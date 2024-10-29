@@ -140,7 +140,7 @@ impl<'a> Context<'a> {
 //**************************************************************************************************
 
 pub fn modules(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) {
     let tparams = modules
@@ -171,7 +171,7 @@ macro_rules! scc_edges {
 }
 
 fn module<'a>(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     tparams: &'a BTreeMap<ModuleIdent, BTreeMap<FunctionName, &'a Vec<TParam>>>,
     mname: ModuleIdent,
     module: &T::ModuleDefinition,
@@ -188,7 +188,7 @@ fn module<'a>(
     petgraph_scc(&graph)
         .into_iter()
         .filter(|scc| scc_edges!(&graph, scc).any(|(_, e, _)| e == Edge::Nested))
-        .for_each(|scc| compilation_env.add_diag(cycle_error(context, &graph, scc)))
+        .for_each(|scc| compilation_env.add_error_diag(cycle_error(context, &graph, scc)))
 }
 
 //**************************************************************************************************

@@ -103,7 +103,7 @@ impl NameCase {
 
 #[allow(clippy::result_unit_err)]
 pub fn check_valid_address_name(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     sp!(_, ln_): &P::LeadingNameAccess,
 ) -> Result<(), ()> {
     use P::LeadingNameAccess_ as LN;
@@ -120,11 +120,7 @@ pub fn valid_local_variable_name(s: Symbol) -> bool {
 }
 
 #[allow(clippy::result_unit_err)]
-pub fn check_valid_function_parameter_name(
-    env: &mut CompilationEnv,
-    is_macro: Option<Loc>,
-    v: &Var,
-) {
+pub fn check_valid_function_parameter_name(env: &CompilationEnv, is_macro: Option<Loc>, v: &Var) {
     const SYNTAX_IDENTIFIER_NOTE: &str =
         "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
         before the macro is expanded, meaning the entire expression is substituted. \
@@ -144,7 +140,7 @@ pub fn check_valid_function_parameter_name(
                 (macro_loc, macro_msg),
             );
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            env.add_diag(diag);
+            env.add_error_diag(diag);
         }
     } else if is_syntax_identifier {
         let msg = format!(
@@ -153,26 +149,26 @@ pub fn check_valid_function_parameter_name(
         );
         let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
         diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-        env.add_diag(diag);
+        env.add_error_diag(diag);
     } else if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
             "Invalid parameter name '{}'. Local variable names must start with 'a'..'z', '_', \
             or be a valid name quoted with backticks (`name`)",
             v,
         );
-        env.add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
+        env.add_error_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
     let _ = check_restricted_name_all_cases(env, NameCase::Variable, &v.0);
 }
 
-pub fn check_valid_local_name(env: &mut CompilationEnv, v: &Var) {
+pub fn check_valid_local_name(env: &CompilationEnv, v: &Var) {
     if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
             "Invalid local name '{}'. Local variable names must start with 'a'..'z', '_', \
             or be a valid name quoted with backticks (`name`)",
             v,
         );
-        env.add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
+        env.add_error_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
     let _ = check_restricted_name_all_cases(env, NameCase::Variable, &v.0);
 }
@@ -182,7 +178,7 @@ fn is_valid_local_variable_name(s: Symbol) -> bool {
 }
 
 pub fn check_valid_module_member_name(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     member: ModuleMemberKind,
     name: Name,
 ) -> Option<Name> {
@@ -193,7 +189,7 @@ pub fn check_valid_module_member_name(
 }
 
 pub fn check_valid_module_member_alias(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     member: ModuleMemberKind,
     alias: Name,
 ) -> Option<Name> {
@@ -209,7 +205,7 @@ pub fn check_valid_module_member_alias(
 }
 
 fn check_valid_module_member_name_impl(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     member: ModuleMemberKind,
     n: &Name,
     case: NameCase,
@@ -231,7 +227,7 @@ fn check_valid_module_member_name_impl(
                     n,
                     upper_first_letter(case.name()),
                 );
-                env.add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                env.add_error_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
                 return Err(());
             }
         }
@@ -243,7 +239,7 @@ fn check_valid_module_member_name_impl(
                     n,
                     upper_first_letter(case.name()),
                 );
-                env.add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                env.add_error_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
                 return Err(());
             }
         }
@@ -272,14 +268,14 @@ fn check_valid_module_member_name_impl(
 
 #[allow(clippy::result_unit_err)]
 pub fn check_valid_type_parameter_name(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     is_macro: Option<Loc>,
     n: &Name,
 ) -> Result<(), ()> {
     // TODO move these names to a more central place?
     if n.value == symbol!("_") {
         let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
-        env.add_diag(diag);
+        env.add_error_diag(diag);
         return Err(());
     }
 
@@ -302,7 +298,7 @@ pub fn check_valid_type_parameter_name(
                 (macro_loc, macro_msg),
             );
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            env.add_diag(diag);
+            env.add_error_diag(diag);
         } else {
             let next_char = n.value.chars().nth(1).unwrap();
             if !next_char.is_ascii_alphabetic() {
@@ -314,7 +310,7 @@ pub fn check_valid_type_parameter_name(
                 );
                 let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
                 diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-                env.add_diag(diag);
+                env.add_error_diag(diag);
             }
         }
     } else if is_syntax_ident {
@@ -325,7 +321,7 @@ pub fn check_valid_type_parameter_name(
         );
         let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
         diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-        env.add_diag(diag);
+        env.add_error_diag(diag);
     }
 
     // TODO move these names to a more central place?
@@ -353,7 +349,7 @@ pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
 // Checks for a restricted name in any decl case
 // Self and vector are not allowed
 pub fn check_restricted_name_all_cases(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     case: NameCase,
     n: &Name,
 ) -> Result<(), ()> {
@@ -373,7 +369,7 @@ pub fn check_restricted_name_all_cases(
                     case.name(),
                     n,
                 );
-                env.add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                env.add_error_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
                 return Err(());
             }
         }
@@ -385,7 +381,7 @@ pub fn check_restricted_name_all_cases(
     if n_str == ModuleName::SELF_NAME
         || (!can_be_vector && n_str == crate::naming::ast::BuiltinTypeName_::VECTOR)
     {
-        env.add_diag(restricted_name_error(case, n.loc, n_str));
+        env.add_error_diag(restricted_name_error(case, n.loc, n_str));
         Err(())
     } else {
         Ok(())
@@ -393,13 +389,13 @@ pub fn check_restricted_name_all_cases(
 }
 
 fn check_restricted_names(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     case: NameCase,
     sp!(loc, n_): &Name,
     all_names: &BTreeSet<Symbol>,
 ) -> Result<(), ()> {
     if all_names.contains(n_) {
-        env.add_diag(restricted_name_error(case, *loc, n_));
+        env.add_error_diag(restricted_name_error(case, *loc, n_));
         Err(())
     } else {
         Ok(())

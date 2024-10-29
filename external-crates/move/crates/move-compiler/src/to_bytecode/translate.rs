@@ -38,7 +38,7 @@ type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
 type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &G::Program,
 ) -> (
@@ -127,7 +127,7 @@ fn extract_decls(
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
@@ -153,7 +153,7 @@ pub fn program(
 }
 
 fn module(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
@@ -227,7 +227,7 @@ fn module(
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
             Err(e) => {
-                compilation_env.add_diag(diag!(
+                compilation_env.add_error_diag(diag!(
                     Bug::BytecodeGeneration,
                     (ident_loc, format!("IR ERROR: {}", e))
                 ));

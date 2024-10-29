@@ -4,6 +4,7 @@
 
 use crate::{
     debug_display, debug_display_verbose, diag,
+    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
     hlir::{
@@ -127,9 +128,10 @@ pub(super) struct HLIRDebugFlags {
 }
 
 pub(super) struct Context<'env> {
-    pub env: &'env mut CompilationEnv,
+    pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
     pub debug: HLIRDebugFlags,
+    warning_filters_scope: WarningFiltersScope,
     current_package: Option<Symbol>,
     function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
@@ -142,7 +144,7 @@ pub(super) struct Context<'env> {
 
 impl<'env> Context<'env> {
     pub fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         _pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
         prog: &T::Program,
     ) -> Self {
@@ -154,8 +156,10 @@ impl<'env> Context<'env> {
             match_specialization: false,
             match_work_queue: false,
         };
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         Context {
             env,
+            warning_filters_scope,
             info: prog.info.clone(),
             debug,
             current_package: None,
@@ -166,6 +170,23 @@ impl<'env> Context<'env> {
             named_block_binders: UniqueMap::new(),
             named_block_types: UniqueMap::new(),
         }
+    }
+
+    pub fn add_diag(&self, diag: Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    #[allow(unused)]
+    pub fn add_diags(&self, diags: Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.warning_filters_scope.pop()
     }
 
     pub fn has_empty_locals(&self) -> bool {
@@ -250,7 +271,7 @@ impl<'env> Context<'env> {
 }
 
 impl MatchContext<true> for Context<'_> {
-    fn env(&mut self) -> &mut CompilationEnv {
+    fn env(&mut self) -> &CompilationEnv {
         self.env
     }
 
@@ -288,7 +309,7 @@ impl MatchContext<true> for Context<'_> {
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: T::Program,
 ) -> H::Program {
@@ -337,7 +358,7 @@ fn module(
         constants: tconstants,
     } = mdef;
     context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
     let enums = tenums.map(|name, s| enum_def(context, name, s));
 
@@ -353,7 +374,7 @@ fn module(
     gen_unused_warnings(context, target_kind, &structs);
 
     context.current_package = None;
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     (
         module_ident,
         H::ModuleDefinition {
@@ -391,10 +412,10 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         body,
     } = f;
     assert!(macro_.is_none(), "ICE macros filtered above");
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, _name, body);
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     H::Function {
         warning_filter,
         index,
@@ -499,7 +520,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         signature: tsignature,
         value: tvalue,
     } = cdef;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let signature = base_type(context, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
@@ -513,7 +534,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         return_type: H::Type_::base(signature.clone()),
     };
     let (locals, body) = function_body_defined(context, &function_signature, loc, tseq);
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     H::Constant {
         warning_filter,
         index,
@@ -542,9 +563,9 @@ fn struct_def(
         type_parameters,
         fields,
     } = sdef;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let fields = struct_fields(context, fields);
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     H::StructDefinition {
         warning_filter,
         index,
@@ -586,13 +607,13 @@ fn enum_def(
         type_parameters,
         variants,
     } = edef;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let variants = variants.map(|_, defn| H::VariantDefinition {
         index: defn.index,
         loc: defn.loc,
         fields: variant_fields(context, defn.fields),
     });
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     H::EnumDefinition {
         warning_filter,
         index,
@@ -648,7 +669,7 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
     use N::Type_ as NT;
     let b_ = match nb_ {
         NT::Var(_) => {
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 loc,
                 format!(
                     "ICE type inf. var not expanded: {}",
@@ -658,7 +679,7 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
             return error_base_type(loc);
         }
         NT::Apply(None, _, _) => {
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 loc,
                 format!("ICE kind not expanded: {}", debug_display_verbose!(nb_))
             )));
@@ -669,7 +690,7 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
         NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 loc,
                 format!(
                     "ICE base type constraint failed: {}",
@@ -716,7 +737,7 @@ fn type_(context: &mut Context, sp!(loc, ty_): N::Type) -> H::Type {
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
         NT::Apply(None, _, _) => {
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 loc,
                 format!("ICE kind not expanded: {}", debug_display_verbose!(ty_))
             )));
@@ -972,9 +993,7 @@ fn tail(
         | E::Continue(_)
         | E::Assign(_, _, _)
         | E::Mutate(_, _) => {
-            context
-                .env
-                .add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
+            context.add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
             None
         }
 
@@ -1004,9 +1023,7 @@ fn tail_block(
         None => None,
         Some(sp!(_, S::Seq(last))) => tail(context, block, expected_type, *last),
         Some(sp!(loc, _)) => {
-            context
-                .env
-                .add_diag(ice!((loc, "ICE statement mishandled in HLIR lowering")));
+            context.add_diag(ice!((loc, "ICE statement mishandled in HLIR lowering")));
             None
         }
     }
@@ -1068,18 +1085,14 @@ fn value(
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
                 _ => {
-                    context
-                        .env
-                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
                     return error_exp(eloc);
                 }
             };
             let (econd, ecode) = match (cond_item, code_item) {
                 (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
                 _ => {
-                    context
-                        .env
-                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
                     return error_exp(eloc);
                 }
             };
@@ -1106,18 +1119,14 @@ fn value(
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
                 _ => {
-                    context
-                        .env
-                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
                     return error_exp(eloc);
                 }
             };
             let (econd, ecode) = match (cond_item, code_item) {
                 (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
                 _ => {
-                    context
-                        .env
-                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
                     return error_exp(eloc);
                 }
             };
@@ -1514,7 +1523,7 @@ fn value(
                     var,
                 } => var,
                 _ => {
-                    context.env.add_diag(ice!((
+                    context.add_diag(ice!((
                         eloc,
                         format!(
                             "ICE invalid bind_exp for single value: {}",
@@ -1538,7 +1547,7 @@ fn value(
                 | Some(bt @ sp!(_, BT::U128))
                 | Some(bt @ sp!(_, BT::U256)) => *bt,
                 _ => {
-                    context.env.add_diag(ice!((
+                    context.add_diag(ice!((
                         eloc,
                         format!(
                             "ICE typing failed for cast: {} : {}",
@@ -1603,9 +1612,7 @@ fn value(
         | E::Continue(_)
         | E::Assign(_, _, _)
         | E::Mutate(_, _) => {
-            context
-                .env
-                .add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
+            context.add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
             error_exp(eloc)
         }
 
@@ -1613,7 +1620,7 @@ fn value(
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => {
-            context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
+            context.add_diag(ice!((eloc, "ICE unexpanded use")));
             error_exp(eloc)
         }
         E::UnresolvedError => {
@@ -1637,15 +1644,11 @@ fn value_block(
     match last_exp {
         Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
         Some(sp!(loc, _)) => {
-            context
-                .env
-                .add_diag(ice!((loc, "ICE last sequence item should be an exp")));
+            context.add_diag(ice!((loc, "ICE last sequence item should be an exp")));
             error_exp(loc)
         }
         None => {
-            context
-                .env
-                .add_diag(ice!((seq_loc, "ICE empty sequence in value position")));
+            context.add_diag(ice!((seq_loc, "ICE empty sequence in value position")));
             error_exp(seq_loc)
         }
     }
@@ -1980,7 +1983,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => {
-            context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
+            context.add_diag(ice!((eloc, "ICE unexpanded use")));
         }
     }
 }
@@ -2503,7 +2506,7 @@ fn bind_value_in_block(
         match lvalue {
             H::LValue_::Var { .. } => (),
             lv => {
-                context.env.add_diag(ice!((
+                context.add_diag(ice!((
                     *loc,
                     format!(
                         "ICE tried bind_value for non-var lvalue {}",
@@ -2603,9 +2606,7 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
     use H::Value_ as HV;
     let v_ = match ev_ {
         EV::InferredNum(_) => {
-            context
-                .env
-                .add_diag(ice!((loc, "ICE not expanded to value")));
+            context.add_diag(ice!((loc, "ICE not expanded to value")));
             HV::U64(0)
         }
         EV::Address(a) => HV::Address(a.into_addr_bytes()),
@@ -2941,7 +2942,7 @@ fn needs_freeze(
                         format!("Expected type: {}", debug_display_verbose!(_expected))
                     ),
                 );
-                context.env.add_diag(diag);
+                context.add_diag(diag);
             }
             Freeze::NotNeeded
         }
@@ -2982,7 +2983,7 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
                                 "ICE list item has Multple type: {}",
                                 debug_display_verbose!(e.ty)
                             );
-                            context.env.add_diag(ice!((e.ty.loc, msg)));
+                            context.add_diag(ice!((e.ty.loc, msg)));
                             H::SingleType_::base(error_base_type(e.ty.loc))
                         }
                     })
@@ -3044,9 +3045,7 @@ fn gen_unused_warnings(
     let is_sui_mode = context.env.package_config(context.current_package).flavor == Flavor::Sui;
 
     for (_, sname, sdef) in structs {
-        context
-            .env
-            .add_warning_filter_scope(sdef.warning_filter.clone());
+        context.push_warning_filter_scope(sdef.warning_filter.clone());
 
         let has_key = sdef.abilities.has_ability_(Ability_::Key);
 
@@ -3062,13 +3061,11 @@ fn gen_unused_warnings(
                     .is_some_and(|names| names.contains(&f.value()))
                 {
                     let msg = format!("The '{}' field of the '{sname}' type is unused", f.value());
-                    context
-                        .env
-                        .add_diag(diag!(UnusedItem::StructField, (f.loc(), msg)));
+                    context.add_diag(diag!(UnusedItem::StructField, (f.loc(), msg)));
                 }
             }
         }
 
-        context.env.pop_warning_filter_scope();
+        context.pop_warning_filter_scope();
     }
 }

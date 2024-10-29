@@ -29,7 +29,7 @@ use crate::{
         BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, TypeName_, Type_, Var,
     },
     parser::ast::Ability_,
-    shared::{CompilationEnv, Identifier},
+    shared::Identifier,
 };
 use std::collections::BTreeMap;
 
@@ -87,7 +87,6 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
     type AI<'a> = CustomStateChangeVerifierAI;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         init_state: &mut State,

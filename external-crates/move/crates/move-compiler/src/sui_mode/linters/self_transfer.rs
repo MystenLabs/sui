@@ -23,7 +23,6 @@ use crate::{
     },
     hlir::ast::{Label, ModuleCall, Type, Type_, Var},
     parser::ast::Ability_,
-    shared::CompilationEnv,
 };
 use std::collections::BTreeMap;
 
@@ -80,7 +79,6 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
     type AI<'a> = SelfTransferVerifierAI;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,

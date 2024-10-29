@@ -33,14 +33,12 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
-    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
-    rc::Rc,
     sync::{
         atomic::{AtomicUsize, Ordering as AtomicOrdering},
-        Arc,
+        Arc, Mutex, OnceLock, RwLock,
     },
 };
 use vfs::{VfsError, VfsPath};
@@ -239,10 +237,9 @@ pub type FilterName = Symbol;
 
 pub struct CompilationEnv {
     flags: Flags,
-    // filters warnings when added.
-    warning_filter: Vec<WarningFilters>,
-    diags: Diagnostics,
-    visitors: Rc<Visitors>,
+    top_level_warning_filter_scope: &'static WarningFiltersScope,
+    diags: RwLock<Diagnostics>,
+    visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
@@ -250,13 +247,17 @@ pub struct CompilationEnv {
     known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
     /// Maps a diagnostics ID to a known filter name.
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
-    prim_definers:
-        BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
+    prim_definers: OnceLock<BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
-    pub ide_information: IDEInfo,
+    ide_information: RwLock<IDEInfo>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct WarningFiltersScope {
+    scopes: Vec<WarningFilters>,
 }
 
 macro_rules! known_code_filter {
@@ -278,6 +279,7 @@ impl CompilationEnv {
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
         save_hooks: Vec<SaveHook>,
+        warning_filters: Option<WarningFilters>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
@@ -363,30 +365,32 @@ impl CompilationEnv {
             })
             .collect();
 
-        let warning_filter = if flags.silence_warnings() {
+        let top_level_warning_filter = if flags.silence_warnings() {
             let mut f = WarningFilters::new_for_source();
             f.add(WarningFilter::All(None));
-            vec![f]
+            Some(f)
         } else {
-            vec![]
+            warning_filters
         };
+        let top_level_warning_filter_scope =
+            Box::leak(Box::new(WarningFiltersScope::new(top_level_warning_filter)));
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
         }
         Self {
             flags,
-            warning_filter,
-            diags,
-            visitors: Rc::new(Visitors::new(visitors)),
+            top_level_warning_filter_scope,
+            diags: RwLock::new(diags),
+            visitors: Visitors::new(visitors),
             package_configs,
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
-            prim_definers: BTreeMap::new(),
+            prim_definers: OnceLock::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
-            ide_information: IDEInfo::new(),
+            ide_information: RwLock::new(IDEInfo::new()),
         }
     }
 
@@ -403,10 +407,16 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn add_diag(&mut self, mut diag: Diagnostic) {
+    pub fn top_level_warning_filter_scope(&self) -> &'static WarningFiltersScope {
+        self.top_level_warning_filter_scope
+    }
+
+    pub fn add_diag(&self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
         if diag.info().severity() <= Severity::NonblockingError
             && self
                 .diags
+                .read()
+                .unwrap()
                 .any_syntax_error_with_primary_loc(diag.primary_loc())
         {
             // do not report multiple diags for the same location (unless they are blocking) to
@@ -417,7 +427,7 @@ impl CompilationEnv {
             return;
         }
 
-        if !self.is_filtered(&diag) {
+        if !warning_filters.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
@@ -434,21 +444,34 @@ impl CompilationEnv {
                     diag = diag.set_severity(Severity::NonblockingError)
                 }
             }
-            self.diags.add(diag)
-        } else if !self.filter_for_dependency() {
+            self.diags.write().unwrap().add(diag)
+        } else if !warning_filters.is_filtered_for_dependency() {
             // unwrap above is safe as the filter has been used (thus it must exist)
-            self.diags.add_source_filtered(diag)
+            self.diags.write().unwrap().add_source_filtered(diag)
         }
     }
 
-    pub fn add_diags(&mut self, diags: Diagnostics) {
+    pub fn add_diags(&self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
         for diag in diags.into_vec() {
-            self.add_diag(diag)
+            self.add_diag(warning_filters, diag)
+        }
+    }
+
+    /// Aborts if the diagnostic is a warning
+    pub fn add_error_diag(&self, diag: Diagnostic) {
+        assert!(diag.info().severity() > Severity::Warning);
+        self.add_diag(WarningFiltersScope::EMPTY, diag)
+    }
+
+    /// Aborts if any diagnostic is a warning
+    pub fn add_error_diags(&self, diags: Diagnostics) {
+        for diag in diags.into_vec() {
+            self.add_error_diag(diag)
         }
     }
 
     pub fn has_warnings_or_errors(&self) -> bool {
-        !self.diags.is_empty()
+        !self.diags.read().unwrap().is_empty()
     }
 
     pub fn has_errors(&self) -> bool {
@@ -457,61 +480,43 @@ impl CompilationEnv {
     }
 
     pub fn count_diags(&self) -> usize {
-        self.diags.len()
+        self.diags.read().unwrap().len()
     }
 
     pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
-        self.diags.count_diags_at_or_above_severity(threshold)
+        self.diags
+            .read()
+            .unwrap()
+            .count_diags_at_or_above_severity(threshold)
     }
 
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {
-        self.diags.max_severity_at_or_above_severity(threshold)
+        self.diags
+            .read()
+            .unwrap()
+            .max_severity_at_or_above_severity(threshold)
     }
 
-    pub fn check_diags_at_or_above_severity(
-        &mut self,
-        threshold: Severity,
-    ) -> Result<(), Diagnostics> {
+    pub fn check_diags_at_or_above_severity(&self, threshold: Severity) -> Result<(), Diagnostics> {
         if self.has_diags_at_or_above_severity(threshold) {
-            Err(std::mem::take(&mut self.diags))
+            let diagnostics: &mut Diagnostics = &mut self.diags.write().unwrap();
+            Err(std::mem::take(diagnostics))
         } else {
             Ok(())
         }
     }
 
     /// Should only be called after compilation is finished
-    pub fn take_final_diags(&mut self) -> Diagnostics {
-        std::mem::take(&mut self.diags)
+    pub fn take_final_diags(&self) -> Diagnostics {
+        let diagnostics: &mut Diagnostics = &mut self.diags.write().unwrap();
+        std::mem::take(diagnostics)
     }
 
     /// Should only be called after compilation is finished
-    pub fn take_final_warning_diags(&mut self) -> Diagnostics {
+    pub fn take_final_warning_diags(&self) -> Diagnostics {
         let final_diags = self.take_final_diags();
         debug_assert!(final_diags.max_severity_at_or_under_severity(Severity::Warning));
         final_diags
-    }
-
-    /// Add a new filter for warnings
-    pub fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.warning_filter.push(filter)
-    }
-
-    pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filter.pop().unwrap();
-    }
-
-    fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.warning_filter
-            .iter()
-            .rev()
-            .any(|filter| filter.is_filtered(diag))
-    }
-
-    fn filter_for_dependency(&self) -> bool {
-        self.warning_filter
-            .iter()
-            .rev()
-            .any(|filter| filter.for_dependency())
     }
 
     pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
@@ -573,24 +578,19 @@ impl CompilationEnv {
         &self.flags
     }
 
-    pub fn visitors(&self) -> Rc<Visitors> {
-        self.visitors.clone()
+    pub fn visitors(&self) -> &Visitors {
+        &self.visitors
     }
 
     // Logs an error if the feature isn't supported. Returns `false` if the feature is not
     // supported, and `true` otherwise.
-    pub fn check_feature(
-        &mut self,
-        package: Option<Symbol>,
-        feature: FeatureGate,
-        loc: Loc,
-    ) -> bool {
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         check_feature_or_error(self, self.package_config(package).edition, feature, loc)
     }
 
     // Returns an error string if if the feature isn't supported, or None otherwise.
     pub fn feature_edition_error_msg(
-        &mut self,
+        &self,
         feature: FeatureGate,
         package: Option<Symbol>,
     ) -> Option<String> {
@@ -619,15 +619,12 @@ impl CompilationEnv {
         )
     }
 
-    pub fn set_primitive_type_definers(
-        &mut self,
-        m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>,
-    ) {
-        self.prim_definers = m
+    pub fn set_primitive_type_definers(&self, m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>) {
+        self.prim_definers.set(m).unwrap()
     }
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
-        self.prim_definers.get(&t)
+        self.prim_definers.get().and_then(|m| m.get(&t))
     }
 
     pub fn save_parser_ast(&self, ast: &P::Program) {
@@ -678,22 +675,61 @@ impl CompilationEnv {
         self.flags.ide_mode()
     }
 
-    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+    pub fn extend_ide_info(&self, warning_filters: &WarningFiltersScope, info: IDEInfo) {
         if self.flags().ide_test_mode() {
             for entry in info.annotations.iter() {
                 let diag = entry.clone().into();
-                self.add_diag(diag);
+                self.add_diag(warning_filters, diag);
             }
         }
-        self.ide_information.extend(info);
+        self.ide_information.write().unwrap().extend(info);
     }
 
-    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+    pub fn add_ide_annotation(
+        &self,
+        warning_filters: &WarningFiltersScope,
+        loc: Loc,
+        info: IDEAnnotation,
+    ) {
         if self.flags().ide_test_mode() {
             let diag = (loc, info.clone()).into();
-            self.add_diag(diag);
+            self.add_diag(warning_filters, diag);
         }
-        self.ide_information.add_ide_annotation(loc, info);
+        self.ide_information
+            .write()
+            .unwrap()
+            .add_ide_annotation(loc, info);
+    }
+
+    pub fn ide_information(&self) -> std::sync::RwLockReadGuard<'_, IDEInfo> {
+        self.ide_information.read().unwrap()
+    }
+}
+
+impl WarningFiltersScope {
+    /// Unsafe and should be used only for internal purposes, such as ide annotations
+    const EMPTY: &'static Self = &WarningFiltersScope { scopes: vec![] };
+
+    fn new(top_level_warning_filter: Option<WarningFilters>) -> Self {
+        Self {
+            scopes: top_level_warning_filter.into_iter().collect(),
+        }
+    }
+
+    pub fn push(&mut self, filters: WarningFilters) {
+        self.scopes.push(filters)
+    }
+
+    pub fn pop(&mut self) {
+        self.scopes.pop().unwrap();
+    }
+
+    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
+        self.scopes.iter().any(|filters| filters.is_filtered(diag))
+    }
+
+    pub fn is_filtered_for_dependency(&self) -> bool {
+        self.scopes.iter().any(|filters| filters.for_dependency())
     }
 }
 
@@ -974,6 +1010,7 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
+    check::<&CompilationEnv>();
 }
 
 //**************************************************************************************************
@@ -981,7 +1018,7 @@ fn check_all() {
 //**************************************************************************************************
 
 #[derive(Clone)]
-pub struct SaveHook(Rc<RefCell<SavedInfo>>);
+pub struct SaveHook(Arc<Mutex<SavedInfo>>);
 
 #[derive(Clone)]
 pub(crate) struct SavedInfo {
@@ -1009,7 +1046,7 @@ pub enum SaveFlag {
 impl SaveHook {
     pub fn new(flags: impl IntoIterator<Item = SaveFlag>) -> Self {
         let flags = flags.into_iter().collect();
-        Self(Rc::new(RefCell::new(SavedInfo {
+        Self(Arc::new(Mutex::new(SavedInfo {
             flags,
             parser: None,
             expansion: None,
@@ -1022,56 +1059,56 @@ impl SaveHook {
     }
 
     pub(crate) fn save_parser_ast(&self, ast: &P::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.parser.is_none() && r.flags.contains(&SaveFlag::Parser) {
             r.parser = Some(ast.clone())
         }
     }
 
     pub(crate) fn save_expansion_ast(&self, ast: &E::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.expansion.is_none() && r.flags.contains(&SaveFlag::Expansion) {
             r.expansion = Some(ast.clone())
         }
     }
 
     pub(crate) fn save_naming_ast(&self, ast: &N::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
             r.naming = Some(ast.clone())
         }
     }
 
     pub(crate) fn save_typing_ast(&self, ast: &T::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.typing.is_none() && r.flags.contains(&SaveFlag::Typing) {
             r.typing = Some(ast.clone())
         }
     }
 
     pub(crate) fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.typing_info.is_none() && r.flags.contains(&SaveFlag::TypingInfo) {
             r.typing_info = Some(info.clone())
         }
     }
 
     pub(crate) fn save_hlir_ast(&self, ast: &H::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.hlir.is_none() && r.flags.contains(&SaveFlag::HLIR) {
             r.hlir = Some(ast.clone())
         }
     }
 
     pub(crate) fn save_cfgir_ast(&self, ast: &G::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
             r.cfgir = Some(ast.clone())
         }
     }
 
     pub fn take_parser_ast(&self) -> P::Program {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::Parser),
             "Parser AST not saved. Please set the flag when creating the SaveHook"
@@ -1080,7 +1117,7 @@ impl SaveHook {
     }
 
     pub fn take_expansion_ast(&self) -> E::Program {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::Expansion),
             "Expansion AST not saved. Please set the flag when creating the SaveHook"
@@ -1089,7 +1126,7 @@ impl SaveHook {
     }
 
     pub fn take_naming_ast(&self) -> N::Program {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::Naming),
             "Naming AST not saved. Please set the flag when creating the SaveHook"
@@ -1098,7 +1135,7 @@ impl SaveHook {
     }
 
     pub fn take_typing_ast(&self) -> T::Program {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::Typing),
             "Typing AST not saved. Please set the flag when creating the SaveHook"
@@ -1107,7 +1144,7 @@ impl SaveHook {
     }
 
     pub fn take_typing_info(&self) -> Arc<program_info::TypingProgramInfo> {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::TypingInfo),
             "Typing info not saved. Please set the flag when creating the SaveHook"
@@ -1116,7 +1153,7 @@ impl SaveHook {
     }
 
     pub fn take_hlir_ast(&self) -> H::Program {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::HLIR),
             "HLIR AST not saved. Please set the flag when creating the SaveHook"
@@ -1125,7 +1162,7 @@ impl SaveHook {
     }
 
     pub fn take_cfgir_ast(&self) -> G::Program {
-        let mut r = RefCell::borrow_mut(&self.0);
+        let mut r = self.0.lock().unwrap();
         assert!(
             r.flags.contains(&SaveFlag::CFGIR),
             "CFGIR AST not saved. Please set the flag when creating the SaveHook"

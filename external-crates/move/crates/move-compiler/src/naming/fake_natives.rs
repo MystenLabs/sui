@@ -19,7 +19,7 @@ use move_symbol_pool::symbol;
 
 /// verify fake native attribute usage usage
 pub fn function(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     module: ModuleIdent,
     function_name: FunctionName,
     function: &N::Function,
@@ -45,7 +45,7 @@ pub fn function(
             (loc, attr_msg),
             (function_name.loc(), name_msg),
         );
-        env.add_diag(diag);
+        env.add_error_diag(diag);
     }
     match &function.body.value {
         N::FunctionBody_::Native => (),
@@ -55,7 +55,7 @@ pub fn function(
                 NativeAttribute::BYTECODE_INSTRUCTION
             );
             let diag = diag!(Attributes::InvalidBytecodeInst, (loc, attr_msg));
-            env.add_diag(diag);
+            env.add_error_diag(diag);
         }
     }
 }

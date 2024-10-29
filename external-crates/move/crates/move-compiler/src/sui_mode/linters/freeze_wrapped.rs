@@ -7,6 +7,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::shared::WarningFiltersScope;
 use crate::{
     diag,
     diagnostics::{
@@ -74,7 +75,8 @@ type WrappingFields =
 pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
+    warning_filters_scope: WarningFiltersScope,
     program_info: Arc<TypingProgramInfo>,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
     wrapping_fields: WrappingFields,
@@ -83,9 +85,11 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for FreezeWrappedVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         Context {
             env,
+            warning_filters_scope,
             program_info: program.info.clone(),
             wrapping_fields: WrappingFields::new(),
         }
@@ -93,13 +97,13 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
 }
 
 impl Context<'_> {
-    fn add_diag(&mut self, diag: Diagnostic) {
-        self.env.add_diag(diag);
+    fn add_diag(&self, diag: Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
     #[allow(unused)]
-    fn add_diags(&mut self, diags: Diagnostics) {
-        self.env.add_diags(diags);
+    fn add_diags(&self, diags: Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
     }
 }
 
@@ -151,12 +155,12 @@ impl<'a> TypingVisitorContext for Context<'a> {
         false
     }
 
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
+        self.warning_filters_scope.pop()
     }
 }
 

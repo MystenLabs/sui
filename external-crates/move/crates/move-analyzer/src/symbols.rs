@@ -1875,7 +1875,7 @@ pub fn get_compiled_pkg(
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
-        mapped_files.extend_with_duplicates(compiler.compilation_env_ref().mapped_files().clone());
+        mapped_files.extend_with_duplicates(compiler.compilation_env().mapped_files().clone());
 
         // extract typed AST
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
@@ -1890,17 +1890,17 @@ pub fn get_compiled_pkg(
             }
         };
         eprintln!("compiled to typed AST");
-        let (mut compiler, typed_program) = compiler.into_ast();
+        let (compiler, typed_program) = compiler.into_ast();
         typed_ast = Some(typed_program.clone());
         compiler_info = Some(CompilerInfo::from(
-            compiler.compilation_env().ide_information.clone(),
+            compiler.compilation_env().ide_information().clone(),
         ));
         edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
 
         // compile to CFGIR for accurate diags
         eprintln!("compiling to CFGIR");
         let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
-        let mut compiler = match compilation_result {
+        let compiler = match compilation_result {
             Ok(v) => v,
             Err((_pass, diags)) => {
                 let failure = false;

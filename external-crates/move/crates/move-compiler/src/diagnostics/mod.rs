@@ -776,7 +776,7 @@ macro_rules! ice {
 macro_rules! ice_assert {
     ($env: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
         if !$cond {
-            $env.add_diag($crate::ice!((
+            $env.add_error_diag($crate::ice!((
                 $loc,
                 format!($($arg)*),
             )));
@@ -798,14 +798,14 @@ pub fn print_stack_trace() {
 }
 
 impl WarningFilters {
-    pub fn new_for_source() -> Self {
+    pub const fn new_for_source() -> Self {
         Self {
             filters: BTreeMap::new(),
             for_dependency: false,
         }
     }
 
-    pub fn new_for_dependency() -> Self {
+    pub const fn new_for_dependency() -> Self {
         Self {
             filters: BTreeMap::new(),
             for_dependency: true,
