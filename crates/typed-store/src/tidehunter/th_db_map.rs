@@ -344,9 +344,8 @@ fn thdb_config(const_spaces: usize) -> Config {
     let mut config = Config::default();
     modify_large_table_size(&mut config);
     modify_frag_size(&mut config);
-    config.max_loaded_entries = config.large_table_size / 1024 / 2;
+    config.max_loaded_entries = config.large_table_size / 1024;
     config.large_table_size += const_spaces;
-    config.max_maps = 32;
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     config.max_dirty_keys = 1024;
