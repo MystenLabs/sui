@@ -165,4 +165,4 @@ jobs:
           Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
           Sui branch: `${{ env.SUI_BRANCH_NAME }}`
           Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
-          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, plesae look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions.
+          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions.
