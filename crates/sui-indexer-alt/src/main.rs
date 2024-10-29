@@ -3,6 +3,8 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use sui_indexer_alt::args::Command;
+use sui_indexer_alt::db::reset_database;
 use sui_indexer_alt::{
     args::Args,
     handlers::{
@@ -25,20 +27,27 @@ async fn main() -> Result<()> {
 
     let cancel = CancellationToken::new();
 
-    let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
+    match args.command {
+        Command::Indexer(indexer_config) => {
+            let mut indexer = Indexer::new(args.db_config, indexer_config, cancel.clone()).await?;
 
-    indexer.concurrent_pipeline::<EvEmitMod>().await?;
-    indexer.concurrent_pipeline::<EvStructInst>().await?;
-    indexer.concurrent_pipeline::<KvCheckpoints>().await?;
-    indexer.concurrent_pipeline::<KvObjects>().await?;
-    indexer.concurrent_pipeline::<KvTransactions>().await?;
-    indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
-    indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
+            indexer.concurrent_pipeline::<EvEmitMod>().await?;
+            indexer.concurrent_pipeline::<EvStructInst>().await?;
+            indexer.concurrent_pipeline::<KvCheckpoints>().await?;
+            indexer.concurrent_pipeline::<KvObjects>().await?;
+            indexer.concurrent_pipeline::<KvTransactions>().await?;
+            indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
+            indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
 
-    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
+            let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
-    cancel.cancelled().await;
-    let _ = h_indexer.await;
+            cancel.cancelled().await;
+            let _ = h_indexer.await;
+        }
+        Command::ResetDatabase { skip_migrations } => {
+            reset_database(args.db_config, skip_migrations).await?;
+        }
+    }
 
     Ok(())
 }

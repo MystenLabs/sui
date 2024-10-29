@@ -68,9 +68,6 @@ pub struct IndexerConfig {
     pub ingestion_config: IngestionConfig,
 
     #[command(flatten)]
-    pub db_config: DbConfig,
-
-    #[command(flatten)]
     pub pipeline_config: PipelineConfig,
 
     /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
@@ -95,16 +92,19 @@ pub struct IndexerConfig {
 }
 
 impl Indexer {
-    pub async fn new(config: IndexerConfig, cancel: CancellationToken) -> Result<Self> {
+    pub async fn new(
+        db_config: DbConfig,
+        indexer_config: IndexerConfig,
+        cancel: CancellationToken,
+    ) -> Result<Self> {
         let IndexerConfig {
             ingestion_config,
-            db_config,
             pipeline_config,
             first_checkpoint,
             last_checkpoint,
             pipeline,
             metrics_address,
-        } = config;
+        } = indexer_config;
 
         let db = Db::new(db_config)
             .await
