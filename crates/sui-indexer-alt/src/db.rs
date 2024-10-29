@@ -122,7 +122,9 @@ impl Db {
         Ok(())
     }
 
-    async fn run_migrations(&self) -> Result<Vec<MigrationVersion<'static>>, anyhow::Error> {
+    pub(crate) async fn run_migrations(
+        &self,
+    ) -> Result<Vec<MigrationVersion<'static>>, anyhow::Error> {
         use diesel_migrations::MigrationHarness;
 
         info!("Running migrations ...");
@@ -142,6 +144,7 @@ impl Db {
     }
 }
 
+/// Drop all tables and rerunning migrations.
 pub async fn reset_database(
     db_config: DbConfig,
     skip_migrations: bool,

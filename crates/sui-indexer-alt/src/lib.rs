@@ -110,6 +110,11 @@ impl Indexer {
             .await
             .context("Failed to connect to database")?;
 
+        // At indexer initialization, we ensure that the DB schema is up-to-date.
+        db.run_migrations()
+            .await
+            .context("Failed to run pending migrations")?;
+
         let (metrics, metrics_service) =
             MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
         let ingestion_service =
