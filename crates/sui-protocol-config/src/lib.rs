@@ -192,6 +192,7 @@ const MAX_PROTOCOL_VERSION: u64 = 68;
 // Version 67: Re-enable distributed vote scoring in mainnet.
 // Version 68: Add G1Uncompressed group to group ops.
 //             Update to Move stdlib.
+//             Enable gas based congestion control with overage.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1250,10 +1251,7 @@ pub struct ProtocolConfig {
     /// The maximum number of transactions included in a consensus block.
     consensus_max_num_transactions_in_block: Option<u64>,
 
-    /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
-    /// in a checkpoint will be deferred once their touch shared objects hit this limit.
-    /// This config is meant to be used when consensus protocol is Narwhal, where each
-    /// consensus commit corresponding to 1 checkpoint (or 2 if randomness is enabled)
+    /// DEPRECATED. Do not use.
     max_accumulated_txn_cost_per_object_in_narwhal_commit: Option<u64>,
 
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
@@ -2909,6 +2907,15 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
+
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
+                    cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
+                        Some(3_700_000); // 20% of above
+                    cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
+                    cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
                 }
                 // Use this template when making changes:
                 //
