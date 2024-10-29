@@ -78,7 +78,7 @@ export class KioskClient {
 	/**
 	 * Fetches the kiosk contents.
 	 * @param id The ID of the kiosk to fetch.
-	 * @param options Optioal
+	 * @param options Optional to control the fetch behavior.
 	 * @returns
 	 */
 	async getKiosk({ id, options }: { id: string; options?: FetchKioskOptions }): Promise<KioskData> {
