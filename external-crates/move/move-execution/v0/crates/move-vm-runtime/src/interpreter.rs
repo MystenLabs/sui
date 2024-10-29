@@ -20,8 +20,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-#[cfg(feature = "gas-profiler")]
-use move_vm_profiler::GasProfiler;
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
 };
