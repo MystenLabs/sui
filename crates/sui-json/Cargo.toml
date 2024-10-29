@@ -18,7 +18,7 @@ sui-types.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
-fastcrypto = { workspace = true }
+fastcrypto.workspace = true
 
 [dev-dependencies]
 test-fuzz.workspace = true
