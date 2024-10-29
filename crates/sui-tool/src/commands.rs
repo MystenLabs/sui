@@ -4,10 +4,10 @@
 use crate::{
     check_completed_snapshot,
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
+    download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, fetch_object,
     get_dead_genesis_objects, get_latest_available_epoch, get_object, get_transaction_block,
     make_clients, restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum,
-    ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
+    GroupedObjectOutput, SnapshotVerifyMode, Verbosity,
 };
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
@@ -34,13 +34,6 @@ use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::transaction::{SenderSignedData, Transaction};
-
-#[derive(Parser, Clone, ValueEnum)]
-pub enum Verbosity {
-    Grouped,
-    Concise,
-    Verbose,
-}
 
 #[derive(Parser)]
 pub enum ToolCommand {
@@ -423,6 +416,39 @@ pub enum ToolCommand {
         #[arg(long = "genesis")]
         genesis: PathBuf,
     },
+    #[command(name = "find-zombie-objects")]
+    FindZombieObjects {
+        #[arg(long = "objects-file-path")]
+        objects_file_path: PathBuf,
+        #[arg(
+            long,
+            help = "Validator to fetch from - if not specified, all validators are queried"
+        )]
+        validator: Option<AuthorityName>,
+        // RPC address to provide the up-to-date committee info
+        #[arg(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: String,
+        /// Concise mode groups responses by results.
+        /// prints tabular output suitable for processing with unix tools. For
+        /// instance, to quickly check that all validators agree on the history of an object:
+        /// ```text
+        /// $ sui-tool fetch-object --id 0x260efde76ebccf57f4c5e951157f5c361cde822c \
+        ///      --genesis $HOME/.sui/sui_config/genesis.blob \
+        ///      --verbosity concise --concise-no-header
+        /// ```
+        #[arg(
+            value_enum,
+            long = "verbosity",
+            default_value = "grouped",
+            ignore_case = true
+        )]
+        verbosity: Verbosity,
+        #[arg(
+            long = "concise-no-header",
+            help = "don't show header in concise output"
+        )]
+        concise_no_header: bool,
+    },
 }
 
 async fn check_locked_object(
@@ -538,40 +564,21 @@ impl ToolCommand {
             }
             ToolCommand::FetchObject {
                 id,
-                validator,
                 version,
+                validator,
                 fullnode_rpc_url,
                 verbosity,
                 concise_no_header,
             } => {
-                let sui_client =
-                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = Arc::new(make_clients(&sui_client).await?);
-                let output = get_object(id, version, validator, clients).await?;
-
-                match verbosity {
-                    Verbosity::Grouped => {
-                        let committee = Arc::new(
-                            sui_client
-                                .governance_api()
-                                .get_committee_info(None)
-                                .await?
-                                .validators
-                                .into_iter()
-                                .collect::<BTreeMap<_, _>>(),
-                        );
-                        println!("{}", GroupedObjectOutput::new(output, committee));
-                    }
-                    Verbosity::Verbose => {
-                        println!("{}", VerboseObjectOutput(output));
-                    }
-                    Verbosity::Concise => {
-                        if !concise_no_header {
-                            println!("{}", ConciseObjectOutput::header());
-                        }
-                        println!("{}", ConciseObjectOutput(output));
-                    }
-                }
+                fetch_object(
+                    id,
+                    version,
+                    validator,
+                    fullnode_rpc_url,
+                    verbosity,
+                    concise_no_header,
+                )
+                .await?;
             }
             ToolCommand::FetchTransaction {
                 digest,
@@ -1100,6 +1107,32 @@ impl ToolCommand {
             }
             ToolCommand::GetDeadGenesisObjects { db_path, genesis } => {
                 get_dead_genesis_objects(&db_path, &genesis).await?;
+            }
+            ToolCommand::FindZombieObjects {
+                objects_file_path,
+                validator,
+                fullnode_rpc_url,
+                verbosity,
+                concise_no_header,
+            } => {
+                let objects_file = std::fs::read_to_string(objects_file_path)?;
+                let object_ids: Vec<ObjectID> = objects_file
+                    .lines()
+                    .filter(|line| !line.is_empty())
+                    .filter_map(|line| line.parse::<ObjectID>().ok())
+                    .collect::<Vec<_>>();
+                println!("Found {} object IDs", object_ids.len());
+                for id in object_ids {
+                    fetch_object(
+                        id,
+                        None,
+                        validator,
+                        fullnode_rpc_url.clone(),
+                        verbosity.clone(),
+                        concise_no_header,
+                    )
+                    .await?;
+                }
             }
         };
         Ok(())

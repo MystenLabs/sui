@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use clap::Parser;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
 use futures::future::AbortHandle;
@@ -72,6 +73,13 @@ use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
+
+#[derive(Parser, Clone, ValueEnum)]
+pub enum Verbosity {
+    Grouped,
+    Concise,
+    Verbose,
+}
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -841,6 +849,44 @@ pub async fn get_dead_genesis_objects(db_path: &Path, genesis: &Path) -> Result<
             .collect::<Vec<_>>()
             .join("\n")
     );
+    Ok(())
+}
+
+pub async fn fetch_object(
+    id: ObjectID,
+    version: Option<u64>,
+    validator: Option<AuthorityName>,
+    fullnode_rpc_url: String,
+    verbosity: Verbosity,
+    concise_no_header: bool,
+) -> Result<(), anyhow::Error> {
+    let sui_client = Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+    let clients = Arc::new(make_clients(&sui_client).await?);
+    let output = get_object(id, version, validator, clients).await?;
+
+    match verbosity {
+        Verbosity::Grouped => {
+            let committee = Arc::new(
+                sui_client
+                    .governance_api()
+                    .get_committee_info(None)
+                    .await?
+                    .validators
+                    .into_iter()
+                    .collect::<BTreeMap<_, _>>(),
+            );
+            println!("{}", GroupedObjectOutput::new(output, committee));
+        }
+        Verbosity::Verbose => {
+            println!("{}", VerboseObjectOutput(output));
+        }
+        Verbosity::Concise => {
+            if !concise_no_header {
+                println!("{}", ConciseObjectOutput::header());
+            }
+            println!("{}", ConciseObjectOutput(output));
+        }
+    }
     Ok(())
 }
 
