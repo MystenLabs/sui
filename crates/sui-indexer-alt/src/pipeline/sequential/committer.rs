@@ -302,7 +302,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     // rows to write, and they are already in the batch, or we can process the next
                     // checkpoint to extract them.
 
-                    if pending_rows < H::MIN_BATCH_ROWS {
+                    if pending_rows < H::MIN_EAGER_ROWS {
                         continue;
                     }
 

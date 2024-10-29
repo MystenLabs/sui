@@ -38,8 +38,11 @@ impl<H: Handler> Pending<H> {
     /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
     /// chunk size.
     fn batch_into(&mut self, batch: &mut Batched<H>) {
-        if batch.values.len() + self.values.len() > H::CHUNK_SIZE {
-            let mut for_batch = self.values.split_off(H::CHUNK_SIZE - batch.values.len());
+        if batch.values.len() + self.values.len() > H::MAX_CHUNK_ROWS {
+            let mut for_batch = self
+                .values
+                .split_off(H::MAX_CHUNK_ROWS - batch.values.len());
+
             std::mem::swap(&mut self.values, &mut for_batch);
             batch.watermark.push(self.watermark.take(for_batch.len()));
             batch.values.extend(for_batch);
@@ -159,7 +162,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     }
                 }
 
-                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
+                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
                     metrics
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
@@ -168,7 +171,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     pending_rows += indexed.values.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
 
-                    if pending_rows >= H::BATCH_SIZE {
+                    if pending_rows >= H::MIN_EAGER_ROWS {
                         poll.reset_immediately()
                     }
                 }

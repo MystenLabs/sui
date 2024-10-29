@@ -39,7 +39,7 @@ mod committer;
 #[async_trait::async_trait]
 pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
-    const MIN_BATCH_ROWS: usize = 50;
+    const MIN_EAGER_ROWS: usize = 50;
 
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
