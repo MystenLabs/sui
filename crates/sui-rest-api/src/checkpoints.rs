@@ -16,9 +16,9 @@ use crate::proto;
 use crate::proto::ListCheckpointResponse;
 use crate::reader::StateReader;
 use crate::response::{JsonProtobufBcs, ProtobufBcs};
-use crate::{accept::AcceptFormat, response::ResponseContent, RestError, Result};
+use crate::PageCursor;
 use crate::{Direction, RestService};
-use crate::{Page, PageCursor};
+use crate::{RestError, Result};
 use documented::Documented;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
@@ -444,7 +444,7 @@ async fn get_full_checkpoint(
         _ => {
             return Err(RestError::new(
                 axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/bcs' is supported",
+                "invalid accept type; only 'application/x-protobuf' is supported",
             ))
         }
     }
@@ -482,161 +482,9 @@ async fn get_full_checkpoint(
         _ => {
             return Err(RestError::new(
                 axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/bcs' is supported",
+                "invalid accept type; only 'application/x-protobuf' is supported",
             ))
         }
     }
     .pipe(Ok)
-}
-
-/// List Full Checkpoints
-///
-/// Request a page of checkpoints and all data associated with them including:
-/// - CheckpointSummary
-/// - Validator Signature
-/// - CheckpointContents
-/// - Transactions, Effects, Events, as well as all input and output objects
-///
-/// If the requested page is below the Node's `lowest_available_checkpoint_objects`, a 410 will be
-/// returned.
-#[derive(Documented)]
-pub struct ListFullCheckpoints;
-
-impl ApiEndpoint<RestService> for ListFullCheckpoints {
-    fn method(&self) -> axum::http::Method {
-        axum::http::Method::GET
-    }
-
-    fn path(&self) -> &'static str {
-        "/checkpoints/full"
-    }
-
-    fn stable(&self) -> bool {
-        // TODO transactions are serialized with an intent message, do we want to change this
-        // format to remove it (and remove user signature duplication) prior to stabalizing the
-        // format?
-        false
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Checkpoint")
-            .operation_id("List Full Checkpoints")
-            .description(Self::DOCS)
-            .query_parameters::<ListFullCheckpointsQueryParameters>(generator)
-            .response(200, ResponseBuilder::new().bcs_content().build())
-            .response(410, ResponseBuilder::new().build())
-            .response(500, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> RouteHandler<RestService> {
-        RouteHandler::new(self.method(), list_full_checkpoints)
-    }
-}
-
-async fn list_full_checkpoints(
-    Query(parameters): Query<ListFullCheckpointsQueryParameters>,
-    accept: AcceptFormat,
-    State(state): State<StateReader>,
-) -> Result<Page<sui_types::full_checkpoint_content::CheckpointData, CheckpointSequenceNumber>> {
-    match accept {
-        AcceptFormat::Bcs => {}
-        _ => {
-            return Err(RestError::new(
-                axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/bcs' is supported",
-            ))
-        }
-    }
-
-    let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
-    let oldest_checkpoint = state.inner().get_lowest_available_checkpoint_objects()?;
-    let limit = parameters.limit();
-    let start = parameters.start(latest_checkpoint);
-    let direction = parameters.direction();
-
-    if start < oldest_checkpoint {
-        return Err(crate::RestError::new(
-            axum::http::StatusCode::GONE,
-            "Old checkpoints have been pruned",
-        ));
-    }
-
-    let checkpoints = state
-        .checkpoint_iter(direction, start)
-        .take(
-            // only iterate until we've reached the edge of our objects available window
-            if direction.is_descending() {
-                std::cmp::min(limit, start.saturating_sub(oldest_checkpoint) as usize)
-            } else {
-                limit
-            },
-        )
-        .map(|result| {
-            result
-                .map_err(Into::into)
-                .and_then(|(checkpoint, contents)| {
-                    state
-                        .inner()
-                        .get_checkpoint_data(
-                            sui_types::messages_checkpoint::VerifiedCheckpoint::new_from_verified(
-                                checkpoint,
-                            ),
-                            contents,
-                        )
-                        .map_err(Into::into)
-                })
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    let cursor = checkpoints.last().and_then(|checkpoint| match direction {
-        Direction::Ascending => checkpoint.checkpoint_summary.sequence_number.checked_add(1),
-        Direction::Descending => {
-            let cursor = checkpoint.checkpoint_summary.sequence_number.checked_sub(1);
-            // If we've exhausted our available object range then there are no more pages left
-            if cursor < Some(oldest_checkpoint) {
-                None
-            } else {
-                cursor
-            }
-        }
-    });
-
-    ResponseContent::Bcs(checkpoints)
-        .pipe(|entries| Page { entries, cursor })
-        .pipe(Ok)
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct ListFullCheckpointsQueryParameters {
-    /// Page size limit for the response.
-    ///
-    /// Defaults to `5` if not provided with a maximum page size of `10`.
-    pub limit: Option<u32>,
-    /// The checkpoint to start listing from.
-    ///
-    /// Defaults to the latest checkpoint if not provided.
-    pub start: Option<CheckpointSequenceNumber>,
-    /// The direction to paginate in.
-    ///
-    /// Defaults to `descending` if not provided.
-    pub direction: Option<Direction>,
-}
-
-impl ListFullCheckpointsQueryParameters {
-    pub fn limit(&self) -> usize {
-        self.limit.map(|l| (l as usize).clamp(1, 10)).unwrap_or(5)
-    }
-
-    pub fn start(&self, default: CheckpointSequenceNumber) -> CheckpointSequenceNumber {
-        self.start.unwrap_or(default)
-    }
-
-    pub fn direction(&self) -> Direction {
-        self.direction.unwrap_or(Direction::Descending)
-    }
 }

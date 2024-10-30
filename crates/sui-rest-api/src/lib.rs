@@ -113,7 +113,6 @@ const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     &objects::GetObjectWithVersion,
     &objects::ListDynamicFields,
     &checkpoints::GetFullCheckpoint,
-    &checkpoints::ListFullCheckpoints,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
     &committee::GetCommittee,
