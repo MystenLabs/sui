@@ -1121,9 +1121,16 @@ module sui_system::sui_system_state_inner {
         self.stake_subsidy.get_distribution_counter()
     }
 
+    // NEVER remove `#[test_only]`
     #[test_only]
     public(package) fun set_epoch_for_testing(self: &mut SuiSystemStateInnerV2, epoch_num: u64) {
         self.epoch = epoch_num
+    }
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun increment_epoch_for_testing(self: &mut SuiSystemStateInnerV2) {
+        self.epoch = self.epoch + 1
     }
 
     #[test_only]

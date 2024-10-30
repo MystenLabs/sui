@@ -6,6 +6,7 @@ module sui_system::rewards_distribution_tests {
     use sui::balance;
     use sui::test_scenario::{Self, Scenario};
     use sui_system::sui_system::SuiSystemState;
+    use sui::coin;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
     use sui_system::governance_test_utils::{
         advance_epoch,
@@ -19,6 +20,7 @@ module sui_system::rewards_distribution_tests {
         stake_with,
         total_sui_balance, unstake
     };
+    use sui_system::staking_pool::StakedSui;
     use sui::test_utils::assert_eq;
     use sui::address;
 
@@ -627,5 +629,60 @@ module sui_system::rewards_distribution_tests {
 
         test_scenario::return_shared(sui_system);
         test.end();
+    }
+
+    #[test]
+    fun test_process_pending_stake_withdraw_no_underflow_in_safe_mode() {
+        let start_epoch: u64 = 1;
+        let epoch_start_time = 100000000000;
+
+        set_up_sui_system_state();
+        let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1); // val 1 has 100 staked sui
+        let mut sui_system = scenario_val.take_shared<SuiSystemState>();
+
+        start_epoch.do!(|_| scenario_val.ctx().increment_epoch_number()); // epoch 1, entering safe mode
+        sui_system.set_epoch_for_testing(start_epoch);
+
+        // staker 1 stakes 101 sui in safe mode
+        scenario_val.next_tx(STAKER_ADDR_1);
+        sui_system.request_add_stake(coin::mint_for_testing(101 * MIST_PER_SUI, scenario_val.ctx()), VALIDATOR_ADDR_1, scenario_val.ctx());
+        scenario_val.next_tx(STAKER_ADDR_1);
+
+        scenario_val.ctx().increment_epoch_number(); // epoch 2: still in safe mode
+        // There is no need to update `sui_system.set_epoch_for_testing` because
+        // it's `ctx.epoch()` being used here
+        sui_system.increment_epoch_for_testing();
+
+        let staked_sui = scenario_val.take_from_address<StakedSui>(STAKER_ADDR_1);
+        // staker 1 unstakes in safe mode
+        sui_system.request_withdraw_stake(staked_sui, scenario_val.ctx());
+        let val = sui_system.active_validator_by_address(VALIDATOR_ADDR_1);
+        let pool = val.get_staking_pool_ref();
+        assert!(pool.sui_balance() == 100 * MIST_PER_SUI, 0);
+        assert!(pool.pool_token_balance() == 100 * MIST_PER_SUI, 0);
+        // FIXME: these 3 values will be fixed in the next PR
+        assert!(pool.pending_stake_amount() == 101 * MIST_PER_SUI, 0);
+        assert!(pool.pending_total_sui_withdraw() == 101 * MIST_PER_SUI, 0);
+        assert!(pool.pending_pool_token_withdraw() == 101 * MIST_PER_SUI, 0);
+
+        // epoch 3: exiting safe mode
+        // There is no underflow here
+        sui_system
+            .inner_mut_for_testing()
+            .advance_epoch(start_epoch + 2, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, epoch_start_time, scenario_val.ctx())
+            .destroy_for_testing(); // balance returned from `advance_epoch`
+
+        scenario_val.next_tx(VALIDATOR_ADDR_1);
+        let val = sui_system.active_validator_by_address(VALIDATOR_ADDR_1);
+        let pool = val.get_staking_pool_ref();
+        assert!(pool.pending_stake_amount() == 0 * MIST_PER_SUI, 0);
+        assert!(pool.pending_total_sui_withdraw() == 0 * MIST_PER_SUI, 0);
+        assert!(pool.pending_pool_token_withdraw() == 0 * MIST_PER_SUI, 0);
+        // FIXME: these 2 values will be fixed in the next PR
+        assert!(pool.sui_balance() == 101 * MIST_PER_SUI, 0);
+        assert!(pool.pool_token_balance() == 101 * MIST_PER_SUI, 0);
+
+        test_scenario::return_shared(sui_system);
+        scenario_val.end();
     }
 }

@@ -116,6 +116,31 @@ module sui_system::staking_pool_tests {
     }
 
     #[test]
+    fun test_process_pending_stake_withdraw_no_underflow() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let mut staking_pool = staking_pool::new(scenario.ctx());
+        staking_pool.activate_staking_pool(0);
+
+        let sui = balance::create_for_testing(1_000_000_000);
+        let staked_sui_1 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1, 0);
+
+        staking_pool.increase_pending_pool_token_withdraw_test_only(1_000_000_000);
+        staking_pool.increase_pending_total_sui_withdraw_test_only(1_000_000_000);
+
+        staking_pool.process_pending_stake_withdraw_test_only();
+
+        assert!(staking_pool.sui_balance() == 0, 0);
+        assert!(staking_pool.pending_total_sui_withdraw() == 0, 0);
+        assert!(staking_pool.pool_token_balance() == 0, 0);
+        assert!(staking_pool.pending_pool_token_withdraw() == 0, 0);
+
+        sui::test_utils::destroy(staking_pool);
+        sui::test_utils::destroy(staked_sui_1);
+        scenario.end();
+    }
+
+    #[test]
     fun test_convert_to_fungible_staked_sui_happy() {
         let mut scenario = test_scenario::begin(@0x0);
         let mut staking_pool = staking_pool::new(scenario.ctx());

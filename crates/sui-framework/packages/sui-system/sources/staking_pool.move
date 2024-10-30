@@ -322,12 +322,16 @@ module sui_system::staking_pool {
         // Check that the stake information matches the pool.
         assert!(staked_sui.pool_id == object::id(pool), EWrongPool);
 
+        // TODO: after fixing the inactive stake issue, change this to always
+        // look forward and find the next available rate. It's guaranteed
+        // the next available rate can be found, otherwise we will never reach
+        // this function, instead we will exit earlier in the inactive stake check.
         let exchange_rate_at_staking_epoch = pool_token_exchange_rate_at_epoch(pool, staked_sui.stake_activation_epoch);
         let principal_withdraw = unwrap_staked_sui(staked_sui);
         let pool_token_withdraw_amount = get_token_amount(
-		&exchange_rate_at_staking_epoch,
-		principal_withdraw.value()
-	);
+            &exchange_rate_at_staking_epoch,
+            principal_withdraw.value()
+        );
 
         (
             pool_token_withdraw_amount,
@@ -371,8 +375,15 @@ module sui_system::staking_pool {
     /// Called at epoch boundaries to process pending stake withdraws requested during the epoch.
     /// Also called immediately upon withdrawal if the pool is inactive.
     fun process_pending_stake_withdraw(pool: &mut StakingPool) {
-        pool.sui_balance = pool.sui_balance - pool.pending_total_sui_withdraw;
-        pool.pool_token_balance = pool.pool_token_balance - pool.pending_pool_token_withdraw;
+        pool.sui_balance =
+            if (pool.sui_balance >= pool.pending_total_sui_withdraw)
+                pool.sui_balance - pool.pending_total_sui_withdraw
+            else 0;
+
+        pool.pool_token_balance =
+            if (pool.pool_token_balance >= pool.pending_pool_token_withdraw)
+                pool.pool_token_balance - pool.pending_pool_token_withdraw
+            else 0;
         pool.pending_total_sui_withdraw = 0;
         pool.pending_pool_token_withdraw = 0;
     }
@@ -675,6 +686,42 @@ module sui_system::staking_pool {
 
     #[test_only]
     public use fun fungible_staked_sui_data_principal_value as FungibleStakedSuiData.principal_value;
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun process_pending_stake_withdraw_test_only(pool: &mut StakingPool) {
+        pool.process_pending_stake_withdraw()
+    }
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun increase_pending_pool_token_withdraw_test_only(pool: &mut StakingPool, delta: u64) {
+        pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + delta
+    }
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun increase_pending_total_sui_withdraw_test_only(pool: &mut StakingPool, delta: u64) {
+        pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + delta
+    }
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun pending_total_sui_withdraw(pool: &StakingPool): u64 {
+        pool.pending_total_sui_withdraw
+    }
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun pool_token_balance(pool: &StakingPool): u64 {
+        pool.pool_token_balance
+    }
+
+    // NEVER remove `#[test_only]`
+    #[test_only]
+    public(package) fun pending_pool_token_withdraw(pool: &StakingPool): u64 {
+        pool.pending_pool_token_withdraw
+    }
 
     #[test_only]
     public(package) fun fungible_staked_sui_data_principal_value(fungible_staked_sui_data: &FungibleStakedSuiData): u64 {
