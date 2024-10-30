@@ -12,12 +12,12 @@ brew services start postgresql@version
 ## DB reset
 When making db-related changes, you may find yourself having to run migrations and reset dbs often. The commands below are how you can invoke these actions.
 ```sh
-cargo run --bin mvr-indexer -- --database-url "<DATABASE_URL>" reset-database --force
+cargo run --bin sui-mvr-indexer -- --database-url "<DATABASE_URL>" reset-database --force
 ```
 
 ## Start the indexer
 ```SH
-cargo run --bin mvr-indexer -- --db-url "<DATABASE_URL>" indexer --rpc-client-url "https://fullnode.devnet.sui.io:443" --remote-store-url  http://lax-suifn-t99eb.devnet.sui.io:9000/rest
+cargo run --bin sui-mvr-indexer -- --db-url "<DATABASE_URL>" indexer --rpc-client-url "https://fullnode.devnet.sui.io:443" --remote-store-url  http://lax-suifn-t99eb.devnet.sui.io:9000/rest
 ```
 
 ## Migrations

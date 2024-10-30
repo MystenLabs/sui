@@ -2,26 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use sui_indexer::backfill::backfill_runner::BackfillRunner;
-use sui_indexer::benchmark::run_indexer_benchmark;
-use sui_indexer::config::{Command, UploadOptions};
-use sui_indexer::database::ConnectionPool;
-use sui_indexer::db::setup_postgres::clear_database;
-use sui_indexer::db::{
+use sui_mvr_indexer::backfill::backfill_runner::BackfillRunner;
+use sui_mvr_indexer::benchmark::run_indexer_benchmark;
+use sui_mvr_indexer::config::{Command, UploadOptions};
+use sui_mvr_indexer::database::ConnectionPool;
+use sui_mvr_indexer::db::setup_postgres::clear_database;
+use sui_mvr_indexer::db::{
     check_db_migration_consistency, check_prunable_tables_valid, reset_database, run_migrations,
 };
-use sui_indexer::indexer::Indexer;
-use sui_indexer::metrics::{
+use sui_mvr_indexer::indexer::Indexer;
+use sui_mvr_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
-use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
-use sui_indexer::store::PgIndexerStore;
+use sui_mvr_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
+use sui_mvr_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let opts = sui_indexer::config::IndexerConfig::parse();
+    let opts = sui_mvr_indexer::config::IndexerConfig::parse();
 
     // NOTE: this is to print out tracing like info, warn & error.
     let _guard = telemetry_subscribers::TelemetryConfig::new()
