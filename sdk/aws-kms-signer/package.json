@@ -41,14 +41,14 @@
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"@types/node": "^20.4.2",
-		"typescript": "^5.1.6",
+		"@types/node": "^20.14.10",
+		"typescript": "^5.5.3",
 		"vitest": "^2.0.1"
 	},
 	"dependencies": {
 		"@mysten/sui": "workspace:*",
-		"@noble/curves": "^1.6.0",
-		"@noble/hashes": "^1.5.0",
+		"@noble/curves": "^1.4.2",
+		"@noble/hashes": "^1.4.0",
 		"asn1-ts": "^8.0.2",
 		"aws4fetch": "^1.0.20"
 	},

@@ -81,10 +81,6 @@ export class AwsKmsSigner extends Signer {
 			SigningAlgorithm: 'ECDSA_SHA_256',
 		});
 
-		if (!signResponse.Signature) {
-			throw new Error('Signature not found in the response. Execution failed.');
-		}
-
 		// Concatenate the signature components into a compact form
 		return this.#getConcatenatedSignature(fromBase64(signResponse.Signature));
 	}

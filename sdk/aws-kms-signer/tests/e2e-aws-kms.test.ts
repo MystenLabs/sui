@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { AwsKmsSigner } from '../src/index';
 
-describe('AWSKMSSigner E2E Tests', () => {
+describe('Aws KMS signer E2E testing', () => {
 	let signer: AwsKmsSigner;
 	beforeAll(async () => {
 		const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_KMS_KEY_ID } = process.env;
