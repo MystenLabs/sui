@@ -64,7 +64,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KEY_ID}}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_KMS_TEST_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ env.AWS_KMS_AWS_REGION }}
+          AWS_REGION: ${{ vars.AWS_KMS_AWS_REGION }}
           AWS_KMS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KMS_KEY_ID }}
         run: pnpm turbo test --env-mode=loose
 
