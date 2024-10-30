@@ -544,36 +544,7 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
 }
 
 #[tokio::test]
-async fn test_upgrade_package_add_new_module_in_dep_only_mode() {
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-    let base_pkg = "dep_only_upgrade";
-    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
-    let (digest, modules) = build_upgrade_test_modules_with_overlay(
-        base_pkg,
-        FileOverlay::Add {
-            file_name: "new_module.move",
-            contents: "module base_addr::new_module;",
-        },
-    );
-    let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
-        )
-        .await;
-
-    assert_eq!(
-        effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
-            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
-        },
-    );
-}
-
-#[tokio::test]
-async fn test_upgrade_package_add_new_friend_module_in_dep_only_mode_pre_v68() {
+async fn test_upgrade_package_invalid_dep_only_upgrade_pre_v68() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
         config
@@ -582,8 +553,7 @@ async fn test_upgrade_package_add_new_friend_module_in_dep_only_mode_pre_v68() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let base_pkg = "dep_only_upgrade";
     assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
-    let (digest, modules) = build_upgrade_test_modules_with_overlay(
-        base_pkg,
+    let overlays = [
         FileOverlay::Add {
             file_name: "new_friend_module.move",
             contents: r#"
@@ -591,81 +561,66 @@ module base_addr::new_friend_module;
 public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
         "#,
         },
-    );
-    let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
-        )
-        .await;
-
-    assert_eq!(
-        effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
-            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
-        },
-    );
-}
-
-#[tokio::test]
-async fn test_upgrade_package_add_new_friend_module_in_dep_only_mode() {
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-    let base_pkg = "dep_only_upgrade";
-    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
-    let (digest, modules) = build_upgrade_test_modules_with_overlay(
-        base_pkg,
-        FileOverlay::Add {
-            file_name: "new_friend_module.move",
-            contents: r#"
-module base_addr::new_friend_module; 
-public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
-        "#,
-        },
-    );
-
-    let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
-        )
-        .await;
-
-    assert_eq!(
-        effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
-            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
-        },
-    );
-}
-
-#[tokio::test]
-async fn test_upgrade_package_remove_module_in_dep_only_mode() {
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-    let base_pkg = "dep_only_upgrade";
-    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
-    let (digest, modules) = build_upgrade_test_modules_with_overlay(
-        base_pkg,
         FileOverlay::Remove("friend_module.move"),
-    );
-    let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
-        )
-        .await;
+    ];
+    for overlay in overlays {
+        let (digest, modules) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
+        let effects = runner
+            .upgrade(
+                UpgradePolicy::DEP_ONLY,
+                digest,
+                modules,
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+            )
+            .await;
 
-    assert_eq!(
-        effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
-            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        assert_eq!(
+            effects.into_status().unwrap_err().0,
+            ExecutionFailureStatus::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+            },
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_invalid_dep_only_upgrades() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let base_pkg = "dep_only_upgrade";
+    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
+    let overlays = [
+        FileOverlay::Add {
+            file_name: "new_module.move",
+            contents: "module base_addr::new_module;",
         },
-    );
+        FileOverlay::Add {
+            file_name: "new_friend_module.move",
+            contents: r#"
+module base_addr::new_friend_module; 
+public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
+        "#,
+        },
+        FileOverlay::Remove("friend_module.move"),
+    ];
+
+    for overlay in overlays {
+        let (digest, modules) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
+        let effects = runner
+            .upgrade(
+                UpgradePolicy::DEP_ONLY,
+                digest,
+                modules,
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+            )
+            .await;
+
+        assert_eq!(
+            effects.into_status().unwrap_err().0,
+            ExecutionFailureStatus::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+            },
+        );
+    }
 }
 
 #[tokio::test]
