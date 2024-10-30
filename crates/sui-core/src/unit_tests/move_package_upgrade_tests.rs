@@ -458,6 +458,122 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
 }
 
 #[tokio::test]
+async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
+    // Allow new modules in deps-only mode for this test.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
+        config
+    });
+
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade_new_module");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+}
+
+#[tokio::test]
+async fn test_upgrade_package_add_new_module_in_dep_only_mode() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade_new_module");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert_eq!(
+        effects.into_status().unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_upgrade_package_add_new_friend_module_in_dep_only_mode_pre_v68() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
+        config
+    });
+
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade_new_friend_module");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert_eq!(
+        effects.into_status().unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_upgrade_package_add_new_friend_module_in_dep_only_mode() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade_new_friend_module");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert_eq!(
+        effects.into_status().unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_upgrade_package_remove_module_in_dep_only_mode() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade_remove_module");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert_eq!(
+        effects.into_status().unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
 async fn test_upgrade_package_compatible_in_additive_mode() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 

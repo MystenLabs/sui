@@ -643,7 +643,7 @@ mod checked {
     fn check_compatibility<'a>(
         context: &ExecutionContext,
         existing_package: &MovePackage,
-        upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
+        upgrading_modules: &[CompiledModule],
         policy: u8,
     ) -> Result<(), ExecutionError> {
         // Make sure this is a known upgrade policy.
@@ -659,6 +659,25 @@ mod checked {
         let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
+
+        let existing_modules_len = current_normalized.len();
+        let upgrading_modules_len = upgrading_modules.len();
+        if context
+            .protocol_config
+            .disallow_new_modules_in_deps_only_packages()
+            && policy as u8 == UpgradePolicy::DEP_ONLY
+            && existing_modules_len != upgrading_modules_len
+        {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PackageUpgradeError {
+                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+                },
+                format!(
+                    "Existing package has {existing_modules_len} modules, but new package has \
+                     {upgrading_modules_len}. Adding or removing a module to a deps only package is not allowed."
+                ),
+            ));
+        }
 
         let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
         for (name, cur_module) in current_normalized {

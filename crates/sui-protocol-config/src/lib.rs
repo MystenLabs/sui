@@ -194,6 +194,7 @@ const MAX_PROTOCOL_VERSION: u64 = 68;
 //             Update to Move stdlib.
 //             Enable gas based congestion control with overage.
 //             Further reduce minimum number of random beacon shares.
+//             Disallow adding new modules in `deps-only` packages.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -560,6 +561,9 @@ struct FeatureFlags {
     // Enable uncompressed group elements in BLS123-81 G1
     #[serde(skip_serializing_if = "is_false")]
     uncompressed_g1_group_elements: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_new_modules_in_deps_only_packages: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1658,6 +1662,11 @@ impl ProtocolConfig {
 
     pub fn uncompressed_g1_group_elements(&self) -> bool {
         self.feature_flags.uncompressed_g1_group_elements
+    }
+
+    pub fn disallow_new_modules_in_deps_only_packages(&self) -> bool {
+        self.feature_flags
+            .disallow_new_modules_in_deps_only_packages
     }
 }
 
@@ -2920,6 +2929,8 @@ impl ProtocolConfig {
 
                     // Further reduce minimum number of random beacon shares.
                     cfg.random_beacon_reduction_lower_bound = Some(500);
+
+                    cfg.feature_flags.disallow_new_modules_in_deps_only_packages = true;
                 }
                 // Use this template when making changes:
                 //
@@ -3085,6 +3096,11 @@ impl ProtocolConfig {
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
         self.consensus_gc_depth = Some(val);
+    }
+
+    pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .disallow_new_modules_in_deps_only_packages = val;
     }
 }
 
