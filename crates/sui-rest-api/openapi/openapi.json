@@ -306,9 +306,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Object"
+                  "$ref": "#/components/schemas/ObjectResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -353,9 +354,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Object"
+                  "$ref": "#/components/schemas/ObjectResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -3872,6 +3874,21 @@
           },
           "reference": {
             "$ref": "#/components/schemas/ObjectReference"
+          }
+        }
+      },
+      "ObjectResponse": {
+        "type": "object",
+        "required": [
+          "digest",
+          "object"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "object": {
+            "$ref": "#/components/schemas/Object"
           }
         }
       },

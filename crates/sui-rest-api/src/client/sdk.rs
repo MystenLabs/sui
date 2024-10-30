@@ -9,7 +9,6 @@ use sui_sdk_types::types::CheckpointData;
 use sui_sdk_types::types::CheckpointDigest;
 use sui_sdk_types::types::CheckpointSequenceNumber;
 use sui_sdk_types::types::EpochId;
-use sui_sdk_types::types::Object;
 use sui_sdk_types::types::ObjectId;
 use sui_sdk_types::types::SignedCheckpointSummary;
 use sui_sdk_types::types::SignedTransaction;
@@ -50,6 +49,7 @@ use crate::types::X_SUI_LOWEST_AVAILABLE_CHECKPOINT;
 use crate::types::X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS;
 use crate::types::X_SUI_TIMESTAMP_MS;
 use crate::ExecuteTransactionQueryParameters;
+use crate::ObjectResponse;
 
 static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -128,26 +128,30 @@ impl Client {
         self.json(request).await
     }
 
-    pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<Object>> {
+    pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<ObjectResponse>> {
         let url = self.url().join(&format!("objects/{object_id}"))?;
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::GetObjectResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn get_object_with_version(
         &self,
         object_id: ObjectId,
         version: Version,
-    ) -> Result<Response<Object>> {
+    ) -> Result<Response<ObjectResponse>> {
         let url = self
             .url()
             .join(&format!("objects/{object_id}/version/{version}"))?;
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::GetObjectResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn list_dynamic_fields(

@@ -84,7 +84,7 @@ impl Client {
             .get_object(object_id.into())
             .await
             .map(Response::into_inner)
-            .and_then(|object| object.try_into().map_err(Into::into))
+            .and_then(|object| object.object.try_into().map_err(Into::into))
     }
 
     pub async fn get_object_with_version(
@@ -96,7 +96,7 @@ impl Client {
             .get_object_with_version(object_id.into(), version.into())
             .await
             .map(Response::into_inner)
-            .and_then(|object| object.try_into().map_err(Into::into))
+            .and_then(|object| object.object.try_into().map_err(Into::into))
     }
 
     pub async fn execute_transaction(

@@ -39,6 +39,7 @@ pub use checkpoints::ListCheckpointsQueryParameters;
 pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
+pub use objects::ObjectResponse;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 pub use transactions::ExecuteTransactionQueryParameters;
 
