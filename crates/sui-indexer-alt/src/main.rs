@@ -12,6 +12,7 @@ use sui_indexer_alt::{
         kv_objects::KvObjects, kv_transactions::KvTransactions, obj_versions::ObjVersions,
         sum_coin_balances::SumCoinBalances, sum_obj_types::SumObjTypes,
         tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+        wal_obj_types::WalObjTypes,
     },
     Indexer,
 };
@@ -43,6 +44,7 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline::<ObjVersions>().await?;
             indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
             indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
+            indexer.concurrent_pipeline::<WalObjTypes>().await?;
             indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;
             indexer.sequential_pipeline::<SumObjTypes>(lag).await?;
 
