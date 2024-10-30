@@ -1036,37 +1036,6 @@ importers:
         specifier: ^0.11.10
         version: 0.11.10
 
-  sdk/aws-kms-signer:
-    dependencies:
-      '@mysten/sui':
-        specifier: workspace:*
-        version: link:../typescript
-      '@noble/curves':
-        specifier: ^1.4.2
-        version: 1.6.0
-      '@noble/hashes':
-        specifier: ^1.4.0
-        version: 1.5.0
-      asn1-ts:
-        specifier: ^8.0.2
-        version: 8.0.2
-      aws4fetch:
-        specifier: ^1.0.20
-        version: 1.0.20
-    devDependencies:
-      '@mysten/build-scripts':
-        specifier: workspace:*
-        version: link:../build-scripts
-      '@types/node':
-        specifier: ^20.14.10
-        version: 20.14.10
-      typescript:
-        specifier: ^5.5.3
-        version: 5.5.3
-      vitest:
-        specifier: ^2.0.1
-        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
-
   sdk/bcs:
     dependencies:
       bs58:
@@ -1615,6 +1584,37 @@ importers:
       wait-on:
         specifier: ^7.2.0
         version: 7.2.0
+
+  sdk/kms:
+    dependencies:
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../typescript
+      '@noble/curves':
+        specifier: ^1.4.2
+        version: 1.6.0
+      '@noble/hashes':
+        specifier: ^1.4.0
+        version: 1.5.0
+      asn1-ts:
+        specifier: ^8.0.2
+        version: 8.0.2
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
+    devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.14.10
+      typescript:
+        specifier: ^5.5.3
+        version: 5.5.3
+      vitest:
+        specifier: ^2.0.1
+        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
 
   sdk/ledgerjs-hw-app-sui:
     dependencies:
@@ -15491,26 +15491,26 @@ snapshots:
     dependencies:
       '@amplitude/types': 1.10.2
       '@amplitude/utils': 1.10.2
-      tslib: 2.6.3
+      tslib: 2.7.0
 
   '@amplitude/node@1.10.2':
     dependencies:
       '@amplitude/identify': 1.10.2
       '@amplitude/types': 1.10.2
       '@amplitude/utils': 1.10.2
-      tslib: 2.6.3
+      tslib: 2.7.0
 
   '@amplitude/plugin-page-view-tracking-browser@0.8.0':
     dependencies:
       '@amplitude/analytics-client-common': 0.7.0
       '@amplitude/analytics-types': 0.20.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   '@amplitude/plugin-web-attribution-browser@0.7.0':
     dependencies:
       '@amplitude/analytics-client-common': 0.7.0
       '@amplitude/analytics-types': 0.20.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   '@amplitude/types@1.10.2': {}
 
@@ -18653,7 +18653,7 @@ snapshots:
       debug: 4.3.5(supports-color@8.1.1)
       globby: 11.1.0
       is-wsl: 2.2.0
-      tslib: 2.6.3
+      tslib: 2.7.0
     transitivePeerDependencies:
       - supports-color
 
@@ -18705,7 +18705,7 @@ snapshots:
       '@oclif/errors': 1.3.6
       '@oclif/linewrap': 1.0.0
       chalk: 4.1.2
-      tslib: 2.6.3
+      tslib: 2.7.0
 
   '@oclif/plugin-autocomplete@0.3.0':
     dependencies:
@@ -20584,7 +20584,7 @@ snapshots:
       '@sentry/core': 7.61.0
       '@sentry/types': 7.61.0
       '@sentry/utils': 7.61.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   '@sentry/browser@7.59.2':
     dependencies:
@@ -20635,7 +20635,7 @@ snapshots:
     dependencies:
       '@sentry/types': 7.61.0
       '@sentry/utils': 7.61.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   '@sentry/hub@6.19.7':
     dependencies:
@@ -20702,7 +20702,7 @@ snapshots:
   '@sentry/utils@7.61.0':
     dependencies:
       '@sentry/types': 7.61.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   '@sentry/webpack-plugin@1.20.0':
     dependencies:
@@ -23101,11 +23101,11 @@ snapshots:
 
   aria-hidden@1.2.3:
     dependencies:
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   aria-hidden@1.2.4:
     dependencies:
-      tslib: 2.6.3
+      tslib: 2.7.0
 
   aria-query@4.2.2:
     dependencies:
@@ -26306,12 +26306,12 @@ snapshots:
   graphql-tag@2.12.6(graphql@15.9.0):
     dependencies:
       graphql: 15.9.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   graphql-tag@2.12.6(graphql@16.9.0):
     dependencies:
       graphql: 16.9.0
-      tslib: 2.6.0
+      tslib: 2.7.0
 
   graphql-ws@5.14.3(graphql@16.9.0):
     dependencies:
@@ -28800,7 +28800,7 @@ snapshots:
   param-case@3.0.4:
     dependencies:
       dot-case: 3.0.4
-      tslib: 2.6.3
+      tslib: 2.7.0
 
   parcel@2.12.0(@swc/helpers@0.5.5)(postcss@8.4.39)(relateurl@0.2.7)(terser@5.31.1)(typescript@5.5.3):
     dependencies:
@@ -29684,7 +29684,7 @@ snapshots:
     dependencies:
       react: 18.3.1
       react-style-singleton: 2.2.1(@types/react@18.3.3)(react@18.3.1)
-      tslib: 2.6.3
+      tslib: 2.7.0
     optionalDependencies:
       '@types/react': 18.3.3
 
@@ -29712,7 +29712,7 @@ snapshots:
       react: 18.3.1
       react-remove-scroll-bar: 2.3.6(@types/react@18.3.3)(react@18.3.1)
       react-style-singleton: 2.2.1(@types/react@18.3.3)(react@18.3.1)
-      tslib: 2.6.3
+      tslib: 2.7.0
       use-callback-ref: 1.3.2(@types/react@18.3.3)(react@18.3.1)
       use-sidecar: 1.1.2(@types/react@18.3.3)(react@18.3.1)
     optionalDependencies:
