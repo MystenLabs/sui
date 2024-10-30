@@ -209,7 +209,7 @@ impl AuthorityPerpetualTables {
         // 8 frac key spaces
         let objects_config = KeySpaceConfig::new().with_compactor(Box::new(objects_compactor));
         let objects = builder.frac_key_space_config("objects", 32 + 8, 1, objects_config);
-        let live_owned_object_markers = builder.frac_key_space("live_owned_object_markers", 32 + 8 + 32, 1);
+        let live_owned_object_markers = builder.frac_key_space("live_owned_object_markers", 32 + 8 + 32 + 8, 1);
         let transactions = builder.frac_key_space("transactions", 32, 1);
         let effects = builder.frac_key_space("effects", 32, 1);
         let executed_effects = builder.frac_key_space("executed_effects",32, 1);
