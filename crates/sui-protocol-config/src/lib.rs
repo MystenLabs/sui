@@ -193,6 +193,7 @@ const MAX_PROTOCOL_VERSION: u64 = 68;
 // Version 68: Add G1Uncompressed group to group ops.
 //             Update to Move stdlib.
 //             Enable gas based congestion control with overage.
+//             Further reduce minimum number of random beacon shares.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2916,6 +2917,9 @@ impl ProtocolConfig {
                         Some(3_700_000); // 20% of above
                     cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
                     cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
+
+                    // Further reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(500);
                 }
                 // Use this template when making changes:
                 //
