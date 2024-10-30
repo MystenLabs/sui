@@ -1,17 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { DERElement } from 'asn1-ts';
-
-/**
- * The total number of bits in the DER bit string for the uncompressed public key.
- */
+/** The total number of bits in the DER bit string for the uncompressed public key. */
 export const DER_BIT_STRING_LENGTH = 520;
 
-/**
- * The total number of bytes corresponding to the DER bit string length.
- */
+/** The total number of bytes corresponding to the DER bit string length. */
 export const DER_BYTES_LENGTH = DER_BIT_STRING_LENGTH / 8;
 
 // Reference Specifications:
@@ -54,7 +47,6 @@ export function compressPublicKeyClamped(uncompressedKey: Uint8ClampedArray): Ui
 
 	// Convert bits to bytes
 	const uncompressedBytes = bitsToBytes(uncompressedKey);
-	//console.log("Uncompressed Bytes:", uncompressedBytes);
 
 	// Ensure the public key starts with the standard uncompressed prefix 0x04
 	if (uncompressedBytes[0] !== 0x04) {
@@ -70,38 +62,4 @@ export function compressPublicKeyClamped(uncompressedKey: Uint8ClampedArray): Ui
 
 	// Return the compressed public key consisting of the parity byte and X-coordinate
 	return new Uint8Array([parityByte, ...xCoord]);
-}
-
-/**
- * Generates a concatenated signature from a DER-encoded signature.
- *
- * This signature format is consumable by Sui's `toSerializedSignature` method.
- *
- * @param signature - A `Uint8Array` representing the DER-encoded signature.
- * @returns A `Uint8Array` containing the concatenated signature in compact form.
- *
- * @throws {Error} If the input signature is invalid or cannot be processed.
- */
-export function getConcatenatedSignature(signature: Uint8Array): Uint8Array {
-	if (!signature || signature.length === 0) {
-		throw new Error('Invalid signature');
-	}
-
-	// Initialize a DERElement to parse the DER-encoded signature
-	const derElement = new DERElement();
-	derElement.fromBytes(signature);
-
-	// Convert the DER element to JSON to extract the r and s components
-	const derJsonData = derElement.toJSON() as {
-		value: string;
-	}[];
-
-	const newR = derJsonData[0];
-	const newS = derJsonData[1];
-
-	// Create a Secp256k1Signature using the extracted r and s values
-	const secp256k1Signature = new secp256k1.Signature(BigInt(String(newR)), BigInt(String(newS)));
-
-	// Normalize the signature and convert it to compact raw bytes
-	return secp256k1Signature.normalizeS().toCompactRawBytes();
 }

@@ -1,81 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { GetPublicKeyCommand, KMSClient, SignCommand } from '@aws-sdk/client-kms';
-import { Signer } from '@mysten/sui/cryptography';
-import { Secp256k1PublicKey } from '@mysten/sui/keypairs/secp256k1';
-import { ASN1Construction, ASN1TagClass, DERElement } from 'asn1-ts';
+import type { PublicKey, SignatureFlag } from '@mysten/sui/cryptography';
+import { SIGNATURE_FLAG_TO_SCHEME, Signer } from '@mysten/sui/cryptography';
+import { secp256r1 } from '@noble/curves/p256.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { DERElement } from 'asn1-ts';
 
-import { compressPublicKeyClamped, getConcatenatedSignature } from './utils.js';
+import { fromBase64, toBase64 } from '../../bcs/src/b64.js';
+import type { AwsClientOptions } from './aws-client.js';
+import { AwsKmsClient } from './aws-client.js';
 
 /**
  * Configuration options for initializing the AWSKMSSigner.
  */
-export interface AWSKMSSignerOptions {
-	/** AWS Access Key ID */
-	accessKeyId: string;
-	/** AWS Secret Access Key */
-	secretAccessKey: string;
-	/** AWS Region (e.g., 'us-west-2') */
-	region: string;
+export interface AwsKmsClientSignerOptions {
 	/** AWS KMS Key ID used for signing */
 	kmsKeyId: string;
+	/** Options for setting up the AWS KMS client */
+	client: AwsKmsClient;
+	/** Public key */
+	publicKey: PublicKey;
 }
 
 /**
  * AWSKMSSigner integrates AWS Key Management Service (KMS) with the Sui blockchain
  * to provide signing capabilities using AWS-managed cryptographic keys.
  */
-export class AWSKMSSigner extends Signer {
-	/** The compressed Secp256k1 public key */
-	#pubKey?: Secp256k1PublicKey;
+export class AwsKmsSigner extends Signer {
+	#publicKey: PublicKey;
 	/** AWS KMS client instance */
-	#client: KMSClient;
+	#client: AwsKmsClient;
 	/** AWS KMS Key ID used for signing */
 	#kmsKeyId: string;
 
 	/**
-	 * Creates an instance of AWSKMSSigner.
+	 * Creates an instance of AwsKmsSigner. It's recommened to call `fromAwsCredentials` method to create an instance.
 	 * @param options - Configuration options for AWS KMS.
 	 * @throws Will throw an error if required AWS credentials or region are not provided.
 	 */
-	constructor({ accessKeyId, secretAccessKey, region, kmsKeyId }: AWSKMSSignerOptions) {
+	constructor({ kmsKeyId, client, publicKey }: AwsKmsClientSignerOptions) {
 		super();
+		this.#client = client;
 
 		if (!kmsKeyId) {
 			throw new Error('KMS Key ID is required');
 		}
 
 		this.#kmsKeyId = kmsKeyId;
-
-		const config = {
-			region,
-			credentials: {
-				accessKeyId,
-				secretAccessKey,
-			},
-		};
-
-		if (!config.credentials.accessKeyId || !config.credentials.secretAccessKey) {
-			throw new Error(
-				'AWS credentials are not set. Please supply the `accessKeyId` and `secretAccessKey`',
-			);
-		}
-
-		if (!config.region) {
-			throw new Error('AWS region is not set');
-		}
-
-		// Initialize the AWS KMS client with the provided configuration
-		this.#client = new KMSClient(config);
-	}
-
-	/**
-	 * Prepares the signer by fetching and setting the public key from AWS KMS.
-	 * This method must be called before performing any signing operations.
-	 * @returns A promise that resolves once the public key is fetched and set.
-	 */
-	async prepare() {
-		this.#pubKey = await this.#getAWSPublicKey();
+		this.#publicKey = publicKey;
 	}
 
 	/**
@@ -83,7 +55,10 @@ export class AWSKMSSigner extends Signer {
 	 * @returns The string 'Secp256k1' indicating the key scheme.
 	 */
 	getKeyScheme() {
-		return 'Secp256k1' as const;
+		if (!this.#publicKey) {
+			throw new Error('Public key not initialized. Call `` method first.');
+		}
+		return SIGNATURE_FLAG_TO_SCHEME[this.#publicKey.flag() as SignatureFlag];
 	}
 
 	/**
@@ -92,10 +67,7 @@ export class AWSKMSSigner extends Signer {
 	 * @throws Will throw an error if the public key has not been initialized.
 	 */
 	getPublicKey() {
-		if (!this.#pubKey) {
-			throw new Error('Public key not initialized. Call `prepare` method first.');
-		}
-		return this.#pubKey;
+		return this.#publicKey;
 	}
 
 	/**
@@ -105,27 +77,19 @@ export class AWSKMSSigner extends Signer {
 	 * @throws Will throw an error if the public key is not initialized or if signing fails.
 	 */
 	async sign(bytes: Uint8Array): Promise<Uint8Array> {
-		if (!this.#pubKey) {
-			throw new Error('Public key not initialized. Call `prepare` method first.');
-		}
-
-		const signCommand = new SignCommand({
+		const signResponse = await this.#client.runCommand('Sign', {
 			KeyId: this.#kmsKeyId,
-			Message: bytes,
+			Message: toBase64(bytes),
 			MessageType: 'RAW',
-			SigningAlgorithm: 'ECDSA_SHA_256', // Adjust the algorithm based on your key spec
+			SigningAlgorithm: 'ECDSA_SHA_256',
 		});
-
-		const signResponse = await this.#client.send(signCommand);
 
 		if (!signResponse.Signature) {
 			throw new Error('Signature not found in the response. Execution failed.');
 		}
 
 		// Concatenate the signature components into a compact form
-		const compactSignature = getConcatenatedSignature(signResponse.Signature);
-
-		return compactSignature;
+		return this.#getConcatenatedSignature(fromBase64(signResponse.Signature));
 	}
 
 	/**
@@ -137,49 +101,54 @@ export class AWSKMSSigner extends Signer {
 	}
 
 	/**
-	 * Fetches the AWS KMS public key and converts it to the Sui Secp256k1PublicKey format.
-	 * @private
-	 * @returns A promise that resolves to a Secp256k1PublicKey instance.
-	 * @throws Will throw an error if the public key cannot be retrieved or parsed.
+	 * Generates a concatenated signature from a DER-encoded signature.
+	 *
+	 * This signature format is consumable by Sui's `toSerializedSignature` method.
+	 *
+	 * @param signature - A `Uint8Array` representing the DER-encoded signature.
+	 * @returns A `Uint8Array` containing the concatenated signature in compact form.
+	 *
+	 * @throws {Error} If the input signature is invalid or cannot be processed.
 	 */
-	async #getAWSPublicKey() {
-		// Create a command to get the public key from AWS KMS
-		const getPublicKeyCommand = new GetPublicKeyCommand({
-			KeyId: this.#kmsKeyId,
-		});
-
-		const publicKeyResponse = await this.#client.send(getPublicKeyCommand);
-
-		if (!publicKeyResponse.PublicKey) {
-			throw new Error('Public Key not found for the supplied `keyId`');
+	#getConcatenatedSignature(signature: Uint8Array): Uint8Array {
+		if (!signature || signature.length === 0) {
+			throw new Error('Invalid signature');
 		}
 
-		const publicKey = publicKeyResponse.PublicKey;
+		// Initialize a DERElement to parse the DER-encoded signature
 		const derElement = new DERElement();
-		derElement.fromBytes(publicKey);
+		derElement.fromBytes(signature);
 
-		// Validate the ASN.1 structure of the public key
-		if (
-			!(
-				derElement.tagClass === ASN1TagClass.universal &&
-				derElement.construction === ASN1Construction.constructed
-			)
-		) {
-			throw new Error('Unexpected ASN.1 structure');
+		const [r, s] = derElement.toJSON() as [string, string];
+
+		switch (this.getKeyScheme()) {
+			case 'Secp256k1':
+				return new secp256k1.Signature(BigInt(r), BigInt(s)).normalizeS().toCompactRawBytes();
+			case 'Secp256r1':
+				return new secp256r1.Signature(BigInt(r), BigInt(s)).normalizeS().toCompactRawBytes();
 		}
 
-		const components = derElement.components;
-		const publicKeyElement = components[1];
+		// Create a Secp256k1Signature using the extracted r and s values
+		const secp256k1Signature = new secp256k1.Signature(BigInt(r), BigInt(s));
 
-		if (!publicKeyElement) {
-			throw new Error('Public Key not found in the DER structure');
-		}
+		// Normalize the signature and convert it to compact raw bytes
+		return secp256k1Signature.normalizeS().toCompactRawBytes();
+	}
 
-		// Extract the raw public key from the ASN.1 bit string
-		const rawPublicKey = publicKeyElement.bitString;
-		const compressedKey = compressPublicKeyClamped(rawPublicKey);
+	/**
+	 * Prepares the signer by fetching and setting the public key from AWS KMS.
+	 * It is recommended to initialize an `AwsKmsSigner` instance using this function.
+	 * @returns A promise that resolves once a `AwsKmsSigner` instance is prepared (public key is set).
+	 */
+	static async fromAwsCredentials(keyId: string, options: AwsClientOptions) {
+		const client = new AwsKmsClient(options);
 
-		// Convert the compressed key to the Secp256k1PublicKey format used by Sui
-		return new Secp256k1PublicKey(compressedKey);
+		const pubKey = await client.getPublicKey(keyId);
+
+		return new AwsKmsSigner({
+			kmsKeyId: keyId,
+			client,
+			publicKey: pubKey,
+		});
 	}
 }
