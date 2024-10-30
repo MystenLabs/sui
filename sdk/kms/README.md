@@ -1,6 +1,7 @@
 # Sui KMS Signers
 
-The Sui KMS Signers package provides a set of tools for securely signing transactions using Key Management Services (KMS) like AWS KMS.
+The Sui KMS Signers package provides a set of tools for securely signing transactions using Key
+Management Services (KMS) like AWS KMS.
 
 ## Table of Contents
 
@@ -13,7 +14,7 @@ The Sui KMS Signers package provides a set of tools for securely signing transac
 
 ## AWS KMS Signer
 
-The AWS KMS Signer allows you to leverage AWS's Key Management Service to sign Sui transactions. 
+The AWS KMS Signer allows you to leverage AWS's Key Management Service to sign Sui transactions.
 
 ### Usage
 
@@ -35,15 +36,27 @@ const prepareSigner = async () => {
 
 #### fromCredentials
 
-Create an AWS KMS signer from credentials. This method initializes the signer with the necessary AWS credentials and region information, allowing it to interact with AWS KMS to perform cryptographic operations.
+Create an AWS KMS signer from credentials. This method initializes the signer with the necessary AWS
+credentials and region information, allowing it to interact with AWS KMS to perform cryptographic
+operations.
 
 ##### Parameters
 
-- `keyId` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The AWS KMS key ID.
-- `options` **[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** An object containing AWS credentials and region.
-  - `region` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The AWS region.
-  - `accessKeyId` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The AWS access key ID.
-  - `secretAccessKey` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The AWS secret access key.
+- `keyId`
+  **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+  The AWS KMS key ID.
+- `options`
+  **[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** An
+  object containing AWS credentials and region.
+  - `region`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The AWS region.
+  - `accessKeyId`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The AWS access key ID.
+  - `secretAccessKey`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The AWS secret access key.
 
 ##### Examples
 
@@ -55,4 +68,6 @@ const signer = await AwsKmsSigner.fromCredentials('your-kms-key-id', {
 });
 ```
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[AwsKmsSigner](./src/aws/aws-kms-signer.ts)>** An instance of AwsKmsSigner.
+Returns
+**[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[AwsKmsSigner](./src/aws/aws-kms-signer.ts)>**
+An instance of AwsKmsSigner.
