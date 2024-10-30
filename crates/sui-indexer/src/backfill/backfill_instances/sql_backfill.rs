@@ -43,8 +43,6 @@ impl BackfillTask for SqlBackFill {
             query
         };
 
-        println!("Running query: {}", query);
-
         diesel::sql_query(query).execute(&mut conn).await.unwrap();
     }
 }
