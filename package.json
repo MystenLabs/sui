@@ -3,7 +3,7 @@
 	"private": true,
 	"license": "Apache-2.0",
 	"scripts": {
-		"test": "turbo run test",
+		"test": "turbo run test --env-mode=loose",
 		"test:dev": "turbo run test -- --run",
 		"icons": "pnpm --filter ./apps/icons",
 		"wallet": "turbo --filter ./apps/wallet",
