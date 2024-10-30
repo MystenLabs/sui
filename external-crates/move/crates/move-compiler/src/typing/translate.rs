@@ -23,7 +23,7 @@ use crate::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
-        program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
+        program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
         string_utils::{debug_print, make_ascii_titlecase},
         unique_map::UniqueMap,
         *,
@@ -43,10 +43,11 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
+use move_symbol_pool::Symbol;
 use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::Arc,
+    sync::{Arc, Mutex, RwLock},
 };
 
 //**************************************************************************************************
@@ -69,8 +70,8 @@ pub fn program(
         info,
     ));
 
-    extract_macros(&mut context, &nmodules, &pre_compiled_lib);
-    let mut modules = modules(&mut context, nmodules);
+    let all_macro_definitions = extract_macros(&nmodules, &pre_compiled_lib);
+    let mut modules = modules(compilation_env, &pre_compiled_lib, info, nmodules);
 
     assert!(context.constraints.is_empty());
     dependency_ordering::program(context.env, &mut modules);
@@ -99,10 +100,9 @@ pub fn program(
 }
 
 fn extract_macros(
-    context: &mut Context,
     modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
     pre_compiled_lib: &Option<Arc<FullyCompiledProgram>>,
-) {
+) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
         let N::UseFuns {
@@ -145,7 +145,7 @@ fn extract_macros(
         ))
         .unwrap();
 
-    let all_macro_definitions = all_modules.map(|_mident, mdef| {
+    all_modules.map(|_mident, mdef| {
         mdef.functions.ref_filter_map(|_name, f| {
             let _macro_loc = f.macro_?;
             if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
@@ -155,28 +155,31 @@ fn extract_macros(
                 None
             }
         })
-    });
-
-    context.set_macros(all_macro_definitions);
+    })
 }
 
 fn modules(
-    context: &mut Context,
+    compilation_env: &CompilationEnv,
+    mut info: NamingProgramInfo,
+    all_macro_definitions: &UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     mut modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
-    let mut all_new_friends = BTreeMap::new();
+    let mut all_new_friends = Mutex::new(BTreeMap::new());
+    let mut used_module_members = Mutex::new(BTreeMap::new());
     // We validate the syntax methods first so that processing syntax method forms later are
     // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
     // much easier to enforce the typeclass-like constraints. We also update the program info to
     // reflect any changes that happened.
-    for (key, mdef) in modules.key_cloned_iter_mut() {
-        validate_syntax_methods(context, &key, mdef);
-        context
-            .modules
-            .set_module_syntax_methods(key, mdef.syntax_methods.clone());
+    for (mident, mdef) in modules.key_cloned_iter_mut() {
+        let context = Context::new(compilation_env, &info, all_macro_definitions);
+        validate_syntax_methods(&mut context, &mident, mdef);
+    }
+    for (mident, mdef) in modules.key_cloned_iter() {
+        info.set_module_syntax_methods(mident, mdef.syntax_methods.clone());
     }
     let mut typed_modules = modules.map(|ident, mdef| {
-        let (typed_mdef, new_friends) = module(context, ident, mdef);
+        let context = Context::new(compilation_env, &info, all_macro_definitions);
+        let (typed_mdef, new_friends) = module(&mut context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
             let friend = Friend {
                 attributes: UniqueMap::new(),
@@ -184,14 +187,20 @@ fn modules(
                 loc,
             };
             all_new_friends
+                .lock()
+                .unwrap()
                 .entry(pub_package_module)
                 .or_insert_with(BTreeMap::new)
                 .insert(ident, friend);
         }
+        used_module_members
+            .lock()
+            .unwrap()
+            .extend(context.used_module_members);
         typed_mdef
     });
 
-    for (mident, friends) in all_new_friends {
+    for (mident, friends) in all_new_friends.into_inner().unwrap() {
         let mdef = typed_modules.get_mut(&mident).unwrap();
         // point of interest: if we have any new friends, we know there can't be any
         // "current" friends becahse all thew new friends are generated off of
@@ -200,8 +209,9 @@ fn modules(
             .expect("ICE compiler added duplicate friends to public(package) friend list");
     }
 
+    let used_module_members = used_module_members.into_inner().unwrap();
     for (_, mident, mdef) in &typed_modules {
-        unused_module_members(context, mident, mdef);
+        unused_module_members(compilation_env, &used_module_members, mident, mdef);
     }
 
     typed_modules
@@ -4623,7 +4633,12 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.
-fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
+fn unused_module_members(
+    env: &CompilationEnv,
+    &used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    mident: &ModuleIdent_,
+    mdef: &T::ModuleDefinition,
+) {
     if !matches!(
         mdef.target_kind,
         TargetKind::Source {

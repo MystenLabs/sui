@@ -98,10 +98,10 @@ pub struct TVarCounter {
 }
 
 pub struct Context<'env> {
-    pub modules: NamingProgramInfo,
-    macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env CompilationEnv,
     pub reporter: DiagnosticReporter<'env>,
+    pub modules: NamingProgramInfo,
+    macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
@@ -192,9 +192,9 @@ impl UseFunsScope {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env CompilationEnv,
-        _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-        info: NamingProgramInfo,
-    ) -> Self {
+        info: &'env NamingProgramInfo,
+        macros: &'env UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
+    ) -> Box<Self> {
         let global_use_funs = UseFunsScope::global(&info);
         let deprecations = Deprecations::new(env, &info);
         let debug = TypingDebugFlags {
@@ -204,7 +204,7 @@ impl<'env> Context<'env> {
             type_elaboration: false,
         };
         let reporter = env.diagnostic_reporter_at_top_level();
-        Context {
+        Box::new(Context {
             use_funs: vec![global_use_funs],
             tvar_counter: TVarCounter::new(),
             subst: Subst::empty(),
@@ -217,7 +217,7 @@ impl<'env> Context<'env> {
             constraints: vec![],
             locals: UniqueMap::new(),
             modules: info,
-            macros: UniqueMap::new(),
+            macros,
             named_block_map: BTreeMap::new(),
             env,
             reporter,
@@ -229,7 +229,7 @@ impl<'env> Context<'env> {
             lambda_expansion: vec![],
             ide_info: IDEInfo::new(),
             deprecations,
-        }
+        })
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
@@ -259,14 +259,6 @@ impl<'env> Context<'env> {
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env
             .check_feature(&self.reporter, package, feature, loc)
-    }
-
-    pub fn set_macros(
-        &mut self,
-        macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
-    ) {
-        debug_assert!(self.macros.is_empty());
-        self.macros = macros;
     }
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
