@@ -492,6 +492,7 @@
                   "$ref": "#/components/schemas/TransactionResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -556,6 +557,7 @@
                   }
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
