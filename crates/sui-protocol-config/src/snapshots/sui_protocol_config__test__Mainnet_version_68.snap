@@ -64,6 +64,7 @@ feature_flags:
   consensus_round_prober: true
   validate_identifier_inputs: true
   relocate_event_module: true
+  disallow_new_modules_in_deps_only_packages: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
