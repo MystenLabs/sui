@@ -2,7 +2,7 @@
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
-error[COMPATIBILITYE01001]: missing public declaration
+error[Compatibility E01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/enum.move:4:18
   │
 4 │ module upgrades::enum_ {
@@ -12,25 +12,25 @@ error[COMPATIBILITYE01001]: missing public declaration
   = enums are part of a module's public interface and cannot be removed or changed during an upgrade
   = add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
 
-error[COMPATIBILITYE01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/struct.move:5:18
+error[Compatibility E01001]: missing public declaration
+  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/func.move:4:18
   │
-5 │ module upgrades::struct_ {
-  │                  ^^^^^^^ struct 'StructToBeRemoved' is missing
-  │
-  = struct is missing expected struct 'StructToBeRemoved', but found none
-  = structs are part of a module's public interface and cannot be removed or changed during an upgrade
-  = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
-
-error[COMPATIBILITYE01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/func.move:5:18
-  │
-5 │ module upgrades::func_ {
+4 │ module upgrades::func_ {
   │                  ^^^^^ public function 'fun_to_be_removed' is missing
   │
   = public function is missing expected public function 'fun_to_be_removed', but found none
   = public functions are part of a module's public interface and cannot be removed or changed during an upgrade
   = add missing public function 'fun_to_be_removed' back to the module 'func_'.
+
+error[Compatibility E01001]: missing public declaration
+  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/struct.move:4:18
+  │
+4 │ module upgrades::struct_ {
+  │                  ^^^^^^^ struct 'StructToBeRemoved' is missing
+  │
+  = struct is missing expected struct 'StructToBeRemoved', but found none
+  = structs are part of a module's public interface and cannot be removed or changed during an upgrade
+  = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
