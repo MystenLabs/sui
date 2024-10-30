@@ -7,8 +7,17 @@ pub mod warning_filters;
 
 use crate::{
     command_line::COLOR_MODE_ENV_VAR,
-    diagnostics::codes::{Category, DiagnosticCode, DiagnosticInfo, Severity},
-    shared::files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
+    diagnostics::{
+        codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
+        warning_filters::{FilterName, FilterPrefix, WarningFilters, WarningFiltersScope},
+    },
+    shared::{
+        files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
+        format_allow_attr,
+        ide::{IDEAnnotation, IDEInfo},
+        known_attributes,
+    },
+    Flags,
 };
 use codespan_reporting::{
     self as csr,
@@ -28,19 +37,20 @@ use std::{
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
+    sync::RwLock,
 };
 
 //**************************************************************************************************
 // Types
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-#[must_use]
-pub struct Diagnostic {
-    info: DiagnosticInfo,
-    primary_label: (Loc, String),
-    secondary_labels: Vec<(Loc, String)>,
-    notes: Vec<String>,
+#[derive(Clone, Debug)]
+pub struct DiagnosticReporter<'env> {
+    flags: &'env Flags,
+    known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
+    diags: &'env RwLock<Diagnostics>,
+    ide_information: &'env RwLock<IDEInfo>,
+    warning_filters_scope: WarningFiltersScope,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -55,6 +65,15 @@ struct Diagnostics_ {
     // diagnostics filtered in source code
     filtered_source_diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[must_use]
+pub struct Diagnostic {
+    info: DiagnosticInfo,
+    primary_label: (Loc, String),
+    secondary_labels: Vec<(Loc, String)>,
+    notes: Vec<String>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -349,6 +368,104 @@ pub fn report_migration_to_buffer(files: &MappedFiles, diags: Diagnostics) -> Ve
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
+
+impl<'env> DiagnosticReporter<'env> {
+    pub const fn new(
+        flags: &'env Flags,
+        known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
+        diags: &'env RwLock<Diagnostics>,
+        ide_information: &'env RwLock<IDEInfo>,
+        warning_filters_scope: WarningFiltersScope,
+    ) -> Self {
+        Self {
+            flags,
+            known_filter_names,
+            diags,
+            ide_information,
+            warning_filters_scope,
+        }
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.warning_filters_scope.pop()
+    }
+
+    pub fn add_diag(&self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
+        if diag.info().severity() <= Severity::NonblockingError
+            && self
+                .diags
+                .read()
+                .unwrap()
+                .any_syntax_error_with_primary_loc(diag.primary_loc())
+        {
+            // do not report multiple diags for the same location (unless they are blocking) to
+            // avoid noise that is likely to confuse the developer trying to localize the problem
+            //
+            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
+            // becomes one
+            return;
+        }
+
+        if !warning_filters.is_filtered(&diag) {
+            // add help to suppress warning, if applicable
+            // TODO do we want a centralized place for tips like this?
+            if diag.info().severity() == Severity::Warning {
+                if let Some((prefix, name)) = self.known_filter_names.get(&diag.info().id()) {
+                    let help = format!(
+                        "This warning can be suppressed with '#[{}({})]' \
+                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
+                        known_attributes::DiagnosticAttribute::ALLOW,
+                        format_allow_attr(*prefix, *name),
+                    );
+                    diag.add_note(help)
+                }
+                if self.flags.warnings_are_errors() {
+                    diag = diag.set_severity(Severity::NonblockingError)
+                }
+            }
+            self.diags.write().unwrap().add(diag)
+        } else if !warning_filters.is_filtered_for_dependency() {
+            // unwrap above is safe as the filter has been used (thus it must exist)
+            self.diags.write().unwrap().add_source_filtered(diag)
+        }
+    }
+
+    pub fn add_diags(&self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
+        for diag in diags.into_vec() {
+            self.add_diag(warning_filters, diag)
+        }
+    }
+
+    pub fn extend_ide_info(&self, warning_filters: &WarningFiltersScope, info: IDEInfo) {
+        if self.flags.ide_test_mode() {
+            for entry in info.annotations.iter() {
+                let diag = entry.clone().into();
+                self.add_diag(warning_filters, diag);
+            }
+        }
+        self.ide_information.write().unwrap().extend(info);
+    }
+
+    pub fn add_ide_annotation(
+        &self,
+        warning_filters: &WarningFiltersScope,
+        loc: Loc,
+        info: IDEAnnotation,
+    ) {
+        if self.flags.ide_test_mode() {
+            let diag = (loc, info.clone()).into();
+            self.add_diag(warning_filters, diag);
+        }
+        self.ide_information
+            .write()
+            .unwrap()
+            .add_ide_annotation(loc, info);
+    }
+}
 
 impl Diagnostics {
     pub fn new() -> Self {

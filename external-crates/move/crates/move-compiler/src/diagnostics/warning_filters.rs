@@ -129,7 +129,9 @@ impl WarningFiltersScope {
     /// Unsafe and should be used only for internal purposes, such as ide annotations
     pub(crate) const EMPTY: &'static Self = &WarningFiltersScope(WarningFiltersScope_::Empty);
 
-    pub(crate) fn new(top_level_warning_filter_opt: Option<&'static WarningFilters>) -> Self {
+    pub(crate) const fn root(
+        top_level_warning_filter_opt: Option<&'static WarningFilters>,
+    ) -> Self {
         match top_level_warning_filter_opt {
             None => WarningFiltersScope(WarningFiltersScope_::Empty),
             Some(top_level_warning_filter) => {
