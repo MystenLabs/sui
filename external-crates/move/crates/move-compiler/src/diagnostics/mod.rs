@@ -394,7 +394,7 @@ impl<'env> DiagnosticReporter<'env> {
         self.warning_filters_scope.pop()
     }
 
-    pub fn add_diag(&self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
+    pub fn add_diag(&self, mut diag: Diagnostic) {
         if diag.info().severity() <= Severity::NonblockingError
             && self
                 .diags
@@ -410,7 +410,7 @@ impl<'env> DiagnosticReporter<'env> {
             return;
         }
 
-        if !warning_filters.is_filtered(&diag) {
+        if !self.warning_filters_scope.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
@@ -428,37 +428,32 @@ impl<'env> DiagnosticReporter<'env> {
                 }
             }
             self.diags.write().unwrap().add(diag)
-        } else if !warning_filters.is_filtered_for_dependency() {
+        } else if !self.warning_filters_scope.is_filtered_for_dependency() {
             // unwrap above is safe as the filter has been used (thus it must exist)
             self.diags.write().unwrap().add_source_filtered(diag)
         }
     }
 
-    pub fn add_diags(&self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
+    pub fn add_diags(&self, diags: Diagnostics) {
         for diag in diags.into_vec() {
-            self.add_diag(warning_filters, diag)
+            self.add_diag(diag)
         }
     }
 
-    pub fn extend_ide_info(&self, warning_filters: &WarningFiltersScope, info: IDEInfo) {
+    pub fn extend_ide_info(&self, info: IDEInfo) {
         if self.flags.ide_test_mode() {
             for entry in info.annotations.iter() {
                 let diag = entry.clone().into();
-                self.add_diag(warning_filters, diag);
+                self.add_diag(diag);
             }
         }
         self.ide_information.write().unwrap().extend(info);
     }
 
-    pub fn add_ide_annotation(
-        &self,
-        warning_filters: &WarningFiltersScope,
-        loc: Loc,
-        info: IDEAnnotation,
-    ) {
+    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
         if self.flags.ide_test_mode() {
             let diag = (loc, info.clone()).into();
-            self.add_diag(warning_filters, diag);
+            self.add_diag(diag);
         }
         self.ide_information
             .write()
