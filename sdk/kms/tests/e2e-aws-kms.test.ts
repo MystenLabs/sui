@@ -4,41 +4,49 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { AwsKmsSigner } from '../src/aws/aws-kms-signer';
 
-describe('Aws KMS signer E2E testing', () => {
-	let signer: AwsKmsSigner;
-	beforeAll(async () => {
-		const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_KMS_KEY_ID } = process.env;
+const { E2E_AWS_KMS_TEST_ENABLE } = process.env;
 
-		if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_REGION || !AWS_KMS_KEY_ID) {
-			throw new Error('Missing one or more required environment variables.');
-		}
+if (!E2E_AWS_KMS_TEST_ENABLE) {
+	describe.skip('Aws KMS Signer E2E testing', () => {
+		// Skip Tests -- not in E2E_CI_ENABLE Environment.
+	});
+} else {
+	describe('Aws KMS signer E2E testing', () => {
+		let signer: AwsKmsSigner;
+		beforeAll(async () => {
+			const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_KMS_KEY_ID } = process.env;
 
-		signer = await AwsKmsSigner.fromCredentials(AWS_KMS_KEY_ID, {
-			region: AWS_REGION,
-			accessKeyId: AWS_ACCESS_KEY_ID,
-			secretAccessKey: AWS_SECRET_ACCESS_KEY,
+			if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_REGION || !AWS_KMS_KEY_ID) {
+				throw new Error('Missing one or more required environment variables.');
+			}
+
+			signer = await AwsKmsSigner.fromCredentials(AWS_KMS_KEY_ID, {
+				region: AWS_REGION,
+				accessKeyId: AWS_ACCESS_KEY_ID,
+				secretAccessKey: AWS_SECRET_ACCESS_KEY,
+			});
+		});
+
+		it('should retrieve the correct sui address', async () => {
+			// Get the public key
+			const publicKey = signer.getPublicKey();
+			expect(publicKey.toSuiAddress()).toEqual(
+				'0x2bfc782b6bf66f305fdeb19a203386efee3e62bce3ceb9d3d53eafbe0b14a035',
+			);
+		});
+
+		it('should sign a message and verify against pubkey', async () => {
+			// Define a test message
+			const testMessage = 'Hello, AWS KMS Signer!';
+			const messageBytes = new TextEncoder().encode(testMessage);
+
+			// Sign the test message
+			const { signature } = await signer.signPersonalMessage(messageBytes);
+
+			// verify signature against pubkey
+			const publicKey = signer.getPublicKey();
+			const isValid = await publicKey.verifyPersonalMessage(messageBytes, signature);
+			expect(isValid).toBe(true);
 		});
 	});
-
-	it('should retrieve the correct sui address', async () => {
-		// Get the public key
-		const publicKey = signer.getPublicKey();
-		expect(publicKey.toSuiAddress()).toEqual(
-			'0x2bfc782b6bf66f305fdeb19a203386efee3e62bce3ceb9d3d53eafbe0b14a035',
-		);
-	});
-
-	it('should sign a message and verify against pubkey', async () => {
-		// Define a test message
-		const testMessage = 'Hello, AWS KMS Signer!';
-		const messageBytes = new TextEncoder().encode(testMessage);
-
-		// Sign the test message
-		const { signature } = await signer.signPersonalMessage(messageBytes);
-
-		// verify signature against pubkey
-		const publicKey = signer.getPublicKey();
-		const isValid = await publicKey.verifyPersonalMessage(messageBytes, signature);
-		expect(isValid).toBe(true);
-	});
-});
+}
