@@ -531,6 +531,23 @@ impl CursorContext {
         }
     }
 
+    fn find_access_chain_in_match_pattern(&self, p: &P::MatchPattern_) -> Option<ChainInfo> {
+        use ChainCompletionKind as CT;
+        use P::MatchPattern_ as MP;
+        match p {
+            MP::PositionalConstructor(chain, _) => {
+                return Some(ChainInfo::new(chain.clone(), CT::Type, false));
+            }
+            MP::FieldConstructor(chain, _) => {
+                return Some(ChainInfo::new(chain.clone(), CT::Type, false));
+            }
+            MP::Name(_, chain) => {
+                return Some(ChainInfo::new(chain.clone(), CT::All, false));
+            }
+            MP::Literal(_) | MP::Or(..) | MP::At(..) => None,
+        }
+    }
+
     /// Returns access chain at cursor position (if any) along with the information of what the chain's
     /// auto-completed target kind should be, and weather it is part of the use statement.
     pub fn find_access_chain(&self) -> Option<ChainInfo> {
@@ -575,6 +592,7 @@ impl CursorContext {
                     return Some(ChainInfo::new(*(ty.clone()), CT::Type, true));
                 }
             }
+            CP::MatchPattern(sp!(_, p)) => return self.find_access_chain_in_match_pattern(p),
             _ => (),
         };
         None
@@ -600,6 +618,7 @@ pub enum CursorPosition {
     DefName,
     Attribute(P::AttributeValue),
     Use(Spanned<P::Use>),
+    MatchPattern(P::MatchPattern),
     Unknown,
     // FIXME: These two are currently unused because these forms don't have enough location
     // recorded on them during parsing.
@@ -962,6 +981,10 @@ impl fmt::Display for CursorContext {
             }
             CursorPosition::Parameter(value) => {
                 writeln!(f, "parameter")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::MatchPattern(value) => {
+                writeln!(f, "match pattern")?;
                 writeln!(f, "- value: {:#?}", value)?;
             }
             CursorPosition::DatatypeTypeParameter(value) => {

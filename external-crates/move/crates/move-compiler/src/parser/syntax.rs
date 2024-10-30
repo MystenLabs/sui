@@ -2061,27 +2061,36 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
             }
             _ => None,
         };
-        consume_token(context.tokens, Tok::EqualGreater)?;
-        let rhs = match context.tokens.peek() {
-            Tok::LBrace => {
-                let block_start_loc = context.tokens.start_loc();
-                context.tokens.advance()?; // consume the LBrace
-                let block_ = Exp_::Block(parse_sequence(context)?);
-                let block_end_loc = context.tokens.previous_end_loc();
-                let exp = spanned(
-                    context.tokens.file_hash(),
-                    block_start_loc,
-                    block_end_loc,
-                    block_,
-                );
-                Box::new(exp)
+        if let Err(diag) = consume_token(context.tokens, Tok::EqualGreater) {
+            // report incomplete pattern so that auto-completion can work
+            context.add_diag(*diag);
+            MatchArm_ {
+                pattern,
+                guard,
+                rhs: Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
             }
-            _ => Box::new(parse_exp(context)?),
-        };
-        MatchArm_ {
-            pattern,
-            guard,
-            rhs,
+        } else {
+            let rhs = match context.tokens.peek() {
+                Tok::LBrace => {
+                    let block_start_loc = context.tokens.start_loc();
+                    context.tokens.advance()?; // consume the LBrace
+                    let block_ = Exp_::Block(parse_sequence(context)?);
+                    let block_end_loc = context.tokens.previous_end_loc();
+                    let exp = spanned(
+                        context.tokens.file_hash(),
+                        block_start_loc,
+                        block_end_loc,
+                        block_,
+                    );
+                    Box::new(exp)
+                }
+                _ => Box::new(parse_exp(context)?),
+            };
+            MatchArm_ {
+                pattern,
+                guard,
+                rhs,
+            }
         }
     })
 }
