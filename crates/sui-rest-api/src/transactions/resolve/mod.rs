@@ -6,15 +6,16 @@ use std::collections::HashMap;
 
 use super::execution::SimulateTransactionQueryParameters;
 use super::TransactionSimulationResponse;
-use crate::accept::AcceptFormat;
+use crate::accept::AcceptJsonProtobufBcs;
 use crate::objects::ObjectNotFoundError;
 use crate::openapi::ApiEndpoint;
 use crate::openapi::OperationBuilder;
 use crate::openapi::RequestBodyBuilder;
 use crate::openapi::ResponseBuilder;
 use crate::openapi::RouteHandler;
+use crate::proto;
 use crate::reader::StateReader;
-use crate::response::ResponseContent;
+use crate::response::JsonProtobufBcs;
 use crate::RestError;
 use crate::RestService;
 use crate::Result;
@@ -79,6 +80,7 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ResolveTransactionResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -93,9 +95,15 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
 async fn resolve_transaction(
     State(state): State<RestService>,
     Query(parameters): Query<ResolveTransactionQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     Json(unresolved_transaction): Json<UnresolvedTransaction>,
-) -> Result<ResponseContent<ResolveTransactionResponse>> {
+) -> Result<
+    JsonProtobufBcs<
+        ResolveTransactionResponse,
+        proto::ResolveTransactionResponse,
+        ResolveTransactionResponse,
+    >,
+> {
     let executor = state
         .executor
         .as_ref()
@@ -183,14 +191,16 @@ async fn resolve_transaction(
         None
     };
 
-    ResolveTransactionResponse {
+    let response = ResolveTransactionResponse {
         transaction: resolved_transaction.try_into()?,
         simulation,
+    };
+
+    match accept {
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
     }
-    .pipe(|response| match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
-    })
     .pipe(Ok)
 }
 

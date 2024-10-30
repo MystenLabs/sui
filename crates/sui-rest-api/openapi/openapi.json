@@ -632,6 +632,7 @@
                   "$ref": "#/components/schemas/TransactionExecutionResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -882,6 +883,7 @@
                   "$ref": "#/components/schemas/TransactionSimulationResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -959,6 +961,7 @@
                   "$ref": "#/components/schemas/ResolveTransactionResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }

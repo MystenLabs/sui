@@ -124,7 +124,12 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
             .body(body);
 
-        self.inner.bcs(request).await.map(Response::into_inner)
+        let proto = self
+            .inner
+            .protobuf::<crate::proto::TransactionExecutionResponse>(request)
+            .await?
+            .into_inner();
+        proto.try_into().map_err(Into::into)
     }
 }
 
