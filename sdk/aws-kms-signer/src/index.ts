@@ -55,9 +55,6 @@ export class AwsKmsSigner extends Signer {
 	 * @returns The string 'Secp256k1' indicating the key scheme.
 	 */
 	getKeyScheme() {
-		if (!this.#publicKey) {
-			throw new Error('Public key not initialized. Call `` method first.');
-		}
 		return SIGNATURE_FLAG_TO_SCHEME[this.#publicKey.flag() as SignatureFlag];
 	}
 
