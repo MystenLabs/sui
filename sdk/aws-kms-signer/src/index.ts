@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { PublicKey, SignatureFlag } from '@mysten/sui/cryptography';
 import { SIGNATURE_FLAG_TO_SCHEME, Signer } from '@mysten/sui/cryptography';
-import { secp256r1 } from '@noble/curves/p256.js';
-import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { fromBase64, toBase64 } from '@mysten/sui/utils';
+import { secp256r1 } from '@noble/curves/p256';
+import { secp256k1 } from '@noble/curves/secp256k1';
 import { DERElement } from 'asn1-ts';
 
-import { fromBase64, toBase64 } from '../../bcs/src/b64.js';
 import type { AwsClientOptions } from './aws-client.js';
 import { AwsKmsClient } from './aws-client.js';
 
 /**
- * Configuration options for initializing the AWSKMSSigner.
+ * Configuration options for initializing the AwsKmsSigner.
  */
-export interface AwsKmsClientSignerOptions {
+export interface AwsKmsSignerOptions {
 	/** AWS KMS Key ID used for signing */
 	kmsKeyId: string;
 	/** Options for setting up the AWS KMS client */
@@ -38,7 +38,7 @@ export class AwsKmsSigner extends Signer {
 	 * @param options - Configuration options for AWS KMS.
 	 * @throws Will throw an error if required AWS credentials or region are not provided.
 	 */
-	constructor({ kmsKeyId, client, publicKey }: AwsKmsClientSignerOptions) {
+	constructor({ kmsKeyId, client, publicKey }: AwsKmsSignerOptions) {
 		super();
 		this.#client = client;
 

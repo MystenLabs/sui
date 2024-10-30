@@ -51,5 +51,8 @@
 		"@noble/hashes": "^1.5.0",
 		"asn1-ts": "^8.0.2",
 		"aws4fetch": "^1.0.20"
+	},
+	"engines": {
+		"node": ">=20"
 	}
 }
