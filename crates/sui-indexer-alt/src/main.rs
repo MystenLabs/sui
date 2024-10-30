@@ -29,8 +29,11 @@ async fn main() -> Result<()> {
     let cancel = CancellationToken::new();
 
     match args.command {
-        Command::Indexer(indexer_config) => {
-            let mut indexer = Indexer::new(args.db_config, indexer_config, cancel.clone()).await?;
+        Command::Indexer {
+            indexer,
+            consistent_range: lag,
+        } => {
+            let mut indexer = Indexer::new(args.db_config, indexer, cancel.clone()).await?;
 
             indexer.concurrent_pipeline::<EvEmitMod>().await?;
             indexer.concurrent_pipeline::<EvStructInst>().await?;
@@ -39,8 +42,8 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline::<KvTransactions>().await?;
             indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
             indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
-            indexer.sequential_pipeline::<SumCoinBalances>().await?;
-            indexer.sequential_pipeline::<SumObjTypes>().await?;
+            indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;
+            indexer.sequential_pipeline::<SumObjTypes>(lag).await?;
 
             let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 

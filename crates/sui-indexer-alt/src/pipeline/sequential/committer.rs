@@ -33,12 +33,16 @@ use super::Handler;
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
 ///
+/// The committer can optionally be configured to lag behind the ingestion service by a fixed
+/// number of checkpoints (configured by `checkpoint_lag`).
+///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
 /// unblock its regulator.
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H: Handler + 'static>(
     config: PipelineConfig,
+    checkpoint_lag: Option<u64>,
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -69,7 +73,7 @@ pub(super) fn committer<H: Handler + 'static>(
         // checkpoint to expect and add to the batch.
         let mut watermark_needs_update = false;
         let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive + 1;
+            let next = watermark.checkpoint_hi_inclusive as u64 + 1;
             (watermark, next)
         } else {
             (CommitterWatermark::initial(H::NAME.into()), 0)
@@ -108,24 +112,56 @@ pub(super) fn committer<H: Handler + 'static>(
                         continue;
                     };
 
+                    // Determine whether we need to hold back checkpoints from being committed
+                    // because of checkpoint lag.
+                    //
+                    // TODO(amnn): Test this (depends on migrations and tempdb)
+                    let commit_hi = match (checkpoint_lag, pending.last_key_value()) {
+                        (Some(lag), None) => {
+                            debug!(pipeline = H::NAME, lag, "No pending checkpoints");
+                            if rx.is_closed() && rx.is_empty() {
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        (Some(lag), Some((pending_hi, _))) if *pending_hi < lag => {
+                            debug!(pipeline = H::NAME, lag, pending_hi, "Priming pipeline");
+                            if rx.is_closed() && rx.is_empty() {
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        (Some(lag), Some((pending_hi, _))) => Some(*pending_hi - lag),
+                        (None, _) => None,
+                    };
+
                     let guard = metrics
                         .collector_gather_latency
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
                     // Push data into the next batch as long as it's from contiguous checkpoints,
-                    // and we haven't gathered information from too many checkpoints already. We
-                    // don't worry about overall size because the handler may have optimized writes
-                    // by combining rows, but we will limit the number of checkpoints we try and
-                    // batch together as a way to impose some limit on the size of the batch (and
-                    // therefore the length of the write transaction).
+                    // outside of the checkpoint lag and we haven't gathered information from too
+                    // many checkpoints already.
+                    //
+                    // We don't worry about overall size because the handler may have optimized
+                    // writes by combining rows, but we will limit the number of checkpoints we try
+                    // and batch together as a way to impose some limit on the size of the batch
+                    // (and therefore the length of the write transaction).
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         let Some(entry) = pending.first_entry() else {
                             break;
                         };
 
-                        let indexed = entry.get();
-                        match next_checkpoint.cmp(&indexed.watermark.checkpoint_hi_inclusive) {
+                        if matches!(commit_hi, Some(hi) if hi < *entry.key()) {
+                            break;
+                        }
+
+                        match next_checkpoint.cmp(entry.key()) {
                             // Next pending checkpoint is from the future.
                             Ordering::Less => break,
 
@@ -283,12 +319,26 @@ pub(super) fn committer<H: Handler + 'static>(
                     batch_rows = 0;
                     attempt = 0;
 
-                    if pending_rows == 0 && rx.is_closed() && rx.is_empty() {
-                        info!(
-                            pipeline = H::NAME,
-                            ?watermark,
-                            "Processor closed channel, pending rows empty, stopping committer",
-                        );
+                    // Keep going if we might get more rows from the processor.
+                    if !rx.is_closed() || !rx.is_empty() {
+                        continue;
+                    }
+
+                    // If there are no more pending checkpoints, stop processing, because there are
+                    // no more coming.
+                    let Some((next, _)) = pending.first_key_value() else {
+                        break;
+                    };
+
+                    // If there is a gap between the next checkpoint and the pending checkpoint,
+                    // stop because there are no more coming.
+                    if next_checkpoint < *next {
+                        break;
+                    }
+
+                    // If checkpoint lag is being enforced, and the pending checkpoint is being
+                    // held back, stop because `commit_hi` will never progress.
+                    if matches!(commit_hi, Some(hi) if hi < *next) {
                         break;
                     }
                 }
@@ -311,15 +361,21 @@ pub(super) fn committer<H: Handler + 'static>(
                         continue;
                     }
 
-                    let Some((_, next)) = pending.first_key_value() else {
+                    let Some((next, _)) = pending.first_key_value() else {
                         continue;
                     };
 
-                    if next.watermark.checkpoint_hi_inclusive <= next_checkpoint {
+                    if *next <= next_checkpoint {
                         poll.reset_immediately();
                     }
                 }
             }
         }
+
+        info!(
+            pipeline = H::NAME,
+            ?watermark,
+            "Processor closed channel, pending rows empty, stopping committer",
+        );
     })
 }
