@@ -10721,7 +10721,7 @@
       "TransactionFilter": {
         "oneOf": [
           {
-            "description": "Query by checkpoint.",
+            "description": "CURRENTLY NOT SUPPORTED. Query by checkpoint.",
             "type": "object",
             "required": [
               "Checkpoint"
@@ -10857,7 +10857,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Query txs that have a given address as sender or recipient.",
+            "description": "CURRENTLY NOT SUPPORTED. Query txs that have a given address as sender or recipient.",
             "type": "object",
             "required": [
               "FromOrToAddress"
