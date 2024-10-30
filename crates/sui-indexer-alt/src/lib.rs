@@ -142,7 +142,6 @@ impl Indexer {
     /// exists for, for their pipeline.
     pub async fn concurrent_pipeline<H: concurrent::Handler + 'static>(&mut self) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
-            info!("Skipping pipeline {}", H::NAME);
             return Ok(());
         };
 
