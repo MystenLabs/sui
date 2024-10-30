@@ -92,13 +92,15 @@ const Rpc = () => {
             <h1 className="fixed bg-white dark:bg-ifm-background-color-dark w-full py-4 top-14">
               Sui JSON-RPC Reference - Version: {openrpc.info.version}
             </h1>
-            <ScrollSpy>
+            
               <div className="">
                 <p className="pt-24">{openrpc.info.description}</p>
+                <ScrollSpy>
                 <Methods json={openrpc} apis={apis} schemas={schemas} />
                 <Components json={openrpc} apis={apis} schemas={schemas} />
+                </ScrollSpy>
               </div>
-            </ScrollSpy>
+            
           </div>
         </div>
       </main>
