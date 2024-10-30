@@ -3,6 +3,7 @@
 
 mod checkpoints;
 mod execute;
+mod objects;
 mod resolve;
 
 async fn transfer_coin(
