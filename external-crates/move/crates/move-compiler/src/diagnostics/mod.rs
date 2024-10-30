@@ -855,9 +855,9 @@ macro_rules! ice {
 
 #[macro_export]
 macro_rules! ice_assert {
-    ($env: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
+    ($reporter: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
         if !$cond {
-            $env.add_error_diag($crate::ice!((
+            $reporter.add_diag($crate::ice!((
                 $loc,
                 format!($($arg)*),
             )));

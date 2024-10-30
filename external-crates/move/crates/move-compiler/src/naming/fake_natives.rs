@@ -20,7 +20,7 @@ use move_symbol_pool::symbol;
 
 /// verify fake native attribute usage usage
 pub fn function(
-    diags: &DiagnosticReporter,
+    reporter: &DiagnosticReporter,
     module: ModuleIdent,
     function_name: FunctionName,
     function: &N::Function,
@@ -46,7 +46,7 @@ pub fn function(
             (loc, attr_msg),
             (function_name.loc(), name_msg),
         );
-        diags.add_diag(diag);
+        reporter.add_diag(diag);
     }
     match &function.body.value {
         N::FunctionBody_::Native => (),
@@ -56,7 +56,7 @@ pub fn function(
                 NativeAttribute::BYTECODE_INSTRUCTION
             );
             let diag = diag!(Attributes::InvalidBytecodeInst, (loc, attr_msg));
-            diags.add_diag(diag);
+            reporter.add_diag(diag);
         }
     }
 }

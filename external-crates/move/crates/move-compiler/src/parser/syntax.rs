@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::{string_utils::*, *},
@@ -23,6 +23,7 @@ use move_symbol_pool::{symbol, Symbol};
 struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
     env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     tokens: &'lexer mut Lexer<'input>,
     stop_set: TokenSet,
 }
@@ -34,9 +35,11 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         package_name: Option<Symbol>,
     ) -> Self {
         let stop_set = TokenSet::from([Tok::EOF]);
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             current_package: package_name,
             env,
+            reporter,
             tokens,
             stop_set,
         }
@@ -72,8 +75,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     }
 
     fn add_diag(&self, diag: Diagnostic) {
-        let warning_filters = self.env.top_level_warning_filter_scope();
-        self.env.add_diag(warning_filters, diag);
+        self.reporter.add_diag(diag);
     }
 }
 
