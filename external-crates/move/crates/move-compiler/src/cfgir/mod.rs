@@ -15,12 +15,10 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
+    diagnostics::warning_filters::WarningFiltersScope,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
-    shared::{
-        program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name,
-        WarningFiltersScope,
-    },
+    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name},
 };
 use cfg::*;
 use move_ir_types::location::Loc;

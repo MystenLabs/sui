@@ -3,7 +3,10 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
+    },
     expansion::ast::ModuleIdent,
     ice,
     naming::ast::{self as N, BlockLabel},

@@ -6,8 +6,10 @@ use move_symbol_pool::Symbol;
 use crate::{
     cfgir::visitor::CFGIRVisitor,
     command_line::compiler::Visitor,
-    diagnostics::codes::WarningFilter,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::{
+        codes::{custom, DiagnosticInfo, Severity},
+        warning_filters::WarningFilter,
+    },
     typing::visitor::TypingVisitor,
 };
 

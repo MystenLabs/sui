@@ -6,6 +6,7 @@
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
+use crate::diagnostics::warning_filters::{WarningFilters, WarningFiltersScope};
 use crate::linters::StyleCodes;
 use crate::{
     cfgir::{
@@ -13,10 +14,10 @@ use crate::{
         visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{Diagnostic, Diagnostics},
     editions::FeatureGate,
     hlir::ast as H,
-    shared::{CompilationEnv, WarningFiltersScope},
+    shared::CompilationEnv,
 };
 
 pub struct AssertAbortNamedConstants;

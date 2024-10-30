@@ -10,14 +10,15 @@ use crate::{
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
+    },
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
-    shared::{
-        program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, WarningFiltersScope,
-    },
+    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;

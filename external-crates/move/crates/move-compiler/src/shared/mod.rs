@@ -9,8 +9,12 @@ use crate::{
     },
     command_line as cli,
     diagnostics::{
-        codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, DiagnosticsFormat, WarningFilters,
+        codes::{DiagnosticsID, Severity},
+        warning_filters::{
+            FilterName, FilterPrefix, WarningFilter, WarningFilters, WarningFiltersScope,
+            FILTER_ALL,
+        },
+        Diagnostic, Diagnostics, DiagnosticsFormat,
     },
     editions::{check_feature_or_error, feature_edition_error_msg, Edition, FeatureGate, Flavor},
     expansion::ast as E,
@@ -167,28 +171,6 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 // Compilation Env
 //**************************************************************************************************
 
-pub const FILTER_ALL: &str = "all";
-pub const FILTER_UNUSED: &str = "unused";
-pub const FILTER_MISSING_PHANTOM: &str = "missing_phantom";
-pub const FILTER_UNUSED_USE: &str = "unused_use";
-pub const FILTER_UNUSED_VARIABLE: &str = "unused_variable";
-pub const FILTER_UNUSED_ASSIGNMENT: &str = "unused_assignment";
-pub const FILTER_UNUSED_TRAILING_SEMI: &str = "unused_trailing_semi";
-pub const FILTER_UNUSED_ATTRIBUTE: &str = "unused_attribute";
-pub const FILTER_UNUSED_TYPE_PARAMETER: &str = "unused_type_parameter";
-pub const FILTER_UNUSED_FUNCTION: &str = "unused_function";
-pub const FILTER_UNUSED_STRUCT_FIELD: &str = "unused_field";
-pub const FILTER_UNUSED_CONST: &str = "unused_const";
-pub const FILTER_DEAD_CODE: &str = "dead_code";
-pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
-pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
-pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
-pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
-pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
-pub const FILTER_DEPRECATED: &str = "deprecated_usage";
-pub const FILTER_IDE_PATH_AUTOCOMPLETE: &str = "ide_path_autocomplete";
-pub const FILTER_IDE_DOT_AUTOCOMPLETE: &str = "ide_dot_autocomplete";
-
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -230,11 +212,6 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
 
-/// None for the default 'allow'.
-/// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
-pub type FilterPrefix = Option<Symbol>;
-pub type FilterName = Symbol;
-
 pub struct CompilationEnv {
     flags: Flags,
     top_level_warning_filter_scope: &'static WarningFiltersScope,
@@ -255,25 +232,6 @@ pub struct CompilationEnv {
     ide_information: RwLock<IDEInfo>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct WarningFiltersScope {
-    scopes: Vec<WarningFilters>,
-}
-
-macro_rules! known_code_filter {
-    ($name:ident, $category:ident::$code:ident) => {
-        (
-            Symbol::from($name),
-            BTreeSet::from([WarningFilter::Code {
-                prefix: None,
-                category: Category::$category as u8,
-                code: $category::$code as u8,
-                name: Some($name),
-            }]),
-        )
-    };
-}
-
 impl CompilationEnv {
     pub fn new(
         flags: Flags,
@@ -283,63 +241,14 @@ impl CompilationEnv {
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
-        use crate::diagnostics::codes::{TypeSafety, UnusedItem, IDE};
         visitors.extend([
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let mut known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
-            (
-                FILTER_ALL.into(),
-                BTreeSet::from([WarningFilter::All(None)]),
-            ),
-            (
-                FILTER_UNUSED.into(),
-                BTreeSet::from([WarningFilter::Category {
-                    prefix: None,
-                    category: Category::UnusedItem as u8,
-                    name: Some(FILTER_UNUSED),
-                }]),
-            ),
-            known_code_filter!(FILTER_MISSING_PHANTOM, Declarations::InvalidNonPhantomUse),
-            known_code_filter!(FILTER_UNUSED_USE, UnusedItem::Alias),
-            known_code_filter!(FILTER_UNUSED_VARIABLE, UnusedItem::Variable),
-            known_code_filter!(FILTER_UNUSED_ASSIGNMENT, UnusedItem::Assignment),
-            known_code_filter!(FILTER_UNUSED_TRAILING_SEMI, UnusedItem::TrailingSemi),
-            known_code_filter!(FILTER_UNUSED_ATTRIBUTE, UnusedItem::Attribute),
-            known_code_filter!(FILTER_UNUSED_FUNCTION, UnusedItem::Function),
-            known_code_filter!(FILTER_UNUSED_STRUCT_FIELD, UnusedItem::StructField),
-            (
-                FILTER_UNUSED_TYPE_PARAMETER.into(),
-                BTreeSet::from([
-                    WarningFilter::Code {
-                        prefix: None,
-                        category: Category::UnusedItem as u8,
-                        code: UnusedItem::StructTypeParam as u8,
-                        name: Some(FILTER_UNUSED_TYPE_PARAMETER),
-                    },
-                    WarningFilter::Code {
-                        prefix: None,
-                        category: Category::UnusedItem as u8,
-                        code: UnusedItem::FunTypeParam as u8,
-                        name: Some(FILTER_UNUSED_TYPE_PARAMETER),
-                    },
-                ]),
-            ),
-            known_code_filter!(FILTER_UNUSED_CONST, UnusedItem::Constant),
-            known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode),
-            known_code_filter!(FILTER_UNUSED_LET_MUT, UnusedItem::MutModifier),
-            known_code_filter!(FILTER_UNUSED_MUT_REF, UnusedItem::MutReference),
-            known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
-            known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
-            known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
-            known_code_filter!(FILTER_DEPRECATED, TypeSafety::DeprecatedUsage),
-        ]);
+        let mut known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> =
+            WarningFilter::compiler_known_filters();
         if flags.ide_mode() {
-            known_filters_.extend([
-                known_code_filter!(FILTER_IDE_PATH_AUTOCOMPLETE, IDE::PathAutocomplete),
-                known_code_filter!(FILTER_IDE_DOT_AUTOCOMPLETE, IDE::DotAutocomplete),
-            ]);
+            known_filters_.extend(WarningFilter::ide_known_filters());
         }
         let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
@@ -703,33 +612,6 @@ impl CompilationEnv {
 
     pub fn ide_information(&self) -> std::sync::RwLockReadGuard<'_, IDEInfo> {
         self.ide_information.read().unwrap()
-    }
-}
-
-impl WarningFiltersScope {
-    /// Unsafe and should be used only for internal purposes, such as ide annotations
-    const EMPTY: &'static Self = &WarningFiltersScope { scopes: vec![] };
-
-    fn new(top_level_warning_filter: Option<WarningFilters>) -> Self {
-        Self {
-            scopes: top_level_warning_filter.into_iter().collect(),
-        }
-    }
-
-    pub fn push(&mut self, filters: WarningFilters) {
-        self.scopes.push(filters)
-    }
-
-    pub fn pop(&mut self) {
-        self.scopes.pop().unwrap();
-    }
-
-    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.scopes.iter().any(|filters| filters.is_filtered(diag))
-    }
-
-    pub fn is_filtered_for_dependency(&self) -> bool {
-        self.scopes.iter().any(|filters| filters.for_dependency())
     }
 }
 

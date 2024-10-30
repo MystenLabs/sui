@@ -6,7 +6,8 @@ use crate::{
     debug_display, diag,
     diagnostics::{
         codes::{NameResolution, TypeSafety},
-        Diagnostic, Diagnostics, WarningFilters,
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
     },
     editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
