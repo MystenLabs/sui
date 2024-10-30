@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { AwsKmsSigner } from '../src/index';
+import { AwsKmsSigner } from '../src/aws/aws-kms-signer';
 
 describe('Aws KMS signer E2E testing', () => {
 	let signer: AwsKmsSigner;
@@ -13,7 +13,7 @@ describe('Aws KMS signer E2E testing', () => {
 			throw new Error('Missing one or more required environment variables.');
 		}
 
-		signer = await AwsKmsSigner.fromAwsCredentials(AWS_KMS_KEY_ID, {
+		signer = await AwsKmsSigner.fromCredentials(AWS_KMS_KEY_ID, {
 			region: AWS_REGION,
 			accessKeyId: AWS_ACCESS_KEY_ID,
 			secretAccessKey: AWS_SECRET_ACCESS_KEY,

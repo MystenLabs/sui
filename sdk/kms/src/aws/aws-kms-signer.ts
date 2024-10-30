@@ -23,7 +23,7 @@ export interface AwsKmsSignerOptions {
 }
 
 /**
- * AWSKMSSigner integrates AWS Key Management Service (KMS) with the Sui blockchain
+ * Aws KMS Signer integrates AWS Key Management Service (KMS) with the Sui blockchain
  * to provide signing capabilities using AWS-managed cryptographic keys.
  */
 export class AwsKmsSigner extends Signer {
@@ -34,24 +34,24 @@ export class AwsKmsSigner extends Signer {
 	#kmsKeyId: string;
 
 	/**
-	 * Creates an instance of AwsKmsSigner. It's recommened to call `fromAwsCredentials` method to create an instance.
-	 * @param options - Configuration options for AWS KMS.
+	 * Creates an instance of AwsKmsSigner. It's expected to call the static `fromCredentials` method to create an instance.
+	 * For example:
+	 * ```
+	 * const signer = await AwsKmsSigner.fromCredentials(keyId, options);
+	 * ```
 	 * @throws Will throw an error if required AWS credentials or region are not provided.
 	 */
 	constructor({ kmsKeyId, client, publicKey }: AwsKmsSignerOptions) {
 		super();
+		if (!kmsKeyId) throw new Error('KMS Key ID is required');
+
 		this.#client = client;
-
-		if (!kmsKeyId) {
-			throw new Error('KMS Key ID is required');
-		}
-
 		this.#kmsKeyId = kmsKeyId;
 		this.#publicKey = publicKey;
 	}
 
 	/**
-	 * Retrieves the key scheme used by this signer.
+	 * Retrieves the key scheme used by this signer. Errors if the public key is not initialized.
 	 * @returns The string 'Secp256k1' indicating the key scheme.
 	 */
 	getKeyScheme() {
@@ -133,7 +133,7 @@ export class AwsKmsSigner extends Signer {
 	 * It is recommended to initialize an `AwsKmsSigner` instance using this function.
 	 * @returns A promise that resolves once a `AwsKmsSigner` instance is prepared (public key is set).
 	 */
-	static async fromAwsCredentials(keyId: string, options: AwsClientOptions) {
+	static async fromCredentials(keyId: string, options: AwsClientOptions) {
 		const client = new AwsKmsClient(options);
 
 		const pubKey = await client.getPublicKey(keyId);

@@ -1,23 +1,24 @@
 {
-	"name": "@mysten/aws-kms-signer",
+	"name": "@mysten/kms",
 	"version": "0.0.1",
-	"description": "TODO: Write Description",
+	"description": "A collection of KMS signers for various cloud providers",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"type": "commonjs",
-	"main": "./dist/cjs/index.js",
-	"module": "./dist/esm/index.js",
-	"types": "./dist/cjs/index.d.ts",
 	"exports": {
-		".": {
-			"import": "./dist/esm/index.js",
-			"require": "./dist/cjs/index.js"
+		"./aws": {
+			"import": "./dist/esm/aws/index.js",
+			"require": "./dist/cjs/aws/index.js"
 		}
 	},
 	"sideEffects": false,
 	"files": [
 		"CHANGELOG.md",
-		"dist"
+		"LICENSE",
+		"README.md",
+		"aws",
+		"dist",
+		"src"
 	],
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
