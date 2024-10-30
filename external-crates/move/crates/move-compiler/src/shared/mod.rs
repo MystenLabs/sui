@@ -214,7 +214,7 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
 
 pub struct CompilationEnv {
     flags: Flags,
-    top_level_warning_filter_scope: &'static WarningFiltersScope,
+    top_level_warning_filter_scope: WarningFiltersScope,
     diags: RwLock<Diagnostics>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
@@ -274,15 +274,19 @@ impl CompilationEnv {
             })
             .collect();
 
-        let top_level_warning_filter = if flags.silence_warnings() {
+        let top_level_warning_filter_opt = if flags.silence_warnings() {
             let mut f = WarningFilters::new_for_source();
             f.add(WarningFilter::All(None));
             Some(f)
         } else {
             warning_filters
         };
-        let top_level_warning_filter_scope =
-            Box::leak(Box::new(WarningFiltersScope::new(top_level_warning_filter)));
+        let top_level_warning_filter_opt: Option<&'static WarningFilters> =
+            top_level_warning_filter_opt.map(|f| {
+                let f: &'static WarningFilters = Box::leak(Box::new(f));
+                f
+            });
+        let top_level_warning_filter_scope = WarningFiltersScope::new(top_level_warning_filter_opt);
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
@@ -316,8 +320,8 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn top_level_warning_filter_scope(&self) -> &'static WarningFiltersScope {
-        self.top_level_warning_filter_scope
+    pub fn top_level_warning_filter_scope(&self) -> &WarningFiltersScope {
+        &self.top_level_warning_filter_scope
     }
 
     pub fn add_diag(&self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
@@ -892,6 +896,7 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
+    check::<&WarningFiltersScope>();
     check::<&CompilationEnv>();
 }
 
