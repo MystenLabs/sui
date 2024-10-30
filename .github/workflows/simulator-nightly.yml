@@ -145,7 +145,7 @@ jobs:
       with:
         channel-id: 'simtest-nightly'
         slack-message: |
-          *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
+          :sui::error-cross: *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
           Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
           Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
           <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results
