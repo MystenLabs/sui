@@ -1,9 +1,9 @@
 pub(crate) mod tracer;
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 pub(crate) const TRACING_ENABLED: bool = true;
 
-#[cfg(not(feature = "gas-profiler"))]
+#[cfg(not(feature = "tracing"))]
 pub(crate) const TRACING_ENABLED: bool = false;
 
 #[macro_export]

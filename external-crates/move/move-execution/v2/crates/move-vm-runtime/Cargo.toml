@@ -41,7 +41,7 @@ failpoints = ["fail/failpoints"]
 debugging = []
 testing = []
 lazy_natives = []
-gas-profiler = [
-    "move-vm-config/gas-profiler",
-    "move-vm-profiler/gas-profiler",
+tracing = [
+    "move-vm-config/tracing",
+    "move-vm-profiler/tracing",
 ]
