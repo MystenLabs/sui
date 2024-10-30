@@ -668,6 +668,7 @@
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -693,6 +694,7 @@
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }

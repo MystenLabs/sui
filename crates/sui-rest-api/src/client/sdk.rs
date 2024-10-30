@@ -213,7 +213,9 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::ValidatorCommittee>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn get_committee(&self, epoch: EpochId) -> Result<Response<ValidatorCommittee>> {
@@ -221,7 +223,9 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::ValidatorCommittee>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn get_checkpoint(
@@ -436,24 +440,6 @@ impl Client {
 
         let json = response.json().await?;
         Ok(Response::new(json, parts))
-    }
-
-    pub(super) async fn bcs<T: serde::de::DeserializeOwned>(
-        &self,
-        request: reqwest::RequestBuilder,
-    ) -> Result<Response<T>> {
-        let response = request
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
-
-        let (response, parts) = self.check_response(response).await?;
-
-        let bytes = response.bytes().await?;
-        match bcs::from_bytes(&bytes) {
-            Ok(bcs) => Ok(Response::new(bcs, parts)),
-            Err(e) => Err(Error::from_error(e).with_parts(parts)),
-        }
     }
 
     pub(super) async fn protobuf<T: prost::Message + std::default::Default>(

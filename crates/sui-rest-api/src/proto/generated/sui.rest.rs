@@ -199,3 +199,17 @@ pub struct SimulateTransactionRequest {
     #[prost(message, optional, tag = "1")]
     pub transaction: ::core::option::Option<Transaction>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorCommittee {
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
+    #[prost(message, repeated, tag = "2")]
+    pub members: ::prost::alloc::vec::Vec<ValidatorCommitteeMember>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorCommitteeMember {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub public_key: ::prost::bytes::Bytes,
+    #[prost(uint64, tag = "2")]
+    pub stake: u64,
+}

@@ -144,3 +144,13 @@ message ExecuteTransactionRequest {
 message SimulateTransactionRequest {
     optional Transaction transaction = 1;
 }
+
+message ValidatorCommittee {
+    uint64 epoch = 1;
+    repeated ValidatorCommitteeMember members = 2;
+}
+
+message ValidatorCommitteeMember {
+    bytes public_key = 1;
+    uint64 stake = 2;
+}
