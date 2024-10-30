@@ -34,10 +34,10 @@ export class AwsKmsSigner extends Signer {
 	#kmsKeyId: string;
 
 	/**
-	 * Creates an instance of AwsKmsSigner. It's expected to call the static `fromCredentials` method to create an instance.
+	 * Creates an instance of AwsKmsSigner. It's expected to call the static `fromKeyId` method to create an instance.
 	 * For example:
 	 * ```
-	 * const signer = await AwsKmsSigner.fromCredentials(keyId, options);
+	 * const signer = await AwsKmsSigner.fromKeyId(keyId, options);
 	 * ```
 	 * @throws Will throw an error if required AWS credentials or region are not provided.
 	 */
@@ -133,7 +133,7 @@ export class AwsKmsSigner extends Signer {
 	 * It is recommended to initialize an `AwsKmsSigner` instance using this function.
 	 * @returns A promise that resolves once a `AwsKmsSigner` instance is prepared (public key is set).
 	 */
-	static async fromCredentials(keyId: string, options: AwsClientOptions) {
+	static async fromKeyId(keyId: string, options: AwsClientOptions) {
 		const client = new AwsKmsClient(options);
 
 		const pubKey = await client.getPublicKey(keyId);

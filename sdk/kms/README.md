@@ -8,7 +8,7 @@ Management Services (KMS) like AWS KMS.
 - [AWS KMS Signer](#aws-kms-signer)
   - [Usage](#usage)
   - [API](#api)
-    - [fromCredentials](#fromcredentials)
+    - [fromKeyId](#fromkeyid)
       - [Parameters](#parameters)
       - [Examples](#examples)
 
@@ -24,7 +24,7 @@ import { AwsKmsSigner } from '@mysten/kms/aws';
 const prepareSigner = async () => {
 	const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_KMS_KEY_ID } = process.env;
 
-	return AwsKmsSigner.fromCredentials(AWS_KMS_KEY_ID, {
+	return AwsKmsSigner.fromKeyId(AWS_KMS_KEY_ID, {
 		region: AWS_REGION,
 		accessKeyId: AWS_ACCESS_KEY_ID,
 		secretAccessKey: AWS_SECRET_ACCESS_KEY,
@@ -34,11 +34,11 @@ const prepareSigner = async () => {
 
 ### API
 
-#### fromCredentials
+#### fromKeyId
 
-Create an AWS KMS signer from credentials. This method initializes the signer with the necessary AWS
-credentials and region information, allowing it to interact with AWS KMS to perform cryptographic
-operations.
+Create an AWS KMS signer from AWS Key ID and AWS credentials. This method initializes the signer
+with the necessary AWS credentials and region information, allowing it to interact with AWS KMS to
+perform cryptographic operations.
 
 ##### Parameters
 
@@ -61,7 +61,7 @@ operations.
 ##### Examples
 
 ```typescript
-const signer = await AwsKmsSigner.fromCredentials('your-kms-key-id', {
+const signer = await AwsKmsSigner.fromKeyId('your-kms-key-id', {
 	region: 'us-west-2',
 	accessKeyId: 'your-access-key-id',
 	secretAccessKey: 'your-secret-access-key',

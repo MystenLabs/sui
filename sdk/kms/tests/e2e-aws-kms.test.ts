@@ -15,7 +15,7 @@ describe.runIf(E2E_AWS_KMS_TEST_ENABLE)('Aws KMS signer E2E testing', () => {
 			throw new Error('Missing one or more required environment variables.');
 		}
 
-		signer = await AwsKmsSigner.fromCredentials(AWS_KMS_KEY_ID, {
+		signer = await AwsKmsSigner.fromKeyId(AWS_KMS_KEY_ID, {
 			region: AWS_REGION,
 			accessKeyId: AWS_ACCESS_KEY_ID,
 			secretAccessKey: AWS_SECRET_ACCESS_KEY,
