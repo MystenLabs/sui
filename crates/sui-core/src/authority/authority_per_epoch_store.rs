@@ -867,14 +867,12 @@ impl AuthorityPerEpochStore {
         let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
             .iter()
-            .filter_map(|transaction| {
-                if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
-                    &transaction.kind
-                {
+            .filter_map(|transaction| match &transaction.kind {
+                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     Some(*certificate.digest())
-                } else {
-                    None
                 }
+                ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
+                _ => None,
             })
             .collect();
         assert_eq!(
