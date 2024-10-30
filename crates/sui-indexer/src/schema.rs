@@ -355,21 +355,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_recipients (recipient, tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        recipient -> Bytea,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
-    tx_senders (sender, tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
     watermarks (pipeline) {
         pipeline -> Text,
         epoch_hi_inclusive -> Int8,
@@ -415,7 +400,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_digests,
     tx_input_objects,
     tx_kinds,
-    tx_recipients,
-    tx_senders,
     watermarks,
 );
