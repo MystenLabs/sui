@@ -640,7 +640,7 @@ mod checked {
         )])
     }
 
-    fn check_compatibility<'a>(
+    fn check_compatibility(
         context: &ExecutionContext,
         existing_package: &MovePackage,
         upgrading_modules: &[CompiledModule],
@@ -662,12 +662,12 @@ mod checked {
 
         let existing_modules_len = current_normalized.len();
         let upgrading_modules_len = upgrading_modules.len();
-        if context
+        let disallow_new_modules = context
             .protocol_config
             .disallow_new_modules_in_deps_only_packages()
-            && policy as u8 == UpgradePolicy::DEP_ONLY
-            && existing_modules_len != upgrading_modules_len
-        {
+            && policy as u8 == UpgradePolicy::DEP_ONLY;
+
+        if disallow_new_modules && existing_modules_len != upgrading_modules_len {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
@@ -679,7 +679,7 @@ mod checked {
             ));
         }
 
-        let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
+        let mut new_normalized = normalize_deserialized_modules(upgrading_modules.iter());
         for (name, cur_module) in current_normalized {
             let Some(new_module) = new_normalized.remove(&name) else {
                 return Err(ExecutionError::new_with_source(
@@ -692,6 +692,9 @@ mod checked {
 
             check_module_compatibility(&policy, &cur_module, &new_module)?;
         }
+
+        // If we disallow new modules double check that there are no modules left in `new_normalized`.
+        debug_assert!(!disallow_new_modules || new_normalized.is_empty());
 
         Ok(())
     }
