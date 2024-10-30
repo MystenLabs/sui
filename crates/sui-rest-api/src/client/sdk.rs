@@ -305,7 +305,9 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::GetTransactionResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn list_transactions(
@@ -316,7 +318,14 @@ impl Client {
 
         let request = self.inner.get(url).query(parameters);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::ListTransactionsResponse>(request)
+            .await?
+            .try_map(|page| {
+                page.transactions
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect()
+            })
     }
 
     pub async fn execute_transaction(
