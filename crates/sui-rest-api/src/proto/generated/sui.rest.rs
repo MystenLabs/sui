@@ -121,3 +121,81 @@ pub struct ListTransactionsResponse {
     #[prost(message, repeated, tag = "1")]
     pub transactions: ::prost::alloc::vec::Vec<GetTransactionResponse>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Address {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub address: ::prost::bytes::Bytes,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TypeTag {
+    #[prost(string, tag = "1")]
+    pub type_tag: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct I128 {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub little_endian_bytes: ::prost::bytes::Bytes,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BalanceChange {
+    #[prost(message, optional, tag = "1")]
+    pub address: ::core::option::Option<Address>,
+    #[prost(message, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<TypeTag>,
+    #[prost(message, optional, tag = "3")]
+    pub amount: ::core::option::Option<I128>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EffectsFinality {
+    #[prost(message, optional, tag = "1")]
+    pub signature: ::core::option::Option<ValidatorAggregatedSignature>,
+    #[prost(uint64, optional, tag = "2")]
+    pub checkpoint: ::core::option::Option<u64>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TransactionExecutionResponse {
+    #[prost(message, optional, tag = "1")]
+    pub effects: ::core::option::Option<TransactionEffects>,
+    #[prost(message, optional, tag = "2")]
+    pub finality: ::core::option::Option<EffectsFinality>,
+    #[prost(message, optional, tag = "3")]
+    pub events: ::core::option::Option<TransactionEvents>,
+    #[prost(message, repeated, tag = "4")]
+    pub balance_changes: ::prost::alloc::vec::Vec<BalanceChange>,
+    #[prost(message, repeated, tag = "5")]
+    pub input_objects: ::prost::alloc::vec::Vec<Object>,
+    #[prost(message, repeated, tag = "6")]
+    pub output_objects: ::prost::alloc::vec::Vec<Object>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TransactionSimulationResponse {
+    #[prost(message, optional, tag = "1")]
+    pub effects: ::core::option::Option<TransactionEffects>,
+    #[prost(message, optional, tag = "2")]
+    pub events: ::core::option::Option<TransactionEvents>,
+    #[prost(message, repeated, tag = "3")]
+    pub balance_changes: ::prost::alloc::vec::Vec<BalanceChange>,
+    #[prost(message, repeated, tag = "4")]
+    pub input_objects: ::prost::alloc::vec::Vec<Object>,
+    #[prost(message, repeated, tag = "5")]
+    pub output_objects: ::prost::alloc::vec::Vec<Object>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolveTransactionResponse {
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::core::option::Option<Transaction>,
+    #[prost(message, optional, tag = "2")]
+    pub simulation: ::core::option::Option<TransactionSimulationResponse>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExecuteTransactionRequest {
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::core::option::Option<Transaction>,
+    #[prost(message, repeated, tag = "2")]
+    pub signatures: ::prost::alloc::vec::Vec<UserSignature>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SimulateTransactionRequest {
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::core::option::Option<Transaction>,
+}

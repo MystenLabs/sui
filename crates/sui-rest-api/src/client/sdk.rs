@@ -344,7 +344,9 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
             .body(body);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::TransactionExecutionResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn simulate_transaction(
@@ -361,7 +363,9 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
             .body(body);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::TransactionSimulationResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn resolve_transaction(
@@ -372,7 +376,9 @@ impl Client {
 
         let request = self.inner.post(url).json(unresolved_transaction);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::ResolveTransactionResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn resolve_transaction_with_parameters(
@@ -388,7 +394,9 @@ impl Client {
             .query(&parameters)
             .json(unresolved_transaction);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::ResolveTransactionResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     async fn check_response(
