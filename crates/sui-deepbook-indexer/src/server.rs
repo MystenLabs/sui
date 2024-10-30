@@ -29,7 +29,6 @@ pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const GET_HISTORICAL_VOLUME_PATH: &str =
     "/get_historical_volume/:pool_ids/:start_time/:end_time";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
-pub const GET_MANAGER_BALANCE: &str = "/get_manager_balance/:manager_id";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -48,7 +47,6 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
             GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID,
             get(get_24hr_volume_by_balance_manager_id),
         )
-        .route(GET_MANAGER_BALANCE, get(get_manager_balance))
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
         .with_state(state)
 }
@@ -187,32 +185,6 @@ async fn get_24hr_volume_by_balance_manager_id(
     }
 
     Ok(Json(vec![maker_vol, taker_vol]))
-}
-
-async fn get_manager_balance(
-    Path(manager_id): Path<String>,
-    State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, i64>>, DeepBookError> {
-    let connection = &mut state.pool.get().await?;
-
-    let query = format!(
-        "SELECT asset, SUM(amount)::bigint AS amount, deposit FROM balances \
-        WHERE balance_manager_id = '{}' GROUP BY asset, deposit",
-        manager_id
-    );
-
-    let results: Vec<BalancesSummary> = diesel::sql_query(query).load(connection).await?;
-
-    let mut manager_balances = HashMap::new();
-    for result in results {
-        let mut asset = result.asset;
-        if !asset.starts_with("0x") {
-            asset.insert_str(0, "0x");
-        }
-        *manager_balances.entry(asset).or_insert(0) += result.amount;
-    }
-
-    Ok(Json(manager_balances))
 }
 
 #[debug_handler]
