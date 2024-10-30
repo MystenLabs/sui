@@ -1137,3 +1137,60 @@ impl TryFrom<SimulateTransactionRequest> for sui_sdk_types::types::Transaction {
             .pipe_ref(TryInto::try_into)
     }
 }
+
+//
+// ValidatorCommitteeMember
+//
+
+impl From<&sui_sdk_types::types::ValidatorCommitteeMember> for ValidatorCommitteeMember {
+    fn from(value: &sui_sdk_types::types::ValidatorCommitteeMember) -> Self {
+        Self {
+            public_key: value.public_key.as_bytes().to_vec().into(),
+            stake: value.stake,
+        }
+    }
+}
+
+impl TryFrom<ValidatorCommitteeMember> for sui_sdk_types::types::ValidatorCommitteeMember {
+    type Error = bcs::Error;
+
+    fn try_from(value: ValidatorCommitteeMember) -> Result<Self, Self::Error> {
+        Ok(Self {
+            public_key: sui_sdk_types::types::Bls12381PublicKey::from_bytes(&value.public_key)
+                .map_err(|e| bcs::Error::Custom(e.to_string()))?,
+            stake: value.stake,
+        })
+    }
+}
+
+//
+// ValidatorCommittee
+//
+
+impl From<sui_sdk_types::types::ValidatorCommittee> for ValidatorCommittee {
+    fn from(value: sui_sdk_types::types::ValidatorCommittee) -> Self {
+        Self {
+            epoch: value.epoch,
+            members: value
+                .members
+                .iter()
+                .map(ValidatorCommitteeMember::from)
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<ValidatorCommittee> for sui_sdk_types::types::ValidatorCommittee {
+    type Error = bcs::Error;
+
+    fn try_from(value: ValidatorCommittee) -> Result<Self, Self::Error> {
+        Ok(Self {
+            epoch: value.epoch,
+            members: value
+                .members
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}

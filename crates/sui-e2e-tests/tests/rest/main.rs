@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod checkpoints;
+mod committee;
 mod execute;
 mod objects;
 mod resolve;
