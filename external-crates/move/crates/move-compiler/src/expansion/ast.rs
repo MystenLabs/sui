@@ -414,7 +414,7 @@ pub enum Exp_ {
     Assign(LValueList, Box<Exp>),
     FieldMutate(Box<ExpDotted>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
-    Abort(Box<Exp>),
+    Abort(Option<Box<Exp>>),
     Return(Option<BlockLabel>, Box<Exp>),
     Break(Option<BlockLabel>, Box<Exp>),
     Continue(Option<BlockLabel>),
@@ -1652,8 +1652,11 @@ impl AstDebug for Exp_ {
             }
 
             E::Abort(e) => {
-                w.write("abort ");
-                e.ast_debug(w);
+                w.write("abort");
+                if let Some(e) = e {
+                    w.write(" ");
+                    e.ast_debug(w);
+                }
             }
             E::Return(name, e) => {
                 w.write("return ");

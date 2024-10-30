@@ -2766,7 +2766,19 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             NE::Mutate(nel, ner)
         }
 
-        EE::Abort(es) => NE::Abort(exp(context, es)),
+        EE::Abort(Some(es)) => NE::Abort(exp(context, es)),
+        EE::Abort(None) => {
+            context
+                .env
+                .check_feature(context.current_package, FeatureGate::CleverAssertions, eloc);
+            let abort_const_expr = sp(
+                eloc,
+                N::Exp_::ErrorConstant {
+                    line_number_loc: eloc,
+                },
+            );
+            NE::Abort(Box::new(abort_const_expr))
+        }
         EE::Return(Some(block_name), es) => {
             let out_rhs = exp(context, es);
             context

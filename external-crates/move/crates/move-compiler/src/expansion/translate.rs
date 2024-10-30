@@ -2630,7 +2630,8 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 Some(LValue::FieldMutate(edotted)) => EE::FieldMutate(edotted, er),
             }
         }
-        PE::Abort(pe) => EE::Abort(exp(context, pe)),
+        PE::Abort(None) => EE::Abort(None),
+        PE::Abort(Some(pe)) => EE::Abort(Some(exp(context, pe))),
         PE::Return(name_opt, pe_opt) => {
             let ev = match pe_opt {
                 None => Box::new(sp(loc, EE::Unit { trailing: false })),
