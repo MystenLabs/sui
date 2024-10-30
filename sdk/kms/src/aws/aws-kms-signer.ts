@@ -51,8 +51,8 @@ export class AwsKmsSigner extends Signer {
 	}
 
 	/**
-	 * Retrieves the key scheme used by this signer. Errors if the public key is not initialized.
-	 * @returns The string 'Secp256k1' indicating the key scheme.
+	 * Retrieves the key scheme used by this signer.
+	 * @returns AWS supports only Secp256k1 and Secp256r1 schemes.
 	 */
 	getKeyScheme() {
 		return SIGNATURE_FLAG_TO_SCHEME[this.#publicKey.flag() as SignatureFlag];
