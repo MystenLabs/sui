@@ -1,5 +1,5 @@
 [package]
-name = "sui-indexer"
+name = "mvr-indexer"
 version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -85,5 +85,5 @@ ntest.workspace = true
 criterion.workspace = true
 
 [[bin]]
-name = "sui-indexer"
+name = "mvr-indexer"
 path = "src/main.rs"
