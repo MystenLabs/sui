@@ -203,20 +203,20 @@ impl CheckpointHandler {
             );
         }
 
-        // At some point while committing data in epoch X - 1, we will encounter a new epoch X. We
-        // want to retrieve X - 2's network total transactions to calculate the number of
-        // transactions that occurred in epoch X - 1.
+        // At some point while committing data in epoch X - 1, we will encounter a new epoch X.
+        // Retrieve current epoch's first_tx_sequence_number to calculate `epoch_total_transactions`
+        // for epoch X - 1.
         let first_tx_sequence_number = match system_state_summary.epoch {
             // If first epoch change, this number is 0
             1 => Ok(0),
             _ => {
-                let last_epoch = system_state_summary.epoch - 2;
+                let last_epoch = system_state_summary.epoch - 1;
                 state
-                    .get_network_total_transactions_by_end_of_epoch(last_epoch)
+                    .get_first_tx_sequence_number_of_epoch(last_epoch)
                     .await?
                     .ok_or_else(|| {
                         IndexerError::PersistentStorageDataCorruptionError(format!(
-                            "Network total transactions for epoch {} not found",
+                            "Expected first_tx_sequence_number for epoch {} not found",
                             last_epoch
                         ))
                     })

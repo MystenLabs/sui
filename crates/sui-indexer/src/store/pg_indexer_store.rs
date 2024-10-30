@@ -1478,7 +1478,7 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn get_network_total_transactions_by_end_of_epoch(
+    async fn get_first_tx_sequence_number_of_epoch(
         &self,
         epoch: u64,
     ) -> Result<Option<u64>, IndexerError> {
@@ -1486,19 +1486,14 @@ impl PgIndexerStore {
 
         let mut connection = self.pool.get().await?;
 
-        // TODO: (wlmyng) update to read from epochs::network_total_transactions
-
-        Ok(Some(
-            checkpoints::table
-                .filter(checkpoints::epoch.eq(epoch as i64))
-                .select(checkpoints::network_total_transactions)
-                .order_by(checkpoints::sequence_number.desc())
-                .first::<i64>(&mut connection)
-                .await
-                .map_err(Into::into)
-                .context("Failed to get network total transactions in epoch")
-                .map(|v| v as u64)?,
-        ))
+        epochs::table
+            .filter(epochs::epoch.eq(epoch as i64))
+            .select(epochs::first_tx_sequence_number)
+            .first::<Option<i64>>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .context("Expected epoch is missing in db")
+            .map(|v| v.map(|v| v as u64))
     }
 
     async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
@@ -2249,12 +2244,11 @@ impl IndexerStore for PgIndexerStore {
         self.persist_display_updates(displays).await
     }
 
-    async fn get_network_total_transactions_by_end_of_epoch(
+    async fn get_first_tx_sequence_number_of_epoch(
         &self,
         epoch: u64,
     ) -> Result<Option<u64>, IndexerError> {
-        self.get_network_total_transactions_by_end_of_epoch(epoch)
-            .await
+        self.get_first_tx_sequence_number_of_epoch(epoch).await
     }
 
     /// Persist protocol configs and feature flags until the protocol version for the latest epoch
