@@ -12,7 +12,6 @@ use tracing::instrument;
 use tracing::{error, info};
 
 use crate::metrics::IndexerMetrics;
-use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 
@@ -170,42 +169,15 @@ async fn commit_checkpoints<S>(
 
     let guard = metrics.checkpoint_db_commit_latency.start_timer();
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
-    let tx_indices_batch = tx_indices_batch.into_iter().flatten().collect::<Vec<_>>();
-    let events_batch = events_batch.into_iter().flatten().collect::<Vec<_>>();
-    let event_indices_batch = event_indices_batch
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-    let object_versions_batch = object_versions_batch
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
-    let raw_checkpoints_batch = checkpoint_batch
-        .iter()
-        .map(|c| c.into())
-        .collect::<Vec<StoredRawCheckpoint>>();
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
         let mut persist_tasks = vec![
-            state.persist_transactions(tx_batch),
-            state.persist_tx_indices(tx_indices_batch),
-            state.persist_events(events_batch),
-            state.persist_event_indices(event_indices_batch),
-            state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
-            // TODO: There are a few ways we could make the following more memory efficient.
-            // 1. persist_objects and persist_object_history both call another function to make the final
-            //    committed object list. We could call it early and share the result.
-            // 2. We could avoid clone by using Arc.
-            state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
-            state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_objects_version(object_versions_batch.clone()),
-            state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
