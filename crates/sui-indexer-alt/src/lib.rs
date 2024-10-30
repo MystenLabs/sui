@@ -211,7 +211,7 @@ impl Indexer {
         self.concurrent_pipeline::<EvEmitMod>().await?;
         self.concurrent_pipeline::<EvStructInst>().await?;
         self.concurrent_pipeline::<KvCheckpoints>().await?;
-        self.concurrent_pipeline::<KvObjects>().await?;
+        self.sequential_pipeline::<KvObjects>().await?;
         self.concurrent_pipeline::<KvTransactions>().await?;
         self.concurrent_pipeline::<TxAffectedObjects>().await?;
         self.concurrent_pipeline::<TxBalanceChanges>().await?;

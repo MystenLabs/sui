@@ -5,10 +5,11 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
+use futures::future::try_join_all;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::{
-    db, models::objects::StoredObject, pipeline::concurrent::Handler, pipeline::Processor,
+    db, models::objects::StoredObject, pipeline::sequential::Handler, pipeline::Processor,
     schema::kv_objects,
 };
 
@@ -56,14 +57,21 @@ impl Processor for KvObjects {
 #[async_trait::async_trait]
 impl Handler for KvObjects {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
-    const MAX_PENDING_ROWS: usize = 10000;
+    type Batch = Vec<Self::Value>;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
-        Ok(diesel::insert_into(kv_objects::table)
-            .values(values)
-            .on_conflict_do_nothing()
-            .execute(conn)
-            .await?)
+    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        batch.extend(values);
+    }
+
+    async fn commit(values: &Self::Batch, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let chunks = values.chunks(1000).map(|chunk| {
+            diesel::insert_into(kv_objects::table)
+                .values(chunk)
+                .on_conflict_do_nothing()
+                .execute(conn)
+        });
+
+        let inserted: usize = try_join_all(chunks).await?.into_iter().sum();
+        Ok(inserted)
     }
 }
