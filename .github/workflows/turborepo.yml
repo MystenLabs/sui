@@ -26,6 +26,7 @@ jobs:
   build:
     name: Lint, Build, and Test
     runs-on: ubuntu-latest
+    environment: sui-typescript-aws-kms-test-env
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -60,6 +61,11 @@ jobs:
       - name: Build
         run: pnpm turbo build
       - name: Test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KEY_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_KMS_TEST_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_KMS_AWS_REGION }}
+          AWS_KMS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KMS_KEY_ID }}
         run: pnpm turbo test
 
       # Pack wallet extension and upload it as an artifact for easy developer use:
