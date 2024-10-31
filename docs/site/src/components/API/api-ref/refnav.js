@@ -9,7 +9,7 @@ const RefNav = (props) => {
   const { json, apis } = props;
 
   return (
-    <div className="mb-24">
+    <div className="mb-8">
       <div className="sticky -top-12 -mt-8 pt-8 pb-2 bg-white dark:bg-ifm-background-color-dark">
         <NetworkSelect />
       </div>
@@ -40,6 +40,7 @@ const RefNav = (props) => {
                   </Link>
                 );
               })}
+              
           </div>
         );
       })}

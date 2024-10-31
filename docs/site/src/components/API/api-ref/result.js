@@ -41,7 +41,6 @@ const Property = (props) => {
 
 const Result = (props) => {
   const { json, result } = props;
-  //console.log(result)
   const hasRef = typeof result.schema["$ref"] !== "undefined";
 
   let refObj = {};
