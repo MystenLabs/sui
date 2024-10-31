@@ -20,7 +20,10 @@ use sui_types::{
         FinalizedEffects, QuorumDriverError,
     },
 };
-use tokio::{task::JoinSet, time::sleep};
+use tokio::{
+    task::JoinSet,
+    time::{sleep, timeout},
+};
 
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
 
@@ -104,8 +107,9 @@ where
         // Send the transaction to a random validator.
         let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
         let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
-        let response = client
-            .submit_transaction(
+        let response = timeout(
+            Duration::from_secs(2),
+            client.submit_transaction(
                 HandleTransactionRequestV2 {
                     transaction: tx,
                     include_events: request.include_events,
@@ -114,11 +118,11 @@ where
                     include_auxiliary_data: request.include_auxiliary_data,
                 },
                 options.forwarded_client_addr,
-            )
-            .await
-            .map_err(|e| {
-                QuorumDriverError::RpcFailure(name.concise().to_string(), e.to_string())
-            })?;
+            ),
+        )
+        .await
+        .map_err(|_| QuorumDriverError::TimeoutBeforeFinality)?
+        .map_err(|e| QuorumDriverError::RpcFailure(name.concise().to_string(), e.to_string()))?;
 
         Ok(ExecuteTransactionResponseV3 {
             effects: FinalizedEffects {
