@@ -43,6 +43,20 @@ pub struct DbConfig {
     connection_timeout: Duration,
 }
 
+impl DbConfig {
+    pub fn new(
+        database_url: Url,
+        connection_pool_size: Option<u32>,
+        connection_timeout: Option<Duration>,
+    ) -> Self {
+        Self {
+            database_url,
+            connection_pool_size: connection_pool_size.unwrap_or(100), // clap default
+            connection_timeout: connection_timeout.unwrap_or(Duration::from_secs(60)), // clap default
+        }
+    }
+}
+
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
 
 impl Db {
@@ -155,4 +169,49 @@ pub async fn reset_database(
         db.run_migrations().await?;
     }
     Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tempdb::TempDb;
+    use diesel::prelude::QueryableByName;
+    use diesel_async::RunQueryDsl;
+
+    #[derive(QueryableByName)]
+    struct CountResult {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        cnt: i64,
+    }
+
+    #[tokio::test]
+    async fn test_reset_database_skip_migrations() {
+        let temp_db = TempDb::new().unwrap();
+        let url = temp_db.database().url();
+        let db_config = DbConfig::new(url.clone(), None, None);
+
+        let db = Db::new(db_config.clone()).await.unwrap();
+        let mut conn = db.connect().await.unwrap();
+        diesel::sql_query("CREATE TABLE test_table (id INTEGER PRIMARY KEY)")
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        let cnt = diesel::sql_query(
+            "SELECT COUNT(*) as cnt FROM information_schema.tables WHERE table_name = 'test_table'",
+        )
+        .get_result::<CountResult>(&mut conn)
+        .await
+        .unwrap();
+        assert_eq!(cnt.cnt, 1);
+
+        reset_database(db_config, true).await.unwrap();
+
+        let mut conn = db.connect().await.unwrap();
+        let cnt = diesel::sql_query(
+            "SELECT COUNT(*) as cnt FROM information_schema.tables WHERE table_name = 'test_table'",
+        )
+        .get_result::<CountResult>(&mut conn)
+        .await
+        .unwrap();
+        assert_eq!(cnt.cnt, 0);
+    }
 }

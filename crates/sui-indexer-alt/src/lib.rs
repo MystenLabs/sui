@@ -23,6 +23,7 @@ pub mod models;
 pub mod pipeline;
 pub mod schema;
 pub mod task;
+pub mod tempdb;
 
 pub struct Indexer {
     /// Connection pool to the database.
