@@ -5,10 +5,7 @@
 use crate::{
     cfgir::ast as G,
     diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     expansion::ast::{
         self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
         ModuleIdent_,
@@ -38,7 +35,7 @@ use std::collections::BTreeMap;
 
 struct Context<'env> {
     env: &'env CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
     constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>>,
 }
 
@@ -53,29 +50,29 @@ impl<'env> Context<'env> {
                 (constant.loc, v_opt, constant.attributes.clone())
             })
         });
-        let warning_filters_scope = compilation_env.top_level_warning_filter_scope().clone();
+        let reporter = compilation_env.diagnostic_reporter_at_top_level();
         Self {
             env: compilation_env,
-            warning_filters_scope,
+            reporter,
             constants,
         }
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn resolve_address(&self, addr: &Address) -> NumericalAddress {
