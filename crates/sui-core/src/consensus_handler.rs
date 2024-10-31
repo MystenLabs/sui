@@ -946,14 +946,14 @@ impl ConsensusTransactionHandler {
             // TODO(fastpath): avoid race with removals in consensus adapter, by waiting to handle commit after
             // all blocks in the commit are processed via the transaction handler. Other kinds of races need to be
             // avoided as well. Or we can track pending consensus transactions inside consensus instead.
-            self.epoch_store
-                .insert_pending_consensus_transactions(
-                    &pending_consensus_transactions,
-                    Some(&reconfig_state),
-                )
-                .unwrap_or_else(|e| {
-                    panic!("Failed to insert pending consensus transactions: {}", e)
-                });
+            // self.epoch_store
+            //     .insert_pending_consensus_transactions(
+            //         &pending_consensus_transactions,
+            //         Some(&reconfig_state),
+            //     )
+            //     .unwrap_or_else(|e| {
+            //         panic!("Failed to insert pending consensus transactions: {}", e)
+            //     });
         }
         self.metrics
             .consensus_transaction_handler_fastpath_executions
