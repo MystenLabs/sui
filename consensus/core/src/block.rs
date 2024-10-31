@@ -102,6 +102,7 @@ pub(crate) struct BlockV1 {
 }
 
 impl BlockV1 {
+    #[allow(unused)]
     pub(crate) fn new(
         epoch: Epoch,
         round: Round,
@@ -656,6 +657,18 @@ pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
             VerifiedBlock::new_verified(signed_block, serialized)
         })
         .collect::<Vec<VerifiedBlock>>()
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct VerifiedVotedBlock {
+    pub(crate) inner: VerifiedBlock,
+    pub(crate) to_reject: Vec<TransactionIndex>,
+}
+
+impl VerifiedVotedBlock {
+    pub(crate) fn new(inner: VerifiedBlock, to_reject: Vec<TransactionIndex>) -> Self {
+        Self { inner, to_reject }
+    }
 }
 
 /// A batch of blocks output by consensus for processing.

@@ -16,8 +16,8 @@ use tracing::{debug, error, info};
 
 use crate::{
     block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockOutput, BlockRef, BlockTimestampMs, Round,
-        Slot, VerifiedBlock, GENESIS_ROUND,
+        genesis_blocks, BlockAPI, BlockDigest, BlockOutput, BlockRef, BlockTimestampMs,
+        BlockTransactionVotes, Round, Slot, VerifiedBlock, VerifiedVotedBlock, GENESIS_ROUND,
     },
     commit::{
         load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
@@ -86,6 +86,8 @@ pub(crate) struct DagState {
     // Commit votes pending to be included in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
     pending_commit_votes: VecDeque<CommitVote>,
+
+    pending_transaction_votes: VecDeque<BlockTransactionVotes>,
 
     // Certified blocks pending to be processed outside of consensus.
     pending_certified_blocks: Vec<BlockOutput>,
@@ -176,6 +178,7 @@ impl DagState {
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
             pending_commit_votes: VecDeque::new(),
+            pending_transaction_votes: VecDeque::new(),
             pending_certified_blocks: vec![],
             blocks_to_write: vec![],
             commits_to_write: vec![],
@@ -241,7 +244,14 @@ impl DagState {
     }
 
     /// Accepts a block into DagState and keeps it in memory.
+    #[cfg(test)]
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
+        self.accept_voted_block(VerifiedVotedBlock::new(block, vec![]));
+    }
+
+    /// Accepts a block into DagState and keeps it in memory.
+    pub(crate) fn accept_voted_block(&mut self, voted_block: VerifiedVotedBlock) {
+        let block = voted_block.inner.clone();
         assert_ne!(
             block.round(),
             0,
@@ -276,6 +286,11 @@ impl DagState {
         if self.context.protocol_config.mysticeti_fastpath() {
             let certified_blocks = self.update_certification_votes(&block);
             self.pending_certified_blocks.extend(certified_blocks);
+            self.pending_transaction_votes
+                .push_back(BlockTransactionVotes {
+                    block_ref,
+                    rejects: voted_block.to_reject,
+                });
         }
 
         self.blocks_to_write.push(block);
@@ -445,13 +460,28 @@ impl DagState {
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
+    #[cfg(test)]
     pub(crate) fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) {
         debug!(
             "Accepting blocks: {}",
             blocks.iter().map(|b| b.reference().to_string()).join(",")
         );
         for block in blocks {
-            self.accept_block(block);
+            self.accept_voted_block(VerifiedVotedBlock::new(block, vec![]));
+        }
+    }
+
+    /// Accepts a blocks into DagState and keeps it in memory.
+    pub(crate) fn accept_voted_blocks(&mut self, blocks: Vec<VerifiedVotedBlock>) {
+        debug!(
+            "Accepting voted blocks: {}",
+            blocks
+                .iter()
+                .map(|b| b.inner.reference().to_string())
+                .join(",")
+        );
+        for block in blocks {
+            self.accept_voted_block(block);
         }
     }
 
@@ -887,6 +917,10 @@ impl DagState {
             votes.push(self.pending_commit_votes.pop_front().unwrap());
         }
         votes
+    }
+
+    pub(crate) fn take_transaction_votes(&mut self) -> Vec<BlockTransactionVotes> {
+        self.pending_transaction_votes.drain(..).collect()
     }
 
     /// Returns the pending certified blocks.
