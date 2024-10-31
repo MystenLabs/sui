@@ -641,6 +641,11 @@ impl<'outer, 'env> Context<'outer, 'env> {
         self.reporter.pop_warning_filter_scope()
     }
 
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env
+            .check_feature(&self.reporter, package, feature, loc)
+    }
+
     fn valid_module(&mut self, m: &ModuleIdent) -> bool {
         let resolved = self.outer.module_members.contains_key(m);
         if !resolved {
@@ -737,8 +742,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         match ma_ {
             EN::Name(sp!(_, n)) if n == symbol!("_") => {
                 let current_package = self.current_package;
-                self.env
-                    .check_feature(current_package, FeatureGate::TypeHoles, nloc);
+                self.check_feature(current_package, FeatureGate::TypeHoles, nloc);
                 ResolvedType::Hole
             }
             EN::Name(n) => match self.resolve_unscoped_type(nloc, n) {
@@ -1129,8 +1133,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 }
             }
             ma_ @ E::ModuleAccess_::Variant(_, _) => {
-                self.env
-                    .check_feature(self.current_package, FeatureGate::Enums, mloc);
+                self.check_feature(self.current_package, FeatureGate::Enums, mloc);
                 let Some(result) = self.resolve_datatype_constructor(sp(mloc, ma_), "construction")
                 else {
                     assert!(self.env.has_errors());
@@ -2768,9 +2771,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
 
         EE::Abort(Some(es)) => NE::Abort(exp(context, es)),
         EE::Abort(None) => {
-            context
-                .env
-                .check_feature(context.current_package, FeatureGate::CleverAssertions, eloc);
+            context.check_feature(context.current_package, FeatureGate::CleverAssertions, eloc);
             let abort_const_expr = sp(
                 eloc,
                 N::Exp_::ErrorConstant {
@@ -2909,11 +2910,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
-                    context.env.check_feature(
-                        context.current_package,
-                        FeatureGate::MacroFuns,
-                        eloc,
-                    );
+                    context.check_feature(context.current_package, FeatureGate::MacroFuns, eloc);
                 }
                 NE::MethodCall(d, n, is_macro, ty_args, nes)
             }
@@ -3934,9 +3931,7 @@ fn resolve_call(
             } = *mf;
             // TODO This is a weird place to check this feature gate.
             if let Some(mloc) = is_macro {
-                context
-                    .env
-                    .check_feature(context.current_package, FeatureGate::MacroFuns, mloc);
+                context.check_feature(context.current_package, FeatureGate::MacroFuns, mloc);
             }
             // TODO. We could check arities here, but we don't; type dones that, instead.
             let tyargs_opt = types_opt(context, TypeAnnotation::Expression, in_tyargs_opt);
@@ -3991,7 +3986,7 @@ fn resolve_call(
                     // If no abort code is given for the assert, we add in the abort code as the
                     // bitset-line-number if `CleverAssertions` is set.
                     if args.value.len() == 1 && is_macro.is_some() {
-                        context.env.check_feature(
+                        context.check_feature(
                             context.current_package,
                             FeatureGate::CleverAssertions,
                             subject_loc,
@@ -4009,7 +4004,7 @@ fn resolve_call(
             N::Exp_::Builtin(sp(subject_loc, builtin_), args)
         }
         ResolvedCallSubject::Constructor(_) => {
-            context.env.check_feature(
+            context.check_feature(
                 context.current_package,
                 FeatureGate::PositionalFields,
                 call_loc,
@@ -4054,9 +4049,7 @@ fn resolve_call(
             }
         }
         ResolvedCallSubject::Var(var) => {
-            context
-                .env
-                .check_feature(context.current_package, FeatureGate::Lambda, call_loc);
+            context.check_feature(context.current_package, FeatureGate::Lambda, call_loc);
 
             check_is_not_macro(context, is_macro, &var.value.name);
             let tyargs_opt = types_opt(context, TypeAnnotation::Expression, in_tyargs_opt);

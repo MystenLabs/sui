@@ -44,7 +44,7 @@ pub(super) fn resolve_syntax_attributes(
 
     let syntax_method_prekinds = resolve_syntax_method_prekind(context, attr)?;
 
-    if !context.env.check_feature(
+    if !context.check_feature(
         context.current_package,
         FeatureGate::SyntaxMethods,
         attr_loc,

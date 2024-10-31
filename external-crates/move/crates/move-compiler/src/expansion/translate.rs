@@ -115,7 +115,7 @@ impl<'env, 'map> Context<'env, 'map> {
         }
     }
 
-    fn env(&mut self) -> &CompilationEnv {
+    fn env(&self) -> &CompilationEnv {
         self.defn_context.env
     }
 
@@ -295,6 +295,11 @@ impl<'env, 'map> Context<'env, 'map> {
 
     pub fn pop_warning_filter_scope(&mut self) {
         self.defn_context.pop_warning_filter_scope()
+    }
+
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env()
+            .check_feature(self.reporter(), package, feature, loc)
     }
 }
 
@@ -1027,9 +1032,7 @@ fn check_visibility_modifiers(
                 friend_usage = Some(loc);
             }
             E::Visibility::Package(loc) => {
-                context
-                    .env()
-                    .check_feature(package_name, FeatureGate::PublicPackage, loc);
+                context.check_feature(package_name, FeatureGate::PublicPackage, loc);
                 public_package_usage = Some(loc);
             }
             _ => (),
@@ -1140,9 +1143,7 @@ fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute)
         | KnownAttribute::Deprecation(_) => (),
         KnownAttribute::Error(_) => {
             let pkg = context.current_package();
-            context
-                .env()
-                .check_feature(pkg, FeatureGate::CleverAssertions, loc);
+            context.check_feature(pkg, FeatureGate::CleverAssertions, loc);
         }
     }
 }
@@ -1570,7 +1571,7 @@ fn use_(
             method,
         } => {
             let pkg = context.current_package();
-            context.env().check_feature(pkg, FeatureGate::DotCall, loc);
+            context.check_feature(pkg, FeatureGate::DotCall, loc);
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
@@ -2214,9 +2215,7 @@ fn function_(
     }
     if let Some(macro_loc) = macro_ {
         let current_package = context.current_package();
-        context
-            .env()
-            .check_feature(current_package, FeatureGate::MacroFuns, macro_loc);
+        context.check_feature(current_package, FeatureGate::MacroFuns, macro_loc);
     }
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, macro_, psignature);
@@ -2733,7 +2732,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
                     let pkg = context.current_package();
-                    context.env().check_feature(pkg, FeatureGate::DotCall, loc);
+                    context.check_feature(pkg, FeatureGate::DotCall, loc);
                     let tys_opt = optional_types(context, ptys_opt);
                     let ers = sp(rloc, exps(context, prs));
                     EE::MethodCall(edotted, n, is_macro, tys_opt, ers)
@@ -2803,9 +2802,7 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
         let current_package = context.current_package();
         let loc = plhs.loc;
         let supports_feature =
-            context
-                .env()
-                .check_feature(current_package, FeatureGate::NoParensCast, loc);
+            context.check_feature(current_package, FeatureGate::NoParensCast, loc);
         if supports_feature && ambiguous_cast(&plhs) {
             let msg = "Potentially ambiguous 'as'. Add parentheses to disambiguate";
             context.add_diag(diag!(Syntax::AmbiguousCast, (loc, msg)));
@@ -2910,9 +2907,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
         | E::ExpDotted_::DotUnresolved(_, _)
         | E::ExpDotted_::Index(_, _) => {
             let current_package = context.current_package();
-            context
-                .env()
-                .check_feature(current_package, FeatureGate::Move2024Paths, cloc);
+            context.check_feature(current_package, FeatureGate::Move2024Paths, cloc);
         }
     }
     Some(match case {
@@ -2933,12 +2928,8 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
         }
         PE::Index(plhs, sp!(argloc, args)) => {
             let cur_pkg = context.current_package();
-            context
-                .env()
-                .check_feature(cur_pkg, FeatureGate::Move2024Paths, loc);
-            context
-                .env()
-                .check_feature(cur_pkg, FeatureGate::SyntaxMethods, loc);
+            context.check_feature(cur_pkg, FeatureGate::Move2024Paths, loc);
+            context.check_feature(cur_pkg, FeatureGate::SyntaxMethods, loc);
             let lhs = exp_dotted(context, plhs)?;
             let args = args
                 .into_iter()
@@ -3484,10 +3475,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 }
                 Some(access_result!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
                     let cur_pkg = context.current_package();
-                    if context
-                        .env()
-                        .check_feature(cur_pkg, FeatureGate::Enums, loc)
-                    {
+                    if context.check_feature(cur_pkg, FeatureGate::Enums, loc) {
                         let msg = "Unexpected assignment of variant";
                         let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                         diag.add_note("If you are trying to unpack an enum variant, use 'match'");
@@ -3519,9 +3507,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
         }
         PE::Call(pn, sp!(_, exprs)) => {
             let pkg = context.current_package();
-            context
-                .env()
-                .check_feature(pkg, FeatureGate::PositionalFields, loc);
+            context.check_feature(pkg, FeatureGate::PositionalFields, loc);
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(

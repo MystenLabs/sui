@@ -245,6 +245,11 @@ impl<'env> Context<'env> {
         self.reporter.pop_warning_filter_scope()
     }
 
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env
+            .check_feature(&self.reporter, package, feature, loc)
+    }
+
     pub fn set_macros(
         &mut self,
         macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
