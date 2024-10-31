@@ -54,7 +54,7 @@ pub struct PipelineConfig {
 
     /// Avoid writing to the watermark table
     #[arg(long)]
-    skip_watermark: bool,
+    pub skip_watermark: bool,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
