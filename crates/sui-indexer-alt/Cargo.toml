@@ -34,6 +34,7 @@ url.workspace = true
 diesel_migrations.workspace = true
 
 mysten-metrics.workspace = true
+sui-field-count.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 

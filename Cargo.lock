@@ -13625,6 +13625,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-field-count"
+version = "1.37.0"
+dependencies = [
+ "sui-field-count-derive",
+ "sui-field-count-main",
+]
+
+[[package]]
+name = "sui-field-count-derive"
+version = "1.37.0"
+dependencies = [
+ "quote 1.0.35",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-field-count-main"
+version = "1.37.0"
+
+[[package]]
 name = "sui-framework"
 version = "0.1.0"
 dependencies = [
@@ -13924,6 +13944,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.5",
  "serde",
+ "sui-field-count",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
