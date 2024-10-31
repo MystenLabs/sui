@@ -19,9 +19,6 @@ use sui_mvr_indexer::types::IndexedDeletedObject;
 use sui_mvr_indexer::types::IndexedObject;
 use sui_mvr_indexer::types::TxIndex;
 use sui_types::base_types::SuiAddress;
-use sui_types::effects::TransactionEffectsAPI;
-use sui_types::gas_coin::GasCoin;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use tempfile::tempdir;
 
 #[tokio::test]
