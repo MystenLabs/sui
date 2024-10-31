@@ -4,7 +4,7 @@
 //! Lint to encourage the use of named constants with 'abort' and 'assert' for enhanced code readability.
 //! Detects cases where non-constants are used and issues a warning.
 
-use crate::diagnostics::warning_filters::WarningFilters;
+use crate::diagnostics::warning_filters::WarningFiltersArc;
 use crate::diagnostics::DiagnosticReporter;
 use crate::linters::StyleCodes;
 use crate::{
@@ -20,7 +20,6 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-use std::sync::Arc;
 
 pub struct AssertAbortNamedConstants;
 
@@ -60,7 +59,7 @@ impl Context<'_> {
 }
 
 impl CFGIRVisitorContext for Context<'_> {
-    fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

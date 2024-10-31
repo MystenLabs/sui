@@ -67,19 +67,22 @@ pub struct WarningFiltersScope(WarningFiltersScope_);
 enum WarningFiltersScope_ {
     /// Unsafe and should be used only for internal purposes, such as ide annotations
     Empty,
-    Static(&'static WarningFilters),
+    Static(&'static WarningFiltersBuilder),
     Node(Arc<WarningFiltersScopeNode>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct WarningFiltersScopeNode {
-    filters: Arc<WarningFilters>,
+    filters: WarningFiltersArc,
     prev: WarningFiltersScope_,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
+pub struct WarningFiltersArc(Arc<WarningFiltersBuilder>);
+
+#[derive(PartialEq, Eq, Clone, Debug)]
 /// Used to filter out diagnostics, specifically used for warning suppression
-pub struct WarningFilters {
+pub struct WarningFiltersBuilder {
     filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
     for_dependency: bool, // if false, the filters are used for source code
 }
@@ -128,7 +131,7 @@ pub type WellKnownFilterName = &'static str;
 
 impl WarningFiltersScope {
     pub(crate) const fn root(
-        top_level_warning_filter_opt: Option<&'static WarningFilters>,
+        top_level_warning_filter_opt: Option<&'static WarningFiltersBuilder>,
     ) -> Self {
         match top_level_warning_filter_opt {
             None => WarningFiltersScope(WarningFiltersScope_::Empty),
@@ -138,7 +141,7 @@ impl WarningFiltersScope {
         }
     }
 
-    pub fn push(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push(&mut self, filters: WarningFiltersArc) {
         let node = Arc::new(WarningFiltersScopeNode {
             filters,
             prev: self.0.clone(),
@@ -187,7 +190,17 @@ impl WarningFiltersScope {
     }
 }
 
-impl WarningFilters {
+impl WarningFiltersArc {
+    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
+        self.0.is_filtered(diag)
+    }
+
+    pub fn for_dependency(&self) -> bool {
+        self.0.for_dependency()
+    }
+}
+
+impl WarningFiltersBuilder {
     pub const fn new_for_source() -> Self {
         Self {
             filters: BTreeMap::new(),
@@ -200,6 +213,10 @@ impl WarningFilters {
             filters: BTreeMap::new(),
             for_dependency: true,
         }
+    }
+
+    pub fn finish(self) -> WarningFiltersArc {
+        WarningFiltersArc(Arc::new(self))
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
@@ -453,7 +470,13 @@ impl WarningFilter {
     }
 }
 
-impl AstDebug for WarningFilters {
+impl AstDebug for WarningFiltersArc {
+    fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
+        self.0.ast_debug(w);
+    }
+}
+
+impl AstDebug for WarningFiltersBuilder {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
         for (prefix, filters) in &self.filters {
             let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);

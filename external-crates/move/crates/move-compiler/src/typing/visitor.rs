@@ -3,7 +3,7 @@
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::WarningFiltersArc,
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
@@ -12,7 +12,6 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
-use std::sync::Arc;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
@@ -44,7 +43,7 @@ pub enum LValueKind {
 }
 
 pub trait TypingVisitorContext {
-    fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>);
+    fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -612,7 +611,7 @@ macro_rules! simple_visitor {
         impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
             fn push_warning_filter_scope(
                 &mut self,
-                filters: std::sync::Arc<crate::diagnostics::warning_filters::WarningFilters>,
+                filters: crate::diagnostics::warning_filters::WarningFiltersArc,
             ) {
                 self.reporter.push_warning_filter_scope(filters)
             }
@@ -647,7 +646,7 @@ pub trait TypingMutVisitorConstructor: Send + Sync {
 }
 
 pub trait TypingMutVisitorContext {
-    fn push_warning_filter_scope(&mut self, filter: Arc<WarningFilters>);
+    fn push_warning_filter_scope(&mut self, filter: WarningFiltersArc);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum

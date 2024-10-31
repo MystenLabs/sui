@@ -23,7 +23,7 @@ use move_binary_format::file_format::{
 use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledUnit},
-    diagnostics::{warning_filters::WarningFilters, Diagnostics},
+    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, TargetKind},
     parser::ast as P,
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
@@ -62,7 +62,7 @@ pub fn run_model_builder<
 >(
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
-    warning_filter: Option<WarningFilters>,
+    warning_filter: Option<WarningFiltersBuilder>,
 ) -> anyhow::Result<GlobalEnv> {
     run_model_builder_with_options(
         move_sources,
@@ -82,7 +82,7 @@ pub fn run_model_builder_with_options<
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
-    warning_filter: Option<WarningFilters>,
+    warning_filter: Option<WarningFiltersBuilder>,
 ) -> anyhow::Result<GlobalEnv> {
     run_model_builder_with_options_and_compilation_flags(
         move_sources,
@@ -103,7 +103,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
     flags: Flags,
-    warning_filter: Option<WarningFilters>,
+    warning_filter: Option<WarningFiltersBuilder>,
 ) -> anyhow::Result<GlobalEnv> {
     let mut env = GlobalEnv::new();
     env.set_extension(options);

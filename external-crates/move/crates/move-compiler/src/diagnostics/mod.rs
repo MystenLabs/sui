@@ -9,7 +9,7 @@ use crate::{
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
         codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
-        warning_filters::{FilterName, FilterPrefix, WarningFilters, WarningFiltersScope},
+        warning_filters::{FilterName, FilterPrefix, WarningFiltersArc, WarningFiltersScope},
     },
     shared::{
         files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
@@ -37,7 +37,7 @@ use std::{
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::RwLock,
 };
 
 //**************************************************************************************************
@@ -386,7 +386,7 @@ impl<'env> DiagnosticReporter<'env> {
         }
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.warning_filters_scope.push(filters)
     }
 

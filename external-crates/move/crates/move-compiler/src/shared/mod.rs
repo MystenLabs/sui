@@ -11,7 +11,7 @@ use crate::{
     diagnostics::{
         codes::{DiagnosticsID, Severity},
         warning_filters::{
-            FilterName, FilterPrefix, WarningFilter, WarningFilters, WarningFiltersScope,
+            FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder, WarningFiltersScope,
             FILTER_ALL,
         },
         DiagnosticReporter, Diagnostics, DiagnosticsFormat,
@@ -214,7 +214,7 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
 
 pub struct CompilationEnv {
     flags: Flags,
-    top_level_warning_filter_scope: Option<&'static WarningFilters>,
+    top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
     diags: RwLock<Diagnostics>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
@@ -237,7 +237,7 @@ impl CompilationEnv {
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
         save_hooks: Vec<SaveHook>,
-        warning_filters: Option<WarningFilters>,
+        warning_filters: Option<WarningFiltersBuilder>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
@@ -275,15 +275,15 @@ impl CompilationEnv {
             .collect();
 
         let top_level_warning_filter_opt = if flags.silence_warnings() {
-            let mut f = WarningFilters::new_for_source();
+            let mut f = WarningFiltersBuilder::new_for_source();
             f.add(WarningFilter::All(None));
             Some(f)
         } else {
             warning_filters
         };
-        let top_level_warning_filter_scope: Option<&'static WarningFilters> =
+        let top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder> =
             top_level_warning_filter_opt.map(|f| {
-                let f: &'static WarningFilters = Box::leak(Box::new(f));
+                let f: &'static WarningFiltersBuilder = Box::leak(Box::new(f));
                 f
             });
         let mut diags = Diagnostics::new();
@@ -770,7 +770,7 @@ impl Flags {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: WarningFiltersBuilder,
     pub flavor: Flavor,
     pub edition: Edition,
 }
@@ -779,7 +779,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: WarningFilters::new_for_source(),
+            warning_filter: WarningFiltersBuilder::new_for_source(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }

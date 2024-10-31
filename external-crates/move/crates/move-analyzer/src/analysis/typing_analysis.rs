@@ -11,7 +11,7 @@ use crate::{
 };
 
 use move_compiler::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::WarningFiltersArc,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast::{self as P, ConstantName},
@@ -26,7 +26,7 @@ use move_symbol_pool::Symbol;
 
 use im::OrdMap;
 use lsp_types::Position;
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 /// Data used during anlysis over typed AST
 pub struct TypingAnalysisContext<'a> {
@@ -661,7 +661,7 @@ impl TypingAnalysisContext<'_> {
 
 impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
     // Nothing to do -- we're not producing errors.
-    fn push_warning_filter_scope(&mut self, _filter: Arc<WarningFilters>) {}
+    fn push_warning_filter_scope(&mut self, _filter: WarningFiltersArc) {}
 
     // Nothing to do -- we're not producing errors.
     fn pop_warning_filter_scope(&mut self) {}

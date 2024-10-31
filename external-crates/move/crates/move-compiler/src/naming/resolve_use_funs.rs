@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::diagnostics::warning_filters::WarningFilters;
+use crate::diagnostics::warning_filters::WarningFiltersArc;
 use crate::diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics};
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
@@ -11,7 +11,6 @@ use crate::typing::core;
 use crate::{diag, ice};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::sync::Arc;
 
 //**************************************************************************************************
 // Entry
@@ -48,7 +47,7 @@ impl<'env, 'info> Context<'env, 'info> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

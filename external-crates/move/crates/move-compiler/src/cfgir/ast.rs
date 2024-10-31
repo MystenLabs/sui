@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::WarningFiltersArc,
     expansion::ast::{Attributes, Friend, ModuleIdent, Mutability, TargetKind},
     hlir::ast::{
         BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,
@@ -38,7 +38,7 @@ pub struct Program {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
-    pub warning_filter: Arc<WarningFilters>,
+    pub warning_filter: WarningFiltersArc,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -58,7 +58,7 @@ pub struct ModuleDefinition {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Constant {
-    pub warning_filter: Arc<WarningFilters>,
+    pub warning_filter: WarningFiltersArc,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -85,7 +85,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Function {
-    pub warning_filter: Arc<WarningFilters>,
+    pub warning_filter: WarningFiltersArc,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,

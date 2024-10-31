@@ -5,7 +5,9 @@
 use crate::{
     diag,
     diagnostics::{
-        warning_filters::{WarningFilter, WarningFilters, FILTER_ALL, FILTER_UNUSED},
+        warning_filters::{
+            WarningFilter, WarningFiltersArc, WarningFiltersBuilder, FILTER_ALL, FILTER_UNUSED,
+        },
         Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::{self, Edition, FeatureGate, Flavor},
@@ -81,7 +83,7 @@ struct Context<'env, 'map> {
     address: Option<Address>,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
-    all_filter_alls: WarningFilters,
+    all_filter_alls: WarningFiltersBuilder,
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
@@ -91,7 +93,7 @@ impl<'env, 'map> Context<'env, 'map> {
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
-        let mut all_filter_alls = WarningFilters::new_for_dependency();
+        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
         for prefix in compilation_env.known_filter_names() {
             for f in compilation_env.filter_from_str(prefix, FILTER_ALL) {
                 all_filter_alls.add(f);
@@ -289,7 +291,7 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.defn_context.push_warning_filter_scope(filters)
     }
 
@@ -320,7 +322,7 @@ impl DefnContext<'_, '_> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub(super) fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub(super) fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -887,7 +889,7 @@ fn module_(
     let mut warning_filter = module_warning_filter(context, &attributes);
     let config = context.env().package_config(package_name);
     warning_filter.union(&config.warning_filter);
-    let warning_filter = Arc::new(warning_filter);
+    let warning_filter = warning_filter.finish();
 
     context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
@@ -1243,7 +1245,10 @@ fn attribute(
 
 /// Like warning_filter, but it will filter _all_ warnings for non-source definitions (or for any
 /// dependency packages)
-fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
+fn module_warning_filter(
+    context: &mut Context,
+    attributes: &E::Attributes,
+) -> WarningFiltersBuilder {
     let filters = warning_filter_(context, attributes);
     let is_dep = !context.defn_context.is_source_definition || {
         let pkg = context.current_package();
@@ -1258,14 +1263,14 @@ fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> W
     }
 }
 
-fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> Arc<WarningFilters> {
-    Arc::new(warning_filter_(context, attributes))
+fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFiltersArc {
+    warning_filter_(context, attributes).finish()
 }
 
 /// Finds the warning filters from the #[allow(_)] attribute and the deprecated #[lint_allow(_)]
 /// attribute.
-fn warning_filter_(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
-    let mut warning_filters = WarningFilters::new_for_source();
+fn warning_filter_(context: &mut Context, attributes: &E::Attributes) -> WarningFiltersBuilder {
+    let mut warning_filters = WarningFiltersBuilder::new_for_source();
     let mut prefixed_filters: Vec<(DiagnosticAttribute, Option<Symbol>, Vec<Name>)> = vec![];
     // Gather lint_allow warnings
     if let Some(lint_allow_attr) = attributes.get_(&DiagnosticAttribute::LintAllow.into()) {

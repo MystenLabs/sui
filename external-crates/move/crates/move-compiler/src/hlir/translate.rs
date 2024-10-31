@@ -4,7 +4,10 @@
 
 use crate::{
     debug_display, debug_display_verbose, diag,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{
+        warning_filters::WarningFiltersArc,
+        Diagnostic, DiagnosticReporter, Diagnostics,
+    },
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
     hlir::{
@@ -181,7 +184,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

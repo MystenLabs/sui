@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::WarningFiltersArc,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
     parser::ast::{Ability_, DatatypeName, Field},
@@ -272,7 +272,7 @@ fn add_private_transfers(
         transferred: &'a mut BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
     }
     impl<'a> TypingVisitorContext for TransferVisitor<'a> {
-        fn push_warning_filter_scope(&mut self, _: Arc<WarningFilters>) {
+        fn push_warning_filter_scope(&mut self, _: WarningFiltersArc) {
             unreachable!("no warning filters in function bodies")
         }
 

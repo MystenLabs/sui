@@ -3,7 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::WarningFiltersArc,
     expansion::ast::{ModuleIdent, Value_},
     ice,
     naming::ast::BuiltinTypeName_,
@@ -26,7 +26,6 @@ use move_proc_macros::growing_stack;
 use std::{
     collections::{BTreeSet, VecDeque},
     fmt::Display,
-    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -72,7 +71,7 @@ impl TypingMutVisitorContext for MatchCompiler<'_, '_> {
         }
     }
 
-    fn push_warning_filter_scope(&mut self, filter: Arc<WarningFilters>) {
+    fn push_warning_filter_scope(&mut self, filter: WarningFiltersArc) {
         self.context.push_warning_filter_scope(filter);
     }
 

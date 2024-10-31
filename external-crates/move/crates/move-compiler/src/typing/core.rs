@@ -6,7 +6,7 @@ use crate::{
     debug_display, diag,
     diagnostics::{
         codes::{NameResolution, TypeSafety},
-        warning_filters::WarningFilters,
+        warning_filters::WarningFiltersArc,
         Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
@@ -237,7 +237,7 @@ impl<'env> Context<'env> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

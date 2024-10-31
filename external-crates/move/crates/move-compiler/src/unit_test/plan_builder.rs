@@ -5,7 +5,10 @@
 use crate::{
     cfgir::ast as G,
     diag,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{
+        warning_filters::WarningFiltersArc,
+        Diagnostic, DiagnosticReporter, Diagnostics,
+    },
     expansion::ast::{
         self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
         ModuleIdent_,
@@ -31,7 +34,7 @@ use move_core_types::{
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 struct Context<'env> {
     #[allow(unused)]
@@ -68,7 +71,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
