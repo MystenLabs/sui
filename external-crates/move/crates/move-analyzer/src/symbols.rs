@@ -531,6 +531,7 @@ impl CursorContext {
         }
     }
 
+    /// Returns access chain for a match pattern, if any
     fn find_access_chain_in_match_pattern(&self, p: &P::MatchPattern_) -> Option<ChainInfo> {
         use ChainCompletionKind as CT;
         use P::MatchPattern_ as MP;
