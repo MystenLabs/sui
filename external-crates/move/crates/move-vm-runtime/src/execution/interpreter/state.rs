@@ -5,7 +5,7 @@ use crate::{
     cache::{arena::ArenaPointer, type_cache},
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::locals::Locals,
+        interpreter::locals::MachineHeap,
         values::{self, VMValueCast, Value},
     },
     jit::execution::ast::{CallType, Constant, Function, Module, Type, VTableKey},
@@ -31,6 +31,8 @@ use move_core_types::{
 
 use std::{cmp::min, fmt::Write, sync::Arc};
 use tracing::error;
+
+use super::locals::StackFrame;
 
 macro_rules! debug_write {
     ($($toks: tt)*) => {
@@ -73,6 +75,8 @@ pub(crate) struct MachineState {
     pub(super) call_stack: CallStack,
     /// The current frame we are computing in.
     pub(super) current_frame: CallFrame,
+    /// The current heap.
+    pub(super) heap: MachineHeap,
 }
 
 /// The operand stack.
@@ -99,7 +103,7 @@ pub(super) struct CallFrame {
     pub(super) function: ArenaPointer<Function>,
     pub(super) pc: u16,
     pub(super) resolver: ModuleDefinitionResolver,
-    pub(super) locals: Locals,
+    pub(super) stack_frame: StackFrame,
     pub(super) ty_args: Vec<Type>,
 }
 
@@ -113,11 +117,12 @@ pub(super) struct ResolvableType<'a, 'b> {
 // -------------------------------------------------------------------------------------------------
 
 impl MachineState {
-    pub(super) fn new(initial_frame: CallFrame) -> Self {
+    pub(super) fn new(heap: MachineHeap, initial_frame: CallFrame) -> Self {
         MachineState {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
             current_frame: initial_frame,
+            heap,
         }
     }
 
@@ -266,7 +271,7 @@ impl MachineState {
         debug_writeln!(buf)?;
         debug_writeln!(buf, "        Locals:")?;
         if func.local_count() > 0 {
-            values::debug::print_locals(buf, &frame.locals)?;
+            values::debug::print_stack_frame(buf, &frame.stack_frame)?;
             debug_writeln!(buf)?;
         } else {
             debug_writeln!(buf, "            (none)")?;
@@ -339,9 +344,9 @@ impl MachineState {
         }
         internal_state.push_str(
             format!(
-                "Locals ({:x}):\n{}\n",
-                current_frame.locals.raw_address(),
-                current_frame.locals
+                "Locals (start: {}):\n{}\n",
+                current_frame.stack_frame.base_index(),
+                current_frame.stack_frame
             )
             .as_str(),
         );
@@ -410,7 +415,7 @@ impl Stack {
     where
         Value: VMValueCast<T>,
     {
-        self.pop()?.value_as()
+        VMValueCast::cast(self.pop()?)
     }
 
     /// Pop n values off the stack.
@@ -460,20 +465,22 @@ impl CallFrame {
     /// This loads the locals, padding appropriately.
     #[inline]
     pub fn new(
+        heap: &mut MachineHeap,
         resolver: ModuleDefinitionResolver,
         function: ArenaPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-    ) -> Self {
+    ) -> PartialVMResult<Self> {
         let fun_ref = function.to_ref();
-        let locals = Locals::new_from(args, fun_ref.local_count());
-        CallFrame {
+        let stack_frame = heap.allocate_stack_frame(args, fun_ref.local_count())?;
+        let call_frame = CallFrame {
             pc: 0,
-            locals,
+            stack_frame,
             resolver,
             function,
             ty_args,
-        }
+        };
+        Ok(call_frame)
     }
 
     pub(super) fn function<'a>(&self) -> &'a Function {

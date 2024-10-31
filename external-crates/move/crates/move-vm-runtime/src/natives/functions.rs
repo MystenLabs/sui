@@ -57,8 +57,8 @@ pub type NativeFunctionTable = Vec<(AccountAddress, Identifier, Identifier, Nati
 #[macro_export]
 macro_rules! pop_arg {
     ($arguments:ident, $t:ty) => {{
-        use $crate::natives::functions::{PartialVMError, StatusCode};
         use $crate::execution::values::VMValueCast;
+        use $crate::natives::functions::{PartialVMError, StatusCode};
         match $arguments.pop_back().map(|v| VMValueCast::<$t>::cast(v)) {
             None => {
                 return Err(PartialVMError::new(

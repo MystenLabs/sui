@@ -5,7 +5,10 @@ use crate::{
     cache::arena::ArenaPointer,
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
+        interpreter::{
+            locals::MachineHeap,
+            state::{CallFrame, MachineState, ModuleDefinitionResolver},
+        },
         values::Value,
     },
     jit::execution::ast::{Function, Type},
@@ -56,11 +59,16 @@ pub(crate) fn run(
 
         Ok(return_values.into_iter().collect())
     } else {
+        let mut heap = MachineHeap::new();
         let module_id = function.to_ref().module_id();
         let resolver = ModuleDefinitionResolver::new(vtables, module_id)
             .map_err(|err| err.finish(Location::Module(fun_ref.module_id().clone())))?;
-        let initial_frame = CallFrame::new(resolver, function, ty_args, args);
-        let state = MachineState::new(initial_frame);
+        let initial_frame =
+            CallFrame::new(&mut heap, resolver, function, ty_args, args).map_err(|e| {
+                e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(fun_ref.module_id().clone()))
+            })?;
+        let state = MachineState::new(heap, initial_frame);
         eval::run(state, vtables, vm_config, extensions, gas_meter)
     }
 }

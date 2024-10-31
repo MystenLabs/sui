@@ -4,7 +4,7 @@
 use crate::{
     cache::move_cache::MoveCache,
     dbg_println,
-    execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
+    execution::{dispatch_tables::VMDispatchTables, vm::MoveVM, interpreter::locals::BaseHeap},
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     shared::{gas::GasMeter, linkage_context::LinkageContext, types::RuntimePackageId},
@@ -128,12 +128,15 @@ impl MoveRuntime {
 
         let virtual_tables = VMDispatchTables::new(runtime_packages)?;
 
+        let base_heap = BaseHeap::new();
+
         // Called and checked linkage, etc.
         let instance = MoveVM {
             virtual_tables,
             vm_config: self.vm_config.clone(),
             link_context,
             native_extensions,
+            base_heap,
         };
         Ok(instance)
     }

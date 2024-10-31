@@ -4,8 +4,7 @@
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::locals::Locals,
-        values::{Reference, VMValueCast, Value},
+        values::{Reference, VMValueCast, Value}, interpreter::locals::{BaseHeap, BaseHeapId},
     },
     jit::execution::ast::Type,
 };
@@ -67,10 +66,11 @@ pub fn deserialize_value(
 
 pub fn deserialize_args(
     vtables: &VMDispatchTables,
-    vm_config: &VMConfig,
+    _vm_config: &VMConfig,
+    heap: &mut BaseHeap,
     arg_tys: Vec<Type>,
     serialized_args: Vec<impl Borrow<[u8]>>,
-) -> PartialVMResult<(Locals, Vec<Value>)> {
+) -> PartialVMResult<(Vec<BaseHeapId>, Vec<Value>)> {
     if arg_tys.len() != serialized_args.len() {
         return Err(
             PartialVMError::new(StatusCode::NUMBER_OF_ARGUMENTS_MISMATCH).with_message(format!(
@@ -81,27 +81,25 @@ pub fn deserialize_args(
         );
     }
 
-    // Create a list of dummy locals. Each value stored will be used be borrowed and passed
-    // by reference to the invoked function
-    let mut dummy_locals = Locals::new_from(vec![], arg_tys.len());
+    let mut allocated_heap_ids = vec![];
     // Arguments for the invoked function. These can be owned values or references
     let deserialized_args = arg_tys
         .into_iter()
         .zip(serialized_args)
-        .enumerate()
-        .map(|(idx, (arg_ty, arg_bytes))| match &arg_ty {
+        .map(|(arg_ty, arg_bytes)| match &arg_ty {
             Type::MutableReference(inner_t) | Type::Reference(inner_t) => {
-                dummy_locals.store_loc(
-                    idx,
+                // Each ref-arg value stored on the base heap, borrowed, and passed by
+                // reference to the invoked function.
+                let (ndx, value) = heap.allocate_and_borrow_loc(
                     deserialize_value(vtables, inner_t, arg_bytes)?,
-                    vm_config.enable_invariant_violation_check_in_swap_loc,
                 )?;
-                dummy_locals.borrow_loc(idx)
+                allocated_heap_ids.push(ndx);
+                Ok(value)
             }
             _ => deserialize_value(vtables, &arg_ty, arg_bytes),
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
-    Ok((dummy_locals, deserialized_args))
+    Ok((allocated_heap_ids, deserialized_args))
 }
 
 pub fn serialize_return_value(

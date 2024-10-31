@@ -138,7 +138,7 @@ fn step(
             partial_error_to_error(state, run_context, charge_result)?;
             let non_ref_vals = state
                 .current_frame
-                .locals
+                .stack_frame
                 .drop_all_values()
                 .map(|(_idx, val)| val);
 
@@ -386,17 +386,12 @@ fn op_step_impl(
         }
         Bytecode::CopyLoc(idx) => {
             // TODO(Gas): We should charge gas before copying the value.
-            let local = state.current_frame.locals.copy_loc(*idx as usize)?;
+            let local = state.current_frame.stack_frame.copy_loc(*idx as usize)?;
             gas_meter.charge_copy_loc(&local)?;
             state.push_operand(local)?;
         }
         Bytecode::MoveLoc(idx) => {
-            let local = state.current_frame.locals.move_loc(
-                *idx as usize,
-                run_context
-                    .vm_config()
-                    .enable_invariant_violation_check_in_swap_loc,
-            )?;
+            let local = state.current_frame.stack_frame.move_loc(*idx as usize)?;
             gas_meter.charge_move_loc(&local)?;
 
             state.push_operand(local)?;
@@ -404,13 +399,10 @@ fn op_step_impl(
         Bytecode::StLoc(idx) => {
             let value_to_store = state.pop_operand()?;
             gas_meter.charge_store_loc(&value_to_store)?;
-            state.current_frame.locals.store_loc(
-                *idx as usize,
-                value_to_store,
-                run_context
-                    .vm_config()
-                    .enable_invariant_violation_check_in_swap_loc,
-            )?;
+            state
+                .current_frame
+                .stack_frame
+                .store_loc(*idx as usize, value_to_store)?;
         }
         Bytecode::MutBorrowLoc(idx) | Bytecode::ImmBorrowLoc(idx) => {
             let instr = match instruction {
@@ -418,7 +410,7 @@ fn op_step_impl(
                 _ => S::ImmBorrowLoc,
             };
             gas_meter.charge_simple_instr(instr)?;
-            state.push_operand(state.current_frame.locals.borrow_loc(*idx as usize)?)?;
+            state.push_operand(state.current_frame.stack_frame.borrow_loc(*idx as usize)?)?;
         }
         Bytecode::ImmBorrowField(fh_idx) | Bytecode::MutBorrowField(fh_idx) => {
             let instr = match instruction {
@@ -682,7 +674,7 @@ fn op_step_impl(
                 .current_frame
                 .resolver
                 .instantiate_single_type(*si, state.current_frame.ty_args())?;
-            let res = vec_ref.borrow_elem(idx, ty);
+            let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(true, make_ty!(ty), res.is_ok())?;
             state.push_operand(res?)?;
         }
@@ -1056,7 +1048,7 @@ fn make_call_frame(
     let fun_ref = function.to_ref();
     let resolver = ModuleDefinitionResolver::new(run_context.vtables, fun_ref.module_id())?;
     let args = state.pop_n_operands(fun_ref.arg_count() as u16)?;
-    Ok(CallFrame::new(resolver, function, ty_args, args))
+    CallFrame::new(&mut state.heap, resolver, function, ty_args, args)
 }
 
 fn partial_error_to_error<T>(
