@@ -7,8 +7,10 @@ use crate::{
 };
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::Hash,
+    pin::Pin,
+    sync::{Arc, Mutex},
 };
 
 pub const FILTER_ALL: &str = "all";
@@ -77,17 +79,20 @@ struct WarningFiltersScopeNode {
     prev: WarningFiltersScope_,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct WarningFiltersArc(Arc<WarningFiltersBuilder>);
+#[derive(Debug, Clone)]
+pub struct WarningFiltersTable(Arc<Mutex<HashSet<Pin<Box<WarningFiltersBuilder>>>>>);
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+pub struct WarningFiltersArc(*const WarningFiltersBuilder);
+
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Used to filter out diagnostics, specifically used for warning suppression
 pub struct WarningFiltersBuilder {
     filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
     for_dependency: bool, // if false, the filters are used for source code
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Filters split by category and code
 enum UnprefixedWarningFilters {
     /// Remove all warnings
@@ -190,13 +195,41 @@ impl WarningFiltersScope {
     }
 }
 
+impl WarningFiltersTable {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(HashSet::new())))
+    }
+
+    pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFiltersArc {
+        let pinned = Box::pin(filters);
+        let wf = {
+            let pinned_ref: &WarningFiltersBuilder = &*pinned;
+            WarningFiltersArc(pinned_ref as *const WarningFiltersBuilder)
+        };
+        let m: &mut HashSet<Pin<Box<WarningFiltersBuilder>>> =
+            Arc::get_mut(&mut self.0).unwrap().get_mut().unwrap();
+        if m.contains(&pinned) {
+            let existing = m.get(&pinned).unwrap();
+            let existing_ref: &WarningFiltersBuilder = &*existing;
+            WarningFiltersArc(existing_ref as *const WarningFiltersBuilder)
+        } else {
+            m.insert(pinned);
+            wf
+        }
+    }
+}
+
 impl WarningFiltersArc {
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.0.is_filtered(diag)
+        self.borrow().is_filtered(diag)
     }
 
     pub fn for_dependency(&self) -> bool {
-        self.0.for_dependency()
+        self.borrow().for_dependency()
+    }
+
+    fn borrow(&self) -> &WarningFiltersBuilder {
+        unsafe { &*self.0 }
     }
 }
 
@@ -213,10 +246,6 @@ impl WarningFiltersBuilder {
             filters: BTreeMap::new(),
             for_dependency: true,
         }
-    }
-
-    pub fn finish(self) -> WarningFiltersArc {
-        WarningFiltersArc(Arc::new(self))
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
@@ -472,7 +501,7 @@ impl WarningFilter {
 
 impl AstDebug for WarningFiltersArc {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        self.0.ast_debug(w);
+        self.borrow().ast_debug(w);
     }
 }
 
