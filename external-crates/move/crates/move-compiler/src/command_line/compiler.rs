@@ -10,7 +10,8 @@ use crate::{
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
-        codes::{Severity, WarningFilter},
+        codes::Severity,
+        warning_filters::{WarningFilter, WarningFilters},
         *,
     },
     editions::Edition,

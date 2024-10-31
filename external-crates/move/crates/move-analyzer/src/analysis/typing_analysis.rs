@@ -11,7 +11,7 @@ use crate::{
 };
 
 use move_compiler::{
-    diagnostics as diag,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast::{self as P, ConstantName},
@@ -661,7 +661,7 @@ impl TypingAnalysisContext<'_> {
 
 impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
     // Nothing to do -- we're not producing errors.
-    fn push_warning_filter_scope(&mut self, _filter: diag::WarningFilters) {}
+    fn push_warning_filter_scope(&mut self, _filter: WarningFilters) {}
 
     // Nothing to do -- we're not producing errors.
     fn pop_warning_filter_scope(&mut self) {}

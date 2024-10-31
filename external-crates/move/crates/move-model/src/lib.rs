@@ -23,7 +23,7 @@ use move_binary_format::file_format::{
 use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledUnit},
-    diagnostics::{Diagnostics, WarningFilters},
+    diagnostics::{warning_filters::WarningFilters, Diagnostics},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, TargetKind},
     parser::ast as P,
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},

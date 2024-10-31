@@ -5,7 +5,10 @@
 use crate::{
     cfgir::ast as G,
     diag,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
+    },
     expansion::ast::{
         self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
         ModuleIdent_,
@@ -16,7 +19,7 @@ use crate::{
     shared::{
         known_attributes::{self, TestingAttribute},
         unique_map::UniqueMap,
-        CompilationEnv, Identifier, NumericalAddress, WarningFiltersScope,
+        CompilationEnv, Identifier, NumericalAddress,
     },
     unit_test::{
         ExpectedFailure, ExpectedMoveError, ModuleTestPlan, MoveErrorType, TestArgument, TestCase,

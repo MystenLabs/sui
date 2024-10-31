@@ -20,7 +20,7 @@ use move_command_line_common::{
 };
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{Diagnostics, WarningFilters},
+    diagnostics::{warning_filters::WarningFilters, Diagnostics},
     editions::{Edition, Flavor},
     shared::{files::MappedFiles, NumericalAddress, PackageConfig},
     FullyCompiledProgram,
