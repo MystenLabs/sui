@@ -4,10 +4,7 @@
 
 use crate::{
     debug_display, debug_display_verbose, diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
     hlir::{
@@ -134,7 +131,7 @@ pub(super) struct Context<'env> {
     pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
     pub debug: HLIRDebugFlags,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
     function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
@@ -159,10 +156,10 @@ impl<'env> Context<'env> {
             match_specialization: false,
             match_work_queue: false,
         };
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             info: prog.info.clone(),
             debug,
             current_package: None,
@@ -176,22 +173,21 @@ impl<'env> Context<'env> {
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
-
     pub fn has_empty_locals(&self) -> bool {
         self.function_locals.is_empty()
     }
