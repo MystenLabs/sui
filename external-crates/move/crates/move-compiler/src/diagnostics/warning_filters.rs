@@ -65,6 +65,7 @@ pub struct WarningFiltersScope(WarningFiltersScope_);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 enum WarningFiltersScope_ {
+    /// Unsafe and should be used only for internal purposes, such as ide annotations
     Empty,
     Static(&'static WarningFilters),
     Node(Arc<WarningFiltersScopeNode>),
@@ -126,9 +127,6 @@ pub type WellKnownFilterName = &'static str;
 //**************************************************************************************************
 
 impl WarningFiltersScope {
-    /// Unsafe and should be used only for internal purposes, such as ide annotations
-    pub(crate) const EMPTY: &'static Self = &WarningFiltersScope(WarningFiltersScope_::Empty);
-
     pub(crate) const fn root(
         top_level_warning_filter_opt: Option<&'static WarningFilters>,
     ) -> Self {

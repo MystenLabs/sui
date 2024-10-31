@@ -63,6 +63,7 @@ enum DepType {
 }
 
 struct Context<'a, 'env> {
+    #[allow(unused)]
     env: &'env CompilationEnv,
     reporter: DiagnosticReporter<'env>,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,

@@ -189,6 +189,7 @@ impl ControlFlow {
 }
 
 struct Context<'env> {
+    #[allow(unused)]
     env: &'env CompilationEnv,
     reporter: DiagnosticReporter<'env>,
     // loops: Vec<BlockLabel>,

@@ -577,6 +577,7 @@ macro_rules! simple_visitor {
         pub struct $visitor;
 
         pub struct Context<'a> {
+            #[allow(unused)]
             env: &'a crate::shared::CompilationEnv,
             reporter: crate::diagnostics::DiagnosticReporter<'a>,
         }

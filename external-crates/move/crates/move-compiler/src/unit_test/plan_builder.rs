@@ -34,6 +34,7 @@ use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 struct Context<'env> {
+    #[allow(unused)]
     env: &'env CompilationEnv,
     reporter: DiagnosticReporter<'env>,
     constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>>,

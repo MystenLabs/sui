@@ -75,6 +75,7 @@ type WrappingFields =
 pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
+    #[allow(unused)]
     env: &'a CompilationEnv,
     reporter: DiagnosticReporter<'a>,
     program_info: Arc<TypingProgramInfo>,
