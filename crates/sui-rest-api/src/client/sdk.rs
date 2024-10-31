@@ -9,6 +9,7 @@ use sui_sdk_types::types::CheckpointData;
 use sui_sdk_types::types::CheckpointDigest;
 use sui_sdk_types::types::CheckpointSequenceNumber;
 use sui_sdk_types::types::EpochId;
+use sui_sdk_types::types::Object;
 use sui_sdk_types::types::ObjectId;
 use sui_sdk_types::types::SignedCheckpointSummary;
 use sui_sdk_types::types::SignedTransaction;
@@ -49,7 +50,6 @@ use crate::types::X_SUI_LOWEST_AVAILABLE_CHECKPOINT;
 use crate::types::X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS;
 use crate::types::X_SUI_TIMESTAMP_MS;
 use crate::ExecuteTransactionQueryParameters;
-use crate::ObjectResponse;
 
 static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -128,30 +128,26 @@ impl Client {
         self.json(request).await
     }
 
-    pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<ObjectResponse>> {
+    pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<Object>> {
         let url = self.url().join(&format!("objects/{object_id}"))?;
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::GetObjectResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn get_object_with_version(
         &self,
         object_id: ObjectId,
         version: Version,
-    ) -> Result<Response<ObjectResponse>> {
+    ) -> Result<Response<Object>> {
         let url = self
             .url()
             .join(&format!("objects/{object_id}/version/{version}"))?;
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::GetObjectResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn list_dynamic_fields(
@@ -213,9 +209,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::ValidatorCommittee>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn get_committee(&self, epoch: EpochId) -> Result<Response<ValidatorCommittee>> {
@@ -223,9 +217,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::ValidatorCommittee>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn get_checkpoint(
@@ -238,9 +230,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::GetCheckpointResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
@@ -256,10 +246,6 @@ impl Client {
         let checkpoint = page
             .pop()
             .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
-        let checkpoint = SignedCheckpointSummary {
-            checkpoint: checkpoint.summary,
-            signature: checkpoint.signature,
-        };
 
         Ok(Response::new(checkpoint, parts))
     }
@@ -267,19 +253,20 @@ impl Client {
     pub async fn list_checkpoints(
         &self,
         parameters: &ListCheckpointsQueryParameters,
-    ) -> Result<Response<Vec<CheckpointResponse>>> {
+    ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
         let url = self.url().join("checkpoints")?;
 
         let request = self.inner.get(url).query(parameters);
 
-        self.protobuf::<crate::proto::ListCheckpointResponse>(request)
-            .await?
-            .try_map(|page| {
-                page.checkpoints
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect()
-            })
+        self.bcs(request).await
+        // self.protobuf::<crate::proto::ListCheckpointResponse>(request)
+        //     .await?
+        //     .try_map(|page| {
+        //         page.checkpoints
+        //             .into_iter()
+        //             .map(TryInto::try_into)
+        //             .collect()
+        //     })
     }
 
     pub async fn get_full_checkpoint(
@@ -292,13 +279,14 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::FullCheckpoint>(request)
-            .await?
-            // TODO make this more efficient and convert directly into the sui-sdk-types version
-            .try_map(|proto| {
-                sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
-                    .and_then(TryInto::try_into)
-            })
+        self.bcs(request).await
+        // self.protobuf::<crate::proto::FullCheckpoint>(request)
+        //     .await?
+        //     // TODO make this more efficient and convert directly into the sui-sdk-types version
+        //     .try_map(|proto| {
+        //         sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
+        //             .and_then(TryInto::try_into)
+        //     })
     }
 
     pub async fn get_transaction(
@@ -309,9 +297,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::GetTransactionResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn list_transactions(
@@ -322,14 +308,7 @@ impl Client {
 
         let request = self.inner.get(url).query(parameters);
 
-        self.protobuf::<crate::proto::ListTransactionsResponse>(request)
-            .await?
-            .try_map(|page| {
-                page.transactions
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect()
-            })
+        self.bcs(request).await
     }
 
     pub async fn execute_transaction(
@@ -348,9 +327,7 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
             .body(body);
 
-        self.protobuf::<crate::proto::TransactionExecutionResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn simulate_transaction(
@@ -367,9 +344,7 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
             .body(body);
 
-        self.protobuf::<crate::proto::TransactionSimulationResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn resolve_transaction(
@@ -380,9 +355,7 @@ impl Client {
 
         let request = self.inner.post(url).json(unresolved_transaction);
 
-        self.protobuf::<crate::proto::ResolveTransactionResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn resolve_transaction_with_parameters(
@@ -398,9 +371,7 @@ impl Client {
             .query(&parameters)
             .json(unresolved_transaction);
 
-        self.protobuf::<crate::proto::ResolveTransactionResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     async fn check_response(
@@ -442,6 +413,25 @@ impl Client {
         Ok(Response::new(json, parts))
     }
 
+    pub(super) async fn bcs<T: serde::de::DeserializeOwned>(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<Response<T>> {
+        let response = request
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
+            .send()
+            .await?;
+
+        let (response, parts) = self.check_response(response).await?;
+
+        let bytes = response.bytes().await?;
+        match bcs::from_bytes(&bytes) {
+            Ok(bcs) => Ok(Response::new(bcs, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
+    }
+
+    #[allow(unused)]
     pub(super) async fn protobuf<T: prost::Message + std::default::Default>(
         &self,
         request: reqwest::RequestBuilder,
