@@ -81,7 +81,7 @@ pub struct ConsensusManager {
     mysticeti_manager: ProtocolManager,
     mysticeti_client: Arc<LazyMysticetiClient>,
     active: parking_lot::Mutex<bool>,
-    consensus_client: Arc<ConsensusClientWrapper>,
+    consensus_client: Arc<UpdatableConsensusClient>,
 }
 
 impl ConsensusManager {
@@ -89,7 +89,7 @@ impl ConsensusManager {
         node_config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
-        consensus_client: Arc<ConsensusClientWrapper>,
+        consensus_client: Arc<UpdatableConsensusClient>,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
@@ -162,13 +162,15 @@ impl ConsensusManagerTrait for ConsensusManager {
     }
 }
 
+/// A ConsensusClient that can be updated internally at any time. This usually happening during epoch
+/// change where a client is set after the new consensus is started for the new epoch.
 #[derive(Default)]
-pub struct ConsensusClientWrapper {
+pub struct UpdatableConsensusClient {
     // An extra layer of Arc<> is needed as required by ArcSwapAny.
     client: ArcSwapOption<Arc<dyn ConsensusClient>>,
 }
 
-impl ConsensusClientWrapper {
+impl UpdatableConsensusClient {
     pub fn new() -> Self {
         Self {
             client: ArcSwapOption::empty(),
@@ -208,7 +210,7 @@ impl ConsensusClientWrapper {
 }
 
 #[async_trait]
-impl ConsensusClient for ConsensusClientWrapper {
+impl ConsensusClient for UpdatableConsensusClient {
     async fn submit(
         &self,
         transactions: &[ConsensusTransaction],
