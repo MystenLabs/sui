@@ -37,7 +37,7 @@ use std::{
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 
 //**************************************************************************************************
@@ -386,7 +386,7 @@ impl<'env> DiagnosticReporter<'env> {
         }
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
         self.warning_filters_scope.push(filters)
     }
 

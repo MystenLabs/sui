@@ -16,7 +16,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::VecDeque, fmt, hash::Hash};
+use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
 
 //**************************************************************************************************
 // Program
@@ -129,7 +129,7 @@ pub type ModuleIdent = Spanned<ModuleIdent_>;
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -171,7 +171,7 @@ pub struct DatatypeTypeParameter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -190,7 +190,7 @@ pub enum StructFields {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -243,7 +243,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -261,7 +261,7 @@ pub struct Function {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Constant {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,

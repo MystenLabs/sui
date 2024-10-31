@@ -73,7 +73,7 @@ enum WarningFiltersScope_ {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct WarningFiltersScopeNode {
-    filters: WarningFilters,
+    filters: Arc<WarningFilters>,
     prev: WarningFiltersScope_,
 }
 
@@ -138,7 +138,7 @@ impl WarningFiltersScope {
         }
     }
 
-    pub fn push(&mut self, filters: WarningFilters) {
+    pub fn push(&mut self, filters: Arc<WarningFilters>) {
         let node = Arc::new(WarningFiltersScopeNode {
             filters,
             prev: self.0.clone(),
