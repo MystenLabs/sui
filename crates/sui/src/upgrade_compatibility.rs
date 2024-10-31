@@ -364,7 +364,6 @@ impl CompatibilityMode for CliCompatibilityMode {
     }
 }
 
-#[allow(dead_code)]
 struct IdentifierTableLookup {
     struct_identifier_to_index: BTreeMap<Identifier, TableIndex>,
     enum_identifier_to_index: BTreeMap<Identifier, TableIndex>,
@@ -607,9 +606,12 @@ fn diag_from_error(
             &name,
             compiled_unit_with_source,
         ),
-        UpgradeCompatibilityModeError::StructMissing { name, .. } => {
-            missing_definition_diag(Declarations::PublicMissing, "struct", &name, compiled_unit_with_source)
-        }
+        UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
+            Declarations::PublicMissing,
+            "struct",
+            &name,
+            compiled_unit_with_source,
+        ),
 
         UpgradeCompatibilityModeError::StructAbilityMismatch {
             name,
@@ -635,11 +637,12 @@ fn diag_from_error(
             compiled_unit_with_source,
             lookup,
         ),
-        UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
-            missing_definition_diag(
-                Declarations::PublicMissing,
-                "enum", &name, compiled_unit_with_source)
-        }
+        UpgradeCompatibilityModeError::EnumMissing { name, .. } => missing_definition_diag(
+            Declarations::PublicMissing,
+            "enum",
+            &name,
+            compiled_unit_with_source,
+        ),
         UpgradeCompatibilityModeError::EnumAbilityMismatch {
             name,
             old_enum,
@@ -793,13 +796,13 @@ fn function_signature_mismatch_diag(
     if old_function.parameters.len() != new_function.parameters.len() {
         diags.add(
             Diagnostic::new(
-                codes::Upgrades::FunctionParameterMismatch, // TODO
+                Declarations::PublicMissing, // TODO
                 (identifier_loc, format!("Function '{function_name}' expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's parameters for function '{function_name}', expected {} parameters.", old_function.parameters.len())],
             )
         );
-    } else if old_function.parameters != new_function.parameters {
+    } else if old_function.parameters.eq(&new_function.parameters) {
         for ((i, old_param), new_param) in old_function
             .parameters
             .iter()
@@ -815,7 +818,7 @@ fn function_signature_mismatch_diag(
 
                 diags.add(
                     Diagnostic::new(
-                        codes::Upgrades::FunctionParameterMismatch, // TODO
+                        Declarations::PublicMissing,
                         (param_loc, format!("Function '{function_name}' unexpected parameter {new_param} at position {i}, expected {old_param}")),
                         Vec::<(Loc, String)>::new(),
                         vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's parameters for function '{function_name}'.")],
@@ -829,7 +832,7 @@ fn function_signature_mismatch_diag(
     if old_function.return_.len() != new_function.return_.len() {
         diags.add(
             Diagnostic::new(
-                codes::Upgrades::FunctionParameterMismatch, // TODO
+                Declarations::PublicMissing, // TODO
                 (identifier_loc, format!("Function '{function_name}' expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's return types for function '{function_name}'.")],
@@ -850,7 +853,7 @@ fn function_signature_mismatch_diag(
             if old_return != new_return {
                 diags.add(
                     Diagnostic::new(
-                        codes::Upgrades::FunctionParameterMismatch, // TODO
+                        Declarations::PublicMissing,
                         (*return_, if new_function.return_.len() == 1 {
                             format!("Function '{function_name}' has an unexpected return type {new_return}, expected {old_return}")
                         } else {
@@ -974,9 +977,11 @@ fn struct_field_mismatch_diag(
                 let field_loc = struct_sourcemap
                     .fields
                     .get(i)
-                    .context("Unable to get field location")?;
+                    .context("Unable to get field location")?
+                    .clone();
 
                 // match of the above
+                // TODO ?
                 let label = match (old_field.name != new_field.name, old_field.type_ != new_field.type_) {
                     (true, true) => format!(
                         "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
@@ -1007,12 +1012,17 @@ fn struct_field_mismatch_diag(
                     )
                 );
 
-                diags.push(Diagnostic::error()
-                    .with_message("Struct field mismatch")
-                    .with_labels(vec![label])
-                    .with_notes(vec![format!(
+                diags.add(Diagnostic::new(
+                    error_code,
+                    (field_loc, format!(
+                        "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
+                        new_field.name, new_field.type_, old_field.name, old_field.type_
+                    )),
+                    Vec::<(Loc, String)>::new(),
+                    vec![format!(
                         "Structs are part of a module's public interface and cannot be changed during an upgrade, restore the original struct's fields for struct '{struct_name}' including the ordering."
-                    )]));
+                    )],
+                ))
             }
         }
     }
@@ -1071,13 +1081,24 @@ fn enum_ability_mismatch_diag(
         };
 
         diags.add( // TODO CHECK
-                   diag!(
+            //        diag!(
+            //     error_code,
+            //     (def_loc, "Enum ability mismatch"),
+            //     // TODO secondary enum
+            //     note: format!(
+            //         "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's abilities for enum '{enum_name}'.",
+            //     ),
+            // ),
+            Diagnostic::new(
                 error_code,
-                (def_loc, "Enum ability mismatch"),
-                // TODO secondary enum
-                note: format!(
-                    "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's abilities for enum '{enum_name}'.",
-                ),
+                (def_loc, format!(
+                    "Enum '{enum_name}' has unexpected abilities, missing {:?}, unexpected {:?}",
+                    missing_abilities, extra_abilities
+                )),
+                Vec::<(Loc, String)>::new(),
+                vec![format!( // TODO breakup
+                    "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's abilities for enum '{enum_name}'."
+                )],
             )
         );
     }
@@ -1150,13 +1171,13 @@ fn enum_variant_mismatch_diag(
             };
 
             diags.add(
-                diag!(
+                Diagnostic::new(
                     error,
                     (variant_loc, label),
-                    // TODO enum label secondary here
-                    note: format!(
+                    Vec::<(Loc, String)>::new(),
+                    vec![format!( // TODO breakup
                         "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's variants for enum '{enum_name}'.",
-                    ),
+                    )],
                 )
             );
         }
@@ -1203,16 +1224,17 @@ fn enum_new_variant_diag(
                 .0;
 
             diags.add(
-                diag!(
+                Diagnostic::new(
                     error,
                     (variant.1, format!(
                         "Enum '{enum_name}' has a new unexpected variant '{}' at position {i}.",
                         new_variant.name
                     )),
+                    Vec::<(Loc, String)>::new(),
                     // TODO NEED TO SHOW THE ENUM LINE HERE
-                    note: format!(
+                    vec![format!( // TODO breakup
                         "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's variants for enum '{enum_name}'.",
-                    ),
+                    )],
                 )
             )
         }
@@ -1249,9 +1271,7 @@ fn enum_variant_missing_diag(
         error,
         (
             enum_sourcemap.definition_location,
-            format!(
-                "Enum '{enum_name}' has a missing variant at position {tag}.",
-            )
+            format!("Enum '{enum_name}' has a missing variant at position {tag}.",)
         ),
     ));
 
