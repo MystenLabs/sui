@@ -1,5 +1,11 @@
 # @mysten/kms
 
+## 0.0.3
+
+### Patch Changes
+
+- 02c9e46: Fix exports on the bundled package
+
 ## 0.0.2
 
 ### Patch Changes
