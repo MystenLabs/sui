@@ -77,6 +77,7 @@ pub(super) fn processor<P: Processor + 'static>(
                     let epoch = checkpoint.checkpoint_summary.epoch;
                     let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
                     let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
+                    let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
 
                     debug!(
                         pipeline = P::NAME,
@@ -95,9 +96,15 @@ pub(super) fn processor<P: Processor + 'static>(
                         .with_label_values(&[P::NAME])
                         .inc_by(values.len() as u64);
 
-                    tx.send(Indexed::new(epoch, cp_sequence_number, tx_hi, values))
-                        .await
-                        .map_err(|_| Break::Cancel)?;
+                    tx.send(Indexed::new(
+                        epoch,
+                        cp_sequence_number,
+                        tx_hi,
+                        timestamp_ms,
+                        values,
+                    ))
+                    .await
+                    .map_err(|_| Break::Cancel)?;
 
                     Ok(())
                 }

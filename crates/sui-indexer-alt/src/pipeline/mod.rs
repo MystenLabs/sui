@@ -89,13 +89,20 @@ enum Break {
 }
 
 impl<P: Processor> Indexed<P> {
-    fn new(epoch: u64, cp_sequence_number: u64, tx_hi: u64, values: Vec<P::Value>) -> Self {
+    fn new(
+        epoch: u64,
+        cp_sequence_number: u64,
+        tx_hi: u64,
+        timestamp_ms: u64,
+        values: Vec<P::Value>,
+    ) -> Self {
         Self {
             watermark: CommitterWatermark {
                 pipeline: P::NAME.into(),
                 epoch_hi_inclusive: epoch as i64,
                 checkpoint_hi_inclusive: cp_sequence_number as i64,
                 tx_hi: tx_hi as i64,
+                timestamp_ms_hi_inclusive: timestamp_ms as i64,
             },
             values,
         }

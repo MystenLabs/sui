@@ -127,9 +127,10 @@ diesel::table! {
         epoch_hi_inclusive -> Int8,
         checkpoint_hi_inclusive -> Int8,
         tx_hi -> Int8,
+        timestamp_ms_hi_inclusive -> Int8,
         epoch_lo -> Int8,
         reader_lo -> Int8,
-        timestamp_ms -> Int8,
+        pruner_timestamp_ms -> Int8,
         pruner_hi -> Int8,
     }
 }
