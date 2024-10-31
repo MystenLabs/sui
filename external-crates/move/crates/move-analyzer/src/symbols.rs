@@ -537,14 +537,10 @@ impl CursorContext {
         use P::MatchPattern_ as MP;
         match p {
             MP::PositionalConstructor(chain, _) => {
-                return Some(ChainInfo::new(chain.clone(), CT::Type, false));
+                Some(ChainInfo::new(chain.clone(), CT::Type, false))
             }
-            MP::FieldConstructor(chain, _) => {
-                return Some(ChainInfo::new(chain.clone(), CT::Type, false));
-            }
-            MP::Name(_, chain) => {
-                return Some(ChainInfo::new(chain.clone(), CT::All, false));
-            }
+            MP::FieldConstructor(chain, _) => Some(ChainInfo::new(chain.clone(), CT::Type, false)),
+            MP::Name(_, chain) => Some(ChainInfo::new(chain.clone(), CT::All, false)),
             MP::Literal(_) | MP::Or(..) | MP::At(..) => None,
         }
     }
