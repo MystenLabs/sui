@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_adapter::{ConsensusClient, SubmitResponse},
+    consensus_adapter::{BlockStatusReceiver, ConsensusClient},
     consensus_handler::SequencedConsensusTransactionKey,
 };
 
@@ -80,7 +80,7 @@ impl ConsensusClient for LazyMysticetiClient {
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SubmitResponse> {
+    ) -> SuiResult<BlockStatusReceiver> {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
@@ -127,6 +127,6 @@ impl ConsensusClient for LazyMysticetiClient {
             let transaction_key = SequencedConsensusTransactionKey::External(transactions[0].key());
             tracing::info!("Transaction {transaction_key:?} was included in {block_ref}",)
         };
-        Ok(SubmitResponse::WithStatusWaiter(status_waiter))
+        Ok(status_waiter)
     }
 }
