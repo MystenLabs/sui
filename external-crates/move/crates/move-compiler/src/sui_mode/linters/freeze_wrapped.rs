@@ -11,8 +11,8 @@ use crate::{
     diag,
     diagnostics::{
         codes::{custom, DiagnosticInfo, Severity},
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
+        warning_filters::WarningFilters,
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     expansion::ast as E,
     naming::ast as N,
@@ -76,7 +76,7 @@ pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
     env: &'a CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'a>,
     program_info: Arc<TypingProgramInfo>,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
     wrapping_fields: WrappingFields,
@@ -86,10 +86,10 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
     type Context<'a> = Context<'a>;
 
     fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a> {
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             program_info: program.info.clone(),
             wrapping_fields: WrappingFields::new(),
         }
@@ -98,12 +98,12 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
 
 impl Context<'_> {
     fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 }
 
@@ -156,11 +156,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
     }
 
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 }
 

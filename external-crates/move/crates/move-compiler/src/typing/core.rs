@@ -874,12 +874,12 @@ impl<'env> Context<'env> {
 }
 
 impl MatchContext<false> for Context<'_> {
-    fn env(&mut self) -> &CompilationEnv {
+    fn env(&self) -> &CompilationEnv {
         self.env
     }
 
-    fn env_ref(&self) -> &CompilationEnv {
-        self.env
+    fn reporter(&self) -> &DiagnosticReporter {
+        &self.reporter
     }
 
     /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this

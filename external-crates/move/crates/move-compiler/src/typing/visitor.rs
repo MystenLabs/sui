@@ -578,7 +578,7 @@ macro_rules! simple_visitor {
 
         pub struct Context<'a> {
             env: &'a crate::shared::CompilationEnv,
-            warning_filters_scope: crate::diagnostics::warning_filters::WarningFiltersScope,
+            reporter: crate::diagnostics::DiagnosticReporter<'a>,
         }
 
         impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
@@ -588,23 +588,23 @@ macro_rules! simple_visitor {
                 env: &'a crate::shared::CompilationEnv,
                 _program: &crate::typing::ast::Program,
             ) -> Self::Context<'a> {
-                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+                let reporter = env.diagnostic_reporter_at_top_level();
                 Context {
                     env,
-                    warning_filters_scope,
+                    reporter,
                 }
             }
         }
 
         impl Context<'_> {
             #[allow(unused)]
-            fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
-                self.env.add_diag(&self.warning_filters_scope, diag);
+            pub fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
+                self.reporter.add_diag(diag);
             }
 
             #[allow(unused)]
-            fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
-                self.env.add_diags(&self.warning_filters_scope, diags);
+            pub fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
+                self.reporter.add_diags(diags);
             }
         }
 
@@ -613,11 +613,11 @@ macro_rules! simple_visitor {
                 &mut self,
                 filters: crate::diagnostics::warning_filters::WarningFilters,
             ) {
-                self.warning_filters_scope.push(filters)
+                self.reporter.push_warning_filter_scope(filters)
             }
 
             fn pop_warning_filter_scope(&mut self) {
-                self.warning_filters_scope.pop()
+                self.reporter.pop_warning_filter_scope()
             }
 
             $($overrides)*

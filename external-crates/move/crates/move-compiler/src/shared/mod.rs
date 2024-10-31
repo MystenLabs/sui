@@ -443,8 +443,14 @@ impl CompilationEnv {
 
     // Logs an error if the feature isn't supported. Returns `false` if the feature is not
     // supported, and `true` otherwise.
-    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
-        check_feature_or_error(self, self.package_config(package).edition, feature, loc)
+    pub fn check_feature(
+        &self,
+        reporter: &DiagnosticReporter,
+        package: Option<Symbol>,
+        feature: FeatureGate,
+        loc: Loc,
+    ) -> bool {
+        check_feature_or_error(reporter, self.package_config(package).edition, feature, loc)
     }
 
     // Returns an error string if if the feature isn't supported, or None otherwise.
