@@ -15,8 +15,8 @@ use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_network::tonic;
 use parking_lot::Mutex;
+use sui_network::tonic;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
@@ -393,7 +393,12 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
     let epoch_store = state.epoch_store_for_testing();
 
     // Make a new consensus adapter instance.
-    let adapter = make_consensus_adapter_for_test(state, HashSet::new(), false, vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)]);
+    let adapter = make_consensus_adapter_for_test(
+        state,
+        HashSet::new(),
+        false,
+        vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)],
+    );
 
     let checkpoint_summary = CheckpointSummary::new(
         &ProtocolConfig::get_for_max_version_UNSAFE(),
