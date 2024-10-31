@@ -143,7 +143,9 @@ const AnyOf = (props) => {
       <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
         Any of
       </p>
-      <Of of={anyof} type="any" />
+      <div className="ml-1 border-0 border-l-4 border-solid border-sui-blue-dark">
+        <Of of={anyof} type="any" />
+      </div>
     </div>
   );
 };
@@ -181,7 +183,9 @@ const OneOf = (props) => {
       <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
         One of
       </p>
-      <Of of={oneof} type="one" />
+      <div className="ml-1 border-0 border-l-4 border-solid border-sui-blue-dark">
+        <Of of={oneof} type="one" />
+      </div>
     </div>
   );
 };
@@ -227,11 +231,24 @@ const PropertiesTable = (props) => {
                   {v.additionalProperties && "Additional properties"}
                 </td>
                 <td colSpan={3}>
-                  {v.additionalProperties && v.additionalProperties["$ref"] && <RefLink refer={v.additionalProperties["$ref"]}/>}
-                  {!v.additionalProperties && v.properties && <PropertiesTable properties={Object.entries(v.properties)} schema={v}></PropertiesTable>}
-                  {v.additionalProperties && v.additionalProperties.type && v.additionalProperties.type}
-                  {v.additionalProperties && v.additionalProperties.anyOf && <AnyOfInline anyof={v.additionalProperties.anyOf}/>}
-                  {v.additionalProperties && v.additionalProperties === true && "true"}
+                  {v.additionalProperties && v.additionalProperties["$ref"] && (
+                    <RefLink refer={v.additionalProperties["$ref"]} />
+                  )}
+                  {!v.additionalProperties && v.properties && (
+                    <PropertiesTable
+                      properties={Object.entries(v.properties)}
+                      schema={v}
+                    ></PropertiesTable>
+                  )}
+                  {v.additionalProperties &&
+                    v.additionalProperties.type &&
+                    v.additionalProperties.type}
+                  {v.additionalProperties && v.additionalProperties.anyOf && (
+                    <AnyOfInline anyof={v.additionalProperties.anyOf} />
+                  )}
+                  {v.additionalProperties &&
+                    v.additionalProperties === true &&
+                    "true"}
                 </td>
               </tr>
             ) : (
@@ -254,56 +271,55 @@ const Components = (props) => {
     <div ref={parentScrollContainerRef()}>
       <h1>Component schemas</h1>
       <ScrollSpy parentScrollContainerRef={parentScrollContainerRef()}>
-      {names &&
-        names.map((name) => {
-          return (
-            <div
-              key={name}
-              className="p-4 m-4 mt-8 snap-start scroll-mt-40 border border-sui-gray-50 border-solid rounded-lg"
-              id={name.toLowerCase()}
-            >
-              <h2>{name}</h2>
-              
-              {schemas[name].description && (
-                <p>
-                  <Markdown>{schemas[name].description}</Markdown>
-                </p>
-              )}
-              {schemas[name].type && (
-                <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
-                  {schemas[name].type[0].toUpperCase()}
-                  {schemas[name].type.substring(1)}
-                  {schemas[name].enum &&
-                    ` enum [ ${schemas[name].enum.map((e) => `"${e}"`).join(" | ")} ]`}
-                </p>
-              )}
+        {names &&
+          names.map((name) => {
+            return (
+              <div
+                key={name}
+                className="p-4 m-4 mt-8 snap-start scroll-mt-40 border border-sui-gray-50 border-solid rounded-lg"
+                id={name.toLowerCase()}
+              >
+                <h2>{name}</h2>
 
-              {schemas[name].properties && (
-                <PropertiesTable
-                  properties={Object.entries(schemas[name].properties)}
-                  schema={schemas[name]}
-                />
-              )}
-              {schemas[name].allOf && <AllOf allof={schemas[name].allOf} />}
-              {schemas[name].oneOf && <OneOf oneof={schemas[name].oneOf} />}
-              {schemas[name].anyOf && <AnyOf anyof={schemas[name].anyOf} />}
-              {schemas[name]["$ref"] && (
-                <RefLink refer={schemas[name]["$ref"]} />
-              )}
-              <details className="py-4">
-                <summary>
-                  <span className="cursor-pointer">Toggle raw JSON</span>
-                </summary>
-                <pre>
-                  <code>{`"${name}":  ${JSON.stringify(schemas[name], null, 2)}`}</code>
-                </pre>
-              </details>
-              
-            </div>
-          );
-        })}
-        </ScrollSpy>
-        </div>
+                {schemas[name].description && (
+                  <p>
+                    <Markdown>{schemas[name].description}</Markdown>
+                  </p>
+                )}
+                {schemas[name].type && (
+                  <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
+                    {schemas[name].type[0].toUpperCase()}
+                    {schemas[name].type.substring(1)}
+                    {schemas[name].enum &&
+                      ` enum [ ${schemas[name].enum.map((e) => `"${e}"`).join(" | ")} ]`}
+                  </p>
+                )}
+
+                {schemas[name].properties && (
+                  <PropertiesTable
+                    properties={Object.entries(schemas[name].properties)}
+                    schema={schemas[name]}
+                  />
+                )}
+                {schemas[name].allOf && <AllOf allof={schemas[name].allOf} />}
+                {schemas[name].oneOf && <OneOf oneof={schemas[name].oneOf} />}
+                {schemas[name].anyOf && <AnyOf anyof={schemas[name].anyOf} />}
+                {schemas[name]["$ref"] && (
+                  <RefLink refer={schemas[name]["$ref"]} />
+                )}
+                <details className="py-4">
+                  <summary>
+                    <span className="cursor-pointer">Toggle raw JSON</span>
+                  </summary>
+                  <pre>
+                    <code>{`"${name}":  ${JSON.stringify(schemas[name], null, 2)}`}</code>
+                  </pre>
+                </details>
+              </div>
+            );
+          })}
+      </ScrollSpy>
+    </div>
   );
 };
 
