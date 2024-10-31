@@ -5,11 +5,12 @@ use diesel::{
     backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
     sql_types::SmallInt, FromSqlRow,
 };
+use sui_field_count::FieldCount;
 use sui_types::base_types::ObjectID;
 
 use crate::schema::{kv_objects, sum_coin_balances, sum_obj_types};
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
 pub struct StoredObject {
     pub object_id: Vec<u8>,
@@ -37,7 +38,7 @@ pub enum StoredOwnerKind {
     Shared = 3,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = sum_coin_balances, primary_key(object_id))]
 pub struct StoredSumCoinBalance {
     pub object_id: Vec<u8>,
@@ -47,7 +48,7 @@ pub struct StoredSumCoinBalance {
     pub coin_balance: i64,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = sum_obj_types, primary_key(object_id))]
 pub struct StoredSumObjType {
     pub object_id: Vec<u8>,
@@ -86,5 +87,25 @@ where
             3 => StoredOwnerKind::Shared,
             o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stored_owner_kind_field_count() {
+        assert_eq!(StoredObject::field_count(), 3);
+    }
+
+    #[test]
+    fn test_stored_sum_coin_balance_field_count() {
+        assert_eq!(StoredSumCoinBalance::field_count(), 5);
+    }
+
+    #[test]
+    fn test_stored_sum_obj_type_field_count() {
+        assert_eq!(StoredSumObjType::field_count(), 8);
     }
 }

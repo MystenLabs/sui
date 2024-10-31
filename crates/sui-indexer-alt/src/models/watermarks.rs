@@ -6,8 +6,9 @@ use std::{borrow::Cow, cmp};
 use crate::{db::Connection, schema::watermarks};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use sui_field_count::FieldCount;
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
 pub struct StoredWatermark {
     pub pipeline: String,
@@ -21,7 +22,7 @@ pub struct StoredWatermark {
 }
 
 /// Fields that the committer is responsible for setting.
-#[derive(AsChangeset, Selectable, Queryable, Debug, Clone)]
+#[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
 pub struct CommitterWatermark<'p> {
     pub pipeline: Cow<'p, str>,
@@ -109,5 +110,20 @@ impl Ord for CommitterWatermark<'_> {
 impl PartialOrd for CommitterWatermark<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stored_watermark_field_count() {
+        assert_eq!(StoredWatermark::field_count(), 8);
+    }
+
+    #[test]
+    fn test_committer_watermark_field_count() {
+        assert_eq!(CommitterWatermark::<'static>::field_count(), 4);
     }
 }
