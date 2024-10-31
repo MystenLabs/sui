@@ -8,7 +8,7 @@ const CompNav = (props) => {
   const { json, apis } = props;
 
   return (
-    <div>
+    <div className="mb-32">
       <div>
         <h2>Component schemas</h2>
         {Object.keys(json["components"]["schemas"]).map((component) => {
