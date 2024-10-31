@@ -227,7 +227,7 @@ where
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
             context.clone(),
-            transaction_verifier,
+            transaction_verifier.clone(),
         ));
 
         let block_manager =
@@ -310,6 +310,7 @@ where
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
+            transaction_verifier,
             commit_vote_monitor,
             synchronizer.clone(),
             core_dispatcher,

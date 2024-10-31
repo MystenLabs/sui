@@ -20,8 +20,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::{
-        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock, Slot,
-        VerifiedBlock, GENESIS_ROUND,
+        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV2, Round, SignedBlock, Slot,
+        VerifiedBlock, VerifiedVotedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit::CommittedSubDag,
@@ -227,9 +227,24 @@ impl Core {
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
+    #[cfg(test)]
     pub(crate) fn add_blocks(
         &mut self,
         blocks: Vec<VerifiedBlock>,
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+        self.add_voted_blocks(
+            blocks
+                .into_iter()
+                .map(|b| VerifiedVotedBlock::new(b, vec![]))
+                .collect(),
+        )
+    }
+
+    /// Processes the provided blocks and accepts them if possible when their causal history exists.
+    /// The method returns the references of parents that are unknown and need to be fetched.
+    pub(crate) fn add_voted_blocks(
+        &mut self,
+        blocks: Vec<VerifiedVotedBlock>,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_blocks");
         let _s = self
@@ -246,7 +261,7 @@ impl Core {
             .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
-        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
+        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_voted_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
             debug!(
@@ -437,14 +452,15 @@ impl Core {
             .proposed_block_transactions
             .observe(transactions.len() as f64);
 
-        // Consume the commit votes to be included.
+        // Consume the commit and transaction votes to be included.
         let commit_votes = self
             .dag_state
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
+        let transaction_votes = self.dag_state.write().take_transaction_votes();
 
         // Create the block and insert to storage.
-        let block = Block::V1(BlockV1::new(
+        let block = Block::V2(BlockV2::new(
             self.context.committee.epoch(),
             clock_round,
             self.context.own_index,
@@ -452,6 +468,7 @@ impl Core {
             ancestors.iter().map(|b| b.reference()).collect(),
             transactions,
             commit_votes,
+            transaction_votes,
             vec![],
         ));
         let signed_block =

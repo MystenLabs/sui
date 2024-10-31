@@ -14,7 +14,9 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, trace, warn};
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    block::{
+        BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, VerifiedVotedBlock, GENESIS_ROUND,
+    },
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
@@ -26,7 +28,7 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
-    CommitIndex, Round,
+    CommitIndex, Round, TransactionVerifier,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -36,6 +38,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     block_verifier: Arc<dyn BlockVerifier>,
+    transaction_verifier: Arc<dyn TransactionVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
@@ -48,6 +51,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
+        transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
@@ -62,6 +66,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         Self {
             context,
             block_verifier,
+            transaction_verifier,
             commit_vote_monitor,
             synchronizer,
             core_dispatcher,
@@ -113,6 +118,38 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
         }
+
+        let transaction_batch: Vec<_> = signed_block
+            .transactions()
+            .iter()
+            .map(|t| t.data())
+            .collect();
+        let transactions_to_reject = if self.context.protocol_config.mysticeti_fastpath() {
+            match self
+                .transaction_verifier
+                .verify_and_vote_batch(&transaction_batch)
+                .await
+            {
+                Ok(votes) => votes,
+                Err(e) => {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .invalid_blocks
+                        .with_label_values(&[
+                            peer_hostname,
+                            "handle_send_block",
+                            "InvalidTransaction",
+                        ])
+                        .inc();
+                    info!("Invalid block from {}: {}", peer, e);
+                    return Err(ConsensusError::InvalidTransaction(format!("{e:?}")));
+                }
+            }
+        } else {
+            vec![]
+        };
+
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
         trace!("Received block {verified_block} via send block.");
@@ -211,7 +248,10 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         let missing_ancestors = self
             .core_dispatcher
-            .add_blocks(vec![verified_block])
+            .add_voted_blocks(vec![VerifiedVotedBlock::new(
+                verified_block,
+                transactions_to_reject,
+            )])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
         if !missing_ancestors.is_empty() {
@@ -602,8 +642,8 @@ async fn make_recv_future<T: Clone>(
 mod tests {
     use crate::{
         authority_service::AuthorityService,
-        block::BlockAPI,
-        block::{BlockRef, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock, VerifiedVotedBlock},
+        block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
@@ -615,6 +655,7 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
+        transaction::NoopTransactionVerifier,
         Round,
     };
     use async_trait::async_trait;
@@ -651,6 +692,17 @@ mod tests {
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             let block_refs = blocks.iter().map(|b| b.reference()).collect();
             self.blocks.lock().extend(blocks);
+            Ok(block_refs)
+        }
+
+        async fn add_voted_blocks(
+            &self,
+            blocks: Vec<VerifiedVotedBlock>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            let block_refs = blocks.iter().map(|b| b.inner.reference()).collect();
+            self.blocks
+                .lock()
+                .extend(blocks.into_iter().map(|b| b.inner));
             Ok(block_refs)
         }
 
@@ -749,7 +801,8 @@ mod tests {
     async fn test_handle_send_block() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let transaction_verifier = Arc::new(NoopTransactionVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
@@ -768,6 +821,7 @@ mod tests {
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
+            transaction_verifier,
             commit_vote_monitor,
             synchronizer,
             core_dispatcher.clone(),
@@ -808,7 +862,8 @@ mod tests {
         // GIVEN
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let transaction_verifier = Arc::new(NoopTransactionVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
@@ -827,6 +882,7 @@ mod tests {
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
+            transaction_verifier,
             commit_vote_monitor,
             synchronizer,
             core_dispatcher.clone(),

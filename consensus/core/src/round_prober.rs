@@ -299,7 +299,7 @@ mod test {
 
     use super::QuorumRound;
     use crate::{
-        block::BlockRef,
+        block::{BlockRef, VerifiedVotedBlock},
         commit::CommitRange,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -340,6 +340,13 @@ mod test {
         async fn add_blocks(
             &self,
             _blocks: Vec<VerifiedBlock>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            unimplemented!()
+        }
+
+        async fn add_voted_blocks(
+            &self,
+            _blocks: Vec<VerifiedVotedBlock>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
         }

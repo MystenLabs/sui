@@ -21,7 +21,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::{BlockRef, Round, VerifiedBlock, VerifiedVotedBlock},
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
@@ -35,7 +35,7 @@ const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
-    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
+    AddBlocks(Vec<VerifiedVotedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
@@ -56,6 +56,11 @@ pub enum CoreError {
 pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
         -> Result<BTreeSet<BlockRef>, CoreError>;
+
+    async fn add_voted_blocks(
+        &self,
+        blocks: Vec<VerifiedVotedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
 
@@ -116,7 +121,7 @@ impl CoreThread {
                     match command {
                         CoreThreadCommand::AddBlocks(blocks, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::add_blocks");
-                            let missing_blocks = self.core.add_blocks(blocks)?;
+                            let missing_blocks = self.core.add_voted_blocks(blocks)?;
                             sender.send(missing_blocks).ok();
                         }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
@@ -260,8 +265,22 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         &self,
         blocks: Vec<VerifiedBlock>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
-        for block in &blocks {
-            self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
+        self.add_voted_blocks(
+            blocks
+                .into_iter()
+                .map(|b| VerifiedVotedBlock::new(b, vec![]))
+                .collect(),
+        )
+        .await
+    }
+
+    async fn add_voted_blocks(
+        &self,
+        blocks: Vec<VerifiedVotedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        for b in &blocks {
+            self.highest_received_rounds[b.inner.author()]
+                .fetch_max(b.inner.round(), Ordering::AcqRel);
         }
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks, sender))
@@ -351,6 +370,15 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
         let mut add_blocks = self.add_blocks.lock();
         add_blocks.extend(blocks);
+        Ok(BTreeSet::new())
+    }
+
+    async fn add_voted_blocks(
+        &self,
+        blocks: Vec<VerifiedVotedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let mut add_blocks = self.add_blocks.lock();
+        add_blocks.extend(blocks.into_iter().map(|b| b.inner));
         Ok(BTreeSet::new())
     }
 
