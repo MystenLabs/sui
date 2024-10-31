@@ -691,6 +691,41 @@ impl DagState {
         blocks.into_iter().collect()
     }
 
+    pub(crate) fn get_rejected_transactions(
+        &self,
+        refs: &[BlockRef],
+    ) -> Vec<Vec<TransactionIndex>> {
+        refs.iter()
+            .map(|block_ref| {
+                let Some(block_info) = self.recent_blocks.get(block_ref) else {
+                    return vec![];
+                };
+                (0..block_info.block.transactions().len())
+                    .filter_map(|i| {
+                        let idx = i as TransactionIndex;
+                        if block_info
+                            .accept_votes
+                            .stake()
+                            .checked_sub(
+                                block_info
+                                    .reject_votes
+                                    .get(&idx)
+                                    .map(|s| s.stake())
+                                    .unwrap_or_default(),
+                            )
+                            .unwrap()
+                            < self.context.committee.quorum_threshold()
+                        {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
     /// Checks whether a block exists in the slot. The method checks only against the cached data.
     /// If the user asks for a slot that is not within the cached data then a panic is thrown.
     pub(crate) fn contains_cached_block_at_slot(&self, slot: Slot) -> bool {

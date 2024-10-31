@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
-    commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
+    commit::{Commit, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
     Round, TransactionIndex,
@@ -18,6 +18,8 @@ use crate::{
 /// mostly introduced for allowing to inject the test store in `DagBuilder`.
 pub(crate) trait BlockStoreAPI {
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>>;
+
+    fn get_rejected_transactions(&self, refs: &[BlockRef]) -> Vec<Vec<TransactionIndex>>;
 
     fn gc_round(&self) -> Round;
 
@@ -29,6 +31,10 @@ impl BlockStoreAPI
 {
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
         DagState::get_blocks(self, refs)
+    }
+
+    fn get_rejected_transactions(&self, refs: &[BlockRef]) -> Vec<Vec<TransactionIndex>> {
+        DagState::get_rejected_transactions(self, refs)
     }
 
     fn gc_round(&self) -> Round {
@@ -120,9 +126,9 @@ impl Linearizer {
         let gc_round: Round = dag_state.gc_round();
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
-        let mut committed = HashSet::new();
-        let mut to_commit = Vec::new();
+        let mut committed = BTreeSet::new();
         assert!(committed.insert(leader_block_ref));
+        let mut to_commit = Vec::new();
 
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
@@ -168,9 +174,10 @@ impl Linearizer {
         // Sort the blocks of the sub-dag blocks
         sort_sub_dag_blocks(&mut to_commit);
 
-        // TODO(fastpath): determine rejected transactions from voting.
         // Get rejected transactions.
-        let rejected_transactions = vec![vec![]; to_commit.len()];
+        let rejected_transactions = dag_state.get_rejected_transactions(
+            &to_commit.iter().map(|b| b.reference()).collect::<Vec<_>>(),
+        );
 
         (to_commit, rejected_transactions)
     }
@@ -224,6 +231,16 @@ impl Linearizer {
 
         committed_sub_dags
     }
+}
+
+// Sort the blocks of the sub-dag blocks by round number then authority index. Any
+// deterministic & stable algorithm works.
+fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
+    blocks.sort_by(|a, b| {
+        a.round()
+            .cmp(&b.round())
+            .then_with(|| a.author().cmp(&b.author()))
+    })
 }
 
 #[cfg(test)]
