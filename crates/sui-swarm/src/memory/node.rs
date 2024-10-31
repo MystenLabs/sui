@@ -9,6 +9,7 @@ use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::ConciseableName;
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use tap::TapFallible;
 use tracing::{error, info};
@@ -46,6 +47,10 @@ impl Node {
     /// Return the `name` of this Node
     pub fn name(&self) -> AuthorityName {
         self.config().protocol_public_key()
+    }
+
+    pub fn sui_address(&self) -> SuiAddress {
+        self.config().sui_address()
     }
 
     pub fn config(&self) -> MutexGuard<'_, NodeConfig> {

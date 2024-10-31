@@ -50,7 +50,9 @@ use sui_move_build::SuiPackageHooks;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
-use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
+use sui_swarm_config::genesis_config::{
+    GenesisConfig, DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_AUTHORITIES,
+};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
@@ -685,7 +687,7 @@ async fn start(
         }
         .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
         swarm_builder = swarm_builder.committee_size(committee_size);
-        let genesis_config = GenesisConfig::custom_genesis(1, 100);
+        let genesis_config = GenesisConfig::custom_genesis(1, 100, DEFAULT_GAS_AMOUNT);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
