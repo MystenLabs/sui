@@ -7,5 +7,5 @@ publish = false
 edition = "2021"
 
 [dependencies]
-sui-field-count-main = { path = "sui-field-count-main" }
-sui-field-count-derive = { path = "sui-field-count-derive" }
+sui-field-count-derive.workspace = true
+sui-field-count-main.workspace = true
