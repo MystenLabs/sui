@@ -9,6 +9,7 @@ pub mod kv_transactions;
 pub mod obj_versions;
 pub mod sum_coin_balances;
 pub mod sum_obj_types;
+pub mod sum_packages;
 pub mod tx_affected_addresses;
 pub mod tx_affected_objects;
 pub mod tx_balance_changes;
