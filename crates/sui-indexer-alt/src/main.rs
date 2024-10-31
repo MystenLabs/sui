@@ -9,9 +9,9 @@ use sui_indexer_alt::{
     args::Args,
     handlers::{
         ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-        kv_objects::KvObjects, kv_transactions::KvTransactions, sum_coin_balances::SumCoinBalances,
-        sum_obj_types::SumObjTypes, tx_affected_objects::TxAffectedObjects,
-        tx_balance_changes::TxBalanceChanges,
+        kv_objects::KvObjects, kv_transactions::KvTransactions, obj_versions::ObjVersions,
+        sum_coin_balances::SumCoinBalances, sum_obj_types::SumObjTypes,
+        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     },
     Indexer,
 };
@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline::<KvCheckpoints>().await?;
             indexer.concurrent_pipeline::<KvObjects>().await?;
             indexer.concurrent_pipeline::<KvTransactions>().await?;
+            indexer.concurrent_pipeline::<ObjVersions>().await?;
             indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
             indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
             indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;
