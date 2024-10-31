@@ -788,18 +788,20 @@ impl TryFrom<&crate::transactions::EffectsFinality> for EffectsFinality {
     type Error = bcs::Error;
 
     fn try_from(value: &crate::transactions::EffectsFinality) -> Result<Self, Self::Error> {
-        let (signature, checkpoint) = match value {
+        let (signature, checkpoint, quorum_executed) = match value {
             crate::transactions::EffectsFinality::Certified { signature } => {
-                (Some(signature.try_into()?), None)
+                (Some(signature.try_into()?), None, None)
             }
             crate::transactions::EffectsFinality::Checkpointed { checkpoint } => {
-                (None, Some(*checkpoint))
+                (None, Some(*checkpoint), None)
             }
+            crate::transactions::EffectsFinality::QuorumExecuted => (None, None, Some(true)),
         };
 
         Ok(Self {
             signature,
             checkpoint,
+            quorum_executed,
         })
     }
 }
@@ -813,16 +815,15 @@ impl TryFrom<&EffectsFinality> for crate::transactions::EffectsFinality {
             .as_ref()
             .map(sui_sdk_types::types::ValidatorAggregatedSignature::try_from)
             .transpose()?;
-        match (signature, value.checkpoint) {
-            (Some(signature), _) => crate::transactions::EffectsFinality::Certified { signature },
-            (None, Some(checkpoint)) => {
+        match (signature, value.checkpoint, value.quorum_executed) {
+            (Some(signature), None, None) => {
+                crate::transactions::EffectsFinality::Certified { signature }
+            }
+            (None, Some(checkpoint), None) => {
                 crate::transactions::EffectsFinality::Checkpointed { checkpoint }
             }
-            (None, None) => {
-                return Err(bcs::Error::Custom(
-                    "missing signature or checkpoint field".into(),
-                ))
-            }
+            (None, None, Some(true)) => crate::transactions::EffectsFinality::QuorumExecuted,
+            _ => return Err(bcs::Error::Custom("invalid EffectsFinality message".into())),
         }
         .pipe(Ok)
     }

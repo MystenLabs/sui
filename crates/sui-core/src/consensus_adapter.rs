@@ -341,6 +341,9 @@ impl ConsensusAdapter {
                 ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     Some(certificate.digest())
                 }
+                ConsensusTransactionKind::UserTransaction(transaction) => {
+                    Some(transaction.digest())
+                }
                 _ => None,
             })
             .min();
@@ -563,6 +566,7 @@ impl ConsensusAdapter {
                     ),
                     SuiError::InvalidTxKindInSoftBundle
                 );
+                // TODO(fastpath): support batch of UserTransaction.
             }
         }
 
@@ -804,6 +808,10 @@ impl ConsensusAdapter {
             || matches!(
                 transactions[0].kind,
                 ConsensusTransactionKind::CertifiedTransaction(_)
+            )
+            || matches!(
+                transactions[0].kind,
+                ConsensusTransactionKind::UserTransaction(_)
             );
         let send_end_of_publish = if is_user_tx {
             // If we are in RejectUserCerts state and we just drained the list we need to
@@ -852,13 +860,11 @@ impl ConsensusAdapter {
     ) -> ProcessedMethod {
         let notifications = FuturesUnordered::new();
         for transaction_key in transaction_keys {
-            let transaction_digests = if let SequencedConsensusTransactionKey::External(
-                ConsensusTransactionKey::Certificate(digest),
-            ) = transaction_key
-            {
-                vec![digest]
-            } else {
-                vec![]
+            let transaction_digests = match transaction_key {
+                SequencedConsensusTransactionKey::External(
+                    ConsensusTransactionKey::Certificate(digest),
+                ) => vec![digest],
+                _ => vec![],
             };
 
             let checkpoint_synced_future = if let SequencedConsensusTransactionKey::External(

@@ -781,7 +781,7 @@ impl ValidatorService {
                     ConsensusTransactionKind::CertifiedTransaction(tx) => {
                         tx.contains_shared_object()
                     }
-                    ConsensusTransactionKind::UserTransaction(_) => true,
+                    ConsensusTransactionKind::UserTransaction(tx) => tx.contains_shared_object(),
                     _ => false,
                 }) {
                     Some(self.metrics.consensus_latency.start_timer())
@@ -830,7 +830,7 @@ impl ValidatorService {
                     ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                         // Certificates already verified by callers of this function.
                         let certificate = VerifiedCertificate::new_unchecked(*(certificate.clone()));
-                         self.state
+                        self.state
                             .execute_certificate(&certificate, epoch_store)
                             .await?
                     }

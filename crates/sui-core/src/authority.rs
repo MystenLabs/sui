@@ -924,8 +924,9 @@ impl AuthorityState {
     async fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
+        sign: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransaction> {
+    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         // Ensure that validator cannot reconfigure while we are signing the tx
         let _execution_lock = self.execution_lock_for_signing().await;
 
@@ -934,19 +935,29 @@ impl AuthorityState {
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
-        let signed_transaction = VerifiedSignedTransaction::new(
-            epoch_store.epoch(),
-            transaction,
-            self.name,
-            &*self.secret,
-        );
+        let tx_digest = *transaction.digest();
+        let signed_transaction = if sign {
+            Some(VerifiedSignedTransaction::new(
+                epoch_store.epoch(),
+                transaction,
+                self.name,
+                &*self.secret,
+            ))
+        } else {
+            None
+        };
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.get_cache_writer()
-            .acquire_transaction_locks(epoch_store, &owned_objects, signed_transaction.clone())
+            .acquire_transaction_locks(
+                epoch_store,
+                &owned_objects,
+                tx_digest,
+                signed_transaction.clone(),
+            )
             .await?;
 
         Ok(signed_transaction)
@@ -973,9 +984,11 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self.handle_transaction_impl(transaction, epoch_store).await;
+        let signed = self
+            .handle_transaction_impl(transaction, true, epoch_store)
+            .await;
         match signed {
-            Ok(s) => {
+            Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
                     if let Some(validator_tx_finalizer) = &self.validator_tx_finalizer {
                         let tx = s.clone();
@@ -991,6 +1004,7 @@ impl AuthorityState {
                     status: TransactionStatus::Signed(s.into_inner().into_sig()),
                 })
             }
+            Ok(None) => panic!("handle_transaction_impl should return a signed transaction"),
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
@@ -1034,10 +1048,14 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self.handle_transaction_impl(transaction, epoch_store).await {
-            // TODO(fastpath): We don't actually need the signed transaction here but just call
-            // into this function to acquire locks. Consider refactoring to avoid the extra work.
-            Ok(_signed) => Ok(None),
+        match self
+            .handle_transaction_impl(transaction, false, epoch_store)
+            .await
+        {
+            Ok(Some(_)) => {
+                panic!("handle_transaction_impl should not return a signed transaction")
+            }
+            Ok(None) => Ok(None),
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
@@ -2973,7 +2991,14 @@ impl AuthorityState {
         &self.transaction_manager
     }
 
-    /// Adds certificates to transaction manager for ordered execution.
+    /// Adds transactions / certificates to transaction manager for ordered execution.
+    pub fn enqueue_transactions_for_execution(
+        &self,
+        txns: Vec<VerifiedExecutableTransaction>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        self.transaction_manager.enqueue(txns, epoch_store)
+    }
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,

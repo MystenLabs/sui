@@ -5,9 +5,9 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::quorum_driver::AuthorityAggregatorUpdatable;
 use sui_core::{
-    authority_client::NetworkAuthorityClient,
-    quorum_driver::{reconfig_observer::ReconfigObserver, QuorumDriver},
+    authority_client::NetworkAuthorityClient, quorum_driver::reconfig_observer::ReconfigObserver,
 };
 use sui_network::default_mysten_network_config;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -79,12 +79,15 @@ impl ReconfigObserver<NetworkAuthorityClient> for EmbeddedReconfigObserver {
         Box::new(self.clone())
     }
 
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
+    async fn run(
+        &mut self,
+        updatable: Arc<dyn AuthorityAggregatorUpdatable<NetworkAuthorityClient>>,
+    ) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            let auth_agg = quorum_driver.authority_aggregator().load();
+            let auth_agg = updatable.authority_aggregator();
             match self.get_committee(auth_agg.clone()).await {
-                Ok(new_auth_agg) => quorum_driver.update_validators(new_auth_agg).await,
+                Ok(new_auth_agg) => updatable.update_authority_aggregator(new_auth_agg),
                 Err(err) => {
                     error!(
                         "Failed to recreate authority aggregator with committee: {}",

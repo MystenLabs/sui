@@ -1108,7 +1108,12 @@ async fn test_concurrent_lockers() {
             for (tx1, _, a_ref, b_ref) in txns {
                 results.push(
                     cache
-                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx1.digest(),
+                            Some(tx1.clone()),
+                        )
                         .await,
                 );
                 barrier.wait().await;
@@ -1127,7 +1132,12 @@ async fn test_concurrent_lockers() {
             for (_, tx2, a_ref, b_ref) in txns {
                 results.push(
                     cache
-                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx2)
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx2.digest(),
+                            Some(tx2.clone()),
+                        )
                         .await,
                 );
                 barrier.wait().await;
@@ -1181,7 +1191,12 @@ async fn test_concurrent_lockers_same_tx() {
             for (tx1, a_ref, b_ref) in txns {
                 results.push(
                     cache
-                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx1.digest(),
+                            Some(tx1.clone()),
+                        )
                         .await,
                 );
                 barrier.wait().await;
@@ -1200,7 +1215,12 @@ async fn test_concurrent_lockers_same_tx() {
             for (tx1, a_ref, b_ref) in txns {
                 results.push(
                     cache
-                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx1.digest(),
+                            Some(tx1.clone()),
+                        )
                         .await,
                 );
                 barrier.wait().await;
