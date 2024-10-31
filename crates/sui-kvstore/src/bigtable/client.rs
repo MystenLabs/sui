@@ -19,6 +19,7 @@ use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use sui_types::base_types::TransactionDigest;
+use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -30,8 +31,9 @@ use tonic::Streaming;
 use tracing::error;
 
 const OBJECTS_TABLE: &str = "objects";
-const CHECKPOINTS_TABLE: &str = "checkpoints";
 const TRANSACTIONS_TABLE: &str = "transactions";
+const CHECKPOINTS_TABLE: &str = "checkpoints";
+const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
 const DEFAULT_COLUMN_QUALIFIER: &str = "";
@@ -117,7 +119,16 @@ impl KeyValueStoreWriter for BigTableClient {
                 bcs::to_bytes(contents)?,
             ),
         ];
-        self.multi_set(CHECKPOINTS_TABLE, [(key, cells)]).await
+        self.multi_set(CHECKPOINTS_TABLE, [(key.clone(), cells)])
+            .await?;
+        self.multi_set(
+            CHECKPOINTS_BY_DIGEST_TABLE,
+            [(
+                checkpoint.checkpoint_summary.digest().inner().to_vec(),
+                vec![(DEFAULT_COLUMN_QUALIFIER, key)],
+            )],
+        )
+        .await
     }
 }
 
@@ -203,6 +214,25 @@ impl KeyValueStoreReader for BigTableClient {
             checkpoints.push(checkpoint);
         }
         Ok(checkpoints)
+    }
+
+    async fn get_checkpoint_by_digest(
+        &mut self,
+        digest: CheckpointDigest,
+    ) -> Result<Option<Checkpoint>> {
+        let key = digest.inner().to_vec();
+        let mut response = self
+            .multi_get(CHECKPOINTS_BY_DIGEST_TABLE, vec![key])
+            .await?;
+        if let Some(row) = response.pop() {
+            if let Some((_, value)) = row.into_iter().next() {
+                let sequence_number = u64::from_be_bytes(value.as_slice().try_into()?);
+                if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
+                    return Ok(Some(chk));
+                }
+            }
+        }
+        Ok(None)
     }
 }
 
