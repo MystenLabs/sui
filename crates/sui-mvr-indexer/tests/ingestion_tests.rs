@@ -8,11 +8,8 @@ use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_mvr_indexer::errors::IndexerError;
 use sui_mvr_indexer::handlers::TransactionObjectChangesToCommit;
-use sui_mvr_indexer::models::{
-    checkpoints::StoredCheckpoint, objects::StoredObject, objects::StoredObjectSnapshot,
-    transactions::StoredTransaction,
-};
-use sui_mvr_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
+use sui_mvr_indexer::models::{checkpoints::StoredCheckpoint, objects::StoredObjectSnapshot};
+use sui_mvr_indexer::schema::{checkpoints, objects_snapshot};
 use sui_mvr_indexer::store::indexer_store::IndexerStore;
 use sui_mvr_indexer::test_utils::{
     set_up, set_up_with_start_and_end_checkpoints, wait_for_checkpoint, wait_for_objects_snapshot,
