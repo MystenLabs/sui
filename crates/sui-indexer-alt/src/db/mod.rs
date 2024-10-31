@@ -16,7 +16,11 @@ use std::time::Duration;
 use tracing::info;
 use url::Url;
 
+pub mod tempdb;
+
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+const DEFAULT_POOL_SIZE: u32 = 100;
+const DEFAULT_CONNECTION_TIMEOUT_SECS: u64 = 60;
 
 #[derive(Clone)]
 pub struct Db {
@@ -30,31 +34,17 @@ pub struct DbConfig {
     database_url: Url,
 
     /// Number of connections to keep in the pool.
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value = stringify!(DEFAULT_POOL_SIZE))]
     connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available.
     #[arg(
         long,
-        default_value = "60",
+        default_value = stringify!(DEFAULT_CONNECTION_TIMEOUT_SECS),
         value_name = "SECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_secs)
     )]
     connection_timeout: Duration,
-}
-
-impl DbConfig {
-    pub fn new(
-        database_url: Url,
-        connection_pool_size: Option<u32>,
-        connection_timeout: Option<Duration>,
-    ) -> Self {
-        Self {
-            database_url,
-            connection_pool_size: connection_pool_size.unwrap_or(100), // clap default
-            connection_timeout: connection_timeout.unwrap_or(Duration::from_secs(60)), // clap default
-        }
-    }
 }
 
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
@@ -158,6 +148,20 @@ impl Db {
     }
 }
 
+impl DbConfig {
+    pub fn new(
+        database_url: Url,
+        connection_pool_size: Option<u32>,
+        connection_timeout: Option<Duration>,
+    ) -> Self {
+        Self {
+            database_url,
+            connection_pool_size: connection_pool_size.unwrap_or(DEFAULT_POOL_SIZE), // clap default
+            connection_timeout: connection_timeout.unwrap_or(Duration::from_secs(DEFAULT_CONNECTION_TIMEOUT_SECS)), // clap default
+        }
+    }
+}
+
 /// Drop all tables and rerunning migrations.
 pub async fn reset_database(
     db_config: DbConfig,
@@ -173,9 +177,9 @@ pub async fn reset_database(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tempdb::TempDb;
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
+    use tempdb::TempDb;
 
     #[derive(QueryableByName)]
     struct CountResult {

@@ -10,7 +10,7 @@ use std::{
     process::{Child, Command},
     time::{Duration, Instant},
 };
-use tracing::trace;
+use tracing::{event_enabled, info, trace};
 use url::Url;
 
 /// A temporary, local postgres database
@@ -26,10 +26,34 @@ pub struct TempDb {
     dir: tempfile::TempDir,
 }
 
+/// Local instance of a `postgres` server.
+///
+/// See <https://www.postgresql.org/docs/16/app-postgres.html> for more info.
+pub struct LocalDatabase {
+    dir: PathBuf,
+    port: u16,
+    url: Url,
+    process: Option<PostgresProcess>,
+}
+
+#[derive(Debug)]
+struct PostgresProcess {
+    dir: PathBuf,
+    inner: Child,
+}
+
+#[derive(Debug)]
+enum HealthCheckError {
+    NotRunning,
+    NotReady,
+    #[allow(unused)]
+    Unknown(String),
+}
+
 impl TempDb {
     /// Create and start a new temporary postgres database.
     ///
-    /// A fresh database will be initialized in a temporary directory that will be cleandup on drop.
+    /// A fresh database will be initialized in a temporary directory that will be cleand up on drop.
     /// The running `postgres` service will be serving traffic on an available, os-assigned port.
     pub fn new() -> Result<Self> {
         let dir = tempfile::TempDir::new()?;
@@ -51,105 +75,6 @@ impl TempDb {
     pub fn dir(&self) -> &Path {
         self.dir.path()
     }
-}
-
-#[derive(Debug)]
-struct PostgresProcess {
-    dir: PathBuf,
-    inner: Child,
-}
-
-impl PostgresProcess {
-    fn start(dir: PathBuf, port: u16) -> Result<Self> {
-        let child = Command::new("postgres")
-            // Set the data directory to use
-            .arg("-D")
-            .arg(&dir)
-            // Set the port to listen for incoming connections
-            .args(["-p", &port.to_string()])
-            // Disable creating and listening on a UDS
-            .args(["-c", "unix_socket_directories="])
-            // pipe stdout and stderr to files located in the data directory
-            .stdout(
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(dir.join("stdout"))?,
-            )
-            .stderr(
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(dir.join("stderr"))?,
-            )
-            .spawn()
-            .context("command not found: postgres")?;
-
-        Ok(Self { dir, inner: child })
-    }
-
-    // https://www.postgresql.org/docs/16/app-pg-ctl.html
-    fn pg_ctl_stop(&mut self) -> Result<()> {
-        let output = Command::new("pg_ctl")
-            .arg("stop")
-            .arg("-D")
-            .arg(&self.dir)
-            .arg("-mfast")
-            .output()
-            .context("command not found: pg_ctl")?;
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            Err(anyhow!("couldn't shut down postgres"))
-        }
-    }
-
-    fn dump_stdout_stderr(&self) -> Result<(String, String)> {
-        let stdout = std::fs::read_to_string(self.dir.join("stdout"))?;
-        let stderr = std::fs::read_to_string(self.dir.join("stderr"))?;
-
-        Ok((stdout, stderr))
-    }
-}
-
-impl Drop for PostgresProcess {
-    // When the Process struct goes out of scope we need to kill the child process
-    fn drop(&mut self) {
-        tracing::error!("dropping postgres");
-        // check if the process has already been terminated
-        match self.inner.try_wait() {
-            // The child process has already terminated, perhaps due to a crash
-            Ok(Some(_)) => {}
-
-            // The process is still running so we need to attempt to kill it
-            _ => {
-                if self.pg_ctl_stop().is_err() {
-                    // Couldn't gracefully stop server so we'll just kill it
-                    self.inner.kill().expect("postgres couldn't be killed");
-                }
-                self.inner.wait().unwrap();
-            }
-        }
-
-        // Dump the contents of stdout/stderr if TRACE is enabled
-        if tracing::event_enabled!(tracing::Level::TRACE) {
-            if let Ok((stdout, stderr)) = self.dump_stdout_stderr() {
-                trace!("stdout: {stdout}");
-                trace!("stderr: {stderr}");
-            }
-        }
-    }
-}
-
-/// Local instance of a `postgres` server.
-///
-/// See <https://www.postgresql.org/docs/16/app-postgres.html> for more info.
-pub struct LocalDatabase {
-    dir: PathBuf,
-    port: u16,
-    url: Url,
-    process: Option<PostgresProcess>,
 }
 
 impl LocalDatabase {
@@ -235,12 +160,87 @@ impl LocalDatabase {
     }
 }
 
-#[derive(Debug)]
-enum HealthCheckError {
-    NotRunning,
-    NotReady,
-    #[allow(unused)]
-    Unknown(String),
+impl PostgresProcess {
+    fn start(dir: PathBuf, port: u16) -> Result<Self> {
+        let child = Command::new("postgres")
+            // Set the data directory to use
+            .arg("-D")
+            .arg(&dir)
+            // Set the port to listen for incoming connections
+            .args(["-p", &port.to_string()])
+            // Disable creating and listening on a UDS
+            .args(["-c", "unix_socket_directories="])
+            // pipe stdout and stderr to files located in the data directory
+            .stdout(
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(dir.join("stdout"))?,
+            )
+            .stderr(
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(dir.join("stderr"))?,
+            )
+            .spawn()
+            .context("command not found: postgres")?;
+
+        Ok(Self { dir, inner: child })
+    }
+
+    // https://www.postgresql.org/docs/16/app-pg-ctl.html
+    fn pg_ctl_stop(&mut self) -> Result<()> {
+        let output = Command::new("pg_ctl")
+            .arg("stop")
+            .arg("-D")
+            .arg(&self.dir)
+            .arg("-mfast")
+            .output()
+            .context("command not found: pg_ctl")?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(anyhow!("couldn't shut down postgres"))
+        }
+    }
+
+    fn dump_stdout_stderr(&self) -> Result<(String, String)> {
+        let stdout = std::fs::read_to_string(self.dir.join("stdout"))?;
+        let stderr = std::fs::read_to_string(self.dir.join("stderr"))?;
+
+        Ok((stdout, stderr))
+    }
+}
+
+impl Drop for PostgresProcess {
+    // When the Process struct goes out of scope we need to kill the child process
+    fn drop(&mut self) {
+        info!("dropping postgres");
+        // check if the process has already been terminated
+        match self.inner.try_wait() {
+            // The child process has already terminated, perhaps due to a crash
+            Ok(Some(_)) => {}
+
+            // The process is still running so we need to attempt to kill it
+            _ => {
+                if self.pg_ctl_stop().is_err() {
+                    // Couldn't gracefully stop server so we'll just kill it
+                    self.inner.kill().expect("postgres couldn't be killed");
+                }
+                self.inner.wait().unwrap();
+            }
+        }
+
+        // Dump the contents of stdout/stderr if TRACE is enabled
+        if event_enabled!(tracing::Level::TRACE) {
+            if let Ok((stdout, stderr)) = self.dump_stdout_stderr() {
+                trace!("stdout: {stdout}");
+                trace!("stderr: {stderr}");
+            }
+        }
+    }
 }
 
 /// Run the postgres `pg_isready` command to get the status of database
@@ -320,8 +320,8 @@ fn get_ephemeral_port() -> std::io::Result<u16> {
 mod test {
     #[tokio::test]
     async fn smoketest() {
+        use crate::db::tempdb::TempDb;
         use crate::db::{Db, DbConfig};
-        use crate::tempdb::TempDb;
         use diesel_async::RunQueryDsl;
 
         telemetry_subscribers::init_for_testing();
