@@ -331,16 +331,6 @@ impl CommittedSubDag {
     }
 }
 
-// Sort the blocks of the sub-dag blocks by round number then authority index. Any
-// deterministic & stable algorithm works.
-pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
-    blocks.sort_by(|a, b| {
-        a.round()
-            .cmp(&b.round())
-            .then_with(|| a.author().cmp(&b.author()))
-    })
-}
-
 impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(

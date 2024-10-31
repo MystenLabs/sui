@@ -22,7 +22,7 @@ use crate::{
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     linearizer::{BlockStoreAPI, Linearizer},
-    CommittedSubDag, Transaction,
+    CommittedSubDag, Transaction, TransactionIndex,
 };
 
 /// DagBuilder API
@@ -173,6 +173,13 @@ impl DagBuilder {
                     refs.iter()
                         .map(|block_ref| self.blocks.get(block_ref).cloned())
                         .collect()
+                }
+
+                fn get_rejected_transactions(
+                    &self,
+                    refs: &[BlockRef],
+                ) -> Vec<Vec<TransactionIndex>> {
+                    vec![vec![]; refs.len()]
                 }
 
                 fn gc_round(&self) -> Round {
