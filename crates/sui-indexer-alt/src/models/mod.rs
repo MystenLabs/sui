@@ -4,5 +4,6 @@
 pub mod checkpoints;
 pub mod events;
 pub mod objects;
+pub mod packages;
 pub mod transactions;
 pub mod watermarks;
