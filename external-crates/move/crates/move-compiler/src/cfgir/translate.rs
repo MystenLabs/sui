@@ -11,8 +11,7 @@ use crate::{
     },
     diag,
     diagnostics::{
-        warning_filters::WarningFiltersArc,
-        Diagnostic, DiagnosticReporter, Diagnostics,
+        warning_filters::WarningFiltersArc, Diagnostic, DiagnosticReporter, Diagnostics,
     },
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
