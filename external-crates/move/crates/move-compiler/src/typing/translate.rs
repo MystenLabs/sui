@@ -2906,7 +2906,7 @@ fn add_variant_field_types<T>(
         N::VariantFields::Empty => {
             if !fields.is_empty() {
                 ice_assert!(
-                    context.env,
+                    context.reporter,
                     context.env.has_errors(),
                     loc,
                     "Empty variant with fields but no error from naming"

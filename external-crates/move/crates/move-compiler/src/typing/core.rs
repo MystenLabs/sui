@@ -93,7 +93,7 @@ pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env CompilationEnv,
-    reporter: DiagnosticReporter<'env>,
+    pub reporter: DiagnosticReporter<'env>,
     pub(super) debug: TypingDebugFlags,
 
     deprecations: Deprecations,

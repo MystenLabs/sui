@@ -73,7 +73,7 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) address_conflicts: BTreeSet<Symbol>,
     pub(super) current_package: Option<Symbol>,
     pub(super) is_source_definition: bool,
-    reporter: DiagnosticReporter<'env>,
+    pub(super) reporter: DiagnosticReporter<'env>,
 }
 
 struct Context<'env, 'map> {
@@ -119,7 +119,7 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.env
     }
 
-    fn diagnostic_reporter(&self) -> &DiagnosticReporter {
+    fn reporter(&self) -> &DiagnosticReporter {
         &self.defn_context.reporter
     }
 
@@ -1486,9 +1486,7 @@ fn aliases_from_member(
 ) -> Option<P::ModuleMember> {
     macro_rules! check_name_and_add_implicit_alias {
         ($kind:expr, $name:expr) => {{
-            if let Some(n) =
-                check_valid_module_member_name(context.diagnostic_reporter(), $kind, $name)
-            {
+            if let Some(n) = check_valid_module_member_name(context.reporter(), $kind, $name) {
                 if let Err(loc) = acc.add_implicit_member_alias(
                     n.clone(),
                     current_module.clone(),
@@ -1624,11 +1622,9 @@ fn module_use(
     };
     macro_rules! add_module_alias {
         ($ident:expr, $alias:expr) => {{
-            if let Err(()) = check_restricted_name_all_cases(
-                context.diagnostic_reporter(),
-                NameCase::ModuleAlias,
-                &$alias,
-            ) {
+            if let Err(()) =
+                check_restricted_name_all_cases(context.reporter(), NameCase::ModuleAlias, &$alias)
+            {
                 return;
             }
 
@@ -1705,14 +1701,11 @@ fn module_use(
 
                 let alias = alias_opt.unwrap_or(member);
 
-                let alias = match check_valid_module_member_alias(
-                    context.diagnostic_reporter(),
-                    member_kind,
-                    alias,
-                ) {
-                    None => continue,
-                    Some(alias) => alias,
-                };
+                let alias =
+                    match check_valid_module_member_alias(context.reporter(), member_kind, alias) {
+                        None => continue,
+                        Some(alias) => alias,
+                    };
                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
                     duplicate_module_member(context, old_loc, alias)
                 }
@@ -1780,7 +1773,7 @@ fn explicit_use_fun(
         "'use fun' with tyargs"
     );
     ice_assert!(
-        context.env(),
+        context.reporter(),
         is_macro.is_none(),
         loc,
         "Found a 'use fun' as a macro"
@@ -1788,13 +1781,13 @@ fn explicit_use_fun(
     let access_result!(ty, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::Type, *ty)?;
     ice_assert!(
-        context.env(),
+        context.reporter(),
         tyargs.is_none(),
         loc,
         "'use fun' with tyargs"
     );
     ice_assert!(
-        context.env(),
+        context.reporter(),
         is_macro.is_none(),
         loc,
         "Found a 'use fun' as a macro"
@@ -2282,7 +2275,7 @@ fn function_signature(
         .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
     for (_, v, _) in &parameters {
-        check_valid_function_parameter_name(context.diagnostic_reporter(), is_macro, v)
+        check_valid_function_parameter_name(context.reporter(), is_macro, v)
     }
     let return_type = type_(context, pret_ty);
     E::FunctionSignature {
@@ -2330,7 +2323,7 @@ fn function_type_parameters(
         .into_iter()
         .map(|(name, constraints_vec)| {
             let constraints = ability_set(context, "constraint", constraints_vec);
-            let _ = check_valid_type_parameter_name(context.diagnostic_reporter(), is_macro, &name);
+            let _ = check_valid_type_parameter_name(context.reporter(), is_macro, &name);
             (name, constraints)
         })
         .collect()
@@ -2343,8 +2336,7 @@ fn datatype_type_parameters(
     pty_params
         .into_iter()
         .map(|param| {
-            let _ =
-                check_valid_type_parameter_name(context.diagnostic_reporter(), None, &param.name);
+            let _ = check_valid_type_parameter_name(context.reporter(), None, &param.name);
             E::DatatypeTypeParameter {
                 is_phantom: param.is_phantom,
                 name: param.name,
@@ -3347,13 +3339,18 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     let b_ = match pb_ {
         PB::Var(pmut, v) => {
             let emut = mutability(context, v.loc(), pmut);
-            check_valid_local_name(context.diagnostic_reporter(), &v);
+            check_valid_local_name(context.reporter(), &v);
             EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, pfields) => {
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
-            ice_assert!(context.env(), is_macro.is_none(), loc, "Found macro in lhs");
+            ice_assert!(
+                context.reporter(),
+                is_macro.is_none(),
+                loc,
+                "Found macro in lhs"
+            );
             let tys_opt = optional_sp_types(context, ptys_opt);
             let fields = match pfields {
                 FieldBindings::Named(named_bindings) => {
@@ -3508,7 +3505,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(
-                context.env(),
+                context.reporter(),
                 is_macro.is_none(),
                 loc,
                 "Marked a bind as a macro"
@@ -3528,7 +3525,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(
-                context.env(),
+                context.reporter(),
                 is_macro.is_none(),
                 loc,
                 "Marked a bind as a macro"

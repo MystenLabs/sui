@@ -506,7 +506,7 @@ fn constant_(
     };
     cfgir::refine_inference_and_verify(&function_context, &mut cfg);
     ice_assert!(
-        context.env,
+        context.reporter,
         num_previous_errors == context.env.count_diags(),
         full_loc,
         "{}",

@@ -131,7 +131,7 @@ pub(super) struct Context<'env> {
     pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
     pub debug: HLIRDebugFlags,
-    reporter: DiagnosticReporter<'env>,
+    pub reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
     function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
