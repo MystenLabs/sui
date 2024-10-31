@@ -1,5 +1,12 @@
 # @mysten/wallet-standard
 
+## 0.13.9
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+
 ## 0.13.8
 
 ### Patch Changes
