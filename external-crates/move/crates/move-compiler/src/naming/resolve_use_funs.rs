@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::diagnostics::warning_filters::{WarningFilters, WarningFiltersScope};
-use crate::diagnostics::{Diagnostic, Diagnostics};
+use crate::diagnostics::warning_filters::WarningFilters;
+use crate::diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics};
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
 use crate::parser::ast::{FunctionName, Visibility};
@@ -18,8 +18,8 @@ use move_proc_macros::growing_stack;
 
 struct Context<'env, 'info> {
     env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     info: &'info NamingProgramInfo,
-    warning_filters_scope: WarningFiltersScope,
     current_module: ModuleIdent,
 }
 
@@ -29,30 +29,30 @@ impl<'env, 'info> Context<'env, 'info> {
         info: &'info NamingProgramInfo,
         current_module: ModuleIdent,
     ) -> Self {
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
+            reporter,
             info,
-            warning_filters_scope,
             current_module,
         }
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 }
 

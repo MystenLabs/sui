@@ -7,8 +7,8 @@ use crate::{
     diagnostics::{
         self,
         codes::{self, *},
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
+        warning_filters::WarningFilters,
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::{
@@ -533,8 +533,8 @@ pub(super) struct OuterContext {
 pub(super) struct Context<'outer, 'env> {
     pub env: &'env CompilationEnv,
     outer: &'outer OuterContext,
+    reporter: DiagnosticReporter<'env>,
     unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
-    warning_filters_scope: WarningFiltersScope,
     current_module: ModuleIdent,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
@@ -597,13 +597,13 @@ impl<'outer, 'env> Context<'outer, 'env> {
         current_module: ModuleIdent,
     ) -> Self {
         let unscoped_types = vec![outer.unscoped_types.clone()];
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
             outer,
+            reporter,
             unscoped_types,
             current_module,
-            warning_filters_scope,
             local_scopes: vec![],
             local_count: BTreeMap::new(),
             nominal_blocks: vec![],
@@ -616,30 +616,29 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     #[allow(unused)]
     pub fn extend_ide_info(&self, info: IDEInfo) {
-        self.env.extend_ide_info(&self.warning_filters_scope, info);
+        self.reporter.extend_ide_info(info);
     }
 
     pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
-        self.env
-            .add_ide_annotation(&self.warning_filters_scope, loc, info);
+        self.reporter.add_ide_annotation(loc, info);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn valid_module(&mut self, m: &ModuleIdent) -> bool {
@@ -667,7 +666,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         let result = members.get(&n.value);
         if result.is_none() {
             let diag = make_unbound_module_member_error(self, kind, loc, *m, n.value);
-            self.env.add_diag(&self.warning_filters_scope, diag);
+            self.add_diag(diag);
         }
         result.map(|inner| {
             let mut result = inner.clone();
@@ -2077,7 +2076,7 @@ fn function(
         body,
     };
     resolve_syntax_attributes(context, syntax_methods, &module, &name, &f);
-    fake_natives::function(context.env, module, name, &f);
+    fake_natives::function(&context.reporter, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
     context.local_count = BTreeMap::new();

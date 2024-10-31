@@ -14,7 +14,7 @@ use crate::{
         translate::Context,
     },
     parser::ast::FunctionName,
-    shared::{known_attributes::SyntaxAttribute, CompilationEnv},
+    shared::known_attributes::SyntaxAttribute,
 };
 use move_ir_types::location::*;
 
@@ -42,7 +42,7 @@ pub(super) fn resolve_syntax_attributes(
     let attr = function.attributes.get_(&SyntaxAttribute::Syntax.into())?;
     let attr_loc = attr.loc;
 
-    let syntax_method_prekinds = resolve_syntax_method_prekind(context.env, attr)?;
+    let syntax_method_prekinds = resolve_syntax_method_prekind(context, attr)?;
 
     if !context.env.check_feature(
         context.current_package,
@@ -147,7 +147,7 @@ fn attr_param_from_str(loc: Loc, name_str: &str) -> Option<SyntaxMethodPrekind> 
 
 /// Resolve the mapping for a function + syntax attribute into a SyntaxMethodKind.
 fn resolve_syntax_method_prekind(
-    env: &CompilationEnv,
+    context: &Context,
     sp!(loc, attr_): &Attribute,
 ) -> Option<BTreeSet<SyntaxMethodPrekind>> {
     match attr_ {
@@ -157,7 +157,7 @@ fn resolve_syntax_method_prekind(
                 SyntaxAttribute::SYNTAX,
                 SyntaxAttribute::INDEX
             );
-            env.add_error_diag(diag!(Declarations::InvalidAttribute, (*loc, msg)));
+            context.add_diag(diag!(Declarations::InvalidAttribute, (*loc, msg)));
             None
         }
         Attribute_::Parameterized(_, inner) => {
@@ -169,7 +169,7 @@ fn resolve_syntax_method_prekind(
                             if let Some(prev_kind) = kinds.replace(kind) {
                                 let msg = "Repeated syntax method identifier".to_string();
                                 let prev = "Initially defined here".to_string();
-                                env.add_error_diag(diag!(
+                                context.add_diag(diag!(
                                     Declarations::InvalidAttribute,
                                     (loc, msg),
                                     (prev_kind.loc, prev)
@@ -177,7 +177,7 @@ fn resolve_syntax_method_prekind(
                             }
                         } else {
                             let msg = format!("Invalid syntax method identifier '{}'", name);
-                            env.add_error_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
                         }
                     }
                     Attribute_::Assigned(n, _) => {
@@ -186,7 +186,7 @@ fn resolve_syntax_method_prekind(
                             SyntaxAttribute::SYNTAX,
                             n
                         );
-                        env.add_error_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                        context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
                     }
                     Attribute_::Parameterized(n, _) => {
                         let msg = format!(
@@ -194,7 +194,7 @@ fn resolve_syntax_method_prekind(
                             SyntaxAttribute::SYNTAX,
                             n
                         );
-                        env.add_error_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                        context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
                     }
                 }
             }
