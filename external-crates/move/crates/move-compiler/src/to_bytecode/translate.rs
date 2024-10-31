@@ -227,7 +227,7 @@ fn module(
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
             Err(e) => {
-                compilation_env.add_error_diag(diag!(
+                compilation_env.add_diag(diag!(
                     Bug::BytecodeGeneration,
                     (ident_loc, format!("IR ERROR: {}", e))
                 ));

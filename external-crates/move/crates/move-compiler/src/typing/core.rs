@@ -6,8 +6,8 @@ use crate::{
     debug_display, diag,
     diagnostics::{
         codes::{NameResolution, TypeSafety},
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
+        warning_filters::WarningFilters,
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
@@ -93,7 +93,7 @@ pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
     pub(super) debug: TypingDebugFlags,
 
     deprecations: Deprecations,
@@ -193,7 +193,7 @@ impl<'env> Context<'env> {
             function_translation: false,
             type_elaboration: false,
         };
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
@@ -209,7 +209,7 @@ impl<'env> Context<'env> {
             macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
-            warning_filters_scope,
+            reporter,
             debug,
             next_match_var_id: 0,
             new_friends: BTreeSet::new(),
@@ -222,28 +222,27 @@ impl<'env> Context<'env> {
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn extend_ide_info(&self, info: IDEInfo) {
-        self.env.extend_ide_info(&self.warning_filters_scope, info);
+        self.reporter.extend_ide_info(info);
     }
 
     pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
-        self.env
-            .add_ide_annotation(&self.warning_filters_scope, loc, info);
+        self.reporter.add_ide_annotation(loc, info);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     pub fn set_macros(

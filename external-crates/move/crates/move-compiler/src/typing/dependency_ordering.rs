@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::{codes::*, Diagnostic},
+    diagnostics::{codes::*, Diagnostic, DiagnosticReporter},
     expansion::ast::{Address, ModuleIdent, Value_},
     ice,
     naming::ast::{self as N, Neighbor, Neighbor_},
@@ -38,7 +38,7 @@ pub fn program(
         Err(cycle_node) => {
             let cycle_ident = *cycle_node.node_id();
             let error = cycle_error(&module_neighbors, cycle_ident);
-            compilation_env.add_error_diag(error);
+            context.reporter.add_diag(error);
         }
         Ok(ordered_ids) => {
             for (order, mident) in ordered_ids.iter().rev().enumerate() {
@@ -64,6 +64,7 @@ enum DepType {
 
 struct Context<'a, 'env> {
     env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
@@ -82,8 +83,10 @@ impl<'a, 'env> Context<'a, 'env> {
         env: &'env CompilationEnv,
         modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     ) -> Self {
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
+            reporter,
             modules,
             module_neighbors: BTreeMap::new(),
             neighbors_by_node: BTreeMap::new(),
@@ -372,7 +375,7 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
             }
         }
         L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
-            context.env.add_error_diag(ice!((
+            context.reporter.add_diag(ice!((
                 *loc,
                 "variant unpacking shouldn't occur before match expansion"
             )));
@@ -420,7 +423,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             }
         }
         E::VariantMatch(..) => {
-            context.env.add_error_diag(ice!((
+            context.reporter.add_diag(ice!((
                 e.exp.loc,
                 "shouldn't find variant match before HLIR lowering"
             )));

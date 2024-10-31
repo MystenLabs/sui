@@ -78,7 +78,7 @@ pub fn check_feature_or_error(
     loc: Loc,
 ) -> bool {
     if !edition.supports(feature) {
-        env.add_error_diag(create_feature_error(edition, feature, loc));
+        env.add_diag(create_feature_error(edition, feature, loc));
         false
     } else {
         true

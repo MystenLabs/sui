@@ -481,7 +481,7 @@ impl PatternMatrix {
                 // Make a match pattern that only holds guard binders
                 let guard_binders = guard_binders.union_with(&const_binders, |k, _, x| {
                     let msg = "Match compilation made a binder for this during const compilation";
-                    context.env().add_error_diag(ice!((k.loc, msg)));
+                    context.env().add_diag(ice!((k.loc, msg)));
                     *x
                 });
                 let pat = apply_pattern_subst(pat, &guard_binders);
