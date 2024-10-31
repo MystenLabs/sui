@@ -4,10 +4,10 @@
 use jsonrpsee::core::RpcResult;
 use simulacrum::Simulacrum;
 use std::sync::Arc;
-use sui_indexer::apis::read_api::ReadApi;
-use sui_indexer::indexer_reader::IndexerReader;
-use sui_indexer::test_utils::{set_up, wait_for_checkpoint};
 use sui_json_rpc_api::ReadApiServer;
+use sui_mvr_indexer::apis::read_api::ReadApi;
+use sui_mvr_indexer::indexer_reader::IndexerReader;
+use sui_mvr_indexer::test_utils::{set_up, wait_for_checkpoint};
 use tempfile::tempdir;
 
 #[tokio::test]

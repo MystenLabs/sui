@@ -6,21 +6,21 @@ use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
-use sui_indexer::errors::IndexerError;
-use sui_indexer::handlers::TransactionObjectChangesToCommit;
-use sui_indexer::models::{
+use sui_mvr_indexer::errors::IndexerError;
+use sui_mvr_indexer::handlers::TransactionObjectChangesToCommit;
+use sui_mvr_indexer::models::{
     checkpoints::StoredCheckpoint, objects::StoredObject, objects::StoredObjectSnapshot,
     transactions::StoredTransaction,
 };
-use sui_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
-use sui_indexer::store::indexer_store::IndexerStore;
-use sui_indexer::test_utils::{
+use sui_mvr_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
+use sui_mvr_indexer::store::indexer_store::IndexerStore;
+use sui_mvr_indexer::test_utils::{
     set_up, set_up_with_start_and_end_checkpoints, wait_for_checkpoint, wait_for_objects_snapshot,
 };
-use sui_indexer::types::EventIndex;
-use sui_indexer::types::IndexedDeletedObject;
-use sui_indexer::types::IndexedObject;
-use sui_indexer::types::TxIndex;
+use sui_mvr_indexer::types::EventIndex;
+use sui_mvr_indexer::types::IndexedDeletedObject;
+use sui_mvr_indexer::types::IndexedObject;
+use sui_mvr_indexer::types::TxIndex;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
