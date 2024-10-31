@@ -1,36 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
-use rand::seq::IteratorRandom;
-use tracing::error;
-
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
-    ExpectedFailureType, Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    ExpectedFailureType, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
     STORAGE_COST_PER_COIN,
 };
-use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
-use crate::{ExecutionEffects, ValidatorProxy};
+use crate::workloads::{Gas, GasCoinConfig, Workload, WorkloadBuilderInfo, WorkloadParams};
+use crate::ExecutionEffects;
+use crate::ValidatorProxy;
+use async_trait::async_trait;
+use rand::seq::IteratorRandom;
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::Arc;
 use sui_core::test_utils::make_transfer_object_transaction;
-use sui_types::{
-    base_types::{ObjectRef, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
-    transaction::Transaction,
-};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{AccountKeyPair, Ed25519SuiSignature};
+use sui_types::signature::GenericSignature;
+use sui_types::{base_types::ObjectRef, crypto::get_key_pair, transaction::Transaction};
+use tracing::debug;
 
-/// TODO: This should be the amount that is being transferred instead of MAX_GAS.
-/// Number of mist sent to each address on each batch transfer
-const _TRANSFER_AMOUNT: u64 = 1;
-
-#[derive(Debug)]
-pub struct TransferObjectTestPayload {
+#[derive(Debug, Clone)]
+pub struct ExpectedFailurePayload {
+    failure_type: ExpectedFailureType,
     transfer_object: ObjectRef,
     transfer_from: SuiAddress,
     transfer_to: SuiAddress,
@@ -38,38 +33,43 @@ pub struct TransferObjectTestPayload {
     system_state_observer: Arc<SystemStateObserver>,
 }
 
-impl Payload for TransferObjectTestPayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
-        if !effects.is_ok() {
-            effects.print_gas_summary();
-            error!("Transfer tx failed... Status: {:?}", effects.status());
-        }
+#[derive(Debug, Clone)]
+pub struct ExpectedFailurePayloadCfg {
+    pub failure_type: ExpectedFailureType,
+}
 
-        let recipient = self.gas.iter().find(|x| x.1 != self.transfer_to).unwrap().1;
-        let updated_gas: Vec<Gas> = self
-            .gas
-            .iter()
-            .map(|x| {
-                if x.1 == self.transfer_from {
-                    (effects.gas_object().0, self.transfer_from, x.2.clone())
-                } else {
-                    x.clone()
-                }
-            })
-            .collect();
-        self.transfer_object = effects
-            .mutated()
-            .iter()
-            .find(|(object_ref, _)| object_ref.0 == self.transfer_object.0)
-            .map(|x| x.0)
-            .unwrap();
-        self.transfer_from = self.transfer_to;
-        self.transfer_to = recipient;
-        self.gas = updated_gas;
+impl Copy for ExpectedFailurePayloadCfg {}
+
+impl ExpectedFailurePayload {
+    fn create_failing_transaction(&self, mut tx: Transaction) -> Transaction {
+        match self.failure_type {
+            ExpectedFailureType::InvalidSignature => {
+                let signatures = tx.tx_signatures_mut_for_testing();
+                signatures.pop();
+                signatures.push(GenericSignature::Signature(
+                    sui_types::crypto::Signature::Ed25519SuiSignature(
+                        Ed25519SuiSignature::default(),
+                    ),
+                ));
+                tx
+            }
+            ExpectedFailureType::Random => unreachable!(),
+        }
     }
+}
+
+impl Payload for ExpectedFailurePayload {
+    fn make_new_payload(&mut self, _effects: &ExecutionEffects) {
+        // This should never be called, as an expected failure payload
+        // should fail (thereby having no effects) and be retried. Note
+        // that since these are failures rather than Move level errors,
+        // no gas should be consumed, nor any objects mutated.
+        unreachable!()
+    }
+
     fn make_transaction(&mut self) -> Transaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
-        make_transfer_object_transaction(
+        let tx = make_transfer_object_transaction(
             self.transfer_object,
             *gas_obj,
             self.transfer_from,
@@ -79,32 +79,36 @@ impl Payload for TransferObjectTestPayload {
                 .state
                 .borrow()
                 .reference_gas_price,
-        )
+        );
+        self.create_failing_transaction(tx)
     }
+
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
-        None
+        Some(self.failure_type)
     }
 }
 
-impl std::fmt::Display for TransferObjectTestPayload {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "transfer_object")
+impl fmt::Display for ExpectedFailurePayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ExpectedFailurePayload({:?})", self.failure_type)
     }
 }
 
 #[derive(Debug)]
-pub struct TransferObjectWorkloadBuilder {
+pub struct ExpectedFailureWorkloadBuilder {
+    expected_failure_cfg: ExpectedFailurePayloadCfg,
     num_transfer_accounts: u64,
     num_payloads: u64,
 }
 
-impl TransferObjectWorkloadBuilder {
+impl ExpectedFailureWorkloadBuilder {
     pub fn from(
         workload_weight: f32,
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
         num_transfer_accounts: u64,
+        expected_failure_cfg: ExpectedFailurePayloadCfg,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -122,9 +126,10 @@ impl TransferObjectWorkloadBuilder {
                 group,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
-                TransferObjectWorkloadBuilder {
-                    num_transfer_accounts,
+                ExpectedFailureWorkloadBuilder {
+                    expected_failure_cfg,
                     num_payloads: max_ops,
+                    num_transfer_accounts,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -137,7 +142,7 @@ impl TransferObjectWorkloadBuilder {
 }
 
 #[async_trait]
-impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
+impl WorkloadBuilder<dyn Payload> for ExpectedFailureWorkloadBuilder {
     async fn generate_coin_config_for_init(&self) -> Vec<GasCoinConfig> {
         vec![]
     }
@@ -184,28 +189,35 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         _init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
-        Box::<dyn Workload<dyn Payload>>::from(Box::new(TransferObjectWorkload {
+        debug!(
+            "Using `{:?}` expected failure workloads",
+            self.expected_failure_cfg.failure_type,
+        );
+
+        Box::<dyn Workload<dyn Payload>>::from(Box::new(ExpectedFailureWorkload {
             num_tokens: self.num_payloads,
             payload_gas,
+            expected_failure_cfg: self.expected_failure_cfg,
         }))
     }
 }
 
 #[derive(Debug)]
-pub struct TransferObjectWorkload {
+pub struct ExpectedFailureWorkload {
     num_tokens: u64,
     payload_gas: Vec<Gas>,
+    expected_failure_cfg: ExpectedFailurePayloadCfg,
 }
 
 #[async_trait]
-impl Workload<dyn Payload> for TransferObjectWorkload {
+impl Workload<dyn Payload> for ExpectedFailureWorkload {
     async fn init(
         &mut self,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         _system_state_observer: Arc<SystemStateObserver>,
     ) {
-        return;
     }
+
     async fn make_test_payloads(
         &self,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
@@ -238,7 +250,8 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
             .map(|(g, t)| {
                 let from = t.1;
                 let to = g.iter().find(|x| x.1 != from).unwrap().1;
-                Box::new(TransferObjectTestPayload {
+                Box::new(ExpectedFailurePayload {
+                    failure_type: self.expected_failure_cfg.failure_type,
                     transfer_object: t.0,
                     transfer_from: from,
                     transfer_to: to,
