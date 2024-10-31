@@ -265,6 +265,7 @@ impl<'extensions> MoveVM<'extensions> {
                 _ => None,
             })
             .collect::<Vec<_>>();
+        println!("{} mut refs", mut_ref_args.len());
         // TODO: Lift deserialization out to the PTB layer, and expose the Base Heap to that layer
         // so that it can allocate values into it for usage in function calls.
         // The external calls in should eventually just call `Value`; serialization and
@@ -277,6 +278,7 @@ impl<'extensions> MoveVM<'extensions> {
             serialized_args,
         )
         .map_err(|e| e.finish(Location::Undefined))?;
+        println!("{} ref ids", ref_ids.len());
         let return_types = return_types
             .into_iter()
             .map(|ty| ty.subst(&ty_args))
@@ -300,7 +302,7 @@ impl<'extensions> MoveVM<'extensions> {
             return_values,
         )
         .map_err(|e| e.finish(Location::Undefined))?;
-        assert!(mut_ref_args.len() == ref_ids.len());
+        assert!(mut_ref_args.len() <= ref_ids.len());
         let serialized_mut_ref_outputs = ref_ids.into_iter().zip(mut_ref_args.into_iter())
             .map(|(ref_id, (ndx, ty))| {
                 // take the value of each reference; return values first in the case that a value
