@@ -3,7 +3,7 @@
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
@@ -578,13 +578,16 @@ macro_rules! simple_visitor {
 
         pub struct Context<'a> {
             env: &'a crate::shared::CompilationEnv,
-            warning_filters_scope: crate::shared::WarningFiltersScope,
+            warning_filters_scope: crate::diagnostics::warning_filters::WarningFiltersScope,
         }
 
         impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
-            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::typing::ast::Program) -> Self::Context<'a> {
+            fn context<'a>(
+                env: &'a crate::shared::CompilationEnv,
+                _program: &crate::typing::ast::Program,
+            ) -> Self::Context<'a> {
                 let warning_filters_scope = env.top_level_warning_filter_scope().clone();
                 Context {
                     env,
@@ -606,7 +609,10 @@ macro_rules! simple_visitor {
         }
 
         impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
-            fn push_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+            fn push_warning_filter_scope(
+                &mut self,
+                filters: crate::diagnostics::warning_filters::WarningFilters,
+            ) {
                 self.warning_filters_scope.push(filters)
             }
 

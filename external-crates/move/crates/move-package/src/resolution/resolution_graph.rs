@@ -8,7 +8,7 @@ use move_command_line_common::files::{
 };
 use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::editions::Edition;
-use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
+use move_compiler::{diagnostics::warning_filters::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use std::fs::File;

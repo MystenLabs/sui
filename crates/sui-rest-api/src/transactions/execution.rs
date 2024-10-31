@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accept::AcceptJsonProtobufBcs;
 use crate::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
-use crate::response::Bcs;
-use crate::{accept::AcceptFormat, response::ResponseContent};
-use crate::{RestError, RestService, Result};
+use crate::response::{Bcs, JsonProtobufBcs};
+use crate::{proto, RestError, RestService, Result};
 use axum::extract::{Query, State};
 use schemars::JsonSchema;
 use std::net::SocketAddr;
@@ -43,6 +43,7 @@ impl ApiEndpoint<RestService> for ExecuteTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionExecutionResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -65,9 +66,15 @@ async fn execute_transaction(
     State(state): State<Option<Arc<dyn TransactionExecutor>>>,
     Query(parameters): Query<ExecuteTransactionQueryParameters>,
     client_address: Option<axum::extract::ConnectInfo<SocketAddr>>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     Bcs(transaction): Bcs<SignedTransaction>,
-) -> Result<ResponseContent<TransactionExecutionResponse>> {
+) -> Result<
+    JsonProtobufBcs<
+        TransactionExecutionResponse,
+        proto::TransactionExecutionResponse,
+        TransactionExecutionResponse,
+    >,
+> {
     let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
     let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
         transaction: transaction.try_into()?,
@@ -161,8 +168,9 @@ async fn execute_transaction(
     };
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
     }
     .pipe(Ok)
 }
@@ -191,13 +199,13 @@ pub struct ExecuteTransactionQueryParameters {
 /// Response type for the execute transaction endpoint
 #[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct TransactionExecutionResponse {
-    effects: TransactionEffects,
+    pub effects: TransactionEffects,
 
-    finality: EffectsFinality,
-    events: Option<TransactionEvents>,
-    balance_changes: Option<Vec<BalanceChange>>,
-    input_objects: Option<Vec<Object>>,
-    output_objects: Option<Vec<Object>>,
+    pub finality: EffectsFinality,
+    pub events: Option<TransactionEvents>,
+    pub balance_changes: Option<Vec<BalanceChange>>,
+    pub input_objects: Option<Vec<Object>>,
+    pub output_objects: Option<Vec<Object>>,
 }
 
 #[derive(Clone, Debug)]
@@ -377,6 +385,7 @@ impl ApiEndpoint<RestService> for SimulateTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionSimulationResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -391,16 +400,26 @@ impl ApiEndpoint<RestService> for SimulateTransaction {
 async fn simulate_transaction(
     State(state): State<Option<Arc<dyn TransactionExecutor>>>,
     Query(parameters): Query<SimulateTransactionQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     //TODO allow accepting JSON as well as BCS
     Bcs(transaction): Bcs<Transaction>,
-) -> Result<ResponseContent<TransactionSimulationResponse>> {
+) -> Result<
+    JsonProtobufBcs<
+        TransactionSimulationResponse,
+        proto::TransactionSimulationResponse,
+        TransactionSimulationResponse,
+    >,
+> {
     let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
 
-    simulate_transaction_impl(&executor, &parameters, transaction).map(|response| match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
-    })
+    let response = simulate_transaction_impl(&executor, &parameters, transaction)?;
+
+    match accept {
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
+    }
+    .pipe(Ok)
 }
 
 pub(super) fn simulate_transaction_impl(

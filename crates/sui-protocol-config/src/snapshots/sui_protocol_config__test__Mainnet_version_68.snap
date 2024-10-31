@@ -64,6 +64,7 @@ feature_flags:
   consensus_round_prober: true
   validate_identifier_inputs: true
   relocate_event_module: true
+  disallow_new_modules_in_deps_only_packages: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -317,7 +318,7 @@ consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
-random_beacon_reduction_lower_bound: 700
+random_beacon_reduction_lower_bound: 500
 random_beacon_dkg_timeout_round: 3000
 random_beacon_min_round_interval_ms: 500
 random_beacon_dkg_version: 1

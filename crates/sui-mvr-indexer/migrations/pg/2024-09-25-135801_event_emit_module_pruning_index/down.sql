@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS event_emit_module_tx_sequence_number;

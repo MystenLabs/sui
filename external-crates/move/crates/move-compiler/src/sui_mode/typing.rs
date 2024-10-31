@@ -8,14 +8,17 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
+    },
     editions::Flavor,
     expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, TargetKind, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
     parser::ast::{Ability_, DatatypeName, FunctionName},
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier, WarningFiltersScope},
+    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},

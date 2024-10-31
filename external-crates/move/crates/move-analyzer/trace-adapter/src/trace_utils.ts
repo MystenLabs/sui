@@ -3,7 +3,12 @@
 
 import * as fs from 'fs';
 import { FRAME_LIFETIME, ModuleInfo } from './utils';
-import { IRuntimeCompundValue, RuntimeValueType, IRuntimeVariableLoc } from './runtime';
+import {
+    IRuntimeCompundValue,
+    RuntimeValueType,
+    IRuntimeVariableLoc,
+    IRuntimeRefValue
+} from './runtime';
 import { ISourceMap, ILoc, IFileInfo } from './source_map_utils';
 
 
@@ -203,6 +208,7 @@ export type TraceEvent =
         id: number,
         name: string,
         fileHash: string
+        isNative: boolean,
         localsTypes: string[],
         localsNames: string[],
         paramValues: RuntimeValueType[]
@@ -346,6 +352,7 @@ export function readTrace(
                 id: frame.frame_id,
                 name: frame.function_name,
                 fileHash: sourceMap.fileHash,
+                isNative: frame.is_native,
                 localsTypes,
                 localsNames: funEntry.localsNames,
                 paramValues,
@@ -424,6 +431,10 @@ export function readTrace(
                 const location = effect.Write ? effect.Write.location : effect.Read!.location;
                 const loc = processJSONLocalLocation(location, localLifetimeEnds);
                 if (effect.Write) {
+                    if (!loc) {
+                        throw new Error('Unsupported location type in Write effect');
+                    }
+                    // process a write only if the location is supported
                     const value = 'RuntimeValue' in effect.Write.root_value_after_write
                         ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
                         : traceRefValueFromJSON(effect.Write.root_value_after_write);
@@ -488,12 +499,11 @@ function JSONTraceAddressToHexString(address: string): string {
  * @param localLifetimeEnds map of local variable lifetimes (defined if local variable
  * lifetime should happen).
  * @returns variable location.
- * @throws error if the location type is not supported.
  */
 function processJSONLocalLocation(
     traceLocation: JSONTraceLocation,
     localLifetimeEnds?: Map<number, number[]>,
-): IRuntimeVariableLoc {
+): IRuntimeVariableLoc | undefined {
     if ('Local' in traceLocation) {
         const frameID = traceLocation.Local[0];
         const localIndex = traceLocation.Local[1];
@@ -506,7 +516,15 @@ function processJSONLocalLocation(
     } else if ('Indexed' in traceLocation) {
         return processJSONLocalLocation(traceLocation.Indexed[0], localLifetimeEnds);
     } else {
-        throw new Error(`Unsupported location type: ${JSON.stringify(traceLocation)}`);
+        // Currently, there is nothing that needs to be done for 'Global' locations,
+        // neither with respect to lifetime nor with respect to location itself.
+        // This is because `Global` locations currently only represent read-only
+        // refererence values returned from native functions. If there ever was
+        // a native functino that would return a mutable reference, we should
+        // consider how to handle value changes via such reference, but it's unlikely
+        // that such a function would ever be added to either Move stdlib or
+        // the Sui framework.
+        return undefined;
     }
 }
 
@@ -515,18 +533,23 @@ function processJSONLocalLocation(
  *
  * @param value JSON trace reference value.
  * @returns runtime value.
+ * @throws Error with a descriptive error message if conversion has failed.
  */
 function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
     if ('MutRef' in value) {
-        return {
-            mutable: true,
-            loc: processJSONLocalLocation(value.MutRef.location)
-        };
+        const loc = processJSONLocalLocation(value.MutRef.location);
+        if (!loc) {
+            throw new Error('Unsupported location type in MutRef');
+        }
+        const ret: IRuntimeRefValue = { mutable: true, loc };
+        return ret;
     } else {
-        return {
-            mutable: false,
-            loc: processJSONLocalLocation(value.ImmRef.location)
-        };
+        const loc = processJSONLocalLocation(value.ImmRef.location);
+        if (!loc) {
+            throw new Error('Unsupported location type in ImmRef');
+        }
+        const ret: IRuntimeRefValue = { mutable: false, loc };
+        return ret;
     }
 }
 

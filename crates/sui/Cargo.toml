@@ -94,9 +94,11 @@ move-analyzer.workspace = true
 move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-compiler.workspace = true
 csv.workspace = true
 move-vm-profiler.workspace = true
 move-vm-config.workspace = true
+move-ir-types.workspace = true
 move-command-line-common.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -131,7 +133,7 @@ name = "ptb_files_tests"
 harness = false
 
 [features]
-gas-profiler = [
-    "sui-types/gas-profiler",
-    "sui-execution/gas-profiler",
+tracing = [
+    "sui-types/tracing",
+    "sui-execution/tracing",
 ]

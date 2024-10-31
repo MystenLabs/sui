@@ -348,6 +348,17 @@ export class Runtime extends EventEmitter {
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
+            // if function is native then the next event will be CloseFrame
+            if (currentEvent.isNative) {
+                if (this.trace.events.length <= this.eventIndex + 1 ||
+                    this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
+                    throw new Error('Expected an CloseFrame event after native OpenFrame event');
+                }
+                // skip over CloseFrame as there is no frame to pop
+                this.eventIndex++;
+                return this.step(next, stopAtCloseFrame);
+            }
+
             // create a new frame and push it onto the stack
             const newFrame =
                 this.newStackFrame(

@@ -679,10 +679,10 @@ impl SuiClientCommands {
                 tx_digest,
                 profile_output,
             } => {
-                move_vm_profiler::gas_profiler_feature_disabled! {
+                move_vm_profiler::tracing_feature_disabled! {
                     bail!(
-                        "gas-profiler feature is not enabled, rebuild or reinstall with \
-                         --features gas-profiler"
+                        "tracing feature is not enabled, rebuild or reinstall with \
+                         --features tracing"
                     );
                 };
 
