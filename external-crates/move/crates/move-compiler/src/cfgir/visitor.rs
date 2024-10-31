@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use crate::{
     cfgir::{
@@ -61,7 +61,7 @@ pub trait CFGIRVisitorConstructor: Send {
 }
 
 pub trait CFGIRVisitorContext {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>);
     fn pop_warning_filter_scope(&mut self);
 
     fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
@@ -359,7 +359,7 @@ macro_rules! simple_visitor {
         impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
             fn push_warning_filter_scope(
                 &mut self,
-                filters: crate::diagnostics::warning_filters::WarningFilters,
+                filters: std::sync::Arc<crate::diagnostics::warning_filters::WarningFilters>,
             ) {
                 self.reporter.push_warning_filter_scope(filters)
             }

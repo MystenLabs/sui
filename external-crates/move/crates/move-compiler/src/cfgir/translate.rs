@@ -75,7 +75,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -1035,7 +1035,7 @@ impl AbsintVisitorContext<'_> {
 }
 
 impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

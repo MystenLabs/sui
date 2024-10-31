@@ -24,6 +24,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -137,7 +138,7 @@ pub type SyntaxMethods = BTreeMap<TypeName, SyntaxMethodEntry>;
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
     pub loc: Loc,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -163,7 +164,7 @@ pub struct DatatypeTypeParameter {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StructDefinition {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub loc: Loc,
@@ -181,7 +182,7 @@ pub enum StructFields {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub loc: Loc,
@@ -225,7 +226,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -243,7 +244,7 @@ pub struct Function {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Constant {
-    pub warning_filter: WarningFilters,
+    pub warning_filter: Arc<WarningFilters>,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,

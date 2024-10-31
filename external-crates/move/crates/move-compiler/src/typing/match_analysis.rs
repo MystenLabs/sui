@@ -26,6 +26,7 @@ use move_proc_macros::growing_stack;
 use std::{
     collections::{BTreeSet, VecDeque},
     fmt::Display,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -71,7 +72,7 @@ impl TypingMutVisitorContext for MatchCompiler<'_, '_> {
         }
     }
 
-    fn push_warning_filter_scope(&mut self, filter: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filter: Arc<WarningFilters>) {
         self.context.push_warning_filter_scope(filter);
     }
 

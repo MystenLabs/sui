@@ -11,6 +11,7 @@ use crate::typing::core;
 use crate::{diag, ice};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
+use std::sync::Arc;
 
 //**************************************************************************************************
 // Entry
@@ -47,7 +48,7 @@ impl<'env, 'info> Context<'env, 'info> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: Arc<WarningFilters>) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
