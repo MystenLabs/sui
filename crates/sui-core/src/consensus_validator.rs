@@ -16,14 +16,14 @@ use tap::TapFallible;
 use tracing::{info, warn};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    checkpoints::CheckpointServiceNotify, transaction_manager::TransactionManager,
+    authority::AuthorityState, checkpoints::CheckpointServiceNotify,
+    transaction_manager::TransactionManager,
 };
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    authority_state: Arc<AuthorityState>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
@@ -31,44 +31,38 @@ pub struct SuiTxValidator {
 
 impl SuiTxValidator {
     pub fn new(
-        epoch_store: Arc<AuthorityPerEpochStore>,
+        authority_state: Arc<AuthorityState>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
+        let epoch_store = authority_state.load_epoch_store_one_call_per_task().clone();
         info!(
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
         );
         Self {
-            epoch_store,
+            authority_state,
             checkpoint_service,
             _transaction_manager: transaction_manager,
             metrics,
         }
     }
 
-    fn validate_transactions(
-        &self,
-        txs: Vec<ConsensusTransactionKind>,
-    ) -> Result<(), eyre::Report> {
+    fn validate_transactions(&self, txs: &[ConsensusTransactionKind]) -> Result<(), eyre::Report> {
+        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+
         let mut cert_batch = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
-        for tx in txs.into_iter() {
+        for tx in txs.iter() {
             match tx {
                 ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-                    cert_batch.push(*certificate);
-
-                    // if !certificate.contains_shared_object() {
-                    //     // new_unchecked safety: we do not use the certs in this list until all
-                    //     // have had their signatures verified.
-                    //     owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
-                    // }
+                    cert_batch.push(certificate.as_ref());
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    ckpt_messages.push(signature.clone());
-                    ckpt_batch.push(signature.summary);
+                    ckpt_messages.push(signature.as_ref());
+                    ckpt_batch.push(&signature.summary);
                 }
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
@@ -91,13 +85,12 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
                 ConsensusTransactionKind::UserTransaction(_tx) => {
-                    if !self.epoch_store.protocol_config().mysticeti_fastpath() {
+                    if !epoch_store.protocol_config().mysticeti_fastpath() {
                         return Err(SuiError::UnexpectedMessage(
                             "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
                         )
                         .into());
                     }
-                    // TODO(fastpath): implement verification for uncertified user transactions.
                 }
             }
         }
@@ -106,7 +99,7 @@ impl SuiTxValidator {
         let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
 
-        self.epoch_store
+        epoch_store
             .signature_verifier
             .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
             .tap_err(|e| warn!("batch verification error: {}", e))
@@ -115,7 +108,7 @@ impl SuiTxValidator {
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
             self.checkpoint_service
-                .notify_checkpoint_signature(&self.epoch_store, &ckpt)?;
+                .notify_checkpoint_signature(&epoch_store, ckpt)?;
         }
 
         self.metrics
@@ -125,15 +118,45 @@ impl SuiTxValidator {
             .checkpoint_signatures_verified
             .inc_by(ckpt_count as u64);
         Ok(())
+    }
 
-        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
-        // all certificates had valid signatures, schedule them for execution prior to sequencing
-        // which is unnecessary for owned object transactions.
-        // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via consensus output.
-        // self.transaction_manager
-        //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
-        //     .wrap_err("Failed to schedule certificates for execution")
+    async fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
+        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+        if !epoch_store.protocol_config().mysticeti_fastpath() {
+            return vec![];
+        }
+
+        let mut result = Vec::new();
+        for (i, tx) in txs.into_iter().enumerate() {
+            let ConsensusTransactionKind::UserTransaction(tx) = tx else {
+                continue;
+            };
+
+            // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
+            // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
+            if tx
+                .validity_check(epoch_store.protocol_config(), epoch_store.epoch())
+                .is_err()
+            {
+                result.push(i as TransactionIndex);
+                continue;
+            }
+            let Ok(tx) = epoch_store.verify_transaction(*tx.clone()) else {
+                result.push(i as TransactionIndex);
+                continue;
+            };
+
+            if self
+                .authority_state
+                .handle_transaction_v2(&epoch_store, tx)
+                .await
+                .is_err()
+            {
+                result.push(i as TransactionIndex);
+            }
+        }
+
+        result
     }
 }
 
@@ -142,6 +165,7 @@ fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
         .wrap_err("Malformed transaction (failed to deserialize)")
 }
 
+#[async_trait::async_trait]
 impl TransactionVerifier for SuiTxValidator {
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError> {
         let _scope = monitored_scope("ValidateBatch");
@@ -155,12 +179,29 @@ impl TransactionVerifier for SuiTxValidator {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.validate_transactions(txs)
+        self.validate_transactions(&txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
     }
 
-    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
-        vec![]
+    async fn verify_and_vote_batch(
+        &self,
+        batch: &[&[u8]],
+    ) -> Result<Vec<TransactionIndex>, ValidationError> {
+        let _scope = monitored_scope("VerifyAndVoteBatch");
+
+        let txs = batch
+            .iter()
+            .map(|tx| {
+                tx_from_bytes(tx)
+                    .map(|tx| tx.kind)
+                    .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.validate_transactions(&txs)
+            .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))?;
+
+        Ok(self.vote_transactions(txs).await)
     }
 }
 
@@ -234,7 +275,7 @@ mod tests {
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
-            state.epoch_store_for_testing().clone(),
+            state.clone(),
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             metrics,

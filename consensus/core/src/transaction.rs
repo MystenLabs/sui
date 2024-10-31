@@ -210,6 +210,7 @@ impl TransactionClient {
 
 /// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
 /// before acceptance of the block.
+#[async_trait::async_trait]
 pub trait TransactionVerifier: Send + Sync + 'static {
     /// Determines if this batch of transactions is valid.
     /// Fails if any one of the transactions is invalid.
@@ -219,7 +220,10 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     /// Currently only uncertified user transactions can be rejected.
     /// The rest of transactions are implicitly voted to accept.
     // TODO: add rejection reasons, add VoteError and wrap the return in Result<>.
-    fn vote_batch(&self, batch: &[&[u8]]) -> Vec<TransactionIndex>;
+    async fn verify_and_vote_batch(
+        &self,
+        batch: &[&[u8]],
+    ) -> Result<Vec<TransactionIndex>, ValidationError>;
 }
 
 #[derive(Debug, Error)]
@@ -229,16 +233,21 @@ pub enum ValidationError {
 }
 
 /// `NoopTransactionVerifier` accepts all transactions.
-#[allow(unused)]
+#[cfg(test)]
 pub(crate) struct NoopTransactionVerifier;
 
+#[cfg(test)]
+#[async_trait::async_trait]
 impl TransactionVerifier for NoopTransactionVerifier {
     fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
     }
 
-    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
-        vec![]
+    async fn verify_and_vote_batch(
+        &self,
+        _batch: &[&[u8]],
+    ) -> Result<Vec<TransactionIndex>, ValidationError> {
+        Ok(vec![])
     }
 }
 

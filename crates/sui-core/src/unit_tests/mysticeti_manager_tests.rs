@@ -96,7 +96,7 @@ async fn test_mysticeti_manager() {
                 epoch_store.clone(),
                 consensus_handler_initializer,
                 SuiTxValidator::new(
-                    epoch_store.clone(),
+                    state.clone(),
                     Arc::new(CheckpointServiceNoop {}),
                     state.transaction_manager().clone(),
                     SuiTxValidatorMetrics::new(&Registry::new()),

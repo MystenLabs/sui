@@ -1845,10 +1845,17 @@ impl ExecutionCacheWrite for WritebackCache {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> BoxFuture<'a, SuiResult> {
         self.object_locks
-            .acquire_transaction_locks(self, epoch_store, owned_input_objects, transaction)
+            .acquire_transaction_locks(
+                self,
+                epoch_store,
+                owned_input_objects,
+                tx_digest,
+                signed_transaction,
+            )
             .boxed()
     }
 
