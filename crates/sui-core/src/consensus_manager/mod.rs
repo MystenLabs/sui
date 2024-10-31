@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_adapter::{ConsensusClient, SubmitResponse};
+use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient};
 use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::mysticeti_manager::MysticetiManager;
 use crate::consensus_validator::SuiTxValidator;
@@ -213,7 +213,7 @@ impl ConsensusClient for ConsensusClientWrapper {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SubmitResponse> {
+    ) -> SuiResult<BlockStatusReceiver> {
         let client = self.get().await;
         client.submit(transactions, epoch_store).await
     }

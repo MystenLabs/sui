@@ -804,11 +804,13 @@ mod tests {
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         consensus_adapter::{
-            BlockStatus, ConnectionMonitorStatusForTests, ConsensusAdapter,
-            ConsensusAdapterMetrics, MockConsensusClient, SubmitResponse,
+            ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
+            MockConsensusClient,
         },
         epoch::randomness::*,
+        mock_consensus::with_block_status,
     };
+    use consensus_core::{BlockRef, BlockStatus};
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
@@ -847,7 +849,7 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)));
+                .returning(|_, _| Ok(with_block_status(BlockStatus::Sequenced(BlockRef::MIN))));
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
@@ -979,7 +981,11 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)));
+                .returning(|_, _| {
+                    Ok(with_block_status(consensus_core::BlockStatus::Sequenced(
+                        BlockRef::MIN,
+                    )))
+                });
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())

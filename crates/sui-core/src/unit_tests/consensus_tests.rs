@@ -6,8 +6,9 @@ use std::collections::HashSet;
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_adapter::BlockStatus;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::mock_consensus::with_block_status;
+use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 <<<<<<< HEAD
@@ -197,7 +198,7 @@ pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
     process_via_checkpoint: HashSet<TransactionDigest>,
     execute: bool,
-    mock_submit_responses: Vec<SubmitResponse>,
+    mock_block_status_receivers: Vec<BlockStatusReceiver>,
 ) -> Arc<ConsensusAdapter> {
     let metrics = ConsensusAdapterMetrics::new_test();
 
@@ -206,7 +207,7 @@ pub fn make_consensus_adapter_for_test(
         state: Arc<AuthorityState>,
         process_via_checkpoint: HashSet<TransactionDigest>,
         execute: bool,
-        mock_submit_responses: Arc<Mutex<Vec<SubmitResponse>>>,
+        mock_block_status_receivers: Arc<Mutex<Vec<BlockStatusReceiver>>>,
     }
 
     #[async_trait::async_trait]
@@ -215,7 +216,7 @@ pub fn make_consensus_adapter_for_test(
             &self,
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
-        ) -> SuiResult<SubmitResponse> {
+        ) -> SuiResult<BlockStatusReceiver> {
             let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
@@ -278,10 +279,10 @@ pub fn make_consensus_adapter_for_test(
             }
 
             assert!(
-                !self.mock_submit_responses.lock().is_empty(),
+                !self.mock_block_status_receivers.lock().is_empty(),
                 "No mock submit responses left"
             );
-            Ok(self.mock_submit_responses.lock().remove(0))
+            Ok(self.mock_block_status_receivers.lock().remove(0))
         }
     }
     let epoch_store = state.epoch_store_for_testing();
@@ -291,7 +292,7 @@ pub fn make_consensus_adapter_for_test(
             state: state.clone(),
             process_via_checkpoint,
             execute,
-            mock_submit_responses: Arc::new(Mutex::new(mock_submit_responses)),
+            mock_block_status_receivers: Arc::new(Mutex::new(mock_block_status_receivers)),
         }),
         state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
@@ -321,13 +322,18 @@ async fn submit_transaction_to_consensus_adapter() {
     let epoch_store = state.epoch_store_for_testing();
 
     // Make a new consensus adapter instance.
-    let submit_responses = vec![
-        SubmitResponse::NoStatusWaiter(BlockStatus::GarbageCollected),
-        SubmitResponse::NoStatusWaiter(BlockStatus::GarbageCollected),
-        SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced),
+    let block_status_receivers = vec![
+        with_block_status(BlockStatus::GarbageCollected(BlockRef::MIN)),
+        with_block_status(BlockStatus::GarbageCollected(BlockRef::MIN)),
+        with_block_status(BlockStatus::GarbageCollected(BlockRef::MIN)),
+        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
     ];
-    let adapter =
-        make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, submit_responses);
+    let adapter = make_consensus_adapter_for_test(
+        state.clone(),
+        HashSet::new(),
+        false,
+        block_status_receivers,
+    );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
@@ -367,7 +373,7 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
         state.clone(),
         process_via_checkpoint,
         false,
-        vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)],
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
     );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
@@ -403,7 +409,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
         state,
         HashSet::new(),
         false,
-        vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)],
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
     );
 
     let checkpoint_summary = CheckpointSummary::new(
