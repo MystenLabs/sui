@@ -1768,7 +1768,7 @@ fn explicit_use_fun(
     let access_result!(function, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::ApplyPositional, *function)?;
     ice_assert!(
-        context.env(),
+        context.reporter(),
         tyargs.is_none(),
         loc,
         "'use fun' with tyargs"
