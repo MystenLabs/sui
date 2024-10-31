@@ -315,31 +315,3 @@ fn get_ephemeral_port() -> std::io::Result<u16> {
 
     Ok(addr.port())
 }
-
-#[cfg(test)]
-mod test {
-    #[tokio::test]
-    async fn smoketest() {
-        use crate::db::tempdb::TempDb;
-        use crate::db::{Db, DbConfig};
-        use diesel_async::RunQueryDsl;
-
-        telemetry_subscribers::init_for_testing();
-
-        let db = TempDb::new().unwrap();
-        println!("dir: {:?}", db.dir.path());
-
-        let url = db.database.url();
-        println!("url: {}", url.as_str());
-        let db_config = DbConfig::new(url.clone(), None, None);
-        let db = Db::new(db_config).await.unwrap();
-        let mut connection = db.connect().await.unwrap();
-
-        // Run a simple query to verify the db can properly be queried
-        let resp = diesel::sql_query("SELECT datname FROM pg_database")
-            .execute(&mut connection)
-            .await
-            .unwrap();
-        println!("resp: {:?}", resp);
-    }
-}

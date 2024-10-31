@@ -16,8 +16,6 @@ use std::time::Duration;
 use tracing::info;
 use url::Url;
 
-pub mod tempdb;
-
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 const DEFAULT_POOL_SIZE: u32 = 100;
 const DEFAULT_CONNECTION_TIMEOUT_SECS: u64 = 60;
@@ -34,7 +32,7 @@ pub struct DbConfig {
     database_url: Url,
 
     /// Number of connections to keep in the pool.
-    #[arg(long, default_value = stringify!(DEFAULT_POOL_SIZE))]
+    #[arg(long, default_value_t = DEFAULT_POOL_SIZE)]
     connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available.
@@ -156,8 +154,9 @@ impl DbConfig {
     ) -> Self {
         Self {
             database_url,
-            connection_pool_size: connection_pool_size.unwrap_or(DEFAULT_POOL_SIZE), // clap default
-            connection_timeout: connection_timeout.unwrap_or(Duration::from_secs(DEFAULT_CONNECTION_TIMEOUT_SECS)), // clap default
+            connection_pool_size: connection_pool_size.unwrap_or(DEFAULT_POOL_SIZE),
+            connection_timeout: connection_timeout
+                .unwrap_or(Duration::from_secs(DEFAULT_CONNECTION_TIMEOUT_SECS)),
         }
     }
 }
@@ -177,9 +176,28 @@ pub async fn reset_database(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::{Db, DbConfig};
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
-    use tempdb::TempDb;
+    use sui_pg_temp_db::TempDb;
+
+    #[tokio::test]
+    async fn temp_db_smoketest() {
+        telemetry_subscribers::init_for_testing();
+        let db = TempDb::new().unwrap();
+        let url = db.database().url();
+        println!("url: {}", url.as_str());
+        let db_config = DbConfig::new(url.clone(), None, None);
+        let db = Db::new(db_config).await.unwrap();
+        let mut connection = db.connect().await.unwrap();
+
+        // Run a simple query to verify the db can properly be queried
+        let resp = diesel::sql_query("SELECT datname FROM pg_database")
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        println!("resp: {:?}", resp);
+    }
 
     #[derive(QueryableByName)]
     struct CountResult {
