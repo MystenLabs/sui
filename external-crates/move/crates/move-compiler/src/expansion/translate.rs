@@ -5,10 +5,8 @@
 use crate::{
     diag,
     diagnostics::{
-        warning_filters::{
-            WarningFilter, WarningFilters, WarningFiltersScope, FILTER_ALL, FILTER_UNUSED,
-        },
-        Diagnostic, Diagnostics,
+        warning_filters::{WarningFilter, WarningFilters, FILTER_ALL, FILTER_UNUSED},
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
@@ -75,7 +73,7 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) address_conflicts: BTreeSet<Symbol>,
     pub(super) current_package: Option<Symbol>,
     pub(super) is_source_definition: bool,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
 }
 
 struct Context<'env, 'map> {
@@ -99,7 +97,7 @@ impl<'env, 'map> Context<'env, 'map> {
                 all_filter_alls.add(f);
             }
         }
-        let warning_filters_scope = compilation_env.top_level_warning_filter_scope().clone();
+        let reporter = compilation_env.diagnostic_reporter_at_top_level();
         let defn_context = DefnContext {
             env: compilation_env,
             named_address_mapping: None,
@@ -107,7 +105,7 @@ impl<'env, 'map> Context<'env, 'map> {
             module_members,
             current_package: None,
             is_source_definition: false,
-            warning_filters_scope,
+            reporter,
         };
         Context {
             defn_context,
@@ -119,6 +117,10 @@ impl<'env, 'map> Context<'env, 'map> {
 
     fn env(&mut self) -> &CompilationEnv {
         self.defn_context.env
+    }
+
+    fn diagnostic_reporter(&self) -> &DiagnosticReporter {
+        &self.defn_context.reporter
     }
 
     fn current_package(&mut self) -> Option<Symbol> {
@@ -298,28 +300,27 @@ impl<'env, 'map> Context<'env, 'map> {
 
 impl DefnContext<'_, '_> {
     pub(super) fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     pub(super) fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub(super) fn extend_ide_info(&self, info: IDEInfo) {
-        self.env.extend_ide_info(&self.warning_filters_scope, info);
+        self.reporter.extend_ide_info(info);
     }
 
     pub(super) fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
-        self.env
-            .add_ide_annotation(&self.warning_filters_scope, loc, info);
+        self.reporter.add_ide_annotation(loc, info);
     }
 
     pub(super) fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub(super) fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 }
 
@@ -471,7 +472,7 @@ pub fn program(
 ) -> E::Program {
     let address_conflicts = compute_address_conflicts(pre_compiled_lib.clone(), &prog);
 
-    let warning_filters_scope = compilation_env.top_level_warning_filter_scope().clone();
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let mut member_computation_context = DefnContext {
         env: compilation_env,
         named_address_mapping: None,
@@ -479,7 +480,7 @@ pub fn program(
         address_conflicts,
         current_package: None,
         is_source_definition: false,
-        warning_filters_scope,
+        reporter,
     };
 
     let module_members = {
@@ -666,7 +667,7 @@ fn top_level_address_(
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
 ) -> Address {
-    let name_res = check_valid_address_name(context.env, &ln);
+    let name_res = check_valid_address_name(&context.reporter, &ln);
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
@@ -704,7 +705,7 @@ pub(super) fn top_level_address_opt(
     context: &mut DefnContext,
     ln: P::LeadingNameAccess,
 ) -> Option<Address> {
-    let name_res = check_valid_address_name(context.env, &ln);
+    let name_res = check_valid_address_name(&context.reporter, &ln);
     let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
     let sp!(loc, ln_) = ln;
     match ln_ {
@@ -886,7 +887,8 @@ fn module_(
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
-    let _ = check_restricted_name_all_cases(context.defn_context.env, NameCase::Module, &name.0);
+    let _ =
+        check_restricted_name_all_cases(&context.defn_context.reporter, NameCase::Module, &name.0);
     if name.value().starts_with('_') {
         let msg = format!(
             "Invalid module name '{}'. Module names cannot start with '_'",
@@ -1484,7 +1486,9 @@ fn aliases_from_member(
 ) -> Option<P::ModuleMember> {
     macro_rules! check_name_and_add_implicit_alias {
         ($kind:expr, $name:expr) => {{
-            if let Some(n) = check_valid_module_member_name(&mut context.env(), $kind, $name) {
+            if let Some(n) =
+                check_valid_module_member_name(context.diagnostic_reporter(), $kind, $name)
+            {
                 if let Err(loc) = acc.add_implicit_member_alias(
                     n.clone(),
                     current_module.clone(),
@@ -1621,7 +1625,7 @@ fn module_use(
     macro_rules! add_module_alias {
         ($ident:expr, $alias:expr) => {{
             if let Err(()) = check_restricted_name_all_cases(
-                &mut context.defn_context.env,
+                context.diagnostic_reporter(),
                 NameCase::ModuleAlias,
                 &$alias,
             ) {
@@ -1701,8 +1705,11 @@ fn module_use(
 
                 let alias = alias_opt.unwrap_or(member);
 
-                let alias = match check_valid_module_member_alias(context.env(), member_kind, alias)
-                {
+                let alias = match check_valid_module_member_alias(
+                    context.diagnostic_reporter(),
+                    member_kind,
+                    alias,
+                ) {
                     None => continue,
                     Some(alias) => alias,
                 };
@@ -2275,7 +2282,7 @@ fn function_signature(
         .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
     for (_, v, _) in &parameters {
-        check_valid_function_parameter_name(context.env(), is_macro, v)
+        check_valid_function_parameter_name(context.diagnostic_reporter(), is_macro, v)
     }
     let return_type = type_(context, pret_ty);
     E::FunctionSignature {
@@ -2323,7 +2330,7 @@ fn function_type_parameters(
         .into_iter()
         .map(|(name, constraints_vec)| {
             let constraints = ability_set(context, "constraint", constraints_vec);
-            let _ = check_valid_type_parameter_name(context.env(), is_macro, &name);
+            let _ = check_valid_type_parameter_name(context.diagnostic_reporter(), is_macro, &name);
             (name, constraints)
         })
         .collect()
@@ -2336,7 +2343,8 @@ fn datatype_type_parameters(
     pty_params
         .into_iter()
         .map(|param| {
-            let _ = check_valid_type_parameter_name(context.env(), None, &param.name);
+            let _ =
+                check_valid_type_parameter_name(context.diagnostic_reporter(), None, &param.name);
             E::DatatypeTypeParameter {
                 is_phantom: param.is_phantom,
                 name: param.name,
@@ -3339,7 +3347,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     let b_ = match pb_ {
         PB::Var(pmut, v) => {
             let emut = mutability(context, v.loc(), pmut);
-            check_valid_local_name(context.env(), &v);
+            check_valid_local_name(context.diagnostic_reporter(), &v);
             EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, pfields) => {
