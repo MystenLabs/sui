@@ -314,8 +314,8 @@ impl AsyncWrite for TcpOrTlsStream {
         cx: &mut Context<'_>,
     ) -> Poll<std::result::Result<(), std::io::Error>> {
         match self.get_mut() {
-            TcpOrTlsStream::Tcp(stream, _) => Pin::new(stream).poll_flush(cx),
-            TcpOrTlsStream::Tls(stream, _) => Pin::new(stream).poll_flush(cx),
+            TcpOrTlsStream::Tcp(stream, _) => Pin::new(stream).poll_shutdown(cx),
+            TcpOrTlsStream::Tls(stream, _) => Pin::new(stream).poll_shutdown(cx),
         }
     }
 }
