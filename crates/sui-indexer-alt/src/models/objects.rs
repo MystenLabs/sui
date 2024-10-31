@@ -8,7 +8,7 @@ use diesel::{
 use sui_field_count::FieldCount;
 use sui_types::base_types::ObjectID;
 
-use crate::schema::{kv_objects, sum_coin_balances, sum_obj_types};
+use crate::schema::{kv_objects, obj_versions, sum_coin_balances, sum_obj_types};
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -16,6 +16,15 @@ pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub serialized_object: Option<Vec<u8>>,
+}
+
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
+pub struct StoredObjVersion {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_digest: Vec<u8>,
+    pub cp_sequence_number: i64,
 }
 
 /// An insert/update or deletion of an object record, keyed on a particular Object ID and version.
