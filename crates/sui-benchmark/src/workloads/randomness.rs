@@ -6,7 +6,7 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{
-    Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    ExpectedFailureType, Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
 };
 use crate::workloads::GasCoinConfig;
 use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
@@ -57,6 +57,9 @@ impl Payload for RandomnessTestPayload {
         TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp)
             .call_emit_random(self.package_id, self.randomness_initial_shared_version)
             .build_and_sign(self.gas.2.as_ref())
+    }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 

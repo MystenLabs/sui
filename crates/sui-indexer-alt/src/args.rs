@@ -18,7 +18,16 @@ pub struct Args {
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Run the indexer.
-    Indexer(IndexerConfig),
+    Indexer {
+        #[command(flatten)]
+        indexer: IndexerConfig,
+
+        /// Number of checkpoints to delay indexing summary tables for.
+        #[clap(long)]
+        consistent_range: Option<u64>,
+    },
+
+    /// Wipe the database of its contents
     ResetDatabase {
         /// If true, only drop all tables but do not run the migrations.
         /// That is, no tables will exist in the DB after the reset.

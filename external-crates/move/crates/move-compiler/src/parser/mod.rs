@@ -156,9 +156,9 @@ fn parse_file(
     let file_hash = FileHash::new(&source_buffer);
     let fname = Symbol::from(path.as_str());
     let source_str = Arc::from(source_buffer);
-    let warning_filters = compilation_env.top_level_warning_filter_scope();
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     if let Err(ds) = verify_string(file_hash, &source_str) {
-        compilation_env.add_diags(warning_filters, ds);
+        reporter.add_diags(ds);
         return Ok(ParsedFile {
             fname,
             defs: vec![],
@@ -171,7 +171,7 @@ fn parse_file(
     {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
-            compilation_env.add_diags(warning_filters, ds);
+            reporter.add_diags(ds);
             (vec![], MatchedFileCommentMap::new())
         }
     };

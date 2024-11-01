@@ -4,6 +4,7 @@
 use crate::schema::{kv_transactions, tx_affected_objects, tx_balance_changes};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use sui_field_count::FieldCount;
 use sui_types::object::Owner;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,7 +22,7 @@ pub enum BalanceChange {
     },
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_transactions)]
 pub struct StoredTransaction {
     pub tx_digest: Vec<u8>,
@@ -32,7 +33,7 @@ pub struct StoredTransaction {
     pub events: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = tx_affected_objects)]
 pub struct StoredTxAffectedObject {
     pub tx_sequence_number: i64,
@@ -40,7 +41,7 @@ pub struct StoredTxAffectedObject {
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = tx_balance_changes)]
 pub struct StoredTxBalanceChange {
     pub tx_sequence_number: i64,

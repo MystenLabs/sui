@@ -132,6 +132,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV2 {
                         NetworkMetadata {
                             network_address: verified_metadata.net_address.clone(),
                             narwhal_primary_address: verified_metadata.primary_address.clone(),
+                            network_public_key: Some(verified_metadata.network_pubkey.clone()),
                         },
                     ),
                 )

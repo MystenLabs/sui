@@ -327,18 +327,19 @@ macro_rules! simple_visitor {
         pub struct $visitor;
 
         pub struct Context<'a> {
+            #[allow(unused)]
             env: &'a crate::shared::CompilationEnv,
-            warning_filters_scope: crate::diagnostics::warning_filters::WarningFiltersScope,
+            reporter: crate::diagnostics::DiagnosticReporter<'a>,
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
             fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
-                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+                let reporter = env.diagnostic_reporter_at_top_level();
                 Context {
                     env,
-                    warning_filters_scope,
+                    reporter,
                 }
             }
         }
@@ -346,12 +347,12 @@ macro_rules! simple_visitor {
         impl Context<'_> {
             #[allow(unused)]
             fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
-                self.env.add_diag(&self.warning_filters_scope, diag);
+                self.reporter.add_diag(diag);
             }
 
             #[allow(unused)]
             fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
-                self.env.add_diags(&self.warning_filters_scope, diags);
+                self.reporter.add_diags(diags);
             }
         }
 
@@ -360,11 +361,11 @@ macro_rules! simple_visitor {
                 &mut self,
                 filters: crate::diagnostics::warning_filters::WarningFilters,
             ) {
-                self.warning_filters_scope.push(filters)
+                self.reporter.push_warning_filter_scope(filters)
             }
 
             fn pop_warning_filter_scope(&mut self) {
-                self.warning_filters_scope.pop()
+                self.reporter.pop_warning_filter_scope()
             }
 
             $($overrides)*

@@ -6,7 +6,8 @@
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
-use crate::diagnostics::warning_filters::{WarningFilters, WarningFiltersScope};
+use crate::diagnostics::warning_filters::WarningFilters;
+use crate::diagnostics::DiagnosticReporter;
 use crate::linters::StyleCodes;
 use crate::{
     cfgir::{
@@ -25,7 +26,7 @@ pub struct AssertAbortNamedConstants;
 pub struct Context<'a> {
     package_name: Option<Symbol>,
     env: &'a CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'a>,
 }
 
 impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
@@ -37,10 +38,10 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
             .iter()
             .next()
             .and_then(|(_, _, mdef)| mdef.package_name);
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             package_name,
         }
     }
@@ -48,22 +49,22 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
 
 impl Context<'_> {
     fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 }
 
 impl CFGIRVisitorContext for Context<'_> {
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn visit_command_custom(&mut self, cmd: &H::Command) -> bool {

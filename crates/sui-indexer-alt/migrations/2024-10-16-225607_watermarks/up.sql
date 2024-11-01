@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS watermarks
     -- Exclusive upper transaction sequence number bound for this entity's
     -- data. Committer updates this field.
     tx_hi                       BIGINT        NOT NULL,
+    -- Inclusive upper timestamp bound (in milliseconds). Committer updates
+    -- this field once it can guarantee that all checkpoints at or before this
+    -- timestamp have been written to the database.
+    timestamp_ms_hi_inclusive   BIGINT        NOT NULL,
     -- Inclusive lower epoch bound for this entity's data. Pruner updates this
     -- field when the epoch range exceeds the retention policy.
     epoch_lo                    BIGINT        NOT NULL,
@@ -27,7 +31,7 @@ CREATE TABLE IF NOT EXISTS watermarks
     -- some data needs to be dropped. The pruner uses this column to determine
     -- whether to prune or wait long enough that all in-flight reads complete
     -- or timeout before it acts on an updated watermark.
-    timestamp_ms                BIGINT        NOT NULL,
+    pruner_timestamp_ms         BIGINT        NOT NULL,
     -- Column used by the pruner to track its true progress. Data below this
     -- watermark can be immediately pruned.
     pruner_hi                   BIGINT        NOT NULL

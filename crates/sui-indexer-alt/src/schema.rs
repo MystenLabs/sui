@@ -50,6 +50,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    obj_versions (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_digest -> Bytea,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     sum_coin_balances (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -88,14 +97,40 @@ diesel::table! {
 }
 
 diesel::table! {
+    wal_coin_balances (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        owner_id -> Nullable<Bytea>,
+        coin_type -> Nullable<Bytea>,
+        coin_balance -> Nullable<Int8>,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    wal_obj_types (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        owner_kind -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        package -> Nullable<Bytea>,
+        module -> Nullable<Text>,
+        name -> Nullable<Text>,
+        instantiation -> Nullable<Bytea>,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     watermarks (pipeline) {
         pipeline -> Text,
         epoch_hi_inclusive -> Int8,
         checkpoint_hi_inclusive -> Int8,
         tx_hi -> Int8,
+        timestamp_ms_hi_inclusive -> Int8,
         epoch_lo -> Int8,
         reader_lo -> Int8,
-        timestamp_ms -> Int8,
+        pruner_timestamp_ms -> Int8,
         pruner_hi -> Int8,
     }
 }
@@ -106,9 +141,12 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_objects,
     kv_transactions,
+    obj_versions,
     sum_coin_balances,
     sum_obj_types,
     tx_affected_objects,
     tx_balance_changes,
+    wal_coin_balances,
+    wal_obj_types,
     watermarks,
 );

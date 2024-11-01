@@ -15,7 +15,7 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
-    diagnostics::warning_filters::WarningFiltersScope,
+    diagnostics::DiagnosticReporter,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
     shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name},
@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
     pub env: &'a CompilationEnv,
-    pub warning_filters_scope: WarningFiltersScope,
+    pub reporter: &'a DiagnosticReporter<'a>,
     pub info: &'a TypingProgramInfo,
     pub package: Option<Symbol>,
     pub module: ModuleIdent,
@@ -56,11 +56,11 @@ pub fn refine_inference_and_verify(context: &CFGContext, cfg: &mut MutForwardCFG
 
 impl CFGContext<'_> {
     fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 }
 

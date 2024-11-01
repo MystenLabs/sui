@@ -1,5 +1,13 @@
 # @mysten/kiosk
 
+## 0.9.23
+
+### Patch Changes
+
+- 4166d71: Fix doc comment on `getKiosk` command
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+
 ## 0.9.22
 
 ### Patch Changes

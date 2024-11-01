@@ -73,6 +73,9 @@ pub trait Handler: Processor {
 /// [Handler::commit] is not chunked up, so the handler must perform this step itself, if
 /// necessary.
 ///
+/// The pipeline can optionally be configured to lag behind the ingestion service by a fixed number
+/// of checkpoints (configured by `checkpoint_lag`).
+///
 /// Watermarks are also shared with the ingestion service, which is guaranteed to bound the
 /// checkpoint height it pre-fetches to some constant additive factor above the pipeline's
 /// watermark.
@@ -85,6 +88,7 @@ pub trait Handler: Processor {
 pub(crate) fn pipeline<H: Handler + 'static>(
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
+    checkpoint_lag: Option<u64>,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -97,6 +101,7 @@ pub(crate) fn pipeline<H: Handler + 'static>(
 
     let committer = committer::<H>(
         config.clone(),
+        checkpoint_lag,
         initial_watermark,
         committer_rx,
         watermark_tx,

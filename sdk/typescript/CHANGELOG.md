@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 1.14.0
+
+### Minor Changes
+
+- c24814b: Adds a custom header; 'Client-Request-Method' which will contain the method name used in
+  each outgoing jsonrpc request
+
 ## 1.13.0
 
 ### Minor Changes

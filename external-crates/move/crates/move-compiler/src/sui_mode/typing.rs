@@ -8,10 +8,7 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::Flavor,
     expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, TargetKind, Visibility},
     naming::ast::{
@@ -47,7 +44,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 #[allow(unused)]
 pub struct Context<'a> {
     env: &'a CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'a>,
     info: Arc<TypingProgramInfo>,
     sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
@@ -63,10 +60,10 @@ impl<'a> Context<'a> {
             .key_cloned_iter()
             .find(|(m, _)| m.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME))
             .map(|(m, _)| m);
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             info,
             sui_transfer_ident: sui_module_ident,
             current_module: None,
@@ -77,12 +74,12 @@ impl<'a> Context<'a> {
     }
 
     fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     fn set_module(&mut self, current_module: ModuleIdent) {
@@ -114,11 +111,11 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
 
 impl<'a> TypingVisitorContext for Context<'a> {
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {

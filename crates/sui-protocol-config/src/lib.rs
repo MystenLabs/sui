@@ -1256,6 +1256,9 @@ pub struct ProtocolConfig {
     /// The maximum number of transactions included in a consensus block.
     consensus_max_num_transactions_in_block: Option<u64>,
 
+    /// The maximum number of rounds where transaction voting is allowed.
+    consensus_voting_rounds: Option<u32>,
+
     /// DEPRECATED. Do not use.
     max_accumulated_txn_cost_per_object_in_narwhal_commit: Option<u64>,
 
@@ -1653,6 +1656,9 @@ impl ProtocolConfig {
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
+        if let Some(enabled) = is_mysticeti_fpc_enabled_in_env() {
+            return enabled;
+        }
         self.feature_flags.mysticeti_fastpath
     }
 
@@ -2172,6 +2178,8 @@ impl ProtocolConfig {
             consensus_max_transactions_in_block_bytes: None,
 
             consensus_max_num_transactions_in_block: None,
+
+            consensus_voting_rounds: None,
 
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
@@ -2931,6 +2939,9 @@ impl ProtocolConfig {
                     cfg.random_beacon_reduction_lower_bound = Some(500);
 
                     cfg.feature_flags.disallow_new_modules_in_deps_only_packages = true;
+
+                    // Sets number of rounds allowed for fastpath voting in consensus.
+                    cfg.consensus_voting_rounds = Some(40);
                 }
                 // Use this template when making changes:
                 //
@@ -3094,10 +3105,6 @@ impl ProtocolConfig {
         self.feature_flags.consensus_round_prober = val;
     }
 
-    pub fn set_gc_depth_for_testing(&mut self, val: u32) {
-        self.consensus_gc_depth = Some(val);
-    }
-
     pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages = val;
@@ -3190,6 +3197,17 @@ macro_rules! check_limit_by_meter {
         };
         result
     }};
+}
+
+pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
+    if let Ok(v) = std::env::var("CONSENSUS") {
+        if v == "mysticeti_fpc" {
+            return Some(true);
+        } else if v == "mysticeti" {
+            return Some(false);
+        }
+    }
+    None
 }
 
 #[cfg(all(test, not(msim)))]
