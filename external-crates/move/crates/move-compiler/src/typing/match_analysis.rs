@@ -368,20 +368,15 @@ fn find_counterexample_impl(
             context.debug.match_counterexample,
             (lines "matrix types" => &matrix.tys; verbose)
         );
-        if context.modules.is_struct(&mident, &datatype_name) {
+        if context.info.is_struct(&mident, &datatype_name) {
             // For a struct, we only care if we destructure it. If we do, we want to specialize and
             // recur. If we don't, we check it as a default specialization.
             if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
                 let ctor_arity = arg_types.len() as u32;
-                let decl_fields = context
-                    .modules
-                    .struct_fields(&mident, &datatype_name)
-                    .unwrap();
+                let decl_fields = context.info.struct_fields(&mident, &datatype_name).unwrap();
                 let fringe_binders =
                     context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
-                let is_positional = context
-                    .modules
-                    .struct_is_positional(&mident, &datatype_name);
+                let is_positional = context.info.struct_is_positional(&mident, &datatype_name);
                 let names = fringe_binders
                     .iter()
                     .map(|(name, _, _)| name.to_string())
@@ -426,7 +421,7 @@ fn find_counterexample_impl(
             }
         } else {
             let mut unmatched_variants = context
-                .modules
+                .info
                 .enum_variants(&mident, &datatype_name)
                 .into_iter()
                 .collect::<BTreeSet<_>>();
@@ -439,14 +434,14 @@ fn find_counterexample_impl(
                 for (ctor, (ploc, arg_types)) in ctors {
                     let ctor_arity = arg_types.len() as u32;
                     let decl_fields = context
-                        .modules
+                        .info
                         .enum_variant_fields(&mident, &datatype_name, &ctor)
                         .unwrap();
                     let fringe_binders =
                         context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                     let is_positional =
                         context
-                            .modules
+                            .info
                             .enum_variant_is_positional(&mident, &datatype_name, &ctor);
                     let names = fringe_binders
                         .iter()
@@ -491,13 +486,13 @@ fn find_counterexample_impl(
                         Some(result)
                     } else {
                         let variant_name = unmatched_variants.first().unwrap();
-                        let is_positional = context.modules.enum_variant_is_positional(
+                        let is_positional = context.info.enum_variant_is_positional(
                             &mident,
                             &datatype_name,
                             variant_name,
                         );
                         let ctor_args = context
-                            .modules
+                            .info
                             .enum_variant_fields(&mident, &datatype_name, variant_name)
                             .unwrap();
                         let names = ctor_args
@@ -644,15 +639,15 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
         mident: ModuleIdent,
         name: DatatypeName,
     ) {
-        if context.modules.is_struct(&mident, &name) {
+        if context.info.is_struct(&mident, &name) {
             if !matrix.is_empty() {
                 // If the matrix isn't empty, we _must_ have matched the struct with at least one
                 // non-guard arm (either wildcards or the struct itself), so we're fine.
                 return;
             }
             // If the matrix _is_ empty, we suggest adding an unpack.
-            let is_positional = context.modules.struct_is_positional(&mident, &name);
-            let Some(fields) = context.modules.struct_fields(&mident, &name) else {
+            let is_positional = context.info.struct_is_positional(&mident, &name);
+            let Some(fields) = context.info.struct_fields(&mident, &name) else {
                 context.add_diag(ice!((
                     loc,
                     "Tried to look up fields for this struct and found none"
@@ -688,7 +683,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             }
 
             let mut unmatched_variants = context
-                .modules
+                .info
                 .enum_variants(&mident, &name)
                 .into_iter()
                 .collect::<BTreeSet<_>>();
@@ -702,19 +697,15 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             }
             let mut arms = vec![];
             // re-iterate the original so we generate these in definition order
-            for variant in context.modules.enum_variants(&mident, &name).into_iter() {
+            for variant in context.info.enum_variants(&mident, &name).into_iter() {
                 if !unmatched_variants.contains(&variant) {
                     continue;
                 }
-                let is_empty = context
-                    .modules
-                    .enum_variant_is_empty(&mident, &name, &variant);
+                let is_empty = context.info.enum_variant_is_empty(&mident, &name, &variant);
                 let is_positional = context
-                    .modules
+                    .info
                     .enum_variant_is_positional(&mident, &name, &variant);
-                let Some(fields) = context
-                    .modules
-                    .enum_variant_fields(&mident, &name, &variant)
+                let Some(fields) = context.info.enum_variant_fields(&mident, &name, &variant)
                 else {
                     context.add_diag(ice!((
                         loc,

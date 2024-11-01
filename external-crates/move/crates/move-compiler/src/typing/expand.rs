@@ -98,7 +98,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             *ty = sp(ty.loc, UnresolvedError)
         }
         Apply(None, _, _) => {
-            let abilities = core::infer_abilities(&context.modules, &context.subst, ty.clone());
+            let abilities = core::infer_abilities(&context.info, &context.subst, ty.clone());
             match &mut ty.value {
                 Apply(abilities_opt, _, tys) => {
                     *abilities_opt = Some(abilities);
@@ -192,7 +192,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Use(v) => {
             let from_user = false;
             let var = *v;
-            let abs = core::infer_abilities(&context.modules, &context.subst, e.ty.clone());
+            let abs = core::infer_abilities(&context.info, &context.subst, e.ty.clone());
             e.exp.value = if abs.has_ability_(Ability_::Copy) {
                 E::Copy { from_user, var }
             } else {

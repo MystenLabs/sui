@@ -47,7 +47,7 @@ use move_symbol_pool::Symbol;
 use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 //**************************************************************************************************
@@ -60,26 +60,19 @@ pub fn program(
     prog: N::Program,
 ) -> T::Program {
     let N::Program {
-        info,
+        mut info,
         warning_filters_table,
         inner: N::Program_ { modules: nmodules },
     } = prog;
-    let mut context = Box::new(Context::new(
-        compilation_env,
-        pre_compiled_lib.clone(),
-        info,
-    ));
 
     let all_macro_definitions = extract_macros(&nmodules, &pre_compiled_lib);
-    let mut modules = modules(compilation_env, &pre_compiled_lib, info, nmodules);
+    let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
-    assert!(context.constraints.is_empty());
-    dependency_ordering::program(context.env, &mut modules);
-    recursive_datatypes::modules(context.env, &modules);
-    infinite_instantiations::modules(context.env, &modules);
+    dependency_ordering::program(compilation_env, &mut modules);
+    recursive_datatypes::modules(compilation_env, &modules);
+    infinite_instantiations::modules(compilation_env, &modules);
     // we extract module use funs into the module info context
-    let module_use_funs = context
-        .modules
+    let module_use_funs = info
         .modules
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
@@ -160,25 +153,25 @@ fn extract_macros(
 
 fn modules(
     compilation_env: &CompilationEnv,
-    mut info: NamingProgramInfo,
+    info: &mut NamingProgramInfo,
     all_macro_definitions: &UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     mut modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
-    let mut all_new_friends = Mutex::new(BTreeMap::new());
-    let mut used_module_members = Mutex::new(BTreeMap::new());
+    let all_new_friends = Mutex::new(BTreeMap::new());
+    let used_module_members = Mutex::new(BTreeMap::new());
     // We validate the syntax methods first so that processing syntax method forms later are
     // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
     // much easier to enforce the typeclass-like constraints. We also update the program info to
     // reflect any changes that happened.
     for (mident, mdef) in modules.key_cloned_iter_mut() {
-        let context = Context::new(compilation_env, &info, all_macro_definitions);
+        let mut context = Context::new(compilation_env, &info, all_macro_definitions);
         validate_syntax_methods(&mut context, &mident, mdef);
     }
     for (mident, mdef) in modules.key_cloned_iter() {
         info.set_module_syntax_methods(mident, mdef.syntax_methods.clone());
     }
     let mut typed_modules = modules.map(|ident, mdef| {
-        let context = Context::new(compilation_env, &info, all_macro_definitions);
+        let mut context = Context::new(compilation_env, &info, all_macro_definitions);
         let (typed_mdef, new_friends) = module(&mut context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
             let friend = Friend {
@@ -4635,7 +4628,7 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 /// Should be called after the whole program has been processed.
 fn unused_module_members(
     env: &CompilationEnv,
-    &used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    used_module_members: &BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
     mident: &ModuleIdent_,
     mdef: &T::ModuleDefinition,
 ) {
@@ -4651,19 +4644,20 @@ fn unused_module_members(
         return;
     }
 
-    let is_sui_mode = context.env.package_config(mdef.package_name).flavor == Flavor::Sui;
-    context.push_warning_filter_scope(mdef.warning_filter);
+    let mut reporter = env.diagnostic_reporter_at_top_level();
+    let is_sui_mode = env.package_config(mdef.package_name).flavor == Flavor::Sui;
+    reporter.push_warning_filter_scope(mdef.warning_filter);
 
     for (loc, name, c) in &mdef.constants {
-        context.push_warning_filter_scope(c.warning_filter);
+        reporter.push_warning_filter_scope(c.warning_filter);
 
-        let members = context.used_module_members.get(mident);
+        let members = used_module_members.get(mident);
         if members.is_none() || !members.unwrap().contains(name) {
             let msg = format!("The constant '{name}' is never used. Consider removing it.");
-            context.add_diag(diag!(UnusedItem::Constant, (loc, msg)))
+            reporter.add_diag(diag!(UnusedItem::Constant, (loc, msg)))
         }
 
-        context.pop_warning_filter_scope();
+        reporter.pop_warning_filter_scope();
     }
 
     for (loc, name, fun) in &mdef.functions {
@@ -4679,9 +4673,9 @@ fn unused_module_members(
             // a Sui-specific filter to avoid signaling that the init function is unused
             continue;
         }
-        context.push_warning_filter_scope(fun.warning_filter);
+        reporter.push_warning_filter_scope(fun.warning_filter);
 
-        let members = context.used_module_members.get(mident);
+        let members = used_module_members.get(mident);
         if fun.entry.is_none()
             && matches!(fun.visibility, Visibility::Internal)
             && (members.is_none() || !members.unwrap().contains(name))
@@ -4692,10 +4686,10 @@ fn unused_module_members(
                 "The non-'public', non-'entry' function '{name}' is never called. \
                 Consider removing it."
             );
-            context.add_diag(diag!(UnusedItem::Function, (loc, msg)))
+            reporter.add_diag(diag!(UnusedItem::Function, (loc, msg)))
         }
-        context.pop_warning_filter_scope();
+        reporter.pop_warning_filter_scope();
     }
 
-    context.pop_warning_filter_scope();
+    reporter.pop_warning_filter_scope();
 }

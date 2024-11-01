@@ -30,7 +30,6 @@ use crate::{
         *,
     },
     typing::deprecation_warnings::Deprecations,
-    FullyCompiledProgram,
 };
 use known_attributes::AttributePosition;
 use move_ir_types::location::*;
@@ -38,7 +37,6 @@ use move_symbol_pool::Symbol;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -100,8 +98,8 @@ pub struct TVarCounter {
 pub struct Context<'env> {
     pub env: &'env CompilationEnv,
     pub reporter: DiagnosticReporter<'env>,
-    pub modules: NamingProgramInfo,
-    macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
+    pub info: &'env NamingProgramInfo,
+    macros: &'env UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
@@ -216,7 +214,7 @@ impl<'env> Context<'env> {
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
-            modules: info,
+            info,
             macros,
             named_block_map: BTreeMap::new(),
             env,
@@ -700,47 +698,47 @@ impl<'env> Context<'env> {
     }
 
     fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.modules.module(m)
+        self.info.module(m)
     }
 
     fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
-        self.modules.struct_definition(m, n)
+        self.info.struct_definition(m, n)
     }
 
     pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
-        self.modules.struct_declared_abilities(m, n)
+        self.info.struct_declared_abilities(m, n)
     }
 
     pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
-        self.modules.struct_declared_loc(m, n)
+        self.info.struct_declared_loc(m, n)
     }
 
     pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
-        self.modules.struct_type_parameters(m, n)
+        self.info.struct_type_parameters(m, n)
     }
 
     fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
-        self.modules.enum_definition(m, n)
+        self.info.enum_definition(m, n)
     }
 
     pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
-        self.modules.enum_declared_abilities(m, n)
+        self.info.enum_declared_abilities(m, n)
     }
 
     pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
-        self.modules.enum_declared_loc(m, n)
+        self.info.enum_declared_loc(m, n)
     }
 
     pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
-        self.modules.enum_type_parameters(m, n)
+        self.info.enum_type_parameters(m, n)
     }
 
     pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
-        self.modules.datatype_kind(m, n)
+        self.info.datatype_kind(m, n)
     }
 
     pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
-        self.modules.function_info(m, n)
+        self.info.function_info(m, n)
     }
 
     pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
@@ -910,7 +908,7 @@ impl MatchContext<false> for Context<'_> {
     }
 
     fn program_info(&self) -> &ProgramInfo<false> {
-        &self.modules
+        &self.info
     }
 }
 
@@ -1453,7 +1451,7 @@ pub fn make_method_call_type(
         };
         let finfo_opt = defining_module.and_then(|m| {
             let finfo = context
-                .modules
+                .info
                 .module(m)
                 .functions
                 .get(&FunctionName(method))?;
@@ -1891,7 +1889,7 @@ fn solve_ability_constraint(
     constraints: AbilitySet,
 ) {
     let ty = unfold_type(&context.subst, ty);
-    let ty_abilities = infer_abilities(&context.modules, &context.subst, ty.clone());
+    let ty_abilities = infer_abilities(&context.info, &context.subst, ty.clone());
 
     let (declared_loc_opt, declared_abilities, ty_args) = debug_abilities_info(context, &ty);
     for constraint in constraints {
@@ -1912,7 +1910,7 @@ fn solve_ability_constraint(
             declared_loc_opt,
             &declared_abilities,
             ty_args.iter().map(|ty_arg| {
-                let abilities = infer_abilities(&context.modules, &context.subst, ty_arg.clone());
+                let abilities = infer_abilities(&context.info, &context.subst, ty_arg.clone());
                 (ty_arg, abilities)
             }),
         );
