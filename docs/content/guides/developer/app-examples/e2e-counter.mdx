@@ -30,7 +30,7 @@ Before getting started, make sure you have:
 
 ## Directory structure
 
-To begin, create a new folder on your system titled `react-e2e-counter` to hold all your project files. You can name this directory differently, but the rest of the guide references this file structure. Inside that folder, create two more folders: `move` and `src`. Inside the `move` folder, create a `counter` directory. Finally, create a `sources` folder inside `counter`. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance.
+To begin, create a new folder on your system titled `react-e2e-counter` to hold all your project files. You can name this directory differently, but the rest of the guide references this file structure. Inside that folder, create two more folders: `move` and `src`. Inside the `move` folder, create a `counter` directory. Finally, create a `sources` folder inside `counter`. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance. See [Write a Move Package](../first-app/write-package.mdx) to learn more about package structure and how to use the Sui CLI to scaffold a new project.
 
 :::checkpoint
 
@@ -43,11 +43,11 @@ To begin, create a new folder on your system titled `react-e2e-counter` to hold 
 
 ## Smart contracts {#smart-contracts}
 
-In this part of the guide, you write the Move contracts that create, increment, and reset counters. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
+In this part of the guide, you write the Move contracts that create, increment, and reset counters.
 
 ### Move.toml
 
-To begin writing your smart contracts, create a `sources` folder in your `counter` folder (if using recommended directory names). Create a file inside the folder named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
+To begin writing your smart contracts, create a file inside `react-e2e-counter/move/counter` named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
 
 :::info
 
