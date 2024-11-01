@@ -43,7 +43,7 @@ pub enum FetchError {
 pub type FetchResult = Result<Bytes, FetchError>;
 
 #[derive(Clone)]
-pub(crate) struct IngestionClient {
+pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
     metrics: Arc<IndexerMetrics>,
