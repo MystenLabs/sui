@@ -425,15 +425,20 @@ async fn handle_error_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if !tally.error_weight.is_sampled() {
+    let error_weight = if let Some((error_weight, error_type)) = tally.clone().error_info {
+        metrics
+            .tally_error_types
+            .with_label_values(&[error_type.as_str()])
+            .inc();
+        error_weight
+    } else {
+        return Ok(());
+    };
+    if !error_weight.is_sampled() {
         return Ok(());
     }
-    let resp = policy.handle_tally(tally.clone());
+    let resp = policy.handle_tally(tally);
     metrics.error_tally_handled.inc();
-    metrics
-        .tally_errors
-        .with_label_values(&[tally.error_type.as_deref().unwrap_or("unknown")])
-        .inc();
     if let Some(fw_config) = fw_config {
         if fw_config.delegate_error_blocking && !mem_drainfile_present {
             let client = nodefw_client
@@ -750,9 +755,8 @@ impl TrafficSim {
                     client,
                     // TODO add proxy IP for testing
                     None,
-                    None,
                     // TODO add weight adjustments
-                    Weight::one(),
+                    None,
                     Weight::one(),
                 ));
             } else {

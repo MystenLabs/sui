@@ -18,7 +18,7 @@ pub struct TrafficControllerMetrics {
     pub num_dry_run_blocked_requests: IntCounter,
     pub tally_handled: IntCounter,
     pub error_tally_handled: IntCounter,
-    pub tally_errors: IntCounterVec,
+    pub tally_error_types: IntCounterVec,
     pub deadmans_switch_enabled: IntGauge,
     pub highest_direct_spam_rate: IntGauge,
     pub highest_proxied_spam_rate: IntGauge,
@@ -91,8 +91,8 @@ impl TrafficControllerMetrics {
                 registry
             )
             .unwrap(),
-            tally_errors: register_int_counter_vec_with_registry!(
-                "traffic_control_tally_errors",
+            tally_error_types: register_int_counter_vec_with_registry!(
+                "traffic_control_tally_error_types",
                 "Number of tally errors, grouped by error type",
                 &["error_type"],
                 registry

@@ -1296,10 +1296,13 @@ impl ValidatorService {
             traffic_controller.tally(TrafficTally {
                 direct: client,
                 through_fullnode: None,
-                error_weight: error.clone().map(normalize).unwrap_or(Weight::zero()),
+                error_info: error.map(|e| {
+                    let error_type = String::from(e.clone().as_ref());
+                    let error_weight = normalize(e);
+                    (error_weight, error_type)
+                }),
                 spam_weight,
                 timestamp: SystemTime::now(),
-                error_type: error.map(|e| e.to_string()),
             })
         }
         unwrapped_response
