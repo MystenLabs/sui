@@ -6,6 +6,7 @@ use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
 use crate::metrics::IndexerMetrics;
+use backoff::backoff::Constant;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use std::path::PathBuf;
@@ -60,14 +61,50 @@ impl IngestionClient {
         IngestionClient { client, metrics }
     }
 
-    /// Repeatedly retries transient errors with an exponential backoff (up to [MAX_RETRY_INTERVAL]).
-    /// Transient errors are either defined by the client implementation that
-    /// returns a `FetchError::Transient` error variant, or within this function
-    /// if we fail to deserialize the result as [CheckpointData].
+    /// Fetch checkpoint data by sequence number.
+    ///
+    /// This function behaves like `IngestionClient::fetch`, but will repeatedly retry the fetch if
+    /// the checkpoint is not found, on a constant back-off. The time between fetches is controlled
+    /// by the `retry_interval` parameter.
+    pub async fn wait_for(
+        &self,
+        checkpoint: u64,
+        retry_interval: Duration,
+        cancel: &CancellationToken,
+    ) -> IngestionResult<Arc<CheckpointData>> {
+        let backoff = Constant::new(retry_interval);
+        let fetch = || async move {
+            use backoff::Error as BE;
+            if cancel.is_cancelled() {
+                return Err(BE::permanent(IngestionError::Cancelled));
+            }
+
+            self.fetch(checkpoint, cancel).await.map_err(|e| match e {
+                IngestionError::NotFound(checkpoint) => {
+                    debug!(checkpoint, "Checkpoint not found, retrying...");
+                    self.metrics.total_ingested_not_found_retries.inc();
+                    BE::transient(e)
+                }
+                e => BE::permanent(e),
+            })
+        };
+
+        backoff::future::retry(backoff, fetch).await
+    }
+
+    /// Fetch checkpoint data by sequence number.
+    ///
+    /// Repeatedly retries transient errors with an exponential backoff (up to
+    /// [MAX_TRANSIENT_RETRY_INTERVAL]). Transient errors are either defined by the client
+    /// implementation that returns a [FetchError::Transient] error variant, or within this
+    /// function if we fail to deserialize the result as [CheckpointData].
+    ///
     /// The function will immediately return on:
-    /// - non-transient errors determined by the client implementation,
-    ///   This includes both the FetcherError::NotFound and FetcherError::Permanent variants.
-    /// - cancellation of the supplied `cancel` token.
+    ///
+    /// - Non-transient errors determined by the client implementation, this includes both the
+    ///   [FetchError::NotFound] and [FetchError::Permanent] variants.
+    ///
+    /// - Cancellation of the supplied `cancel` token.
     pub(crate) async fn fetch(
         &self,
         checkpoint: u64,
