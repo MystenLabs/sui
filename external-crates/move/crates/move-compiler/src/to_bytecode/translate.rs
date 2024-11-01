@@ -137,6 +137,7 @@ pub fn program(
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
+        warning_filters_table,
         info: _,
     } = prog;
 
@@ -158,6 +159,7 @@ pub fn program(
             units.push(unit)
         }
     }
+    drop(warning_filters_table);
     units
 }
 

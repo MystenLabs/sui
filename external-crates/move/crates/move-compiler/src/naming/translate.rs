@@ -1662,12 +1662,19 @@ pub fn program(
     prog: E::Program,
 ) -> N::Program {
     let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
-    let E::Program { modules: emodules } = prog;
+    let E::Program {
+        warning_filters_table,
+        modules: emodules,
+    } = prog;
     let modules = modules(compilation_env, &outer_context, emodules);
     let mut inner = N::Program_ { modules };
     let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
-    N::Program { info, inner }
+    N::Program {
+        info,
+        warning_filters_table,
+        inner,
+    }
 }
 
 fn modules(

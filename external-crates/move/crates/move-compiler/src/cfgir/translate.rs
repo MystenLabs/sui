@@ -149,6 +149,7 @@ pub fn program(
 ) -> G::Program {
     let H::Program {
         modules: hmodules,
+        warning_filters_table,
         info,
     } = prog;
 
@@ -158,6 +159,7 @@ pub fn program(
 
     let mut program = G::Program {
         modules,
+        warning_filters_table,
         info: info.clone(),
     };
     visit_program(&mut context, &mut program);

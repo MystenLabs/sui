@@ -59,6 +59,7 @@ pub fn program(
 ) -> T::Program {
     let N::Program {
         info,
+        warning_filters_table,
         inner: N::Program_ { modules: nmodules },
     } = prog;
     let mut context = Box::new(Context::new(
@@ -85,6 +86,7 @@ pub fn program(
         TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
     let prog = T::Program {
         modules,
+        warning_filters_table,
         info: Arc::new(module_info),
     };
     for v in &compilation_env.visitors().typing {

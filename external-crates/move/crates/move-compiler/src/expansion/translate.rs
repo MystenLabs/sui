@@ -55,7 +55,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     iter::IntoIterator,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 //**************************************************************************************************
@@ -82,7 +82,7 @@ pub(super) struct DefnContext<'env, 'map> {
 struct Context<'env, 'map> {
     defn_context: DefnContext<'env, 'map>,
     address: Option<Address>,
-    warning_filters_table: WarningFiltersTable,
+    warning_filters_table: Mutex<WarningFiltersTable>,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
     all_filter_alls: WarningFiltersArc,
@@ -116,14 +116,14 @@ impl<'env, 'map> Context<'env, 'map> {
         Context {
             defn_context,
             address: None,
-            warning_filters_table,
+            warning_filters_table: Mutex::new(warning_filters_table),
             all_filter_alls,
             path_expander: None,
         }
     }
 
     fn finish(self) -> WarningFiltersTable {
-        self.warning_filters_table
+        self.warning_filters_table.into_inner().unwrap()
     }
 
     fn env(&self) -> &CompilationEnv {
@@ -623,7 +623,7 @@ pub fn program(
 
     super::primitive_definers::modules(context.env(), pre_compiled_lib, &module_map);
     E::Program {
-        warning_filters_table: context.finish(),
+        warning_filters_table: Arc::new(context.finish()),
         modules: module_map,
     }
 }
@@ -1268,14 +1268,17 @@ fn module_warning_filter(
     } else {
         let config = context.env().package_config(package);
         filters.union(&config.warning_filter);
-        context.warning_filters_table.add(filters)
+        context
+            .warning_filters_table
+            .get_mut()
+            .unwrap()
+            .add(filters)
     }
 }
 
 fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFiltersArc {
-    context
-        .warning_filters_table
-        .add(warning_filter_(context, attributes))
+    let wf = warning_filter_(context, attributes);
+    context.warning_filters_table.get_mut().unwrap().add(wf)
 }
 
 /// Finds the warning filters from the #[allow(_)] attribute and the deprecated #[lint_allow(_)]

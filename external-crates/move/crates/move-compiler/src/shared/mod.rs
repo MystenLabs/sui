@@ -12,7 +12,7 @@ use crate::{
         codes::{DiagnosticsID, Severity},
         warning_filters::{
             FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder, WarningFiltersScope,
-            FILTER_ALL,
+            WarningFiltersTable, FILTER_ALL,
         },
         DiagnosticReporter, Diagnostics, DiagnosticsFormat,
     },
@@ -822,6 +822,7 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
+    check::<&WarningFiltersTable>();
     check::<&WarningFiltersScope>();
     check::<&CompilationEnv>();
 }

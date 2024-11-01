@@ -10,7 +10,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 pub const FILTER_ALL: &str = "all";
@@ -80,10 +80,12 @@ struct WarningFiltersScopeNode {
 }
 
 #[derive(Debug, Clone)]
-pub struct WarningFiltersTable(Arc<Mutex<HashSet<Pin<Box<WarningFiltersBuilder>>>>>);
+pub struct WarningFiltersTable(HashSet<Pin<Box<WarningFiltersBuilder>>>);
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub struct WarningFiltersArc(*const WarningFiltersBuilder);
+unsafe impl Send for WarningFiltersArc {}
+unsafe impl Sync for WarningFiltersArc {}
 
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Used to filter out diagnostics, specifically used for warning suppression
@@ -197,7 +199,7 @@ impl WarningFiltersScope {
 
 impl WarningFiltersTable {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(HashSet::new())))
+        Self(HashSet::new())
     }
 
     pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFiltersArc {
@@ -206,15 +208,15 @@ impl WarningFiltersTable {
             let pinned_ref: &WarningFiltersBuilder = &*pinned;
             WarningFiltersArc(pinned_ref as *const WarningFiltersBuilder)
         };
-        let m: &mut HashSet<Pin<Box<WarningFiltersBuilder>>> =
-            Arc::get_mut(&mut self.0).unwrap().get_mut().unwrap();
-        if m.contains(&pinned) {
-            let existing = m.get(&pinned).unwrap();
-            let existing_ref: &WarningFiltersBuilder = &*existing;
-            WarningFiltersArc(existing_ref as *const WarningFiltersBuilder)
-        } else {
-            m.insert(pinned);
-            wf
+        match self.0.get(&pinned) {
+            Some(existing) => {
+                let existing_ref: &WarningFiltersBuilder = &*existing;
+                WarningFiltersArc(existing_ref as *const WarningFiltersBuilder)
+            }
+            None => {
+                self.0.insert(pinned);
+                wf
+            }
         }
     }
 }

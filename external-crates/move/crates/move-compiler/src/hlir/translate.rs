@@ -5,8 +5,7 @@
 use crate::{
     debug_display, debug_display_verbose, diag,
     diagnostics::{
-        warning_filters::WarningFiltersArc,
-        Diagnostic, DiagnosticReporter, Diagnostics,
+        warning_filters::WarningFiltersArc, Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
@@ -320,11 +319,16 @@ pub fn program(
     let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
     let T::Program {
         modules: tmodules,
+        warning_filters_table,
         info,
     } = prog;
     let modules = modules(&mut context, tmodules);
 
-    H::Program { modules, info }
+    H::Program {
+        modules,
+        warning_filters_table,
+        info,
+    }
 }
 
 fn modules(
