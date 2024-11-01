@@ -170,7 +170,7 @@ fn modules(
     for (mident, mdef) in modules.key_cloned_iter() {
         info.set_module_syntax_methods(mident, mdef.syntax_methods.clone());
     }
-    let mut typed_modules = modules.map(|ident, mdef| {
+    let mut typed_modules = modules.par_map(|ident, mdef| {
         let mut context = Context::new(compilation_env, &info, all_macro_definitions);
         let (typed_mdef, new_friends) = module(&mut context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
