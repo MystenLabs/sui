@@ -94,7 +94,7 @@ pub(super) fn committer<H: Handler + 'static>(
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received, stopping committer");
+                    info!(pipeline = H::NAME, "Shutdown received");
                     break;
                 }
 
@@ -120,6 +120,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         (Some(lag), None) => {
                             debug!(pipeline = H::NAME, lag, "No pending checkpoints");
                             if rx.is_closed() && rx.is_empty() {
+                                info!(pipeline = H::NAME, "Processor closed channel before priming");
                                 break;
                             } else {
                                 continue;
@@ -129,6 +130,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         (Some(lag), Some((pending_hi, _))) if *pending_hi < lag => {
                             debug!(pipeline = H::NAME, lag, pending_hi, "Priming pipeline");
                             if rx.is_closed() && rx.is_empty() {
+                                info!(pipeline = H::NAME, "Processor closed channel while priming");
                                 break;
                             } else {
                                 continue;
@@ -209,6 +211,26 @@ pub(super) fn committer<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .inc();
 
+                    metrics
+                        .watermark_epoch
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.epoch_hi_inclusive);
+
+                    metrics
+                        .watermark_checkpoint
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.checkpoint_hi_inclusive);
+
+                    metrics
+                        .watermark_transaction
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.tx_hi);
+
+                    metrics
+                        .watermark_timestamp_ms
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.timestamp_ms_hi_inclusive);
+
                     let guard = metrics
                         .committer_commit_latency
                         .with_label_values(&[H::NAME])
@@ -272,19 +294,24 @@ pub(super) fn committer<H: Handler + 'static>(
                         .inc_by(affected as u64);
 
                     metrics
-                        .watermark_epoch
+                        .watermark_epoch_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.epoch_hi_inclusive);
 
                     metrics
-                        .watermark_checkpoint
+                        .watermark_checkpoint_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.checkpoint_hi_inclusive);
 
                     metrics
-                        .watermark_transaction
+                        .watermark_transaction_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.tx_hi);
+
+                    metrics
+                        .watermark_timestamp_in_db_ms
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.timestamp_ms_hi_inclusive);
 
                     if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
                         next_loud_watermark_update += LOUD_WATERMARK_UPDATE_INTERVAL;
@@ -293,6 +320,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             epoch = watermark.epoch_hi_inclusive,
                             checkpoint = watermark.checkpoint_hi_inclusive,
                             transaction = watermark.tx_hi,
+                            timestamp = %watermark.timestamp(),
                             "Watermark",
                         );
                     } else {
@@ -301,6 +329,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             epoch = watermark.epoch_hi_inclusive,
                             checkpoint = watermark.checkpoint_hi_inclusive,
                             transaction = watermark.tx_hi,
+                            timestamp = %watermark.timestamp(),
                             "Watermark",
                         );
                     }
@@ -334,6 +363,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     {
                         poll.reset_immediately();
                     } else if rx.is_closed() && rx.is_empty() {
+                        info!(pipeline = H::NAME, "Processor closed channel, pending rows empty");
                         break;
                     }
                 }
@@ -373,10 +403,6 @@ pub(super) fn committer<H: Handler + 'static>(
             }
         }
 
-        info!(
-            pipeline = H::NAME,
-            ?watermark,
-            "Processor closed channel, pending rows empty, stopping committer",
-        );
+        info!(pipeline = H::NAME, ?watermark, "Stopping committer");
     })
 }

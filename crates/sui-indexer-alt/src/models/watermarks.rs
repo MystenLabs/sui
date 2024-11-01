@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, cmp};
+use std::borrow::Cow;
 
-use crate::{db::Connection, schema::watermarks};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
+
+use crate::{db::Connection, schema::watermarks};
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
@@ -15,9 +17,10 @@ pub struct StoredWatermark {
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
     pub tx_hi: i64,
+    pub timestamp_ms_hi_inclusive: i64,
     pub epoch_lo: i64,
     pub reader_lo: i64,
-    pub timestamp_ms: i64,
+    pub pruner_timestamp_ms: i64,
     pub pruner_hi: i64,
 }
 
@@ -29,6 +32,7 @@ pub struct CommitterWatermark<'p> {
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
     pub tx_hi: i64,
+    pub timestamp_ms_hi_inclusive: i64,
 }
 
 impl CommitterWatermark<'static> {
@@ -54,7 +58,13 @@ impl<'p> CommitterWatermark<'p> {
             epoch_hi_inclusive: 0,
             checkpoint_hi_inclusive: 0,
             tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
         }
+    }
+
+    /// The consensus timestamp associated with this checkpoint.
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
     }
 
     /// Upsert the high watermark as long as it raises the watermark stored in the database.
@@ -82,34 +92,12 @@ impl<'p> From<CommitterWatermark<'p>> for StoredWatermark {
             epoch_hi_inclusive: watermark.epoch_hi_inclusive,
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
             tx_hi: watermark.tx_hi,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
             epoch_lo: 0,
             reader_lo: 0,
-            timestamp_ms: 0,
+            pruner_timestamp_ms: 0,
             pruner_hi: 0,
         }
-    }
-}
-
-// Ordering for watermarks is driven solely by their checkpoints.
-
-impl PartialEq for CommitterWatermark<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.checkpoint_hi_inclusive == other.checkpoint_hi_inclusive
-    }
-}
-
-impl Eq for CommitterWatermark<'_> {}
-
-impl Ord for CommitterWatermark<'_> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.checkpoint_hi_inclusive
-            .cmp(&other.checkpoint_hi_inclusive)
-    }
-}
-
-impl PartialOrd for CommitterWatermark<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
     }
 }
 
@@ -119,11 +107,11 @@ mod tests {
 
     #[test]
     fn test_stored_watermark_field_count() {
-        assert_eq!(StoredWatermark::field_count(), 8);
+        assert_eq!(StoredWatermark::field_count(), 9);
     }
 
     #[test]
     fn test_committer_watermark_field_count() {
-        assert_eq!(CommitterWatermark::<'static>::field_count(), 4);
+        assert_eq!(CommitterWatermark::<'static>::field_count(), 5);
     }
 }

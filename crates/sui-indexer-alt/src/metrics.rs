@@ -88,10 +88,12 @@ pub struct IndexerMetrics {
     pub watermark_epoch: IntGaugeVec,
     pub watermark_checkpoint: IntGaugeVec,
     pub watermark_transaction: IntGaugeVec,
+    pub watermark_timestamp_ms: IntGaugeVec,
 
     pub watermark_epoch_in_db: IntGaugeVec,
     pub watermark_checkpoint_in_db: IntGaugeVec,
     pub watermark_transaction_in_db: IntGaugeVec,
+    pub watermark_timestamp_in_db_ms: IntGaugeVec,
 }
 
 /// Collects information about the database connection pool.
@@ -344,6 +346,13 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            watermark_timestamp_ms: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_timestamp_ms",
+                "Current timestamp high watermark for this committer, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
             watermark_epoch_in_db: register_int_gauge_vec_with_registry!(
                 "indexer_watermark_epoch_in_db",
                 "Last epoch high watermark this committer wrote to the DB",
@@ -361,6 +370,13 @@ impl IndexerMetrics {
             watermark_transaction_in_db: register_int_gauge_vec_with_registry!(
                 "indexer_watermark_transaction_in_db",
                 "Last transaction high watermark this committer wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_timestamp_in_db_ms: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_timestamp_ms_in_db",
+                "Last timestamp high watermark this committer wrote to the DB, in milliseconds",
                 &["pipeline"],
                 registry,
             )

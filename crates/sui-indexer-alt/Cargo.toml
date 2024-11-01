@@ -17,6 +17,7 @@ axum.workspace = true
 backoff.workspace = true
 bb8 = "0.8.5"
 bcs.workspace = true
+chrono.workspace = true
 clap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }

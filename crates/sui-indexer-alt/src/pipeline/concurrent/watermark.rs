@@ -87,7 +87,7 @@ pub(super) fn watermark<H: Handler + 'static>(
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received, stopping watermark");
+                    info!(pipeline = H::NAME, "Shutdown received");
                     break;
                 }
 
@@ -165,10 +165,16 @@ pub(super) fn watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(watermark.tx_hi);
 
+                    metrics
+                        .watermark_timestamp_ms
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.timestamp_ms_hi_inclusive);
+
                     debug!(
                         pipeline = H::NAME,
                         elapsed_ms = elapsed * 1000.0,
                         watermark = watermark.checkpoint_hi_inclusive,
+                        timestamp = %watermark.timestamp(),
                         pending = precommitted.len(),
                         "Gathered watermarks",
                     );
@@ -210,27 +216,34 @@ pub(super) fn watermark<H: Handler + 'static>(
                                         .watermark_transaction_in_db
                                         .with_label_values(&[H::NAME])
                                         .set(watermark.tx_hi);
+
+                                    metrics
+                                        .watermark_timestamp_in_db_ms
+                                        .with_label_values(&[H::NAME])
+                                        .set(watermark.timestamp_ms_hi_inclusive);
                                 }
 
                                 if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
                                     next_loud_watermark_update += LOUD_WATERMARK_UPDATE_INTERVAL;
                                     info!(
                                         pipeline = H::NAME,
-                                        elapsed_ms = elapsed * 1000.0,
-                                        updated,
                                         epoch = watermark.epoch_hi_inclusive,
                                         checkpoint = watermark.checkpoint_hi_inclusive,
                                         transaction = watermark.tx_hi,
+                                        timestamp = %watermark.timestamp(),
+                                        updated,
+                                        elapsed_ms = elapsed * 1000.0,
                                         "Watermark",
                                     );
                                 } else {
                                     debug!(
                                         pipeline = H::NAME,
-                                        elapsed_ms = elapsed * 1000.0,
-                                        updated,
                                         epoch = watermark.epoch_hi_inclusive,
                                         checkpoint = watermark.checkpoint_hi_inclusive,
                                         transaction = watermark.tx_hi,
+                                        timestamp = %watermark.timestamp(),
+                                        updated,
+                                        elapsed_ms = elapsed * 1000.0,
                                         "Watermark",
                                     );
                                 }
@@ -239,7 +252,7 @@ pub(super) fn watermark<H: Handler + 'static>(
                     }
 
                     if rx.is_closed() && rx.is_empty() {
-                        info!(pipeline = H::NAME, ?watermark, "Committer closed channel, stopping watermark task");
+                        info!(pipeline = H::NAME, "Committer closed channel");
                         break;
                     }
                 }
@@ -259,5 +272,7 @@ pub(super) fn watermark<H: Handler + 'static>(
                 }
             }
         }
+
+        info!(pipeline = H::NAME, ?watermark, "Stopping watermark task");
     })
 }
