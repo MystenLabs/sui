@@ -5,7 +5,6 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use codespan_reporting::diagnostic::Label;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::{stdout, IsTerminal};
@@ -26,7 +25,6 @@ use move_binary_format::{
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::codes::DiagnosticInfo;
 use move_compiler::{
-    diag,
     diagnostics::{
         codes::{custom, Severity},
         report_diagnostics_to_buffer, Diagnostic, Diagnostics,
@@ -47,6 +45,7 @@ use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 /// Errors that can occur during upgrade compatibility checks.
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) enum UpgradeCompatibilityModeError {
     ModuleMissing {
@@ -461,6 +460,11 @@ macro_rules! upgrade_codes {
 upgrade_codes!(
     Declarations: [
         PublicMissing: { msg: "missing public declaration" },
+        TypeMismatch: { msg: "type mismatch" },
+        AbilityMismatch: { msg: "ability mismatch" },
+    ],
+    Function_: [
+        SignatureMismatch: { msg: "function signature mismatch" },
     ],
 );
 
@@ -594,31 +598,14 @@ fn diag_from_error(
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
     match error {
-        UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
-            Declarations::PublicMissing,
-            "struct",
-            &name,
-            compiled_unit_with_source,
-        ),
-        UpgradeCompatibilityModeError::EnumMissing { name, .. } => missing_definition_diag(
-            Declarations::PublicMissing,
-            "enum",
-            &name,
-            compiled_unit_with_source,
-        ),
-        UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
-            Declarations::PublicMissing,
-            "struct",
-            &name,
-            compiled_unit_with_source,
-        ),
-
+        UpgradeCompatibilityModeError::StructMissing { name, .. } => {
+            missing_definition_diag("struct", &name, compiled_unit_with_source)
+        }
         UpgradeCompatibilityModeError::StructAbilityMismatch {
             name,
             old_struct,
             new_struct,
         } => struct_ability_mismatch_diag(
-            Declarations::PublicMissing,
             &name,
             old_struct,
             new_struct,
@@ -630,38 +617,27 @@ fn diag_from_error(
             old_struct,
             new_struct,
         } => struct_field_mismatch_diag(
-            Declarations::PublicMissing,
             &name,
             old_struct,
             new_struct,
             compiled_unit_with_source,
             lookup,
         ),
-        UpgradeCompatibilityModeError::EnumMissing { name, .. } => missing_definition_diag(
-            Declarations::PublicMissing,
-            "enum",
-            &name,
-            compiled_unit_with_source,
-        ),
+        UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
+            missing_definition_diag("enum", &name, compiled_unit_with_source)
+        }
         UpgradeCompatibilityModeError::EnumAbilityMismatch {
             name,
             old_enum,
             new_enum,
-        } => enum_ability_mismatch_diag(
-            Declarations::PublicMissing,
-            &name,
-            old_enum,
-            new_enum,
-            compiled_unit_with_source,
-            lookup,
-        ),
-
+        } => {
+            enum_ability_mismatch_diag(&name, old_enum, new_enum, compiled_unit_with_source, lookup)
+        }
         UpgradeCompatibilityModeError::EnumNewVariant {
             name,
             old_enum,
             new_enum,
         } => enum_new_variant_diag(
-            Declarations::PublicMissing,
             &name,
             old_enum,
             new_enum,
@@ -669,53 +645,28 @@ fn diag_from_error(
             compiled_unit_with_source,
             lookup,
         ),
-
         UpgradeCompatibilityModeError::EnumVariantMissing { name, tag, .. } => {
-            enum_variant_missing_diag(
-                Declarations::PublicMissing, // TODO
-                &name,
-                *tag,
-                compiled_unit_with_source,
-                lookup,
-            )
+            enum_variant_missing_diag(&name, *tag, compiled_unit_with_source, lookup)
         }
-
         UpgradeCompatibilityModeError::EnumVariantMismatch {
             name,
             old_enum,
             new_enum,
             ..
-        } => enum_variant_mismatch_diag(
-            Declarations::PublicMissing, // TODO
-            &name,
-            old_enum,
-            new_enum,
-            compiled_unit_with_source,
-            lookup,
-        ),
-
+        } => {
+            enum_variant_mismatch_diag(&name, old_enum, new_enum, compiled_unit_with_source, lookup)
+        }
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
-            missing_definition_diag(
-                Declarations::PublicMissing, // TODO
-                "public function",
-                &name,
-                compiled_unit_with_source,
-            )
+            missing_definition_diag("public function", &name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
-            missing_definition_diag(
-                Declarations::PublicMissing, // TODO
-                "entry function",
-                &name,
-                compiled_unit_with_source,
-            )
+            missing_definition_diag("entry function", &name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionSignatureMismatch {
             name,
             old_function,
             new_function,
         } => function_signature_mismatch_diag(
-            Declarations::PublicMissing, // TODO
             &name,
             old_function,
             new_function,
@@ -728,7 +679,6 @@ fn diag_from_error(
 
 /// Return a diagnostic for a missing definition.
 fn missing_definition_diag(
-    error: impl Into<DiagnosticInfo> + Copy,
     declaration_kind: &str,
     identifier_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
@@ -743,7 +693,7 @@ fn missing_definition_diag(
 
     diags.add(
         Diagnostic::new(
-            error,
+            Declarations::PublicMissing,
             (loc, format!(
                 "{declaration_kind} '{identifier_name}' is missing",
                 declaration_kind = declaration_kind,
@@ -769,14 +719,12 @@ fn missing_definition_diag(
 /// start by checking the lengths of the parameters and returns and return a diagnostic if they are different
 /// if the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch
 fn function_signature_mismatch_diag(
-    error: impl Into<DiagnosticInfo> + std::marker::Copy,
     function_name: &Identifier,
     old_function: &Function,
     new_function: &Function,
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
-    let module_name = compiled_unit_with_source.unit.name;
     let old_func_index = lookup
         .function_identifier_to_index
         .get(function_name)
@@ -796,7 +744,7 @@ fn function_signature_mismatch_diag(
     if old_function.parameters.len() != new_function.parameters.len() {
         diags.add(
             Diagnostic::new(
-                Declarations::PublicMissing, // TODO
+                Function_::SignatureMismatch,
                 (identifier_loc, format!("Function '{function_name}' expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's parameters for function '{function_name}', expected {} parameters.", old_function.parameters.len())],
@@ -818,7 +766,7 @@ fn function_signature_mismatch_diag(
 
                 diags.add(
                     Diagnostic::new(
-                        Declarations::PublicMissing,
+                        Function_::SignatureMismatch,
                         (param_loc, format!("Function '{function_name}' unexpected parameter {new_param} at position {i}, expected {old_param}")),
                         Vec::<(Loc, String)>::new(),
                         vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's parameters for function '{function_name}'.")],
@@ -832,7 +780,7 @@ fn function_signature_mismatch_diag(
     if old_function.return_.len() != new_function.return_.len() {
         diags.add(
             Diagnostic::new(
-                Declarations::PublicMissing, // TODO
+                Function_::SignatureMismatch,
                 (identifier_loc, format!("Function '{function_name}' expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's return types for function '{function_name}'.")],
@@ -853,7 +801,7 @@ fn function_signature_mismatch_diag(
             if old_return != new_return {
                 diags.add(
                     Diagnostic::new(
-                        Declarations::PublicMissing,
+                        Function_::SignatureMismatch,
                         (*return_, if new_function.return_.len() == 1 {
                             format!("Function '{function_name}' has an unexpected return type {new_return}, expected {old_return}")
                         } else {
@@ -871,7 +819,6 @@ fn function_signature_mismatch_diag(
 }
 
 fn struct_ability_mismatch_diag(
-    error_code: impl Into<DiagnosticInfo> + Copy,
     struct_name: &Identifier,
     old_struct: &Struct,
     new_struct: &Struct,
@@ -900,7 +847,7 @@ fn struct_ability_mismatch_diag(
             AbilitySet::from_u8(new_struct.abilities.into_u8() & !old_struct.abilities.into_u8())
                 .context("Unable to get extra abilities")?;
 
-        let label = match (
+        let _label = match (
             missing_abilities != AbilitySet::EMPTY,
             extra_abilities != AbilitySet::EMPTY,
         ) {
@@ -921,7 +868,7 @@ fn struct_ability_mismatch_diag(
 
         diags.add(
             Diagnostic::new(
-                error_code,
+                Declarations::AbilityMismatch,
                 (def_loc, "Struct ability mismatch"),
                 Vec::<(Loc, String)>::new(),
                 vec![format!(
@@ -935,7 +882,6 @@ fn struct_ability_mismatch_diag(
 }
 
 fn struct_field_mismatch_diag(
-    error_code: impl Into<DiagnosticInfo> + Copy,
     struct_name: &Identifier,
     old_struct: &Struct,
     new_struct: &Struct,
@@ -958,7 +904,7 @@ fn struct_field_mismatch_diag(
         let def_loc = struct_sourcemap.definition_location;
 
         diags.add(Diagnostic::new(
-            error_code,
+            Declarations::TypeMismatch,
             (def_loc, format!("Struct '{struct_name}' has a different number of fields, expected {}, found {}", old_struct.fields.len(), new_struct.fields.len())),
             Vec::<(Loc, String)>::new(),
             vec![format!(
@@ -982,7 +928,7 @@ fn struct_field_mismatch_diag(
 
                 // match of the above
                 // TODO ?
-                let label = match (old_field.name != new_field.name, old_field.type_ != new_field.type_) {
+                let _label = match (old_field.name != new_field.name, old_field.type_ != new_field.type_) {
                     (true, true) => format!(
                         "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
                         new_field.name, new_field.type_, old_field.name, old_field.type_
@@ -1000,7 +946,7 @@ fn struct_field_mismatch_diag(
 
                 diags.add(
                     Diagnostic::new(
-                        error_code,
+                        Declarations::TypeMismatch,
                         (field_loc, format!(
                             "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
                             new_field.name, new_field.type_, old_field.name, old_field.type_
@@ -1013,7 +959,7 @@ fn struct_field_mismatch_diag(
                 );
 
                 diags.add(Diagnostic::new(
-                    error_code,
+                    Declarations::TypeMismatch,
                     (field_loc, format!(
                         "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
                         new_field.name, new_field.type_, old_field.name, old_field.type_
@@ -1031,7 +977,6 @@ fn struct_field_mismatch_diag(
 }
 
 fn enum_ability_mismatch_diag(
-    error_code: impl Into<DiagnosticInfo> + Copy,
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
@@ -1061,7 +1006,7 @@ fn enum_ability_mismatch_diag(
             AbilitySet::from_u8(new_enum.abilities.into_u8() & !old_enum.abilities.into_u8())
                 .context("Unable to get extra abilities")?;
 
-        let label = match (
+        let _label = match (
             missing_abilities != AbilitySet::EMPTY,
             extra_abilities != AbilitySet::EMPTY,
         ) {
@@ -1090,7 +1035,7 @@ fn enum_ability_mismatch_diag(
             //     ),
             // ),
             Diagnostic::new(
-                error_code,
+                Declarations::AbilityMismatch,
                 (def_loc, format!(
                     "Enum '{enum_name}' has unexpected abilities, missing {:?}, unexpected {:?}",
                     missing_abilities, extra_abilities
@@ -1106,7 +1051,6 @@ fn enum_ability_mismatch_diag(
 }
 
 fn enum_variant_mismatch_diag(
-    error: impl Into<DiagnosticInfo> + Copy,
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
@@ -1133,7 +1077,7 @@ fn enum_variant_mismatch_diag(
         .enumerate()
     {
         if old_variant != new_variant {
-            let variant = &enum_sourcemap
+            let _variant = &enum_sourcemap
                 .variants
                 .get(i)
                 .context("Unable to get variant location")?
@@ -1172,7 +1116,7 @@ fn enum_variant_mismatch_diag(
 
             diags.add(
                 Diagnostic::new(
-                    error,
+                    Declarations::TypeMismatch,
                     (variant_loc, label),
                     Vec::<(Loc, String)>::new(),
                     vec![format!( // TODO breakup
@@ -1187,7 +1131,6 @@ fn enum_variant_mismatch_diag(
 }
 
 fn enum_new_variant_diag(
-    error: impl Into<DiagnosticInfo> + Copy,
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
@@ -1213,7 +1156,7 @@ fn enum_new_variant_diag(
         .map(|v| v.name.clone())
         .collect::<HashSet<_>>();
 
-    let def_loc = enum_sourcemap.definition_location;
+    let _def_loc = enum_sourcemap.definition_location;
 
     for (i, new_variant) in new_enum.variants.iter().enumerate() {
         if !old_enum_map.contains(&new_variant.name) {
@@ -1225,7 +1168,7 @@ fn enum_new_variant_diag(
 
             diags.add(
                 Diagnostic::new(
-                    error,
+                    Declarations::TypeMismatch,
                     (variant.1, format!(
                         "Enum '{enum_name}' has a new unexpected variant '{}' at position {i}.",
                         new_variant.name
@@ -1244,7 +1187,6 @@ fn enum_new_variant_diag(
 }
 
 fn enum_variant_missing_diag(
-    error: impl Into<DiagnosticInfo> + Copy,
     enum_name: &Identifier,
     tag: usize,
     compiled_unit_with_source: &CompiledUnitWithSource,
@@ -1267,12 +1209,16 @@ fn enum_variant_missing_diag(
 
     let mut diags = Diagnostics::new();
 
-    diags.add(diag!(
-        error,
+    diags.add(Diagnostic::new(
+        Declarations::TypeMismatch,
         (
             enum_sourcemap.definition_location,
             format!("Enum '{enum_name}' has a missing variant at position {tag}.",)
         ),
+        Vec::<(Loc, String)>::new(),
+        vec![format!(
+            "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's variants for enum '{enum_name}'.",
+        )],
     ));
 
     Ok(diags)
