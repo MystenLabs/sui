@@ -736,14 +736,13 @@ impl DagState {
                         if block_info
                             .accept_votes
                             .stake()
-                            .checked_sub(
+                            .saturating_sub(
                                 block_info
                                     .reject_votes
                                     .get(&idx)
                                     .map(|s| s.stake())
                                     .unwrap_or_default(),
                             )
-                            .unwrap()
                             < self.context.committee.quorum_threshold()
                         {
                             Some(idx)
