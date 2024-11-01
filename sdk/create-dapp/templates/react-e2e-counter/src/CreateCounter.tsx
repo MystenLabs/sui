@@ -2,7 +2,6 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Button, Container } from "@radix-ui/themes";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
-import { useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
 
 export function CreateCounter({
@@ -12,11 +11,9 @@ export function CreateCounter({
 }) {
   const counterPackageId = useNetworkVariable("counterPackageId");
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
-  const [waitingForTxn, setWaitingForTxn] = useState(false);
+  const { mutate: signAndExecute, isSuccess, isPending } = useSignAndExecuteTransaction();
 
   function create() {
-    setWaitingForTxn(true);
 
     const tx = new Transaction();
 
@@ -30,23 +27,15 @@ export function CreateCounter({
         transaction: tx,
       },
       {
-        onSuccess: ({ digest }) => {
-          suiClient
-            .waitForTransaction({
-              digest: digest,
-              options: {
-                showEffects: true,
-              },
-            })
-            .then((tx) => {
-              const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-
-              if (objectId) {
-                onCreated(objectId);
-              }
-
-              setWaitingForTxn(false);
-            });
+        onSuccess: async ({ digest }) => {
+          const { effects } = await suiClient.waitForTransaction({
+            digest: digest,
+            options: {
+              showEffects: true,
+            },
+          });
+          
+          onCreated(effects?.created?.[0]?.reference?.objectId!);
         },
       },
     );
@@ -59,9 +48,9 @@ export function CreateCounter({
         onClick={() => {
           create();
         }}
-        disabled={waitingForTxn}
+        disabled={isSuccess || isPending}
       >
-        {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
+        {(isSuccess || isPending) ? <ClipLoader size={20} /> : "Create Counter"}
       </Button>
     </Container>
   );
