@@ -87,7 +87,7 @@ fn module(
     mdef: &mut N::ModuleDefinition,
 ) {
     let context = &mut Context::new(env, info, mident);
-    context.push_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter);
     use_funs(context, &mut mdef.use_funs);
     for (_, _, c) in &mut mdef.constants {
         constant(context, c);
@@ -99,13 +99,13 @@ fn module(
 }
 
 fn constant(context: &mut Context, c: &mut N::Constant) {
-    context.push_warning_filter_scope(c.warning_filter.clone());
+    context.push_warning_filter_scope(c.warning_filter);
     exp(context, &mut c.value);
     context.pop_warning_filter_scope();
 }
 
 fn function(context: &mut Context, function: &mut N::Function) {
-    context.push_warning_filter_scope(function.warning_filter.clone());
+    context.push_warning_filter_scope(function.warning_filter);
     if let N::FunctionBody_::Defined(seq) = &mut function.body.value {
         sequence(context, seq)
     }

@@ -194,7 +194,7 @@ fn module(
         constants: hconstants,
     } = mdef;
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let constants = constants(context, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.pop_warning_filter_scope();
@@ -426,7 +426,7 @@ fn constant(
         value: (locals, block),
     } = c;
 
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let final_value = constant_(
         context,
         constant_values,
@@ -607,7 +607,7 @@ fn function(
         signature,
         body,
     } = f;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let body = function_body(
         context,
         module,

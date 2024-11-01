@@ -205,12 +205,12 @@ impl WarningFiltersTable {
     pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFiltersArc {
         let pinned = Box::pin(filters);
         let wf = {
-            let pinned_ref: &WarningFiltersBuilder = &*pinned;
+            let pinned_ref: &WarningFiltersBuilder = &pinned;
             WarningFiltersArc(pinned_ref as *const WarningFiltersBuilder)
         };
         match self.0.get(&pinned) {
             Some(existing) => {
-                let existing_ref: &WarningFiltersBuilder = &*existing;
+                let existing_ref: &WarningFiltersBuilder = existing;
                 WarningFiltersArc(existing_ref as *const WarningFiltersBuilder)
             }
             None => {
