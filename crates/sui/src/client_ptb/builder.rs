@@ -443,13 +443,13 @@ impl<'a> PTBBuilder<'a> {
         sp!(loc, arg): Spanned<PTBArg>,
         param: &SignatureToken,
     ) -> PTBResult<Tx::Argument> {
-        let (is_primitive, layout) = primitive_type(view, ty_args, param);
+        let layout = primitive_type(view, ty_args, param);
 
         // If it's a primitive value, see if we've already resolved this argument. Otherwise, we
         // need to resolve it.
-        if is_primitive {
+        if let Some(layout) = layout {
             return self
-                .resolve(loc.wrap(arg), ToPure::new_from_layout(layout.unwrap()))
+                .resolve(loc.wrap(arg), ToPure::new_from_layout(layout))
                 .await;
         }
 
