@@ -69,20 +69,30 @@ pub struct WarningFiltersScope(WarningFiltersScope_);
 enum WarningFiltersScope_ {
     /// Unsafe and should be used only for internal purposes, such as ide annotations
     Empty,
+    /// The top-level warning filters given to the compiler instance. They are leaked as they will
+    /// be needed for the lifetime of the compiler instance.
     Static(&'static WarningFiltersBuilder),
+    /// A user-defined warning filter scope, with a reference to the previous scope
     Node(Arc<WarningFiltersScopeNode>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct WarningFiltersScopeNode {
+    /// The warning filters for this scope
     filters: WarningFilters,
+    /// The previous scope
     prev: WarningFiltersScope_,
 }
 
 #[derive(Debug, Clone)]
+/// An intern table for warning filters. The `Pin` is likely unnecessary given the usage of
+/// `WarningFiltersTable`, but it is added to ensure the underlying `Box` is not moved.
+/// Safety: This table should not be dropped as long as any `WarningFilters` are alive
 pub struct WarningFiltersTable(HashSet<Pin<Box<WarningFiltersBuilder>>>);
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
+/// An unsafe pointer into the intern table for warning filters.
+/// Safety: The `WarningFiltersTable` must be held as long as any `WarningFilters`s are alive.
 pub struct WarningFilters(*const WarningFiltersBuilder);
 unsafe impl Send for WarningFilters {}
 unsafe impl Sync for WarningFilters {}
@@ -137,6 +147,9 @@ pub type WellKnownFilterName = &'static str;
 //**************************************************************************************************
 
 impl WarningFiltersScope {
+    /// Create a new scope with the given top-level warning filter, if any.
+    /// A `&'static WarningFiltersBuilder` is used to avoid cloning the filter table for each
+    /// new top-level scope needed
     pub(crate) const fn root(
         top_level_warning_filter_opt: Option<&'static WarningFiltersBuilder>,
     ) -> Self {

@@ -24,6 +24,7 @@ use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
     pub warning_filters_table: Arc<WarningFiltersTable>,
     // Map of declared named addresses, and their values if specified
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,

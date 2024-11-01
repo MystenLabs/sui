@@ -159,6 +159,8 @@ pub fn program(
             units.push(unit)
         }
     }
+    // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
+    // are gone, the table can safely be dropped.
     drop(warning_filters_table);
     units
 }
