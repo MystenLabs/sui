@@ -31,7 +31,6 @@ mod test_utils;
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
-    metrics: Arc<IndexerMetrics>,
     ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
@@ -86,7 +85,6 @@ impl IngestionService {
         Ok(Self {
             config,
             client,
-            metrics,
             ingest_hi_tx,
             ingest_hi_rx,
             subscribers,
@@ -141,7 +139,6 @@ impl IngestionService {
         let IngestionService {
             config,
             client,
-            metrics,
             ingest_hi_tx: _,
             ingest_hi_rx,
             subscribers,
@@ -162,14 +159,7 @@ impl IngestionService {
             cancel.clone(),
         );
 
-        let broadcaster = broadcaster(
-            config,
-            client,
-            metrics,
-            checkpoint_rx,
-            subscribers,
-            cancel.clone(),
-        );
+        let broadcaster = broadcaster(config, client, checkpoint_rx, subscribers, cancel.clone());
 
         Ok((regulator, broadcaster))
     }
