@@ -21,6 +21,7 @@ chrono.workspace = true
 clap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+diesel_migrations.workspace = true
 futures.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
@@ -32,7 +33,6 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 url.workspace = true
-diesel_migrations.workspace = true
 
 mysten-metrics.workspace = true
 sui-field-count.workspace = true
