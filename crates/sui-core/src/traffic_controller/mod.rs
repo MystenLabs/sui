@@ -430,6 +430,10 @@ async fn handle_error_tally(
     }
     let resp = policy.handle_tally(tally.clone());
     metrics.error_tally_handled.inc();
+    metrics
+        .tally_errors
+        .with_label_values(&[tally.error_type.as_deref().unwrap_or("unknown")])
+        .inc();
     if let Some(fw_config) = fw_config {
         if fw_config.delegate_error_blocking && !mem_drainfile_present {
             let client = nodefw_client
@@ -509,6 +513,7 @@ async fn handle_policy_response(
         {
             // Only increment the metric if the client was not already blocked
             debug!("Blocking client: {:?}", client);
+            metrics.requests_blocked_at_protocol.inc();
             metrics.connection_ip_blocklist_len.inc();
         }
     }
@@ -523,6 +528,7 @@ async fn handle_policy_response(
         {
             // Only increment the metric if the client was not already blocked
             debug!("Blocking proxied client: {:?}", client);
+            metrics.requests_blocked_at_protocol.inc();
             metrics.proxy_ip_blocklist_len.inc();
         }
     }
@@ -743,6 +749,7 @@ impl TrafficSim {
                 controller.tally(TrafficTally::new(
                     client,
                     // TODO add proxy IP for testing
+                    None,
                     None,
                     // TODO add weight adjustments
                     Weight::one(),
