@@ -8,7 +8,7 @@ use diesel::{
 use sui_field_count::FieldCount;
 use sui_types::base_types::ObjectID;
 
-use crate::schema::{kv_objects, obj_versions, sum_coin_balances, sum_obj_types};
+use crate::schema::{kv_objects, obj_versions, sum_coin_balances, sum_obj_types, wal_obj_types};
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -32,6 +32,7 @@ pub struct StoredObjVersion {
 pub struct StoredObjectUpdate<T> {
     pub object_id: ObjectID,
     pub object_version: u64,
+    pub cp_sequence_number: u64,
     /// `None` means the object was deleted or wrapped at this version, `Some(x)` means it was
     /// changed to `x`.
     pub update: Option<T>,
@@ -68,6 +69,20 @@ pub struct StoredSumObjType {
     pub module: Option<String>,
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
+}
+
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = wal_obj_types, primary_key(object_id, object_version))]
+pub struct StoredWalObjType {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub owner_kind: Option<StoredOwnerKind>,
+    pub owner_id: Option<Vec<u8>>,
+    pub package: Option<Vec<u8>>,
+    pub module: Option<String>,
+    pub name: Option<String>,
+    pub instantiation: Option<Vec<u8>>,
+    pub cp_sequence_number: i64,
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
