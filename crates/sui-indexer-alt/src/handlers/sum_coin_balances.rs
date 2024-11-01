@@ -37,8 +37,13 @@ impl Processor for SumCoinBalances {
     type Value = StoredObjectUpdate<StoredSumCoinBalance>;
 
     fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
-        let CheckpointData { transactions, .. } = checkpoint.as_ref();
+        let CheckpointData {
+            transactions,
+            checkpoint_summary,
+            ..
+        } = checkpoint.as_ref();
 
+        let cp_sequence_number = checkpoint_summary.sequence_number;
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         let mut coin_types: BTreeMap<ObjectID, Vec<u8>> = BTreeMap::new();
 
@@ -78,6 +83,7 @@ impl Processor for SumCoinBalances {
                         entry.insert(StoredObjectUpdate {
                             object_id,
                             object_version,
+                            cp_sequence_number,
                             update: None,
                         });
                     }
@@ -111,6 +117,7 @@ impl Processor for SumCoinBalances {
                         entry.insert(StoredObjectUpdate {
                             object_id,
                             object_version,
+                            cp_sequence_number,
                             update: Some(StoredSumCoinBalance {
                                 object_id: object_id.to_vec(),
                                 object_version: object_version as i64,
