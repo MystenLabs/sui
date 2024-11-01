@@ -37,8 +37,13 @@ impl Processor for SumObjTypes {
     type Value = StoredObjectUpdate<StoredSumObjType>;
 
     fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
-        let CheckpointData { transactions, .. } = checkpoint.as_ref();
+        let CheckpointData {
+            transactions,
+            checkpoint_summary,
+            ..
+        } = checkpoint.as_ref();
 
+        let cp_sequence_number = checkpoint_summary.sequence_number;
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
 
         // Iterate over transactions in reverse so we see the latest version of each object first.
@@ -63,6 +68,7 @@ impl Processor for SumObjTypes {
                         entry.insert(StoredObjectUpdate {
                             object_id,
                             object_version,
+                            cp_sequence_number,
                             update: None,
                         });
                     }
@@ -83,6 +89,7 @@ impl Processor for SumObjTypes {
                         entry.insert(StoredObjectUpdate {
                             object_id,
                             object_version,
+                            cp_sequence_number,
                             update: Some(StoredSumObjType {
                                 object_id: object_id.to_vec(),
                                 object_version: object_version as i64,
