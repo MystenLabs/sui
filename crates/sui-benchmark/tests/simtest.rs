@@ -547,6 +547,9 @@ mod test {
                         config.max_accumulated_txn_cost_per_object_in_mysticeti_commit() / 10,
                     ),
                 );
+            } else {
+                config
+                .disable_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing();
             }
             config
         });
