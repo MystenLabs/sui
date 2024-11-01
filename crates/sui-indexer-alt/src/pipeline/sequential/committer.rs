@@ -320,8 +320,9 @@ pub(super) fn committer<H: Handler + 'static>(
                     attempt = 0;
 
                     // If there is a pending checkpoint, no greater than the expected next
-                    // checkpoint, and no less than the upperbound due to checkpoint lag, then the
-                    // pipeline can do more work immediately (without waiting).
+                    // checkpoint, and less than or equal to the inclusive upperbound due to
+                    // checkpoint lag, then the pipeline can do more work immediately (without
+                    // waiting).
                     //
                     // Otherwise, if its channels have been closed, we know that it is guaranteed
                     // not to make any more progress, and we can stop the task.
