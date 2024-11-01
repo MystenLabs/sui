@@ -51,6 +51,7 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
 use moka::sync::Cache as MokaCache;
+use mysten_common::fatal;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
@@ -627,15 +628,21 @@ impl WritebackCache {
                         .map(|e| e.is_tombstone())
                         .unwrap_or(false);
 
-                if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!(
-                        ?highest,
-                        ?cache_entry,
-                        ?tombstone_possibly_pruned,
-                        "object_by_id cache is incoherent for {:?}",
-                        object_id
-                    );
-                    panic!("object_by_id cache is incoherent for {:?}", object_id);
+                if highest != cache_entry {
+                    match (&highest, &cache_entry, tombstone_possibly_pruned) {
+                        // cache_entry None is correct if highest is None, Wrapped, or Deleted
+                        (None | Some(ObjectEntry::Wrapped | ObjectEntry::Deleted), None, _)
+                        | (_, _, true) => (),
+                        _ => {
+                            fatal!(
+                            "object_by_id cache is incoherent for {:?} (highest: {:?}, cache: {:?}, tombstone_possibly_pruned: {:?})",
+                            object_id,
+                            highest,
+                            cache_entry,
+                            tombstone_possibly_pruned,
+                        );
+                        }
+                    }
                 }
             }
         }
