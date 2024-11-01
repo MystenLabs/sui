@@ -394,6 +394,7 @@ pub fn format_vm_error(e: &VMError) -> String {
     major_status: {major_status:?},
     sub_status: {sub_status:?},
     location: {location_string},
+    message: {message:?},
     indices: {indices:?},
     offsets: {offsets:?},
 }}",
@@ -403,6 +404,7 @@ pub fn format_vm_error(e: &VMError) -> String {
         // TODO maybe include source map info?
         indices = e.indices(),
         offsets = e.offsets(),
+        message = e.message(),
     )
 }
 
