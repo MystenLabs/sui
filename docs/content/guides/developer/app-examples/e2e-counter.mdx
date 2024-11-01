@@ -28,17 +28,46 @@ Before getting started, make sure you have:
 
 - [Installed the latest version of Sui](../getting-started/sui-install.mdx).
 
+## Directory structure
+
+To begin, create a new folder on your system titled `react-e2e-counter` to hold all your project files. You can name this directory differently, but the rest of the guide references this file structure. Inside that folder, create two more folders: `move` and `src`. Inside the `move` folder, create a `counter` directory. Finally, create a `sources` folder inside `counter`. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance.
+
+:::checkpoint
+
+- You have the latest version of Sui installed. If you run `sui --version` in your terminal or console, it responds with the currently installed version.
+- Your active environment is pointing to the expected network. Run `sui client active-env` to make sure. If you receive a warning about a client and server API version mismatch, update Sui using the version in the relevant branch (`mainnet`, `testnet`, `devent`) of the Sui repo.
+- Your active address has SUI. Run `sui client balance` in your terminal or console. If there is no balance, [acquire SUI](../getting-started/get-coins.mdx) from the faucet (not available in Mainnet).
+- You have a directory to place the files you create in. The top-level directory is named `react-e2e-counter` if you want to match the directory structure in this guide. 
+
+:::
+
 ## Smart contracts {#smart-contracts}
 
 In this part of the guide, you write the Move contracts that create, increment, and reset counters. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
 
+### Move.toml
+
+To begin writing your smart contracts, create a `sources` folder in your `counter` folder (if using recommended directory names). Create a file inside the folder named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
+
 :::info
 
-To follow along with this guide, set your new Move package to `counter`.
+If you are targeting a network other than Testnet, be sure to update the `rev` value for the Sui dependency.
 
 :::
 
+{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/Move.toml}
+
 ### `Counter` struct
+
+To begin creating the smart contract that defines the on-chain counter, create a `counter.move` file inside your `react-e2e-counter/move/counter` folder. Define the module that holds your smart contract logic.
+
+```move
+module counter::counter {
+  // Code goes here
+}
+```
+
+Add the `Counter` struct and elements described in the following sections to the module. 
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#struct=Counter noComments}
 
@@ -53,11 +82,12 @@ In the `create` function, a new `Counter` object is created and [shared](../../.
 ### Incrementing and resetting `Counter`
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=increment noComments}
-The `increment` function accepts a mutable reference to any shared `Counter` object and will increments its `value` field.
+
+The `increment` function accepts a mutable reference to any shared `Counter` object and increments its `value` field.
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=set_value noComments}
 
-The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. This function can only be ran by the `Counter`'s `owner`.
+The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. The `Counter` `owner` is the only one that can run this function.
 
 :::tip Additional resources
 
@@ -70,6 +100,19 @@ Learn more about taking [object references as input](../../../concepts/sui-move-
 The final module should look like this
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move noComments}
+
+:::checkpoint
+
+Your smart contract is complete. You should be able to run the `sui move build` command from `react-e2e-counter/move/counter` and receive a response similar to the following:
+```sh
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING counter
+```
+You always run `sui move build` at the same level as your `Move.toml` file. After a successful build, you now have a `build` folder inside `react-e2e-counter/move/counter`.
+
+:::
 
 ### Deployment {#deployment}
 
