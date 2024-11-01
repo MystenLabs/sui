@@ -6,7 +6,6 @@ use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
-use crate::package_hooks::SuiPackageHooks;
 use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
@@ -37,6 +36,7 @@ use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, Si
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
+use sui_package_hooks::package_hooks::SuiPackageHooks;
 
 use sui_graphql_rpc::{
     config::{ConnectionConfig, ServiceConfig},

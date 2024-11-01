@@ -30,6 +30,7 @@ sui-move.workspace = true
 sui-move-build.workspace = true
 sui-sdk.workspace = true
 sui-source-validation.workspace = true
+sui-package-hooks.workspace = true
 
 axum.workspace = true
 bin-version.workspace = true

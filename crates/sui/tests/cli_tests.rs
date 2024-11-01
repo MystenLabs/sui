@@ -17,8 +17,8 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
-use sui::package_hooks::SuiPackageHooks;
 use sui::sui_commands::IndexerArgs;
+use sui_package_hooks::package_hooks::SuiPackageHooks;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;

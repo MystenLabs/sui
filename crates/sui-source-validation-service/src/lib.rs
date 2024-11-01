@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{ffi::OsString, fs, path::Path, process::Command};
-use sui::package_cache::PackageCache;
-use sui::package_hooks::SuiPackageHooks;
+use sui_package_hooks::package_cache::PackageCache;
+use sui_package_hooks::package_hooks::SuiPackageHooks;
 use tokio::sync::oneshot::Sender;
 
 use anyhow::{anyhow, bail};

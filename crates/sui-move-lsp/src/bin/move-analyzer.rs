@@ -3,8 +3,8 @@
 
 use clap::*;
 use move_analyzer::analyzer;
-use sui::package_hooks::SuiPackageHooks;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
+use sui_package_hooks::package_hooks::SuiPackageHooks;
 use sui_sdk::wallet_context::WalletContext;
 
 // Define the `GIT_REVISION` and `VERSION` consts
