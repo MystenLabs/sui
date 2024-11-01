@@ -27,6 +27,7 @@ use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
 };
+use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
@@ -996,9 +997,12 @@ fn visit_program(context: &mut Context, prog: &mut G::Program) {
 
     AbsintVisitor.visit(context.env, prog);
 
-    for v in &context.env.visitors().cfgir {
-        v.visit(context.env, prog)
-    }
+    context
+        .env
+        .visitors()
+        .cfgir
+        .par_iter()
+        .for_each(|v| v.visit(context.env, prog));
 }
 
 struct AbsintVisitor;
@@ -1088,11 +1092,11 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             locals,
             infinite_loop_starts: &infinite_loop_starts,
         };
-        let mut ds = Diagnostics::new();
-        for v in &self.env.visitors().abs_int {
-            ds.extend(v.verify(&function_context, &cfg));
-        }
-        self.add_diags(ds);
+        self.env
+            .visitors()
+            .abs_int
+            .par_iter()
+            .for_each(|v| self.add_diags(v.verify(&function_context, &cfg)));
         true
     }
 }
