@@ -6,7 +6,11 @@ import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
-import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
+import {
+	computeZkLoginAddressWithSeed,
+	genAddressSeed,
+	getZkLoginSignature,
+} from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 
@@ -125,20 +129,15 @@ export class ZkLoginAccount
 		};
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
+
+		const addressSeed = genAddressSeed(BigInt(salt), claimName, claimValue, aud);
+
 		return {
 			type: 'zkLogin',
-			address: computeZkLoginAddress({
-				claimName,
-				claimValue,
-				iss: decodedJWT.iss,
-				aud,
-				userSalt: BigInt(salt),
-			}),
+			address: computeZkLoginAddressWithSeed(addressSeed, decodedJWT.iss),
 			claims: await obfuscate(claims),
 			salt: await obfuscate(salt),
-			addressSeed: await obfuscate(
-				genAddressSeed(BigInt(salt), claimName, claimValue, aud).toString(),
-			),
+			addressSeed: await obfuscate(addressSeed.toString()),
 			provider,
 			publicKey: null,
 			lastUnlockedOn: null,
