@@ -5,7 +5,7 @@
 use codespan_reporting::{diagnostic::Severity, term::termcolor::Buffer};
 use move_binary_format::file_format::{FunctionDefinitionIndex, StructDefinitionIndex};
 use move_command_line_common::testing::EXP_EXT;
-use move_compiler::{diagnostics::WarningFilters, shared::PackagePaths};
+use move_compiler::{diagnostics::warning_filters::WarningFilters, shared::PackagePaths};
 use move_model::{run_bytecode_model_builder, run_model_builder};
 use move_prover_test_utils::baseline_test::verify_or_update_baseline;
 use std::path::Path;

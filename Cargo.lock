@@ -967,23 +967,24 @@ dependencies = [
 
 [[package]]
 name = "async-stream"
-version = "0.3.3"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
+checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
 dependencies = [
  "async-stream-impl",
  "futures-core",
+ "pin-project-lite",
 ]
 
 [[package]]
 name = "async-stream-impl"
-version = "0.3.3"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
+checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
 dependencies = [
  "proc-macro2 1.0.87",
  "quote 1.0.35",
- "syn 1.0.107",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -8163,11 +8164,13 @@ name = "mysten-network"
 version = "0.2.0"
 dependencies = [
  "anemo",
+ "async-stream",
  "bcs",
  "bytes",
  "eyre",
  "futures",
  "http 1.1.0",
+ "hyper-rustls 0.27.2",
  "hyper-util",
  "multiaddr",
  "once_cell",
@@ -8175,6 +8178,7 @@ dependencies = [
  "serde",
  "snap",
  "tokio",
+ "tokio-rustls 0.26.0",
  "tokio-stream",
  "tonic 0.12.3",
  "tonic-health",
@@ -13325,6 +13329,7 @@ dependencies = [
  "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
+ "sui-tls",
  "sui-transaction-checks",
  "sui-types",
  "tap",
@@ -13388,6 +13393,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sui-archival",
  "sui-data-ingestion-core",
+ "sui-kvstore",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
@@ -13617,6 +13623,26 @@ dependencies = [
  "typed-store",
  "uuid 1.2.2",
 ]
+
+[[package]]
+name = "sui-field-count"
+version = "1.37.0"
+dependencies = [
+ "sui-field-count-derive",
+ "sui-field-count-main",
+]
+
+[[package]]
+name = "sui-field-count-derive"
+version = "1.37.0"
+dependencies = [
+ "quote 1.0.35",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-field-count-main"
+version = "1.37.0"
 
 [[package]]
 name = "sui-framework"
@@ -13908,6 +13934,7 @@ dependencies = [
  "backoff",
  "bb8",
  "bcs",
+ "chrono",
  "clap",
  "diesel",
  "diesel-async",
@@ -13918,6 +13945,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.5",
  "serde",
+ "sui-field-count",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
@@ -14367,6 +14395,83 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
+]
+
+[[package]]
+name = "sui-mvr-indexer"
+version = "1.37.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.7.5",
+ "backoff",
+ "bb8",
+ "bcs",
+ "bytes",
+ "cached",
+ "chrono",
+ "clap",
+ "criterion",
+ "csv",
+ "dashmap",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "fastcrypto",
+ "futures",
+ "hex",
+ "indicatif",
+ "itertools 0.13.0",
+ "jsonrpsee",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "mysten-metrics",
+ "ntest",
+ "object_store",
+ "prometheus",
+ "rand 0.8.5",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_with 3.9.0",
+ "simulacrum",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
+ "sui-archival",
+ "sui-config",
+ "sui-core",
+ "sui-data-ingestion-core",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-api",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-move-build",
+ "sui-open-rpc",
+ "sui-package-resolver",
+ "sui-protocol-config",
+ "sui-rest-api",
+ "sui-sdk",
+ "sui-snapshot",
+ "sui-storage",
+ "sui-swarm-config",
+ "sui-synthetic-ingestion",
+ "sui-test-transaction-builder",
+ "sui-transaction-builder",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-cluster",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.10",
+ "toml 0.7.4",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -15157,6 +15262,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-simulator",
  "sui-swarm-config",
+ "sui-tls",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -15294,6 +15400,7 @@ dependencies = [
  "sui-sdk",
  "sui-snapshot",
  "sui-storage",
+ "sui-tls",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",

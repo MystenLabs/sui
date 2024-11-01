@@ -4,7 +4,10 @@
 
 use crate::{
     debug_display, debug_display_verbose, diag,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
+    },
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
     hlir::{

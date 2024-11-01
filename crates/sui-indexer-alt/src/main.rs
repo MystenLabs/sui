@@ -9,9 +9,10 @@ use sui_indexer_alt::{
     args::Args,
     handlers::{
         ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-        kv_objects::KvObjects, kv_transactions::KvTransactions, sum_coin_balances::SumCoinBalances,
-        sum_obj_types::SumObjTypes, tx_affected_objects::TxAffectedObjects,
-        tx_balance_changes::TxBalanceChanges,
+        kv_objects::KvObjects, kv_transactions::KvTransactions, obj_versions::ObjVersions,
+        sum_coin_balances::SumCoinBalances, sum_obj_types::SumObjTypes,
+        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+        wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
     },
     Indexer,
 };
@@ -29,18 +30,24 @@ async fn main() -> Result<()> {
     let cancel = CancellationToken::new();
 
     match args.command {
-        Command::Indexer(indexer_config) => {
-            let mut indexer = Indexer::new(args.db_config, indexer_config, cancel.clone()).await?;
+        Command::Indexer {
+            indexer,
+            consistent_range: lag,
+        } => {
+            let mut indexer = Indexer::new(args.db_config, indexer, cancel.clone()).await?;
 
             indexer.concurrent_pipeline::<EvEmitMod>().await?;
             indexer.concurrent_pipeline::<EvStructInst>().await?;
             indexer.concurrent_pipeline::<KvCheckpoints>().await?;
             indexer.concurrent_pipeline::<KvObjects>().await?;
             indexer.concurrent_pipeline::<KvTransactions>().await?;
+            indexer.concurrent_pipeline::<ObjVersions>().await?;
             indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
             indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
-            indexer.sequential_pipeline::<SumCoinBalances>().await?;
-            indexer.sequential_pipeline::<SumObjTypes>().await?;
+            indexer.concurrent_pipeline::<WalCoinBalances>().await?;
+            indexer.concurrent_pipeline::<WalObjTypes>().await?;
+            indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;
+            indexer.sequential_pipeline::<SumObjTypes>(lag).await?;
 
             let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 

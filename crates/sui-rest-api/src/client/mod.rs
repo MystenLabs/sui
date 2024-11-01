@@ -53,12 +53,13 @@ impl Client {
 
         let request = self.inner.client().get(url);
 
-        let proto = self
-            .inner
-            .protobuf::<crate::proto::FullCheckpoint>(request)
-            .await?
-            .into_inner();
-        proto.try_into().map_err(Into::into)
+        self.inner.bcs(request).await.map(Response::into_inner)
+        // let proto = self
+        //     .inner
+        //     .protobuf::<crate::proto::FullCheckpoint>(request)
+        //     .await?
+        //     .into_inner();
+        // proto.try_into().map_err(Into::into)
     }
 
     pub async fn get_checkpoint_summary(

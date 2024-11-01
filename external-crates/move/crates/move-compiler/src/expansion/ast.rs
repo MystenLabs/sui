@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
         FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,

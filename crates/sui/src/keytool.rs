@@ -629,8 +629,15 @@ impl KeyToolCommand {
                 match SuiKeyPair::decode(&input_string) {
                     Ok(skp) => {
                         info!("Importing Bech32 encoded private key to keystore");
-                        let key = Key::from(&skp);
-                        keystore.add_key(alias, skp)?;
+                        let mut key = Key::from(&skp);
+                        keystore.add_key(alias.clone(), skp)?;
+
+                        let alias = match alias {
+                            Some(x) => x,
+                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                        };
+
+                        key.alias = Some(alias);
                         CommandOutput::Import(key)
                     }
                     Err(_) => {
@@ -639,10 +646,17 @@ impl KeyToolCommand {
                             &input_string,
                             key_scheme,
                             derivation_path,
-                            alias,
+                            alias.clone(),
                         )?;
                         let skp = keystore.get_key(&sui_address)?;
-                        let key = Key::from(skp);
+                        let mut key = Key::from(skp);
+
+                        let alias = match alias {
+                            Some(x) => x,
+                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                        };
+
+                        key.alias = Some(alias);
                         CommandOutput::Import(key)
                     }
                 }

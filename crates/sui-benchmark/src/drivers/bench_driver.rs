@@ -49,6 +49,7 @@ pub struct BenchMetrics {
     pub benchmark_duration: IntGauge,
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
+    pub num_expected_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
     pub num_in_flight: GaugeVec,
     pub latency_s: HistogramVec,
@@ -75,6 +76,13 @@ impl BenchMetrics {
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
+                &["workload"],
+                registry,
+            )
+            .unwrap(),
+            num_expected_error: register_int_counter_vec_with_registry!(
+                "num_expected_error",
+                "Total number of transaction errors that were expected",
                 &["workload"],
                 registry,
             )
@@ -373,6 +381,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 duration: Duration::ZERO,
                 num_error_txes: 0,
                 num_success_txes: 0,
+                num_expected_error_txes: 0,
                 num_success_cmds: 0,
                 total_gas_used: 0,
                 latency_ms: HistogramWrapper {
@@ -407,6 +416,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 let mut total_cps: f32 = 0.0;
                 let mut num_success_txes: u64 = 0;
                 let mut num_error_txes: u64 = 0;
+                let mut num_expected_error_txes: u64 = 0;
                 let mut num_success_cmds = 0;
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
@@ -426,6 +436,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                     total_cps += v.bench_stats.num_success_cmds as f32 / duration;
                     num_success_txes += v.bench_stats.num_success_txes;
                     num_error_txes += v.bench_stats.num_error_txes;
+                    num_expected_error_txes += v.bench_stats.num_expected_error_txes;
                     num_success_cmds += v.bench_stats.num_success_cmds;
                     num_no_gas += v.num_no_gas;
                     num_submitted += v.num_submitted;
@@ -442,7 +453,24 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 };
                 counter += 1;
                 if counter % num_workers == 0 {
-                    stat = format!("TPS = {}, CPS = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, num_success_tx = {}, num_error_tx = {}, num_success_cmds = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, total_cps, latency_histogram.min(), latency_histogram.value_at_quantile(0.5), latency_histogram.value_at_quantile(0.99), latency_histogram.max(), num_success_txes, num_error_txes, num_success_cmds, num_no_gas, num_submitted, num_in_flight);
+                    stat = format!(
+                        "TPS = {}, CPS = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, \
+                        num_success_tx = {}, num_error_tx = {}, num_expected_error_tx = {}, \
+                        num_success_cmds = {}, no_gas = {}, submitted = {}, in_flight = {}",
+                        total_qps,
+                        total_cps,
+                        latency_histogram.min(),
+                        latency_histogram.value_at_quantile(0.5),
+                        latency_histogram.value_at_quantile(0.99),
+                        latency_histogram.max(),
+                        num_success_txes,
+                        num_error_txes,
+                        num_expected_error_txes,
+                        num_success_cmds,
+                        num_no_gas,
+                        num_submitted,
+                        num_in_flight
+                    );
                     if show_progress {
                         eprintln!("{}", stat);
                     }
@@ -681,6 +709,7 @@ async fn run_bench_worker(
     let request_delay_micros = 1_000_000 / worker.target_qps;
     let mut num_success_txes = 0;
     let mut num_error_txes = 0;
+    let mut num_expected_error_txes = 0;
     let mut num_success_cmds = 0;
     let mut num_no_gas = 0;
     let mut num_in_flight: u64 = 0;
@@ -708,6 +737,7 @@ async fn run_bench_worker(
      -> NextOp {
         match result {
             Ok(effects) => {
+                assert!(payload.get_failure_type().is_none());
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
@@ -767,27 +797,38 @@ async fn run_bench_worker(
             }
             Err(err) => {
                 error!("{}", err);
-                if err
-                    .downcast::<QuorumDriverError>()
-                    .and_then(|err| {
-                        if matches!(
-                            err,
-                            QuorumDriverError::NonRecoverableTransactionError { .. }
-                        ) {
-                            Err(err.into())
+                match payload.get_failure_type() {
+                    Some(_) => {
+                        metrics_cloned
+                            .num_expected_error
+                            .with_label_values(&[&payload.to_string()])
+                            .inc();
+                        NextOp::Retry(Box::new((transaction, payload)))
+                    }
+                    None => {
+                        if err
+                            .downcast::<QuorumDriverError>()
+                            .and_then(|err| {
+                                if matches!(
+                                    err,
+                                    QuorumDriverError::NonRecoverableTransactionError { .. }
+                                ) {
+                                    Err(err.into())
+                                } else {
+                                    Ok(())
+                                }
+                            })
+                            .is_err()
+                        {
+                            NextOp::Failure
                         } else {
-                            Ok(())
+                            metrics_cloned
+                                .num_error
+                                .with_label_values(&[&payload.to_string(), "rpc"])
+                                .inc();
+                            NextOp::Retry(Box::new((transaction, payload)))
                         }
-                    })
-                    .is_err()
-                {
-                    NextOp::Failure
-                } else {
-                    metrics_cloned
-                        .num_error
-                        .with_label_values(&[&payload.to_string(), "rpc"])
-                        .inc();
-                    NextOp::Retry(Box::new((transaction, payload)))
+                    }
                 }
             }
         }
@@ -841,6 +882,7 @@ async fn run_bench_worker(
                         bench_stats: BenchmarkStats {
                             duration:stat_start_time.elapsed(),
                             num_error_txes,
+                            num_expected_error_txes,
                             num_success_txes,
                             num_success_cmds,
                             latency_ms:HistogramWrapper{
@@ -855,6 +897,7 @@ async fn run_bench_worker(
                 }
                 num_success_txes = 0;
                 num_error_txes = 0;
+                num_expected_error_txes = 0;
                 num_success_cmds = 0;
                 num_no_gas = 0;
                 num_submitted = 0;
@@ -874,7 +917,11 @@ async fn run_bench_worker(
                 if let Some(b) = retry_queue.pop_front() {
                     let tx = b.0;
                     let payload = b.1;
-                    num_error_txes += 1;
+                    if payload.get_failure_type().is_some() {
+                        num_expected_error_txes += 1;
+                    } else {
+                        num_error_txes += 1;
+                    }
                     num_submitted += 1;
                     metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                     // TODO: clone committee for each request is not ideal.
@@ -958,6 +1005,7 @@ async fn run_bench_worker(
             bench_stats: BenchmarkStats {
                 duration: stat_start_time.elapsed(),
                 num_error_txes,
+                num_expected_error_txes,
                 num_success_txes,
                 num_success_cmds,
                 total_gas_used: worker_gas_used,

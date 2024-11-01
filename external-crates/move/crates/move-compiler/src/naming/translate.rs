@@ -7,7 +7,8 @@ use crate::{
     diagnostics::{
         self,
         codes::{self, *},
-        Diagnostic, Diagnostics, WarningFilters,
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
     },
     editions::FeatureGate,
     expansion::{

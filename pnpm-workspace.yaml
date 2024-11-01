@@ -26,3 +26,4 @@ packages:
   - '!sdk/typescript/keypairs/secp256r1'
   - '!sdk/typescript/graphql/schemas/2024.1'
   - '!sdk/typescript/graphql/schemas/2024.4'
+  - '!sdk/kms/aws'

@@ -11,7 +11,7 @@ use crate::{
         CFGContext,
     },
     command_line::compiler::Visitor,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, Diagnostics},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName},
@@ -328,7 +328,7 @@ macro_rules! simple_visitor {
 
         pub struct Context<'a> {
             env: &'a crate::shared::CompilationEnv,
-            warning_filters_scope: crate::shared::WarningFiltersScope,
+            warning_filters_scope: crate::diagnostics::warning_filters::WarningFiltersScope,
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
@@ -356,7 +356,10 @@ macro_rules! simple_visitor {
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
-            fn push_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+            fn push_warning_filter_scope(
+                &mut self,
+                filters: crate::diagnostics::warning_filters::WarningFilters,
+            ) {
                 self.warning_filters_scope.push(filters)
             }
 

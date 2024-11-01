@@ -33,12 +33,16 @@ use super::Handler;
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
 ///
+/// The committer can optionally be configured to lag behind the ingestion service by a fixed
+/// number of checkpoints (configured by `checkpoint_lag`).
+///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
 /// unblock its regulator.
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H: Handler + 'static>(
     config: PipelineConfig,
+    checkpoint_lag: Option<u64>,
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -69,7 +73,7 @@ pub(super) fn committer<H: Handler + 'static>(
         // checkpoint to expect and add to the batch.
         let mut watermark_needs_update = false;
         let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive + 1;
+            let next = watermark.checkpoint_hi_inclusive as u64 + 1;
             (watermark, next)
         } else {
             (CommitterWatermark::initial(H::NAME.into()), 0)
@@ -90,7 +94,7 @@ pub(super) fn committer<H: Handler + 'static>(
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received, stopping committer");
+                    info!(pipeline = H::NAME, "Shutdown received");
                     break;
                 }
 
@@ -108,24 +112,58 @@ pub(super) fn committer<H: Handler + 'static>(
                         continue;
                     };
 
+                    // Determine whether we need to hold back checkpoints from being committed
+                    // because of checkpoint lag.
+                    //
+                    // TODO(amnn): Test this (depends on migrations and tempdb)
+                    let commit_hi_inclusive = match (checkpoint_lag, pending.last_key_value()) {
+                        (Some(lag), None) => {
+                            debug!(pipeline = H::NAME, lag, "No pending checkpoints");
+                            if rx.is_closed() && rx.is_empty() {
+                                info!(pipeline = H::NAME, "Processor closed channel before priming");
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        (Some(lag), Some((pending_hi, _))) if *pending_hi < lag => {
+                            debug!(pipeline = H::NAME, lag, pending_hi, "Priming pipeline");
+                            if rx.is_closed() && rx.is_empty() {
+                                info!(pipeline = H::NAME, "Processor closed channel while priming");
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        (Some(lag), Some((pending_hi, _))) => Some(*pending_hi - lag),
+                        (None, _) => None,
+                    };
+
                     let guard = metrics
                         .collector_gather_latency
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
                     // Push data into the next batch as long as it's from contiguous checkpoints,
-                    // and we haven't gathered information from too many checkpoints already. We
-                    // don't worry about overall size because the handler may have optimized writes
-                    // by combining rows, but we will limit the number of checkpoints we try and
-                    // batch together as a way to impose some limit on the size of the batch (and
-                    // therefore the length of the write transaction).
+                    // outside of the checkpoint lag and we haven't gathered information from too
+                    // many checkpoints already.
+                    //
+                    // We don't worry about overall size because the handler may have optimized
+                    // writes by combining rows, but we will limit the number of checkpoints we try
+                    // and batch together as a way to impose some limit on the size of the batch
+                    // (and therefore the length of the write transaction).
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         let Some(entry) = pending.first_entry() else {
                             break;
                         };
 
-                        let indexed = entry.get();
-                        match next_checkpoint.cmp(&indexed.watermark.checkpoint_hi_inclusive) {
+                        if matches!(commit_hi_inclusive, Some(hi) if hi < *entry.key()) {
+                            break;
+                        }
+
+                        match next_checkpoint.cmp(entry.key()) {
                             // Next pending checkpoint is from the future.
                             Ordering::Less => break,
 
@@ -172,6 +210,26 @@ pub(super) fn committer<H: Handler + 'static>(
                         .total_committer_batches_attempted
                         .with_label_values(&[H::NAME])
                         .inc();
+
+                    metrics
+                        .watermark_epoch
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.epoch_hi_inclusive);
+
+                    metrics
+                        .watermark_checkpoint
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.checkpoint_hi_inclusive);
+
+                    metrics
+                        .watermark_transaction
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.tx_hi);
+
+                    metrics
+                        .watermark_timestamp_ms
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.timestamp_ms_hi_inclusive);
 
                     let guard = metrics
                         .committer_commit_latency
@@ -236,19 +294,24 @@ pub(super) fn committer<H: Handler + 'static>(
                         .inc_by(affected as u64);
 
                     metrics
-                        .watermark_epoch
+                        .watermark_epoch_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.epoch_hi_inclusive);
 
                     metrics
-                        .watermark_checkpoint
+                        .watermark_checkpoint_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.checkpoint_hi_inclusive);
 
                     metrics
-                        .watermark_transaction
+                        .watermark_transaction_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.tx_hi);
+
+                    metrics
+                        .watermark_timestamp_in_db_ms
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.timestamp_ms_hi_inclusive);
 
                     if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
                         next_loud_watermark_update += LOUD_WATERMARK_UPDATE_INTERVAL;
@@ -257,6 +320,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             epoch = watermark.epoch_hi_inclusive,
                             checkpoint = watermark.checkpoint_hi_inclusive,
                             transaction = watermark.tx_hi,
+                            timestamp = %watermark.timestamp(),
                             "Watermark",
                         );
                     } else {
@@ -265,6 +329,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             epoch = watermark.epoch_hi_inclusive,
                             checkpoint = watermark.checkpoint_hi_inclusive,
                             transaction = watermark.tx_hi,
+                            timestamp = %watermark.timestamp(),
                             "Watermark",
                         );
                     }
@@ -283,12 +348,22 @@ pub(super) fn committer<H: Handler + 'static>(
                     batch_rows = 0;
                     attempt = 0;
 
-                    if pending_rows == 0 && rx.is_closed() && rx.is_empty() {
-                        info!(
-                            pipeline = H::NAME,
-                            ?watermark,
-                            "Processor closed channel, pending rows empty, stopping committer",
-                        );
+                    // If there is a pending checkpoint, no greater than the expected next
+                    // checkpoint, and less than or equal to the inclusive upperbound due to
+                    // checkpoint lag, then the pipeline can do more work immediately (without
+                    // waiting).
+                    //
+                    // Otherwise, if its channels have been closed, we know that it is guaranteed
+                    // not to make any more progress, and we can stop the task.
+                    if pending
+                        .first_key_value()
+                        .is_some_and(|(next, _)| {
+                            *next <= next_checkpoint && commit_hi_inclusive.map_or(true, |hi| *next <= hi)
+                        })
+                    {
+                        poll.reset_immediately();
+                    } else if rx.is_closed() && rx.is_empty() {
+                        info!(pipeline = H::NAME, "Processor closed channel, pending rows empty");
                         break;
                     }
                 }
@@ -311,15 +386,23 @@ pub(super) fn committer<H: Handler + 'static>(
                         continue;
                     }
 
-                    let Some((_, next)) = pending.first_key_value() else {
+                    let Some((next, _)) = pending.first_key_value() else {
                         continue;
                     };
 
-                    if next.watermark.checkpoint_hi_inclusive <= next_checkpoint {
-                        poll.reset_immediately();
+                    match (checkpoint_lag, pending.last_key_value()) {
+                        (Some(_), None) => continue,
+                        (Some(lag), Some((last, _))) if last.saturating_sub(lag) <= *next => {
+                            continue;
+                        }
+                        _ => if *next <= next_checkpoint {
+                            poll.reset_immediately();
+                        }
                     }
                 }
             }
         }
+
+        info!(pipeline = H::NAME, ?watermark, "Stopping committer");
     })
 }

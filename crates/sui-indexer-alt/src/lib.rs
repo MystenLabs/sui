@@ -142,7 +142,6 @@ impl Indexer {
     /// exists for, for their pipeline.
     pub async fn concurrent_pipeline<H: concurrent::Handler + 'static>(&mut self) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
-            info!("Skipping pipeline {}", H::NAME);
             return Ok(());
         };
 
@@ -170,9 +169,14 @@ impl Indexer {
     /// be required to handle pipelines that modify data in-place (where each update is not an
     /// insert, but could be a modification of an existing row, where ordering between updates is
     /// important).
-    pub async fn sequential_pipeline<H: sequential::Handler + 'static>(&mut self) -> Result<()> {
+    ///
+    /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
+    /// number of checkpoints (configured by `checkpoint_lag`).
+    pub async fn sequential_pipeline<H: sequential::Handler + 'static>(
+        &mut self,
+        checkpoint_lag: Option<u64>,
+    ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
-            info!("Skipping pipeline {}", H::NAME);
             return Ok(());
         };
 
@@ -181,6 +185,7 @@ impl Indexer {
         let (processor, committer) = sequential::pipeline::<H>(
             watermark,
             self.pipeline_config.clone(),
+            checkpoint_lag,
             self.db.clone(),
             checkpoint_rx,
             watermark_tx,

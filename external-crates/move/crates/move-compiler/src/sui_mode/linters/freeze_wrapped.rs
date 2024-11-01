@@ -7,12 +7,12 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::shared::WarningFiltersScope;
 use crate::{
     diag,
     diagnostics::{
         codes::{custom, DiagnosticInfo, Severity},
-        Diagnostic, Diagnostics, WarningFilters,
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
     },
     expansion::ast as E,
     naming::ast as N,

@@ -10,6 +10,7 @@ use move_command_line_common::{
 };
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
+    diagnostics::warning_filters::WarningFilters,
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},

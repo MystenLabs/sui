@@ -4,7 +4,12 @@
 
 use crate::{
     diag,
-    diagnostics::{codes::WarningFilter, Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{
+        warning_filters::{
+            WarningFilter, WarningFilters, WarningFiltersScope, FILTER_ALL, FILTER_UNUSED,
+        },
+        Diagnostic, Diagnostics,
+    },
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
         alias_map_builder::{

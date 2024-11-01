@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accept::AcceptFormat,
+    accept::AcceptJsonProtobufBcs,
     openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
+    proto,
     reader::StateReader,
-    response::ResponseContent,
+    response::JsonProtobufBcs,
     RestService, Result,
 };
 use axum::extract::{Path, State};
@@ -35,6 +36,7 @@ impl ApiEndpoint<RestService> for GetLatestCommittee {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ValidatorCommittee>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -47,17 +49,18 @@ impl ApiEndpoint<RestService> for GetLatestCommittee {
 }
 
 async fn get_latest_committee(
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<ValidatorCommittee>> {
+) -> Result<JsonProtobufBcs<ValidatorCommittee, proto::ValidatorCommittee, ValidatorCommittee>> {
     let current_epoch = state.inner().get_latest_checkpoint()?.epoch();
     let committee = state
         .get_committee(current_epoch)?
         .ok_or_else(|| CommitteeNotFoundError::new(current_epoch))?;
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(committee),
-        AcceptFormat::Bcs => ResponseContent::Bcs(committee),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(committee),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(committee.into()),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(committee),
     }
     .pipe(Ok)
 }
@@ -85,6 +88,7 @@ impl ApiEndpoint<RestService> for GetCommittee {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ValidatorCommittee>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -99,16 +103,17 @@ impl ApiEndpoint<RestService> for GetCommittee {
 
 async fn get_committee(
     Path(epoch): Path<EpochId>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<ValidatorCommittee>> {
+) -> Result<JsonProtobufBcs<ValidatorCommittee, proto::ValidatorCommittee, ValidatorCommittee>> {
     let committee = state
         .get_committee(epoch)?
         .ok_or_else(|| CommitteeNotFoundError::new(epoch))?;
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(committee),
-        AcceptFormat::Bcs => ResponseContent::Bcs(committee),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(committee),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(committee.into()),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(committee),
     }
     .pipe(Ok)
 }

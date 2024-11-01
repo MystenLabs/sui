@@ -90,3 +90,67 @@ message ListCheckpointResponse {
 message ListTransactionsResponse {
     repeated GetTransactionResponse transactions = 1;
 }
+
+message Address {
+    bytes address = 1;
+}
+
+message TypeTag {
+    string type_tag = 1;
+}
+
+message I128 {
+    bytes little_endian_bytes = 1;
+}
+
+message BalanceChange {
+    Address address = 1;
+    TypeTag coin_type = 2;
+    I128 amount = 3;
+}
+
+message EffectsFinality {
+    optional ValidatorAggregatedSignature signature = 1;
+    optional uint64 checkpoint = 2;
+}
+
+message TransactionExecutionResponse {
+    optional TransactionEffects effects = 1;
+    optional EffectsFinality finality = 2;
+    optional TransactionEvents events = 3;
+    repeated BalanceChange balance_changes = 4;
+    repeated Object input_objects = 5;
+    repeated Object output_objects = 6;
+}
+
+message TransactionSimulationResponse {
+    optional TransactionEffects effects = 1;
+    optional TransactionEvents events = 2;
+    repeated BalanceChange balance_changes = 3;
+    repeated Object input_objects = 4;
+    repeated Object output_objects = 5;
+}
+
+message ResolveTransactionResponse {
+    optional Transaction transaction = 1;
+    optional TransactionSimulationResponse simulation = 2;
+}
+
+message ExecuteTransactionRequest {
+    optional Transaction transaction = 1;
+    repeated UserSignature signatures = 2;
+}
+
+message SimulateTransactionRequest {
+    optional Transaction transaction = 1;
+}
+
+message ValidatorCommittee {
+    uint64 epoch = 1;
+    repeated ValidatorCommitteeMember members = 2;
+}
+
+message ValidatorCommitteeMember {
+    bytes public_key = 1;
+    uint64 stake = 2;
+}

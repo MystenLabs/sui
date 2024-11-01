@@ -9,11 +9,15 @@ use crate::{
     multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
 };
 use eyre::{eyre, Result};
-use futures::FutureExt;
+use futures::{FutureExt, Stream};
+use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{convert::Infallible, net::SocketAddr};
-use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio_stream::wrappers::TcpListenerStream;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tonic::codegen::http::HeaderValue;
 use tonic::{
     body::BoxBody,
@@ -35,6 +39,7 @@ use tower_http::classify::{GrpcErrorsAsFailures, SharedClassifier};
 use tower_http::propagate_header::PropagateHeaderLayer;
 use tower_http::set_header::SetRequestHeaderLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnBodyChunk, DefaultOnEos, TraceLayer};
+use tracing::debug;
 
 pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProvider> {
     router: Router<WrapperService<M>>,
@@ -155,46 +160,48 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
         self
     }
 
-    pub async fn bind(self, addr: &Multiaddr) -> Result<Server> {
+    pub async fn bind(self, addr: &Multiaddr, tls_config: Option<ServerConfig>) -> Result<Server> {
         let mut iter = addr.iter();
 
         let (tx_cancellation, rx_cancellation) = tokio::sync::oneshot::channel();
         let rx_cancellation = rx_cancellation.map(|_| ());
-        let (local_addr, server): (Multiaddr, BoxFuture<(), tonic::transport::Error>) =
-            match iter.next().ok_or_else(|| eyre!("malformed addr"))? {
-                Protocol::Dns(_) => {
-                    let (dns_name, tcp_port, _http_or_https) = parse_dns(addr)?;
-                    let (local_addr, incoming) =
-                        tcp_listener_and_update_multiaddr(addr, (dns_name.as_ref(), tcp_port))
-                            .await?;
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                Protocol::Ip4(_) => {
-                    let (socket_addr, _http_or_https) = parse_ip4(addr)?;
-                    let (local_addr, incoming) =
-                        tcp_listener_and_update_multiaddr(addr, socket_addr).await?;
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                Protocol::Ip6(_) => {
-                    let (socket_addr, _http_or_https) = parse_ip6(addr)?;
-                    let (local_addr, incoming) =
-                        tcp_listener_and_update_multiaddr(addr, socket_addr).await?;
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
-            };
+        let (local_addr, server): (Multiaddr, BoxFuture<(), tonic::transport::Error>) = match iter
+            .next()
+            .ok_or_else(|| eyre!("malformed addr"))?
+        {
+            Protocol::Dns(_) => {
+                let (dns_name, tcp_port, _http_or_https) = parse_dns(addr)?;
+                let (local_addr, incoming) =
+                    listen_and_update_multiaddr(addr, (dns_name.to_string(), tcp_port), tls_config)
+                        .await?;
+                let server = Box::pin(
+                    self.router
+                        .serve_with_incoming_shutdown(incoming, rx_cancellation),
+                );
+                (local_addr, server)
+            }
+            Protocol::Ip4(_) => {
+                let (socket_addr, _http_or_https) = parse_ip4(addr)?;
+                let (local_addr, incoming) =
+                    listen_and_update_multiaddr(addr, socket_addr, tls_config).await?;
+                let server = Box::pin(
+                    self.router
+                        .serve_with_incoming_shutdown(incoming, rx_cancellation),
+                );
+                (local_addr, server)
+            }
+            Protocol::Ip6(_) => {
+                let (socket_addr, _http_or_https) = parse_ip6(addr)?;
+                let (local_addr, incoming) =
+                    listen_and_update_multiaddr(addr, socket_addr, tls_config).await?;
+                let server = Box::pin(
+                    self.router
+                        .serve_with_incoming_shutdown(incoming, rx_cancellation),
+                );
+                (local_addr, server)
+            }
+            unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
+        };
 
         Ok(Server {
             server,
@@ -205,21 +212,133 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
     }
 }
 
-async fn tcp_listener_and_update_multiaddr<T: ToSocketAddrs>(
+async fn listen_and_update_multiaddr<T: ToSocketAddrs>(
     address: &Multiaddr,
     socket_addr: T,
-) -> Result<(Multiaddr, TcpListenerStream)> {
-    let (local_addr, incoming) = tcp_listener(socket_addr).await?;
+    tls_config: Option<ServerConfig>,
+) -> Result<(
+    Multiaddr,
+    impl Stream<Item = std::io::Result<TcpOrTlsStream>>,
+)> {
+    let listener = TcpListener::bind(socket_addr).await?;
+    let local_addr = listener.local_addr()?;
     let local_addr = update_tcp_port_in_multiaddr(address, local_addr.port());
-    Ok((local_addr, incoming))
+
+    let tls_acceptor = tls_config.map(|tls_config| TlsAcceptor::from(Arc::new(tls_config)));
+    let incoming = TcpOrTlsListener::new(listener, tls_acceptor);
+    let stream = async_stream::stream! {
+        loop {
+            yield incoming.accept().await;
+        }
+    };
+
+    Ok((local_addr, stream))
 }
 
-async fn tcp_listener<T: ToSocketAddrs>(address: T) -> Result<(SocketAddr, TcpListenerStream)> {
-    let listener = TcpListener::bind(address).await?;
-    let local_addr = listener.local_addr()?;
-    let incoming = TcpListenerStream::new(listener);
-    Ok((local_addr, incoming))
+pub struct TcpOrTlsListener {
+    listener: TcpListener,
+    tls_acceptor: Option<TlsAcceptor>,
 }
+
+impl TcpOrTlsListener {
+    fn new(listener: TcpListener, tls_acceptor: Option<TlsAcceptor>) -> Self {
+        Self {
+            listener,
+            tls_acceptor,
+        }
+    }
+
+    async fn accept(&self) -> std::io::Result<TcpOrTlsStream> {
+        let (stream, addr) = self.listener.accept().await?;
+        if self.tls_acceptor.is_none() {
+            return Ok(TcpOrTlsStream::Tcp(stream, addr));
+        }
+
+        // Determine whether new connection is TLS.
+        let mut buf = [0; 1];
+        stream.peek(&mut buf).await?;
+        if buf[0] == 0x16 {
+            // First byte of a TLS handshake is 0x16.
+            debug!("accepting TLS connection from {addr:?}");
+            let stream = self.tls_acceptor.as_ref().unwrap().accept(stream).await?;
+            Ok(TcpOrTlsStream::Tls(stream, addr))
+        } else {
+            debug!("accepting TCP connection from {addr:?}");
+            Ok(TcpOrTlsStream::Tcp(stream, addr))
+        }
+    }
+}
+
+pub enum TcpOrTlsStream {
+    Tcp(TcpStream, SocketAddr),
+    Tls(TlsStream<TcpStream>, SocketAddr),
+}
+
+impl AsyncRead for TcpOrTlsStream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf,
+    ) -> Poll<std::io::Result<()>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Tcp(stream, _) => Pin::new(stream).poll_read(cx, buf),
+            TcpOrTlsStream::Tls(stream, _) => Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for TcpOrTlsStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::result::Result<usize, std::io::Error>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Tcp(stream, _) => Pin::new(stream).poll_write(cx, buf),
+            TcpOrTlsStream::Tls(stream, _) => Pin::new(stream).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::result::Result<(), std::io::Error>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Tcp(stream, _) => Pin::new(stream).poll_flush(cx),
+            TcpOrTlsStream::Tls(stream, _) => Pin::new(stream).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::result::Result<(), std::io::Error>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Tcp(stream, _) => Pin::new(stream).poll_shutdown(cx),
+            TcpOrTlsStream::Tls(stream, _) => Pin::new(stream).poll_shutdown(cx),
+        }
+    }
+}
+
+impl tonic::transport::server::Connected for TcpOrTlsStream {
+    type ConnectInfo = tonic::transport::server::TcpConnectInfo;
+
+    fn connect_info(&self) -> Self::ConnectInfo {
+        match self {
+            TcpOrTlsStream::Tcp(stream, addr) => Self::ConnectInfo {
+                local_addr: stream.local_addr().ok(),
+                remote_addr: Some(*addr),
+            },
+            TcpOrTlsStream::Tls(stream, addr) => Self::ConnectInfo {
+                local_addr: stream.get_ref().0.local_addr().ok(),
+                remote_addr: Some(*addr),
+            },
+        }
+    }
+}
+
+/// TLS server name to use for the public Sui validator interface.
+pub const SUI_TLS_SERVER_NAME: &str = "sui";
 
 pub struct Server {
     server: BoxFuture<(), tonic::transport::Error>,
@@ -318,14 +437,14 @@ mod test {
 
         let mut server = config
             .server_builder_with_metrics(metrics.clone())
-            .bind(&address)
+            .bind(&address, None)
             .await
             .unwrap();
 
         let address = server.local_addr().to_owned();
         let cancel_handle = server.take_cancel_handle().unwrap();
         let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         client
@@ -381,14 +500,14 @@ mod test {
 
         let mut server = config
             .server_builder_with_metrics(metrics.clone())
-            .bind(&address)
+            .bind(&address, None)
             .await
             .unwrap();
 
         let address = server.local_addr().to_owned();
         let cancel_handle = server.take_cancel_handle().unwrap();
         let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         // Call the healthcheck for a service that doesn't exist
@@ -408,11 +527,11 @@ mod test {
 
     async fn test_multiaddr(address: Multiaddr) {
         let config = Config::new();
-        let mut server = config.server_builder().bind(&address).await.unwrap();
+        let mut server = config.server_builder().bind(&address, None).await.unwrap();
         let address = server.local_addr().to_owned();
         let cancel_handle = server.take_cancel_handle().unwrap();
         let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         client

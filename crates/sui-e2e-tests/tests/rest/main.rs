@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod checkpoints;
+mod committee;
 mod execute;
+mod objects;
 mod resolve;
+mod transactions;
 
 async fn transfer_coin(
     context: &sui_sdk::wallet_context::WalletContext,

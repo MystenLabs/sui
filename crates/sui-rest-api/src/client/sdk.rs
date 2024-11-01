@@ -230,9 +230,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::GetCheckpointResponse>(request)
-            .await?
-            .try_map(TryInto::try_into)
+        self.bcs(request).await
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
@@ -248,10 +246,6 @@ impl Client {
         let checkpoint = page
             .pop()
             .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
-        let checkpoint = SignedCheckpointSummary {
-            checkpoint: checkpoint.summary,
-            signature: checkpoint.signature,
-        };
 
         Ok(Response::new(checkpoint, parts))
     }
@@ -259,19 +253,20 @@ impl Client {
     pub async fn list_checkpoints(
         &self,
         parameters: &ListCheckpointsQueryParameters,
-    ) -> Result<Response<Vec<CheckpointResponse>>> {
+    ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
         let url = self.url().join("checkpoints")?;
 
         let request = self.inner.get(url).query(parameters);
 
-        self.protobuf::<crate::proto::ListCheckpointResponse>(request)
-            .await?
-            .try_map(|page| {
-                page.checkpoints
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect()
-            })
+        self.bcs(request).await
+        // self.protobuf::<crate::proto::ListCheckpointResponse>(request)
+        //     .await?
+        //     .try_map(|page| {
+        //         page.checkpoints
+        //             .into_iter()
+        //             .map(TryInto::try_into)
+        //             .collect()
+        //     })
     }
 
     pub async fn get_full_checkpoint(
@@ -284,13 +279,14 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.protobuf::<crate::proto::FullCheckpoint>(request)
-            .await?
-            // TODO make this more efficient and convert directly into the sui-sdk-types version
-            .try_map(|proto| {
-                sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
-                    .and_then(TryInto::try_into)
-            })
+        self.bcs(request).await
+        // self.protobuf::<crate::proto::FullCheckpoint>(request)
+        //     .await?
+        //     // TODO make this more efficient and convert directly into the sui-sdk-types version
+        //     .try_map(|proto| {
+        //         sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
+        //             .and_then(TryInto::try_into)
+        //     })
     }
 
     pub async fn get_transaction(
@@ -435,6 +431,7 @@ impl Client {
         }
     }
 
+    #[allow(unused)]
     pub(super) async fn protobuf<T: prost::Message + std::default::Default>(
         &self,
         request: reqwest::RequestBuilder,

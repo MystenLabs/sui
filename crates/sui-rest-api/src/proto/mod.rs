@@ -338,6 +338,36 @@ impl TryFrom<&UserSignature> for sui_types::signature::GenericSignature {
 }
 
 //
+// GetObjectResponse
+//
+
+impl TryFrom<crate::objects::ObjectResponse> for GetObjectResponse {
+    type Error = bcs::Error;
+
+    fn try_from(value: crate::objects::ObjectResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            digest: value.digest.as_bytes().to_vec().into(),
+            object: Some(Object::try_from(&value.object)?),
+        })
+    }
+}
+
+impl TryFrom<GetObjectResponse> for crate::objects::ObjectResponse {
+    type Error = bcs::Error;
+
+    fn try_from(value: GetObjectResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            digest: sui_sdk_types::types::ObjectDigest::from_bytes(&value.digest)
+                .map_err(|e| bcs::Error::Custom(e.to_string()))?,
+            object: value
+                .object
+                .ok_or_else(|| bcs::Error::Custom("missing object".into()))?
+                .pipe_ref(TryInto::try_into)?,
+        })
+    }
+}
+
+//
 // GetCheckpointResponse
 //
 
@@ -588,6 +618,579 @@ impl TryFrom<FullCheckpoint> for sui_types::full_checkpoint_content::CheckpointD
             checkpoint_summary,
             checkpoint_contents: contents,
             transactions,
+        })
+    }
+}
+
+//
+// Address
+//
+
+impl From<&sui_sdk_types::types::Address> for Address {
+    fn from(value: &sui_sdk_types::types::Address) -> Self {
+        Self {
+            address: value.as_bytes().to_vec().into(),
+        }
+    }
+}
+
+impl TryFrom<&Address> for sui_sdk_types::types::Address {
+    type Error = bcs::Error;
+
+    fn try_from(value: &Address) -> Result<Self, Self::Error> {
+        Self::from_bytes(&value.address).map_err(|e| bcs::Error::Custom(e.to_string()))
+    }
+}
+
+impl TryFrom<&Address> for sui_types::base_types::SuiAddress {
+    type Error = bcs::Error;
+
+    fn try_from(value: &Address) -> Result<Self, Self::Error> {
+        Self::from_bytes(&value.address).map_err(|e| bcs::Error::Custom(e.to_string()))
+    }
+}
+
+//
+// TypeTag
+//
+
+impl From<&sui_sdk_types::types::TypeTag> for TypeTag {
+    fn from(value: &sui_sdk_types::types::TypeTag) -> Self {
+        Self {
+            type_tag: value.to_string(),
+        }
+    }
+}
+
+impl TryFrom<&TypeTag> for sui_sdk_types::types::TypeTag {
+    type Error = sui_sdk_types::types::TypeParseError;
+
+    fn try_from(value: &TypeTag) -> Result<Self, Self::Error> {
+        value.type_tag.parse()
+    }
+}
+
+impl TryFrom<&TypeTag> for sui_types::TypeTag {
+    type Error = bcs::Error;
+
+    fn try_from(value: &TypeTag) -> Result<Self, Self::Error> {
+        value
+            .type_tag
+            .parse::<sui_types::TypeTag>()
+            .map_err(|e| bcs::Error::Custom(e.to_string()))
+    }
+}
+
+//
+// I128
+//
+
+impl From<i128> for I128 {
+    fn from(value: i128) -> Self {
+        Self {
+            little_endian_bytes: value.to_le_bytes().to_vec().into(),
+        }
+    }
+}
+
+impl TryFrom<&I128> for i128 {
+    type Error = std::array::TryFromSliceError;
+
+    fn try_from(value: &I128) -> Result<Self, Self::Error> {
+        Ok(i128::from_le_bytes(
+            value.little_endian_bytes.as_ref().try_into()?,
+        ))
+    }
+}
+
+//
+// BalanceChange
+//
+
+impl From<&sui_sdk_types::types::BalanceChange> for BalanceChange {
+    fn from(value: &sui_sdk_types::types::BalanceChange) -> Self {
+        Self {
+            address: Some(Address::from(&value.address)),
+            coin_type: Some(TypeTag::from(&value.coin_type)),
+            amount: Some(I128::from(value.amount)),
+        }
+    }
+}
+
+impl TryFrom<&BalanceChange> for sui_sdk_types::types::BalanceChange {
+    type Error = bcs::Error;
+
+    fn try_from(value: &BalanceChange) -> Result<Self, Self::Error> {
+        let address = value
+            .address
+            .as_ref()
+            .ok_or_else(|| bcs::Error::Custom("missing address".into()))?
+            .try_into()?;
+
+        let coin_type = value
+            .coin_type
+            .as_ref()
+            .ok_or_else(|| bcs::Error::Custom("missing coin_type".into()))?
+            .pipe(sui_sdk_types::types::TypeTag::try_from)
+            .map_err(|e| bcs::Error::Custom(e.to_string()))?;
+
+        let amount = value
+            .amount
+            .as_ref()
+            .ok_or_else(|| bcs::Error::Custom("missing amount".into()))?
+            .pipe(i128::try_from)
+            .map_err(|e| bcs::Error::Custom(e.to_string()))?;
+
+        Ok(Self {
+            address,
+            coin_type,
+            amount,
+        })
+    }
+}
+
+impl TryFrom<&BalanceChange> for crate::client::BalanceChange {
+    type Error = bcs::Error;
+
+    fn try_from(value: &BalanceChange) -> Result<Self, Self::Error> {
+        let address = value
+            .address
+            .as_ref()
+            .ok_or_else(|| bcs::Error::Custom("missing address".into()))?
+            .try_into()?;
+
+        let coin_type = value
+            .coin_type
+            .as_ref()
+            .ok_or_else(|| bcs::Error::Custom("missing coin_type".into()))?
+            .pipe(sui_types::TypeTag::try_from)
+            .map_err(|e| bcs::Error::Custom(e.to_string()))?;
+
+        let amount = value
+            .amount
+            .as_ref()
+            .ok_or_else(|| bcs::Error::Custom("missing amount".into()))?
+            .pipe(i128::try_from)
+            .map_err(|e| bcs::Error::Custom(e.to_string()))?;
+
+        Ok(Self {
+            address,
+            coin_type,
+            amount,
+        })
+    }
+}
+//
+// EffectsFinality
+//
+
+impl TryFrom<&crate::transactions::EffectsFinality> for EffectsFinality {
+    type Error = bcs::Error;
+
+    fn try_from(value: &crate::transactions::EffectsFinality) -> Result<Self, Self::Error> {
+        let (signature, checkpoint) = match value {
+            crate::transactions::EffectsFinality::Certified { signature } => {
+                (Some(signature.try_into()?), None)
+            }
+            crate::transactions::EffectsFinality::Checkpointed { checkpoint } => {
+                (None, Some(*checkpoint))
+            }
+        };
+
+        Ok(Self {
+            signature,
+            checkpoint,
+        })
+    }
+}
+
+impl TryFrom<&EffectsFinality> for crate::transactions::EffectsFinality {
+    type Error = bcs::Error;
+
+    fn try_from(value: &EffectsFinality) -> Result<Self, Self::Error> {
+        let signature = value
+            .signature
+            .as_ref()
+            .map(sui_sdk_types::types::ValidatorAggregatedSignature::try_from)
+            .transpose()?;
+        match (signature, value.checkpoint) {
+            (Some(signature), _) => crate::transactions::EffectsFinality::Certified { signature },
+            (None, Some(checkpoint)) => {
+                crate::transactions::EffectsFinality::Checkpointed { checkpoint }
+            }
+            (None, None) => {
+                return Err(bcs::Error::Custom(
+                    "missing signature or checkpoint field".into(),
+                ))
+            }
+        }
+        .pipe(Ok)
+    }
+}
+
+impl TryFrom<&EffectsFinality> for crate::client::EffectsFinality {
+    type Error = bcs::Error;
+
+    fn try_from(value: &EffectsFinality) -> Result<Self, Self::Error> {
+        let signature = value
+            .signature
+            .as_ref()
+            .map(sui_types::crypto::AuthorityStrongQuorumSignInfo::try_from)
+            .transpose()?;
+        match (signature, value.checkpoint) {
+            (Some(signature), _) => crate::client::EffectsFinality::Certified { signature },
+            (None, Some(checkpoint)) => crate::client::EffectsFinality::Checkpointed { checkpoint },
+            (None, None) => {
+                return Err(bcs::Error::Custom(
+                    "missing signature or checkpoint field".into(),
+                ))
+            }
+        }
+        .pipe(Ok)
+    }
+}
+
+//
+// TransactionExecutionResponse
+//
+
+impl TryFrom<crate::transactions::TransactionExecutionResponse> for TransactionExecutionResponse {
+    type Error = bcs::Error;
+
+    fn try_from(
+        value: crate::transactions::TransactionExecutionResponse,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            effects: Some(TransactionEffects::try_from(&value.effects)?),
+            finality: Some(EffectsFinality::try_from(&value.finality)?),
+            events: value
+                .events
+                .as_ref()
+                .map(TransactionEvents::try_from)
+                .transpose()?,
+            balance_changes: value
+                .balance_changes
+                .iter()
+                .flat_map(|balance_changes| balance_changes.iter())
+                .map(BalanceChange::from)
+                .collect(),
+            input_objects: value
+                .input_objects
+                .iter()
+                .flat_map(|objects| objects.iter())
+                .map(Object::try_from)
+                .collect::<Result<_, _>>()?,
+            output_objects: value
+                .output_objects
+                .iter()
+                .flat_map(|objects| objects.iter())
+                .map(Object::try_from)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<TransactionExecutionResponse> for crate::transactions::TransactionExecutionResponse {
+    type Error = bcs::Error;
+
+    fn try_from(value: TransactionExecutionResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            effects: value
+                .effects
+                .ok_or_else(|| bcs::Error::Custom("missing Effects".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            events: value.events.as_ref().map(TryInto::try_into).transpose()?,
+            input_objects: Some(
+                value
+                    .input_objects
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            output_objects: Some(
+                value
+                    .output_objects
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            finality: value
+                .finality
+                .ok_or_else(|| bcs::Error::Custom("missing finality".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            balance_changes: Some(
+                value
+                    .balance_changes
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
+}
+
+impl TryFrom<TransactionExecutionResponse> for crate::client::TransactionExecutionResponse {
+    type Error = bcs::Error;
+
+    fn try_from(value: TransactionExecutionResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            effects: value
+                .effects
+                .ok_or_else(|| bcs::Error::Custom("missing Effects".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            events: value.events.as_ref().map(TryInto::try_into).transpose()?,
+            input_objects: Some(
+                value
+                    .input_objects
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            output_objects: Some(
+                value
+                    .output_objects
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            finality: value
+                .finality
+                .ok_or_else(|| bcs::Error::Custom("missing finality".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            balance_changes: Some(
+                value
+                    .balance_changes
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
+}
+
+//
+// TransactionSimulationResponse
+//
+
+impl TryFrom<crate::transactions::TransactionSimulationResponse> for TransactionSimulationResponse {
+    type Error = bcs::Error;
+
+    fn try_from(
+        value: crate::transactions::TransactionSimulationResponse,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            effects: Some(TransactionEffects::try_from(&value.effects)?),
+            events: value
+                .events
+                .as_ref()
+                .map(TransactionEvents::try_from)
+                .transpose()?,
+            balance_changes: value
+                .balance_changes
+                .iter()
+                .flat_map(|balance_changes| balance_changes.iter())
+                .map(BalanceChange::from)
+                .collect(),
+            input_objects: value
+                .input_objects
+                .iter()
+                .flat_map(|objects| objects.iter())
+                .map(Object::try_from)
+                .collect::<Result<_, _>>()?,
+            output_objects: value
+                .output_objects
+                .iter()
+                .flat_map(|objects| objects.iter())
+                .map(Object::try_from)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<TransactionSimulationResponse> for crate::transactions::TransactionSimulationResponse {
+    type Error = bcs::Error;
+
+    fn try_from(value: TransactionSimulationResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            effects: value
+                .effects
+                .ok_or_else(|| bcs::Error::Custom("missing Effects".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            events: value.events.as_ref().map(TryInto::try_into).transpose()?,
+            input_objects: Some(
+                value
+                    .input_objects
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            output_objects: Some(
+                value
+                    .output_objects
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            balance_changes: Some(
+                value
+                    .balance_changes
+                    .iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
+}
+
+//
+// ResolveTransactionResponse
+//
+
+impl TryFrom<crate::transactions::ResolveTransactionResponse> for ResolveTransactionResponse {
+    type Error = bcs::Error;
+
+    fn try_from(
+        value: crate::transactions::ResolveTransactionResponse,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction: Some(Transaction::try_from(&value.transaction)?),
+            simulation: value
+                .simulation
+                .map(TransactionSimulationResponse::try_from)
+                .transpose()?,
+        })
+    }
+}
+
+impl TryFrom<ResolveTransactionResponse> for crate::transactions::ResolveTransactionResponse {
+    type Error = bcs::Error;
+
+    fn try_from(value: ResolveTransactionResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction: value
+                .transaction
+                .ok_or_else(|| bcs::Error::Custom("missing transaction".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            simulation: value.simulation.map(TryInto::try_into).transpose()?,
+        })
+    }
+}
+
+//
+// ExecuteTransactionRequest
+//
+
+impl TryFrom<sui_sdk_types::types::SignedTransaction> for ExecuteTransactionRequest {
+    type Error = bcs::Error;
+
+    fn try_from(value: sui_sdk_types::types::SignedTransaction) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction: Some(Transaction::try_from(&value.transaction)?),
+            signatures: value
+                .signatures
+                .iter()
+                .map(UserSignature::try_from)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<ExecuteTransactionRequest> for sui_sdk_types::types::SignedTransaction {
+    type Error = bcs::Error;
+
+    fn try_from(value: ExecuteTransactionRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction: value
+                .transaction
+                .ok_or_else(|| bcs::Error::Custom("missing transaction".into()))?
+                .pipe_ref(TryInto::try_into)?,
+            signatures: value
+                .signatures
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+//
+// SimulateTransactionRequest
+//
+
+impl TryFrom<sui_sdk_types::types::Transaction> for SimulateTransactionRequest {
+    type Error = bcs::Error;
+
+    fn try_from(value: sui_sdk_types::types::Transaction) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction: Some(Transaction::try_from(&value)?),
+        })
+    }
+}
+
+impl TryFrom<SimulateTransactionRequest> for sui_sdk_types::types::Transaction {
+    type Error = bcs::Error;
+
+    fn try_from(value: SimulateTransactionRequest) -> Result<Self, Self::Error> {
+        value
+            .transaction
+            .ok_or_else(|| bcs::Error::Custom("missing transaction".into()))?
+            .pipe_ref(TryInto::try_into)
+    }
+}
+
+//
+// ValidatorCommitteeMember
+//
+
+impl From<&sui_sdk_types::types::ValidatorCommitteeMember> for ValidatorCommitteeMember {
+    fn from(value: &sui_sdk_types::types::ValidatorCommitteeMember) -> Self {
+        Self {
+            public_key: value.public_key.as_bytes().to_vec().into(),
+            stake: value.stake,
+        }
+    }
+}
+
+impl TryFrom<ValidatorCommitteeMember> for sui_sdk_types::types::ValidatorCommitteeMember {
+    type Error = bcs::Error;
+
+    fn try_from(value: ValidatorCommitteeMember) -> Result<Self, Self::Error> {
+        Ok(Self {
+            public_key: sui_sdk_types::types::Bls12381PublicKey::from_bytes(&value.public_key)
+                .map_err(|e| bcs::Error::Custom(e.to_string()))?,
+            stake: value.stake,
+        })
+    }
+}
+
+//
+// ValidatorCommittee
+//
+
+impl From<sui_sdk_types::types::ValidatorCommittee> for ValidatorCommittee {
+    fn from(value: sui_sdk_types::types::ValidatorCommittee) -> Self {
+        Self {
+            epoch: value.epoch,
+            members: value
+                .members
+                .iter()
+                .map(ValidatorCommitteeMember::from)
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<ValidatorCommittee> for sui_sdk_types::types::ValidatorCommittee {
+    type Error = bcs::Error;
+
+    fn try_from(value: ValidatorCommittee) -> Result<Self, Self::Error> {
+        Ok(Self {
+            epoch: value.epoch,
+            members: value
+                .members
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
