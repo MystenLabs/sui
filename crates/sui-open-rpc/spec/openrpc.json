@@ -1429,6 +1429,7 @@
                 "consensus_max_num_transactions_in_block": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
+                "consensus_voting_rounds": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
