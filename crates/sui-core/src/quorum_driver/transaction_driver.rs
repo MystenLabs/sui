@@ -71,7 +71,7 @@ where
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.contains_shared_object();
         let timer = Instant::now();
-        loop {
+        for _ in 0..60 {
             match self.submit_transaction_once(&request, &options).await {
                 Ok(resp) => {
                     let settlement_finality_latency = timer.elapsed().as_secs_f64();
@@ -91,6 +91,7 @@ where
                 }
             }
         }
+        Err(QuorumDriverError::TimeoutBeforeFinality)
     }
 
     async fn submit_transaction_once(
