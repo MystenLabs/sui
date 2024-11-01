@@ -97,6 +97,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    wal_coin_balances (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        owner_id -> Nullable<Bytea>,
+        coin_type -> Nullable<Bytea>,
+        coin_balance -> Nullable<Int8>,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     wal_obj_types (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -134,6 +145,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     sum_obj_types,
     tx_affected_objects,
     tx_balance_changes,
+    wal_coin_balances,
     wal_obj_types,
     watermarks,
 );
