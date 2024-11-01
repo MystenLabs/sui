@@ -7,7 +7,9 @@ use diesel::{
 };
 use sui_types::base_types::ObjectID;
 
-use crate::schema::{kv_objects, obj_versions, sum_coin_balances, sum_obj_types, wal_obj_types};
+use crate::schema::{
+    kv_objects, obj_versions, sum_coin_balances, sum_obj_types, wal_coin_balances, wal_obj_types,
+};
 
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -68,6 +70,17 @@ pub struct StoredSumObjType {
     pub module: Option<String>,
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
+}
+
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = wal_coin_balances, primary_key(object_id, object_version))]
+pub struct StoredWalCoinBalance {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub owner_id: Option<Vec<u8>>,
+    pub coin_type: Option<Vec<u8>>,
+    pub coin_balance: Option<i64>,
+    pub cp_sequence_number: i64,
 }
 
 #[derive(Insertable, Debug, Clone)]

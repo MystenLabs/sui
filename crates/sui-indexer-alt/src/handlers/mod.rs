@@ -11,4 +11,5 @@ pub mod sum_coin_balances;
 pub mod sum_obj_types;
 pub mod tx_affected_objects;
 pub mod tx_balance_changes;
+pub mod wal_coin_balances;
 pub mod wal_obj_types;
