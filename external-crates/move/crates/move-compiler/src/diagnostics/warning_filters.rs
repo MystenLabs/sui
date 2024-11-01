@@ -6,7 +6,10 @@ use crate::{
     shared::{known_attributes, AstDebug},
 };
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 pub const FILTER_ALL: &str = "all";
 pub const FILTER_UNUSED: &str = "unused";
@@ -58,8 +61,20 @@ pub type FilterPrefix = Option<Symbol>;
 pub type FilterName = Symbol;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct WarningFiltersScope {
-    scopes: Vec<WarningFilters>,
+pub struct WarningFiltersScope(WarningFiltersScope_);
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+enum WarningFiltersScope_ {
+    /// Unsafe and should be used only for internal purposes, such as ide annotations
+    Empty,
+    Static(&'static WarningFilters),
+    Node(Arc<WarningFiltersScopeNode>),
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+struct WarningFiltersScopeNode {
+    filters: WarningFilters,
+    prev: WarningFiltersScope_,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -112,29 +127,63 @@ pub type WellKnownFilterName = &'static str;
 //**************************************************************************************************
 
 impl WarningFiltersScope {
-    /// Unsafe and should be used only for internal purposes, such as ide annotations
-    pub(crate) const EMPTY: &'static Self = &WarningFiltersScope { scopes: vec![] };
-
-    pub(crate) fn new(top_level_warning_filter: Option<WarningFilters>) -> Self {
-        Self {
-            scopes: top_level_warning_filter.into_iter().collect(),
+    pub(crate) const fn root(
+        top_level_warning_filter_opt: Option<&'static WarningFilters>,
+    ) -> Self {
+        match top_level_warning_filter_opt {
+            None => WarningFiltersScope(WarningFiltersScope_::Empty),
+            Some(top_level_warning_filter) => {
+                WarningFiltersScope(WarningFiltersScope_::Static(top_level_warning_filter))
+            }
         }
     }
 
     pub fn push(&mut self, filters: WarningFilters) {
-        self.scopes.push(filters)
+        let node = Arc::new(WarningFiltersScopeNode {
+            filters,
+            prev: self.0.clone(),
+        });
+        *self = WarningFiltersScope(WarningFiltersScope_::Node(node))
     }
 
     pub fn pop(&mut self) {
-        self.scopes.pop().unwrap();
+        match std::mem::replace(&mut self.0, WarningFiltersScope_::Empty) {
+            WarningFiltersScope_::Empty => panic!("pop on empty scope"),
+            WarningFiltersScope_::Static(_) => panic!("pop on top level scope"),
+            WarningFiltersScope_::Node(node) => self.0 = node.prev.clone(),
+        }
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.scopes.iter().any(|filters| filters.is_filtered(diag))
+        let mut scope = &self.0;
+        loop {
+            match scope {
+                WarningFiltersScope_::Empty => return false,
+                WarningFiltersScope_::Static(filters) => return filters.is_filtered(diag),
+                WarningFiltersScope_::Node(node) => {
+                    if node.filters.is_filtered(diag) {
+                        return true;
+                    }
+                    scope = &node.prev;
+                }
+            }
+        }
     }
 
     pub fn is_filtered_for_dependency(&self) -> bool {
-        self.scopes.iter().any(|filters| filters.for_dependency())
+        let mut scope = &self.0;
+        loop {
+            match scope {
+                WarningFiltersScope_::Empty => return false,
+                WarningFiltersScope_::Static(filters) => return filters.for_dependency(),
+                WarningFiltersScope_::Node(node) => {
+                    if node.filters.for_dependency() {
+                        return true;
+                    }
+                    scope = &node.prev;
+                }
+            }
+        }
     }
 }
 

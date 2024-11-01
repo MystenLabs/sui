@@ -1664,10 +1664,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             res
         }
         NE::Lambda(_) => {
-            if context
-                .env
-                .check_feature(context.current_package, FeatureGate::Lambda, eloc)
-            {
+            if context.check_feature(context.current_package, FeatureGate::Lambda, eloc) {
                 let msg = "Lambdas can only be used directly as arguments to 'macro' functions";
                 context.add_diag(diag!(TypeSafety::UnexpectedLambda, (eloc, msg)))
             }
@@ -2906,7 +2903,7 @@ fn add_variant_field_types<T>(
         N::VariantFields::Empty => {
             if !fields.is_empty() {
                 ice_assert!(
-                    context.env,
+                    context.reporter,
                     context.env.has_errors(),
                     loc,
                     "Empty variant with fields but no error from naming"
@@ -3323,7 +3320,7 @@ fn resolve_exp_dotted(
                     make_error(context)
                 }
                 _ => {
-                    if context.env.check_feature(
+                    if context.check_feature(
                         context.current_package(),
                         FeatureGate::Move2024Paths,
                         loc,
@@ -3351,7 +3348,7 @@ fn resolve_exp_dotted(
                         },
                     ),
                     exp_ @ TE::Constant(_, _) => {
-                        context.env.check_feature(
+                        context.check_feature(
                             context.current_package(),
                             FeatureGate::Move2024Paths,
                             edotted.base.exp.loc,
@@ -3595,9 +3592,7 @@ fn exp_dotted_to_owned(
         }
         DottedUsage::Use => "implicit copy",
         DottedUsage::Copy(loc) => {
-            context
-                .env
-                .check_feature(context.current_package(), FeatureGate::Move2024Paths, loc);
+            context.check_feature(context.current_package(), FeatureGate::Move2024Paths, loc);
             "'copy'"
         }
     };
