@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use sui_field_count_derive::*;
-pub use sui_field_count_main::*;
+
+pub trait FieldCount {
+    fn field_count() -> usize;
+}
 
 #[cfg(test)]
 mod tests {
