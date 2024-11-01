@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS ev_emit_mod
 (
-    package                     BYTEA,
-    module                      TEXT,
-    tx_sequence_number          BIGINT,
+    package                     BYTEA         NOT NULL,
+    module                      TEXT          NOT NULL,
+    tx_sequence_number          BIGINT        NOT NULL,
     sender                      BYTEA         NOT NULL,
     PRIMARY KEY(package, module, tx_sequence_number)
 );
@@ -21,12 +21,12 @@ ON ev_emit_mod (sender, package, tx_sequence_number);
 
 CREATE TABLE IF NOT EXISTS ev_struct_inst
 (
-    package                     BYTEA,
-    module                      TEXT,
-    name                        TEXT,
+    package                     BYTEA         NOT NULL,
+    module                      TEXT          NOT NULL,
+    name                        TEXT          NOT NULL,
     -- BCS encoded array of TypeTags for type parameters.
-    instantiation               BYTEA,
-    tx_sequence_number          BIGINT,
+    instantiation               BYTEA         NOT NULL,
+    tx_sequence_number          BIGINT        NOT NULL,
     sender                      BYTEA         NOT NULL,
     PRIMARY KEY(package, module, name, instantiation, tx_sequence_number)
 );
