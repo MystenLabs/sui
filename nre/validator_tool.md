@@ -101,7 +101,7 @@ $SUI_BINARY validator update-metadata --help
 #### Operation Cap
 Operation Cap allows a validator to authorizer another account to perform certain actions on behalf of this validator. Read about [Operation Cap here](sui_for_node_operators.md#operation-cap).
 
-The Operation Cap holder (either the valdiator itself or the delegatee) updates its Gas Price and reports validator peers with the Operation Cap.
+The Operation Cap holder (either the validator itself or the delegatee) updates its Gas Price and reports validator peers with the Operation Cap.
 
 #### Update Gas Price
 To update Gas Price, run
@@ -183,7 +183,7 @@ Then you will be removed from committee starting from next epoch.
 
 ### Generate the payload to create PoP
 
-Serialize the payload that is used to generate Proof of Possession. This is allows the signer to take the payload offline for an Authority protocol BLS keypair to sign.
+Serialize the payload that is used to generate Proof of Possession. This allows the signer to take the payload offline for an Authority protocol BLS keypair to sign.
 
 ``` bash
 $SUI_BINARY validator serialize-payload-pop --account-address $ACCOUNT_ADDRESS --protocol-public-key $BLS_PUBKEY

@@ -12,7 +12,6 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
-			'concepts/graphql-rpc',
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -53,7 +52,6 @@ const concepts = [
 						},
 						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
 					},
-					'concepts/events',
 					'concepts/versioning',
 				],
 			},
@@ -99,6 +97,7 @@ const concepts = [
 					'concepts/transactions/gas-smashing',
 				],
 			},
+			'concepts/graphql-rpc',
 		],
 	},
 	{
@@ -179,6 +178,7 @@ const concepts = [
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
+	'concepts/sui-bridge',
 	'concepts/research-papers',
 ];
 module.exports = concepts;

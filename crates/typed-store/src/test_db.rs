@@ -265,6 +265,13 @@ where
         Ok(())
     }
 
+    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError> {
+        let mut locked = self.rows.write().unwrap();
+        locked
+            .retain(|k, _| k < &be_fix_int_ser(from).unwrap() || k >= &be_fix_int_ser(to).unwrap());
+        Ok(())
+    }
+
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
         let mut locked = self.rows.write().unwrap();
         locked.clear();

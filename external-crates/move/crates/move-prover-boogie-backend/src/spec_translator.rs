@@ -1071,7 +1071,7 @@ impl<'env> SpecTranslator<'env> {
             );
         }
         let struct_type = &self.get_node_type(args[0].node_id());
-        let (_, _, inst) = struct_type.skip_reference().require_struct();
+        let (_, _, inst) = struct_type.skip_reference().require_datatype();
         let field_env = struct_env.get_field(field_id);
         emit!(self.writer, "{}(", boogie_field_sel(&field_env, inst));
         self.translate_exp(&args[0]);
@@ -1125,7 +1125,7 @@ impl<'env> SpecTranslator<'env> {
 
     fn get_memory_inst_from_node(&self, node_id: NodeId) -> QualifiedInstId<DatatypeId> {
         let mem_ty = &self.get_node_instantiation(node_id)[0];
-        let (mid, sid, inst) = mem_ty.require_struct();
+        let (mid, sid, inst) = mem_ty.require_datatype();
         mid.qualified_inst(sid, inst.to_owned())
     }
 

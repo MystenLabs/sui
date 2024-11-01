@@ -10,6 +10,7 @@ use move_command_line_common::{
 };
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
+    diagnostics::warning_filters::WarningFilters,
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
@@ -69,7 +70,8 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     let config = PackageConfig {
         flavor,
         edition,
-        ..PackageConfig::default()
+        is_dependency: false,
+        warning_filter: WarningFilters::new_for_source(),
     };
     testsuite(path, config, lint)
 }

@@ -40,4 +40,9 @@ interface ISuiBridge {
         bytes senderAddress,
         address recipientAddress
     );
+
+    /// @notice Emitted when the bridge is paused or unpaused.
+    /// @param nonce The governance action nonce.
+    /// @param paused A boolean indicating whether the bridge is paused or not.
+    event EmergencyOperation(uint64 nonce, bool paused);
 }

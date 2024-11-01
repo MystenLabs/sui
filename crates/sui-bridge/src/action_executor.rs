@@ -78,7 +78,7 @@ pub struct BridgeActionExecutor<C> {
     gas_object_id: ObjectID,
     store: Arc<BridgeOrchestratorTables>,
     bridge_object_arg: ObjectArg,
-    token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+    sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
     bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
     metrics: Arc<BridgeMetrics>,
 }
@@ -109,7 +109,7 @@ where
         key: SuiKeyPair,
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
-        token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+        sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
         bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
@@ -124,7 +124,7 @@ where
             gas_object_id,
             sui_address,
             bridge_object_arg,
-            token_config_rx,
+            sui_token_type_tags,
             bridge_pause_rx,
             metrics,
         }
@@ -184,7 +184,7 @@ where
                 execution_tx_clone,
                 execution_rx,
                 self.bridge_object_arg,
-                self.token_config_rx,
+                self.sui_token_type_tags,
                 self.bridge_pause_rx,
                 metrics,
             )
@@ -378,6 +378,7 @@ where
 
                 // TODO: spawn a task for this
                 if attempt_times >= MAX_SIGNING_ATTEMPTS {
+                    metrics.err_signature_aggregation_too_many_failures.inc();
                     error!("Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}", e);
                     return;
                 }
@@ -407,51 +408,37 @@ where
             CertifiedBridgeActionExecutionWrapper,
         >,
         bridge_object_arg: ObjectArg,
-        mut token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
-        // TODO: wire this up
-        _bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
+        sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
+        bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_onchain_execution_loop");
-        let sui_token_type_tags =
-            ArcSwap::new(Arc::new(token_config_rx.borrow_and_update().clone()));
-
-        loop {
-            tokio::select! {
-                result = token_config_rx.changed() => {
-                    match result {
-                        Ok(()) => {
-                            sui_token_type_tags.store(Arc::new(token_config_rx.borrow_and_update().clone()));
-                        }
-                        Err(_) => {
-                            panic!("Token config watch channel closed unexpectedly");
-                        }
-                    }
-                },
-                certificate_wrapper = execution_queue_receiver.recv() => {
-                    match certificate_wrapper {
-                        Some(certificate_wrapper) => {
-                            Self::handle_execution_task(
-                                certificate_wrapper,
-                                &sui_client,
-                                &sui_key,
-                                &sui_address,
-                                gas_object_id,
-                                &store,
-                                &execution_queue_sender,
-                                &bridge_object_arg,
-                                &sui_token_type_tags,
-                                &metrics,
-                            )
-                            .await;
-                        },
-                        None => {
-                            panic!("Execution queue closed unexpectedly");
-                        }
-                    }
-                }
+        while let Some(certificate_wrapper) = execution_queue_receiver.recv().await {
+            // When bridge is paused, skip execution.
+            // Skipped actions will be picked up upon node restarting
+            // if bridge is unpaused.
+            if *bridge_pause_rx.borrow() {
+                warn!("Bridge is paused, skipping execution");
+                metrics
+                    .action_executor_execution_queue_skipped_actions_due_to_pausing
+                    .inc();
+                continue;
             }
+            Self::handle_execution_task(
+                certificate_wrapper,
+                &sui_client,
+                &sui_key,
+                &sui_address,
+                gas_object_id,
+                &store,
+                &execution_queue_sender,
+                &bridge_object_arg,
+                &sui_token_type_tags,
+                &metrics,
+            )
+            .await;
         }
+        panic!("Execution queue closed unexpectedly");
     }
 
     #[instrument(level = "error", skip_all, fields(action_key=?certificate_wrapper.0.data().key(), attempt_times=?certificate_wrapper.1))]
@@ -556,10 +543,10 @@ where
                 let sender_clone = execution_queue_sender.clone();
                 spawn_logged_monitored_task!(async move {
                     // If it fails for too many times, log and ask for manual intervention.
-                    metrics_clone
-                        .err_sui_transaction_submission_too_many_failures
-                        .inc();
                     if attempt_times >= MAX_EXECUTION_ATTEMPTS {
+                        metrics_clone
+                            .err_sui_transaction_submission_too_many_failures
+                            .inc();
                         error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
                         return;
                     }
@@ -663,9 +650,11 @@ pub async fn submit_to_executor(
 mod tests {
     use crate::events::init_all_struct_tags;
     use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+    use crate::types::BRIDGE_PAUSED;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use std::collections::{BTreeMap, HashMap};
+    use std::str::FromStr;
     use sui_json_rpc_types::SuiTransactionBlockEffects;
     use sui_json_rpc_types::SuiTransactionBlockEvents;
     use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
@@ -682,8 +671,8 @@ mod tests {
         server::mock_handler::BridgeRequestMockHandler,
         sui_mock_client::SuiMockClient,
         test_utils::{
-            get_test_authorities_and_run_mock_bridge_server, get_test_sui_to_eth_bridge_action,
-            sign_action_with_key,
+            get_test_authorities_and_run_mock_bridge_server, get_test_eth_to_sui_bridge_action,
+            get_test_sui_to_eth_bridge_action, sign_action_with_key,
         },
         types::{BridgeCommittee, BridgeCommitteeValiditySignInfo, CertifiedBridgeAction},
     };
@@ -707,15 +696,17 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-            token_tx,
+            sui_token_type_tags,
             _bridge_pause_tx,
         ) = setup().await;
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            None,
+            true,
         );
         let action = action_certificate.data().clone();
-        let id_token_map = token_tx.borrow();
+        let id_token_map = (*sui_token_type_tags.load().clone()).clone();
         let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
@@ -769,6 +760,8 @@ mod tests {
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            None,
+            true,
         );
 
         let action = action_certificate.data().clone();
@@ -821,6 +814,8 @@ mod tests {
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            None,
+            true,
         );
 
         let action = action_certificate.data().clone();
@@ -899,14 +894,16 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-            token_tx,
+            sui_token_type_tags,
             _bridge_pause_tx,
         ) = setup().await;
-        let id_token_map = token_tx.borrow();
+        let id_token_map = (*sui_token_type_tags.load().clone()).clone();
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
             get_bridge_authority_approved_action(
                 vec![&mock0, &mock1, &mock2, &mock3],
                 vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+                None,
+                true,
             );
         let action = action_certificate.data().clone();
         mock_bridge_authority_signing_errors(
@@ -1020,7 +1017,7 @@ mod tests {
             _handles,
             _gas_object_ref,
             _sui_address,
-            _token_tx,
+            _sui_token_type_tags,
             _bridge_pause_tx,
         ) = setup().await;
 
@@ -1088,13 +1085,15 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-            token_tx,
+            sui_token_type_tags,
             _bridge_pause_tx,
         ) = setup().await;
-        let id_token_map = token_tx.borrow();
+        let id_token_map = (*sui_token_type_tags.load().clone()).clone();
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            None,
+            true,
         );
 
         let action = action_certificate.data().clone();
@@ -1154,6 +1153,198 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_skip_tx_submission_if_bridge_is_paused() {
+        let (
+            _signing_tx,
+            execution_tx,
+            sui_client_mock,
+            mut tx_subscription,
+            store,
+            secrets,
+            dummy_sui_key,
+            mock0,
+            mock1,
+            mock2,
+            mock3,
+            _handles,
+            gas_object_ref,
+            sui_address,
+            sui_token_type_tags,
+            bridge_pause_tx,
+        ) = setup().await;
+        let id_token_map: HashMap<u8, TypeTag> = (*sui_token_type_tags.load().clone()).clone();
+        let (action_certificate, _, _) = get_bridge_authority_approved_action(
+            vec![&mock0, &mock1, &mock2, &mock3],
+            vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            None,
+            true,
+        );
+
+        let action = action_certificate.data().clone();
+        let arg = DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate.clone(),
+            arg,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
+        let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
+        mock_transaction_error(
+            &sui_client_mock,
+            tx_digest,
+            BridgeError::Generic("some random error".to_string()),
+            true,
+        );
+
+        let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
+        sui_client_mock.add_gas_object_info(
+            gas_coin.clone(),
+            gas_object_ref,
+            Owner::AddressOwner(sui_address),
+        );
+        let action_digest = action.digest();
+        sui_client_mock.set_action_onchain_status(&action, BridgeActionStatus::Pending);
+
+        // assert bridge is unpaused now
+        assert!(!*bridge_pause_tx.borrow());
+
+        store.insert_pending_actions(&[action.clone()]).unwrap();
+        assert_eq!(
+            store.get_all_pending_actions()[&action.digest()],
+            action.clone()
+        );
+
+        // Kick it (send to the execution queue, skipping the signing queue)
+        execution_tx
+            .send(CertifiedBridgeActionExecutionWrapper(
+                action_certificate.clone(),
+                0,
+            ))
+            .await
+            .unwrap();
+
+        // Some requests come in
+        tx_subscription.recv().await.unwrap();
+
+        // Pause the bridge
+        bridge_pause_tx.send(BRIDGE_PAUSED).unwrap();
+
+        // Kick it again
+        execution_tx
+            .send(CertifiedBridgeActionExecutionWrapper(action_certificate, 0))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        // Nothing is sent to execute
+        assert_eq!(
+            tx_subscription.try_recv().unwrap_err(),
+            tokio::sync::broadcast::error::TryRecvError::Empty
+        );
+        // Still in WAL
+        assert_eq!(
+            store.get_all_pending_actions()[&action_digest],
+            action.clone()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_action_executor_handle_new_token() {
+        let new_token_id = 255u8; // token id that does not exist
+        let new_type_tag = TypeTag::from_str("0xbeef::beef::BEEF").unwrap();
+        let (
+            _signing_tx,
+            execution_tx,
+            sui_client_mock,
+            mut tx_subscription,
+            _store,
+            secrets,
+            dummy_sui_key,
+            mock0,
+            mock1,
+            mock2,
+            mock3,
+            _handles,
+            gas_object_ref,
+            sui_address,
+            sui_token_type_tags,
+            _bridge_pause_tx,
+        ) = setup().await;
+        let mut id_token_map: HashMap<u8, TypeTag> = (*sui_token_type_tags.load().clone()).clone();
+        let (action_certificate, _, _) = get_bridge_authority_approved_action(
+            vec![&mock0, &mock1, &mock2, &mock3],
+            vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            Some(new_token_id),
+            false, // we need an eth -> sui action that entails the new token type tag in transaction building
+        );
+
+        let action = action_certificate.data().clone();
+        let arg = DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate.clone(),
+            arg,
+            &maplit::hashmap! {
+                new_token_id => new_type_tag.clone()
+            },
+            1000,
+        )
+        .unwrap();
+        let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
+        mock_transaction_error(
+            &sui_client_mock,
+            tx_digest,
+            BridgeError::Generic("some random error".to_string()),
+            true,
+        );
+
+        let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
+        sui_client_mock.add_gas_object_info(
+            gas_coin.clone(),
+            gas_object_ref,
+            Owner::AddressOwner(sui_address),
+        );
+        sui_client_mock.set_action_onchain_status(&action, BridgeActionStatus::Pending);
+
+        // Kick it (send to the execution queue, skipping the signing queue)
+        execution_tx
+            .send(CertifiedBridgeActionExecutionWrapper(
+                action_certificate.clone(),
+                0,
+            ))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        // Nothing is sent to execute, because the token id does not exist yet
+        assert_eq!(
+            tx_subscription.try_recv().unwrap_err(),
+            tokio::sync::broadcast::error::TryRecvError::Empty
+        );
+
+        // Now insert the new token id
+        id_token_map.insert(new_token_id, new_type_tag);
+        sui_token_type_tags.store(Arc::new(id_token_map));
+
+        // Kick it again
+        execution_tx
+            .send(CertifiedBridgeActionExecutionWrapper(
+                action_certificate.clone(),
+                0,
+            ))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        // The action is sent to execution
+        assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
+    }
+
     fn mock_bridge_authority_sigs(
         mocks: Vec<&BridgeRequestMockHandler>,
         action: &BridgeAction,
@@ -1169,6 +1360,7 @@ mod tests {
                 sui_tx_digest,
                 sui_tx_event_index,
                 Ok(signed_action.clone()),
+                None,
             );
             signed_actions.insert(secret.public().into(), signed_action.into_sig().signature);
         }
@@ -1185,6 +1377,7 @@ mod tests {
                 sui_tx_digest,
                 sui_tx_event_index,
                 Err(BridgeError::RestAPIError("small issue".into())),
+                None,
             );
         }
     }
@@ -1193,18 +1386,24 @@ mod tests {
     fn get_bridge_authority_approved_action(
         mocks: Vec<&BridgeRequestMockHandler>,
         secrets: Vec<&BridgeAuthorityKeyPair>,
+        token_id: Option<u8>,
+        sui_to_eth: bool,
     ) -> (VerifiedCertifiedBridgeAction, TransactionDigest, u16) {
         let sui_tx_digest = TransactionDigest::random();
         let sui_tx_event_index = 1;
-        let action = get_test_sui_to_eth_bridge_action(
-            Some(sui_tx_digest),
-            Some(sui_tx_event_index),
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let action = if sui_to_eth {
+            get_test_sui_to_eth_bridge_action(
+                Some(sui_tx_digest),
+                Some(sui_tx_event_index),
+                None,
+                None,
+                None,
+                None,
+                token_id,
+            )
+        } else {
+            get_test_eth_to_sui_bridge_action(None, None, None, token_id)
+        };
 
         let sigs =
             mock_bridge_authority_sigs(mocks, &action, secrets, sui_tx_digest, sui_tx_event_index);
@@ -1280,7 +1479,7 @@ mod tests {
         Vec<tokio::task::JoinHandle<()>>,
         ObjectRef,
         SuiAddress,
-        tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
+        Arc<ArcSwap<HashMap<u8, TypeTag>>>,
         tokio::sync::watch::Sender<IsBridgePaused>,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -1314,13 +1513,12 @@ mod tests {
 
         let committee = BridgeCommittee::new(authorities).unwrap();
 
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(committee)),
+        )));
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
-        let (token_type_tags_tx, token_type_tags_rx) =
-            tokio::sync::watch::channel(sui_token_type_tags);
+        let sui_token_type_tags = Arc::new(ArcSwap::new(Arc::new(sui_token_type_tags)));
         let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(false);
         let executor = BridgeActionExecutor::new(
             sui_client.clone(),
@@ -1329,7 +1527,7 @@ mod tests {
             sui_key,
             sui_address,
             gas_object_ref.0,
-            token_type_tags_rx,
+            sui_token_type_tags.clone(),
             bridge_pause_rx,
             metrics,
         )
@@ -1353,7 +1551,7 @@ mod tests {
             handles,
             gas_object_ref,
             sui_address,
-            token_type_tags_tx,
+            sui_token_type_tags,
             bridge_pause_tx,
         )
     }

@@ -65,6 +65,7 @@ pub fn get_test_authority_and_key(
     let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
     let pubkey = kp.public().clone();
     let authority = BridgeAuthority {
+        sui_address: SuiAddress::random_for_testing_only(),
         pubkey: pubkey.clone(),
         voting_power,
         base_url: format!("http://127.0.0.1:{}", port),
@@ -103,6 +104,7 @@ pub fn get_test_eth_to_sui_bridge_action(
     nonce: Option<u64>,
     amount: Option<u64>,
     sui_address: Option<SuiAddress>,
+    token_id: Option<u8>,
 ) -> BridgeAction {
     BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
         eth_tx_hash: TxHash::random(),
@@ -111,7 +113,7 @@ pub fn get_test_eth_to_sui_bridge_action(
             eth_chain_id: BridgeChainId::EthCustom,
             nonce: nonce.unwrap_or_default(),
             sui_chain_id: BridgeChainId::SuiCustom,
-            token_id: TOKEN_ID_USDC,
+            token_id: token_id.unwrap_or(TOKEN_ID_USDC),
             sui_adjusted_amount: amount.unwrap_or(100_000),
             sui_address: sui_address.unwrap_or_else(SuiAddress::random_for_testing_only),
             eth_address: EthAddress::random(),

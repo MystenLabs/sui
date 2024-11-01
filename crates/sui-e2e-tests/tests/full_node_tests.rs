@@ -7,6 +7,7 @@ use jsonrpsee::rpc_params;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
 use rand::rngs::OsRng;
+use std::path::PathBuf;
 use std::sync::Arc;
 use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
@@ -36,8 +37,7 @@ use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverResponse,
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, QuorumDriverResponse,
 };
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
@@ -754,16 +754,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction_block(
-            ExecuteTransactionRequest {
-                transaction: txn,
-                request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
-            },
+            ExecuteTransactionRequestV3::new_v2(txn),
+            ExecuteTransactionRequestType::WaitForLocalExecution,
             None,
         )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    let ExecuteTransactionResponse::EffectsCert(res) = res;
     let (
         tx,
         QuorumDriverResponse {
@@ -772,11 +769,17 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
             ..
         },
     ) = rx.recv().await.unwrap().unwrap();
-    let (cte, events, is_executed_locally) = *res;
+    let (response, is_executed_locally) = res;
     assert_eq!(*tx.digest(), digest);
-    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
+    assert_eq!(
+        response.effects.effects.digest(),
+        *certified_txn_effects.digest()
+    );
     assert!(is_executed_locally);
-    assert_eq!(events.digest(), txn_events.unwrap_or_default().digest());
+    assert_eq!(
+        response.events.unwrap_or_default().digest(),
+        txn_events.unwrap_or_default().digest()
+    );
     // verify that the node has sequenced and executed the txn
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
@@ -786,16 +789,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction_block(
-            ExecuteTransactionRequest {
-                transaction: txn,
-                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-            },
+            ExecuteTransactionRequestV3::new_v2(txn),
+            ExecuteTransactionRequestType::WaitForEffectsCert,
             None,
         )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    let ExecuteTransactionResponse::EffectsCert(res) = res;
     let (
         tx,
         QuorumDriverResponse {
@@ -804,10 +804,16 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
             ..
         },
     ) = rx.recv().await.unwrap().unwrap();
-    let (cte, events, is_executed_locally) = *res;
+    let (response, is_executed_locally) = res;
     assert_eq!(*tx.digest(), digest);
-    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
-    assert_eq!(txn_events.unwrap_or_default().digest(), events.digest());
+    assert_eq!(
+        response.effects.effects.digest(),
+        *certified_txn_effects.digest()
+    );
+    assert_eq!(
+        txn_events.unwrap_or_default().digest(),
+        response.events.unwrap_or_default().digest()
+    );
     assert!(!is_executed_locally);
     fullnode
         .state()
@@ -1189,10 +1195,8 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     let digest = *tx.digest();
     let _res = transaction_orchestrator
         .execute_transaction_block(
-            ExecuteTransactionRequest {
-                transaction: tx,
-                request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
-            },
+            ExecuteTransactionRequestV3::new_v2(tx),
+            ExecuteTransactionRequestType::WaitForLocalExecution,
             None,
         )
         .await
@@ -1403,4 +1407,30 @@ async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
         .is_none());
 
     Ok(())
+}
+
+// This test checks that the fullnode is able to resolve events emitted from a transaction
+// that references the structs defined in the package published by the transaction itself,
+// without local execution.
+#[sim_test]
+async fn publish_init_events_without_local_execution() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/move_test_code");
+    let tx_data = test_cluster
+        .test_transaction_builder()
+        .await
+        .publish(path)
+        .build();
+    let tx = test_cluster.sign_transaction(&tx_data);
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let response = client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            tx,
+            SuiTransactionBlockResponseOptions::new().with_events(),
+            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.events.unwrap().data.len(), 1);
 }

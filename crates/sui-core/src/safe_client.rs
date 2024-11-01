@@ -4,9 +4,11 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use prometheus::{
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
+    HistogramVec, IntCounterVec, Registry,
+};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -66,12 +68,14 @@ impl SafeClientMetricsBase {
                 registry,
             )
             .unwrap(),
-            latency: HistogramVec::new_in_registry(
+            latency: register_histogram_vec_with_registry!(
                 "safe_client_latency",
                 "RPC latency observed by safe client aggregator, group by address and method",
                 &["address", "method"],
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 }

@@ -21,8 +21,8 @@ use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store_derive::DBMapUtils;
-use typed_store_derive::SallyDB;
+use typed_store::DBMapUtils;
+use typed_store::SallyDB;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -166,13 +166,13 @@ async fn macro_test() {
     // Test pagination
     let m = tbls_secondary.dump("table1", 2, 0).unwrap();
     assert_eq!(2, m.len());
-    assert_eq!(format!("\"1\""), *m.get(&"\"1\"".to_string()).unwrap());
-    assert_eq!(format!("\"2\""), *m.get(&"\"2\"".to_string()).unwrap());
+    assert_eq!(format!("\"1\""), *m.get("\"1\"").unwrap());
+    assert_eq!(format!("\"2\""), *m.get("\"2\"").unwrap());
 
     let m = tbls_secondary.dump("table1", 3, 2).unwrap();
     assert_eq!(3, m.len());
-    assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
-    assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+    assert_eq!(format!("\"7\""), *m.get("\"7\"").unwrap());
+    assert_eq!(format!("\"8\""), *m.get("\"8\"").unwrap());
 }
 
 #[tokio::test]
@@ -306,13 +306,13 @@ async fn test_sallydb() {
     // Test pagination
     let m = example_db_secondary.dump("col1", 2, 0).unwrap();
     assert_eq!(2, m.len());
-    assert_eq!(format!("\"1\""), *m.get(&"\"1\"".to_string()).unwrap());
-    assert_eq!(format!("\"2\""), *m.get(&"\"2\"".to_string()).unwrap());
+    assert_eq!(format!("\"1\""), *m.get("\"1\"").unwrap());
+    assert_eq!(format!("\"2\""), *m.get("\"2\"").unwrap());
 
     let m = example_db_secondary.dump("col1", 3, 2).unwrap();
     assert_eq!(3, m.len());
-    assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
-    assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+    assert_eq!(format!("\"7\""), *m.get("\"7\"").unwrap());
+    assert_eq!(format!("\"8\""), *m.get("\"8\"").unwrap());
 }
 
 #[tokio::test]

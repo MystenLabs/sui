@@ -31,6 +31,8 @@ your application's lifecycle.
   connection in Stashed.
 - `options`: An optional object with the following properties:
   - `origin`: The origin of the Stashed website. Defaults to `https://getstashed.com`.
+  - `network`: The network that you would like the Stashed wallet to use. Defaults to `mainnet`,
+    supports `mainnet` and `testnet`.
 
 ```ts
 import { registerStashedWallet } from '@mysten/zksend';

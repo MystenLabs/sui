@@ -162,7 +162,7 @@ DEPRECATED, use <code>std::u128::sqrt</code> instead
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
-   x.<a href="math.md#0x2_math_sqrt">sqrt</a>()
+    x.<a href="math.md#0x2_math_sqrt">sqrt</a>()
 }
 </code></pre>
 

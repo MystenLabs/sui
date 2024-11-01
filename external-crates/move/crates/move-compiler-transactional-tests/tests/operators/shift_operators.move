@@ -1,6 +1,6 @@
 //# run
 // Number of bits shifted >= total number of bits in the number.
-module 1::m {
+module 6::m {
 fun main() {
     // should fail
     0u8 << 8u8;
@@ -8,7 +8,7 @@ fun main() {
 }
 
 //# run
-module 2::m {
+module 7::m {
 fun main() {
     // should fail
     0u64 << 64u8;
@@ -16,7 +16,7 @@ fun main() {
 }
 
 //# run
-module 3::m {
+module 8::m {
 fun main() {
     // should fail
     0u128 << 128u8;
@@ -24,7 +24,7 @@ fun main() {
 }
 
 //# run
-module 4::m {
+module 9::m {
 fun main() {
     // should fail
     0u8 >> 8u8;
@@ -32,7 +32,7 @@ fun main() {
 }
 
 //# run
-module 5::m {
+module 0xa::m {
 fun main() {
     // should fail
     0u64 >> 64u8;
@@ -40,7 +40,7 @@ fun main() {
 }
 
 //# run
-module 6::m {
+module 0xb::m {
 fun main() {
     // should fail
     0u128 >> 128u8;
@@ -48,7 +48,7 @@ fun main() {
 }
 
 //# run
-module 7::m {
+module 0xc::m {
 fun main() {
     // should fail
     0u16 << 16u8;
@@ -56,7 +56,7 @@ fun main() {
 }
 
 //# run
-module 8::m {
+module 0xd::m {
 fun main() {
     // should fail
     0u32 << 32u8;
@@ -64,7 +64,7 @@ fun main() {
 }
 
 //# run
-module 9::m {
+module 0xe::m {
 fun main() {
     // should fail
     0u16 >> 16u8;
@@ -72,7 +72,7 @@ fun main() {
 }
 
 //# run
-module 10::m {
+module 0xf::m {
 fun main() {
     // should fail
     0u32 >> 32u8;
@@ -82,7 +82,7 @@ fun main() {
 
 // Shifting 0 results in 0.
 //# run
-module 11::m {
+module 0x10::m {
 fun main() {
     assert!(0u8 << 4u8 == 0u8, 1000);
     assert!(0u64 << 1u8 == 0u64, 1001);
@@ -103,7 +103,7 @@ fun main() {
 
 // Shifting by 0 bits results in the same number.
 //# run
-module 12::m {
+module 0x11::m {
 fun main() {
     assert!(100u8 << 0u8 == 100u8, 2000);
     assert!(43u64 << 0u8 == 43u64, 2001);
@@ -146,7 +146,7 @@ fun main() {
 
 // Underflowing results in 0.
 //# run
-module 13::m {
+module 0x13::m {
 fun main() {
     assert!(1234u64 >> 63u8 == 0u64, 4000);
     assert!(3u8 >> 5u8 == 0u8, 4001);
@@ -161,7 +161,7 @@ fun main() {
 
 // Overflowing results are truncated.
 //# run
-module 14::m {
+module 0x14::m {
 fun main() {
     assert!(7u8 << 7u8 == 128u8, 5000);
     assert!(7u64 << 62u8 == 13835058055282163712u64, 5001);
@@ -176,7 +176,7 @@ fun main() {
 
 // Some random tests.
 //# run
-module 15::m {
+module 0x15::m {
 fun main() {
     assert!(54u8 << 3u8 == 176u8, 6000);
     assert!(5u8 << 2u8 == 20u8, 6001);

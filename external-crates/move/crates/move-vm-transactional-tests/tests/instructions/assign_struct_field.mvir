@@ -25,7 +25,7 @@ module 0x42.Tester {
 }
 
 //# run
-module 0x42.m {
+module 0x43.m {
 import 0x42.Tester;
 
 entry foo() {

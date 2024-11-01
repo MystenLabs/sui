@@ -4,46 +4,68 @@
 
 use criterion::{measurement::Measurement, Criterion};
 use move_binary_format::CompiledModule;
-use move_compiler::Compiler;
+use move_compiler::{editions::Edition, shared::PackagePaths, Compiler, FullyCompiledProgram};
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
+    identifier::Identifier,
     language_storage::{ModuleId, CORE_CODE_ADDRESS},
 };
+
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::BlankStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
-static MOVE_BENCH_SRC_PATH: Lazy<PathBuf> = Lazy::new(|| {
-    vec![env!("CARGO_MANIFEST_DIR"), "src", "bench.move"]
-        .into_iter()
-        .collect()
+static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+    let program_res = move_compiler::construct_pre_compiled_lib(
+        vec![PackagePaths {
+            name: None,
+            paths: move_stdlib::move_stdlib_files(),
+            named_address_map: move_stdlib::move_stdlib_named_addresses(),
+        }],
+        None,
+        move_compiler::Flags::empty(),
+        None,
+    )
+    .unwrap();
+    match program_res {
+        Ok(stdlib) => stdlib,
+        Err((files, errors)) => {
+            eprintln!("!!!Standard library failed to compile!!!");
+            move_compiler::diagnostics::report_diagnostics(&files, errors)
+        }
+    }
 });
 
 /// Entry point for the bench, provide a function name to invoke in Module Bench in bench.move.
-pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, fun: &str) {
-    let modules = compile_modules();
-    let move_vm = MoveVM::new(move_stdlib_natives::all_natives(
-        AccountAddress::from_hex_literal("0x1").unwrap(),
-        move_stdlib_natives::GasParameters::zeros(),
-        /* silent debug */ true,
-    ))
-    .unwrap();
-    execute(c, &move_vm, modules, fun);
+pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, filename: &str) {
+    let modules = compile_modules(filename);
+    let move_vm = create_vm();
+    execute(c, &move_vm, modules, filename);
+}
+
+fn make_path(file: &str) -> PathBuf {
+    vec![env!("CARGO_MANIFEST_DIR"), "tests", file]
+        .into_iter()
+        .collect()
 }
 
 // Compile `bench.move` and its dependencies
-fn compile_modules() -> Vec<CompiledModule> {
-    let mut src_files = move_stdlib::move_stdlib_files();
-    src_files.push(MOVE_BENCH_SRC_PATH.to_str().unwrap().to_owned());
+pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
+    let src_files = vec![make_path(filename).to_str().unwrap().to_owned()];
+    let pkg_config = move_compiler::shared::PackageConfig {
+        edition: Edition::E2024_BETA,
+        ..Default::default()
+    };
     let (_files, compiled_units) = Compiler::from_files(
         None,
         src_files,
         vec![],
         move_stdlib::move_stdlib_named_addresses(),
     )
+    .set_pre_compiled_lib(Arc::new(PRECOMPILED_MOVE_STDLIB.clone()))
+    .set_default_config(pkg_config)
     .build_and_report()
     .expect("Error compiling...");
     compiled_units
@@ -52,12 +74,21 @@ fn compile_modules() -> Vec<CompiledModule> {
         .collect()
 }
 
+fn create_vm() -> MoveVM {
+    MoveVM::new(move_stdlib_natives::all_natives(
+        AccountAddress::from_hex_literal("0x1").unwrap(),
+        move_stdlib_natives::GasParameters::zeros(),
+        /* silent debug */ true,
+    ))
+    .unwrap()
+}
+
 // execute a given function in the Bench module
 fn execute<M: Measurement + 'static>(
     c: &mut Criterion<M>,
     move_vm: &MoveVM,
     modules: Vec<CompiledModule>,
-    fun: &str,
+    file: &str,
 ) {
     // establish running context
     let storage = BlankStorage::new();
@@ -77,21 +108,23 @@ fn execute<M: Measurement + 'static>(
     }
 
     // module and function to call
-    let module_id = ModuleId::new(sender, Identifier::new("Bench").unwrap());
-    let fun_name = IdentStr::new(fun).unwrap_or_else(|_| panic!("Invalid identifier name {}", fun));
+    let module_id = ModuleId::new(sender, Identifier::new("bench").unwrap());
+    let fun_name = Identifier::new("bench").unwrap();
 
     // benchmark
-    c.bench_function(fun, |b| {
-        b.iter(|| {
+    c.bench_function(file, |b| {
+        b.iter_with_large_drop(|| {
             session
                 .execute_function_bypass_visibility(
                     &module_id,
-                    fun_name,
+                    &fun_name,
                     vec![],
                     Vec::<Vec<u8>>::new(),
                     &mut UnmeteredGasMeter,
                 )
-                .unwrap_or_else(|err| panic!("{:?}::{} failed with {:?}", &module_id, fun, err))
+                .unwrap_or_else(|err| {
+                    panic!("{:?}::bench in {file} failed with {:?}", &module_id, err)
+                })
         })
     });
 }

@@ -47,7 +47,7 @@ pub async fn handle_sui_transactions_loop(
         if !data.is_empty() {
             // unwrap: token_transfers is not empty
             let last_ckp = txns.last().map(|tx| tx.checkpoint).unwrap_or_default();
-            while let Err(err) = write(&pg_pool, data.clone()) {
+            while let Err(err) = write(&pg_pool, data.clone()).await {
                 error!("Failed to write sui transactions to DB: {:?}", err);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -57,7 +57,7 @@ pub async fn handle_sui_transactions_loop(
 
         // update sui progress store using the latest cursor
         if let Some(cursor) = cursor {
-            while let Err(err) = update_sui_progress_store(&pg_pool, cursor) {
+            while let Err(err) = update_sui_progress_store(&pg_pool, cursor).await {
                 error!("Failed to update sui progress tore DB: {:?}", err);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -105,12 +105,14 @@ pub fn into_token_transfers(
                     status: TokenTransferStatus::Deposited,
                     gas_usage: effects.gas_cost_summary().net_gas_usage(),
                     data_source: BridgeDataSource::Sui,
+                    is_finalized: true,
                     data: Some(TokenTransferData {
                         destination_chain: move_event.target_chain,
                         sender_address: move_event.sender_address.clone(),
                         recipient_address: move_event.target_address.clone(),
                         token_id: move_event.token_type,
                         amount: move_event.amount_sui_adjusted,
+                        is_finalized: true,
                     }),
                 }));
             }
@@ -129,6 +131,7 @@ pub fn into_token_transfers(
                     gas_usage: effects.gas_cost_summary().net_gas_usage(),
                     data_source: BridgeDataSource::Sui,
                     data: None,
+                    is_finalized: true,
                 }));
             }
             "TokenTransferClaimed" => {
@@ -146,6 +149,7 @@ pub fn into_token_transfers(
                     gas_usage: effects.gas_cost_summary().net_gas_usage(),
                     data_source: BridgeDataSource::Sui,
                     data: None,
+                    is_finalized: true,
                 }));
             }
             _ => {

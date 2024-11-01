@@ -142,7 +142,17 @@ impl JsonRpcServerBuilder {
                     .and_then(|v| v.to_str().ok())
                     .map(tracing::field::display);
 
-                tracing::info_span!("json-rpc-request", "x-req-id" = request_id)
+                let origin = request
+                    .headers()
+                    .get("origin")
+                    .and_then(|v| v.to_str().ok())
+                    .map(tracing::field::display);
+
+                tracing::info_span!(
+                    "json-rpc-request",
+                    "x-req-id" = request_id,
+                    "origin" = origin
+                )
             })
             .on_request(())
             .on_response(())

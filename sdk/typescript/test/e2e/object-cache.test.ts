@@ -10,7 +10,7 @@ import { CachingTransactionExecutor } from '../../src/transactions/executor/cach
 import { normalizeSuiAddress } from '../../src/utils';
 import { setup, TestToolbox } from './utils/setup';
 
-describe('CachingTransactionExecutor', async () => {
+describe('CachingTransactionExecutor', { retry: 3 }, async () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
 	let rawPackageId: string;
@@ -181,6 +181,8 @@ describe('CachingTransactionExecutor', async () => {
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
+		await toolbox.client.waitForTransaction({ digest: result.digest });
+
 		const result2 = await executor.signAndExecuteTransaction({
 			transaction: txb2,
 			signer: toolbox.keypair,
@@ -191,6 +193,8 @@ describe('CachingTransactionExecutor', async () => {
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 		expect(result2.effects?.status.status).toBe('success');
+
+		await toolbox.client.waitForTransaction({ digest: result2.digest });
 
 		await executor.reset();
 
@@ -209,6 +213,7 @@ describe('CachingTransactionExecutor', async () => {
 		});
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
 		expect(result3.effects?.status.status).toBe('success');
+		await toolbox.client.waitForTransaction({ digest: result3.digest });
 	});
 });
 

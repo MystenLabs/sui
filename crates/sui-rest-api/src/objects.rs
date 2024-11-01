@@ -2,19 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accept::AcceptFormat,
+    accept::{AcceptFormat, AcceptJsonProtobufBcs},
     openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
+    proto::GetObjectResponse,
     reader::StateReader,
-    response::ResponseContent,
+    response::{JsonProtobufBcs, ResponseContent},
     Page, RestError, RestService, Result,
 };
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
-use sui_sdk2::types::{Object, ObjectId, TypeTag, Version};
-use sui_types::storage::{DynamicFieldIndexInfo, DynamicFieldKey};
-use sui_types::sui_sdk2_conversions::type_tag_core_to_sdk;
+use sui_sdk_types::types::{Object, ObjectDigest, ObjectId, TypeTag, Version};
+use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
+use sui_types::{
+    storage::{DynamicFieldIndexInfo, DynamicFieldKey},
+    sui_sdk_types_conversions::SdkTypeConversionError,
+};
 use tap::Pipe;
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct ObjectResponse {
+    pub digest: ObjectDigest,
+    pub object: Object,
+}
 
 pub struct GetObject;
 
@@ -38,7 +48,8 @@ impl ApiEndpoint<RestService> for GetObject {
             .response(
                 200,
                 ResponseBuilder::new()
-                    .json_content::<Object>(generator)
+                    .json_content::<ObjectResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -53,16 +64,24 @@ impl ApiEndpoint<RestService> for GetObject {
 
 pub async fn get_object(
     Path(object_id): Path<ObjectId>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<Object>> {
+) -> Result<JsonProtobufBcs<ObjectResponse, GetObjectResponse, Object>> {
     let object = state
         .get_object(object_id)?
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
 
+    let object = ObjectResponse {
+        digest: object.digest(),
+        object,
+    };
+
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(object),
-        AcceptFormat::Bcs => ResponseContent::Bcs(object),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(object),
+        AcceptJsonProtobufBcs::Protobuf => {
+            JsonProtobufBcs::Protobuf(GetObjectResponse::try_from(object)?)
+        }
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(object.object),
     }
     .pipe(Ok)
 }
@@ -90,7 +109,8 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
             .response(
                 200,
                 ResponseBuilder::new()
-                    .json_content::<Object>(generator)
+                    .json_content::<ObjectResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -105,16 +125,24 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
 
 pub async fn get_object_with_version(
     Path((object_id, version)): Path<(ObjectId, Version)>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<Object>> {
+) -> Result<JsonProtobufBcs<ObjectResponse, GetObjectResponse, Object>> {
     let object = state
         .get_object_with_version(object_id, version)?
         .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
 
+    let object = ObjectResponse {
+        digest: object.digest(),
+        object,
+    };
+
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(object),
-        AcceptFormat::Bcs => ResponseContent::Bcs(object),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(object),
+        AcceptJsonProtobufBcs::Protobuf => {
+            JsonProtobufBcs::Protobuf(GetObjectResponse::try_from(object)?)
+        }
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(object.object),
     }
     .pipe(Ok)
 }
@@ -219,8 +247,8 @@ async fn list_dynamic_fields(
         .inner()
         .dynamic_field_iter(parent.into(), start)?
         .take(limit + 1)
-        .map(DynamicFieldInfo::from)
-        .collect::<Vec<_>>();
+        .map(DynamicFieldInfo::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
 
     let cursor = if dynamic_fields.len() > limit {
         // SAFETY: We've already verified that object_keys is greater than limit, which is
@@ -271,8 +299,10 @@ pub struct DynamicFieldInfo {
     pub dynamic_object_id: Option<ObjectId>,
 }
 
-impl From<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
-    fn from(value: (DynamicFieldKey, DynamicFieldIndexInfo)) -> Self {
+impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: (DynamicFieldKey, DynamicFieldIndexInfo)) -> Result<Self, Self::Error> {
         let DynamicFieldKey { parent, field_id } = value.0;
         let DynamicFieldIndexInfo {
             dynamic_field_type,
@@ -285,10 +315,11 @@ impl From<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
             parent: parent.into(),
             field_id: field_id.into(),
             dynamic_field_type: dynamic_field_type.into(),
-            name_type: type_tag_core_to_sdk(name_type),
+            name_type: type_tag_core_to_sdk(name_type)?,
             name_value,
             dynamic_object_id: dynamic_object_id.map(Into::into),
         }
+        .pipe(Ok)
     }
 }
 

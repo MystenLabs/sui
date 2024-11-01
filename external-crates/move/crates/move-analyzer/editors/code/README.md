@@ -83,6 +83,7 @@ Move source file (a file with a `.move` file extension) and:
   `>`, `)`, or `}` -- will be highlighted.
 - As you type, the editor will offer completion suggestions, in particular:
   - struct field name and method name suggestions following `.` being typed
+  - suggestions following `::` being typed
   - code snippets to complete `init` function and object type definitions
 - If the opened Move source file is located within a buildable project (a `Move.toml` file can be
   found in one of its parent directories), the following advanced features will also be available:

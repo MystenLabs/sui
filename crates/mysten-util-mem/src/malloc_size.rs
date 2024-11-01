@@ -39,8 +39,6 @@
 //! - If an `Rc` or `Arc` is known to be a "primary" reference and can always
 //!   be measured, it should be measured via the `MallocUnconditionalSizeOf`
 //!   trait.
-//! - If an `Rc` or `Arc` should be measured only if it hasn't been seen
-//!   before, it should be measured via the `MallocConditionalSizeOf` trait.
 //! - Using universal function call syntax is a good idea when measuring boxed
 //!   fields in structs, because it makes it clear that the Box is being
 //!   measured as well as the thing it points to. E.g.
@@ -205,22 +203,6 @@ pub trait MallocUnconditionalSizeOf {
 pub trait MallocUnconditionalShallowSizeOf {
     /// `unconditional_size_of` combined with `shallow_size_of`.
     fn unconditional_shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize;
-}
-
-/// Like `MallocSizeOf`, but only measures if the value hasn't already been
-/// measured. For use with types like `Rc` and `Arc` when appropriate (e.g.
-/// when there is no "primary" reference).
-pub trait MallocConditionalSizeOf {
-    /// Measure the heap usage of all heap-allocated descendant structures, but
-    /// not the space taken up by the value itself, and only if that heap usage
-    /// hasn't already been measured.
-    fn conditional_size_of(&self, ops: &mut MallocSizeOfOps) -> usize;
-}
-
-/// `MallocConditionalSizeOf` combined with `MallocShallowSizeOf`.
-pub trait MallocConditionalShallowSizeOf {
-    /// `conditional_size_of` combined with `shallow_size_of`.
-    fn conditional_shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize;
 }
 
 impl<'a, T: ?Sized> MallocSizeOf for &'a T {
@@ -511,36 +493,9 @@ where
 // impl<T> !MallocShallowSizeOf for Arc<T> { }
 
 #[cfg(feature = "std")]
-fn arc_ptr<T>(s: &Arc<T>) -> *const T {
-    &(**s) as *const T
-}
-
-#[cfg(feature = "std")]
 impl<T: MallocSizeOf> MallocUnconditionalSizeOf for Arc<T> {
     fn unconditional_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.unconditional_shallow_size_of(ops) + (**self).size_of(ops)
-    }
-}
-
-#[cfg(feature = "std")]
-impl<T> MallocConditionalShallowSizeOf for Arc<T> {
-    fn conditional_shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        if ops.have_seen_ptr(arc_ptr(self)) {
-            0
-        } else {
-            self.unconditional_shallow_size_of(ops)
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<T: MallocSizeOf> MallocConditionalSizeOf for Arc<T> {
-    fn conditional_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        if ops.have_seen_ptr(arc_ptr(self)) {
-            0
-        } else {
-            self.unconditional_size_of(ops)
-        }
     }
 }
 
@@ -713,26 +668,6 @@ where
 {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let mut n = self.shallow_size_of(ops);
-        if let (Some(k), Some(v)) = (K::constant_size(), V::constant_size()) {
-            n += self.len() * (k + v)
-        } else {
-            n = self
-                .iter()
-                .fold(n, |acc, (k, v)| acc + k.size_of(ops) + v.size_of(ops))
-        }
-        n
-    }
-}
-
-#[cfg(feature = "lru")]
-impl<K, V, S> MallocSizeOf for lru::LruCache<K, V, S>
-where
-    K: MallocSizeOf + rstd::cmp::Eq + rstd::hash::Hash,
-    V: MallocSizeOf,
-    S: rstd::hash::BuildHasher,
-{
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        let mut n = 0;
         if let (Some(k), Some(v)) = (K::constant_size(), V::constant_size()) {
             n += self.len() * (k + v)
         } else {

@@ -1,16 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::str::FromStr;
 
 use crate::functional_group::FunctionalGroup;
 use async_graphql::*;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_graphql_config::GraphQLConfig;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
-pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(30_000);
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
+
+// Move Registry constants
+pub(crate) const MOVE_REGISTRY_MODULE: &IdentStr = ident_str!("name");
+pub(crate) const MOVE_REGISTRY_TYPE: &IdentStr = ident_str!("Name");
+// TODO(manos): Replace with actual package id on mainnet.
+const MOVE_REGISTRY_PACKAGE: &str =
+    "0x1a841abe817c38221596856bc975b3b84f2f68692191e9247e185213d3d02fd8";
+// TODO(manos): Replace with actual registry table id on mainnet.
+const MOVE_REGISTRY_TABLE_ID: &str =
+    "0x250b60446b8e7b8d9d7251600a7228dbfda84ccb4b23a56a700d833e221fae4f";
+const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// The combination of all configurations for the GraphQL service.
 #[GraphQLConfig]
@@ -27,16 +42,30 @@ pub struct ServerConfig {
 /// specific connections between this service and other services, and might differ from instance to
 /// instance of the GraphQL service.
 #[GraphQLConfig]
-#[derive(Clone, Eq, PartialEq)]
+#[derive(clap::Args, Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
-    pub(crate) port: u16,
+    #[clap(short, long, default_value_t = ConnectionConfig::default().port)]
+    pub port: u16,
     /// Host to bind the server to
-    pub(crate) host: String,
-    pub(crate) db_url: String,
-    pub(crate) db_pool_size: u32,
-    pub(crate) prom_url: String,
-    pub(crate) prom_port: u16,
+    #[clap(long, default_value_t = ConnectionConfig::default().host)]
+    pub host: String,
+    /// DB URL for data fetching
+    #[clap(short, long, default_value_t = ConnectionConfig::default().db_url)]
+    pub db_url: String,
+    /// Pool size for DB connections
+    #[clap(long, default_value_t = ConnectionConfig::default().db_pool_size)]
+    pub db_pool_size: u32,
+    /// Host to bind the prom server to
+    #[clap(long, default_value_t = ConnectionConfig::default().prom_host)]
+    pub prom_host: String,
+    /// Port to bind the prom server to
+    #[clap(long, default_value_t = ConnectionConfig::default().prom_port)]
+    pub prom_port: u16,
+    /// Skip checking whether the service is compatible with the DB it is about to connect to, on
+    /// start-up.
+    #[clap(long, default_value_t = ConnectionConfig::default().skip_migration_consistency_check)]
+    pub skip_migration_consistency_check: bool,
 }
 
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
@@ -45,18 +74,13 @@ pub struct ConnectionConfig {
 #[GraphQLConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
-    pub(crate) versions: Versions,
-    pub(crate) limits: Limits,
-    pub(crate) disabled_features: BTreeSet<FunctionalGroup>,
-    pub(crate) experiments: Experiments,
-    pub(crate) name_service: NameServiceConfig,
-    pub(crate) background_tasks: BackgroundTasksConfig,
-    pub(crate) zklogin: ZkLoginConfig,
-}
-
-#[GraphQLConfig]
-pub struct Versions {
-    versions: Vec<String>,
+    pub limits: Limits,
+    pub disabled_features: BTreeSet<FunctionalGroup>,
+    pub experiments: Experiments,
+    pub name_service: NameServiceConfig,
+    pub background_tasks: BackgroundTasksConfig,
+    pub zklogin: ZkLoginConfig,
+    pub move_registry: MoveRegistryConfig,
 }
 
 #[GraphQLConfig]
@@ -67,7 +91,12 @@ pub struct Limits {
     pub max_query_nodes: u32,
     /// Maximum number of output nodes allowed in the response.
     pub max_output_nodes: u32,
-    /// Maximum size (in bytes) of a GraphQL request.
+    /// Maximum size in bytes allowed for the `txBytes` and `signatures` fields of a GraphQL
+    /// mutation request in the `executeTransactionBlock` node, and for the `txBytes` of a
+    /// `dryRunTransactionBlock` node.
+    pub max_tx_payload_size: u32,
+    /// Maximum size in bytes of the JSON payload of a GraphQL read request (excluding
+    /// `max_tx_payload_size`).
     pub max_query_payload_size: u32,
     /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
     /// database (where 1.0 is roughly the cost of a sequential page access).
@@ -92,6 +121,10 @@ pub struct Limits {
     pub max_type_nodes: u32,
     /// Maximum deph of a move value.
     pub max_move_value_depth: u32,
+    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
+    pub max_transaction_ids: u32,
+    /// Maximum number of candidates to scan when gathering a page of results.
+    pub max_scan_limit: u32,
 }
 
 #[GraphQLConfig]
@@ -102,22 +135,39 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
+#[GraphQLConfig]
+#[derive(Clone)]
+pub struct MoveRegistryConfig {
+    pub(crate) external_api_url: Option<String>,
+    pub(crate) resolution_type: ResolutionType,
+    pub(crate) page_limit: u16,
+    pub(crate) package_address: SuiAddress,
+    pub(crate) registry_id: ObjectID,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub(crate) enum ResolutionType {
+    Internal,
+    External,
+}
+
 /// The Version of the service. `year.month` represents the major release.
 /// New `patch` versions represent backwards compatible fixes for their major release.
 /// The `full` version is `year.month.patch-sha`.
 #[derive(Copy, Clone, Debug)]
 pub struct Version {
-    /// The year of this release.
-    pub year: &'static str,
-    /// The month of this release.
-    pub month: &'static str,
-    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    /// The major version for the release
+    pub major: &'static str,
+    /// The minor version of the release
+    pub minor: &'static str,
+    /// The patch version of the release
     pub patch: &'static str,
-    /// The commit sha for this release.
+    /// The full commit SHA that the release was built from
     pub sha: &'static str,
-    /// The full version string.
-    /// Note that this extra field is used only for the uptime_metric function which requries a
-    /// &'static str.
+    /// The full version string: {MAJOR}.{MINOR}.{PATCH}-{SHA}
+    ///
+    /// The full version is pre-computed as a &'static str because that is what is required for
+    /// `uptime_metric`.
     pub full: &'static str,
 }
 
@@ -125,26 +175,22 @@ impl Version {
     /// Use for testing when you need the Version obj and a year.month &str
     pub fn for_testing() -> Self {
         Self {
-            year: env!("CARGO_PKG_VERSION_MAJOR"),
-            month: env!("CARGO_PKG_VERSION_MINOR"),
-            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            major: "42",
+            minor: "43",
+            patch: "44",
             sha: "testing-no-sha",
             // note that this full field is needed for metrics but not for testing
-            full: const_str::concat!(
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_MINOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_PATCH"),
-                "-testing-no-sha"
-            ),
+            full: "42.43.44-testing-no-sha",
         }
     }
 }
 
 #[GraphQLConfig]
+#[derive(clap::Args)]
 pub struct Ide {
-    pub(crate) ide_title: String,
+    /// The title to display at the top of the web-based GraphiQL IDE.
+    #[clap(short, long, default_value_t = Ide::default().ide_title)]
+    pub ide_title: String,
 }
 
 #[GraphQLConfig]
@@ -170,8 +216,10 @@ pub struct InternalFeatureConfig {
 }
 
 #[GraphQLConfig]
-#[derive(Default)]
+#[derive(clap::Args, Default)]
 pub struct TxExecFullNodeConfig {
+    /// RPC URL for the fullnode to send transactions to execute and dry-run.
+    #[clap(long)]
     pub(crate) node_rpc_url: Option<String>,
 }
 
@@ -187,11 +235,6 @@ impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
     async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
         !self.disabled_features.contains(&feature)
-    }
-
-    /// List the available versions for this GraphQL service.
-    async fn available_versions(&self) -> Vec<String> {
-        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -256,7 +299,19 @@ impl ServiceConfig {
         self.limits.request_timeout_ms
     }
 
-    /// Maximum length of a query payload string.
+    /// The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+    /// `executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
+    ///
+    /// It is the value of the maximum transaction bytes (including the signatures) allowed by the
+    /// protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+    async fn max_transaction_payload_size(&self) -> u32 {
+        self.limits.max_tx_payload_size
+    }
+
+    /// The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+    /// the read part of the query.
+    /// In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+    /// included in this limit.
     async fn max_query_payload_size(&self) -> u32 {
         self.limits.max_query_payload_size
     }
@@ -282,6 +337,16 @@ impl ServiceConfig {
     async fn max_move_value_depth(&self) -> u32 {
         self.limits.max_move_value_depth
     }
+
+    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
+    async fn max_transaction_ids(&self) -> u32 {
+        self.limits.max_transaction_ids
+    }
+
+    /// Maximum number of candidates to scan when gathering a page of results.
+    async fn max_scan_limit(&self) -> u32 {
+        self.limits.max_scan_limit
+    }
 }
 
 impl TxExecFullNodeConfig {
@@ -291,46 +356,6 @@ impl TxExecFullNodeConfig {
 }
 
 impl ConnectionConfig {
-    pub fn new(
-        port: Option<u16>,
-        host: Option<String>,
-        db_url: Option<String>,
-        db_pool_size: Option<u32>,
-        prom_url: Option<String>,
-        prom_port: Option<u16>,
-    ) -> Self {
-        let default = Self::default();
-        Self {
-            port: port.unwrap_or(default.port),
-            host: host.unwrap_or(default.host),
-            db_url: db_url.unwrap_or(default.db_url),
-            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
-            prom_url: prom_url.unwrap_or(default.prom_url),
-            prom_port: prom_port.unwrap_or(default.prom_port),
-        }
-    }
-
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_graphql_rpc_e2e_tests"
-                .to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn ci_integration_test_cfg_with_db_name(
-        db_name: String,
-        port: u16,
-        prom_port: u16,
-    ) -> Self {
-        Self {
-            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
-            port,
-            prom_port,
-            ..Default::default()
-        }
-    }
-
     pub fn db_name(&self) -> String {
         self.db_url.split('/').last().unwrap().to_string()
     }
@@ -345,6 +370,14 @@ impl ConnectionConfig {
 
     pub fn server_address(&self) -> String {
         format!("{}:{}", self.host, self.port)
+    }
+
+    pub fn host(&self) -> String {
+        self.host.clone()
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 }
 
@@ -362,6 +395,29 @@ impl ServiceConfig {
             ..Default::default()
         }
     }
+
+    pub fn move_registry_test_defaults(
+        external: bool,
+        endpoint: Option<String>,
+        pkg_address: Option<SuiAddress>,
+        object_id: Option<ObjectID>,
+        page_limit: Option<u16>,
+    ) -> Self {
+        Self {
+            move_registry: MoveRegistryConfig {
+                resolution_type: if external {
+                    ResolutionType::External
+                } else {
+                    ResolutionType::Internal
+                },
+                external_api_url: endpoint,
+                package_address: pkg_address.unwrap_or_default(),
+                registry_id: object_id.unwrap_or(ObjectID::random()),
+                page_limit: page_limit.unwrap_or(50),
+            },
+            ..Self::test_defaults()
+        }
+    }
 }
 
 impl Limits {
@@ -376,14 +432,6 @@ impl Limits {
     }
 }
 
-impl Ide {
-    pub fn new(ide_title: Option<String>) -> Self {
-        ide_title
-            .map(|ide_title| Ide { ide_title })
-            .unwrap_or_default()
-    }
-}
-
 impl BackgroundTasksConfig {
     pub fn test_defaults() -> Self {
         Self {
@@ -392,14 +440,20 @@ impl BackgroundTasksConfig {
     }
 }
 
-impl Default for Versions {
-    fn default() -> Self {
+impl MoveRegistryConfig {
+    pub(crate) fn new(
+        resolution_type: ResolutionType,
+        external_api_url: Option<String>,
+        page_limit: u16,
+        package_address: SuiAddress,
+        registry_id: ObjectID,
+    ) -> Self {
         Self {
-            versions: vec![format!(
-                "{}.{}",
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                env!("CARGO_PKG_VERSION_MINOR")
-            )],
+            resolution_type,
+            external_api_url,
+            page_limit,
+            package_address,
+            registry_id,
         }
     }
 }
@@ -419,8 +473,9 @@ impl Default for ConnectionConfig {
             host: "127.0.0.1".to_string(),
             db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer".to_string(),
             db_pool_size: 10,
-            prom_url: "0.0.0.0".to_string(),
+            prom_host: "0.0.0.0".to_string(),
             prom_port: 9184,
+            skip_migration_consistency_check: false,
         }
     }
 }
@@ -452,6 +507,15 @@ impl Default for Limits {
             max_type_nodes: 256,
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1988>
             max_move_value_depth: 128,
+            // Filter-specific limits, such as the number of transaction ids that can be specified
+            // for the `TransactionBlockFilter`.
+            max_transaction_ids: 1000,
+            max_scan_limit: 100_000_000,
+            // This value is set to be the size of the max transaction bytes allowed + base64
+            // overhead (roughly 1/3 of the original string). This is rounded up.
+            //
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
+            max_tx_payload_size: (128u32 * 1024u32 * 4u32).div_ceil(3),
         }
     }
 }
@@ -486,6 +550,20 @@ impl Display for Version {
     }
 }
 
+// TODO: Keeping the values as is, because we'll remove the default getters
+// when we refactor to use `[GraphqlConfig]` macro.
+impl Default for MoveRegistryConfig {
+    fn default() -> Self {
+        Self::new(
+            ResolutionType::Internal,
+            None,
+            DEFAULT_PAGE_LIMIT,
+            SuiAddress::from_str(MOVE_REGISTRY_PACKAGE).unwrap(),
+            ObjectID::from_str(MOVE_REGISTRY_TABLE_ID).unwrap(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,6 +582,7 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-output-nodes = 200000
+                max-mutation-payload-size = 174763
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
@@ -514,6 +593,8 @@ mod tests {
                 max-type-argument-width = 64
                 max-type-nodes = 128
                 max-move-value-depth = 256
+                max-transaction-ids = 11
+                max-scan-limit = 50
             "#,
         )
         .unwrap();
@@ -523,6 +604,7 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_output_nodes: 200000,
+                max_tx_payload_size: 174763,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
@@ -533,6 +615,8 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
+                max_transaction_ids: 11,
+                max_scan_limit: 50,
             },
             ..Default::default()
         };
@@ -586,6 +670,7 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-output-nodes = 200000
+                max-tx-payload-size = 181017
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
@@ -596,6 +681,8 @@ mod tests {
                 max-type-argument-width = 64
                 max-type-nodes = 128
                 max-move-value-depth = 256
+                max-transaction-ids = 42
+                max-scan-limit = 420
 
                 [experiments]
                 test-flag = true
@@ -608,6 +695,7 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_output_nodes: 200000,
+                max_tx_payload_size: 181017,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,
@@ -618,6 +706,8 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
+                max_transaction_ids: 42,
+                max_scan_limit: 420,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

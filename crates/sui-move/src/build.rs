@@ -99,12 +99,11 @@ impl Build {
                 check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
             }
 
-            let package_dependencies = pkg.get_package_dependencies_hex();
             println!(
                 "{}",
                 json!({
                     "modules": pkg.get_package_base64(with_unpublished_deps),
-                    "dependencies": json!(package_dependencies),
+                    "dependencies": pkg.get_dependency_storage_package_ids(),
                     "digest": pkg.get_package_digest(with_unpublished_deps),
                 })
             )
@@ -113,11 +112,12 @@ impl Build {
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
             // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-            let layout_filename = rerooted_path
+            let dir_name = rerooted_path
                 .join("build")
                 .join(pkg.package.compiled_package_info.package_name.as_str())
-                .join(LAYOUTS_DIR)
-                .join(STRUCT_LAYOUTS_FILENAME);
+                .join(LAYOUTS_DIR);
+            let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
+            fs::create_dir_all(dir_name)?;
             fs::write(layout_filename, layout_str)?
         }
 

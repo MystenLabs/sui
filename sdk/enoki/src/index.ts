@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export { EnokiClient, type EnokiClientConfig } from './EnokiClient/index.js';
+export { EnokiClient, type EnokiClientConfig, EnokiClientError } from './EnokiClient/index.js';
 export { EnokiFlow, type AuthProvider, type EnokiFlowConfig } from './EnokiFlow.js';
 export {
 	createLocalStorage,

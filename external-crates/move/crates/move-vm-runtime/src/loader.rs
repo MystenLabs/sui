@@ -1339,7 +1339,7 @@ impl Loader {
     // Return an instantiated type given a generic and an instantiation.
     // Stopgap to avoid a recursion that is either taking too long or using too
     // much memory
-    fn subst(&self, ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
+    pub(crate) fn subst(&self, ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
@@ -1355,6 +1355,14 @@ impl Loader {
             }
         }
         ty.subst(ty_args)
+    }
+
+    pub(crate) fn make_type(
+        &self,
+        module: &CompiledModule,
+        tok: &SignatureToken,
+    ) -> PartialVMResult<Type> {
+        self.module_cache.read().make_type(module, tok)
     }
 
     // Verify the kind (constraints) of an instantiation.
@@ -1386,7 +1394,7 @@ impl Loader {
         self.module_cache.read().function_at(idx)
     }
 
-    fn get_module(
+    pub(crate) fn get_module(
         &self,
         link_context: AccountAddress,
         runtime_id: &ModuleId,
@@ -2195,7 +2203,7 @@ impl Function {
         )
     }
 
-    #[cfg(any(debug_assertions, feature = "debugging"))]
+    #[cfg(any(debug_assertions, feature = "tracing"))]
     pub(crate) fn pretty_short_string(&self) -> String {
         let id = &self.module;
         format!(
@@ -2353,11 +2361,9 @@ impl TypeCache {
 /// Maximal depth of a value in terms of type depth.
 pub const VALUE_DEPTH_MAX: u64 = 128;
 
-/// Maximal nodes which are allowed when converting to layout. This includes the types of
+/// [Historical] Maximal nodes which are allowed when converting to layout. This includes the types of
 /// fields for struct types.
-/// Maximal nodes which are allowed when converting to layout. This includes the types of
-/// fields for datatypes.
-const MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
+const HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 
 /// Maximal nodes which are all allowed when instantiating a generic type. This does not include
 /// field types of datatypes.
@@ -2526,7 +2532,7 @@ impl Loader {
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     variant_layouts.push(field_layouts);
                 }
-                R::MoveDatatypeLayout::Enum(R::MoveEnumLayout(variant_layouts))
+                R::MoveDatatypeLayout::Enum(Box::new(R::MoveEnumLayout(Box::new(variant_layouts))))
             }
             Datatype::Struct(ref sinfo) => {
                 let field_tys = sinfo
@@ -2539,7 +2545,7 @@ impl Loader {
                     .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
                     .collect::<PartialVMResult<Vec<_>>>()?;
 
-                R::MoveDatatypeLayout::Struct(R::MoveStructLayout::new(field_layouts))
+                R::MoveDatatypeLayout::Struct(Box::new(R::MoveStructLayout::new(field_layouts)))
             }
         };
 
@@ -2564,14 +2570,19 @@ impl Loader {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<R::MoveTypeLayout> {
-        if *count > MAX_TYPE_TO_LAYOUT_NODES {
+        if *count
+            > self
+                .vm_config()
+                .max_type_to_layout_nodes
+                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
+        {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
         if depth > VALUE_DEPTH_MAX {
             return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
         }
         *count += 1;
-        Ok(match ty {
+        let ty = match ty {
             Type::Bool => R::MoveTypeLayout::Bool,
             Type::U8 => R::MoveTypeLayout::U8,
             Type::U16 => R::MoveTypeLayout::U16,
@@ -2598,7 +2609,8 @@ impl Loader {
                         .with_message(format!("no type layout for {:?}", ty)),
                 );
             }
-        })
+        };
+        Ok(ty)
     }
 
     fn datatype_gidx_to_fully_annotated_layout(
@@ -2651,10 +2663,10 @@ impl Loader {
                         field_layouts,
                     );
                 }
-                A::MoveDatatypeLayout::Enum(A::MoveEnumLayout {
+                A::MoveDatatypeLayout::Enum(Box::new(A::MoveEnumLayout {
                     type_: struct_tag.clone(),
                     variants: variant_layouts,
-                })
+                }))
             }
             Datatype::Struct(struct_type) => {
                 if struct_type.fields.len() != struct_type.field_names.len() {
@@ -2676,7 +2688,10 @@ impl Loader {
                         Ok(A::MoveFieldLayout::new(n.clone(), l))
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                A::MoveDatatypeLayout::Struct(A::MoveStructLayout::new(struct_tag, field_layouts))
+                A::MoveDatatypeLayout::Struct(Box::new(A::MoveStructLayout::new(
+                    struct_tag,
+                    field_layouts,
+                )))
             }
         };
 
@@ -2701,7 +2716,12 @@ impl Loader {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<A::MoveTypeLayout> {
-        if *count > MAX_TYPE_TO_LAYOUT_NODES {
+        if *count
+            > self
+                .vm_config()
+                .max_type_to_layout_nodes
+                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
+        {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
         if depth > VALUE_DEPTH_MAX {

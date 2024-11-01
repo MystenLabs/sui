@@ -10,12 +10,11 @@ use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::payload::Payload;
-use crate::workloads::{Gas, GasCoinConfig};
+use crate::workloads::{workload::ExpectedFailureType, Gas, GasCoinConfig};
 use crate::ProgrammableTransactionBuilder;
 use crate::{convert_move_call_args, BenchMoveCallArg, ExecutionEffects, ValidatorProxy};
 use anyhow::anyhow;
 use async_trait::async_trait;
-use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -144,7 +143,7 @@ impl FromStr for AdversarialPayloadCfg {
         if !re.is_match(s) {
             return Err(anyhow!("invalid load config"));
         };
-        let toks = s.split('-').collect_vec();
+        let toks = s.split('-').collect::<Vec<_>>();
         let payload_type = AdversarialPayloadType::from_str(toks[0])?;
         let load_factor = toks[1].parse::<f32>().unwrap();
 
@@ -189,6 +188,10 @@ impl Payload for AdversarialTestPayload {
                 .as_ref()
                 .expect("Protocol config not in system state"),
         )
+    }
+
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 

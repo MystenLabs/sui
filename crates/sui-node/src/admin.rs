@@ -241,12 +241,12 @@ async fn capabilities(State(state): State<Arc<AppState>>) -> (StatusCode, String
     // Only one of v1 or v2 will be populated at a time
     let capabilities = epoch_store.get_capabilities_v1();
     let mut output = String::new();
-    for capability in &capabilities {
+    for capability in capabilities.unwrap_or_default() {
         output.push_str(&format!("{:?}\n", capability));
     }
 
     let capabilities = epoch_store.get_capabilities_v2();
-    for capability in &capabilities {
+    for capability in capabilities.unwrap_or_default() {
         output.push_str(&format!("{:?}\n", capability));
     }
 

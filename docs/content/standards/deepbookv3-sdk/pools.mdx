@@ -1,0 +1,319 @@
+---
+title: Pools SDK
+sidebar_label: Pools
+---
+
+Pools are shared objects that represent a market. See [Query the Pool](../deepbookv3/query-the-pool.mdx) for more information on pools.
+
+## Pool functions
+
+The DeepBookV3 SDK exposes functions that you can call to read the state of a pool. These functions typically require a `managerKey`, `coinKey`, `poolKey`, or a combination of these. For details on these keys, see [DeepBookV3 SDK](../deepbookv3-sdk.mdx#keys). The SDK includes some default keys that you can view in the `constants.ts` file.
+
+::: tip
+Decimal adjust all input quantities. All outputs are decimal adjusted.
+:::
+
+### account
+
+Use `account` to retrieve the account information for a `BalanceManager` in a pool, which has the following form:
+
+```tsx
+{
+  epoch: '511',
+  open_orders: {
+    constants: [
+      '170141211130585342296014727715884105730',
+      '18446744092156295689709543266',
+      '18446744092156295689709543265'
+    ]
+  },
+  taker_volume: 0,
+  maker_volume: 0,
+  active_stake: 0,
+  inactive_stake: 0,
+  created_proposal: false,
+  voted_proposal: null,
+  unclaimed_rebates: { base: 0, quote: 0, deep: 0 },
+  settled_balances: { base: 0, quote: 0, deep: 0 },
+  owed_balances: { base: 0, quote: 0, deep: 0 }
+}
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query. 
+- `balanceManagerKey`: key of the balance manager defined in the SDK.
+
+```tsx
+async account(poolKey: string, managerKey: string) {}
+```
+
+### accountOpenOrders
+
+Use `accountOpenOrders` to retrieve open orders for the balance manager and pool with the IDs you provide. The call returns a `Promise` that contains an array of open order IDs.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `managerKey`: String that identifies the balance manager to query.
+
+```tsx
+async accountOpenOrders(poolKey: string, managerKey: string) {}
+```
+
+### checkManagerBalance
+
+Use `checkManagerBalance` to check the balance manager for a specific coin. The call returns a `Promise` in the form:
+
+```
+{ 
+  coinType: string,
+  balance: number 
+}
+```
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager to query.
+- `coinKey`: String that identifies the coin to query the balance of.
+
+```tsx
+async checkManagerBalance(managerKey: string, coinKey: string) {}
+```
+
+### getOrder
+
+Use `getOrder` to retrieve an order's information. The call returns a `Promise` in the `Order` struct, which has the following form:
+
+```tsx
+{
+  balance_manager_id: {
+    bytes: '0x6149bfe6808f0d6a9db1c766552b7ae1df477f5885493436214ed4228e842393'
+  },
+  order_id: '9223372036873222552073709551614',
+  client_order_id: '888',
+  quantity: '50000000',
+  filled_quantity: '0',
+  fee_is_deep: true,
+  order_deep_price: { asset_is_base: false, deep_per_asset: '0' },
+  epoch: '440',
+  status: 0,
+  expire_timestamp: '1844674407370955161'
+}
+```
+
+**Parameters**
+
+`poolKey`: String that identifies the pool to query.
+`orderId`: ID of the order to query.
+
+```tsx
+async getOrder(poolKey: string, orderId: string) {}
+```
+
+### getQuoteQuantityOut
+
+Use `getQuoteQuantityOut` to retrieve the quote quantity out for the base quantity you provide. The call returns a `Promise` in the form:
+```
+{ 
+  baseQuantity: number,
+  baseOut: number,
+  quoteOut: number,
+  deepRequired: number 
+}
+```
+where `deepRequired` is the amount of DEEP required for the dry run.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `baseQuantity`: Number that defines the base quantity you want to convert.
+
+ ```tsx
+async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {}
+```
+
+### getBaseQuantityOut
+
+Use `getBaseQuantityOut` to retrieve the base quantity out for the quote quantity that you provide. The call returns a `Promise` in the form:
+```
+{
+  quoteQuantity: number,
+  baseOut: number,
+  quoteOut: number,
+  deepRequired: number
+}
+```
+where `deepRequired` is the amount of DEEP required for the dry run.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `quoteQuantity`: Number that defines the quote quantity you want to convert.
+
+```tsx
+async getBaseQuantityOut(poolKey: string, quoteQuantity: number) {}
+```
+
+### getQuantityOut
+
+Use `getQuantityOut` to retrieve the output quantities for the base or quote quantity you provide. You provide values for both quantities, but only one of them can be non-zero. The call returns a `Promise` with the form:
+```
+{
+  baseQuantity: number,
+  quoteQuantity: number,
+  baseOut: number,
+  quoteOut: number,
+  deepRequired: number
+}
+```
+where `deepRequired` is the amount of DEEP required for the dry run.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `baseQuantity`: Number that defines the base quantity you want to convert. Set to `0` if using quote quantity.
+- `quoteQuantity`: Number that defines the quote quantity you want to convert. Set to `0` if using base quantity.
+
+```tsx
+async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {}
+```
+
+### getLevel2Range
+
+Use `getLevel2Range` to retrieve level 2 order book within the boundary price range you provide. The call returns a `Promise` in the form:
+```
+{
+  prices: Array<number>,
+  quantities: Array<number>
+}
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `priceLow`: Number for lower bound of price range.
+- `priceHigh`: Number for upper bound of price range.
+- `isBid`: Boolean when set to `true` gets bid orders, else retrieve ask orders.
+
+ ```tsx
+async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {}
+```
+
+### getLevel2TicksFromMid
+
+Use `getLevel2TicksFromMid` to retrieve level 2 order book ticks from mid-price for a pool with the ID you provide. The call returns a `Promise` in the form:
+```
+{
+  bid_prices: Array<number>,
+  bid_quantities: Array<number>,
+  ask_prices: Array<number>,
+  ask_quantities: Array<number>
+}
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `ticks`: Number of ticks from mid-price.
+
+ ```tsx
+async getLevel2TicksFromMid(poolKey: string, ticks: number) {}
+```
+
+### lockedBalance
+
+Use `lockedBalance` to retrieve a `BalanceManager` locked balance in the pool. The call returns a `Promise` in the `Order` struct, which has the following form:
+
+```tsx
+{
+  base: 5.5,
+	quote: 2,
+	deep: 0.15,
+}
+```
+
+**Parameters**
+
+`poolKey`: String that identifies the pool to query. `balanceManagerKey`: key of the balance manager defined in the SDK.
+
+```tsx
+async lockedBalance(poolKey: string, balanceManagerKey: string) {}
+```
+
+### poolTradeParams
+
+Use `poolTradeParams` to retrieve the trade params for the pool, which has the following form:
+
+```tsx
+{
+  takerFee: 0.001,
+	makerFee: 0.0005,
+	stakeRequired: 100,
+}
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async poolTradeParams(poolKey: string) {}
+```
+
+### vaultBalances
+
+Use `vaultBalances` to get the vault balances for a pool with the ID you provide. The call returns a `Promise` in the form:
+
+```tsx
+{
+  base: number, 
+  quote: number, 
+  deep: number
+} 
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async vaultBalances(poolKey: string) {}
+```
+
+### getPoolIdByAssets
+
+Use `getPoolIdByAssets` to retrieve the pool ID for the asset types you provide. The call returns a `Promise` with the address of the pool if it's found.
+
+**Parameters**
+
+- `baseType`: String of the type of base asset.
+- `quoteType`: String of the type of quote asset.
+
+```tsx
+async getPoolIdByAssets(baseType: string, quoteType: string) {}
+```
+
+### midPrice
+
+Use `midPrice` to retrieve the mid price for a pool with the ID that you provide. The call returns a `Promise` with the mid price.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async midPrice(poolKey: string) {}
+```
+
+### whitelisted
+
+Use `whitelisted` to check if the pool with the ID you provide is whitelisted. The call returns a `Promise` as a boolean indicating whether the pool is whitelisted.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async whitelisted(poolKey: string) {}
+```

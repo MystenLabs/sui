@@ -6,6 +6,9 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
@@ -54,6 +57,7 @@ tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 typed-store.workspace = true
+tonic-rustls.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

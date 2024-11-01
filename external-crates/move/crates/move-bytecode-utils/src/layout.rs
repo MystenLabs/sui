@@ -226,8 +226,8 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             (None, Some(enum_def)) => {
                 Container::Enum(Enum::new(declaring_module.borrow(), enum_def).1)
             }
-            (Some(_), Some(_)) => panic!("Found both struct and enum with name {}", name),
-            (None, None) => panic!(
+            (Some(_), Some(_)) => bail!("Found both struct and enum with name {}", name),
+            (None, None) => bail!(
                 "Could not find datatype named {} in module {}",
                 name,
                 declaring_module.borrow().name()
@@ -287,7 +287,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
                 if old_datatype.clone()
                     != self.generate_serde_container(def, type_arguments, depth)?
                 {
-                    panic!(
+                    bail!(
                         "Name conflict: multiple structs with name {}, but different addresses",
                         type_key
                     )
@@ -587,7 +587,10 @@ impl DatatypeLayoutBuilder {
                     .zip(layouts)
                     .map(|(name, layout)| A::MoveFieldLayout::new(name, layout))
                     .collect();
-                Ok(A::MoveStructLayout { type_, fields })
+                Ok(A::MoveStructLayout {
+                    type_,
+                    fields: Box::new(fields),
+                })
             }
         }
     }
@@ -608,7 +611,7 @@ impl DatatypeLayoutBuilder {
             module.borrow().find_struct_def_by_name(name),
             module.borrow().find_enum_def_by_name(name),
         ) {
-            (Some(struct_def), None) => Ok(A::MoveDatatypeLayout::Struct(
+            (Some(struct_def), None) => Ok(A::MoveDatatypeLayout::Struct(Box::new(
                 Self::build_from_struct_definition(
                     module.borrow(),
                     struct_def,
@@ -616,8 +619,8 @@ impl DatatypeLayoutBuilder {
                     resolver,
                     depth,
                 )?,
-            )),
-            (None, Some(enum_def)) => Ok(A::MoveDatatypeLayout::Enum(
+            ))),
+            (None, Some(enum_def)) => Ok(A::MoveDatatypeLayout::Enum(Box::new(
                 Self::build_from_enum_definition(
                     module.borrow(),
                     enum_def,
@@ -625,9 +628,9 @@ impl DatatypeLayoutBuilder {
                     resolver,
                     depth,
                 )?,
-            )),
-            (Some(_), Some(_)) => panic!("Found both struct and enum with name {}", name),
-            (None, None) => panic!(
+            ))),
+            (Some(_), Some(_)) => bail!("Found both struct and enum with name {}", name),
+            (None, None) => bail!(
                 "Could not find struct/enum named {} in module {}",
                 name,
                 module.borrow().name()
@@ -645,13 +648,13 @@ impl DatatypeLayoutBuilder {
         check_depth!(depth);
         if let Some(def) = m.find_struct_def(s) {
             // declared internally
-            Ok(A::MoveDatatypeLayout::Struct(
+            Ok(A::MoveDatatypeLayout::Struct(Box::new(
                 Self::build_from_struct_definition(m, def, type_arguments, resolver, depth)?,
-            ))
+            )))
         } else if let Some(def) = m.find_enum_def(s) {
-            Ok(A::MoveDatatypeLayout::Enum(
+            Ok(A::MoveDatatypeLayout::Enum(Box::new(
                 Self::build_from_enum_definition(m, def, type_arguments, resolver, depth)?,
-            ))
+            )))
         } else {
             let handle = m.datatype_handle_at(s);
             let name = m.identifier_at(handle.name);

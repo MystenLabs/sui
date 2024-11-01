@@ -3,6 +3,7 @@
 
 use crate::{
     diag,
+    diagnostics::Diagnostics,
     expansion::ast::{self as E, ModuleIdent},
     ice,
     shared::{
@@ -19,6 +20,7 @@ const NOTE_STR: &str = "note";
 #[derive(Debug, Clone)]
 pub struct Deprecation {
     // The source location of the deprecation attribute
+    #[allow(unused)]
     pub source_location: Loc,
     // The type of the member that is deprecated (function, constant, etc.)
     pub location: AttributePosition,
@@ -42,7 +44,7 @@ pub struct Deprecations {
 impl Deprecations {
     /// Index the modules and their members for deprecation attributes and register each
     /// deprecation attribute for use later on.
-    pub fn new(env: &mut CompilationEnv, info: &NamingProgramInfo) -> Self {
+    pub fn new(env: &CompilationEnv, info: &NamingProgramInfo) -> Self {
         let mut deprecated_members = HashMap::new();
 
         for (mident, module_info) in info.modules.key_cloned_iter() {
@@ -119,12 +121,7 @@ impl Deprecations {
 
 impl Deprecation {
     /// Emit a warning for the deprecation of a module member.
-    pub fn emit_deprecation_warning(
-        &self,
-        env: &mut CompilationEnv,
-        member_name: Name,
-        method_opt: Option<Name>,
-    ) {
+    pub fn deprecation_warnings(&self, member_name: Name, method_opt: Option<Name>) -> Diagnostics {
         let mident_string = self.module_ident.to_string();
         let location_string = match (self.location, method_opt) {
             (AttributePosition::Module, None) => {
@@ -158,7 +155,10 @@ impl Deprecation {
 
         let location = method_opt.map_or(member_name.loc, |method| method.loc);
 
-        env.add_diag(diag!(TypeSafety::DeprecatedUsage, (location, message)));
+        Diagnostics::from(vec![diag!(
+            TypeSafety::DeprecatedUsage,
+            (location, message)
+        )])
     }
 }
 
@@ -167,7 +167,7 @@ impl Deprecation {
 // #[deprecated] attributes (malformed, or multiple on the member), add an error diagnostic to
 // `env` and return None.
 fn deprecations(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     attr_position: AttributePosition,
     attrs: &E::Attributes,
     source_location: Loc,
@@ -183,7 +183,7 @@ fn deprecations(
     }
 
     if deprecations.len() != 1 {
-        env.add_diag(ice!((
+        env.add_error_diag(ice!((
             source_location,
             "ICE: verified that there is at at least one deprecation attribute above, \
             and expansion should have failed if there were multiple deprecation attributes."
@@ -195,7 +195,7 @@ fn deprecations(
         .last()
         .expect("Verified deprecations is not empty above");
 
-    let mut make_invalid_deprecation_diag = || {
+    let make_invalid_deprecation_diag = || {
         let mut diag = diag!(
             Attributes::InvalidUsage,
             (
@@ -208,7 +208,7 @@ fn deprecations(
             DeprecationAttribute.name()
         );
         diag.add_note(note);
-        env.add_diag(diag);
+        env.add_error_diag(diag);
         None
     };
 

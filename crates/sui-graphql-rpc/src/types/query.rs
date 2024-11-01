@@ -12,6 +12,11 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
+use super::move_package::{
+    self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
+};
+use super::move_registry::named_move_package::NamedMovePackage;
+use super::move_registry::named_type::NamedType;
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -24,7 +29,7 @@ use super::{
     cursor::Page,
     digest::Digest,
     dry_run_result::DryRunResult,
-    epoch::Epoch,
+    epoch::{self, Epoch},
     event::{self, Event, EventFilter},
     move_type::MoveType,
     object::{self, Object, ObjectFilter},
@@ -36,6 +41,7 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
+use crate::connection::ScanConnection;
 use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64 as GraphQLBase64;
 use crate::types::zklogin_verify_signature::verify_zklogin_signature;
@@ -51,10 +57,18 @@ impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        Ok(ChainIdentifier::query(ctx.data_unchecked())
-            .await
-            .extend()?
-            .to_string())
+        // we want to panic if the chain identifier is missing, as there's something wrong with
+        // the service.
+        let chain_id: ChainIdentifier = *ctx.data_unchecked();
+
+        if let Some(id) = chain_id.0 {
+            Ok(id.to_string())
+        } else {
+            Err(Error::Internal(
+                "Chain identifier not initialized.".to_string(),
+            ))
+            .extend()
+        }
     }
 
     /// Range of checkpoints that the RPC has data available for (for data
@@ -195,13 +209,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
-        root_version: Option<u64>,
+        root_version: Option<UInt53>,
     ) -> Result<Option<Owner>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         Ok(Some(Owner {
             address,
             checkpoint_viewed_at: checkpoint,
-            root_version,
+            root_version: root_version.map(|v| v.into()),
         }))
     }
 
@@ -214,17 +228,52 @@ impl Query {
         version: Option<UInt53>,
     ) -> Result<Option<Object>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
+        let key = match version {
+            Some(version) => Object::at_version(version.into(), checkpoint),
+            None => Object::latest_at(checkpoint),
+        };
 
-        match version {
-            Some(version) => {
-                Object::query(ctx, address, Object::at_version(version.into(), checkpoint))
-                    .await
-                    .extend()
-            }
-            None => Object::query(ctx, address, Object::latest_at(checkpoint))
-                .await
-                .extend(),
-        }
+        Object::query(ctx, address, key).await.extend()
+    }
+
+    /// The package corresponding to the given address (at the optionally given version).
+    ///
+    /// When no version is given, the package is loaded directly from the address given. Otherwise,
+    /// the address is translated before loading to point to the package whose original ID matches
+    /// the package at `address`, but whose version is `version`. For non-system packages, this
+    /// might result in a different address than `address` because different versions of a package,
+    /// introduced by upgrades, exist at distinct addresses.
+    ///
+    /// Note that this interpretation of `version` is different from a historical object read (the
+    /// interpretation of `version` for the `object` query).
+    async fn package(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        version: Option<UInt53>,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let key = match version {
+            Some(version) => MovePackage::by_version(version.into(), checkpoint),
+            None => MovePackage::by_id_at(checkpoint),
+        };
+
+        MovePackage::query(ctx, address, key).await.extend()
+    }
+
+    /// The latest version of the package at `address`.
+    ///
+    /// This corresponds to the package with the highest `version` that shares its original ID with
+    /// the package at `address`.
+    async fn latest_package(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        MovePackage::query(ctx, address, MovePackage::latest_at(checkpoint))
+            .await
+            .extend()
     }
 
     /// Look-up an Account by its SuiAddress.
@@ -240,11 +289,10 @@ impl Query {
     /// Fetch a structured representation of a concrete type, including its layout information.
     /// Fails if the type is malformed.
     async fn type_(&self, type_: String) -> Result<MoveType> {
-        Ok(MoveType::new(
-            TypeTag::from_str(&type_)
-                .map_err(|e| Error::Client(format!("Bad type: {e}")))
-                .extend()?,
-        ))
+        Ok(TypeTag::from_str(&type_)
+            .map_err(|e| Error::Client(format!("Bad type: {e}")))
+            .extend()?
+            .into())
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
@@ -275,9 +323,8 @@ impl Query {
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
-        TransactionBlock::query(ctx, digest, checkpoint)
-            .await
-            .extend()
+        let lookup = TransactionBlock::by_digest(digest, checkpoint);
+        TransactionBlock::query(ctx, lookup).await.extend()
     }
 
     /// The coin objects that exist in the network.
@@ -308,6 +355,23 @@ impl Query {
         .extend()
     }
 
+    // The epochs of the network
+    async fn epochs(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<epoch::Cursor>,
+        last: Option<u64>,
+        before: Option<epoch::Cursor>,
+    ) -> Result<Connection<String, Epoch>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Epoch::paginate(ctx.data_unchecked(), page, checkpoint)
+            .await
+            .extend()
+    }
+
     /// The checkpoints that exist in the network.
     async fn checkpoints(
         &self,
@@ -331,6 +395,25 @@ impl Query {
     }
 
     /// The transaction blocks that exist in the network.
+    ///
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range includes all transactions known to GraphQL, but it can be
+    /// restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+    /// `afterCheckpoint` and `atCheckpoint` filters.
     async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -339,21 +422,26 @@ impl Query {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+        scan_limit: Option<u64>,
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
         TransactionBlock::paginate(
-            ctx.data_unchecked(),
+            ctx,
             page,
             filter.unwrap_or_default(),
             checkpoint,
+            scan_limit,
         )
         .await
         .extend()
     }
 
-    /// The events that exist in the network.
+    /// Query events that are emitted in the network.
+    /// We currently do not support filtering by emitting module and event type
+    /// at the same time so if both are provided in one filter, the query will error.
     async fn events(
         &self,
         ctx: &Context<'_>,
@@ -399,6 +487,49 @@ impl Query {
         .extend()
     }
 
+    /// The Move packages that exist in the network, optionally filtered to be strictly before
+    /// `beforeCheckpoint` and/or strictly after `afterCheckpoint`.
+    ///
+    /// This query returns all versions of a given user package that appear between the specified
+    /// checkpoints, but only records the latest versions of system packages.
+    async fn packages(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<move_package::Cursor>,
+        last: Option<u64>,
+        before: Option<move_package::Cursor>,
+        filter: Option<MovePackageCheckpointFilter>,
+    ) -> Result<Connection<String, MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        MovePackage::paginate_by_checkpoint(ctx.data_unchecked(), page, filter, checkpoint)
+            .await
+            .extend()
+    }
+
+    /// Fetch all versions of package at `address` (packages that share this package's original ID),
+    /// optionally bounding the versions exclusively from below with `afterVersion`, or from above
+    /// with `beforeVersion`.
+    async fn package_versions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<move_package::Cursor>,
+        last: Option<u64>,
+        before: Option<move_package::Cursor>,
+        address: SuiAddress,
+        filter: Option<MovePackageVersionFilter>,
+    ) -> Result<Connection<String, MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        MovePackage::paginate_by_version(ctx.data_unchecked(), page, address, filter, checkpoint)
+            .await
+            .extend()
+    }
+
     /// Fetch the protocol config by protocol version (defaults to the latest protocol
     /// version known to the GraphQL service).
     async fn protocol_config(
@@ -426,6 +557,27 @@ impl Query {
                 address: a.into(),
                 checkpoint_viewed_at: checkpoint,
             }))
+    }
+
+    /// Fetch a package by its name (using dot move service)
+    async fn package_by_name(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        NamedMovePackage::query(ctx, &name, checkpoint)
+            .await
+            .extend()
+    }
+
+    /// Fetch a type that includes dot move service names in it.
+    async fn type_by_name(&self, ctx: &Context<'_>, name: String) -> Result<MoveType> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let type_tag = NamedType::query(ctx, &name, checkpoint).await?;
+
+        Ok(type_tag.into())
     }
 
     /// The coin metadata associated with the given coin type.

@@ -133,6 +133,7 @@ mod tests {
     use crate::core::CoreSignals;
     use crate::core_thread::{CoreError, CoreThreadDispatcher};
     use crate::leader_timeout::LeaderTimeoutTask;
+    use crate::round_prober::QuorumRound;
 
     #[derive(Clone, Default)]
     struct MockCoreThreadDispatcher {
@@ -167,10 +168,23 @@ mod tests {
             todo!()
         }
 
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
+
+        fn set_propagation_delay_and_quorum_rounds(
+            &self,
+            _delay: Round,
+            _quorum_rounds: Vec<QuorumRound>,
+        ) -> Result<(), CoreError> {
+            todo!()
+        }
+
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
+        }
+
+        fn highest_received_rounds(&self) -> Vec<Round> {
             todo!()
         }
     }

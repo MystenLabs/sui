@@ -4,6 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use aws_config::timeout::TimeoutConfig;
+use aws_sdk_dynamodb::error::SdkError;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use aws_sdk_s3::config::{Credentials, Region};
@@ -58,7 +59,7 @@ impl ProgressStore for DynamoDBProgressStore {
             .send()
             .await?;
         if let Some(output) = item.item() {
-            if let AttributeValue::S(checkpoint_number) = &output["state"] {
+            if let AttributeValue::N(checkpoint_number) = &output["nstate"] {
                 return Ok(CheckpointSequenceNumber::from_str(checkpoint_number)?);
             }
         }
@@ -71,14 +72,29 @@ impl ProgressStore for DynamoDBProgressStore {
     ) -> Result<()> {
         let backoff = backoff::ExponentialBackoff::default();
         backoff::future::retry(backoff, || async {
-            self.client
-                .put_item()
+            let result = self
+                .client
+                .update_item()
                 .table_name(self.table_name.clone())
-                .item("task_name", AttributeValue::S(task_name.clone()))
-                .item("state", AttributeValue::S(checkpoint_number.to_string()))
+                .key("task_name", AttributeValue::S(task_name.clone()))
+                .update_expression("SET #nstate = :newState")
+                .condition_expression("#nstate < :newState")
+                .expression_attribute_names("#nstate", "nstate")
+                .expression_attribute_values(
+                    ":newState",
+                    AttributeValue::N(checkpoint_number.to_string()),
+                )
                 .send()
-                .await
-                .map_err(backoff::Error::transient)
+                .await;
+            match result {
+                Ok(_) => Ok(()),
+                Err(SdkError::ServiceError(err))
+                    if err.err().is_conditional_check_failed_exception() =>
+                {
+                    Ok(())
+                }
+                Err(err) => Err(backoff::Error::transient(err)),
+            }
         })
         .await?;
         Ok(())

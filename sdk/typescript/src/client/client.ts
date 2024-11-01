@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { fromB58, toB64, toHEX } from '@mysten/bcs';
+import { fromBase58, toBase64, toHex } from '@mysten/bcs';
 
 import type { Signer } from '../cryptography/index.js';
 import type { Transaction } from '../transactions/index.js';
@@ -406,20 +406,32 @@ export class SuiClient {
 		});
 	}
 
-	async executeTransactionBlock(
-		input: ExecuteTransactionBlockParams,
-	): Promise<SuiTransactionBlockResponse> {
-		return await this.transport.request({
+	async executeTransactionBlock({
+		transactionBlock,
+		signature,
+		options,
+		requestType,
+	}: ExecuteTransactionBlockParams): Promise<SuiTransactionBlockResponse> {
+		const result: SuiTransactionBlockResponse = await this.transport.request({
 			method: 'sui_executeTransactionBlock',
 			params: [
-				typeof input.transactionBlock === 'string'
-					? input.transactionBlock
-					: toB64(input.transactionBlock),
-				Array.isArray(input.signature) ? input.signature : [input.signature],
-				input.options,
-				input.requestType,
+				typeof transactionBlock === 'string' ? transactionBlock : toBase64(transactionBlock),
+				Array.isArray(signature) ? signature : [signature],
+				options,
 			],
 		});
+
+		if (requestType === 'WaitForLocalExecution') {
+			try {
+				await this.waitForTransaction({
+					digest: result.digest,
+				});
+			} catch (_) {
+				// Ignore error while waiting for transaction
+			}
+		}
+
+		return result;
 	}
 
 	async signAndExecuteTransaction({
@@ -568,7 +580,7 @@ export class SuiClient {
 		let devInspectTxBytes;
 		if (isTransaction(input.transactionBlock)) {
 			input.transactionBlock.setSenderIfNotSet(input.sender);
-			devInspectTxBytes = toB64(
+			devInspectTxBytes = toBase64(
 				await input.transactionBlock.build({
 					client: this,
 					onlyTransactionKind: true,
@@ -577,7 +589,7 @@ export class SuiClient {
 		} else if (typeof input.transactionBlock === 'string') {
 			devInspectTxBytes = input.transactionBlock;
 		} else if (input.transactionBlock instanceof Uint8Array) {
-			devInspectTxBytes = toB64(input.transactionBlock);
+			devInspectTxBytes = toBase64(input.transactionBlock);
 		} else {
 			throw new Error('Unknown transaction block format.');
 		}
@@ -599,7 +611,7 @@ export class SuiClient {
 			params: [
 				typeof input.transactionBlock === 'string'
 					? input.transactionBlock
-					: toB64(input.transactionBlock),
+					: toBase64(input.transactionBlock),
 			],
 		});
 	}
@@ -731,8 +743,8 @@ export class SuiClient {
 	// TODO: Migrate this to `sui_getChainIdentifier` once it is widely available.
 	async getChainIdentifier(): Promise<string> {
 		const checkpoint = await this.getCheckpoint({ id: '0' });
-		const bytes = fromB58(checkpoint.digest);
-		return toHEX(bytes.slice(0, 4));
+		const bytes = fromBase58(checkpoint.digest);
+		return toHex(bytes.slice(0, 4));
 	}
 
 	async resolveNameServiceAddress(input: ResolveNameServiceAddressParams): Promise<string | null> {

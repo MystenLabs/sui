@@ -7,7 +7,7 @@ use sui_indexer::models::objects::StoredHistoryObject;
 
 use crate::raw_query::RawQuery;
 use crate::types::available_range::AvailableRange;
-use crate::types::cursor::{JsonCursor, Page};
+use crate::types::cursor::{JsonCursor, Page, ScanLimited};
 use crate::types::object::Cursor;
 use crate::{filter, query};
 
@@ -59,15 +59,20 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
     }
 }
 
+impl ScanLimited for JsonCursor<ConsistentIndexCursor> {}
+
+impl ScanLimited for JsonCursor<ConsistentNamedCursor> {}
+
 /// Constructs a `RawQuery` against the `objects_snapshot` and `objects_history` table to fetch
 /// objects that satisfy some filtering criteria `filter_fn` within the provided checkpoint `range`.
 /// The `objects_snapshot` table contains the latest versions of objects up to a checkpoint sequence
 /// number, and `objects_history` captures changes after that, so a query to both tables is
 /// necessary to handle these object states:
-/// 1) In snapshot, not in history - occurs when an object gets snapshotted and then has not been
+/// 1) In snapshot, not in history - occurs when a live object gets snapshotted and then has not been
 ///    modified since
-/// 2) In history, not in snapshot - occurs when a new object is created
-/// 3) In snapshot and in history - occurs when an object is snapshotted and further modified
+/// 2) Not in snapshot, in history - occurs when a new object is created or a wrapped object is unwrapped
+/// 3) In snapshot and in history - occurs when an object is snapshotted and further modified, the modification
+///    can be wrapping or deleting.
 ///
 /// Additionally, even among objects that satisfy the filtering criteria, it is possible that there
 /// is a yet more recent version of the object within the checkpoint range, such as when the owner
@@ -142,6 +147,7 @@ pub(crate) fn build_objects_query(
     // Similar to the snapshot query, construct the filtered inner query for the history table.
     let mut history_objs_inner = query!("SELECT * FROM objects_history");
     history_objs_inner = filter_fn(history_objs_inner);
+    history_objs_inner = filter!(history_objs_inner, "object_status = 0");
 
     let mut history_objs = match view {
         View::Consistent => {

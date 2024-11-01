@@ -16,12 +16,12 @@ npm i @mysten/bcs
 ## Quickstart
 
 ```ts
-import { bcs } from '@mysten/bcs';
+import { bcs, fromHex, toHex } from '@mysten/bcs';
 
 // define UID as a 32-byte array, then add a transform to/from hex strings
 const UID = bcs.fixedArray(32, bcs.u8()).transform({
-	input: (id: string) => fromHEX(id),
-	output: (id) => toHEX(Uint8Array.from(id)),
+	input: (id: string) => fromHex(id),
+	output: (id) => toHex(Uint8Array.from(id)),
 });
 
 const Coin = bcs.struct('Coin', {
@@ -114,9 +114,9 @@ import { bcs } from '@mysten/bcs';
 const intList = bcs.vector(bcs.u8()).serialize([1, 2, 3, 4, 5]).toBytes();
 const stringList = bcs.vector(bcs.string()).serialize(['a', 'b', 'c']).toBytes();
 
-// Arrays
-const intArray = bcs.array(4, bcs.u8()).serialize([1, 2, 3, 4]).toBytes();
-const stringArray = bcs.array(3, bcs.string()).serialize(['a', 'b', 'c']).toBytes();
+// Fixed length Arrays
+const intArray = bcs.fixedArray(4, bcs.u8()).serialize([1, 2, 3, 4]).toBytes();
+const stringArray = bcs.fixedArray(3, bcs.string()).serialize(['a', 'b', 'c']).toBytes();
 
 // Option
 const option = bcs.option(bcs.string()).serialize('some value').toBytes();
@@ -127,7 +127,7 @@ const MyEnum = bcs.enum('MyEnum', {
 	NoType: null,
 	Int: bcs.u8(),
 	String: bcs.string(),
-	Array: bcs.array(3, bcs.u8()),
+	Array: bcs.fixedArray(3, bcs.u8()),
 });
 
 const noTypeEnum = MyEnum.serialize({ NoType: null }).toBytes();
@@ -163,8 +163,8 @@ const map = bcs
 const parsedIntList = bcs.vector(bcs.u8()).parse(intList);
 const parsedStringList = bcs.vector(bcs.string()).parse(stringList);
 
-// Arrays
-const parsedIntArray = bcs.array(4, bcs.u8()).parse(intArray);
+// Fixed length Arrays
+const parsedIntArray = bcs.fixedArray(4, bcs.u8()).parse(intArray);
 
 // Option
 const parsedOption = bcs.option(bcs.string()).parse(option);
@@ -242,10 +242,12 @@ represent an address as a hex string, but the BCS serialization format for addre
 array. To handle this, you can use the `transform` API to map between the two formats:
 
 ```ts
+import { bcs, toHex } from '@mysten/bcs';
+
 const Address = bcs.bytes(32).transform({
 	// To change the input type, you need to provide a type definition for the input
-	input: (val: string) => fromHEX(val),
-	output: (val) => toHEX(val),
+	input: (val: string) => fromHex(val),
+	output: (val) => toHex(val),
 });
 
 const serialized = Address.serialize('0x000000...').toBytes();
@@ -306,7 +308,7 @@ preserves type information for the serialized bytes, and can be used to get raw 
 formats.
 
 ```ts
-import { bcs, fromB58, fromB64, fromHex } from '@mysten/bcs';
+import { bcs, fromBase58, fromBase64, fromHex } from '@mysten/bcs';
 
 const serializedString = bcs.string().serialize('this is a string');
 
@@ -323,8 +325,8 @@ const str1 = bcs.string().parse(bytes);
 
 // If your data is encoded as string, you need to convert it to Uint8Array first
 const str2 = bcs.string().parse(fromHex(hex));
-const str3 = bcs.string().parse(fromB64(base64));
-const str4 = bcs.string().parse(fromB58(base58));
+const str3 = bcs.string().parse(fromBase64(base64));
+const str4 = bcs.string().parse(fromBase58(base58));
 
 console.assert((str1 == str2) == (str3 == str4), 'Result is the same');
 ```

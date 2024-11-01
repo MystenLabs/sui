@@ -113,7 +113,11 @@ pub(crate) fn process_intrinsic_declaration(
     };
 
     // prepare the decl
-    let type_entry = builder.parent.struct_table.get(&type_qsym).expect("struct");
+    let type_entry = builder
+        .parent
+        .datatype_table
+        .get(&type_qsym)
+        .expect("struct");
     let move_type = type_entry.module_id.qualified(type_entry.struct_id);
 
     let mut decl = IntrinsicDecl {

@@ -47,11 +47,11 @@ pub(crate) struct ModelBuilder<'env> {
     /// A symbol table storing unused schemas, used later to generate warnings. All schemas
     /// are initially in the table and are removed when they are used in expressions.
     pub unused_schema_set: BTreeSet<QualifiedSymbol>,
-    /// A symbol table for structs.
-    pub struct_table: BTreeMap<QualifiedSymbol, StructEntry>,
+    /// A symbol table for datatypes.
+    pub datatype_table: BTreeMap<QualifiedSymbol, DatatypeEntry>,
     /// A reverse mapping from ModuleId/DatatypeId pairs to QualifiedSymbol. This
     /// is used for visualization of types in error messages.
-    pub reverse_struct_table: BTreeMap<(ModuleId, DatatypeId), QualifiedSymbol>,
+    pub reverse_datatype_table: BTreeMap<(ModuleId, DatatypeId), QualifiedSymbol>,
     /// A symbol table for functions.
     pub fun_table: BTreeMap<QualifiedSymbol, FunEntry>,
     /// A symbol table for constants.
@@ -102,17 +102,28 @@ pub(crate) struct SpecSchemaEntry {
     pub included_spec: Spec,
 }
 
-/// A declaration of a struct.
+/// A declaration of a datatype.
 #[derive(Debug, Clone)]
-pub(crate) struct StructEntry {
+pub(crate) struct DatatypeEntry {
     pub loc: Loc,
     pub module_id: ModuleId,
     pub struct_id: DatatypeId,
     #[allow(dead_code)]
     pub is_resource: bool,
     pub type_params: Vec<(Symbol, Type)>,
-    pub fields: Option<BTreeMap<Symbol, (usize, Type)>>,
     pub attributes: Vec<Attribute>,
+    pub data: DatatypeData,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub(crate) enum DatatypeData {
+    Struct {
+        fields: Option<BTreeMap<Symbol, (usize, Type)>>,
+    },
+    Enum {
+        variants: BTreeMap<Symbol, Option<BTreeMap<Symbol, (usize, Type)>>>,
+    },
 }
 
 /// A declaration of a function.
@@ -135,6 +146,7 @@ pub(crate) struct ConstEntry {
     pub loc: Loc,
     pub ty: Type,
     pub value: Value,
+    pub attributes: Vec<Attribute>,
 }
 
 impl<'env> ModelBuilder<'env> {
@@ -146,8 +158,8 @@ impl<'env> ModelBuilder<'env> {
             spec_var_table: BTreeMap::new(),
             spec_schema_table: BTreeMap::new(),
             unused_schema_set: BTreeSet::new(),
-            struct_table: BTreeMap::new(),
-            reverse_struct_table: BTreeMap::new(),
+            datatype_table: BTreeMap::new(),
+            reverse_datatype_table: BTreeMap::new(),
             fun_table: BTreeMap::new(),
             const_table: BTreeMap::new(),
             move_fun_call_graph: BTreeMap::new(),
@@ -247,18 +259,44 @@ impl<'env> ModelBuilder<'env> {
         type_params: Vec<(Symbol, Type)>,
         fields: Option<BTreeMap<Symbol, (usize, Type)>>,
     ) {
-        let entry = StructEntry {
+        let entry = DatatypeEntry {
             loc,
             attributes,
             module_id,
             struct_id,
             is_resource,
             type_params,
-            fields,
+            data: DatatypeData::Struct { fields },
         };
         // Duplicate declarations have been checked by the Move compiler.
-        assert!(self.struct_table.insert(name.clone(), entry).is_none());
-        self.reverse_struct_table
+        assert!(self.datatype_table.insert(name.clone(), entry).is_none());
+        self.reverse_datatype_table
+            .insert((module_id, struct_id), name);
+    }
+
+    pub fn define_enum(
+        &mut self,
+        loc: Loc,
+        attributes: Vec<Attribute>,
+        name: QualifiedSymbol,
+        module_id: ModuleId,
+        struct_id: DatatypeId,
+        is_resource: bool,
+        type_params: Vec<(Symbol, Type)>,
+        variants: BTreeMap<Symbol, Option<BTreeMap<Symbol, (usize, Type)>>>,
+    ) {
+        let entry = DatatypeEntry {
+            loc,
+            attributes,
+            module_id,
+            struct_id,
+            is_resource,
+            type_params,
+            data: DatatypeData::Enum { variants },
+        };
+        // Duplicate declarations have been checked by the Move compiler.
+        assert!(self.datatype_table.insert(name.clone(), entry).is_none());
+        self.reverse_datatype_table
             .insert((module_id, struct_id), name);
     }
 
@@ -310,7 +348,7 @@ impl<'env> ModelBuilder<'env> {
 
     /// Looks up a type (struct), reporting an error if it is not found.
     pub fn lookup_type(&self, loc: &Loc, name: &QualifiedSymbol) -> Type {
-        self.struct_table
+        self.datatype_table
             .get(name)
             .cloned()
             .map(|e| Type::Datatype(e.module_id, e.struct_id, project_2nd(&e.type_params)))

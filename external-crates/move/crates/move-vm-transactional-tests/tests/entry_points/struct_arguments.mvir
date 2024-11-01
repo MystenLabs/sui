@@ -17,7 +17,7 @@ module 0x42.M {
 }
 
 //# run --args 0 0 0
-module 0x1.m {
+module 0x5.m {
 import 0x42.M;
 entry foo(s: M.S, i: &M.S, m: &mut M.S) {
     label l0:
@@ -26,7 +26,7 @@ entry foo(s: M.S, i: &M.S, m: &mut M.S) {
 }
 
 //# run --type-args 0x42::M::S --args 0 0 0
-module 0x2.m {
+module 0x6.m {
 entry foo<T:drop>(s: T, i: &T, m: &mut T) {
     label l0:
     return;

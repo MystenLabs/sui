@@ -12,6 +12,7 @@ pub struct CompilerInfo {
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
     pub expanded_lambdas: BTreeSet<Loc>,
     pub dot_autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::DotAutocompleteInfo>>,
+    pub path_autocomplete_info: BTreeMap<Loc, CI::AliasAutocompleteInfo>,
     /// Locations of binders in enum variants that are expanded from an ellipsis (and should
     /// not be displayed in any way by the IDE)
     pub ellipsis_binders: BTreeSet<Loc>,
@@ -61,8 +62,8 @@ impl CompilerInfo {
                 CI::IDEAnnotation::EllipsisMatchEntries(_) => {
                     self.ellipsis_binders.insert(loc);
                 }
-                CI::IDEAnnotation::PathAutocompleteInfo(_) => {
-                    // TODO: Integrate this into the provided compiler information.
+                CI::IDEAnnotation::PathAutocompleteInfo(info) => {
+                    self.path_autocomplete_info.insert(loc, *info);
                 }
             }
         }

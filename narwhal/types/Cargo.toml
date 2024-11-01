@@ -47,12 +47,7 @@ criterion.workspace = true
 serde_test.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
-[target.'cfg(not(target_env = "msvc"))'.build-dependencies]
-protobuf-src.workspace = true
-
 [build-dependencies]
-prost-build.workspace = true
-rustversion.workspace = true
 tonic-build.workspace = true
 anemo-build.workspace = true
 

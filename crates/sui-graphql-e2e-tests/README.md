@@ -44,11 +44,8 @@ Linux
 
 # Running Locally
 
-When running the tests locally, they must be run with the `pg_integration`
-feature enabled:
-
 ```sh
-$ cargo nextest run --features pg_integration
+$ cargo nextest run
 ```
 
 # Snapshot Stability

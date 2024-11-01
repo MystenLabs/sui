@@ -1,40 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
-
 use super::QueryExecutor;
 use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
     query_builder::{Query, QueryFragment, QueryId},
-    query_dsl::LoadQuery,
-    QueryResult, RunQueryDsl,
+    QueryResult,
 };
+use diesel_async::{methods::LoadQuery, scoped_futures::ScopedBoxFuture};
+use diesel_async::{scoped_futures::ScopedFutureExt, RunQueryDsl};
+use std::fmt;
+use std::time::Instant;
 use sui_indexer::indexer_reader::IndexerReader;
 
-use sui_indexer::{run_query_async, run_query_repeatable_async, spawn_read_only_blocking};
 use tracing::error;
 
 #[derive(Clone)]
 pub(crate) struct PgExecutor {
-    pub inner: IndexerReader<diesel::PgConnection>,
+    pub inner: IndexerReader,
     pub limits: Limits,
     pub metrics: Metrics,
 }
 
 pub(crate) struct PgConnection<'c> {
     max_cost: u32,
-    conn: &'c mut diesel::PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
+pub(crate) struct ByteaLiteral<'a>(pub &'a [u8]);
+
 impl PgExecutor {
-    pub(crate) fn new(
-        inner: IndexerReader<diesel::PgConnection>,
-        limits: Limits,
-        metrics: Metrics,
-    ) -> Self {
+    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Metrics) -> Self {
         Self {
             inner,
             limits,
@@ -45,13 +43,17 @@ impl PgExecutor {
 
 #[async_trait]
 impl QueryExecutor for PgExecutor {
-    type Connection = diesel::PgConnection;
+    type Connection = diesel_async::AsyncPgConnection;
     type Backend = Pg;
     type DbConnection<'c> = PgConnection<'c>;
 
-    async fn execute<T, U, E>(&self, txn: T) -> Result<U, Error>
+    async fn execute<'c, T, U, E>(&self, txn: T) -> Result<U, Error>
     where
-        T: FnOnce(&mut Self::DbConnection<'_>) -> Result<U, E>,
+        T: for<'r> FnOnce(
+                &'r mut Self::DbConnection<'_>,
+            ) -> ScopedBoxFuture<'static, 'r, Result<U, E>>
+            + Send
+            + 'c,
         E: From<diesel::result::Error> + std::error::Error,
         T: Send + 'static,
         U: Send + 'static,
@@ -59,8 +61,25 @@ impl QueryExecutor for PgExecutor {
     {
         let max_cost = self.limits.max_db_query_cost;
         let instant = Instant::now();
-        let pool = self.inner.get_pool();
-        let result = run_query_async!(&pool, move |conn| txn(&mut PgConnection { max_cost, conn }));
+        let mut connection = self
+            .inner
+            .pool()
+            .get()
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let result = connection
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                async move {
+                    let mut connection = PgConnection { max_cost, conn };
+                    txn(&mut connection).await
+                }
+                .scope_boxed()
+            })
+            .await;
+
         self.metrics
             .observe_db_data(instant.elapsed(), result.is_ok());
         if let Err(e) = &result {
@@ -69,9 +88,13 @@ impl QueryExecutor for PgExecutor {
         result.map_err(|e| Error::Internal(e.to_string()))
     }
 
-    async fn execute_repeatable<T, U, E>(&self, txn: T) -> Result<U, Error>
+    async fn execute_repeatable<'c, T, U, E>(&self, txn: T) -> Result<U, Error>
     where
-        T: FnOnce(&mut Self::DbConnection<'_>) -> Result<U, E>,
+        T: for<'r> FnOnce(
+                &'r mut Self::DbConnection<'_>,
+            ) -> ScopedBoxFuture<'static, 'r, Result<U, E>>
+            + Send
+            + 'c,
         E: From<diesel::result::Error> + std::error::Error,
         T: Send + 'static,
         U: Send + 'static,
@@ -79,11 +102,27 @@ impl QueryExecutor for PgExecutor {
     {
         let max_cost = self.limits.max_db_query_cost;
         let instant = Instant::now();
-        let pool = self.inner.get_pool();
-        let result = run_query_repeatable_async!(&pool, move |conn| txn(&mut PgConnection {
-            max_cost,
-            conn
-        }));
+
+        let mut connection = self
+            .inner
+            .pool()
+            .get()
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let result = connection
+            .build_transaction()
+            .read_only()
+            .repeatable_read()
+            .run(|conn| {
+                async move {
+                    //
+                    txn(&mut PgConnection { max_cost, conn }).await
+                }
+                .scope_boxed()
+            })
+            .await;
+
         self.metrics
             .observe_db_data(instant.elapsed(), result.is_ok());
         if let Err(e) = &result {
@@ -93,36 +132,52 @@ impl QueryExecutor for PgExecutor {
     }
 }
 
+#[async_trait]
 impl<'c> super::DbConnection for PgConnection<'c> {
-    type Connection = diesel::PgConnection;
+    type Connection = diesel_async::AsyncPgConnection;
     type Backend = Pg;
 
-    fn result<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
+    async fn result<T, Q, U>(&mut self, query: T) -> QueryResult<U>
     where
-        Q: diesel::query_builder::Query,
+        T: Fn() -> Q + Send,
+        Q: diesel::query_builder::Query + Send + 'static,
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>,
+        U: Send,
     {
-        query_cost::log(self.conn, self.max_cost, query());
-        query().get_result(self.conn)
+        query_cost::log(self.conn, self.max_cost, query()).await;
+        query().get_result(self.conn).await
     }
 
-    fn results<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<Vec<U>>
+    async fn results<T, Q, U>(&mut self, query: T) -> QueryResult<Vec<U>>
     where
-        Q: diesel::query_builder::Query,
+        T: Fn() -> Q + Send,
+        Q: diesel::query_builder::Query + Send + 'static,
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>,
+        U: Send,
     {
-        query_cost::log(self.conn, self.max_cost, query());
-        query().get_results(self.conn)
+        query_cost::log(self.conn, self.max_cost, query()).await;
+        query().get_results(self.conn).await
     }
+}
+
+impl fmt::Display for ByteaLiteral<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'\\x{}'::bytea", hex::encode(self.0))
+    }
+}
+
+pub(crate) fn bytea_literal(slice: &[u8]) -> ByteaLiteral<'_> {
+    ByteaLiteral(slice)
 }
 
 /// Support for calculating estimated query cost using EXPLAIN and then logging it.
 mod query_cost {
     use super::*;
 
-    use diesel::{query_builder::AstPass, sql_types::Text, PgConnection, QueryResult};
+    use diesel::{query_builder::AstPass, sql_types::Text, QueryResult};
+    use diesel_async::AsyncPgConnection;
     use serde_json::Value;
     use tap::{TapFallible, TapOptional};
     use tracing::{debug, info, warn};
@@ -136,8 +191,6 @@ mod query_cost {
         type SqlType = Text;
     }
 
-    impl<Q> RunQueryDsl<PgConnection> for Explained<Q> {}
-
     impl<Q: QueryFragment<Pg>> QueryFragment<Pg> for Explained<Q> {
         fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
             out.push_sql("EXPLAIN (FORMAT JSON) ");
@@ -147,13 +200,13 @@ mod query_cost {
     }
 
     /// Run `EXPLAIN` on the `query`, and log the estimated cost.
-    pub(crate) fn log<Q>(conn: &mut PgConnection, max_db_query_cost: u32, query: Q)
+    pub(crate) async fn log<Q>(conn: &mut AsyncPgConnection, max_db_query_cost: u32, query: Q)
     where
-        Q: Query + QueryId + QueryFragment<Pg> + RunQueryDsl<PgConnection>,
+        Q: Query + QueryId + QueryFragment<Pg> + RunQueryDsl<AsyncPgConnection> + Send,
     {
         debug!("Estimating: {}", diesel::debug_query(&query).to_string());
 
-        let Some(cost) = explain(conn, query) else {
+        let Some(cost) = explain(conn, query).await else {
             warn!("Failed to extract cost from EXPLAIN.");
             return;
         };
@@ -165,12 +218,13 @@ mod query_cost {
         }
     }
 
-    pub(crate) fn explain<Q>(conn: &mut PgConnection, query: Q) -> Option<f64>
+    pub(crate) async fn explain<Q>(conn: &mut AsyncPgConnection, query: Q) -> Option<f64>
     where
-        Q: Query + QueryId + QueryFragment<Pg> + RunQueryDsl<PgConnection>,
+        Q: Query + QueryId + QueryFragment<Pg> + RunQueryDsl<AsyncPgConnection> + Send,
     {
         let result: String = Explained { query }
             .get_result(conn)
+            .await
             .tap_err(|e| warn!("Failed to run EXPLAIN: {e}"))
             .ok()?;
 
@@ -186,29 +240,29 @@ mod query_cost {
     }
 }
 
-#[cfg(all(test, feature = "pg_integration"))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ConnectionConfig;
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        db::{get_pool_connection, new_connection_pool, reset_database},
-        models::objects::StoredObject,
-        schema::objects,
-        types::IndexedObject,
+        database::Connection, db::reset_database, models::objects::StoredObject, schema::objects,
+        tempdb::TempDb, types::IndexedObject,
     };
 
-    #[test]
-    fn test_query_cost() {
-        let connection_config = ConnectionConfig::default();
-        let pool = new_connection_pool::<diesel::PgConnection>(
-            &connection_config.db_url,
-            Some(connection_config.db_pool_size),
+    #[tokio::test]
+    async fn test_query_cost() {
+        let database = TempDb::new().unwrap();
+        reset_database(
+            Connection::dedicated(database.database().url())
+                .await
+                .unwrap(),
         )
+        .await
         .unwrap();
-        let mut conn = get_pool_connection(&pool).unwrap();
-        reset_database(&mut conn, /* drop_all */ true).unwrap();
+        let mut connection = Connection::dedicated(database.database().url())
+            .await
+            .unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()
             .map(|pkg| IndexedObject::from_object(1, pkg.genesis_object(), None).into())
@@ -217,7 +271,8 @@ mod tests {
         let expect = objects.len();
         let actual = diesel::insert_into(objects::dsl::objects)
             .values(objects)
-            .execute(&mut conn)
+            .execute(&mut connection)
+            .await
             .unwrap();
 
         assert_eq!(expect, actual, "Failed to write objects");
@@ -227,8 +282,12 @@ mod tests {
         let query_all = dsl::objects.select(dsl::objects.star());
 
         // Test estimating query costs
-        let cost_one = query_cost::explain(&mut conn, query_one).unwrap();
-        let cost_all = query_cost::explain(&mut conn, query_all).unwrap();
+        let cost_one = query_cost::explain(&mut connection, query_one)
+            .await
+            .unwrap();
+        let cost_all = query_cost::explain(&mut connection, query_all)
+            .await
+            .unwrap();
 
         assert!(
             cost_one < cost_all,

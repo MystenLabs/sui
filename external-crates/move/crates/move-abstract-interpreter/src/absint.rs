@@ -202,23 +202,23 @@ impl<'a> FunctionContext<'a> {
         self.index
     }
 
-    pub fn code(&self) -> &CodeUnit {
+    pub fn code(&self) -> &'a CodeUnit {
         self.code
     }
 
-    pub fn parameters(&self) -> &Signature {
+    pub fn parameters(&self) -> &'a Signature {
         self.parameters
     }
 
-    pub fn return_(&self) -> &Signature {
+    pub fn return_(&self) -> &'a Signature {
         self.return_
     }
 
-    pub fn locals(&self) -> &Signature {
+    pub fn locals(&self) -> &'a Signature {
         self.locals
     }
 
-    pub fn type_parameters(&self) -> &[AbilitySet] {
+    pub fn type_parameters(&self) -> &'a [AbilitySet] {
         self.type_parameters
     }
 

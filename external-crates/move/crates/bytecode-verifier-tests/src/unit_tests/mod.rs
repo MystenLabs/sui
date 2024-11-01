@@ -53,6 +53,6 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             bytecode_version: VERSION_MAX,
             max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
         },
-        MeterConfig::default(),
+        MeterConfig::old_default(),
     )
 }

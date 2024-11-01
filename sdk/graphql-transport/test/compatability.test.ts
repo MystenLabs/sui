@@ -608,9 +608,6 @@ describe('GraphQL SuiClient compatibility', () => {
 				},
 			})) as SuiTransactionBlockResponse & { rawEffects: unknown };
 
-		// Deleted gas coin isn't included in changes when executing transaction block
-		rpc.objectChanges?.pop();
-
 		expect(graphql).toEqual(rpc);
 	});
 
@@ -732,6 +729,9 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getProtocolConfig();
 		const graphql = await graphQLClient!.getProtocolConfig();
 
+		// If this check fails and the difference is due to types,
+		// the config field type may need to overridden if it is not u64,
+		// in sdk/graphql-transport/src/methods.ts getProtocolConfig().
 		expect(graphql).toEqual(rpc);
 	});
 

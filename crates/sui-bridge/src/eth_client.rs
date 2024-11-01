@@ -6,12 +6,13 @@ use std::sync::Arc;
 
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
+use crate::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
 use crate::metrics::BridgeMetrics;
 use crate::types::{BridgeAction, EthLog, RawEthLog};
-use ethers::providers::{Http, JsonRpcClient, Middleware, Provider};
+use ethers::providers::{JsonRpcClient, Middleware, Provider};
 use ethers::types::TxHash;
 use ethers::types::{Block, Filter};
-use tap::{Tap, TapFallible};
+use tap::TapFallible;
 
 #[cfg(test)]
 use crate::eth_mock_provider::EthMockProvider;
@@ -19,23 +20,25 @@ use ethers::types::Address as EthAddress;
 pub struct EthClient<P> {
     provider: Provider<P>,
     contract_addresses: HashSet<EthAddress>,
-    metrics: Arc<BridgeMetrics>,
 }
 
-impl EthClient<Http> {
+impl EthClient<MeteredEthHttpProvier> {
     pub async fn new(
         provider_url: &str,
         contract_addresses: HashSet<EthAddress>,
         metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<Self> {
-        let provider = Provider::try_from(provider_url)?;
+        let provider = new_metered_eth_provider(provider_url, metrics)?;
         let self_ = Self {
             provider,
             contract_addresses,
-            metrics,
         };
         self_.describe().await?;
         Ok(self_)
+    }
+
+    pub fn provider(&self) -> Arc<Provider<MeteredEthHttpProvier>> {
+        Arc::new(self.provider.clone())
     }
 }
 
@@ -46,7 +49,6 @@ impl EthClient<EthMockProvider> {
         Self {
             provider,
             contract_addresses,
-            metrics: Arc::new(BridgeMetrics::new_for_testing()),
         }
     }
 }
@@ -55,9 +57,14 @@ impl<P> EthClient<P>
 where
     P: JsonRpcClient,
 {
+    pub async fn get_chain_id(&self) -> Result<u64, anyhow::Error> {
+        let chain_id = self.provider.get_chainid().await?;
+        Ok(chain_id.as_u64())
+    }
+
     // TODO assert chain identifier
     async fn describe(&self) -> anyhow::Result<()> {
-        let chain_id = self.provider.get_chainid().await?;
+        let chain_id = self.get_chain_id().await?;
         let block_number = self.provider.get_block_number().await?;
         tracing::info!(
             "EthClient is connected to chain {chain_id}, current block number: {block_number}"
@@ -77,7 +84,6 @@ where
             .provider
             .get_transaction_receipt(tx_hash)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)?
             .ok_or(BridgeError::TxNotFound)?;
         let receipt_block_num = receipt.block_number.ok_or(BridgeError::ProviderError(
@@ -115,8 +121,7 @@ where
         let block: Result<Option<Block<ethers::types::TxHash>>, ethers::prelude::ProviderError> =
             self.provider
                 .request("eth_getBlockByNumber", ("finalized", false))
-                .await
-                .tap(|_| self.metrics.eth_provider_queries.inc());
+                .await;
         let block = block?.ok_or(BridgeError::TransientProviderError(
             "Provider fails to return last finalized block".into(),
         ))?;
@@ -140,9 +145,9 @@ where
             .address(address);
         let logs = self
             .provider
+            // TODO use get_logs_paginated?
             .get_logs(&filter)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)
             .tap_err(|e| {
                 tracing::error!(
@@ -181,19 +186,18 @@ where
     // for chunking the query.
     pub async fn get_raw_events_in_range(
         &self,
-        address: ethers::types::Address,
+        addresses: Vec<ethers::types::Address>,
         start_block: u64,
         end_block: u64,
     ) -> BridgeResult<Vec<RawEthLog>> {
         let filter = Filter::new()
             .from_block(start_block)
             .to_block(end_block)
-            .address(address);
+            .address(addresses.clone());
         let logs = self
             .provider
             .get_logs(&filter)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)
             .tap_err(|e| {
                 tracing::error!(
@@ -202,11 +206,11 @@ where
                     e
                 )
             })?;
-        // Safeguard check that all events are emitted from requested contract address
+        // Safeguard check that all events are emitted from requested contract addresses
         logs.into_iter().map(
             |log| {
-                if log.address != address {
-                    return Err(BridgeError::ProviderError(format!("Provider returns logs from different contract address (expected: {:?}): {:?}", address, log)));
+                if !addresses.contains(&log.address) {
+                    return Err(BridgeError::ProviderError(format!("Provider returns logs from different contract address (expected: {:?}): {:?}", addresses, log)));
                 }
                 Ok(RawEthLog {
                 block_number: log.block_number.ok_or(BridgeError::ProviderError("Provider returns log without block_number".into()))?.as_u64(),
@@ -241,7 +245,6 @@ where
             .provider
             .get_transaction_receipt(tx_hash)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)?
             .ok_or(BridgeError::ProviderError(format!(
                 "Provide cannot find eth transaction for log: {:?})",

@@ -34,6 +34,8 @@ pub type BridgeRecordDyanmicField = Field<
 >;
 
 pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
+pub const BRIDGE_TREASURY_MODULE_NAME: &IdentStr = ident_str!("treasury");
+pub const BRIDGE_LIMITER_MODULE_NAME: &IdentStr = ident_str!("limiter");
 pub const BRIDGE_COMMITTEE_MODULE_NAME: &IdentStr = ident_str!("committee");
 pub const BRIDGE_MESSAGE_MODULE_NAME: &IdentStr = ident_str!("message");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
@@ -165,6 +167,22 @@ pub struct BridgeSummary {
     /// Whether the bridge is currently frozen or not
     pub is_frozen: bool,
     // TODO: add treasury
+}
+
+impl Default for BridgeSummary {
+    fn default() -> Self {
+        BridgeSummary {
+            bridge_version: 1,
+            message_version: 1,
+            chain_id: 1,
+            sequence_nums: vec![],
+            committee: BridgeCommitteeSummary::default(),
+            treasury: BridgeTreasurySummary::default(),
+            bridge_records_id: ObjectID::random(),
+            limiter: BridgeLimiterSummary::default(),
+            is_frozen: false,
+        }
+    }
 }
 
 pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrapper, SuiError> {

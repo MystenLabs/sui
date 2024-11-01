@@ -73,7 +73,7 @@ impl MockConsensusClient {
                         .unwrap();
                 }
             }
-            if let ConsensusTransactionKind::UserTransaction(tx) = tx.kind {
+            if let ConsensusTransactionKind::CertifiedTransaction(tx) = tx.kind {
                 if tx.contains_shared_object() {
                     validator.enqueue_certificates_for_execution(
                         vec![VerifiedCertificate::new_unchecked(*tx)],

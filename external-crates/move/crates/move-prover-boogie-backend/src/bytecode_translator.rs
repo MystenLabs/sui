@@ -192,7 +192,7 @@ impl<'env> BoogieTranslator<'env> {
             let suffix = boogie_type_suffix(env, &Type::TypeParameter(*idx));
             let is_uid = self
                 .env
-                .find_struct_by_tag(&StructTag::from_str("0x2::object::UID").unwrap())
+                .find_datatype_by_tag(&StructTag::from_str("0x2::object::UID").unwrap())
                 .is_some();
             if is_uid {
                 // Sui-specific to allow "using" unresolved type params as Sui objects in Boogie
@@ -1593,7 +1593,7 @@ impl<'env> FunctionTranslator<'env> {
                 PropKind::Modifies => {
                     let ty = &self.inst(&env.get_node_type(exp.node_id()));
                     let bv_flag = global_state.get_node_num_oper(exp.node_id()) == Bitwise;
-                    let (mid, sid, inst) = ty.require_struct();
+                    let (mid, sid, inst) = ty.require_datatype();
                     let memory = boogie_resource_memory_name(
                         env,
                         &mid.qualified_inst(sid, inst.to_owned()),

@@ -15,7 +15,6 @@ use super::datatype::MoveDatatype;
 use super::move_enum::MoveEnum;
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
-use super::object::Object;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -40,7 +39,7 @@ impl MoveModule {
         MovePackage::query(
             ctx,
             self.storage_id,
-            Object::latest_at(self.checkpoint_viewed_at),
+            MovePackage::by_id_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()?
@@ -91,7 +90,7 @@ impl MoveModule {
         let Some(package) = MovePackage::query(
             ctx,
             self.storage_id,
-            Object::latest_at(checkpoint_viewed_at),
+            MovePackage::by_id_at(checkpoint_viewed_at),
         )
         .await
         .extend()?
@@ -482,7 +481,7 @@ impl MoveModule {
         checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         let Some(package) =
-            MovePackage::query(ctx, address, Object::latest_at(checkpoint_viewed_at)).await?
+            MovePackage::query(ctx, address, MovePackage::by_id_at(checkpoint_viewed_at)).await?
         else {
             return Ok(None);
         };

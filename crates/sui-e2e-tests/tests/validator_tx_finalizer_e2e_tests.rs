@@ -28,13 +28,23 @@ async fn test_validator_tx_finalizer_fastpath_tx() {
         .process_transaction(tx, None)
         .await
         .unwrap();
-    // Validators wait for 60s before the first one wakes up. Since 2f+1 signed the tx, i.e.
-    // 5 validators have signed the tx, in the worst case where the other 2 wake up first,
-    // it would take 60 + 3 * 10 = 90s for a validator to finalize this.
-    tokio::time::sleep(Duration::from_secs(120)).await;
-    for node in cluster.all_node_handles() {
-        node.with(|n| assert!(n.state().is_tx_already_executed(&tx_digest).unwrap()));
-    }
+    // Since 2f+1 signed the tx, i.e. 5 validators have signed the tx, in the worst case where the other 2 wake up first,
+    // it would take 10 + 3 * 1 = 13s for a validator to finalize this.
+    let tx_digests = [tx_digest];
+    tokio::time::timeout(Duration::from_secs(60), async move {
+        for node in cluster.all_node_handles() {
+            node.with_async(|n| async {
+                n.state()
+                    .get_transaction_cache_reader()
+                    .notify_read_executed_effects_digests(&tx_digests)
+                    .await
+                    .unwrap();
+            })
+            .await;
+        }
+    })
+    .await
+    .unwrap();
 }
 
 #[sim_test]
@@ -59,17 +69,28 @@ async fn test_validator_tx_finalizer_consensus_tx() {
         .process_transaction(tx, None)
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_secs(120)).await;
-    for node in cluster.all_node_handles() {
-        node.with(|n| assert!(n.state().is_tx_already_executed(&tx_digest).unwrap()));
-    }
+    let tx_digests = [tx_digest];
+    tokio::time::timeout(Duration::from_secs(60), async move {
+        for node in cluster.all_node_handles() {
+            node.with_async(|n| async {
+                n.state()
+                    .get_transaction_cache_reader()
+                    .notify_read_executed_effects_digests(&tx_digests)
+                    .await
+                    .unwrap();
+            })
+            .await;
+        }
+    })
+    .await
+    .unwrap();
 }
 
 #[cfg(msim)]
 #[sim_test]
 async fn test_validator_tx_finalizer_equivocation() {
     let cluster = TestClusterBuilder::new()
-        .with_num_validators(4)
+        .with_num_validators(7)
         // Make epoch duration large enough so that reconfig is never triggered.
         .with_epoch_duration_ms(1000 * 1000)
         .build()
@@ -90,16 +111,16 @@ async fn test_validator_tx_finalizer_equivocation() {
     let tx_digest2 = *tx2.digest();
     let auth_agg = cluster.authority_aggregator();
     for (idx, client) in auth_agg.authority_clients.values().enumerate() {
-        if idx < 2 {
+        if idx % 2 == 0 {
             client.handle_transaction(tx1.clone(), None).await.unwrap();
         } else {
             client.handle_transaction(tx2.clone(), None).await.unwrap();
         }
     }
-    // It takes up to 90s for each validator to wake up and finalize the txs once.
-    // We wait for long enough and check that no validator will spawn another thread
+    // It takes up to 11s (5 + 6 * 1) for each validator to wake up and finalize the txs once.
+    // We wait for long enough and check that no validator will spawn a thread
     // twice to try to finalize the same txs.
-    tokio::time::sleep(Duration::from_secs(200)).await;
+    tokio::time::sleep(Duration::from_secs(30)).await;
     for node in cluster.swarm.validator_node_handles() {
         node.with(|n| {
             let state = n.state();

@@ -1045,7 +1045,7 @@ impl<'a> Instrumenter<'a> {
         addr: Exp,
     ) {
         let target = self.builder.get_target();
-        let (mid, sid, _) = resource_type.require_struct();
+        let (mid, sid, _) = resource_type.require_datatype();
         if self.is_verified()
             && target
                 .get_modify_targets_for_type(&mid.qualified(sid))
@@ -1058,7 +1058,7 @@ impl<'a> Instrumenter<'a> {
             let can_modify =
                 ExpData::Call(node_id, ast::Operation::CanModify, vec![addr]).into_exp();
             if kind == PropKind::Assert {
-                let (mid, sid, inst) = resource_type.require_struct();
+                let (mid, sid, inst) = resource_type.require_datatype();
                 self.builder.set_loc_and_vc_info(
                     loc.clone(),
                     &modify_check_fails_message(env, mid.qualified(sid), inst),

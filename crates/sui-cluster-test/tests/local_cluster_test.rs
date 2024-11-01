@@ -10,34 +10,24 @@ async fn cluster_test() {
     ClusterTest::run(ClusterTestOpt::new_local()).await;
 }
 
-#[cfg(feature = "pg_integration")]
 #[tokio::test]
 async fn test_sui_cluster() {
     use reqwest::StatusCode;
     use sui_cluster_test::cluster::Cluster;
     use sui_cluster_test::cluster::LocalNewCluster;
-    use sui_cluster_test::config::Env;
     use sui_graphql_rpc::client::simple_client::SimpleClient;
     use tokio::time::sleep;
-    let fullnode_rpc_port: u16 = 9020;
-    let indexer_rpc_port: u16 = 9124;
-    let pg_address = "postgres://postgres:postgrespw@localhost:5432/sui_indexer".to_string();
-    let graphql_address = format!("127.0.0.1:{}", 8000);
+
+    telemetry_subscribers::init_for_testing();
 
     let opts = ClusterTestOpt {
-        env: Env::NewLocal,
-        faucet_address: None,
-        fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
-        epoch_duration_ms: Some(60000),
-        indexer_address: Some(format!("127.0.0.1:{}", indexer_rpc_port)),
-        pg_address: Some(pg_address),
-        config_dir: None,
-        graphql_address: Some(graphql_address),
+        with_indexer_and_graphql: true,
+        ..ClusterTestOpt::new_local()
     };
 
-    let _cluster = LocalNewCluster::start(&opts).await.unwrap();
+    let cluster = LocalNewCluster::start(&opts).await.unwrap();
 
-    let grphql_url: String = format!("http://127.0.0.1:{}", 8000);
+    let grphql_url = cluster.graphql_url().to_owned().unwrap();
 
     sleep(std::time::Duration::from_secs(20)).await;
 

@@ -56,7 +56,7 @@ public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
 
 ### Swap exact quantity
 
-This function is what the previous two functions call with `coin::zer()` set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
+This function is what the previous two functions call with `coin::zero()` set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
 
 ```move
 /// Swap exact quantity without needing an balance_manager.

@@ -1,6 +1,6 @@
 [package]
 name = "Root"
 
-[dependencies.A]
 # This resolver doesn't exist, so calling out to it will fail.
-resolver = "../resolvers/doesnt_exist.sh"
+[dependencies]
+A = { r."../resolvers/doesnt_exist.sh" = "A" }

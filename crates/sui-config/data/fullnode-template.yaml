@@ -19,3 +19,20 @@ authority-store-pruning-config:
   max-checkpoints-in-batch: 10
   max-transactions-in-batch: 1000
   pruning-run-delay-seconds: 60
+
+state-archive-read-config:
+  - object-store-config:
+      object-store: "S3"
+      # Use mysten-testnet-archives for testnet 
+      # Use mysten-mainnet-archives for mainnet
+      bucket: "mysten-<testnet|mainnet>-archives"
+      # you can either provide your own aws credentials via "aws-secret-access-key" and
+      # "aws-access-key-id" or set no-sign-request: true
+      no-sign-request: true
+      aws-region: "us-west-2"
+      object-store-connection-limit: 20
+    # How many objects to read ahead when catching up  
+    concurrency: 5
+    # Whether to prune local state based on latest checkpoint in archive.
+    # This should stay false for most use cases
+    use-for-pruning-watermark: false

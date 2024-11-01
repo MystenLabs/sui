@@ -267,6 +267,7 @@ impl StateSyncConfig {
 /// * If the node marks itself as Private, only nodes that have it in
 ///     their `allowlisted_peers` or `seed_peers` will try to connect to it.
 /// * If not set, defaults to Public.
+///
 /// AccessType is useful when a network of nodes want to stay private. To achieve this,
 /// mark every node in this network as `Private` and allowlist/seed them to each other.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

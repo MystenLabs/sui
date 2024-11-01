@@ -3,11 +3,11 @@ title: Sui Kiosk
 description: Kiosk is a decentralized system for commerce applications on Sui. Kiosk is a part of the Sui framework, native to the system, and available to everyone.
 ---
 
-Kiosk is a decentralized system for commerce applications on Sui. It consists of Kiosks - shared objects owned by individual parties that store assets and allow listing them for sale as well as utilize custom trading functionality - for example, an auction. While being highly decentralized, Kiosk provides a set of strong guarantees:
+Kiosk is a decentralized system for commerce applications on Sui. It consists of `Kiosk` objects - shared objects owned by individual parties that store assets and allow listing them for sale as well as utilize custom trading functionality - for example, an auction. While being highly decentralized, Sui Kiosk provides a set of strong guarantees:
 
 - Kiosk owners retain ownership of their assets to the moment of purchase.
 - Creators set custom policies - sets of rules applied to every trade (such as pay royalty fee or do some arbitrary action X).
-- Marketplaces can index events the Kiosk emits and subscribe to a single feed for on-chain asset trading.
+- Marketplaces can index events the `Kiosk` object emits and subscribe to a single feed for on-chain asset trading.
 
 Practically, Kiosk is a part of the Sui framework, and it is native to the system and available to everyone out of the box.
 
@@ -23,7 +23,7 @@ Anyone can create a Sui Kiosk. Ownership of a kiosk is determined by the owner o
 
 To sell an item, if there is an existing transfer policy for the type (T), you just add your assets to your kiosk and then list them. You specify an offer amount when you list an item. Anyone can then purchase the item for the amount of SUI specified in the listing. The associated transfer policy determines what the buyer can do with the purchased asset.
 
-A Kiosk owner can:
+A kiosk owner can:
 
 - Place and take items
 - List items for sale
@@ -34,13 +34,13 @@ A Kiosk owner can:
 
 ## Sui Kiosk for buyers
 
-A buyer is a party that purchases (or - more generally - receives) items from Kiosks, anyone on the network can be a Buyer (and, for example, a Kiosk Owner at the same time).
+A buyer is a party that purchases (or - more generally - receives) items from kiosks, anyone on the network can be a buyer (and, for example, a kiosk owner at the same time).
 
-** Benefits:**
+**Benefits:**
 
 - Buyers get access to global liquidity and can get the best offer
-- Buyers can place bids on collections through their Kiosks
-- Most of the actions performed in Kiosks are free (gas-less) for Buyers
+- Buyers can place bids on collections through their kiosks
+- Most buyer actions performed in kiosks clean up seller objects, which results in free (gas-less) actions
 
 **Responsibilities:**
 
@@ -49,7 +49,7 @@ A buyer is a party that purchases (or - more generally - receives) items from Ki
 
 **Guarantees:**
 
-- When using a custom trading logic such as an Auction, the items are guaranteed to be unchanged until the trade is complete
+- When using a custom trading logic such as an auction, the items are guaranteed to be unchanged until the trade is complete
 
 ## Sui Kiosk for marketplaces
 
@@ -59,22 +59,22 @@ As a marketplace operator, you can implement Sui Kiosk to watch for offers made 
 
 As a creator, Sui Kiosk supports strong enforcement for transfer policies and associated rules to protect assets and enforce asset ownership. Sui Kiosk gives creators more control over their creations, and puts creators and owners in control of how their works can be used.
 
-Creator is a party that creates and controls the TransferPolicy for a single type. For example, the authors of SuiFrens are the Creators of the `SuiFren<Capy>` type and act as creators in the Kiosk ecosystem. Creators set the policy, but they might also be the first sellers of their assets through a Kiosk.
+Creator is a party that creates and controls the TransferPolicy for a single type. For example, the authors of SuiFrens are the Creators of the `SuiFren<Capy>` type and act as creators in the Kiosk ecosystem. Creators set the policy, but they might also be the first sellers of their assets through a kiosk.
 
 **Creators can:**
 
 - Set any rules for trades
 - Set multiple ways ("tracks") of rules
 - Enable or disable trades at any moment with a policy
-- Enforce policies (eg royalties) on all trades
-- Perform a primary sale of their assets through a Kiosk
+- Enforce policies (like royalties) on all trades
+- Perform a primary sale of their assets through a kiosk
 
 All of the above is effective immediately and globally.
 
 **Creators cannot:**
 
-- Take or modify items stored in someone else's Kiosk
-- Restrict taking items from Kiosks if the "locking" rule was not set in the policy
+- Take or modify items stored in someone else's kiosk
+- Restrict taking items from kiosks if the "locking" rule was not set in the policy
 
 ## Sui Kiosk guarantees
 
@@ -82,7 +82,7 @@ Sui Kiosk provides a set of guarantees that Sui enforces through smart contracts
 These guarantees include:
 
 - Every trade in Sui Kiosk requires a `TransferPolicy` resolution. This gives creators control over how their assets can be traded.
-- True Ownership, which means that only a kiosk owner can take, list, borrow, or modify the assets added to their kiosk. This is similar to how single-owner objects work on Sui.
+- True ownership, which means that only a kiosk owner can take, list, borrow, or modify the assets added to their kiosk. This is similar to how single-owner objects work on Sui.
 - Strong policy enforcement, for example Royalty policies, that lets creators enable or disable policies at any time that applies to all trades on the platform for objects with that policy attached.
 - Changes to a `TransferPolicy` apply instantly and globally.
 
@@ -98,10 +98,10 @@ In practice, these guarantees mean that:
 
 Sui Kiosk is a shared object that can store heterogeneous values, such as different sets of asset collectibles. When you add an asset to your kiosk, it has one of the following states:
 
-- PLACED - an item placed in the kiosk using the `kiosk::place` function. The Kiosk Owner can withdraw it and use it directly, borrow it (mutably or immutably), or list an item for sale.
-- LOCKED - an item placed in the kiosk using the `kiosk::lock` function. You can’t withdraw a Locked item from a kiosk, but you can borrow it mutably and list it for sale. Any item placed in a kiosk that has an associated Kiosk Lock policy have a LOCKED state.
+- PLACED - an item placed in the kiosk using the `kiosk::place` function. The kiosk owner can withdraw it and use it directly, borrow it (mutably or immutably), or list an item for sale.
+- LOCKED - an item placed in the kiosk using the `kiosk::lock` function. You can’t withdraw a Locked item from a kiosk, but you can borrow it mutably and list it for sale. Any item placed in a kiosk that has an associated kiosk lock policy have a LOCKED state.
 - LISTED - an item in the kiosk that is listed for sale using the `kiosk::list` or `kiosk::place_and_list` functions. You can’t modify an item while listed, but you can borrow it immutably or delist it, which returns it to its previous state.
-- LISTED EXCLUSIVELY - an item placed or locked in the kiosk by an extension that calls the `kiosk::list_with_purchase_cap` function. Only the kiosk owner can approve calling the function. The owner can only borrow it immutably. The extension must provide the functionality to delist / unlock the asset, or it might stay locked forever. Given that this action is explicitly performed by the Owner - it is the responsibility of the Owner to choose verified and audited extensions to use.
+- LISTED EXCLUSIVELY - an item placed or locked in the kiosk by an extension that calls the `kiosk::list_with_purchase_cap` function. Only the kiosk owner can approve calling the function. The owner can only borrow it immutably. The extension must provide the functionality to delist / unlock the asset, or it might stay locked forever. Given that this action is explicitly performed by the owner - it is the responsibility of the owner to choose verified and audited extensions to use.
 
 When someone purchases an asset from a kiosk, the asset leaves the kiosk and ownership transfers to the buyer’s address.
 
@@ -132,8 +132,8 @@ sui client call \
 
 ### Create a Sui Kiosk with advanced options
 
-For more advanced use cases, when you want to choose the storage model or perform an action right away, you can use the programmable transaction block (PTB) friendly function kiosk::new.
-Kiosk is designed to be shared. If you choose a different storage model, such as owned, your kiosk might not function as intended or not be accessible to other users. You can make sure your Kiosk works by testing it on Sui Testnet.
+For more advanced use cases, when you want to choose the storage model or perform an action right away, you can use the programmable transaction block (PTB) friendly function `kiosk::new`.
+Kiosk is designed to be shared. If you choose a different storage model, such as owned, your kiosk might not function as intended or not be accessible to other users. You can make sure your kiosk works by testing it on Sui Testnet.
 
 ### Create a Sui Kiosk with advanced options using programmable transaction blocks
 
@@ -159,11 +159,11 @@ Sui CLI does not support PTBs and transaction chaining yet. You can use the `kio
 
 As a kiosk owner, you can place any assets into your Sui Kiosk. You can take any item from your kiosk that is not currently listed for sale.
 
-There's no limitations on which assets you can place in your kiosk. However, you can’t necessarily list and trade all of the items you place in your kiosk. The `TransferPolicy` associated with the type for the item determines whether you can trade it. To learn more, see the [Purchase items from a Kiosk](#purchase) section.
+There's no limitations on which assets you can place in your kiosk. However, you can’t necessarily list and trade all of the items you place in your kiosk. The `TransferPolicy` associated with the type for the item determines whether you can trade it. To learn more, see the [Purchase items from a kiosk](#purchase) section.
 
 ### Place an item in your kiosk
 
-To place an item to the Kiosk, the owner needs to call the `sui::kiosk::place` function on the `Kiosk` object and pass the `KioskOwnerCap` and the `Item` as arguments.
+To place an item to the kiosk, the owner needs to call the `sui::kiosk::place` function on the `Kiosk` object and pass the `KioskOwnerCap` and the `Item` as arguments.
 
 `ITEM_TYPE` in the following examples represents the full type of the item.
 
@@ -281,7 +281,7 @@ Anyone on the network can purchase an item listed from a Sui Kiosk. To learn mor
 ### List an item from a kiosk
 
 As a kiosk owner, you can use the `kiosk::list` function to list any asset you added to your kiosk. Include the item to sell and the list price as arguments. All listings on Sui are in SUI tokens.
-When you list an item, Sui emits a `kiosk::ItemListed` event that contains the Kiosk ID, Item ID, type of the Item, and the list price.
+When you list an item, Sui emits a `kiosk::ItemListed` event that contains the kiosk ID, item ID, type of the item, and the list price.
 
 ### List an item using programmable transaction blocks
 
@@ -319,7 +319,7 @@ As a kiosk owner you can use the `kiosk::delist` to delist any currently listed 
 
 When you delist an item, Sui returns to the kiosk owner the gas fees charged to list the item.
 
-When you delist an item, Sui emits a `kiosk::ItemDelisted` event that contains the Kiosk ID, Item ID, and the type of the item.
+When you delist an item, Sui emits a `kiosk::ItemDelisted` event that contains the kiosk ID, item ID, and the type of the item.
 
 ### Delist an item using the programmable transaction blocks
 
@@ -351,7 +351,7 @@ sui client call \
 
 ## Purchase an item from a kiosk {#purchase}
 
-Anyone that has an address on the Sui network can purchase an item listed from a Sui Kiosk. To purchase an item, you can use the `kiosk::purchase` function. Specify the item to purchase and pay the list price set by the Kiosk Owner.
+Anyone that has an address on the Sui network can purchase an item listed from a Sui Kiosk. To purchase an item, you can use the `kiosk::purchase` function. Specify the item to purchase and pay the list price set by the kiosk owner.
 
 You can discover the items listed on the network with the `kiosk::ItemListed` event.
 
@@ -434,7 +434,7 @@ tx.moveCall({
 
 ## Withdraw proceeds from a completed sale
 
-When someone purchases an item, Sui stores the proceeds from the sale in the Kiosk. As the kiosk owner, you can withdraw the proceeds at any time by calling the `kiosk::withdraw` function. The function is simple, but because it is PTB friendly it is not currently supported in the Sui CLI.
+When someone purchases an item, Sui stores the proceeds from the sale in the kiosk. As the kiosk owner, you can withdraw the proceeds at any time by calling the `kiosk::withdraw` function. The function is simple, but because it is PTB friendly it is not currently supported in the Sui CLI.
 
 ### Withdraw proceeds using programmable transaction blocks
 
@@ -466,4 +466,4 @@ let coin = tx.moveCall({
 
 ### Withdraw proceeds using the Sui CLI
 
-Due to the function being PTB friendly, it is not currently supported in the CLI environment.
+This action is not currently supported in the CLI environment.

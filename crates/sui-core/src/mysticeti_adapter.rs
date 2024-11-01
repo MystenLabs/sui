@@ -4,24 +4,24 @@
 use std::{sync::Arc, time::Duration};
 
 use arc_swap::{ArcSwapOption, Guard};
-use consensus_core::TransactionClient;
+use consensus_core::{ClientError, TransactionClient};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
-use tokio::time::{sleep, timeout};
-use tracing::warn;
+use tokio::time::{sleep, Instant};
+use tracing::{error, info, warn};
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     consensus_adapter::SubmitToConsensus, consensus_handler::SequencedConsensusTransactionKey,
 };
 
-/// Basically a wrapper struct that reads from the LOCAL_MYSTICETI_CLIENT variable where the latest
-/// MysticetiClient is stored in order to communicate with Mysticeti. The LazyMysticetiClient is considered
-/// "lazy" only in the sense that we can't use it directly to submit to consensus unless the underlying
-/// local client is set first.
+/// Gets a client to submit transactions to Mysticeti, or waits for one to be available.
+/// This hides the complexities of async consensus initialization and submitting to different
+/// instances of consensus across epochs.
+// TODO: rename to LazyConsensusClient?
 #[derive(Default, Clone)]
 pub struct LazyMysticetiClient {
     client: Arc<ArcSwapOption<TransactionClient>>,
@@ -40,33 +40,36 @@ impl LazyMysticetiClient {
             return client;
         }
 
-        // We expect this to get called during the SUI process start. After that at least one
-        // object will have initialised and won't need to call again.
-        const MYSTICETI_START_TIMEOUT: Duration = Duration::from_secs(60);
-        const LOAD_RETRY_TIMEOUT: Duration = Duration::from_millis(100);
-        if let Ok(client) = timeout(MYSTICETI_START_TIMEOUT, async {
-            loop {
-                let client = self.client.load();
-                if client.is_some() {
-                    return client;
-                } else {
-                    sleep(LOAD_RETRY_TIMEOUT).await;
+        // Consensus client is initialized after validators or epoch starts, and cleared after an epoch ends.
+        // But calls to get() can happen during validator startup or epoch change, before consensus finished
+        // initializations.
+        // TODO: maybe listen to updates from consensus manager instead of polling.
+        let mut count = 0;
+        let start = Instant::now();
+        const RETRY_INTERVAL: Duration = Duration::from_millis(100);
+        loop {
+            let client = self.client.load();
+            if client.is_some() {
+                return client;
+            } else {
+                sleep(RETRY_INTERVAL).await;
+                count += 1;
+                if count % 100 == 0 {
+                    warn!(
+                        "Waiting for consensus to initialize after {:?}",
+                        Instant::now() - start
+                    );
                 }
             }
-        })
-        .await
-        {
-            return client;
         }
-
-        panic!(
-            "Timed out after {:?} waiting for Mysticeti to start!",
-            MYSTICETI_START_TIMEOUT,
-        );
     }
 
     pub fn set(&self, client: Arc<TransactionClient>) {
         self.client.store(Some(client));
+    }
+
+    pub fn clear(&self) {
+        self.client.store(None);
     }
 }
 
@@ -90,9 +93,21 @@ impl SubmitToConsensus for LazyMysticetiClient {
             .expect("Client should always be returned")
             .submit(transactions_bytes)
             .await
-            .tap_err(|r| {
+            .tap_err(|err| {
                 // Will be logged by caller as well.
-                warn!("Submit transactions failed with: {:?}", r);
+                let msg = format!("Transaction submission failed with: {:?}", err);
+                match err {
+                    ClientError::ConsensusShuttingDown(_) => {
+                        info!("{}", msg);
+                    }
+                    ClientError::OversizedTransaction(_, _) => {
+                        if cfg!(debug_assertions) {
+                            panic!("{}", msg);
+                        } else {
+                            error!("{}", msg);
+                        }
+                    }
+                };
             })
             .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
 

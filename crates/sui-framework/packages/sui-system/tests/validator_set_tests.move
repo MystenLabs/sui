@@ -299,12 +299,14 @@ module sui_system::validator_set_tests {
         // Add the second one as a candidate.
         validator_set.request_add_validator_candidate(validator2, ctx1);
         assert!(validator_set.is_validator_candidate(@0x2));
+        assert_eq(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
 
         scenario.next_tx(@0x2);
         // Then remove its candidacy.
         validator_set.request_remove_validator_candidate(scenario.ctx());
         assert!(!validator_set.is_validator_candidate(@0x2));
         assert!(validator_set.is_inactive_validator(pool_id_2));
+        assert_eq(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
 
         test_utils::destroy(validator_set);
         scenario_val.end();

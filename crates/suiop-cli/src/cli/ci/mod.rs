@@ -20,8 +20,8 @@ pub struct CIArgs {
 pub(crate) enum CIAction {
     #[clap(aliases = ["k", "key"])]
     Keys(KeyArgs),
-    #[clap(aliases = ["i", "image"])]
-    Image(ImageArgs),
+    #[clap(aliases = ["i"])]
+    Image(Box<ImageArgs>),
 }
 
 pub async fn ci_cmd(args: &CIArgs) -> Result<()> {

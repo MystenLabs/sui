@@ -135,3 +135,27 @@ TypeDef: no info
 On Hover:
 const Symbols::M8::EQUAL: bool = 1 == 1
 
+-- test 17 -------------------
+use line: 34, use_ndx: 0
+Use: 'ERROR_CONST', start: 10, end: 21
+Def: 'ERROR_CONST', line: 33, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ERROR_CONST: u64 = 42
+
+-- test 18 -------------------
+use line: 37, use_ndx: 0
+Use: 'ERROR_CONST', start: 16, end: 27
+Def: 'ERROR_CONST', line: 33, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ERROR_CONST: u64 = 42
+
+-- test 19 -------------------
+use line: 37, use_ndx: 1
+Use: 'ERROR_CONST', start: 35, end: 46
+Def: 'ERROR_CONST', line: 33, def char: 10
+TypeDef: no info
+On Hover:
+const Symbols::M8::ERROR_CONST: u64 = 42
+

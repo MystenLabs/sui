@@ -1,0 +1,32 @@
+[alias]
+# Collection of project wide clippy lints. This is done via an alias because
+# clippy doesn't currently allow for specifiying project-wide lints in a
+# configuration file. This is a similar workaround to the ones presented here:
+# <https://github.com/EmbarkStudios/rust-ecosystem/issues/59>
+xclippy = [
+    "clippy", "--all-targets", "--all-features", "--",
+    "-Wclippy::all",
+    "-Wclippy::disallowed_methods",
+    "-Aclippy::unnecessary_get_then_check",
+]
+xlint = "run --package x --bin x -- lint"
+xtest = "run --package x --bin x -- external-crates-tests"
+
+# Configuration specifically for running clippy on `external-crates/move/`.
+# Some of these allows are to avoid code churn; others are filed as issues on the `sui` repo now.
+move-clippy = [
+    "clippy",
+    "--all-targets",
+    "--",
+    "-Wclippy::all",
+    "-Wclippy::disallowed_methods",
+    "-Aclippy::upper_case_acronyms",
+    "-Aclippy::type_complexity",
+    "-Aclippy::new_without_default",
+    "-Aclippy::question_mark",
+    "-Aclippy::unnecessary_get_then_check",
+    "-Aclippy::needless_borrows_for_generic_args",
+]
+
+[build]
+rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]

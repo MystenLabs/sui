@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58 } from '@mysten/bcs';
+import { fromBase64, toBase58 } from '@mysten/bcs';
 import { bcs } from '@mysten/sui/bcs';
 import type {
 	SuiArgument,
@@ -47,7 +47,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		...(options?.showRawEffects
 			? {
 					rawEffects: transactionBlock.effects?.bcs
-						? Array.from(fromB64(transactionBlock.effects?.bcs))
+						? Array.from(fromBase64(transactionBlock.effects?.bcs))
 						: undefined,
 				}
 			: {}),
@@ -55,25 +55,26 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		...(errors ? { errors: errors } : {}),
 		events:
 			transactionBlock.effects?.events?.nodes.map((event) => ({
-				bcs: event.bcs,
+				bcs: event.contents.bcs,
 				id: {
 					eventSeq: '', // TODO
 					txDigest: '', // TODO
 				},
 				packageId: event.sendingModule?.package.address!,
-				parsedJson: event.json ? JSON.parse(event.json) : undefined,
+				parsedJson: event.contents.json ? JSON.parse(event.contents.json) : undefined,
 				sender: event.sender?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
-				type: toShortTypeString(event.type?.repr)!,
+				type: toShortTypeString(event.contents.type?.repr)!,
 			})) ?? [],
-		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
+		rawTransaction: options?.showRawInput ? mapRawTransaction(transactionBlock) : undefined,
 		...(options?.showInput
 			? {
 					transaction:
 						transactionBlock.rawTransaction &&
 						mapTransactionBlockToInput(
-							bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0],
+							bcs.TransactionData.fromBase64(transactionBlock.rawTransaction),
+							transactionBlock.signatures,
 						),
 				}
 			: {}),
@@ -81,6 +82,30 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 			? mapObjectChanges(transactionBlock, effects)
 			: undefined,
 	};
+}
+
+function mapRawTransaction(transactionBlock: Rpc_Transaction_FieldsFragment) {
+	const txData = bcs.TransactionData.fromBase64(transactionBlock.rawTransaction);
+
+	return bcs.SenderSignedData.serialize([
+		{
+			intentMessage: {
+				intent: {
+					scope: {
+						TransactionData: true,
+					},
+					version: {
+						V0: true,
+					},
+					appId: {
+						Sui: true,
+					},
+				},
+				value: txData,
+			},
+			txSignatures: transactionBlock.signatures?.map((sig) => fromBase64(sig)) ?? [],
+		},
+	]).toBase64();
 }
 
 function mapObjectChanges(
@@ -169,10 +194,12 @@ function mapObjectChanges(
 }
 
 export function mapTransactionBlockToInput(
-	data: typeof bcs.SenderSignedTransaction.$inferType,
+	data: typeof bcs.TransactionData.$inferType,
+	signatures: any[] | null | undefined,
 ): SuiTransactionBlock | null {
-	const txData = data.intentMessage.value.V1;
-
+	const txData = data.V1;
+	console.log('Signatures:', signatures);
+	const sigs: string[] = (signatures ?? []).filter((sig): sig is string => typeof sig === 'string');
 	const programableTransaction =
 		'ProgrammableTransaction' in txData.kind ? txData.kind.ProgrammableTransaction : null;
 
@@ -181,7 +208,7 @@ export function mapTransactionBlockToInput(
 	}
 
 	return {
-		txSignatures: data.txSignatures,
+		txSignatures: sigs,
 		data: {
 			gasData: {
 				budget: txData.gasData.budget,
@@ -214,7 +241,7 @@ function mapTransactionInput(input: typeof bcs.CallArg.$inferType): SuiCallArg {
 	if (input.Pure) {
 		return {
 			type: 'pure',
-			value: fromB64(input.Pure.bytes),
+			value: fromBase64(input.Pure.bytes),
 		};
 	}
 
@@ -340,13 +367,13 @@ function mapTransactionArgument(arg: typeof bcs.Argument.$inferType): SuiArgumen
 	throw new Error(`Unknown argument type ${arg}`);
 }
 
-const OBJECT_DIGEST_DELETED = toB58(Uint8Array.from({ length: 32 }, () => 99));
-const OBJECT_DIGEST_WRAPPED = toB58(Uint8Array.from({ length: 32 }, () => 88));
-const OBJECT_DIGEST_ZERO = toB58(Uint8Array.from({ length: 32 }, () => 0));
+const OBJECT_DIGEST_DELETED = toBase58(Uint8Array.from({ length: 32 }, () => 99));
+const OBJECT_DIGEST_WRAPPED = toBase58(Uint8Array.from({ length: 32 }, () => 88));
+const OBJECT_DIGEST_ZERO = toBase58(Uint8Array.from({ length: 32 }, () => 0));
 const ADDRESS_ZERO = normalizeSuiAddress('0x0');
 
 export function mapEffects(data: string): SuiTransactionBlockResponse['effects'] {
-	const effects = bcs.TransactionEffects.parse(fromB64(data));
+	const effects = bcs.TransactionEffects.parse(fromBase64(data));
 
 	let effectsV1 = effects.V1;
 

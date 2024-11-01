@@ -10,7 +10,8 @@ use crate::{
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
-        codes::{Severity, WarningFilter},
+        codes::Severity,
+        warning_filters::{WarningFilter, WarningFilters},
         *,
     },
     editions::Edition,
@@ -99,6 +100,7 @@ enum PassResult {
 #[derive(Clone)]
 pub struct FullyCompiledProgram {
     pub files: MappedFiles,
+    pub comments: CommentMap,
     pub parser: parser::ast::Program,
     pub expansion: expansion::ast::Program,
     pub naming: naming::ast::Program,
@@ -375,17 +377,19 @@ impl Compiler {
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env =
-            CompilationEnv::new(flags, visitors, save_hooks, package_configs, default_config);
-        if let Some(filter) = warning_filter {
-            compilation_env.add_warning_filter_scope(filter);
-        }
+        let mut compilation_env = CompilationEnv::new(
+            flags,
+            visitors,
+            save_hooks,
+            warning_filter,
+            package_configs,
+            default_config,
+        );
         for (prefix, filters) in known_warning_filters {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (source_text, pprog, comments) =
-            parse_program(&mut compilation_env, maps, targets, deps)?;
+        let (source_text, pprog, comments) = parse_program(&compilation_env, maps, targets, deps)?;
 
         for (fhash, (fname, contents)) in &source_text {
             // TODO better support for bytecode interface file paths
@@ -479,12 +483,12 @@ impl<const P: Pass> SteppedCompiler<P> {
             "Invalid pass for run_to. Target pass precedes the current pass"
         );
         let Self {
-            mut compilation_env,
+            compilation_env,
             pre_compiled_lib,
             program,
         } = self;
         let new_prog = run(
-            &mut compilation_env,
+            &compilation_env,
             pre_compiled_lib.clone(),
             program.unwrap(),
             TARGET,
@@ -497,10 +501,7 @@ impl<const P: Pass> SteppedCompiler<P> {
         })
     }
 
-    pub fn compilation_env(&mut self) -> &mut CompilationEnv {
-        &mut self.compilation_env
-    }
-    pub fn compilation_env_ref(&self) -> &CompilationEnv {
+    pub fn compilation_env(&self) -> &CompilationEnv {
         &self.compilation_env
     }
 }
@@ -650,18 +651,19 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
 
-    let (_comments, stepped) = match pprog_and_comments_res {
+    let (comments, stepped) = match pprog_and_comments_res {
         Err((_pass, errors)) => return Ok(Err((files, errors))),
         Ok(res) => res,
     };
 
     let (empty_compiler, ast) = stepped.into_ast();
-    let mut compilation_env = empty_compiler.compilation_env;
+    let compilation_env = empty_compiler.compilation_env;
     let start = PassResult::Parser(ast);
-    match run(&mut compilation_env, None, start, PASS_COMPILATION) {
+    match run(&compilation_env, None, start, PASS_COMPILATION) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
             files,
+            comments,
             parser: hook.take_parser_ast(),
             expansion: hook.take_expansion_ast(),
             naming: hook.take_naming_ast(),
@@ -884,7 +886,7 @@ pub fn move_check_for_errors(
     ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), (Pass, Diagnostics)> {
         let (_, compiler) = comments_and_compiler_res?;
 
-        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
+        let (compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
         let compilation_env = compiler.compilation_env();
         if compilation_env.flags().is_testing() {
             unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
@@ -920,7 +922,7 @@ impl PassResult {
         }
     }
 
-    pub fn save(&self, compilation_env: &mut CompilationEnv) {
+    pub fn save(&self, compilation_env: &CompilationEnv) {
         match self {
             PassResult::Parser(prog) => {
                 compilation_env.save_parser_ast(prog);
@@ -947,14 +949,14 @@ impl PassResult {
 }
 
 fn run(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     cur: PassResult,
     until: Pass,
 ) -> Result<PassResult, (Pass, Diagnostics)> {
     #[growing_stack]
     fn rec(
-        compilation_env: &mut CompilationEnv,
+        compilation_env: &CompilationEnv,
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         cur: PassResult,
         until: Pass,
@@ -1060,14 +1062,4 @@ fn run(
         }
     }
     rec(compilation_env, pre_compiled_lib, cur, until)
-}
-
-//**************************************************************************************************
-// traits
-//**************************************************************************************************
-
-impl From<AbsIntVisitorObj> for Visitor {
-    fn from(f: AbsIntVisitorObj) -> Self {
-        Self::AbsIntVisitor(f)
-    }
 }

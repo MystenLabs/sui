@@ -7,6 +7,9 @@ description = "Move framework for Sui platform"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
@@ -36,7 +39,6 @@ telemetry-subscribers.workspace = true
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib" }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 
-rocksdb.workspace = true
 simulacrum.workspace = true
 sui-graphql-rpc.workspace = true
 sui-rest-api.workspace = true
@@ -52,7 +54,6 @@ sui-json-rpc-api.workspace = true
 sui-framework-snapshot.workspace = true
 sui-storage.workspace = true
 typed-store.workspace = true
-typed-store-derive.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true

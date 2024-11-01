@@ -1,0 +1,25 @@
+{
+  "id": "6BZi",
+  "type": "rich_text",
+  "rich_text": [
+    {
+      "type": "text",
+      "text": {
+        "content": "https://notion.so/",
+        "link": {
+          "url": "https://notion.so/"
+        }
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "https://notion.so/",
+      "href": "https://notion.so/"
+    }
+  ]
+}

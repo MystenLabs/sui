@@ -1,5 +1,5 @@
 //# publish
-module 0x1.M {
+module 0x6.M {
     enum S<T> { V{ b: bool } }
 
     a<T>() {
@@ -51,7 +51,7 @@ module 0x1.M {
 // loop: c#T1 --> c#T2 --> d#T --> b#T2 --S<T2>--> c#T1
 
 //# publish
-module 0x1.M2 {
+module 0x7.M2 {
     enum S<T> { V { b: bool } }
 
     f<T>() {
@@ -71,7 +71,7 @@ module 0x1.M2 {
 
 //# publish
 
-module 0x1.M3 {
+module 0x8.M3 {
     enum S<T> { V{ b: bool } }
 
     a<T>() {

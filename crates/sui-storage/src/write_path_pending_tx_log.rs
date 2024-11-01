@@ -14,8 +14,8 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use typed_store::rocks::MetricConf;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::DBMapUtils;
 use typed_store::{rocks::DBMap, traits::Map};
-use typed_store_derive::DBMapUtils;
 
 pub type IsFirstRecord = bool;
 

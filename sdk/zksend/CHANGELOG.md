@@ -1,5 +1,124 @@
 # @mysten/zksend
 
+## 0.11.9
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+  - @mysten/wallet-standard@0.13.9
+
+## 0.11.8
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+  - @mysten/wallet-standard@0.13.8
+
+## 0.11.7
+
+### Patch Changes
+
+- af39b6a: Update to reflect GraphQL schema renaming TransactionBlockFilter.signAddress to
+  .sentAddress.
+
+## 0.11.6
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+  - @mysten/wallet-standard@0.13.7
+
+## 0.11.5
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+  - @mysten/wallet-standard@0.13.6
+
+## 0.11.4
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+  - @mysten/wallet-standard@0.13.5
+
+## 0.11.3
+
+### Patch Changes
+
+- 0db770a: Check transaction status when creating and claiming transactions
+
+## 0.11.2
+
+### Patch Changes
+
+- Updated dependencies [2c96b06]
+- Updated dependencies [1fd22cc]
+  - @mysten/sui@1.9.0
+  - @mysten/wallet-standard@0.13.4
+
+## 0.11.1
+
+### Patch Changes
+
+- 22844ae: Add network param to zksend links
+
+## 0.11.0
+
+### Minor Changes
+
+- 4bdef4a: Add support for testnet in Stashed and zkSend SDKs.
+
+### Patch Changes
+
+- Updated dependencies [569511a]
+  - @mysten/sui@1.8.0
+  - @mysten/wallet-standard@0.13.3
+
+## 0.10.6
+
+### Patch Changes
+
+- Updated dependencies [143cd9d]
+- Updated dependencies [4357ac6]
+- Updated dependencies [4019dd7]
+- Updated dependencies [4019dd7]
+- Updated dependencies [00a974d]
+  - @mysten/sui@1.7.0
+  - @mysten/wallet-standard@0.13.2
+
+## 0.10.5
+
+### Patch Changes
+
+- Updated dependencies [a3e32fe]
+  - @mysten/sui@1.6.0
+  - @mysten/wallet-standard@0.13.1
+
+## 0.10.4
+
+### Patch Changes
+
+- Updated dependencies [0851b31]
+- Updated dependencies [f37b3c2]
+  - @mysten/wallet-standard@0.13.0
+  - @mysten/sui@1.5.0
+
+## 0.10.3
+
+### Patch Changes
+
+- Updated dependencies [4419234]
+  - @mysten/sui@1.4.0
+  - @mysten/wallet-standard@0.12.14
+
 ## 0.10.2
 
 ### Patch Changes

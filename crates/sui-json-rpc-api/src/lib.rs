@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use mysten_metrics::histogram::Histogram;
-
 pub use bridge::BridgeReadApiClient;
 pub use bridge::BridgeReadApiOpenRpc;
 pub use bridge::BridgeReadApiServer;
@@ -23,6 +21,8 @@ pub use move_utils::MoveUtilsClient;
 pub use move_utils::MoveUtilsOpenRpc;
 pub use move_utils::MoveUtilsServer;
 use once_cell::sync::Lazy;
+use prometheus::register_histogram_with_registry;
+use prometheus::Histogram;
 use prometheus::{register_int_counter_with_registry, IntCounter};
 pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
@@ -114,165 +114,207 @@ pub struct JsonRpcMetrics {
 impl JsonRpcMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
-            get_objects_limit: Histogram::new_in_registry(
+            get_objects_limit: register_histogram_with_registry!(
                 "json_rpc_get_objects_limit",
                 "The input limit for multi_get_objects, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_objects_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_objects_result_size: register_histogram_with_registry!(
                 "json_rpc_get_objects_result_size",
                 "The return size for multi_get_objects",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_objects_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_objects_result_size_total",
                 "The total return size for multi_get_objects",
                 registry
             )
             .unwrap(),
-            get_tx_blocks_limit: Histogram::new_in_registry(
+            get_tx_blocks_limit: register_histogram_with_registry!(
                 "json_rpc_get_tx_blocks_limit",
                 "The input limit for get_tx_blocks, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_tx_blocks_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_tx_blocks_result_size: register_histogram_with_registry!(
                 "json_rpc_get_tx_blocks_result_size",
                 "The return size for get_tx_blocks",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_tx_blocks_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_tx_blocks_result_size_total",
                 "The total return size for get_tx_blocks",
                 registry
             )
             .unwrap(),
-            get_checkpoints_limit: Histogram::new_in_registry(
+            get_checkpoints_limit: register_histogram_with_registry!(
                 "json_rpc_get_checkpoints_limit",
                 "The input limit for get_checkpoints, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_checkpoints_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_checkpoints_result_size: register_histogram_with_registry!(
                 "json_rpc_get_checkpoints_result_size",
                 "The return size for get_checkpoints",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_checkpoints_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_checkpoints_result_size_total",
                 "The total return size for get_checkpoints",
                 registry
             )
             .unwrap(),
-            get_owned_objects_limit: Histogram::new_in_registry(
+            get_owned_objects_limit: register_histogram_with_registry!(
                 "json_rpc_get_owned_objects_limit",
                 "The input limit for get_owned_objects, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_owned_objects_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_owned_objects_result_size: register_histogram_with_registry!(
                 "json_rpc_get_owned_objects_result_size",
                 "The return size for get_owned_objects",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_owned_objects_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_owned_objects_result_size_total",
                 "The total return size for get_owned_objects",
                 registry
             )
             .unwrap(),
-            get_coins_limit: Histogram::new_in_registry(
+            get_coins_limit: register_histogram_with_registry!(
                 "json_rpc_get_coins_limit",
                 "The input limit for get_coins, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_coins_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_coins_result_size: register_histogram_with_registry!(
                 "json_rpc_get_coins_result_size",
                 "The return size for get_coins",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_coins_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_coins_result_size_total",
                 "The total return size for get_coins",
                 registry
             )
             .unwrap(),
-            get_dynamic_fields_limit: Histogram::new_in_registry(
+            get_dynamic_fields_limit: register_histogram_with_registry!(
                 "json_rpc_get_dynamic_fields_limit",
                 "The input limit for get_dynamic_fields, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_dynamic_fields_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_dynamic_fields_result_size: register_histogram_with_registry!(
                 "json_rpc_get_dynamic_fields_result_size",
                 "The return size for get_dynamic_fields",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_dynamic_fields_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_dynamic_fields_result_size_total",
                 "The total return size for get_dynamic_fields",
                 registry
             )
             .unwrap(),
-            query_tx_blocks_limit: Histogram::new_in_registry(
+            query_tx_blocks_limit: register_histogram_with_registry!(
                 "json_rpc_query_tx_blocks_limit",
                 "The input limit for query_tx_blocks, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            query_tx_blocks_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            query_tx_blocks_result_size: register_histogram_with_registry!(
                 "json_rpc_query_tx_blocks_result_size",
                 "The return size for query_tx_blocks",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             query_tx_blocks_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_query_tx_blocks_result_size_total",
                 "The total return size for query_tx_blocks",
                 registry
             )
             .unwrap(),
-            query_events_limit: Histogram::new_in_registry(
+            query_events_limit: register_histogram_with_registry!(
                 "json_rpc_query_events_limit",
                 "The input limit for query_events, after applying the cap",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            query_events_result_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            query_events_result_size: register_histogram_with_registry!(
                 "json_rpc_query_events_result_size",
                 "The return size for query_events",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             query_events_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_query_events_result_size_total",
                 "The total return size for query_events",
                 registry
             )
             .unwrap(),
-            get_stake_sui_result_size: Histogram::new_in_registry(
+            get_stake_sui_result_size: register_histogram_with_registry!(
                 "json_rpc_get_stake_sui_result_size",
                 "The return size for get_stake_sui",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             get_stake_sui_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_get_stake_sui_result_size_total",
                 "The total return size for get_stake_sui",
                 registry
             )
             .unwrap(),
-            get_stake_sui_latency: Histogram::new_in_registry(
+            get_stake_sui_latency: register_histogram_with_registry!(
                 "get_stake_sui_latency",
                 "The latency of get stake sui, in ms",
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            get_delegated_sui_latency: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            get_delegated_sui_latency: register_histogram_with_registry!(
                 "get_delegated_sui_latency",
                 "The latency of get delegated sui, in ms",
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            orchestrator_latency_ms: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            orchestrator_latency_ms: register_histogram_with_registry!(
                 "json_rpc_orchestrator_latency",
                 "The latency of submitting transaction via transaction orchestrator, in ms",
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            post_orchestrator_latency_ms: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            post_orchestrator_latency_ms: register_histogram_with_registry!(
                 "json_rpc_post_orchestrator_latency",
                 "The latency of response processing after transaction orchestrator, in ms",
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 

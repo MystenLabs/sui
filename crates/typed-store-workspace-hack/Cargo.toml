@@ -1,0 +1,37 @@
+# This file is generated is used by the typed-store crate in order to force
+# rocksdb to be built a single time, regaurdless of where in the workspace a
+# package is being built.
+#
+# This was generated using `cargo hakari` plus `cargo tree` to select only the
+# dependencies that were relevant for rocksdb.
+
+[package]
+name = "typed-store-workspace-hack"
+version = "0.0.0"
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+libc = { version = "0.2", features = ["extra_traits"] }
+zstd-sys = { version = "2", features = ["std"] }
+nom = { version = "7" }
+memchr = { version = "2" }
+lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = { version = "1" }
+regex = { version = "1" }
+regex-syntax = { version = "0.7" }
+
+[build-dependencies]
+memchr = { version = "2" }
+nom = { version = "7" }
+libc = { version = "0.2", features = ["extra_traits"] }
+cc = { version = "1", default-features = false, features = ["parallel"] }
+zstd-sys = { version = "2", features = ["std"] }
+lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+quote = { version = "1" }
+regex = { version = "1" }
+regex-syntax = { version = "0.7" }

@@ -13,15 +13,18 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey or later
 - Microsoft Windows - Windows 10 and 11
 
+::::info[Fastest method]
+
 ## Quick install using Homebrew or Chocolatey {#install-homebrew}
 
 {@include: ../../../snippets/quick-install.mdx}
 
-:::info
+:::note
 
 If you use this method to install Sui, you are all set. The quick install is suitable for most use cases. The remaining installation methods are for those wanting more control over the installation process.
 
 :::
+::::
 
 ## Download binaries from GitHub {#install-binaries}
 
@@ -182,7 +185,7 @@ The prerequisites needed for the Linux operating system include:
 - GCC
 - libssl-dev
 - libclang-dev
-- libpq-dev
+- libpq-dev (optional)
 - build-essential
 
 :::info
@@ -271,7 +274,9 @@ sudo apt-get install libclang-dev
 
 If the version of Linux you use doesn't support `libclang-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
 
-#### libpq-dev {#libpq-dev}
+#### libpq-dev (optional) {#libpq-dev}
+
+{@include: ../../../snippets/libpq-req.mdx}
 
 Use the following command to install `libpq-dev`:
 
@@ -299,7 +304,7 @@ The prerequisites needed for the macOS operating system include:
 - Homebrew
 - cURL
 - CMake
-- libpq
+- libpq (optional)
 - Git CLI
 
 macOS includes a version of cURL you can use to install Homebrew. Use Homebrew to install other tools, including a newer version of cURL.
@@ -343,7 +348,10 @@ brew install cmake
 
 To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
 
-#### libpq {#libpq-1}
+#### libpq (optional) {#libpq-1}
+
+{@include: ../../../snippets/libpq-req.mdx}
+
 Use the following command to install libpq:
 ```bash
 brew install libpq

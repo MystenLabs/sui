@@ -11,10 +11,10 @@ futures.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
 jsonrpsee.workspace = true
 tracing.workspace = true
 clap.workspace = true
-diesel.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -42,8 +42,3 @@ telemetry-subscribers.workspace = true
 
 test-cluster.workspace = true
 move-core-types.workspace = true
-
-[features]
-default = ["postgres-feature"]
-postgres-feature = ["diesel/postgres", "diesel/postgres_backend"]
-pg_integration = []

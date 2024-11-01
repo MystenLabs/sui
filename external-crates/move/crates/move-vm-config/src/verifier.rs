@@ -77,12 +77,22 @@ impl Default for VerifierConfig {
     }
 }
 
+impl MeterConfig {
+    pub fn old_default() -> Self {
+        Self {
+            max_per_fun_meter_units: Some(8_000_000),
+            max_per_mod_meter_units: Some(8_000_000),
+            max_per_pkg_meter_units: Some(8_000_000),
+        }
+    }
+}
+
 impl Default for MeterConfig {
     fn default() -> Self {
         Self {
-            max_per_fun_meter_units: Some(1000 * 8000),
-            max_per_mod_meter_units: Some(1000 * 8000),
-            max_per_pkg_meter_units: Some(1000 * 8000),
+            max_per_fun_meter_units: Some(2_200_000),
+            max_per_mod_meter_units: Some(2_200_000),
+            max_per_pkg_meter_units: Some(2_200_000),
         }
     }
 }

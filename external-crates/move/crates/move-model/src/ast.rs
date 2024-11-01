@@ -568,7 +568,7 @@ impl ExpData {
             match e {
                 Call(id, Exists(label), _) | Call(id, Global(label), _) => {
                     let inst = &env.get_node_instantiation(*id);
-                    let (mid, sid, sinst) = inst[0].require_struct();
+                    let (mid, sid, sinst) = inst[0].require_datatype();
                     result.insert((mid.qualified_inst(sid, sinst.to_owned()), label.to_owned()));
                 }
                 Call(id, Function(mid, fid, labels), _) => {
@@ -781,7 +781,7 @@ impl ExpData {
         if let ExpData::Call(_, Operation::Select(_, _, field_id), sargs) = self {
             if let ExpData::Call(id, Operation::Global(None), gargs) = sargs[0].as_ref() {
                 let ty = &env.get_node_type(*id);
-                let (mid, sid, targs) = ty.require_struct();
+                let (mid, sid, targs) = ty.require_datatype();
                 if env
                     .symbol_pool()
                     .string(sid.symbol())

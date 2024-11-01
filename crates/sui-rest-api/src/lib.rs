@@ -1,12 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::Router;
+use axum::{
+    response::{Redirect, ResponseParts},
+    routing::get,
+    Router,
+};
 use mysten_network::callback::CallbackLayer;
 use openapi::ApiEndpoint;
 use reader::StateReader;
 use std::sync::Arc;
 use sui_types::storage::RestStateReader;
+use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
 pub mod accept;
@@ -22,21 +27,26 @@ mod info;
 mod metrics;
 mod objects;
 pub mod openapi;
+pub mod proto;
 mod reader;
 mod response;
 mod system;
 pub mod transactions;
 pub mod types;
 
+pub use checkpoints::CheckpointResponse;
+pub use checkpoints::ListCheckpointsQueryParameters;
 pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
+pub use objects::ObjectResponse;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
+pub use transactions::ExecuteTransactionQueryParameters;
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
+pub const APPLICATION_PROTOBUF: &str = "application/x-protobuf";
 
 #[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -45,9 +55,38 @@ pub enum Direction {
     Descending,
 }
 
+impl Direction {
+    pub fn is_descending(self) -> bool {
+        matches!(self, Self::Descending)
+    }
+}
+
+#[derive(Debug)]
 pub struct Page<T, C> {
     pub entries: response::ResponseContent<Vec<T>>,
     pub cursor: Option<C>,
+}
+
+pub struct PageCursor<C>(pub Option<C>);
+
+impl<C: std::fmt::Display> axum::response::IntoResponseParts for PageCursor<C> {
+    type Error = (axum::http::StatusCode, String);
+
+    fn into_response_parts(
+        self,
+        res: ResponseParts,
+    ) -> std::result::Result<ResponseParts, Self::Error> {
+        self.0
+            .map(|cursor| [(crate::types::X_SUI_CURSOR, cursor.to_string())])
+            .into_response_parts(res)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    }
+}
+
+impl<C: std::fmt::Display> axum::response::IntoResponse for PageCursor<C> {
+    fn into_response(self) -> axum::response::Response {
+        (self, ()).into_response()
+    }
 }
 
 pub const DEFAULT_PAGE_SIZE: usize = 50;
@@ -64,15 +103,17 @@ impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for
 }
 
 const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
+    // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
+    &checkpoints::ListCheckpoints,
+    &checkpoints::GetCheckpoint,
+    // unstable APIs
     &accounts::ListAccountObjects,
     &objects::GetObject,
     &objects::GetObjectWithVersion,
     &objects::ListDynamicFields,
-    &checkpoints::ListCheckpoints,
-    &checkpoints::GetCheckpoint,
-    &checkpoints::GetCheckpointFull,
+    &checkpoints::GetFullCheckpoint,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
     &committee::GetCommittee,
@@ -82,6 +123,8 @@ const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     &system::GetProtocolConfig,
     &system::GetGasInfo,
     &transactions::ExecuteTransaction,
+    &transactions::SimulateTransaction,
+    &transactions::ResolveTransaction,
     &coins::GetCoinInfo,
 ];
 
@@ -92,6 +135,7 @@ pub struct RestService {
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
     metrics: Option<Arc<RestMetrics>>,
+    config: Config,
 }
 
 impl axum::extract::FromRef<RestService> for StateReader {
@@ -115,11 +159,16 @@ impl RestService {
             chain_id,
             software_version,
             metrics: None,
+            config: Config::default(),
         }
     }
 
     pub fn new_without_version(reader: Arc<dyn RestStateReader>) -> Self {
         Self::new(reader, "unknown")
+    }
+
+    pub fn with_config(&mut self, config: Config) {
+        self.config = config;
     }
 
     pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
@@ -141,12 +190,23 @@ impl RestService {
     pub fn into_router(self) -> Router {
         let metrics = self.metrics.clone();
 
-        let mut api = openapi::Api::new(info());
+        let mut api = openapi::Api::new(info(self.software_version()));
 
-        api.register_endpoints(ENDPOINTS.to_owned());
+        api.register_endpoints(
+            ENDPOINTS
+                .iter()
+                .copied()
+                .filter(|endpoint| endpoint.stable() || self.config.enable_unstable_apis()),
+        );
 
-        api.to_router()
-            .with_state(self.clone())
+        Router::new()
+            .nest("/v2/", api.to_router().with_state(self.clone()))
+            .route("/v2", get(|| async { Redirect::permanent("/v2/") }))
+            // Previously the service used to be hosted at `/rest`. In an effort to migrate folks
+            // to the new versioned route, we'll issue redirects from `/rest` -> `/v2`.
+            .route("/rest/*path", axum::routing::method_routing::any(redirect))
+            .route("/rest", get(|| async { Redirect::permanent("/v2/") }))
+            .route("/rest/", get(|| async { Redirect::permanent("/v2/") }))
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
@@ -162,19 +222,13 @@ impl RestService {
             })
     }
 
-    pub async fn start_service(self, socket_address: std::net::SocketAddr, base: Option<String>) {
-        let mut app = self.into_router();
-
-        if let Some(base) = base {
-            app = Router::new().nest(&base, app);
-        }
-
+    pub async fn start_service(self, socket_address: std::net::SocketAddr) {
         let listener = tokio::net::TcpListener::bind(socket_address).await.unwrap();
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, self.into_router()).await.unwrap();
     }
 }
 
-fn info() -> openapiv3::v3_1::Info {
+fn info(version: &'static str) -> openapiv3::v3_1::Info {
     use openapiv3::v3_1::Contact;
     use openapiv3::v3_1::License;
 
@@ -191,8 +245,37 @@ fn info() -> openapiv3::v3_1::Info {
             url: Some("https://www.apache.org/licenses/LICENSE-2.0.html".to_owned()),
             ..Default::default()
         }),
-        version: "0.0.0".to_owned(),
+        version: version.to_owned(),
         ..Default::default()
+    }
+}
+
+async fn redirect(axum::extract::Path(path): axum::extract::Path<String>) -> Redirect {
+    Redirect::permanent(&format!("/v2/{path}"))
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Config {
+    /// Enable serving of unstable APIs
+    ///
+    /// Defaults to `false`, with unstable APIs being disabled
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_unstable_apis: Option<bool>,
+
+    // Only include this till we have another field that isn't set with a non-default value for
+    // testing
+    #[doc(hidden)]
+    #[serde(skip)]
+    pub _hidden: (),
+}
+
+impl Config {
+    pub fn enable_unstable_apis(&self) -> bool {
+        // TODO
+        // Until the rest service as a whole is "stabalized" with a sane set of default stable
+        // apis, have the default be to enable all apis
+        self.enable_unstable_apis.unwrap_or(true)
     }
 }
 
@@ -238,9 +321,9 @@ mod test {
             concat!(env!("CARGO_MANIFEST_DIR"), "/openapi/openapi.json");
 
         let openapi = {
-            let mut api = openapi::Api::new(info());
+            let mut api = openapi::Api::new(info("unknown"));
 
-            api.register_endpoints(ENDPOINTS.to_owned());
+            api.register_endpoints(ENDPOINTS.iter().copied());
             api.openapi()
         };
 
@@ -276,7 +359,7 @@ mod test {
         }
 
         let openapi = {
-            let mut api = openapi::Api::new(info());
+            let mut api = openapi::Api::new(info("unknown"));
             api.register_endpoints(ENDPOINTS.to_owned());
             api.openapi()
         };

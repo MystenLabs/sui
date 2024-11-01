@@ -1,0 +1,89 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "database",
+      "id": "58be2827-5ca0-4cc4-85a8-ff656911df67",
+      "created_time": "2021-03-07T19:20:00.000Z",
+      "last_edited_time": "2021-07-11T22:04:00.000Z",
+      "title": [
+        {
+          "type": "text",
+          "text": { "content": "Movie Collection", "link": null },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Movie Collection",
+          "href": null
+        }
+      ],
+      "properties": {
+        "Watched": { "id": "<dji", "type": "checkbox", "checkbox": {} },
+        "Cover": { "id": "VWBk", "type": "files", "files": {} },
+        "Type": {
+          "id": "]iu{",
+          "type": "select",
+          "select": {
+            "options": [
+              {
+                "id": "522ab335-108c-4a92-a2d6-0aeee7b946c8",
+                "name": "Blu-Ray",
+                "color": "blue"
+              },
+              {
+                "id": "12f11180-47bd-4c36-abb8-c84c35ade60c",
+                "name": "Digital",
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "Year": {
+          "id": "jwIv",
+          "type": "number",
+          "number": { "format": "number" }
+        },
+        "Director": {
+          "id": "~psh",
+          "type": "select",
+          "select": {
+            "options": [
+              {
+                "id": "d1023a7a-52af-4c2f-aabf-cac75b59e9bd",
+                "name": "Hirozaku Kore-eda",
+                "color": "yellow"
+              },
+              {
+                "id": "45bd4057-eddc-4bf2-be59-a693f4f81f05",
+                "name": "Hayao Miyazaki",
+                "color": "pink"
+              },
+              {
+                "id": "a1a2896b-26f0-410b-8205-fda67c9edb99",
+                "name": "Doug Liman",
+                "color": "orange"
+              },
+              {
+                "id": "f9854b2d-b913-454f-b18c-ce312fa1d9e4",
+                "name": "Steven Soderbergh",
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "Title": { "id": "title", "type": "title", "title": {} }
+      },
+      "parent": {
+        "type": "page_id",
+        "page_id": "2ffcd525-17b1-4606-93ff-e367eade9e66"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}

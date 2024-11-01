@@ -4,6 +4,7 @@
 
 //! This module defines the abstract state for the local safety analysis.
 
+use crate::ability_cache::AbilityCache;
 use move_abstract_interpreter::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -26,10 +27,9 @@ pub(crate) enum LocalState {
 }
 use LocalState::*;
 
-pub(crate) const STEP_BASE_COST: u128 = 15;
-pub(crate) const RET_PER_LOCAL_COST: u128 = 30;
-pub(crate) const JOIN_BASE_COST: u128 = 10;
-pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
+pub(crate) const STEP_BASE_COST: u128 = 1;
+pub(crate) const RET_COST: u128 = 10;
+pub(crate) const JOIN_COST: u128 = 10;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AbstractState {
@@ -41,8 +41,10 @@ pub(crate) struct AbstractState {
 impl AbstractState {
     /// create a new abstract state
     pub fn new(
-        module: &CompiledModule,
+        _module: &CompiledModule,
         function_context: &FunctionContext,
+        ability_cache: &mut AbilityCache,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Self> {
         let num_args = function_context.parameters().len();
         let num_locals = num_args + function_context.locals().len();
@@ -55,7 +57,14 @@ impl AbstractState {
             .0
             .iter()
             .chain(function_context.locals().0.iter())
-            .map(|st| module.abilities(st, function_context.type_parameters()))
+            .map(|st| {
+                ability_cache.abilities(
+                    Scope::Function,
+                    meter,
+                    function_context.type_parameters(),
+                    st,
+                )
+            })
             .collect::<PartialVMResult<Vec<_>>>()?;
 
         Ok(Self {
@@ -141,12 +150,7 @@ impl AbstractDomain for AbstractState {
         state: &AbstractState,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
-        meter.add(Scope::Function, JOIN_BASE_COST)?;
-        meter.add_items(
-            Scope::Function,
-            JOIN_PER_LOCAL_COST,
-            state.local_states.len(),
-        )?;
+        meter.add(Scope::Function, JOIN_COST)?;
         let joined = Self::join_(self, state);
         assert!(self.local_states.len() == joined.local_states.len());
         let locals_unchanged = self

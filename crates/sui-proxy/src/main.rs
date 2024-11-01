@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     let listener = std::net::TcpListener::bind(config.listen_address).unwrap();
 
     let (tls_config, allower) =
-        // we'll only use the dynamic peers in some cases - it makes little sense to run with the statics
+        // we'll only use the dynamic peers in some cases - it makes little sense to run with the static's
         // since this first mode allows all.
         if config.dynamic_peers.certificate_file.is_none() || config.dynamic_peers.private_key.is_none() {
             (

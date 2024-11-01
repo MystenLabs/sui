@@ -7,7 +7,7 @@ use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io};
 use sui_bridge::config::BridgeCommitteeConfig;
+use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
@@ -32,12 +33,15 @@ use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
-#[cfg(feature = "indexer")]
-use sui_graphql_rpc::{
-    config::ConnectionConfig, test_infra::cluster::start_graphql_server_with_fn_rpc,
+use sui_indexer::test_utils::{
+    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
-#[cfg(feature = "indexer")]
-use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
+
+use sui_graphql_rpc::{
+    config::{ConnectionConfig, ServiceConfig},
+    test_infra::cluster::start_graphql_server_with_fn_rpc,
+};
+
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
@@ -60,21 +64,19 @@ const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 const DEFAULT_FAUCET_NUM_COINS: usize = 5; // 5 coins per request was the default in sui-test-validator
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 const DEFAULT_FAUCET_PORT: u16 = 9123;
-#[cfg(feature = "indexer")]
+
 const DEFAULT_GRAPHQL_PORT: u16 = 9125;
-#[cfg(feature = "indexer")]
+
 const DEFAULT_INDEXER_PORT: u16 = 9124;
 
-#[cfg(feature = "indexer")]
 #[derive(Args)]
-pub struct IndexerFeatureArgs {
+pub struct IndexerArgs {
     /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
     /// a host, or both (e.g., 0.0.0.0:9124).
     /// When providing a specific value, please use the = sign between the flag and value:
     /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
     /// The indexer will be started in writer mode and reader mode.
     #[clap(long,
-            default_value = "0.0.0.0:9124",
             default_missing_value = "0.0.0.0:9124",
             num_args = 0..=1,
             require_equals = true,
@@ -118,8 +120,7 @@ pub struct IndexerFeatureArgs {
     pg_password: String,
 }
 
-#[cfg(feature = "indexer")]
-impl IndexerFeatureArgs {
+impl IndexerArgs {
     pub fn for_testing() -> Self {
         Self {
             with_indexer: None,
@@ -146,7 +147,18 @@ pub enum SuiCommand {
     /// generate the genesis blob, and start the network.
     ///
     /// Note that if you want to start an indexer, Postgres DB is required.
-    #[clap(name = "start")]
+    ///
+    /// ProtocolConfig parameters can be overridden individually by setting env variables as
+    /// follows:
+    /// - SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE=1
+    /// - Then, to configure an override, use the prefix `SUI_PROTOCOL_CONFIG_OVERRIDE_`
+    ///   along with the parameter name. For example, to increase the interval between
+    ///   checkpoint creation to >1/s, you might set:
+    ///   SUI_PROTOCOL_CONFIG_OVERRIDE_min_checkpoint_interval_ms=1000
+    ///
+    /// Note that ProtocolConfig parameters must match between all nodes, or the network
+    /// may break. Changing these values outside of local networks is very dangerous.
+    #[clap(name = "start", verbatim_doc_comment)]
     Start {
         /// Config directory that will be used to store network config, node db, keystore
         /// sui genesis -f --with-faucet generates a genesis config that can be used to start this
@@ -177,9 +189,8 @@ pub enum SuiCommand {
         )]
         with_faucet: Option<String>,
 
-        #[cfg(feature = "indexer")]
         #[clap(flatten)]
-        indexer_feature_args: IndexerFeatureArgs,
+        indexer_feature_args: IndexerArgs,
 
         /// Port to start the Fullnode RPC server on. Default port is 9000.
         #[clap(long, default_value = "9000")]
@@ -353,7 +364,7 @@ impl SuiCommand {
                 config_dir,
                 force_regenesis,
                 with_faucet,
-                #[cfg(feature = "indexer")]
+
                 indexer_feature_args,
                 fullnode_rpc_port,
                 no_full_node,
@@ -362,7 +373,6 @@ impl SuiCommand {
                 start(
                     config_dir.clone(),
                     with_faucet,
-                    #[cfg(feature = "indexer")]
                     indexer_feature_args,
                     force_regenesis,
                     epoch_duration_ms,
@@ -419,8 +429,8 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
+                    let mut context = WalletContext::new(&config_path, None, None)?;
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -493,7 +503,7 @@ impl SuiCommand {
                     PersistedConfig::read(&bridge_committee_config_path).map_err(|err| {
                         err.context(format!(
                             "Cannot open Bridge Committee config file at {:?}",
-                            network_config_path
+                            bridge_committee_config_path
                         ))
                     })?;
 
@@ -503,7 +513,8 @@ impl SuiCommand {
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.config.get_active_env()?.rpc;
                 println!("rpc_url: {}", rpc_url);
-                let sui_bridge_client = SuiBridgeClient::new(rpc_url).await?;
+                let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
+                let sui_bridge_client = SuiBridgeClient::new(rpc_url, bridge_metrics).await?;
                 let bridge_arg = sui_bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
@@ -566,7 +577,7 @@ impl SuiCommand {
 async fn start(
     config: Option<PathBuf>,
     with_faucet: Option<String>,
-    #[cfg(feature = "indexer")] indexer_feature_args: IndexerFeatureArgs,
+    indexer_feature_args: IndexerArgs,
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
@@ -579,8 +590,7 @@ async fn start(
         );
     }
 
-    #[cfg(feature = "indexer")]
-    let IndexerFeatureArgs {
+    let IndexerArgs {
         mut with_indexer,
         with_graphql,
         pg_port,
@@ -590,12 +600,12 @@ async fn start(
         pg_password,
     } = indexer_feature_args;
 
-    #[cfg(feature = "indexer")]
+    let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
+
     if with_graphql.is_some() {
         with_indexer = Some(with_indexer.unwrap_or_default());
     }
 
-    #[cfg(feature = "indexer")]
     if with_indexer.is_some() {
         ensure!(
             !no_full_node,
@@ -623,7 +633,7 @@ async fn start(
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
     } else {
         if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-            genesis(None, None, None, false, epoch_duration_ms, None, false).await?;
+            genesis(None, None, None, false, epoch_duration_ms, None, false).await.map_err(|_| anyhow!("Cannot run genesis with non-empty Sui config directory: {}.\n\nIf you are trying to run a local network without persisting the data (so a new genesis that is randomly generated and will not be saved once the network is shut down), use --force-regenesis flag.\nIf you are trying to persist the network data and start from a new genesis, use sui genesis --help to see how to generate a new genesis.", sui_config_dir().unwrap().display()))?;
         }
 
         // Load the config of the Sui authority.
@@ -660,13 +670,12 @@ async fn start(
             .with_network_config(network_config);
     }
 
-    #[cfg(feature = "indexer")]
     let data_ingestion_path = tempdir()?.into_path();
 
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    #[cfg(feature = "indexer")]
+
     if with_indexer.is_some() {
         swarm_builder = swarm_builder.with_data_ingestion_dir(data_ingestion_path.clone());
     }
@@ -691,52 +700,49 @@ async fn start(
     // the indexer requires a fullnode url with protocol specified
     let fullnode_url = format!("http://{}", fullnode_url);
     info!("Fullnode URL: {}", fullnode_url);
-    #[cfg(feature = "indexer")]
-    let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
 
-    #[cfg(feature = "indexer")]
     if let Some(input) = with_indexer {
         let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
-        tracing::info!("Starting the indexer service at {indexer_address}");
-        // Start in writer mode
-        start_test_indexer::<diesel::PgConnection>(
-            Some(pg_address.clone()),
-            fullnode_url.clone(),
-            ReaderWriterConfig::writer_mode(None),
-            data_ingestion_path.clone(),
-        )
-        .await;
-        info!("Indexer in writer mode started");
-
+        info!("Starting the indexer service at {indexer_address}");
         // Start in reader mode
-        start_test_indexer::<diesel::PgConnection>(
-            Some(pg_address.clone()),
+        start_indexer_jsonrpc_for_testing(
+            pg_address.clone(),
             fullnode_url.clone(),
-            ReaderWriterConfig::reader_mode(indexer_address.to_string()),
-            data_ingestion_path,
+            indexer_address.to_string(),
+            None,
         )
         .await;
-        info!("Indexer in reader mode started");
+        info!("Indexer started in reader mode");
+        start_indexer_writer_for_testing(
+            pg_address.clone(),
+            None,
+            None,
+            Some(data_ingestion_path.clone()),
+            None,
+            None, /* start_checkpoint */
+            None, /* end_checkpoint */
+        )
+        .await;
+        info!("Indexer started in writer mode");
     }
 
-    #[cfg(feature = "indexer")]
     if let Some(input) = with_graphql {
         let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .map_err(|_| anyhow!("Invalid graphql host and port"))?;
         tracing::info!("Starting the GraphQL service at {graphql_address}");
-        let graphql_connection_config = ConnectionConfig::new(
-            Some(graphql_address.port()),
-            Some(graphql_address.ip().to_string()),
-            Some(pg_address),
-            None,
-            None,
-            None,
-        );
+        let graphql_connection_config = ConnectionConfig {
+            port: graphql_address.port(),
+            host: graphql_address.ip().to_string(),
+            db_url: pg_address,
+            ..Default::default()
+        };
+
         start_graphql_server_with_fn_rpc(
             graphql_connection_config,
             Some(fullnode_url.clone()),
             None, // it will be initialized by default
+            ServiceConfig::test_defaults(),
         )
         .await;
         info!("GraphQL started");
@@ -1136,10 +1142,26 @@ async fn prompt_if_no_config(
         };
 
         if let Some(env) = env {
-            let keystore_path = wallet_conf_path
-                .parent()
-                .unwrap_or(&sui_config_dir()?)
-                .join(SUI_KEYSTORE_FILENAME);
+            let keystore_path = match wallet_conf_path.parent() {
+                // Wallet config was created in the current directory as a relative path.
+                Some(parent) if parent.as_os_str().is_empty() => {
+                    std::env::current_dir().context("Couldn't find current directory")?
+                }
+
+                // Wallet config was given a path with some parent (could be relative or absolute).
+                Some(parent) => parent
+                    .canonicalize()
+                    .context("Could not find sui config directory")?,
+
+                // No parent component and the wallet config was the empty string, use the default
+                // config.
+                None if wallet_conf_path.as_os_str().is_empty() => sui_config_dir()?,
+
+                // Wallet config was requested at the root of the file system ...for some reason.
+                None => wallet_conf_path.to_owned(),
+            }
+            .join(SUI_KEYSTORE_FILENAME);
+
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519

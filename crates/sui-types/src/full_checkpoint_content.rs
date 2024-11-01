@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEvents};
+use std::collections::BTreeMap;
+
+use crate::base_types::ObjectRef;
+use crate::effects::{
+    IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
 use crate::storage::BackingPackageStore;
@@ -18,11 +23,32 @@ pub struct CheckpointData {
 }
 
 impl CheckpointData {
-    pub fn output_objects(&self) -> Vec<&Object> {
-        self.transactions
-            .iter()
-            .flat_map(|tx| &tx.output_objects)
-            .collect()
+    // returns the latest versions of the output objects that still exist at the end of the checkpoint
+    pub fn latest_live_output_objects(&self) -> Vec<&Object> {
+        let mut latest_live_objects = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj in tx.output_objects.iter() {
+                latest_live_objects.insert(obj.id(), obj);
+            }
+            for obj_ref in tx.removed_object_refs_post_version() {
+                latest_live_objects.remove(&(obj_ref.0));
+            }
+        }
+        latest_live_objects.into_values().collect()
+    }
+
+    // returns the object refs that are eventually deleted or wrapped in the current checkpoint
+    pub fn eventually_removed_object_refs_post_version(&self) -> Vec<ObjectRef> {
+        let mut eventually_removed_object_refs = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj_ref in tx.removed_object_refs_post_version() {
+                eventually_removed_object_refs.insert(obj_ref.0, obj_ref);
+            }
+            for obj in tx.output_objects.iter() {
+                eventually_removed_object_refs.remove(&(obj.id()));
+            }
+        }
+        eventually_removed_object_refs.into_values().collect()
     }
 
     pub fn input_objects(&self) -> Vec<&Object> {
@@ -51,19 +77,21 @@ pub struct CheckpointTransaction {
     pub events: Option<TransactionEvents>,
     /// The state of all inputs to this transaction as they were prior to execution.
     pub input_objects: Vec<Object>,
-    /// The state of all output objects created or mutated by this transaction.
+    /// The state of all output objects created or mutated or unwrapped by this transaction.
     pub output_objects: Vec<Object>,
 }
 
 impl CheckpointTransaction {
     // provide an iterator over all deleted or wrapped objects in this transaction
-    pub fn removed_objects(&self) -> impl Iterator<Item = &Object> {
+    pub fn removed_objects_pre_version(&self) -> impl Iterator<Item = &Object> {
         // Iterator over id and versions for all deleted or wrapped objects
         match &self.effects {
             TransactionEffects::V1(v1) => Either::Left(
                 // Effects v1 has delted and wrapped objects versions as the "new" version, not the
                 // old one that was actually removed. So we need to take these and then look them
                 // up in the `modified_at_versions`.
+                // No need to chain unwrapped_then_deleted because these objects must have been wrapped
+                // before the transaction, hence they will not be in modified_at_versions / input_objects.
                 v1.deleted().iter().chain(v1.wrapped()).map(|(id, _, _)| {
                     // lookup the old version for mutated objects
                     let (_, old_version) = v1
@@ -108,6 +136,13 @@ impl CheckpointTransaction {
         })
     }
 
+    pub fn removed_object_refs_post_version(&self) -> impl Iterator<Item = ObjectRef> {
+        let deleted = self.effects.deleted().into_iter();
+        let wrapped = self.effects.wrapped().into_iter();
+        let unwrapped_then_deleted = self.effects.unwrapped_then_deleted().into_iter();
+        deleted.chain(wrapped).chain(unwrapped_then_deleted)
+    }
+
     pub fn changed_objects(&self) -> impl Iterator<Item = (&Object, Option<&Object>)> {
         // Iterator over ((ObjectId, new version), Option<old version>)
         match &self.effects {
@@ -142,7 +177,7 @@ impl CheckpointTransaction {
                             ObjectIn::NotExist,
                             ObjectOut::PackageWrite((version, _)),
                             IDOperation::Created,
-                        ) => Some(((id, &version), None)),
+                        ) => Some(((id, version), None)),
 
                         // Unwrapped Objects
                         (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::None) => {
@@ -206,7 +241,7 @@ impl CheckpointTransaction {
                             ObjectIn::NotExist,
                             ObjectOut::PackageWrite((version, _)),
                             IDOperation::Created,
-                        ) => Some((id, &version)),
+                        ) => Some((id, version)),
 
                         _ => None,
                     }

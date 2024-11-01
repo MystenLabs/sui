@@ -7,17 +7,11 @@
 
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast as N,
     parser::ast as P,
-    shared::{CompilationEnv, Identifier},
-    typing::{
-        ast as T,
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
-    },
+    shared::Identifier,
+    typing::{ast as T, visitor::simple_visitor},
 };
 
 use super::{
@@ -55,21 +49,9 @@ const COLLECTION_TYPES: &[(&str, &str, &str)] = &[
     (SUI_PKG_NAME, VEC_SET_MOD_NAME, VEC_SET_STRUCT_NAME),
 ];
 
-pub struct CollectionEqualityVisitor;
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for CollectionEqualityVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+simple_visitor!(
+    CollectionEqualityVisitor,
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         if let E::BinopExp(_, op, t, _) = &exp.exp.value {
             if op.value != P::BinOp_::Eq && op.value != P::BinOp_::Neq {
@@ -98,18 +80,10 @@ impl TypingVisitorContext for Context<'_> {
                     format!("Equality for collections of type '{caddr}::{cmodule}::{cname}' IS NOT a structural check based on content");
                 let mut d = diag!(COLLECTIONS_EQUALITY_DIAG, (op.loc, msg),);
                 d.add_note(note_msg);
-                self.env.add_diag(d);
+                self.add_diag(d);
                 return true;
             }
         }
         false
     }
-
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
+);

@@ -384,7 +384,7 @@ impl Scenario {
             };
             let id = o.id();
             // genesis objects are not managed by Scenario, ignore them
-            if reverse_id_map.get(&id).is_some() {
+            if reverse_id_map.contains_key(&id) {
                 self.objects.insert(id, o);
             }
         });
@@ -1142,6 +1142,79 @@ async fn test_concurrent_lockers() {
     for (r1, r2) in results1.into_iter().zip(results2) {
         // exactly one should succeed in each case
         assert_eq!(r1.is_ok(), r2.is_err());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_concurrent_lockers_same_tx() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
+    let mut txns = Vec::new();
+
+    for i in 0..1000 {
+        let a = i * 4;
+        let b = i * 4 + 1;
+        s.with_created(&[a, b]);
+        s.do_tx().await;
+
+        let a_ref = s.obj_ref(a);
+        let b_ref = s.obj_ref(b);
+
+        let tx1 = s.take_outputs();
+
+        let tx1 = s.make_signed_transaction(&tx1.transaction);
+
+        txns.push((tx1, a_ref, b_ref));
+    }
+
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+
+    let t1 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (tx1, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let t2 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (tx1, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let results1 = t1.await.unwrap();
+    let results2 = t2.await.unwrap();
+
+    for (r1, r2) in results1.into_iter().zip(results2) {
+        assert!(r1.is_ok());
+        assert!(r2.is_ok());
     }
 }
 

@@ -31,20 +31,19 @@ pub const NON_RECOVERABLE_ERROR_MSG: &str =
 /// Every invariant needs detailed documents to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
 pub enum QuorumDriverError {
-    #[error("QuorumDriver internal error: {0:?}.")]
+    #[error("QuorumDriver internal error: {0}.")]
     QuorumDriverInternalError(SuiError),
-    #[error("Invalid user signature: {0:?}.")]
+    #[error("Invalid user signature: {0}.")]
     InvalidUserSignature(SuiError),
     #[error(
         "Failed to sign transaction by a quorum of validators because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
         conflicting_txes,
-        retried_tx,
-        retried_tx_success
+        .retried_tx_status.map(|(tx, success)| tx),
+        .retried_tx_status.map(|(tx, success)| success),
     )]
     ObjectsDoubleUsed {
         conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-        retried_tx: Option<TransactionDigest>,
-        retried_tx_success: Option<bool>,
+        retried_tx_status: Option<(TransactionDigest, bool)>,
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,

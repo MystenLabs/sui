@@ -11,7 +11,7 @@ use typed_store::Map;
 use typed_store::{rocks::DBMap, TypedStoreError};
 
 use tracing::info;
-use typed_store_derive::DBMapUtils;
+use typed_store::DBMapUtils;
 use uuid::Uuid;
 
 /// Persistent log of transactions paying out sui from the faucet, keyed by the coin serving the

@@ -27,6 +27,7 @@ pub(crate) fn declare_spec_builtins(trans: &mut ModelBuilder<'_>) {
         loc: loc.clone(),
         ty: num_t.clone(),
         value: Value::Number(value),
+        attributes: vec![],
     };
 
     {

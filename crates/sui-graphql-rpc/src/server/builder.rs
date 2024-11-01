@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::compatibility_check::check_all_tables;
 use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
-use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
+use super::watermark_task::{ChainIdentifierLock, Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
+use crate::data::move_registry_data_loader::MoveRegistryDataLoader;
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
 use crate::extensions::directive_checker::DirectiveChecker;
@@ -25,10 +25,10 @@ use crate::{
     extensions::{
         feature_gate::FeatureGate,
         logger::Logger,
-        query_limits_checker::{QueryLimitsChecker, ShowUsage},
+        query_limits_checker::{PayloadSize, QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
-    server::version::{check_version_middleware, set_version_middleware},
+    server::version::set_version_middleware,
     types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::extensions::ApolloTracing;
@@ -45,6 +45,8 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post, MethodRouter, Route};
 use axum::Extension;
 use axum::Router;
+use axum_extra::headers::ContentLength;
+use axum_extra::TypedHeader;
 use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use mysten_metrics::spawn_monitored_task;
@@ -55,6 +57,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::LIMITS_HEADER;
+use sui_indexer::db::check_db_migration_consistency;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -76,7 +79,6 @@ pub(crate) struct Server {
     system_package_task: SystemPackageTask,
     trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
-    db_reader: Db,
 }
 
 impl Server {
@@ -84,11 +86,6 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
-
-        // Compatibility check
-        info!("Starting compatibility check");
-        check_all_tables(&self.db_reader).await?;
-        info!("Compatibility check passed");
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -221,6 +218,7 @@ impl ServerBuilder {
         self
     }
 
+    #[cfg(test)]
     fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
@@ -257,12 +255,9 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
-                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
-                .route("/graphql/:version", post(graphql_handler))
                 .route("/health", get(health_check))
                 .route("/graphql/health", get(health_check))
-                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -337,7 +332,7 @@ impl ServerBuilder {
         );
 
         let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
-            db_reader.clone(),
+            db_reader,
             watermark_task.epoch_receiver(),
             state.cancellation_token.clone(),
         );
@@ -347,12 +342,9 @@ impl ServerBuilder {
                 state.version,
                 set_version_middleware,
             ))
-            .route_layer(middleware::from_fn_with_state(
-                state.version,
-                check_version_middleware,
-            ))
             .layer(axum::extract::Extension(schema))
             .layer(axum::extract::Extension(watermark_task.lock()))
+            .layer(axum::extract::Extension(watermark_task.chain_id_lock()))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -362,7 +354,6 @@ impl ServerBuilder {
             system_package_task,
             trigger_exchange_rates_task,
             state,
-            db_reader,
         })
     }
 
@@ -376,13 +367,13 @@ impl ServerBuilder {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
             "{}:{}",
-            config.connection.prom_url, config.connection.prom_port
+            config.connection.prom_host, config.connection.prom_port
         )
         .parse()
         .map_err(|_| {
             Error::Internal(format!(
                 "Failed to parse url {}, port {} into socket address",
-                config.connection.prom_url, config.connection.prom_port
+                config.connection.prom_host, config.connection.prom_port
             ))
         })?;
 
@@ -409,6 +400,7 @@ impl ServerBuilder {
         let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.service.name_service.clone();
+        let move_registry_config = config.service.move_registry.clone();
         let zklogin_config = config.service.zklogin.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
@@ -418,7 +410,19 @@ impl ServerBuilder {
             // time).
             config.service.limits.request_timeout_ms.into(),
         )
+        .await
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+
+        if !config.connection.skip_migration_consistency_check {
+            check_db_migration_consistency(
+                &mut reader
+                    .pool()
+                    .get()
+                    .await
+                    .map_err(|e| Error::Internal(e.to_string()))?,
+            )
+            .await?;
+        }
 
         // DB
         let db = Db::new(
@@ -463,7 +467,9 @@ impl ServerBuilder {
             .context_data(name_service_config)
             .context_data(zklogin_config)
             .context_data(metrics.clone())
-            .context_data(config.clone());
+            .context_data(config.clone())
+            .context_data(move_registry_config.clone())
+            .context_data(MoveRegistryDataLoader::new(move_registry_config));
 
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
@@ -517,25 +523,30 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    TypedHeader(ContentLength(content_length)): TypedHeader<ContentLength>,
     schema: Extension<SuiGraphQLSchema>,
     Extension(watermark_lock): Extension<WatermarkLock>,
+    Extension(chain_identifier_lock): Extension<ChainIdentifierLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
+
+    req.data.insert(PayloadSize(content_length));
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
     }
+
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-
     req.data.insert(Watermark::new(watermark_lock).await);
+    req.data.insert(chain_identifier_lock.read().await);
 
     let result = schema.execute(req).await;
 
-    // If there are errors, insert them as an extention so that the Metrics callback handler can
+    // If there are errors, insert them as an extension so that the Metrics callback handler can
     // pull it out later.
     let mut extensions = axum::http::Extensions::new();
     if result.is_err() {
@@ -664,8 +675,11 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
+#[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::test_infra::cluster::{prep_executor_cluster, start_cluster};
+    use crate::types::chain_identifier::ChainIdentifier;
     use crate::{
         config::{ConnectionConfig, Limits, ServiceConfig, Version},
         context_data::db_data_provider::PgManager,
@@ -673,21 +687,29 @@ pub mod tests {
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
-        Response,
+        Request, Response, Variables,
     };
+    use serde_json::json;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_sdk::{wallet_context::WalletContext, SuiClient};
+    use sui_indexer::tempdb::get_available_port;
+    use sui_sdk::SuiClient;
+    use sui_types::digests::get_mainnet_chain_identifier;
     use sui_types::transaction::TransactionData;
     use uuid::Uuid;
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
     /// further extended with `context_data` and `extension` for testing.
-    fn prep_schema(
-        connection_config: Option<ConnectionConfig>,
-        service_config: Option<ServiceConfig>,
-    ) -> ServerBuilder {
-        let connection_config = connection_config.unwrap_or_default();
+    async fn prep_schema(db_url: String, service_config: Option<ServiceConfig>) -> ServerBuilder {
+        let connection_config = ConnectionConfig {
+            port: get_available_port(),
+            host: "127.0.0.1".to_owned(),
+            db_url,
+            db_pool_size: 5,
+            prom_host: "127.0.0.1".to_owned(),
+            prom_port: get_available_port(),
+            skip_migration_consistency_check: false,
+        };
         let service_config = service_config.unwrap_or_default();
 
         let reader = PgManager::reader_with_config(
@@ -695,6 +717,7 @@ pub mod tests {
             connection_config.db_pool_size,
             service_config.limits.request_timeout_ms.into(),
         )
+        .await
         .expect("Failed to create pg connection pool");
 
         let version = Version::for_testing();
@@ -704,6 +727,7 @@ pub mod tests {
             service_config.limits.clone(),
             metrics.clone(),
         );
+        let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
@@ -720,22 +744,26 @@ pub mod tests {
         );
         ServerBuilder::new(state)
             .context_data(db)
+            .context_data(loader)
             .context_data(pg_conn_pool)
             .context_data(service_config)
             .context_data(query_id())
             .context_data(ip_address())
             .context_data(watermark)
+            .context_data(ChainIdentifier::from(get_mainnet_chain_identifier()))
             .context_data(metrics)
     }
 
     fn metrics() -> Metrics {
-        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
+        let binding_address: SocketAddr = format!("127.0.0.1:{}", get_available_port())
+            .parse()
+            .unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         Metrics::new(&registry)
     }
 
     fn ip_address() -> SocketAddr {
-        let binding_address: SocketAddr = "0.0.0.0:51515".parse().unwrap();
+        let binding_address: SocketAddr = "127.0.0.1:51515".parse().unwrap();
         binding_address
     }
 
@@ -743,7 +771,18 @@ pub mod tests {
         Uuid::new_v4()
     }
 
-    pub async fn test_timeout_impl(wallet: WalletContext) {
+    #[tokio::test]
+    async fn test_timeout() {
+        telemetry_subscribers::init_for_testing();
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
+            .await;
+        // timeout test includes mutation timeout, which requires a [SuiClient] to be able to run
+        // the test, and a transaction. [WalletContext] gives access to everything that's needed.
+        let wallet = &cluster.network.validator_fullnode_handle.wallet;
+        let db_url = cluster.network.graphql_connection_config.db_url.clone();
+
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -774,12 +813,14 @@ pub mod tests {
             timeout: Duration,
             query: &str,
             sui_client: &SuiClient,
+            db_url: String,
         ) -> Response {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u32;
             cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
-            let schema = prep_schema(None, Some(cfg))
+            let schema = prep_schema(db_url, Some(cfg))
+                .await
                 .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
@@ -790,18 +831,18 @@ pub mod tests {
             schema.execute(query).await
         }
 
-        let query = "{ chainIdentifier }";
+        let query = r#"{ checkpoint(id: {sequenceNumber: 0 }) { digest }}"#;
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
         let sui_client = wallet.get_client().await.unwrap();
 
-        test_timeout(delay, timeout, query, &sui_client)
+        test_timeout(delay, timeout, query, &sui_client, db_url.clone())
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client)
+        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client, db_url.clone())
             .await
             .into_result()
             .unwrap_err()
@@ -844,7 +885,7 @@ pub mod tests {
             tx_bytes.encoded(),
             signature_base64.encoded()
         );
-        let errs: Vec<_> = test_timeout(delay, delay, &query, &sui_client)
+        let errs: Vec<_> = test_timeout(delay, delay, &query, &sui_client, db_url.clone())
             .await
             .into_result()
             .unwrap_err()
@@ -858,8 +899,12 @@ pub mod tests {
         assert_eq!(errs, vec![exp]);
     }
 
-    pub async fn test_query_depth_limit_impl() {
-        async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
+    #[tokio::test]
+    async fn test_query_depth_limit() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+
+        async fn exec_query_depth_limit(db_url: String, depth: u32, query: &str) -> Response {
             let service_config = ServiceConfig {
                 limits: Limits {
                     max_query_depth: depth,
@@ -868,18 +913,21 @@ pub mod tests {
                 ..Default::default()
             };
 
-            let schema = prep_schema(None, Some(service_config))
+            let schema = prep_schema(db_url, Some(service_config))
+                .await
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
 
-        exec_query_depth_limit(1, "{ chainIdentifier }")
+        exec_query_depth_limit(db_url.clone(), 1, "{ chainIdentifier }")
             .await
             .into_result()
             .expect("Should complete successfully");
 
         exec_query_depth_limit(
+            db_url.clone(),
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
@@ -888,7 +936,7 @@ pub mod tests {
         .expect("Should complete successfully");
 
         // Should fail
-        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
+        let errs: Vec<_> = exec_query_depth_limit(db_url.clone(), 0, "{ chainIdentifier }")
             .await
             .into_result()
             .unwrap_err()
@@ -898,6 +946,7 @@ pub mod tests {
 
         assert_eq!(errs, vec!["Query nesting is over 0".to_string()]);
         let errs: Vec<_> = exec_query_depth_limit(
+            db_url.clone(),
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
@@ -910,8 +959,11 @@ pub mod tests {
         assert_eq!(errs, vec!["Query nesting is over 2".to_string()]);
     }
 
-    pub async fn test_query_node_limit_impl() {
-        async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
+    #[tokio::test]
+    async fn test_query_node_limit() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        async fn exec_query_node_limit(db_url: String, nodes: u32, query: &str) -> Response {
             let service_config = ServiceConfig {
                 limits: Limits {
                     max_query_nodes: nodes,
@@ -920,18 +972,21 @@ pub mod tests {
                 ..Default::default()
             };
 
-            let schema = prep_schema(None, Some(service_config))
+            let schema = prep_schema(db_url, Some(service_config))
+                .await
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
 
-        exec_query_node_limit(1, "{ chainIdentifier }")
+        exec_query_node_limit(db_url.clone(), 1, "{ chainIdentifier }")
             .await
             .into_result()
             .expect("Should complete successfully");
 
         exec_query_node_limit(
+            db_url.clone(),
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
@@ -940,7 +995,7 @@ pub mod tests {
         .expect("Should complete successfully");
 
         // Should fail
-        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
+        let err: Vec<_> = exec_query_node_limit(db_url.clone(), 0, "{ chainIdentifier }")
             .await
             .into_result()
             .unwrap_err()
@@ -950,6 +1005,7 @@ pub mod tests {
         assert_eq!(err, vec!["Query has over 0 nodes".to_string()]);
 
         let err: Vec<_> = exec_query_node_limit(
+            db_url.clone(),
             4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
@@ -962,7 +1018,11 @@ pub mod tests {
         assert_eq!(err, vec!["Query has over 4 nodes".to_string()]);
     }
 
-    pub async fn test_query_default_page_limit_impl(connection_config: ConnectionConfig) {
+    #[tokio::test]
+    async fn test_query_default_page_limit() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+
         let service_config = ServiceConfig {
             limits: Limits {
                 default_page_size: 1,
@@ -970,7 +1030,9 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let schema = prep_schema(Some(connection_config), Some(service_config)).build_schema();
+        let schema = prep_schema(db_url, Some(service_config))
+            .await
+            .build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
@@ -1007,8 +1069,12 @@ pub mod tests {
         );
     }
 
-    pub async fn test_query_max_page_limit_impl() {
-        let schema = prep_schema(None, None).build_schema();
+    #[tokio::test]
+    async fn test_query_max_page_limit() {
+        telemetry_subscribers::init_for_testing();
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        let schema = prep_schema(db_url, None).await.build_schema();
 
         schema
             .execute("{ objects(first: 1) { nodes { version } } }")
@@ -1031,8 +1097,14 @@ pub mod tests {
         );
     }
 
-    pub async fn test_query_complexity_metrics_impl() {
-        let server_builder = prep_schema(None, None);
+    #[tokio::test]
+    async fn test_query_complexity_metrics() {
+        telemetry_subscribers::init_for_testing();
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        let server_builder = prep_schema(db_url, None)
+            .await
+            .context_data(PayloadSize(100));
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
             .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
@@ -1066,13 +1138,14 @@ pub mod tests {
         assert_eq!(req_metrics.query_depth.get_sample_sum(), 1. + 3.);
     }
 
-    pub async fn test_health_check_impl() {
-        let server_builder = prep_schema(None, None);
+    #[tokio::test]
+    pub async fn test_health_check() {
+        let cluster = prep_executor_cluster().await;
+
         let url = format!(
             "http://{}:{}/health",
-            server_builder.state.connection.host, server_builder.state.connection.port
+            cluster.graphql_connection_config.host, cluster.graphql_connection_config.port
         );
-        server_builder.build_schema();
 
         let resp = reqwest::get(&url).await.unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
@@ -1080,5 +1153,877 @@ pub mod tests {
         let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
         let resp = reqwest::get(&url_with_param).await.unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
+    }
+
+    /// Execute a GraphQL request with `limits` in place, expecting an error to be returned.
+    /// Returns the list of errors returned.
+    async fn execute_for_error(db_url: &str, limits: Limits, request: Request) -> String {
+        let service_config = ServiceConfig {
+            limits,
+            ..Default::default()
+        };
+
+        let schema = prep_schema(db_url.to_owned(), Some(service_config))
+            .await
+            .context_data(PayloadSize(
+                // Payload size is usually set per request, and it is the size of the raw HTTP
+                // request, which includes the query, variables, and surrounding JSON. Simulate for
+                // testing purposes by serializing the request back into JSON and baking its length
+                // as context data into the schema.
+                serde_json::to_string(&request).unwrap().len() as u64,
+            ))
+            .extension(QueryLimitsChecker)
+            .build_schema();
+
+        let errs: Vec<_> = schema
+            .execute(request)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+
+        errs.join("\n")
+    }
+
+    #[tokio::test]
+    async fn test_payload_read_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 400,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(txBytes: "AAA", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Query part too large: 354 bytes. Requests are limited to 400 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_mutation_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 400,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_dry_run_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 400,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 bytes \
+             or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_total_exceeded_impl() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        dryRunTransactionBlock(txByte: "AAABBB") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Overall request too large: 380 bytes. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) \
+             and the rest of the request (the query part) must be 10 bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_using_vars_mutation_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    mutation ($tx: String!, $sigs: [String!]!) {
+                        executeTransactionBlock(txBytes: $tx, signatures: $sigs) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC",
+                    "sigs": ["BBB"]
+                })))
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_using_vars_read_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 500,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    mutation ($tx: String!, $sigs: [String!]!) {
+                        executeTransactionBlock(txBytes: $tx, signatures: $sigs) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAA",
+                    "sigs": ["BBB"]
+                })))
+            )
+            .await,
+            "Query part too large: 409 bytes. Requests are limited to 500 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 bytes \
+             or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_using_vars_dry_run_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 400,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                }))),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_using_vars_dry_run_read_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 400,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                }))),
+            )
+            .await,
+            "Query part too large: 398 bytes. Requests are limited to 400 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 bytes \
+             or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_multiple_execution_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        // First check that the limit is large enough to hold one transaction's parameters (by
+        // checking that we hit the read limit).
+        let err = execute_for_error(
+            &db_url,
+            Limits {
+                max_tx_payload_size: 30,
+                max_query_payload_size: 320,
+                ..Default::default()
+            },
+            r#"
+                mutation {
+                    executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["DDD"]) {
+                        effects {
+                            status
+                        }
+                    }
+                }
+            "#
+            .into(),
+        )
+        .await;
+        assert!(err.starts_with("Query part too large"), "{err}");
+
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 30,
+                    max_query_payload_size: 800,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        e0: executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["DDD"]) {
+                            effects {
+                                status
+                            }
+                        }
+                        e1: executeTransactionBlock(txBytes: "EEEFFFGGG", signatures: ["HHH"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 30 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 800 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_multiple_dry_run_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        // First check that tx limit is large enough to hold one transaction's parameters (by
+        // checking that we hit the read limit).
+        let err = execute_for_error(
+            &db_url,
+            Limits {
+                max_tx_payload_size: 20,
+                max_query_payload_size: 330,
+                ..Default::default()
+            },
+            r#"
+                query {
+                    dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                       error
+                       transaction {
+                           digest
+                       }
+                    }
+                }
+            "#
+            .into(),
+        )
+        .await;
+        assert!(err.starts_with("Query part too large"), "{err}");
+
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 20,
+                    max_query_payload_size: 800,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        d0: dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                           error
+                           transaction {
+                               digest
+                           }
+                        }
+                        d1: dryRunTransactionBlock(txBytes: "DDDEEEFFF") {
+                           error
+                           transaction {
+                               digest
+                           }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 20 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 800 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_execution_multiple_sigs_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        // First check that the limit is large enough to hold a transaction with a single signature
+        // (by checking that we hite the read limit).
+        let err = execute_for_error(
+            &db_url,
+            Limits {
+                max_tx_payload_size: 30,
+                max_query_payload_size: 320,
+                ..Default::default()
+            },
+            r#"
+                mutation {
+                    executeTransactionBlock(txBytes: "AAA", signatures: ["BBB"]) {
+                        effects {
+                            status
+                        }
+                    }
+                }
+            "#
+            .into(),
+        )
+        .await;
+
+        assert!(err.starts_with("Query part too large"), "{err}");
+
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 30,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(
+                            txBytes: "AAA",
+                            signatures: ["BBB", "CCC", "DDD", "EEE", "FFF"]
+                        ) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 30 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer.",
+        )
+    }
+
+    #[tokio::test]
+    async fn test_payload_sig_var_execution_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        // Variables can show up in the sub-structure of a GraphQL value as well, and we need to
+        // count those as well.
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    mutation ($tx: String!, $sig: String!) {
+                        executeTransactionBlock(txBytes: $tx, signatures: [$sig]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAA",
+                    "sig": "BBB"
+                })))
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    /// Check if the error indicates that the request passed the overall size check and the
+    /// transaction payload check.
+    fn passed_tx_checks(err: &str) -> bool {
+        !err.starts_with("Overall request too large")
+            && !err.starts_with("Transaction payload too large")
+    }
+
+    #[tokio::test]
+    async fn test_payload_reusing_vars_execution() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        // Test that when variables are re-used as execution params, the size of the variable is
+        // only counted once.
+
+        // First, check that `error_passed_tx_checks` is working, by submitting a request that will
+        // fail the initial payload check.
+        assert!(!passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 1,
+                    max_query_payload_size: 1,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(txBytes: "AAA", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await
+        ));
+
+        let limits = Limits {
+            max_tx_payload_size: 20,
+            max_query_payload_size: 1000,
+            ..Default::default()
+        };
+
+        // Then check that a request that uses the variable once passes the transaction limit
+        // check.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                limits.clone(),
+                Request::new(
+                    r#"
+                    mutation ($sig: String!) {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: [$sig]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "sig": "BBB"
+                })))
+            )
+            .await
+        ));
+
+        // Then check that a request that introduces an extra signature, but without re-using the
+        // variable fails the transaction limit.
+        assert!(!passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                limits.clone(),
+                Request::new(
+                    r#"
+                    mutation ($sig: String!) {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: [$sig, "BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "sig": "BBB"
+                })))
+            )
+            .await
+        ));
+
+        // And then when that use is replaced by re-using the variable, we should be under the
+        // transaction payload limit again.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                limits,
+                Request::new(
+                    r#"
+                    mutation ($sig: String!) {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: [$sig, $sig]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "sig": "BBB"
+                })))
+            )
+            .await
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_payload_reusing_vars_dry_run() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        // Like `test_payload_reusing_vars_execution` but the variable is used in a dry-run.
+
+        let limits = Limits {
+            max_tx_payload_size: 20,
+            max_query_payload_size: 1000,
+            ..Default::default()
+        };
+
+        // A single dry-run is under the limit.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                limits.clone(),
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                })))
+            )
+            .await
+        ));
+
+        // Duplicating the dry-run causes us to hit the limit.
+        assert!(!passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                limits.clone(),
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        d0: dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+
+                        d1: dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                })))
+            )
+            .await
+        ));
+
+        // And by re-using the variable, we are under the transaction limit again.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                &db_url,
+                limits,
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        d0: dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+
+                        d1: dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                })))
+            )
+            .await
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_payload_named_fragment_execution_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        ...Tx
+                    }
+
+                    fragment Tx on Mutation {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_inline_fragment_execution_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        ... on Mutation {
+                            executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["BBB"]) {
+                                effects {
+                                    status
+                                }
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_named_fragment_dry_run_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        ...DryRun
+                    }
+
+                    fragment DryRun on Query {
+                        dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_payload_inline_fragment_dry_run_exceeded() {
+        let cluster = prep_executor_cluster().await;
+        let db_url = cluster.graphql_connection_config.db_url.clone();
+        assert_eq!(
+            execute_for_error(
+                &db_url,
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        ... on Query {
+                            dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                                error
+                                transaction {
+                                    digest
+                                }
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
     }
 }

@@ -5,7 +5,6 @@ use crate::{
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
-use diesel::PgConnection;
 use std::{collections::BTreeMap, time::Duration};
 use sui_indexer::db::ConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
@@ -16,24 +15,25 @@ use sui_types::{
 };
 
 pub(crate) struct PgManager {
-    pub inner: IndexerReader<PgConnection>,
+    pub inner: IndexerReader,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader<PgConnection>) -> Self {
+    pub(crate) fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader_with_config(
+    pub(crate) async fn reader_with_config(
         db_url: impl Into<String>,
         pool_size: u32,
         timeout_ms: u64,
-    ) -> Result<IndexerReader<PgConnection>, Error> {
+    ) -> Result<IndexerReader, Error> {
         let mut config = ConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));
-        IndexerReader::<PgConnection>::new_with_config(db_url, config)
+        IndexerReader::new_with_config(db_url, config)
+            .await
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
 }
@@ -46,10 +46,7 @@ impl PgManager {
         &self,
         epoch_id: Option<u64>,
     ) -> Result<NativeSuiSystemStateSummary, Error> {
-        let latest_sui_system_state = self
-            .inner
-            .spawn_blocking(move |this| this.get_latest_sui_system_state())
-            .await?;
+        let latest_sui_system_state = self.inner.get_latest_sui_system_state().await?;
 
         if let Some(epoch_id) = epoch_id {
             if epoch_id == latest_sui_system_state.epoch {
@@ -57,7 +54,7 @@ impl PgManager {
             } else {
                 Ok(self
                     .inner
-                    .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
+                    .get_epoch_sui_system_state(Some(epoch_id))
                     .await?)
             }
         } else {

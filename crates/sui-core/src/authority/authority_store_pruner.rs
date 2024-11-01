@@ -11,7 +11,6 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
-use rocksdb::LiveFile;
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Mutex;
@@ -35,6 +34,7 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
+use typed_store::rocksdb::LiveFile;
 use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
@@ -780,7 +780,7 @@ mod tests {
         let perpetual_db_path = path.join(Path::new("perpetual"));
         let cf_names = AuthorityPerpetualTables::describe_tables();
         let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
-        let mut db_options = rocksdb::Options::default();
+        let mut db_options = typed_store::rocksdb::Options::default();
         db_options.set_merge_operator(
             "refcount operator",
             reference_count_merge_operator,
@@ -1152,6 +1152,8 @@ mod pprof_tests {
     }
 
     #[tokio::test]
+    // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
+    #[ignore]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
     ) -> Result<(), anyhow::Error> {
         // This test writes a bunch of objects to objects table, invokes pruning on it and
@@ -1188,6 +1190,8 @@ mod pprof_tests {
     }
 
     #[tokio::test]
+    // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
+    #[ignore]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_after_flush(
     ) -> Result<(), anyhow::Error> {
         // This test writes a bunch of objects to objects table, invokes pruning on it and

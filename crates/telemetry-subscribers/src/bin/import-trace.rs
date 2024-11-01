@@ -6,7 +6,7 @@ use bytes_varint::VarIntSupport;
 use clap::*;
 use opentelemetry_proto::tonic::{
     collector::trace::v1::{trace_service_client::TraceServiceClient, ExportTraceServiceRequest},
-    common::v1::{any_value, AnyValue},
+    common::v1::{any_value, AnyValue, KeyValue},
 };
 use prost::Message;
 use std::io::{self, Cursor, Read};
@@ -38,7 +38,7 @@ async fn main() {
     if args.dump_spans {
         for message in messages.iter() {
             for span in &message.resource_spans {
-                println!("{:?}", span);
+                println!("{:#?}", span);
             }
         }
         return;
@@ -58,24 +58,36 @@ async fn main() {
     println!("importing trace with service name {:?}", service_name);
 
     for mut message in messages {
-        println!(
-            "sending {} spans to otlp collector",
-            message.resource_spans.len()
-        );
+        let mut span_count = 0;
 
         // Rewrite the service name to separate the imported trace from other traces
         for resource_span in message.resource_spans.iter_mut() {
+            for scope_span in resource_span.scope_spans.iter() {
+                span_count += scope_span.spans.len();
+            }
+
             if let Some(resource) = resource_span.resource.as_mut() {
+                let mut service_name_found = false;
                 for attr in resource.attributes.iter_mut() {
                     if attr.key == "service.name" {
+                        service_name_found = true;
                         attr.value = Some(AnyValue {
                             value: Some(any_value::Value::StringValue(service_name.clone())),
                         });
                     }
                 }
+                if !service_name_found {
+                    resource.attributes.push(KeyValue {
+                        key: "service.name".to_string(),
+                        value: Some(AnyValue {
+                            value: Some(any_value::Value::StringValue(service_name.clone())),
+                        }),
+                    });
+                }
             }
         }
 
+        println!("sending {} spans to otlp collector", span_count);
         trace_exporter.export(Request::new(message)).await.unwrap();
     }
     println!("all spans imported");

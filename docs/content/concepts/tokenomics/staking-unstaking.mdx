@@ -19,7 +19,7 @@ Similar to staking, a user withdraws stake from a validator by sending a transac
 
 When you stake on Sui, you have to choose a specific validator you would like to stake with. The choice of validator can potentially impact the amount of staking rewards you receive. The factors determining this amount include, but are not limited to:
 
-- Validator commission rate: a validator can choose to set a non-zero commission rate specifying the percentage of staking rewards they are taking from the stakers. For example, if a validator has the commission rate of 10%, then 10% of every staker's staking rewards is given to the validator. Understand that a validator can choose its commission at a future moment in time without prior notice.
+- Validator commission rate: a validator can choose to set a non-zero commission rate specifying the percentage of staking rewards they are taking from the stakers. For example, if a validator has a commission rate of 10%, then 10% of every staker's staking rewards is given to the validator. Understand that a validator can choose its commission at a future moment in time without prior notice.
 - Validator performance: a validator with bad performance might be punished according to the [tallying rule](./gas-pricing.mdx#tallying-rule). Punished validators do not receive any staking rewards for the epoch during which they are punished, and you also do not receive that epoch's rewards when you withdraw your stake from that validator. 
 
 Sui-compatible crypto wallets and explorers typically provide validator information such as commission and APY. See the respective documentation for these tools for information on how to retrieve this data.

@@ -5,6 +5,7 @@ use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::verifier_signing_config::VerifierSigningConfig;
 use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
@@ -19,7 +20,6 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
@@ -65,6 +65,8 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub enable_experimental_rest_api: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rest: Option<sui_rest_api::Config>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
@@ -196,16 +198,33 @@ pub struct NodeConfig {
 
     #[serde(default = "bool_true")]
     pub enable_validator_tx_finalizer: bool,
+
+    #[serde(default)]
+    pub verifier_signing_config: VerifierSigningConfig,
+
+    /// If a value is set, it determines if writes to DB can stall, which can halt the whole process.
+    /// By default, write stall is enabled on validators but not on fullnodes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_db_write_stall: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionCacheConfig {
-    #[default]
     PassthroughCache,
     WritebackCache {
+        /// Maximum number of entries in each cache. (There are several different caches).
+        /// If None, the default of 10000 is used.
         max_cache_size: Option<usize>,
     },
+}
+
+impl Default for ExecutionCacheConfig {
+    fn default() -> Self {
+        ExecutionCacheConfig::WritebackCache {
+            max_cache_size: None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -216,10 +235,31 @@ pub enum ServerType {
     Both,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionKeyValueStoreReadConfig {
+    #[serde(default = "default_base_url")]
     pub base_url: String,
+
+    #[serde(default = "default_cache_size")]
+    pub cache_size: u64,
+}
+
+impl Default for TransactionKeyValueStoreReadConfig {
+    fn default() -> Self {
+        Self {
+            base_url: default_base_url(),
+            cache_size: default_cache_size(),
+        }
+    }
+}
+
+fn default_base_url() -> String {
+    "https://transactions.sui.io/".to_string()
+}
+
+fn default_cache_size() -> u64 {
+    100_000
 }
 
 fn default_jwk_fetch_interval_seconds() -> u64 {
@@ -228,6 +268,8 @@ fn default_jwk_fetch_interval_seconds() -> u64 {
 
 pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
     let mut map = BTreeMap::new();
+
+    // providers that are available on devnet only.
     let experimental_providers = BTreeSet::from([
         "Google".to_string(),
         "Facebook".to_string(),
@@ -239,14 +281,30 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Microsoft".to_string(),
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(),
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(),
+        "Playtron".to_string(),
+        "Threedos".to_string(),
+        "Onefc".to_string(),
+        "FanTV".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(), // test tenant in mysten aws
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // Ambrus, external partner
+        "Arden".to_string(),                                                    // Arden partner
+        "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
     ]);
+
+    // providers that are available for mainnet and testnet.
     let providers = BTreeSet::from([
         "Google".to_string(),
         "Facebook".to_string(),
         "Twitch".to_string(),
         "Apple".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // Ambrus, external partner
+        "KarrierOne".to_string(),
+        "Credenza3".to_string(),
+        "Playtron".to_string(),
+        "Onefc".to_string(),
+        "Threedos".to_string(),
+        "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
+        "Arden".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -255,9 +313,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
 }
 
 fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {
-    TransactionKeyValueStoreReadConfig {
-        base_url: "https://transactions.sui.io/".to_string(),
-    }
+    TransactionKeyValueStoreReadConfig::default()
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -412,10 +468,17 @@ pub struct ConsensusConfig {
     // Base consensus DB path for all epochs.
     pub db_path: PathBuf,
 
+    // The number of epochs for which to retain the consensus DBs. Setting it to 0 will make a consensus DB getting
+    // dropped as soon as system is switched to a new epoch.
+    pub db_retention_epochs: Option<u64>,
+
+    // Pruner will run on every epoch change but it will also check periodically on every `db_pruner_period_secs`
+    // seconds to see if there are any epoch DBs to remove.
+    pub db_pruner_period_secs: Option<u64>,
+
     /// Maximum number of pending transactions to submit to consensus, including those
     /// in submission wait.
-    /// Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
-    /// Default to 100_000.
+    /// Default to 20_000 inflight limit, assuming 20_000 txn tps * 1 sec consensus latency.
     pub max_pending_transactions: Option<usize>,
 
     /// When defined caps the calculated submission position to the max_submit_position. Even if the
@@ -444,7 +507,7 @@ impl ConsensusConfig {
     }
 
     pub fn max_pending_transactions(&self) -> usize {
-        self.max_pending_transactions.unwrap_or(100_000)
+        self.max_pending_transactions.unwrap_or(20_000)
     }
 
     pub fn submit_delay_step_override(&self) -> Option<Duration> {
@@ -454,6 +517,17 @@ impl ConsensusConfig {
 
     pub fn narwhal_config(&self) -> &NarwhalParameters {
         &self.narwhal_config
+    }
+
+    pub fn db_retention_epochs(&self) -> u64 {
+        self.db_retention_epochs.unwrap_or(0)
+    }
+
+    pub fn db_pruner_period(&self) -> Duration {
+        // Default to 1 hour
+        self.db_pruner_period_secs
+            .map(Duration::from_secs)
+            .unwrap_or(Duration::from_secs(3_600))
     }
 }
 
@@ -609,7 +683,10 @@ pub struct AuthorityStorePruningConfig {
     /// enables periodic background compaction for old SST files whose last modified time is
     /// older than `periodic_compaction_threshold_days` days.
     /// That ensures that all sst files eventually go through the compaction process
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_periodic_compaction_threshold_days",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -641,6 +718,10 @@ fn default_smoothing() -> bool {
     cfg!(not(test))
 }
 
+fn default_periodic_compaction_threshold_days() -> Option<usize> {
+    Some(1)
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
@@ -659,6 +740,10 @@ impl Default for AuthorityStorePruningConfig {
 }
 
 impl AuthorityStorePruningConfig {
+    pub fn set_num_epochs_to_retain(&mut self, num_epochs_to_retain: u64) {
+        self.num_epochs_to_retain = num_epochs_to_retain;
+    }
+
     pub fn set_num_epochs_to_retain_for_checkpoints(&mut self, num_epochs_to_retain: Option<u64>) {
         self.num_epochs_to_retain_for_checkpoints = num_epochs_to_retain;
     }
@@ -798,7 +883,7 @@ pub struct AuthorityOverloadConfig {
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
-    Duration::from_secs(1)
+    Duration::from_millis(200)
 }
 
 fn default_overload_monitor_interval() -> Duration {
@@ -834,7 +919,7 @@ fn default_max_transaction_manager_queue_length() -> usize {
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
-    100
+    20
 }
 
 impl Default for AuthorityOverloadConfig {

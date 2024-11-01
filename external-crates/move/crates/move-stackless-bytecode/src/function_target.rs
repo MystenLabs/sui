@@ -320,7 +320,7 @@ impl<'env> FunctionTarget<'env> {
                 exps.iter().map(move |e| {
                     let env = self.global_env();
                     let rty = &env.get_node_instantiation(e.node_id())[0];
-                    let (_, _, inst) = rty.require_struct();
+                    let (_, _, inst) = rty.require_datatype();
                     qid.instantiate(inst.to_owned())
                 })
             })
@@ -335,7 +335,7 @@ impl<'env> FunctionTarget<'env> {
             for target in exps {
                 let env = self.global_env();
                 let rty = &env.get_node_instantiation(target.node_id())[0];
-                let (_, _, inst) = rty.require_struct();
+                let (_, _, inst) = rty.require_datatype();
                 let qinstid = qid.instantiate(inst.to_owned());
                 res.entry(qinstid)
                     .or_insert_with(Vec::new)

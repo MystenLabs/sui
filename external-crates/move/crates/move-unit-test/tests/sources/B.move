@@ -1,6 +1,6 @@
-module 0x1::B {
+module 0x6::B {
     #[test_only]
-    use 0x1::A;
+    use 0x6::A;
 
     #[test]
     fun b() { }
@@ -11,13 +11,13 @@ module 0x1::B {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0, location=0x1::A)]
+    #[expected_failure(abort_code = 0, location=0x6::A)]
     public fun b_other0() {
         A::a_call()
     }
 
     #[test]
-    #[expected_failure(abort_code = 1, location=0x1::A)]
+    #[expected_failure(abort_code = 1, location=0x6::A)]
     public fun b_other1() {
         A::a_call()
     }

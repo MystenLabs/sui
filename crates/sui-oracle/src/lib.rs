@@ -525,7 +525,7 @@ impl OnChainDataUploader {
                 self.metrics
                     .uploaded_values
                     .with_label_values(&[&data_point.feed_name])
-                    .observe(data_point.value);
+                    .observe(data_point.value as f64);
             } else {
                 self.metrics
                     .upload_data_errors
@@ -538,7 +538,9 @@ impl OnChainDataUploader {
         let storage_rebate = effects.gas_cost_summary().storage_rebate;
         let computation_cost = effects.gas_cost_summary().computation_cost;
         let net_gas_usage = effects.gas_cost_summary().net_gas_usage();
-        self.metrics.computation_gas_used.observe(computation_cost);
+        self.metrics
+            .computation_gas_used
+            .observe(computation_cost as f64);
         self.metrics.total_gas_cost.inc_by(gas_usage);
         self.metrics.total_gas_rebate.inc_by(storage_rebate);
 
@@ -660,7 +662,7 @@ impl OnChainDataReader {
                         self.metrics
                             .downloaded_values
                             .with_label_values(&[feed_name])
-                            .observe((value * METRICS_MULTIPLIER) as u64);
+                            .observe(value * METRICS_MULTIPLIER);
                         self.metrics
                             .download_successes
                             .with_label_values(&[feed_name, &object_id.to_string()])

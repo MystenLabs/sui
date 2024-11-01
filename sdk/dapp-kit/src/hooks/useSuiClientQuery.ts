@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui/client';
-import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import type {
+	UndefinedInitialDataOptions,
+	UseQueryOptions,
+	UseQueryResult,
+} from '@tanstack/react-query';
+import { queryOptions, useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import type { PartialBy } from '../types/utilityTypes.js';
 import { useSuiClientContext } from './useSuiClient.js';
@@ -35,6 +40,34 @@ export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods, TData> = Par
 	'queryKey'
 >;
 
+export type GetSuiClientQueryOptions<T extends keyof SuiRpcMethods> = {
+	client: SuiClient;
+	network: string;
+	method: T;
+	options?: PartialBy<
+		Omit<UndefinedInitialDataOptions<SuiRpcMethods[T]['result']>, 'queryFn'>,
+		'queryKey'
+	>;
+} & (undefined extends SuiRpcMethods[T]['params']
+	? { params?: SuiRpcMethods[T]['params'] }
+	: { params: SuiRpcMethods[T]['params'] });
+
+export function getSuiClientQuery<T extends keyof SuiRpcMethods>({
+	client,
+	network,
+	method,
+	params,
+	options,
+}: GetSuiClientQueryOptions<T>) {
+	return queryOptions<SuiRpcMethods[T]['result']>({
+		...options,
+		queryKey: [network, method, params],
+		queryFn: async () => {
+			return await client[method](params as never);
+		},
+	});
+}
+
 export function useSuiClientQuery<
 	T extends keyof SuiRpcMethods,
 	TData = SuiRpcMethods[T]['result'],
@@ -58,4 +91,33 @@ export function useSuiClientQuery<
 			return await suiContext.client[method](params as never);
 		},
 	});
+}
+
+export function useSuiClientSuspenseQuery<
+	T extends keyof SuiRpcMethods,
+	TData = SuiRpcMethods[T]['result'],
+>(
+	...args: undefined extends SuiRpcMethods[T]['params']
+		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UndefinedInitialDataOptions<TData>]
+		: [method: T, params: SuiRpcMethods[T]['params'], options?: UndefinedInitialDataOptions<TData>]
+) {
+	const [method, params, options = {}] = args as [
+		method: T,
+		params?: SuiRpcMethods[T]['params'],
+		options?: UndefinedInitialDataOptions<TData>,
+	];
+
+	const suiContext = useSuiClientContext();
+
+	const query = useMemo(() => {
+		return getSuiClientQuery<T>({
+			client: suiContext.client,
+			network: suiContext.network,
+			method,
+			params,
+			options,
+		});
+	}, [suiContext.client, suiContext.network, method, params, options]);
+
+	return useSuspenseQuery(query);
 }

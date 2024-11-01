@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::connection::ScanConnection;
+
 use super::{
     balance::{self, Balance},
     coin::Coin,
@@ -23,13 +25,14 @@ pub(crate) struct Address {
     pub checkpoint_viewed_at: u64,
 }
 
-/// The possible relationship types for a transaction block: sign, sent, received, or paid.
+/// The possible relationship types for a transaction block: sent, or received.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
-    /// Transactions this address has signed either as a sender or as a sponsor.
-    Sign,
-    /// Transactions that sent objects to this address.
-    Recv,
+    /// Transactions this address has sent.
+    Sent,
+    /// Transactions that this address was involved in, either as the sender, sponsor, or as the
+    /// owner of some object that was created, modified or transfered.
+    Affected,
 }
 
 /// The 32-byte address that is an account address (corresponding to a public key).
@@ -134,7 +137,26 @@ impl Address {
     }
 
     /// Similar behavior to the `transactionBlocks` in Query but supporting the additional
-    /// `AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+    /// `AddressTransactionBlockRelationship` filter, which defaults to `SENT`.
+    ///
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range includes all transactions known to GraphQL, but it can be
+    /// restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+    /// `afterCheckpoint` and `atCheckpoint` filters.
     async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -144,33 +166,29 @@ impl Address {
         before: Option<transaction_block::Cursor>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+        scan_limit: Option<u64>,
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         use AddressTransactionBlockRelationship as R;
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter.unwrap_or_default().intersect(match relation {
-            // Relationship defaults to "signer" if none is supplied.
-            Some(R::Sign) | None => TransactionBlockFilter {
-                sign_address: Some(self.address),
+            // Relationship defaults to "sent" if none is supplied.
+            Some(R::Sent) | None => TransactionBlockFilter {
+                sent_address: Some(self.address),
                 ..Default::default()
             },
 
-            Some(R::Recv) => TransactionBlockFilter {
-                recv_address: Some(self.address),
+            Some(R::Affected) => TransactionBlockFilter {
+                affected_address: Some(self.address),
                 ..Default::default()
             },
         }) else {
-            return Ok(Connection::new(false, false));
+            return Ok(ScanConnection::new(false, false));
         };
 
-        TransactionBlock::paginate(
-            ctx.data_unchecked(),
-            page,
-            filter,
-            self.checkpoint_viewed_at,
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)
+            .await
+            .extend()
     }
 }
 

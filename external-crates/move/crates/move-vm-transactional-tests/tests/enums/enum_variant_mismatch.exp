@@ -3,7 +3,7 @@ processed 3 tasks
 task 0, lines 1-24:
 //# print-bytecode
 // Move bytecode v7
-module 1.MonomorphicEnums {
+module 6.MonomorphicEnums {
 
 
 enum EnumWithTwoVariants<Ty0> {
@@ -42,7 +42,7 @@ task 2, lines 51-61:
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,
-    location: 0x1::MonomorphicEnums,
+    location: 0x6::MonomorphicEnums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 6)],
 }

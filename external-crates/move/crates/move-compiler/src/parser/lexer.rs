@@ -102,12 +102,12 @@ impl fmt::Display for Tok {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         use Tok::*;
         let s = match *self {
-            EOF => "[end-of-file]",
-            NumValue => "[Num]",
-            NumTypedValue => "[NumTyped]",
-            ByteStringValue => "[ByteString]",
-            Identifier => "[Identifier]",
-            SyntaxIdentifier => "[SyntaxIdentifier]",
+            EOF => "<End-Of-File>",
+            NumValue => "<Number>",
+            NumTypedValue => "<TypedNumber>",
+            ByteStringValue => "<ByteString>",
+            Identifier => "<Identifier>",
+            SyntaxIdentifier => "$<Identifier>",
             Exclaim => "!",
             ExclaimEqual => "!=",
             Percent => "%",
@@ -171,12 +171,12 @@ impl fmt::Display for Tok {
             Friend => "friend",
             NumSign => "#",
             AtSign => "@",
-            RestrictedIdentifier => "r#[Identifier]",
+            RestrictedIdentifier => "r#<Identifier>",
             Mut => "mut",
             Enum => "enum",
             Type => "type",
             Match => "match",
-            BlockLabel => "'[Identifier]",
+            BlockLabel => "'<Identifier>",
             MinusGreater => "->",
             For => "for",
         };
@@ -355,7 +355,7 @@ impl<'input> Lexer<'input> {
                 if is_doc {
                     let end = get_offset(text);
                     let mut comment = &self.text[(start + 3)..end];
-                    comment = comment.trim_end_matches(|c: char| c == '\r');
+                    comment = comment.trim_end_matches('\r');
 
                     self.doc_comments
                         .insert((start as u32, end as u32), comment.to_string());
@@ -482,10 +482,7 @@ impl<'input> Lexer<'input> {
     // At the end of parsing, checks whether there are any unmatched documentation comments,
     // producing errors if so. Otherwise returns a map from file position to associated
     // documentation.
-    pub fn check_and_get_doc_comments(
-        &mut self,
-        env: &mut CompilationEnv,
-    ) -> MatchedFileCommentMap {
+    pub fn check_and_get_doc_comments(&mut self, env: &CompilationEnv) -> MatchedFileCommentMap {
         let msg = "Documentation comment cannot be matched to a language item";
         let diags = self
             .doc_comments
@@ -495,7 +492,8 @@ impl<'input> Lexer<'input> {
                 diag!(Syntax::InvalidDocComment, (loc, msg))
             })
             .collect();
-        env.add_diags(diags);
+        let warning_filters = env.top_level_warning_filter_scope();
+        env.add_diags(warning_filters, diags);
         std::mem::take(&mut self.matched_doc_comments)
     }
 

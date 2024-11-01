@@ -29,6 +29,7 @@ pub(crate) mod move_function;
 pub(crate) mod move_module;
 pub(crate) mod move_object;
 pub(crate) mod move_package;
+pub(crate) mod move_registry;
 pub(crate) mod move_struct;
 pub(crate) mod move_type;
 pub(crate) mod move_value;

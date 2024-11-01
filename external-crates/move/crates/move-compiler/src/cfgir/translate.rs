@@ -7,12 +7,16 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
-        visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
+        visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::Diagnostics,
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersScope},
+        Diagnostic, Diagnostics,
+    },
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+    ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
     FullyCompiledProgram,
@@ -42,8 +46,9 @@ enum NamedBlockType {
 }
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
+    warning_filters_scope: WarningFiltersScope,
     current_package: Option<Symbol>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
@@ -52,15 +57,33 @@ struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(env: &'env mut CompilationEnv, info: &'env TypingProgramInfo) -> Self {
+    pub fn new(env: &'env CompilationEnv, info: &'env TypingProgramInfo) -> Self {
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         Context {
             env,
+            warning_filters_scope,
             info,
             current_package: None,
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
         }
+    }
+
+    pub fn add_diag(&self, diag: Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    pub fn add_diags(&self, diags: Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.warning_filters_scope.pop()
     }
 
     fn new_label(&mut self) -> Label {
@@ -121,7 +144,7 @@ impl<'env> Context<'env> {
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: H::Program,
 ) -> G::Program {
@@ -170,10 +193,10 @@ fn module(
         constants: hconstants,
     } = mdef;
     context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let constants = constants(context, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     context.current_package = None;
     (
         module_ident,
@@ -238,7 +261,7 @@ fn constants(
                     "Cyclic constant defined here",
                 ));
             }
-            context.env.add_diag(diag);
+            context.add_diag(diag);
             cycle_nodes.append(&mut scc.into_iter().collect());
         }
     }
@@ -251,7 +274,7 @@ fn constants(
             .filter(|node| !cycle_nodes.contains(node) && graph.contains_node(*node))
             .collect();
         for node in neighbors {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 BytecodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&node).unwrap(),
@@ -324,7 +347,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         match command {
             C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
             C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
+            C::Abort(_, exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
             C::Mutate(lhs, rhs) => {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
@@ -402,7 +425,7 @@ fn constant(
         value: (locals, block),
     } = c;
 
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let final_value = constant_(
         context,
         constant_values,
@@ -427,7 +450,7 @@ fn constant(
         _ => None,
     };
 
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     G::Constant {
         warning_filter,
         index,
@@ -471,6 +494,8 @@ fn constant_(
     };
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
+        env: context.env,
+        warning_filters_scope: context.warning_filters_scope.clone(),
         info: context.info,
         package: context.current_package,
         module,
@@ -482,9 +507,11 @@ fn constant_(
         locals: &locals,
         infinite_loop_starts: &fake_infinite_loop_starts,
     };
-    cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
-    assert!(
+    cfgir::refine_inference_and_verify(&function_context, &mut cfg);
+    ice_assert!(
+        context.env,
         num_previous_errors == context.env.count_diags(),
+        full_loc,
         "{}",
         ICE_MSG
     );
@@ -498,7 +525,7 @@ fn constant_(
     );
 
     if blocks.len() != 1 {
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             BytecodeGeneration::UnfoldableConstant,
             (full_loc, CANNOT_FOLD)
         ));
@@ -510,7 +537,7 @@ fn constant_(
         let e = match cmd_ {
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     BytecodeGeneration::UnfoldableConstant,
                     (*cloc, CANNOT_FOLD)
                 ));
@@ -532,7 +559,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     use H::UnannotatedExp_ as E;
     match &e.exp.value {
         E::Value(_) => (),
-        _ => context.env.add_diag(diag!(
+        _ => context.add_diag(diag!(
             BytecodeGeneration::UnfoldableConstant,
             (e.exp.loc, CANNOT_FOLD)
         )),
@@ -579,7 +606,7 @@ fn function(
         signature,
         body,
     } = f;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let body = function_body(
         context,
         module,
@@ -590,7 +617,7 @@ fn function(
         &signature,
         body,
     );
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
     G::Function {
         warning_filter,
         index,
@@ -627,9 +654,11 @@ fn function_body(
 
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
-            context.env.add_diags(diags);
+            context.add_diags(diags);
 
             let function_context = super::CFGContext {
+                env: context.env,
+                warning_filters_scope: context.warning_filters_scope.clone(),
                 info: context.info,
                 package: context.current_package,
                 module,
@@ -641,7 +670,7 @@ fn function_body(
                 locals: &locals,
                 infinite_loop_starts: &infinite_loop_starts,
             };
-            cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
+            cfgir::refine_inference_and_verify(&function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
                 cfgir::optimize(
@@ -653,7 +682,6 @@ fn function_body(
                     &mut cfg,
                 );
             }
-
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
@@ -971,15 +999,15 @@ fn visit_program(context: &mut Context, prog: &mut G::Program) {
 
     AbsintVisitor.visit(context.env, prog);
 
-    for visitor in &context.env.visitors().cfgir {
-        let mut v = visitor.borrow_mut();
+    for v in &context.env.visitors().cfgir {
         v.visit(context.env, prog)
     }
 }
 
 struct AbsintVisitor;
 struct AbsintVisitorContext<'a> {
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
+    warning_filters_scope: WarningFiltersScope,
     info: Arc<TypingProgramInfo>,
     current_package: Option<Symbol>,
 }
@@ -987,25 +1015,38 @@ struct AbsintVisitorContext<'a> {
 impl CFGIRVisitorConstructor for AbsintVisitor {
     type Context<'a> = AbsintVisitorContext<'a>;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         AbsintVisitorContext {
             env,
+            warning_filters_scope,
             info: program.info.clone(),
             current_package: None,
         }
     }
 }
 
+impl AbsintVisitorContext<'_> {
+    #[allow(unused)]
+    fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+}
+
 impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
-    fn add_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
+        self.warning_filters_scope.pop()
     }
 
-    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &mut G::ModuleDefinition) -> bool {
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &G::ModuleDefinition) -> bool {
         self.current_package = mdef.package_name;
         false
     }
@@ -1014,7 +1055,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         &mut self,
         mident: ModuleIdent,
         name: FunctionName,
-        fdef: &mut G::Function,
+        fdef: &G::Function,
     ) -> bool {
         let G::Function {
             warning_filter: _,
@@ -1037,6 +1078,8 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         };
         let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
         let function_context = super::CFGContext {
+            env: self.env,
+            warning_filters_scope: self.warning_filters_scope.clone(),
             info: &self.info,
             package: self.current_package,
             module: mident,
@@ -1049,11 +1092,10 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             infinite_loop_starts: &infinite_loop_starts,
         };
         let mut ds = Diagnostics::new();
-        for visitor in &self.env.visitors().abs_int {
-            let mut v = visitor.borrow_mut();
-            ds.extend(v.verify(self.env, &function_context, &cfg));
+        for v in &self.env.visitors().abs_int {
+            ds.extend(v.verify(&function_context, &cfg));
         }
-        self.env.add_diags(ds);
+        self.add_diags(ds);
         true
     }
 }

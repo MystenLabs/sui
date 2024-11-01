@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x1.MonomorphicEnums {
+module 0x6.MonomorphicEnums {
     enum EnumWithOneVariant {
         One { }
     }
@@ -33,7 +33,7 @@ module 0x1.MonomorphicEnums {
 }
 
 //# publish
-module 0x1.MonomorphicEnums {
+module 0x6.MonomorphicEnums {
     enum EnumWithOneVariant {
         One { }
     }
@@ -67,8 +67,8 @@ module 0x1.MonomorphicEnums {
 }
 
 //# run
-module 0x2.m {
-import 0x1.MonomorphicEnums;
+module 0x7.m {
+import 0x6.MonomorphicEnums;
 entry foo() {
     let x: u64;
     label b0:

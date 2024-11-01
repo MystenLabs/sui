@@ -40,6 +40,11 @@ pub struct ClusterTestOpt {
     /// URL for the indexer RPC server
     #[clap(long)]
     pub graphql_address: Option<String>,
+    /// Indicate that an indexer and graphql service should be started
+    ///
+    /// Only used with a local cluster
+    #[clap(long)]
+    pub with_indexer_and_graphql: bool,
 }
 
 fn obfuscated_pg_address(val: &Option<String>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -68,6 +73,7 @@ impl ClusterTestOpt {
             pg_address: None,
             config_dir: None,
             graphql_address: None,
+            with_indexer_and_graphql: false,
         }
     }
 }

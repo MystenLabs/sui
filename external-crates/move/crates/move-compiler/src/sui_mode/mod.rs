@@ -6,6 +6,7 @@ use move_symbol_pool::Symbol;
 use crate::diagnostics::codes::{custom, DiagnosticInfo, Severity};
 
 pub mod id_leak;
+pub mod info;
 pub mod linters;
 pub mod typing;
 

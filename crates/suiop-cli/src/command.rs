@@ -38,11 +38,7 @@ impl Default for CommandOptions {
 
 pub fn run_cmd(cmd_in: Vec<&str>, options: Option<CommandOptions>) -> Result<Output> {
     debug!("attempting to run {}", cmd_in.join(" "));
-    let opts = if let Some(opts) = options {
-        opts
-    } else {
-        CommandOptions::default()
-    };
+    let opts = options.unwrap_or_default();
 
     let mut cmd = Command::new(cmd_in[0]);
     // add extra args

@@ -1,0 +1,18 @@
+[package]
+name = "sui-synthetic-ingestion"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+async-trait.workspace = true
+simulacrum.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

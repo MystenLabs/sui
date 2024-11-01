@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{
-    progress_store, sui_error_transactions, sui_progress_store, token_transfer, token_transfer_data,
-};
 use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
+
+use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
+
+use crate::schema::{
+    governance_actions, progress_store, sui_error_transactions, sui_progress_store, token_transfer,
+    token_transfer_data,
+};
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
 #[diesel(table_name = progress_store, primary_key(task_name))]
@@ -14,6 +18,19 @@ pub struct ProgressStore {
     pub checkpoint: i64,
     pub target_checkpoint: i64,
     pub timestamp: Option<PgTimestamp>,
+}
+
+impl From<ProgressStore> for Task {
+    fn from(value: ProgressStore) -> Self {
+        Self {
+            task_name: value.task_name,
+            start_checkpoint: value.checkpoint as u64,
+            target_checkpoint: value.target_checkpoint as u64,
+            // Ok to unwrap, timestamp is defaulted to now() in database
+            timestamp: value.timestamp.expect("Timestamp not set").0 as u64,
+            is_live_task: value.target_checkpoint == LIVE_TASK_TARGET_CHECKPOINT,
+        }
+    }
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -35,6 +52,7 @@ pub struct TokenTransfer {
     pub txn_sender: Vec<u8>,
     pub gas_usage: i64,
     pub data_source: String,
+    pub is_finalized: bool,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -50,6 +68,7 @@ pub struct TokenTransferData {
     pub recipient_address: Vec<u8>,
     pub token_id: i32,
     pub amount: i64,
+    pub is_finalized: bool,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -60,4 +79,16 @@ pub struct SuiErrorTransactions {
     pub timestamp_ms: i64,
     pub failure_status: String,
     pub cmd_idx: Option<i64>,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = governance_actions, primary_key(txn_digest))]
+pub struct GovernanceAction {
+    pub nonce: Option<i64>,
+    pub data_source: String,
+    pub txn_digest: Vec<u8>,
+    pub sender_address: Vec<u8>,
+    pub timestamp_ms: i64,
+    pub action: String,
+    pub data: serde_json::Value,
 }

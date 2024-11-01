@@ -20,8 +20,10 @@ use sui_data_ingestion_core::Worker;
 use sui_storage::http_key_value_store::TaggedKey;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::ObjectKey;
+use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
+const DDB_SIZE_LIMIT: usize = 399000;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KVStoreTaskConfig {
@@ -93,15 +95,17 @@ impl KVStoreWorker {
                 continue;
             }
             seen.insert(digest.clone());
+            let bytes = bcs::to_bytes(value.borrow())?;
+            if bytes.len() > DDB_SIZE_LIMIT {
+                error!("large value for table {:?} and key {:?}", table, digest);
+                continue;
+            }
             let item = WriteRequest::builder()
                 .set_put_request(Some(
                     PutRequest::builder()
                         .item("digest", AttributeValue::B(Blob::new(digest)))
                         .item("type", AttributeValue::S(Self::type_name(table)))
-                        .item(
-                            "bcs",
-                            AttributeValue::B(Blob::new(bcs::to_bytes(value.borrow())?)),
-                        )
+                        .item("bcs", AttributeValue::B(Blob::new(bytes)))
                         .build(),
                 ))
                 .build();
@@ -172,7 +176,9 @@ impl KVStoreWorker {
 
 #[async_trait]
 impl Worker for KVStoreWorker {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
+    type Result = ();
+
+    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
         let mut transactions = vec![];
         let mut effects = vec![];
         let mut events = vec![];
@@ -180,16 +186,16 @@ impl Worker for KVStoreWorker {
         let mut transactions_to_checkpoint = vec![];
         let checkpoint_number = checkpoint.checkpoint_summary.sequence_number;
 
-        for transaction in checkpoint.transactions {
+        for transaction in &checkpoint.transactions {
             let transaction_digest = transaction.transaction.digest().into_inner().to_vec();
             effects.push((transaction_digest.clone(), transaction.effects.clone()));
             transactions_to_checkpoint.push((transaction_digest.clone(), checkpoint_number));
             transactions.push((transaction_digest, transaction.transaction.clone()));
 
-            if let Some(tx_events) = transaction.events {
+            if let Some(tx_events) = &transaction.events {
                 events.push((tx_events.digest().into_inner().to_vec(), tx_events));
             }
-            for object in transaction.output_objects {
+            for object in &transaction.output_objects {
                 let object_key = ObjectKey(object.id(), object.version());
                 objects.push((bcs::to_bytes(&object_key)?, object));
             }
@@ -203,7 +209,7 @@ impl Worker for KVStoreWorker {
 
         let serialized_checkpoint_number =
             bcs::to_bytes(&TaggedKey::CheckpointSequenceNumber(checkpoint_number))?;
-        let checkpoint_summary = checkpoint.checkpoint_summary;
+        let checkpoint_summary = &checkpoint.checkpoint_summary;
         for key in [
             serialized_checkpoint_number.clone(),
             checkpoint_summary.content_digest.into_inner().to_vec(),
@@ -218,7 +224,7 @@ impl Worker for KVStoreWorker {
                 checkpoint_summary.digest().into_inner().to_vec(),
             ]
             .into_iter()
-            .zip(repeat(checkpoint_summary.into_summary_and_sequence().1)),
+            .zip(repeat(checkpoint_summary.data())),
         )
         .await?;
         Ok(())

@@ -29,14 +29,14 @@ use std::collections::BTreeSet;
 
 /// Perform control flow verification on the compiled function, returning its `FunctionContext` if
 /// verification was successful.
-pub fn verify_function<'a>(
-    verifier_config: &'a VerifierConfig,
-    module: &'a CompiledModule,
+pub fn verify_function<'env>(
+    verifier_config: &VerifierConfig,
+    module: &'env CompiledModule,
     index: FunctionDefinitionIndex,
-    function_definition: &'a FunctionDefinition,
-    code: &'a CodeUnit,
+    function_definition: &'env FunctionDefinition,
+    code: &'env CodeUnit,
     _meter: &mut (impl Meter + ?Sized), // TODO: metering
-) -> PartialVMResult<FunctionContext<'a>> {
+) -> PartialVMResult<FunctionContext<'env>> {
     let function_handle = module.function_handle_at(function_definition.function);
 
     if module.version() <= 5 {

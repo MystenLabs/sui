@@ -38,7 +38,7 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 ];
 
 #[async_trait::async_trait]
-pub trait AnalyticsHandler<S>: Worker {
+pub trait AnalyticsHandler<S>: Worker<Result = ()> {
     /// Read back rows which are ready to be persisted. This function
     /// will be invoked by the analytics processor after every call to
     /// process_checkpoint

@@ -627,6 +627,21 @@ impl NativesCostTable {
                 bls12381_pairing_cost: protocol_config
                     .group_ops_bls12381_pairing_cost_as_option()
                     .map(Into::into),
+                bls12381_g1_to_uncompressed_g1_cost: protocol_config
+                    .group_ops_bls12381_g1_to_uncompressed_g1_cost_as_option()
+                    .map(Into::into),
+                bls12381_uncompressed_g1_to_g1_cost: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_to_g1_cost_as_option()
+                    .map(Into::into),
+                bls12381_uncompressed_g1_sum_base_cost: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_sum_base_cost_as_option()
+                    .map(Into::into),
+                bls12381_uncompressed_g1_sum_cost_per_term: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_sum_cost_per_term_as_option()
+                    .map(Into::into),
+                bls12381_uncompressed_g1_sum_max_terms: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_sum_max_terms_as_option()
+                    .map(Into::into),
             },
             vdf_cost_params: VDFCostParams {
                 vdf_verify_cost: protocol_config
@@ -890,6 +905,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "internal_pairing",
             make_native!(group_ops::internal_pairing),
         ),
+        (
+            "group_ops",
+            "internal_convert",
+            make_native!(group_ops::internal_convert),
+        ),
+        (
+            "group_ops",
+            "internal_sum",
+            make_native!(group_ops::internal_sum),
+        ),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
@@ -1088,7 +1113,7 @@ pub fn get_object_id(object: Value) -> Result<Value, PartialVMError> {
     get_nested_struct_field(object, &[0, 0, 0])
 }
 
-// Extract a field valye that's nested inside value `v`. The offset of each nesting
+// Extract a field value that's nested inside value `v`. The offset of each nesting
 // is determined by `offsets`.
 pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value, PartialVMError> {
     for offset in offsets {

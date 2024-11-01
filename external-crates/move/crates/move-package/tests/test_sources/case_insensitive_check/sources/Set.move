@@ -1,3 +1,3 @@
-module 0x1::Set {
+module 0x6::Set {
     public fun foo() { }
 }

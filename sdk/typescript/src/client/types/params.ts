@@ -56,7 +56,7 @@ export interface ExecuteTransactionBlockParams {
 	signature: string | string[];
 	/** options for specifying the content to be returned */
 	options?: RpcTypes.SuiTransactionBlockResponseOptions | null | undefined;
-	/** The request type, derived from `SuiTransactionBlockResponseOptions` if None */
+	/** @deprecated requestType will be ignored by JSON RPC in the future */
 	requestType?: RpcTypes.ExecuteTransactionRequestType | null | undefined;
 }
 /** Return the first four bytes of the chain's genesis checkpoint digest. */
@@ -85,9 +85,6 @@ export interface GetEventsParams {
 }
 /** Return the sequence number of the latest checkpoint that has been executed */
 export interface GetLatestCheckpointSequenceNumberParams {}
-export interface GetLoadedChildObjectsParams {
-	digest: string;
-}
 /** Return the argument types of a Move function, based on normalized Type. */
 export interface GetMoveFunctionArgTypesParams {
 	package: string;

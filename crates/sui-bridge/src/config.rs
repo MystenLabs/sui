@@ -5,6 +5,8 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
+use crate::metered_eth_provider::new_metered_eth_provider;
+use crate::metered_eth_provider::MeteredEthHttpProvier;
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiClient;
 use crate::types::{is_route_valid, BridgeAction};
@@ -15,6 +17,7 @@ use ethers::types::Address as EthAddress;
 use futures::{future, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -28,7 +31,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::bridge::BridgeChainId;
 use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{get_key_pair_from_rng, NetworkKeyPair, SuiKeyPair};
 use sui_types::digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier};
 use sui_types::event::EventID;
 use sui_types::object::Owner;
@@ -91,7 +94,7 @@ pub struct SuiConfig {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BridgeNodeConfig {
     /// The port that the server listens on.
@@ -112,6 +115,33 @@ pub struct BridgeNodeConfig {
     pub sui: SuiConfig,
     /// Eth configuration
     pub eth: EthConfig,
+    /// Network key used for metrics pushing
+    #[serde(default = "default_ed25519_key_pair")]
+    pub metrics_key_pair: NetworkKeyPair,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsConfig>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub watchdog_config: Option<WatchdogConfig>,
+}
+
+pub fn default_ed25519_key_pair() -> NetworkKeyPair {
+    get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetricsConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_interval_seconds: Option<u64>,
+    pub push_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WatchdogConfig {
+    /// Total supplies to watch on Sui. Mapping from coin name to coin type tag
+    pub total_supplies: BTreeMap<String, String>,
 }
 
 impl Config for BridgeNodeConfig {}
@@ -139,7 +169,8 @@ impl BridgeNodeConfig {
 
         // we do this check here instead of `prepare_for_sui` below because
         // that is only called when `run_client` is true.
-        let sui_client = Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url).await?);
+        let sui_client =
+            Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
         let bridge_committee = sui_client
             .get_bridge_committee()
             .await
@@ -150,7 +181,7 @@ impl BridgeNodeConfig {
             ));
         }
 
-        let (eth_client, eth_contracts) = self.prepare_for_eth(metrics).await?;
+        let (eth_client, eth_contracts) = self.prepare_for_eth(metrics.clone()).await?;
         let bridge_summary = sui_client
             .get_bridge_summary()
             .await
@@ -177,6 +208,7 @@ impl BridgeNodeConfig {
         let bridge_server_config = BridgeServerConfig {
             key: bridge_authority_key,
             metrics_port: self.metrics_port,
+            eth_bridge_proxy_address: eth_contracts[0], // the first contract is bridge proxy
             server_listen_port: self.server_listen_port,
             sui_client: sui_client.clone(),
             eth_client: eth_client.clone(),
@@ -188,7 +220,7 @@ impl BridgeNodeConfig {
 
         // If client is enabled, prepare client config
         let (bridge_client_key, client_sui_address, gas_object_ref) =
-            self.prepare_for_sui(sui_client.clone()).await?;
+            self.prepare_for_sui(sui_client.clone(), metrics).await?;
 
         let db_path = self
             .db_path
@@ -221,15 +253,15 @@ impl BridgeNodeConfig {
     async fn prepare_for_eth(
         &self,
         metrics: Arc<BridgeMetrics>,
-    ) -> anyhow::Result<(Arc<EthClient<ethers::providers::Http>>, Vec<EthAddress>)> {
+    ) -> anyhow::Result<(Arc<EthClient<MeteredEthHttpProvier>>, Vec<EthAddress>)> {
         let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
         let provider = Arc::new(
-            ethers::prelude::Provider::<ethers::providers::Http>::try_from(&self.eth.eth_rpc_url)
+            new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone())
                 .unwrap()
                 .interval(std::time::Duration::from_millis(2000)),
         );
         let chain_id = provider.get_chainid().await?;
-        let (committee_address, limiter_address, vault_address, config_address) =
+        let (committee_address, limiter_address, vault_address, config_address, _weth_address) =
             get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
 
@@ -268,7 +300,7 @@ impl BridgeNodeConfig {
         );
 
         let eth_client = Arc::new(
-            EthClient::<ethers::providers::Http>::new(
+            EthClient::<MeteredEthHttpProvier>::new(
                 &self.eth.eth_rpc_url,
                 HashSet::from_iter(vec![
                     bridge_proxy_address,
@@ -294,6 +326,7 @@ impl BridgeNodeConfig {
     async fn prepare_for_sui(
         &self,
         sui_client: Arc<SuiClient<SuiSdkClient>>,
+        metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(SuiKeyPair, SuiAddress, ObjectRef)> {
         let bridge_client_key = match &self.sui.bridge_client_key_path {
             None => read_key(&self.bridge_authority_key_path, true),
@@ -331,7 +364,6 @@ impl BridgeNodeConfig {
 
         let client_sui_address = SuiAddress::from(&bridge_client_key.public());
 
-        // TODO: decide a minimal amount here
         let gas_object_id = match self.sui.bridge_client_gas_object {
             Some(id) => id,
             None => {
@@ -339,7 +371,8 @@ impl BridgeNodeConfig {
                     .build(&self.sui.sui_rpc_url)
                     .await?;
                 let coin =
-                    pick_highest_balance_coin(sui_client.coin_read_api(), client_sui_address, 0)
+                    // Minimum balance for gas object is 10 SUI
+                    pick_highest_balance_coin(sui_client.coin_read_api(), client_sui_address, 10_000_000_000)
                         .await?;
                 coin.coin_object_id
             }
@@ -350,11 +383,11 @@ impl BridgeNodeConfig {
         if owner != Owner::AddressOwner(client_sui_address) {
             return Err(anyhow!("Gas object {:?} is not owned by bridge client key's associated sui address {:?}, but {:?}", gas_object_id, client_sui_address, owner));
         }
+        let balance = gas_coin.value();
+        metrics.gas_coin_balance.set(balance as i64);
         info!(
             "Starting bridge client with address: {:?}, gas object {:?}, balance: {}",
-            client_sui_address,
-            gas_object_ref.0,
-            gas_coin.value()
+            client_sui_address, gas_object_ref.0, balance,
         );
 
         Ok((bridge_client_key, client_sui_address, gas_object_ref))
@@ -364,21 +397,21 @@ impl BridgeNodeConfig {
 pub struct BridgeServerConfig {
     pub key: BridgeAuthorityKeyPair,
     pub server_listen_port: u16,
+    pub eth_bridge_proxy_address: EthAddress,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiClient<SuiSdkClient>>,
-    pub eth_client: Arc<EthClient<ethers::providers::Http>>,
+    pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     /// A list of approved governance actions. Action in this list will be signed when requested by client.
     pub approved_governance_actions: Vec<BridgeAction>,
 }
 
-// TODO: add gas balance alert threshold
 pub struct BridgeClientConfig {
     pub sui_address: SuiAddress,
     pub key: SuiKeyPair,
     pub gas_object_ref: ObjectRef,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiClient<SuiSdkClient>>,
-    pub eth_client: Arc<EthClient<ethers::providers::Http>>,
+    pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     pub db_path: PathBuf,
     pub eth_contracts: Vec<EthAddress>,
     // See `BridgeNodeConfig` for the explanation of following two fields.

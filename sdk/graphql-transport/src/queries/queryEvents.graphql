@@ -36,10 +36,13 @@ fragment RPC_EVENTS_FIELDS on Event {
 	sender {
 		address
 	}
-	type {
-		repr
+	contents {
+		type {
+			repr
+		}
+
+		json
+		bcs
 	}
-	json
-	bcs
 	timestamp
 }

@@ -276,4 +276,11 @@ module bridge::limiter {
     public(package) fun hour_tail(record: &TransferRecord): u64 {
         record.hour_tail
     }
+
+    #[test_only]
+    public(package) fun unpack_route_limit_event(event: UpdateRouteLimitEvent):
+        (u8, u8, u64) 
+    {
+        (event.sending_chain, event.receiving_chain, event.new_limit)
+    }
 }

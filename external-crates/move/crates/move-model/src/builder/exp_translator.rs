@@ -19,7 +19,7 @@ use move_ir_types::location::Spanned;
 use crate::{
     ast::{Exp, ExpData, LocalVarDecl, ModuleName, Operation, QualifiedSymbol, QuantKind, Value},
     builder::{
-        model_builder::{ConstEntry, LocalVarEntry, SpecFunEntry},
+        model_builder::{ConstEntry, DatatypeData, LocalVarEntry, SpecFunEntry},
         module_builder::ModuleBuilder,
     },
     model::{DatatypeId, FieldId, Loc, ModuleId, NodeId, QualifiedId, SpecFunId},
@@ -301,7 +301,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     fn type_display_context(&self) -> TypeDisplayContext<'_> {
         TypeDisplayContext::WithoutEnv {
             symbol_pool: self.symbol_pool(),
-            reverse_struct_table: &self.parent.parent.reverse_struct_table,
+            reverse_datatype_table: &self.parent.parent.reverse_datatype_table,
         }
     }
 
@@ -748,7 +748,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             EA::Exp_::Pack(maccess, generics, fields) => {
                 self.translate_pack(&loc, maccess, generics, fields, expected_type)
             }
-            EA::Exp_::IfElse(cond, then, else_) => {
+            EA::Exp_::IfElse(cond, then, Some(else_)) => {
                 let then = self.translate_exp(then, expected_type);
                 let else_ = self.translate_exp(else_, expected_type);
                 let cond = self.translate_exp(cond, &Type::new_prim(PrimitiveType::Bool));
@@ -1352,17 +1352,20 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             let struct_name = self
                 .parent
                 .parent
-                .reverse_struct_table
+                .reverse_datatype_table
                 .get(&(*mid, *sid))
                 .expect("invalid Type::Datatype");
             let entry = self
                 .parent
                 .parent
-                .struct_table
+                .datatype_table
                 .get(struct_name)
                 .expect("invalid Type::Datatype");
             // Lookup the field in the struct.
-            if let Some(fields) = &entry.fields {
+            if let DatatypeData::Struct {
+                fields: Some(fields),
+            } = &entry.data
+            {
                 if let Some((_, field_ty)) = fields.get(&field_name) {
                     // We must instantiate the field type by the provided type args.
                     let field_ty = field_ty.instantiate(targs);
@@ -1700,7 +1703,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
         let struct_name = self.parent.module_access_to_qualified(maccess);
         let struct_name_loc = self.to_loc(&maccess.loc);
         let generics = generics.as_ref().map(|ts| self.translate_types(ts));
-        if let Some(entry) = self.parent.parent.struct_table.get(&struct_name) {
+        if let Some(entry) = self.parent.parent.datatype_table.get(&struct_name) {
             let entry = entry.clone();
             let (instantiation, diag) =
                 self.make_instantiation(entry.type_params.len(), vec![], generics);
@@ -1708,7 +1711,10 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                 self.error(loc, &msg);
                 return self.new_error_exp();
             }
-            if let Some(field_decls) = &entry.fields {
+            if let DatatypeData::Struct {
+                fields: Some(field_decls),
+            } = &entry.data
+            {
                 let mut fields_not_covered: BTreeSet<Symbol> = BTreeSet::new();
                 fields_not_covered.extend(field_decls.keys());
                 let mut args = BTreeMap::new();

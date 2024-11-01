@@ -214,7 +214,8 @@ impl QueryRunner for SnowflakeQueryRunner {
         let res = self.make_snowflake_api()?.exec(query).await?;
         match res {
             QueryResult::Arrow(records) => self.parse_record_batches(records),
-            // Handle other result types (Json, Empty) with a unified error message
+            QueryResult::Empty => Ok(Vec::new()),
+            // Handle other result types Json with a unified error message
             _ => Err(anyhow!("Unexpected query result type")),
         }
     }

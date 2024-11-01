@@ -13,9 +13,11 @@ use move_binary_format::{
     proptest_types::CompiledModuleStrategyGen,
 };
 use move_bytecode_verifier::{
-    ability_field_requirements, constants, instantiation_loops::InstantiationLoopChecker,
-    DuplicationChecker, InstructionConsistency, RecursiveDataDefChecker, SignatureChecker,
+    ability_cache::AbilityCache, ability_field_requirements, constants,
+    instantiation_loops::InstantiationLoopChecker, DuplicationChecker, InstructionConsistency,
+    RecursiveDataDefChecker, SignatureChecker,
 };
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -28,7 +30,9 @@ proptest! {
 
     #[test]
     fn valid_ability_transitivity(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(ability_field_requirements::verify_module(&module).is_ok());
+        let module = &module;
+        let ability_cache = &mut AbilityCache::new(module);
+        prop_assert!(ability_field_requirements::verify_module(module, ability_cache, &mut DummyMeter).is_ok());
     }
 
     #[test]
@@ -101,18 +105,22 @@ proptest! {
 
     #[test]
     fn check_verifier_passes(module in CompiledModule::valid_strategy(20)) {
-        DuplicationChecker::verify_module(&module).expect("DuplicationChecker failure");
-        SignatureChecker::verify_module(&module).expect("SignatureChecker failure");
-        InstructionConsistency::verify_module(&module).expect("InstructionConsistency failure");
-        constants::verify_module(&module).expect("constants failure");
-        ability_field_requirements::verify_module(&module).expect("ability_field_requirements failure");
-        RecursiveDataDefChecker::verify_module(&module).expect("RecursiveDataDefChecker failure");
-        InstantiationLoopChecker::verify_module(&module).expect("InstantiationLoopChecker failure");
+        let module = &module;
+        let ability_cache = &mut AbilityCache::new(module);
+        DuplicationChecker::verify_module(module).expect("DuplicationChecker failure");
+        SignatureChecker::verify_module(module, ability_cache, &mut DummyMeter).expect("SignatureChecker failure");
+        InstructionConsistency::verify_module(module).expect("InstructionConsistency failure");
+        constants::verify_module(module).expect("constants failure");
+        ability_field_requirements::verify_module(module, ability_cache, &mut DummyMeter).expect("ability_field_requirements failure");
+        RecursiveDataDefChecker::verify_module(module).expect("RecursiveDataDefChecker failure");
+        InstantiationLoopChecker::verify_module(module).expect("InstantiationLoopChecker failure");
     }
 
     #[test]
     fn valid_signatures(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(SignatureChecker::verify_module(&module).is_ok())
+        let module = &module;
+        let ability_cache = &mut AbilityCache::new(module);
+        prop_assert!(SignatureChecker::verify_module(module, ability_cache, &mut DummyMeter).is_ok())
     }
 
     #[test]
@@ -123,7 +131,9 @@ proptest! {
         let context = SignatureRefMutation::new(&mut module, mutations);
         let expected_violations = context.apply();
 
-        let result = SignatureChecker::verify_module(&module);
+        let module = &module;
+        let ability_cache = &mut AbilityCache::new(module);
+        let result = SignatureChecker::verify_module(module, ability_cache, &mut DummyMeter);
 
         prop_assert_eq!(expected_violations, result.is_err());
     }
@@ -136,7 +146,9 @@ proptest! {
         let context = FieldRefMutation::new(&mut module, mutations);
         let expected_violations = context.apply();
 
-        let result = SignatureChecker::verify_module(&module);
+        let module = &module;
+        let ability_cache = &mut AbilityCache::new(module);
+        let result = SignatureChecker::verify_module(module, ability_cache, &mut DummyMeter);
 
         prop_assert_eq!(expected_violations, result.is_err());
     }

@@ -113,7 +113,7 @@ Get inner URL
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="../sui-framework/url.md#0x2_url_Url">Url</a>): String{
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="../sui-framework/url.md#0x2_url_Url">Url</a>): String {
     self.<a href="../sui-framework/url.md#0x2_url">url</a>
 }
 </code></pre>

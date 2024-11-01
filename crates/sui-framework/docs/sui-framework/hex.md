@@ -133,11 +133,11 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/hex.md#0x2_hex_decode_byte">decode_byte</a>(<a href="../sui-framework/hex.md#0x2_hex">hex</a>: u8): u8 {
-    <b>if</b> (/* 0 .. 9 */ 48 &lt;= <a href="../sui-framework/hex.md#0x2_hex">hex</a> && <a href="../sui-framework/hex.md#0x2_hex">hex</a> &lt; 58) {
+    <b>if</b> (48 &lt;= <a href="../sui-framework/hex.md#0x2_hex">hex</a> && <a href="../sui-framework/hex.md#0x2_hex">hex</a> &lt; 58) {
         <a href="../sui-framework/hex.md#0x2_hex">hex</a> - 48
-    } <b>else</b> <b>if</b> (/* A .. F */ 65 &lt;= <a href="../sui-framework/hex.md#0x2_hex">hex</a> && <a href="../sui-framework/hex.md#0x2_hex">hex</a> &lt; 71) {
+    } <b>else</b> <b>if</b> (65 &lt;= <a href="../sui-framework/hex.md#0x2_hex">hex</a> && <a href="../sui-framework/hex.md#0x2_hex">hex</a> &lt; 71) {
         10 + <a href="../sui-framework/hex.md#0x2_hex">hex</a> - 65
-    } <b>else</b> <b>if</b> (/* a .. f */ 97 &lt;= <a href="../sui-framework/hex.md#0x2_hex">hex</a> && <a href="../sui-framework/hex.md#0x2_hex">hex</a> &lt; 103) {
+    } <b>else</b> <b>if</b> (97 &lt;= <a href="../sui-framework/hex.md#0x2_hex">hex</a> && <a href="../sui-framework/hex.md#0x2_hex">hex</a> &lt; 103) {
         10 + <a href="../sui-framework/hex.md#0x2_hex">hex</a> - 97
     } <b>else</b> {
         <b>abort</b> <a href="../sui-framework/hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>

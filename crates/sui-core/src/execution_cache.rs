@@ -8,6 +8,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
+use mysten_common::fatal;
 use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
@@ -104,7 +105,7 @@ impl ExecutionCacheTraitPointers {
     }
 }
 
-static ENABLE_WRITEBACK_CACHE_ENV_VAR: &str = "ENABLE_WRITEBACK_CACHE";
+static DISABLE_WRITEBACK_CACHE_ENV_VAR: &str = "DISABLE_WRITEBACK_CACHE";
 
 #[derive(Debug)]
 pub enum ExecutionCacheConfigType {
@@ -130,12 +131,12 @@ pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheCo
         }
     }
 
-    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
-        || matches!(config, ExecutionCacheConfig::WritebackCache { .. })
+    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
+        || matches!(config, ExecutionCacheConfig::PassthroughCache)
     {
-        ExecutionCacheConfigType::WritebackCache
-    } else {
         ExecutionCacheConfigType::PassthroughCache
+    } else {
+        ExecutionCacheConfigType::WritebackCache
     }
 }
 
@@ -158,13 +159,13 @@ pub fn build_execution_cache_from_env(
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
-    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
+    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
         ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
         )
     } else {
         ExecutionCacheTraitPointers::new(
-            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
+            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
         )
     }
 }
@@ -587,6 +588,13 @@ pub trait TransactionCacheRead: Send + Sync {
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>>;
 
+    /// Wait until the effects of the given transactions are available and return them.
+    /// WARNING: If calling this on a transaction that could be reverted, you must be
+    /// sure that this function cannot be called during reconfiguration. The best way to
+    /// do this is to wrap your future in EpochStore::within_alive_epoch. Holding an
+    /// ExecutionLockReadGuard would also prevent reconfig from happening while waiting,
+    /// but this is very dangerous, as it could prevent reconfiguration from ever
+    /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
@@ -597,7 +605,7 @@ pub trait TransactionCacheRead: Send + Sync {
             self.multi_get_effects(&digests).map(|effects| {
                 effects
                     .into_iter()
-                    .map(|e| e.expect("digests must exist"))
+                    .map(|e| e.unwrap_or_else(|| fatal!("digests must exist")))
                     .collect()
             })
         }
@@ -847,11 +855,11 @@ macro_rules! implement_passthrough_traits {
 
         impl ExecutionCacheReconfigAPI for $implementor {
             fn insert_genesis_object(&self, object: Object) -> SuiResult {
-                self.store.insert_genesis_object(object)
+                self.insert_genesis_object_impl(object)
             }
 
             fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult {
-                self.store.bulk_insert_genesis_objects(objects)
+                self.bulk_insert_genesis_objects_impl(objects)
             }
 
             fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {

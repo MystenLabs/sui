@@ -16,8 +16,8 @@ use thiserror::Error;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
+use typed_store::DBMapUtils;
 use typed_store::{Map, TypedStoreError};
-use typed_store_derive::DBMapUtils;
 
 const STORE: &str = "RocksDB";
 
@@ -32,7 +32,7 @@ impl From<Error> for PackageResolverError {
         match source {
             Error::TypedStore(store_error) => Self::Store {
                 store: STORE,
-                source: Arc::new(store_error),
+                error: store_error.to_string(),
             },
         }
     }
@@ -74,10 +74,9 @@ pub struct LocalDBPackageStore {
 
 impl LocalDBPackageStore {
     pub fn new(path: &Path, rest_url: &str) -> Self {
-        let rest_api_url = format!("{}/rest", rest_url);
         Self {
             package_store_tables: PackageStoreTables::new(path),
-            fallback_client: Client::new(rest_api_url),
+            fallback_client: Client::new(rest_url),
         }
     }
 

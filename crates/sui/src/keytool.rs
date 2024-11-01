@@ -629,8 +629,15 @@ impl KeyToolCommand {
                 match SuiKeyPair::decode(&input_string) {
                     Ok(skp) => {
                         info!("Importing Bech32 encoded private key to keystore");
-                        let key = Key::from(&skp);
-                        keystore.add_key(alias, skp)?;
+                        let mut key = Key::from(&skp);
+                        keystore.add_key(alias.clone(), skp)?;
+
+                        let alias = match alias {
+                            Some(x) => x,
+                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                        };
+
+                        key.alias = Some(alias);
                         CommandOutput::Import(key)
                     }
                     Err(_) => {
@@ -639,10 +646,17 @@ impl KeyToolCommand {
                             &input_string,
                             key_scheme,
                             derivation_path,
-                            alias,
+                            alias.clone(),
                         )?;
                         let skp = keystore.get_key(&sui_address)?;
-                        let key = Key::from(skp);
+                        let mut key = Key::from(skp);
+
+                        let alias = match alias {
+                            Some(x) => x,
+                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                        };
+
+                        key.alias = Some(alias);
                         CommandOutput::Import(key)
                     }
                 }
@@ -951,7 +965,7 @@ impl KeyToolCommand {
                 )
                 .await
                 .unwrap();
-                let (_, aud) = parse_and_validate_jwt(&parsed_token).unwrap();
+                let (_, aud, _) = parse_and_validate_jwt(&parsed_token).unwrap();
                 let address_seed = gen_address_seed(user_salt, "sub", sub, &aud).unwrap();
                 let zk_login_inputs =
                     ZkLoginInputs::from_reader(reader, &address_seed.to_string()).unwrap();
@@ -1114,6 +1128,23 @@ impl KeyToolCommand {
                     "https://api.ambrus.studio/callback",
                     &jwt_randomness,
                 )?;
+                let url_14 = get_oidc_url(
+                    OIDCProvider::Arden,
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "2e3i87cb-bf24-4399-ab98-48343d457124",
+                    "https://www.sui.io",
+                    &jwt_randomness,
+                )?;
+                let url_15 = get_oidc_url(
+                    OIDCProvider::AwsTenant(("eu-west-3".to_string(), "trace".to_string())),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "trace-dev",
+                    "https://trace.fan",
+                    &jwt_randomness,
+                )?;
+                // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
@@ -1128,6 +1159,8 @@ impl KeyToolCommand {
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
                 println!("Visit URL (AWS - Ambrus): {url_13}");
+                println!("Visit URL (Arden): {url_14}");
+                println!("Visit URL (AWS - Trace): {url_15}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 

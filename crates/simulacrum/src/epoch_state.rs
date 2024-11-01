@@ -4,7 +4,9 @@
 use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
-use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_config::{
+    transaction_deny_config::TransactionDenyConfig, verifier_signing_config::VerifierSigningConfig,
+};
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
@@ -91,6 +93,7 @@ impl EpochState {
         &self,
         store: &dyn SimulatorStore,
         deny_config: &TransactionDenyConfig,
+        verifier_signing_config: &VerifierSigningConfig,
         transaction: &VerifiedTransaction,
     ) -> Result<(
         InnerTemporaryStore,
@@ -127,6 +130,7 @@ impl EpochState {
             input_objects,
             &receiving_objects,
             &self.bytecode_verifier_metrics,
+            verifier_signing_config,
         )?;
 
         let transaction_data = transaction.data().transaction_data();

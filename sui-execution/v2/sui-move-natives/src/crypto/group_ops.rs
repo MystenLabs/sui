@@ -563,8 +563,8 @@ fn multi_scalar_mul<G, const SCALAR_SIZE: usize, const POINT_SIZE: usize>(
     base_cost: Option<InternalGas>,
     base_cost_per_addition: Option<InternalGas>,
     max_len: u32,
-    scalars: &Vec<u8>,
-    points: &Vec<u8>,
+    scalars: &[u8],
+    points: &[u8],
 ) -> PartialVMResult<NativeResult>
 where
     G: GroupElement

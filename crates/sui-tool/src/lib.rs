@@ -71,7 +71,6 @@ use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
-pub mod pkg_dump;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -107,8 +106,14 @@ async fn make_clients(
 
     for validator in active_validators {
         let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
+        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
+        // let tls_config = sui_tls::create_rustls_client_config(
+        //     sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
+        //     sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        //     None,
+        // );
         let channel = net_config
-            .connect_lazy(&net_addr)
+            .connect_lazy(&net_addr, None)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =
@@ -128,9 +133,6 @@ pub struct ObjectData {
 trait OptionDebug<T> {
     fn opt_debug(&self, def_str: &str) -> String;
 }
-trait OptionDisplay<T> {
-    fn opt_display(&self, def_str: &str) -> String;
-}
 
 impl<T> OptionDebug<T> for Option<T>
 where
@@ -140,40 +142,6 @@ where
         match self {
             None => def_str.to_string(),
             Some(t) => format!("{:?}", t),
-        }
-    }
-}
-
-impl<T> OptionDisplay<T> for Option<T>
-where
-    T: std::fmt::Display,
-{
-    fn opt_display(&self, def_str: &str) -> String {
-        match self {
-            None => def_str.to_string(),
-            Some(t) => format!("{}", t),
-        }
-    }
-}
-
-struct OwnerOutput(Owner);
-
-// grep/awk-friendly output for Owner
-impl std::fmt::Display for OwnerOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Owner::AddressOwner(address) => {
-                write!(f, "address({})", address)
-            }
-            Owner::ObjectOwner(address) => {
-                write!(f, "object({})", address)
-            }
-            Owner::Immutable => {
-                write!(f, "immutable")
-            }
-            Owner::Shared { .. } => {
-                write!(f, "shared")
-            }
         }
     }
 }
@@ -444,7 +412,7 @@ pub async fn get_transaction_block(
         .sorted_by(|(k1, err1, _), (k2, err2, _)| {
             Ord::cmp(k1, k2).then_with(|| Ord::cmp(err1, err2))
         })
-        .group_by(|(_, _err, r)| {
+        .chunk_by(|(_, _err, r)| {
             r.2.as_ref().map(|ok_result| match &ok_result.status {
                 TransactionStatus::Signed(_) => None,
                 TransactionStatus::Executed(_, effects, _) => Some((
@@ -527,64 +495,17 @@ async fn get_object_impl(
 }
 
 pub(crate) fn make_anemo_config() -> anemo_cli::Config {
-    use narwhal_types::*;
     use sui_network::discovery::*;
     use sui_network::state_sync::*;
 
     // TODO: implement `ServiceInfo` generation in anemo-build and use here.
     anemo_cli::Config::new()
-        // Narwhal primary-to-primary
-        .add_service(
-            "PrimaryToPrimary",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "SendCertificate",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        send_certificate,
-                        SendCertificateRequest
-                    ),
-                )
-                .add_method(
-                    "RequestVote",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        request_vote,
-                        RequestVoteRequest
-                    ),
-                )
-                .add_method(
-                    "FetchCertificates",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        fetch_certificates,
-                        FetchCertificatesRequest
-                    ),
-                ),
-        )
-        // Narwhal worker-to-worker
-        .add_service(
-            "WorkerToWorker",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "ReportBatch",
-                    anemo_cli::ron_method!(WorkerToWorkerClient, report_batch, WorkerBatchMessage),
-                )
-                .add_method(
-                    "RequestBatches",
-                    anemo_cli::ron_method!(
-                        WorkerToWorkerClient,
-                        request_batches,
-                        RequestBatchesRequest
-                    ),
-                ),
-        )
         // Sui discovery
         .add_service(
             "Discovery",
             anemo_cli::ServiceInfo::new().add_method(
-                "GetKnownPeers",
-                anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
+                "GetKnownPeersV2",
+                anemo_cli::ron_method!(DiscoveryClient, get_known_peers_v2, ()),
             ),
         )
         // Sui state sync

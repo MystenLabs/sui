@@ -271,7 +271,7 @@ fn compile_match_head(
 ) -> MatchStep {
     debug_print!(
         context.debug.match_specialization,
-        ("-----\ncompiling with fringe queue entry" => fringe; dbg)
+        ("-----\ncompiling with fringe queue entry" => fringe; sdbg)
     );
     if matrix.is_empty() {
         MatchStep::Failure
@@ -333,8 +333,10 @@ fn compile_match_head(
             // If we have an actual destructuring anywhere, we do that and take the specialized
             // matrix (which holds the default matrix and bindings, for our purpose). If we don't,
             // we just take the default matrix.
+            let decl_fields = context.info.struct_fields(&mident, &datatype_name).unwrap();
             let unpack = if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
-                let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let fringe_binders =
+                    context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let fringe_exps = make_fringe_entries(&fringe_binders);
                 let mut inner_fringe = fringe.clone();
                 for fringe_exp in fringe_exps.into_iter().rev() {
@@ -376,7 +378,12 @@ fn compile_match_head(
             let mut arms = BTreeMap::new();
             for (ctor, (ploc, arg_types)) in ctors {
                 unmatched_variants.remove(&ctor);
-                let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let decl_fields = context
+                    .info
+                    .enum_variant_fields(&mident, &datatype_name, &ctor)
+                    .unwrap();
+                let fringe_binders =
+                    context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let fringe_exps = make_fringe_entries(&fringe_binders);
                 let mut inner_fringe = fringe.clone();
                 for fringe_exp in fringe_exps.into_iter().rev() {
@@ -585,11 +592,11 @@ fn resolve_result(
 
             let true_arm = resolve_result(context, init_subject, true_arm_result);
             let false_arm = resolve_result(context, init_subject, false_arm_result);
-            let result_type = true_arm.ty.clone();
+            let result_ty = context.output_type().clone();
 
             make_copy_bindings(
                 bindings,
-                make_if_else(lit_subject, true_arm, false_arm, result_type),
+                make_if_else(lit_subject, true_arm, false_arm, result_ty),
             )
         }
         WorkResult::LiteralSwitch {
@@ -615,7 +622,7 @@ fn resolve_result(
                 let work_result = context.work_result(result_ndx);
                 let match_arm = resolve_result(context, init_subject, work_result);
                 let test_exp = make_lit_test(lit_subject.clone(), key);
-                let result_ty = out_exp.ty.clone();
+                let result_ty = context.output_type().clone();
                 out_exp = make_if_else(test_exp, match_arm, out_exp, result_ty);
             }
             make_copy_bindings(bindings, out_exp)
@@ -717,7 +724,7 @@ fn make_arm_unpack(
                 let Some((queue_entries, unpack)) =
                     arm_variant_unpack(context, None, ploc, m, e, tys, v, fs, entry)
                 else {
-                    context.hlir_context.env.add_diag(ice!((
+                    context.hlir_context.add_diag(ice!((
                         ploc,
                         "Did not build an arm unpack for a value variant"
                     )));
@@ -743,7 +750,7 @@ fn make_arm_unpack(
                 let Some((queue_entries, unpack)) =
                     arm_struct_unpack(context, None, ploc, m, s, tys, fs, entry)
                 else {
-                    context.hlir_context.env.add_diag(ice!((
+                    context.hlir_context.add_diag(ice!((
                         ploc,
                         "Did not build an arm unpack for a value struct"
                     )));
@@ -898,6 +905,12 @@ fn make_arm_variant_unpack_fields(
 ) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
+    let decl_fields = context
+        .hlir_context
+        .info
+        .enum_variant_fields(&mident, &enum_, &variant)
+        .unwrap();
+
     let field_tys = {
         let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
         if let Some(mut_) = mut_ref {
@@ -911,13 +924,12 @@ fn make_arm_variant_unpack_fields(
             field_tys
         }
     };
-    let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
+    let fringe_binders =
+        context
+            .hlir_context
+            .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let decl_fields = context
-        .hlir_context
-        .info
-        .enum_variant_fields(&mident, &enum_, &variant);
     let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
@@ -946,6 +958,11 @@ fn make_arm_struct_unpack_fields(
     fields: Fields<(Type, MatchPattern)>,
 ) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
+    let decl_fields = context
+        .hlir_context
+        .info
+        .struct_fields(&mident, &struct_)
+        .unwrap();
 
     let field_tys = {
         let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
@@ -960,10 +977,12 @@ fn make_arm_struct_unpack_fields(
             field_tys
         }
     };
-    let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
+    let fringe_binders =
+        context
+            .hlir_context
+            .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let decl_fields = context.hlir_context.info.struct_fields(&mident, &struct_);
     let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
@@ -1258,7 +1277,7 @@ fn make_if_else(test: T::Exp, conseq: T::Exp, alt: T::Exp, result_ty: Type) -> T
         result_ty,
         sp(
             loc,
-            T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Box::new(alt)),
+            T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Some(Box::new(alt))),
         ),
     )
 }

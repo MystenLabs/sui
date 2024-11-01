@@ -23,14 +23,16 @@ use crate::{
 /// Role of CommitObserver
 /// - Called by core when try_commit() returns newly committed leaders.
 /// - The newly committed leaders are sent to commit observer and then commit observer
-/// gets subdags for each leader via the commit interpreter (linearizer)
+///     gets subdags for each leader via the commit interpreter (linearizer)
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
+///
 /// No back pressure mechanism is needed as backpressure is handled as input into
 /// consenus.
+///
 /// - Commit metadata including index is persisted in store, before the CommittedSubDag
-/// is sent to the consumer.
+///     is sent to the consumer.
 /// - When CommitObserver is initialized a last processed commit index can be used
-/// to ensure any missing commits are re-sent.
+///     to ensure any missing commits are re-sent.
 pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
@@ -53,7 +55,7 @@ impl CommitObserver {
         let mut observer = Self {
             context,
             commit_interpreter: Linearizer::new(dag_state.clone(), leader_schedule.clone()),
-            sender: commit_consumer.sender,
+            sender: commit_consumer.commit_sender,
             store,
             leader_schedule,
         };
@@ -205,16 +207,12 @@ impl CommitObserver {
 
 #[cfg(test)]
 mod tests {
-    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use parking_lot::RwLock;
 
     use super::*;
     use crate::{
-        block::{BlockRef, Round},
-        commit::DEFAULT_WAVE_LENGTH,
-        context::Context,
-        dag_state::DagState,
-        storage::mem_store::MemStore,
+        block::BlockRef, context::Context, dag_state::DagState, storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
     };
 
@@ -228,9 +226,9 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+            CommitConsumer::new(last_processed_commit_index);
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -239,11 +237,7 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            commit_consumer,
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -296,7 +290,7 @@ mod tests {
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
-        while let Ok(subdag) = receiver.try_recv() {
+        while let Ok(subdag) = commit_receiver.try_recv() {
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
@@ -306,7 +300,7 @@ mod tests {
         }
         assert_eq!(processed_subdag_index, leaders.len());
 
-        verify_channel_empty(&mut receiver);
+        verify_channel_empty(&mut commit_receiver);
 
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
@@ -332,10 +326,9 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel("consensus_output");
-
+        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+            CommitConsumer::new(last_processed_commit_index);
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
@@ -343,11 +336,7 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender.clone(),
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            commit_consumer,
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule.clone(),
@@ -370,8 +359,6 @@ mod tests {
         // Commit first batch of leaders (2) and "receive" the subdags as the
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
-        let expected_last_processed_round =
-            expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
         let mut commits = observer
             .handle_commit(
                 leaders
@@ -384,7 +371,7 @@ mod tests {
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
-        while let Ok(subdag) = receiver.try_recv() {
+        while let Ok(subdag) = commit_receiver.try_recv() {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -395,7 +382,7 @@ mod tests {
         }
         assert_eq!(processed_subdag_index, expected_last_processed_index);
 
-        verify_channel_empty(&mut receiver);
+        verify_channel_empty(&mut commit_receiver);
 
         // Check last stored commit is correct
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
@@ -420,7 +407,7 @@ mod tests {
         );
 
         let expected_last_sent_index = num_rounds as usize;
-        while let Ok(subdag) = receiver.try_recv() {
+        while let Ok(subdag) = commit_receiver.try_recv() {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -431,7 +418,7 @@ mod tests {
         }
         assert_eq!(processed_subdag_index, expected_last_sent_index);
 
-        verify_channel_empty(&mut receiver);
+        verify_channel_empty(&mut commit_receiver);
 
         // Check last stored commit is correct. We should persist the last commit
         // that was sent over the channel regardless of how the consumer handled
@@ -441,13 +428,11 @@ mod tests {
 
         // Re-create commit observer starting from index 2 which represents the
         // last processed index from the consumer over consensus output channel
+        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+            CommitConsumer::new(expected_last_processed_index as CommitIndex);
         let _observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                expected_last_processed_round as Round,
-                expected_last_processed_index as CommitIndex,
-            ),
+            commit_consumer,
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -456,7 +441,7 @@ mod tests {
         // Check commits sent over consensus output channel is accurate starting
         // from last processed index of 2 and finishing at last sent index of 3.
         processed_subdag_index = expected_last_processed_index;
-        while let Ok(subdag) = receiver.try_recv() {
+        while let Ok(subdag) = commit_receiver.try_recv() {
             tracing::info!("Processed {subdag} on resubmission");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -467,7 +452,7 @@ mod tests {
         }
         assert_eq!(processed_subdag_index, expected_last_sent_index);
 
-        verify_channel_empty(&mut receiver);
+        verify_channel_empty(&mut commit_receiver);
     }
 
     #[tokio::test]
@@ -480,9 +465,9 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+            CommitConsumer::new(last_processed_commit_index);
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -491,11 +476,7 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender.clone(),
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            commit_consumer,
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule.clone(),
@@ -518,13 +499,11 @@ mod tests {
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
         let expected_last_processed_index: usize = 10;
-        let expected_last_processed_round =
-            expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
         let commits = observer.handle_commit(leaders.clone()).unwrap();
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
-        while let Ok(subdag) = receiver.try_recv() {
+        while let Ok(subdag) = commit_receiver.try_recv() {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
@@ -535,7 +514,7 @@ mod tests {
         }
         assert_eq!(processed_subdag_index, expected_last_processed_index);
 
-        verify_channel_empty(&mut receiver);
+        verify_channel_empty(&mut commit_receiver);
 
         // Check last stored commit is correct
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
@@ -546,13 +525,11 @@ mod tests {
 
         // Re-create commit observer starting from index 3 which represents the
         // last processed index from the consumer over consensus output channel
+        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+            CommitConsumer::new(expected_last_processed_index as CommitIndex);
         let _observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                expected_last_processed_round as Round,
-                expected_last_processed_index as CommitIndex,
-            ),
+            commit_consumer,
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -560,7 +537,7 @@ mod tests {
 
         // No commits should be resubmitted as consensus store's last commit index
         // is equal to last processed index by consumer
-        verify_channel_empty(&mut receiver);
+        verify_channel_empty(&mut commit_receiver);
     }
 
     /// After receiving all expected subdags, ensure channel is empty

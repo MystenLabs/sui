@@ -7,8 +7,7 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 
 -- test 1 -------------------
 use line: 20, use_ndx: 0
@@ -18,8 +17,7 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 
 -- test 2 -------------------
 use line: 20, use_ndx: 3
@@ -29,8 +27,7 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 
 -- test 3 -------------------
 use line: 23, use_ndx: 2
@@ -40,8 +37,7 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 
 -- test 4 -------------------
 use line: 24, use_ndx: 0
@@ -51,8 +47,7 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 
 -- test 5 -------------------
 use line: 28, use_ndx: 2
@@ -86,6 +81,5 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 

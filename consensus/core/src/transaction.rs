@@ -4,21 +4,18 @@
 use std::sync::Arc;
 
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
-use sui_protocol_config::ProtocolConfig;
 use tap::tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};
 
 use crate::{
-    block::{BlockRef, Transaction},
+    block::{BlockRef, Transaction, TransactionIndex},
     context::Context,
 };
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
-
-const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
 
 /// The guard acts as an acknowledgment mechanism for the inclusion of the transactions to a block.
 /// When its last transaction is included to a block then `included_in_block_ack` will be signalled.
@@ -43,18 +40,15 @@ pub(crate) struct TransactionConsumer {
 }
 
 impl TransactionConsumer {
-    pub(crate) fn new(
-        tx_receiver: Receiver<TransactionsGuard>,
-        context: Arc<Context>,
-        max_consumed_transactions_per_request: Option<u64>,
-    ) -> Self {
+    pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
         Self {
             tx_receiver,
             max_consumed_bytes_per_request: context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes(),
-            max_consumed_transactions_per_request: max_consumed_transactions_per_request
-                .unwrap_or(MAX_CONSUMED_TRANSACTIONS_PER_REQUEST),
+                .max_transactions_in_block_bytes(),
+            max_consumed_transactions_per_request: context
+                .protocol_config
+                .max_num_transactions_in_block(),
             pending_transactions: None,
         }
     }
@@ -72,7 +66,6 @@ impl TransactionConsumer {
         // Handle one batch of incoming transactions from TransactionGuard.
         // Returns the remaining txs as a new TransactionGuard, if the batch breaks any limit.
         let mut handle_txs = |t: TransactionsGuard| -> Option<TransactionsGuard> {
-            // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
             let remaining_txs: Vec<_> = t
                 .transactions
                 .into_iter()
@@ -164,9 +157,7 @@ impl TransactionClient {
         (
             Self {
                 sender,
-                max_transaction_size: context
-                    .protocol_config
-                    .consensus_max_transaction_size_bytes(),
+                max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
             },
             receiver,
         )
@@ -220,12 +211,15 @@ impl TransactionClient {
 /// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
 /// before acceptance of the block.
 pub trait TransactionVerifier: Send + Sync + 'static {
-    /// Determines if this batch can be voted on
-    fn verify_batch(
-        &self,
-        protocol_config: &ProtocolConfig,
-        batch: &[&[u8]],
-    ) -> Result<(), ValidationError>;
+    /// Determines if this batch of transactions is valid.
+    /// Fails if any one of the transactions is invalid.
+    fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
+
+    /// Returns indices of transactions to reject.
+    /// Currently only uncertified user transactions can be rejected.
+    /// The rest of transactions are implicitly voted to accept.
+    // TODO: add rejection reasons, add VoteError and wrap the return in Result<>.
+    fn vote_batch(&self, batch: &[&[u8]]) -> Vec<TransactionIndex>;
 }
 
 #[derive(Debug, Error)]
@@ -235,15 +229,16 @@ pub enum ValidationError {
 }
 
 /// `NoopTransactionVerifier` accepts all transactions.
+#[allow(unused)]
 pub(crate) struct NoopTransactionVerifier;
 
 impl TransactionVerifier for NoopTransactionVerifier {
-    fn verify_batch(
-        &self,
-        _protocol_config: &ProtocolConfig,
-        _batch: &[&[u8]],
-    ) -> Result<(), ValidationError> {
+    fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
+    }
+
+    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
+        vec![]
     }
 }
 
@@ -271,7 +266,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // submit asynchronously the transactions and keep the waiters
         let mut included_in_block_waiters = FuturesUnordered::new();
@@ -323,7 +318,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // submit some transactions
         for i in 0..10 {
@@ -343,14 +338,9 @@ mod tests {
         // ensure their total size is less than `max_bytes_to_fetch`
         let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
-            total_size
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes(),
+            total_size <= context.protocol_config.max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
-            context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes()
+            context.protocol_config.max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -361,14 +351,9 @@ mod tests {
         // ensure their total size is less than `max_bytes_to_fetch`
         let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
-            total_size
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes(),
+            total_size <= context.protocol_config.max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
-            context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes()
+            context.protocol_config.max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -391,7 +376,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let mut all_receivers = Vec::new();
         // submit a few transactions individually.
         for i in 0..10 {
@@ -440,14 +425,9 @@ mod tests {
 
             let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
             assert!(
-                total_size
-                    <= context
-                        .protocol_config
-                        .consensus_max_transactions_in_block_bytes(),
+                total_size <= context.protocol_config.max_transactions_in_block_bytes(),
                 "Should have fetched transactions up to {}",
-                context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes()
+                context.protocol_config.max_transactions_in_block_bytes()
             );
 
             all_transactions.extend(transactions);

@@ -1,0 +1,127 @@
+---
+title: Flash Loans SDK
+sidebar_label: Flash Loans
+---
+
+A flash loan is one where the borrowing and returning of loans from pools is performed within a single programmable transaction block. The SDK exposes functions that allow you to implement this functionality. See [Flash Loans](https://docs.sui.io/standards/deepbookv3/flash-loans) for more details on the API.
+
+## Flash loan functions
+
+The DeepBookV3 SDK provides the following flash loan related functions. 
+
+### borrowBaseAsset
+
+Use `borrowBaseAsset` to borrow a base asset from the pool identified by the `poolKey` value you provide. The call returns a function that takes a `Transaction` object
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool from which to borrow.
+- `borrowAmount`: Number that represents the amount to borrow from the pool.
+
+```tsx
+borrowBaseAsset(poolKey: string, borrowAmount: number);
+```
+
+### returnBaseAsset
+
+Use `returnBaseAsset` to return the base asset to the pool identified by the `poolKey` value you provide. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool from which to borrow.
+- `borrowAmount`: Number that represents the amount to borrow from the pool.
+- `baseCoinInput`: Coin object representing the base asset to be returned.
+- `flashLoan`: Flash loan object representing the loan to be settled.
+
+```tsx
+returnBaseAsset(
+  {
+    poolKey: string,
+    borrowAmount: number,
+    baseCoinInput: TransactionObjectArgument,
+    flashLoan: TransactionObjectArgument,
+  }
+)
+```
+
+### borrowQuoteAsset
+
+Use `borrowQuoteAsset` to borrow a quote asset from the pool identified by the `poolKey` value you provide. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool from which to borrow.
+- `borrowAmount`: Number that represents the amount to borrow from the pool.
+
+```tsx
+borrowQuoteAsset(poolKey: string, borrowAmount: number);
+```
+
+### returnQuoteAsset
+
+Use `returnQuoteAsset` to return a quote asset to the pool identified by the `poolKey` you provide. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool from which to borrow.
+- `borrowAmount`: Number that represents the amount to borrow from the pool.
+- `baseCoinInput`: Coin object representing the quote asset to be returned.
+- `flashLoan`: Flash loan object representing the loan to be settled.
+
+```tsx
+returnQuoteAsset(
+  poolKey: string,
+  borrowAmount: number,
+  quoteCoinInput: TransactionObjectArgument,
+  flashLoan: TransactionObjectArgument,
+);
+```
+
+## Flash loan example
+
+The following example demonstrates flash loan usage in `DeepBookMarketMaker` class.
+    
+```tsx
+// Example of a flash loan transaction
+// Borrow 1 DEEP from DEEP_SUI pool
+// Swap 0.5 DBUSDC for SUI in SUI_DBUSDC pool, pay with deep borrowed
+// Swap SUI back to DEEP
+// Return 1 DEEP to DEEP_SUI pool
+flashLoanExample = async (tx: Transaction) => {
+  const borrowAmount = 1;
+  const [deepCoin, flashLoan] = tx.add(this.flashLoans.borrowBaseAsset('DEEP_SUI', borrowAmount));
+
+  // Execute trade using borrowed DEEP
+  const [baseOut, quoteOut, deepOut] = tx.add(
+    this.deepBook.swapExactQuoteForBase({
+      poolKey: 'SUI_DBUSDC',
+      amount: 0.5,
+      deepAmount: 1,
+      minOut: 0,
+      deepCoin: deepCoin,
+    }),
+  );
+
+  tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
+
+  // Execute second trade to get back DEEP for repayment
+  const [baseOut2, quoteOut2, deepOut2] = tx.add(
+    this.deepBook.swapExactQuoteForBase({
+      poolKey: 'DEEP_SUI',
+      amount: 10,
+      deepAmount: 0,
+      minOut: 0,
+    }),
+  );
+
+  tx.transferObjects([quoteOut2, deepOut2], this.getActiveAddress());
+
+  // Return borrowed DEEP
+  const loanRemain = tx.add(
+    this.flashLoans.returnBaseAsset('DEEP_SUI', borrowAmount, baseOut2, flashLoan),
+  );
+  
+  // Send the remaining coin to user's address
+  tx.transferObjects([loanRemain], this.getActiveAddress());
+};
+```

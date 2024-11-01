@@ -10,6 +10,7 @@ use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken, VariantTag},
 };
+use move_core_types::annotated_value as A;
 use move_core_types::{
     account_address::AccountAddress,
     effects::Op,
@@ -2018,7 +2019,7 @@ impl IntegerValue {
         match self {
             U8(x) => Ok(x),
             U16(x) => {
-                if x > (std::u8::MAX as u16) {
+                if x > (u8::MAX as u16) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u16({}) to u8", x)))
                 } else {
@@ -2026,7 +2027,7 @@ impl IntegerValue {
                 }
             }
             U32(x) => {
-                if x > (std::u8::MAX as u32) {
+                if x > (u8::MAX as u32) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u32({}) to u8", x)))
                 } else {
@@ -2034,7 +2035,7 @@ impl IntegerValue {
                 }
             }
             U64(x) => {
-                if x > (std::u8::MAX as u64) {
+                if x > (u8::MAX as u64) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u64({}) to u8", x)))
                 } else {
@@ -2042,7 +2043,7 @@ impl IntegerValue {
                 }
             }
             U128(x) => {
-                if x > (std::u8::MAX as u128) {
+                if x > (u8::MAX as u128) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u128({}) to u8", x)))
                 } else {
@@ -2050,7 +2051,7 @@ impl IntegerValue {
                 }
             }
             U256(x) => {
-                if x > (u256::U256::from(std::u8::MAX)) {
+                if x > (u256::U256::from(u8::MAX)) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u256({}) to u8", x)))
                 } else {
@@ -2067,7 +2068,7 @@ impl IntegerValue {
             U8(x) => Ok(x as u16),
             U16(x) => Ok(x),
             U32(x) => {
-                if x > (std::u16::MAX as u32) {
+                if x > (u16::MAX as u32) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u32({}) to u16", x)))
                 } else {
@@ -2075,7 +2076,7 @@ impl IntegerValue {
                 }
             }
             U64(x) => {
-                if x > (std::u16::MAX as u64) {
+                if x > (u16::MAX as u64) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u64({}) to u16", x)))
                 } else {
@@ -2083,7 +2084,7 @@ impl IntegerValue {
                 }
             }
             U128(x) => {
-                if x > (std::u16::MAX as u128) {
+                if x > (u16::MAX as u128) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u128({}) to u16", x)))
                 } else {
@@ -2091,7 +2092,7 @@ impl IntegerValue {
                 }
             }
             U256(x) => {
-                if x > (u256::U256::from(std::u16::MAX)) {
+                if x > (u256::U256::from(u16::MAX)) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u256({}) to u16", x)))
                 } else {
@@ -2109,7 +2110,7 @@ impl IntegerValue {
             U16(x) => Ok(x as u32),
             U32(x) => Ok(x),
             U64(x) => {
-                if x > (std::u32::MAX as u64) {
+                if x > (u32::MAX as u64) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u64({}) to u32", x)))
                 } else {
@@ -2117,7 +2118,7 @@ impl IntegerValue {
                 }
             }
             U128(x) => {
-                if x > (std::u32::MAX as u128) {
+                if x > (u32::MAX as u128) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u128({}) to u32", x)))
                 } else {
@@ -2125,7 +2126,7 @@ impl IntegerValue {
                 }
             }
             U256(x) => {
-                if x > (u256::U256::from(std::u32::MAX)) {
+                if x > (u256::U256::from(u32::MAX)) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u128({}) to u32", x)))
                 } else {
@@ -2144,7 +2145,7 @@ impl IntegerValue {
             U32(x) => Ok(x as u64),
             U64(x) => Ok(x),
             U128(x) => {
-                if x > (std::u64::MAX as u128) {
+                if x > (u64::MAX as u128) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u128({}) to u64", x)))
                 } else {
@@ -2152,7 +2153,7 @@ impl IntegerValue {
                 }
             }
             U256(x) => {
-                if x > (u256::U256::from(std::u64::MAX)) {
+                if x > (u256::U256::from(u64::MAX)) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u256({}) to u64", x)))
                 } else {
@@ -2172,7 +2173,7 @@ impl IntegerValue {
             U64(x) => Ok(x as u128),
             U128(x) => Ok(x),
             U256(x) => {
-                if x > (u256::U256::from(std::u128::MAX)) {
+                if x > (u256::U256::from(u128::MAX)) {
                     Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
                         .with_message(format!("Cannot cast u256({}) to u128", x)))
                 } else {
@@ -3306,7 +3307,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
 
             (MoveTypeLayout::Struct(struct_layout), ValueImpl::Container(Container::Struct(r))) => {
                 (AnnotatedValue {
-                    layout: struct_layout,
+                    layout: &**struct_layout,
                     val: &*r.borrow(),
                 })
                 .serialize(serializer)
@@ -3314,7 +3315,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
 
             (MoveTypeLayout::Enum(enum_layout), ValueImpl::Container(Container::Variant(r))) => {
                 (AnnotatedValue {
-                    layout: enum_layout,
+                    layout: &**enum_layout,
                     val: &*r.borrow(),
                 })
                 .serialize(serializer)
@@ -3483,12 +3484,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
             L::Struct(struct_layout) => Ok(SeedWrapper {
-                layout: struct_layout,
+                layout: &**struct_layout,
             }
             .deserialize(deserializer)?),
 
             L::Enum(enum_layout) => Ok(SeedWrapper {
-                layout: enum_layout,
+                layout: &**enum_layout,
             }
             .deserialize(deserializer)?),
 
@@ -4138,10 +4139,11 @@ impl ValueImpl {
             (L::Bool, ValueImpl::Bool(x)) => MoveValue::Bool(*x),
             (L::Address, ValueImpl::Address(x)) => MoveValue::Address(*x),
 
-            (L::Enum(MoveEnumLayout(variants)), ValueImpl::Container(Container::Variant(r))) => {
+            (L::Enum(enum_layout), ValueImpl::Container(Container::Variant(r))) => {
+                let MoveEnumLayout(variants) = &**enum_layout;
                 let (tag, values) = &*r.borrow();
                 let tag = *tag;
-                let field_layouts = &variants[tag as usize];
+                let field_layouts = &variants.as_slice()[tag as usize];
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(field_layouts) {
                     fields.push(v.as_move_value(field_layout));
@@ -4201,5 +4203,142 @@ impl ValueImpl {
 impl Value {
     pub fn as_move_value(&self, layout: &MoveTypeLayout) -> MoveValue {
         self.0.as_move_value(layout)
+    }
+
+    pub fn as_annotated_move_value_for_tracing_only(
+        &self,
+        layout: &A::MoveTypeLayout,
+    ) -> Option<A::MoveValue> {
+        self.0.as_annotated_move_value(layout)
+    }
+}
+
+impl ValueImpl {
+    /// Converts the value to an annotated move value. This is only needed for tracing and care
+    /// should be taken when using this function as it can possibly inflate the size of the value.
+    fn as_annotated_move_value(&self, layout: &A::MoveTypeLayout) -> Option<A::MoveValue> {
+        use move_core_types::annotated_value::MoveTypeLayout as L;
+        use move_core_types::annotated_value::MoveValue;
+        Some(match (layout, self) {
+            (L::U8, ValueImpl::U8(x)) => MoveValue::U8(*x),
+            (L::U16, ValueImpl::U16(x)) => MoveValue::U16(*x),
+            (L::U32, ValueImpl::U32(x)) => MoveValue::U32(*x),
+            (L::U64, ValueImpl::U64(x)) => MoveValue::U64(*x),
+            (L::U128, ValueImpl::U128(x)) => MoveValue::U128(*x),
+            (L::U256, ValueImpl::U256(x)) => MoveValue::U256(*x),
+            (L::Bool, ValueImpl::Bool(x)) => MoveValue::Bool(*x),
+            (L::Address, ValueImpl::Address(x)) => MoveValue::Address(*x),
+            (l, ValueImpl::Container(c)) => return c.as_annotated_move_value(l),
+            (
+                _,
+                ValueImpl::ContainerRef(
+                    ContainerRef::Local(c) | ContainerRef::Global { container: c, .. },
+                ),
+            ) => return c.as_annotated_move_value(layout),
+            (
+                _,
+                ValueImpl::IndexedRef(IndexedRef {
+                    container_ref:
+                        ContainerRef::Local(c) | ContainerRef::Global { container: c, .. },
+                    idx,
+                }),
+            ) => {
+                use Container::*;
+                let idx = *idx;
+                let res = match c {
+                    Locals(r) | Vec(r) | Struct(r) => r.borrow()[idx].copy_value().unwrap(),
+                    Variant(r) => r.borrow().1[idx].copy_value().unwrap(),
+                    VecU8(r) => ValueImpl::U8(r.borrow()[idx]),
+                    VecU16(r) => ValueImpl::U16(r.borrow()[idx]),
+                    VecU32(r) => ValueImpl::U32(r.borrow()[idx]),
+                    VecU64(r) => ValueImpl::U64(r.borrow()[idx]),
+                    VecU128(r) => ValueImpl::U128(r.borrow()[idx]),
+                    VecU256(r) => ValueImpl::U256(r.borrow()[idx]),
+                    VecBool(r) => ValueImpl::Bool(r.borrow()[idx]),
+                    VecAddress(r) => ValueImpl::Address(r.borrow()[idx]),
+                };
+                return res.as_annotated_move_value(layout);
+            }
+            (_layout, _val) => return None,
+        })
+    }
+}
+
+impl Container {
+    fn as_annotated_move_value(&self, layout: &A::MoveTypeLayout) -> Option<A::MoveValue> {
+        use move_core_types::annotated_value::MoveTypeLayout as L;
+        Some(match (layout, self) {
+            (L::Enum(e_layout), Container::Variant(r)) => {
+                let A::MoveEnumLayout { type_, variants } = e_layout.as_ref();
+                let (tag, values) = &*r.borrow();
+                let tag = *tag;
+                let ((name, _), field_layouts) =
+                    variants.iter().find(|((_, t), _)| *t == tag).unwrap();
+                let mut fields = vec![];
+                for (v, field_layout) in values.iter().zip(field_layouts) {
+                    fields.push((
+                        field_layout.name.clone(),
+                        v.as_annotated_move_value(&field_layout.layout)?,
+                    ));
+                }
+                A::MoveValue::Variant(A::MoveVariant {
+                    tag,
+                    fields,
+                    type_: type_.clone(),
+                    variant_name: name.clone(),
+                })
+            }
+            (L::Struct(struct_layout), Container::Struct(r)) => {
+                let mut fields = vec![];
+                for (v, field_layout) in r.borrow().iter().zip(struct_layout.fields.iter()) {
+                    fields.push((
+                        field_layout.name.clone(),
+                        v.as_annotated_move_value(&field_layout.layout)?,
+                    ));
+                }
+                A::MoveValue::Struct(A::MoveStruct::new(struct_layout.type_.clone(), fields))
+            }
+
+            (L::Vector(inner_layout), c) => A::MoveValue::Vector(match c {
+                Container::VecU8(r) => r.borrow().iter().map(|u| A::MoveValue::U8(*u)).collect(),
+                Container::VecU16(r) => r.borrow().iter().map(|u| A::MoveValue::U16(*u)).collect(),
+                Container::VecU32(r) => r.borrow().iter().map(|u| A::MoveValue::U32(*u)).collect(),
+                Container::VecU64(r) => r.borrow().iter().map(|u| A::MoveValue::U64(*u)).collect(),
+                Container::VecU128(r) => {
+                    r.borrow().iter().map(|u| A::MoveValue::U128(*u)).collect()
+                }
+                Container::VecU256(r) => {
+                    r.borrow().iter().map(|u| A::MoveValue::U256(*u)).collect()
+                }
+                Container::VecBool(r) => {
+                    r.borrow().iter().map(|u| A::MoveValue::Bool(*u)).collect()
+                }
+                Container::VecAddress(r) => r
+                    .borrow()
+                    .iter()
+                    .map(|u| A::MoveValue::Address(*u))
+                    .collect(),
+                Container::Vec(r) => r
+                    .borrow()
+                    .iter()
+                    .map(|v| v.as_annotated_move_value(inner_layout))
+                    .collect::<Option<_>>()?,
+                Container::Struct(_) | Container::Variant { .. } | Container::Locals(_) => {
+                    return None
+                }
+            }),
+
+            (L::Signer, Container::Struct(r)) => {
+                let v = r.borrow();
+                if v.len() != 1 {
+                    return None;
+                }
+                match &v[0] {
+                    ValueImpl::Address(a) => A::MoveValue::Signer(*a),
+                    _ => return None,
+                }
+            }
+            (_layout, _val) => return None,
+        })
     }
 }

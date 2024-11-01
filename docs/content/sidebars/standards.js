@@ -31,7 +31,7 @@ const standards = [
 		items: [
 			{
 				type: 'category',
-				label: 'DeepBook V3',
+				label: 'DeepBookV3',
 				link: {
 					type: 'doc',
 					id: 'standards/deepbookv3',
@@ -48,7 +48,22 @@ const standards = [
 			},
 			{
 				type: 'category',
-				label: 'DeepBook V2',
+				label: 'DeepBookV3 SDK',
+				link: {
+					type: 'doc',
+					id: 'standards/deepbookv3-sdk',
+				},
+				items: [
+					'standards/deepbookv3-sdk/flash-loans',
+					'standards/deepbookv3-sdk/orders',
+					'standards/deepbookv3-sdk/pools',
+					'standards/deepbookv3-sdk/staking-governance',
+					'standards/deepbookv3-sdk/swaps',
+				],
+			},
+			{
+				type: 'category',
+				label: 'DeepBookV2',
 				link: {
 					type: 'doc',
 					id: 'standards/deepbookv2',

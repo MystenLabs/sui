@@ -69,14 +69,14 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                         ty.loc,
                         "ICE unfold_type_base failed to expand type inf. var"
                     ));
-                    context.env.add_diag(diag);
+                    context.env.add_error_diag(diag);
                     sp(loc, UnresolvedError)
                 }
                 sp!(loc, Anything) => {
                     let msg = "Could not infer this type. Try adding an annotation";
                     context
                         .env
-                        .add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
+                        .add_error_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
                     sp(loc, UnresolvedError)
                 }
                 sp!(loc, Fun(_, _)) if !context.in_macro_function => {
@@ -96,7 +96,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 ty.loc,
                 format!("ICE expanding pre-expanded type {}", debug_display!(aty))
             ));
-            context.env.add_diag(diag);
+            context.env.add_error_diag(diag);
             *ty = sp(ty.loc, UnresolvedError)
         }
         Apply(None, _, _) => {
@@ -108,7 +108,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 }
                 _ => {
                     let diag = ice!((ty.loc, "ICE type-apply switched to non-apply"));
-                    context.env.add_diag(diag);
+                    context.env.add_error_diag(diag);
                     *ty = sp(ty.loc, UnresolvedError)
                 }
             }
@@ -134,7 +134,7 @@ fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
             Lambdas can only be used with 'macro' functions, as parameters or direct arguments";
         context
             .env
-            .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
+            .add_error_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
     }
 }
 
@@ -234,10 +234,12 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, args);
         }
 
-        E::IfElse(eb, et, ef) => {
+        E::IfElse(eb, et, ef_opt) => {
             exp(context, eb);
             exp(context, et);
-            exp(context, ef);
+            if let Some(ef) = ef_opt {
+                exp(context, ef)
+            }
         }
         E::Match(esubject, arms) => {
             exp(context, esubject);
@@ -246,7 +248,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             }
         }
         E::VariantMatch(subject, _, arms) => {
-            context.env.add_diag(ice!((
+            context.env.add_error_diag(ice!((
                 e.exp.loc,
                 "shouldn't find variant match before match compilation"
             )));
@@ -318,11 +320,11 @@ fn inferred_numerical_value(
         Some(sp!(_, bt)) if bt.is_numeric() => bt,
         _ => panic!("ICE inferred num failed {:?}", &ty.value),
     };
-    let u8_max = U256::from(std::u8::MAX);
-    let u16_max = U256::from(std::u16::MAX);
-    let u32_max = U256::from(std::u32::MAX);
-    let u64_max = U256::from(std::u64::MAX);
-    let u128_max = U256::from(std::u128::MAX);
+    let u8_max = U256::from(u8::MAX);
+    let u16_max = U256::from(u16::MAX);
+    let u32_max = U256::from(u32::MAX);
+    let u64_max = U256::from(u64::MAX);
+    let u128_max = U256::from(u128::MAX);
     let u256_max = U256::max_value();
     let max = match bt {
         BT::U8 => u8_max,
@@ -355,7 +357,7 @@ fn inferred_numerical_value(
             "Annotating the literal might help inference: '{value}{type}'",
             type=fix_bt,
         );
-        context.env.add_diag(diag!(
+        context.env.add_error_diag(diag!(
             TypeSafety::InvalidNum,
             (eloc, "Invalid numerical literal"),
             (ty.loc, msg),

@@ -663,4 +663,9 @@ module bridge::message {
             token_prices,
         }
     }
+
+    #[test_only]
+    public(package) fun unpack_message(msg: BridgeMessageKey): (u8, u8, u64) {
+        (msg.source_chain, msg.message_type, msg.bridge_seq_num)
+    }
 }

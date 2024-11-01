@@ -1,4 +1,4 @@
-module 0x1::M {
+module 0x6::M {
     const ErrorCode: u64 = 100;
 
     #[test(a = @0x42)]

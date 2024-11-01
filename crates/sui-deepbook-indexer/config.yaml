@@ -1,0 +1,18 @@
+# config.yaml format:
+
+# URL of the remote store
+# remote_store_url: <url>
+# Database connection URL
+# db_url: <url>
+# Path to the checkpoints
+# checkpoints_path: <path>
+# DeepBook package ID
+# deepbook_package_id:
+# DeepBook genesis checkpoint
+# deepbook_genesis_checkpoint:
+# Number of concurrent operations
+# concurrency: 1
+# Client metric URL
+# metric_url: <url>
+# Client metric port
+# metric_port: <port>

@@ -95,6 +95,10 @@ export type CompressedSignature =
 	| {
 			ZkLogin: string;
 	  };
+/** Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments. */
+export type ConsensusDeterminedVersionAssignments = {
+	CancelledTransactions: [string, [string, string][]][];
+};
 export type SuiParsedData =
 	| {
 			dataType: 'moveObject';
@@ -286,8 +290,7 @@ export type SuiEventFilter =
 			Or: [SuiEventFilter, SuiEventFilter];
 	  };
 /**
- * Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number, the ID is
- * local to this particular fullnode and will be different from other fullnode.
+ * Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number.
  */
 export interface EventId {
 	eventSeq: string;
@@ -356,13 +359,6 @@ export type InputObjectKind =
 				mutable?: boolean;
 			};
 	  };
-export interface LoadedChildObject {
-	objectId: string;
-	sequenceNumber: string;
-}
-export interface LoadedChildObjectsResponse {
-	loadedChildObjects: LoadedChildObject[];
-}
 export interface MoveCallParams {
 	arguments: unknown[];
 	function: string;
@@ -396,7 +392,15 @@ export type MoveValue =
 			id: string;
 	  }
 	| MoveStruct
-	| null;
+	| null
+	| MoveVariant;
+export interface MoveVariant {
+	fields: {
+		[key: string]: MoveValue;
+	};
+	type: string;
+	variant: string;
+}
 /** The struct that contains signatures and public keys necessary for authenticating a MultiSig. */
 export interface MultiSig {
 	/** A bitmap that indicates the position of which public key the signature should be authenticated with. */
@@ -410,8 +414,8 @@ export interface MultiSig {
 	sigs: CompressedSignature[];
 }
 /**
- * Deprecated, use [struct MultiSig] instead. The struct that contains signatures and public keys
- * necessary for authenticating a MultiSigLegacy.
+ * Deprecated, use [struct MultiSig] instead. The struct that contains signatures and public keys necessary
+ * for authenticating a MultiSigLegacy.
  */
 export interface MultiSigLegacy {
 	/** A bitmap that indicates the position of which public key the signature should be authenticated with. */
@@ -715,6 +719,24 @@ export interface PaginatedTransactionResponse {
 	hasNextPage: boolean;
 	nextCursor?: string | null;
 }
+/**
+ * An passkey authenticator with parsed fields. See field defition below. Can be initialized from
+ * [struct RawPasskeyAuthenticator].
+ */
+export interface PasskeyAuthenticator {
+	/**
+	 * `authenticatorData` is a bytearray that encodes
+	 * [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) structure returned
+	 * by the authenticator attestation response as is.
+	 */
+	authenticator_data: number[];
+	/**
+	 * `clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed
+	 * to the authenticator by the client during the authentication request (see
+	 * [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))
+	 */
+	client_data_json: string;
+}
 export interface ProtocolConfig {
 	attributes: {
 		[key: string]: ProtocolConfigValue | null;
@@ -738,6 +760,9 @@ export type ProtocolConfigValue =
 	  }
 	| {
 			f64: string;
+	  }
+	| {
+			bool: string;
 	  };
 export type PublicKey =
 	| {
@@ -751,6 +776,9 @@ export type PublicKey =
 	  }
 	| {
 			ZkLogin: string;
+	  }
+	| {
+			Passkey: string;
 	  };
 export type RPCTransactionRequestParams =
 	| {
@@ -895,6 +923,12 @@ export type SuiEndOfEpochTransactionKind =
 	  }
 	| {
 			AuthenticatorStateExpire: SuiAuthenticatorStateExpire;
+	  }
+	| {
+			BridgeStateCreate: string;
+	  }
+	| {
+			BridgeCommitteeUpdate: string;
 	  };
 export interface SuiExecutionResult {
 	/** The value of any arguments that were mutably borrowed. Non-mut borrowed values are not included */
@@ -1375,6 +1409,15 @@ export type SuiTransactionBlockKind =
 			epoch: string;
 			kind: 'ConsensusCommitPrologueV2';
 			round: string;
+	  }
+	| {
+			commit_timestamp_ms: string;
+			consensus_commit_digest: string;
+			consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments;
+			epoch: string;
+			kind: 'ConsensusCommitPrologueV3';
+			round: string;
+			sub_dag_index?: string | null;
 	  };
 export interface SuiTransactionBlockResponse {
 	balanceChanges?: BalanceChange[] | null;
@@ -1468,9 +1511,9 @@ export interface TransferObjectParams {
 }
 /** Identifies a struct and the module it was defined in */
 export interface TypeOrigin {
+	datatype_name: string;
 	module_name: string;
 	package: string;
-	struct_name: string;
 }
 /** Upgraded package info for the linkage table */
 export interface UpgradeInfo {
