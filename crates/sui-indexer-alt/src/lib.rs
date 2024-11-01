@@ -134,6 +134,11 @@ impl Indexer {
         })
     }
 
+    /// The database connection pool used by the indexer.
+    pub fn db(&self) -> &Db {
+        &self.db
+    }
+
     /// The ingestion client used by the indexer to fetch checkpoints.
     pub fn ingestion_client(&self) -> &IngestionClient {
         self.ingestion_service.client()
