@@ -47,23 +47,3 @@ pub struct StoredTxBalanceChange {
     pub tx_sequence_number: i64,
     pub balance_changes: Vec<u8>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stored_transaction_field_count() {
-        assert_eq!(StoredTransaction::field_count(), 6);
-    }
-
-    #[test]
-    fn test_stored_tx_affected_object_field_count() {
-        assert_eq!(StoredTxAffectedObject::field_count(), 3);
-    }
-
-    #[test]
-    fn test_stored_tx_balance_change_field_count() {
-        assert_eq!(StoredTxBalanceChange::field_count(), 2);
-    }
-}

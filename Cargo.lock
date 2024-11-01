@@ -13631,7 +13631,6 @@ name = "sui-field-count"
 version = "1.38.0"
 dependencies = [
  "sui-field-count-derive",
- "sui-field-count-main",
 ]
 
 [[package]]
@@ -13641,10 +13640,6 @@ dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
 ]
-
-[[package]]
-name = "sui-field-count-main"
-version = "1.38.0"
 
 [[package]]
 name = "sui-framework"

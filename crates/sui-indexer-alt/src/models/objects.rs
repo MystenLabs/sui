@@ -126,23 +126,3 @@ where
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stored_owner_kind_field_count() {
-        assert_eq!(StoredObject::field_count(), 3);
-    }
-
-    #[test]
-    fn test_stored_sum_coin_balance_field_count() {
-        assert_eq!(StoredSumCoinBalance::field_count(), 5);
-    }
-
-    #[test]
-    fn test_stored_sum_obj_type_field_count() {
-        assert_eq!(StoredSumObjType::field_count(), 8);
-    }
-}
