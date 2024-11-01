@@ -2,6 +2,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Button, Container } from "@radix-ui/themes";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
+import { useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
 
 export function CreateCounter({
@@ -11,9 +12,12 @@ export function CreateCounter({
 }) {
   const counterPackageId = useNetworkVariable("counterPackageId");
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const [waitingForTxn, setWaitingForTxn] = useState(false);
 
   function create() {
+    setWaitingForTxn(true);
+
     const tx = new Transaction();
 
     tx.moveCall({
@@ -40,6 +44,8 @@ export function CreateCounter({
               if (objectId) {
                 onCreated(objectId);
               }
+
+              setWaitingForTxn(false);
             });
         },
       },
@@ -53,9 +59,9 @@ export function CreateCounter({
         onClick={() => {
           create();
         }}
-        disabled={isPending}
+        disabled={waitingForTxn}
       >
-        {isPending ? <ClipLoader size={20} /> : "Create Counter"}
+        {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
       </Button>
     </Container>
   );
