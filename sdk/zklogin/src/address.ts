@@ -68,3 +68,7 @@ export function computeZkLoginAddress({
 }: ComputeZkLoginAddressOptions) {
 	return computeZkLoginAddressFromSeed(genAddressSeed(userSalt, claimName, claimValue, aud), iss);
 }
+
+export function computeZkLoginAddressWithSeed(seed: bigint, iss: string) {
+	return computeZkLoginAddressFromSeed(seed, iss);
+}
