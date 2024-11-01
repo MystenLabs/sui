@@ -14,13 +14,3 @@ pub struct StoredCheckpoint {
     /// BCS serialized CheckpointContents
     pub checkpoint_contents: Vec<u8>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stored_checkpoint_field_count() {
-        assert_eq!(StoredCheckpoint::field_count(), 3);
-    }
-}

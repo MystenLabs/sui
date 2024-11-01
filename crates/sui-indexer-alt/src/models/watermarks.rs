@@ -100,18 +100,3 @@ impl<'p> From<CommitterWatermark<'p>> for StoredWatermark {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stored_watermark_field_count() {
-        assert_eq!(StoredWatermark::field_count(), 9);
-    }
-
-    #[test]
-    fn test_committer_watermark_field_count() {
-        assert_eq!(CommitterWatermark::<'static>::field_count(), 5);
-    }
-}

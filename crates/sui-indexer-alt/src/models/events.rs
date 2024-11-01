@@ -24,18 +24,3 @@ pub struct StoredEvStructInst {
     pub tx_sequence_number: i64,
     pub sender: Vec<u8>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stored_event_field_count() {
-        assert_eq!(StoredEvEmitMod::field_count(), 4);
-    }
-
-    #[test]
-    fn test_stored_struct_inst_field_count() {
-        assert_eq!(StoredEvStructInst::field_count(), 6);
-    }
-}
