@@ -11,10 +11,13 @@ export function CreateCounter({
 }) {
   const counterPackageId = useNetworkVariable("counterPackageId");
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute, isSuccess, isPending } = useSignAndExecuteTransaction();
+  const {
+    mutate: signAndExecute,
+    isSuccess,
+    isPending,
+  } = useSignAndExecuteTransaction();
 
   function create() {
-
     const tx = new Transaction();
 
     tx.moveCall({
@@ -34,7 +37,7 @@ export function CreateCounter({
               showEffects: true,
             },
           });
-          
+
           onCreated(effects?.created?.[0]?.reference?.objectId!);
         },
       },
@@ -50,7 +53,7 @@ export function CreateCounter({
         }}
         disabled={isSuccess || isPending}
       >
-        {(isSuccess || isPending) ? <ClipLoader size={20} /> : "Create Counter"}
+        {isSuccess || isPending ? <ClipLoader size={20} /> : "Create Counter"}
       </Button>
     </Container>
   );
