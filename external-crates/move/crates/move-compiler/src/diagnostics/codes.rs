@@ -21,7 +21,7 @@ pub type ExternalPrefix = Option<&'static str>;
 /// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
 pub type DiagnosticsID = (ExternalPrefix, u8, u8);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
     severity: Severity,
     category: u8,
