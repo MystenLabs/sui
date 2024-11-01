@@ -21,7 +21,7 @@ pub struct StoredObject {
     pub serialized_object: Option<Vec<u8>>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
 pub struct StoredObjVersion {
     pub object_id: Vec<u8>,
@@ -97,6 +97,11 @@ pub struct StoredWalObjType {
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
     pub cp_sequence_number: i64,
+}
+
+/// StoredObjectUpdate is a wrapper type, we want to count the fields of the inner type.
+impl<T: FieldCount> FieldCount for StoredObjectUpdate<T> {
+    const FIELD_COUNT: usize = T::FIELD_COUNT;
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind

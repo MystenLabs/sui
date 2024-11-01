@@ -22,13 +22,6 @@ use crate::{
     schema::sum_obj_types,
 };
 
-/// Each insert or update will include at most this many rows -- the size is chosen to maximize the
-/// rows without hitting the limit on bind parameters.
-const UPDATE_CHUNK_ROWS: usize = i16::MAX as usize / 8;
-
-/// Each deletion will include at most this many rows.
-const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-
 pub struct SumObjTypes;
 
 impl Processor for SumObjTypes {
@@ -158,8 +151,8 @@ impl Handler for SumObjTypes {
             }
         }
 
-        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(Either::Left);
-        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(Either::Right);
+        let update_chunks = updates.chunks(Self::INSERT_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(Self::DELETE_CHUNK_ROWS).map(Either::Right);
 
         let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
             Either::Left(update) => Either::Left(

@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use mysten_metrics::spawn_monitored_task;
+use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
@@ -25,8 +26,15 @@ pub trait Processor {
     /// How much concurrency to use when processing checkpoint data.
     const FANOUT: usize = 10;
 
+    /// Each insert or update will include at most this many rows -- the size is chosen to maximize the
+    /// rows without hitting the limit on bind parameters.
+    const INSERT_CHUNK_ROWS: usize = i16::MAX as usize / Self::Value::FIELD_COUNT;
+
+    /// Each deletion will include at most this many rows without hitting the limit on bind parameters.
+    const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
+
     /// The type of value being inserted by the handler.
-    type Value: Send + Sync + 'static;
+    type Value: Send + Sync + 'static + FieldCount;
 
     /// The processing logic for turning a checkpoint into rows of the table.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
