@@ -1,0 +1,10 @@
+[package]
+name = "abort_math"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+abort_math = "0x0"
+std = "0x1"

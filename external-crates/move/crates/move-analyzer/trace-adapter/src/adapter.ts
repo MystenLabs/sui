@@ -20,8 +20,10 @@ import {
     RuntimeValueType,
     IRuntimeVariableScope,
     CompoundType,
-    IRuntimeRefValue
+    IRuntimeRefValue,
+    ExecutionResult
 } from './runtime';
+import { log } from 'console';
 
 
 const enum LogLevel {
@@ -107,6 +109,9 @@ export class MoveDebugSession extends LoggingDebugSession {
         });
         this.runtime.on(RuntimeEvents.stopOnLineBreakpoint, () => {
             this.sendEvent(new StoppedEvent('breakpoint', MoveDebugSession.THREAD_ID));
+        });
+        this.runtime.on(RuntimeEvents.stopOnException, (msg) => {
+            this.sendEvent(new StoppedEvent('exception', MoveDebugSession.THREAD_ID, msg));
         });
         this.runtime.on(RuntimeEvents.end, () => {
             this.sendEvent(new TerminatedEvent());
@@ -434,7 +439,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
+            const executionResult = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -451,7 +457,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
+            const executionResult = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -466,14 +473,16 @@ export class MoveDebugSession extends LoggingDebugSession {
         response: DebugProtocol.StepOutResponse,
         _args: DebugProtocol.StepOutArguments
     ): void {
+        let terminate = false;
         try {
-            const steppedOut = this.runtime.stepOut(/* next */ false);
-            if (!steppedOut) {
-                logger.log(`Cannot step out`);
-            }
+            const executionResult = this.runtime.stepOut(/* next */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
+        }
+        if (terminate) {
+            this.sendEvent(new TerminatedEvent());
         }
         this.sendResponse(response);
     }
@@ -484,7 +493,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.continue();
+            const executionResult = this.runtime.continue();
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
