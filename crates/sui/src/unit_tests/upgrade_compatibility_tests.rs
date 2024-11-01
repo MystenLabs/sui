@@ -19,7 +19,7 @@ fn test_all_fail() {
 
 #[test]
 fn test_declarations_missing() {
-    let (pkg_v1, pkg_v2) = get_packages("declarations_missing");
+    let (pkg_v1, pkg_v2) = get_packages("declaration_errors");
     let result = compare_packages(pkg_v1, pkg_v2);
 
     assert!(result.is_err());
@@ -29,7 +29,7 @@ fn test_declarations_missing() {
 
 #[test]
 fn test_function_signature() {
-    let (pkg_v1, pkg_v2) = get_packages("function_signature");
+    let (pkg_v1, pkg_v2) = get_packages("function_errors");
     let result = compare_packages(pkg_v1, pkg_v2);
 
     assert!(result.is_err());
@@ -39,7 +39,7 @@ fn test_function_signature() {
 
 #[test]
 fn test_struct() {
-    let (pkg_v1, pkg_v2) = get_packages("struct_mismatch");
+    let (pkg_v1, pkg_v2) = get_packages("struct_errors");
     let result = compare_packages(pkg_v1, pkg_v2);
 
     assert!(result.is_err());
@@ -49,7 +49,7 @@ fn test_struct() {
 
 #[test]
 fn test_enum() {
-    let (pkg_v1, pkg_v2) = get_packages("enum_mismatch");
+    let (pkg_v1, pkg_v2) = get_packages("enum_errors");
     let result = compare_packages(pkg_v1, pkg_v2);
 
     assert!(result.is_err());

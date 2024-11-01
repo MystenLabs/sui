@@ -10,7 +10,8 @@ module upgrades::upgrades {
     public struct AddExtraAbility has copy {} // added copy
     public struct RemoveAbility has drop {} // removed copy
     public struct AddAndRemoveAbility has drop, store {} // remove copy, add store
-
+    public struct RemoveMultipleAbilities has drop {} // remove copy, store
+    public struct AddMultipleAbilities has drop, copy {}
 
     // field mismatch
     public struct AddField {
