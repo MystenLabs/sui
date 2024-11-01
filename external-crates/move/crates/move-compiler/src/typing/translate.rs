@@ -43,6 +43,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
+use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
@@ -89,9 +90,11 @@ pub fn program(
         warning_filters_table,
         info: Arc::new(module_info),
     };
-    for v in &compilation_env.visitors().typing {
-        v.visit(compilation_env, &prog);
-    }
+    compilation_env
+        .visitors()
+        .typing
+        .par_iter()
+        .for_each(|v| v.visit(compilation_env, &prog));
     prog
 }
 
