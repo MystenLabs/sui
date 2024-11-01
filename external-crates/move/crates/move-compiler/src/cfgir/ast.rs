@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{Attributes, Friend, ModuleIdent, Mutability, TargetKind},
     hlir::ast::{
         BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,

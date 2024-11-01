@@ -23,7 +23,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     vm_status::StatusCode,
 };
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{
     move_vm::MoveVM,
@@ -33,7 +33,7 @@ use move_vm_test_utils::{
     gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
     InMemoryStorage,
 };
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 use move_vm_types::gas::GasMeter;
 use std::time::Instant;
 
@@ -555,7 +555,7 @@ fn run_with_module(
         .into_iter()
         .map(|tag| session.load_type(&tag))
         .collect::<VMResult<Vec<_>>>();
-    move_vm_profiler::gas_profiler_feature_enabled! {
+    move_vm_profiler::tracing_feature_enabled! {
         gas.set_profiler(GasProfiler::init(
             &session.vm_config().profiler_config,
             entry_name.to_string(),

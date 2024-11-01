@@ -15,13 +15,13 @@ use crate::{
 };
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     is_source_def: bool,
     current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
-    fn new(env: &'env mut CompilationEnv) -> Self {
+    fn new(env: &'env CompilationEnv) -> Self {
         Self {
             env,
             is_source_def: false,
@@ -56,6 +56,7 @@ impl FilterContext for Context<'_> {
         // expansion
         // Ideally we would just have a warning filter scope here
         // (but again, need expansion for that)
+        let top_warning_filter_scope = self.env.top_level_warning_filter_scope();
         let silence_warning =
             !self.is_source_def || self.env.package_config(self.current_package).is_dependency;
         if !silence_warning {
@@ -64,8 +65,10 @@ impl FilterContext for Context<'_> {
                     "The '{}' attribute has been deprecated along with specification blocks",
                     VerificationAttribute::VERIFY_ONLY
                 );
-                self.env
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
+                self.env.add_diag(
+                    top_warning_filter_scope,
+                    diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)),
+                );
             }
         }
         should_remove
@@ -79,7 +82,7 @@ impl FilterContext for Context<'_> {
 // This filters out all AST elements annotated with verify-only annotated from `prog`
 // if the `verify` flag in `compilation_env` is not set. If the `verify` flag is set,
 // no filtering is performed.
-pub fn program(compilation_env: &mut CompilationEnv, prog: P::Program) -> P::Program {
+pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program {
     let mut context = Context::new(compilation_env);
     filter_program(&mut context, prog)
 }

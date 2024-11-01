@@ -9,7 +9,7 @@ use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
-use crate::workloads::{GroupID, WorkloadBuilderInfo, WorkloadInfo};
+use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -17,9 +17,36 @@ use std::sync::Arc;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
+use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
 use super::randomness::RandomnessWorkloadBuilder;
 use super::shared_object_deletion::SharedCounterDeletionWorkloadBuilder;
 
+pub struct WorkloadWeights {
+    pub shared_counter: u32,
+    pub transfer_object: u32,
+    pub delegation: u32,
+    pub batch_payment: u32,
+    pub shared_deletion: u32,
+    pub adversarial: u32,
+    pub expected_failure: u32,
+    pub randomness: u32,
+}
+
+pub struct WorkloadConfig {
+    pub group: u32,
+    pub num_workers: u64,
+    pub num_transfer_accounts: u64,
+    pub weights: WorkloadWeights,
+    pub adversarial_cfg: AdversarialPayloadCfg,
+    pub expected_failure_cfg: ExpectedFailurePayloadCfg,
+    pub batch_payment_size: u32,
+    pub shared_counter_hotness_factor: u32,
+    pub num_shared_counters: Option<u64>,
+    pub shared_counter_max_tip: u64,
+    pub target_qps: u64,
+    pub in_flight_ratio: u64,
+    pub duration: Interval,
+}
 pub struct WorkloadConfiguration;
 
 impl WorkloadConfiguration {
@@ -40,12 +67,14 @@ impl WorkloadConfiguration {
                 delegation,
                 batch_payment,
                 adversarial,
+                expected_failure,
                 randomness,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
                 batch_payment_size,
                 adversarial_cfg,
+                expected_failure_type,
                 target_qps,
                 num_workers,
                 in_flight_ratio,
@@ -60,28 +89,36 @@ impl WorkloadConfiguration {
                 // benchmark group will run in the same time for the same duration.
                 for workload_group in 0..num_of_benchmark_groups {
                     let i = workload_group as usize;
-                    let builders = Self::create_workload_builders(
-                        workload_group,
-                        num_workers[i],
-                        opts.num_transfer_accounts,
-                        shared_counter[i],
-                        transfer_object[i],
-                        delegation[i],
-                        batch_payment[i],
-                        shared_deletion[i],
-                        adversarial[i],
-                        AdversarialPayloadCfg::from_str(&adversarial_cfg[i]).unwrap(),
-                        randomness[i],
-                        batch_payment_size[i],
-                        shared_counter_hotness_factor[i],
-                        num_shared_counters.as_ref().map(|n| n[i]),
-                        shared_counter_max_tip[i],
-                        target_qps[i],
-                        in_flight_ratio[i],
-                        duration[i],
-                        system_state_observer.clone(),
-                    )
-                    .await;
+                    let config = WorkloadConfig {
+                        group: workload_group,
+                        num_workers: num_workers[i],
+                        num_transfer_accounts: opts.num_transfer_accounts,
+                        weights: WorkloadWeights {
+                            shared_counter: shared_counter[i],
+                            transfer_object: transfer_object[i],
+                            delegation: delegation[i],
+                            batch_payment: batch_payment[i],
+                            shared_deletion: shared_deletion[i],
+                            adversarial: adversarial[i],
+                            expected_failure: expected_failure[i],
+                            randomness: randomness[i],
+                        },
+                        adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
+                            .unwrap(),
+                        expected_failure_cfg: ExpectedFailurePayloadCfg {
+                            failure_type: ExpectedFailureType::try_from(expected_failure_type[i])
+                                .unwrap(),
+                        },
+                        batch_payment_size: batch_payment_size[i],
+                        shared_counter_hotness_factor: shared_counter_hotness_factor[i],
+                        num_shared_counters: num_shared_counters.as_ref().map(|n| n[i]),
+                        shared_counter_max_tip: shared_counter_max_tip[i],
+                        target_qps: target_qps[i],
+                        in_flight_ratio: in_flight_ratio[i],
+                        duration: duration[i],
+                    };
+                    let builders =
+                        Self::create_workload_builders(config, system_state_observer.clone()).await;
                     workload_builders.extend(builders);
                 }
 
@@ -139,37 +176,35 @@ impl WorkloadConfiguration {
     }
 
     pub async fn create_workload_builders(
-        workload_group: u32,
-        num_workers: u64,
-        num_transfer_accounts: u64,
-        shared_counter_weight: u32,
-        transfer_object_weight: u32,
-        delegation_weight: u32,
-        batch_payment_weight: u32,
-        shared_deletion_weight: u32,
-        adversarial_weight: u32,
-        adversarial_cfg: AdversarialPayloadCfg,
-        randomness_weight: u32,
-        batch_payment_size: u32,
-        shared_counter_hotness_factor: u32,
-        num_shared_counters: Option<u64>,
-        shared_counter_max_tip: u64,
-        target_qps: u64,
-        in_flight_ratio: u64,
-        duration: Interval,
+        WorkloadConfig {
+            group,
+            num_workers,
+            num_transfer_accounts,
+            weights,
+            adversarial_cfg,
+            expected_failure_cfg,
+            batch_payment_size,
+            shared_counter_hotness_factor,
+            num_shared_counters,
+            shared_counter_max_tip,
+            target_qps,
+            in_flight_ratio,
+            duration,
+        }: WorkloadConfig,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
-        let total_weight = shared_counter_weight
-            + shared_deletion_weight
-            + transfer_object_weight
-            + delegation_weight
-            + batch_payment_weight
-            + adversarial_weight
-            + randomness_weight;
+        let total_weight = weights.shared_counter
+            + weights.shared_deletion
+            + weights.transfer_object
+            + weights.delegation
+            + weights.batch_payment
+            + weights.adversarial
+            + weights.randomness
+            + weights.expected_failure;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
-            shared_counter_weight as f32 / total_weight as f32,
+            weights.shared_counter as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
@@ -178,11 +213,11 @@ impl WorkloadConfiguration {
             shared_counter_max_tip,
             reference_gas_price,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(shared_workload);
         let shared_deletion_workload = SharedCounterDeletionWorkloadBuilder::from(
-            shared_deletion_weight as f32 / total_weight as f32,
+            weights.shared_deletion as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
@@ -190,58 +225,69 @@ impl WorkloadConfiguration {
             shared_counter_max_tip,
             reference_gas_price,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(shared_deletion_workload);
         let transfer_workload = TransferObjectWorkloadBuilder::from(
-            transfer_object_weight as f32 / total_weight as f32,
+            weights.transfer_object as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
             num_transfer_accounts,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(transfer_workload);
         let delegation_workload = DelegationWorkloadBuilder::from(
-            delegation_weight as f32 / total_weight as f32,
+            weights.delegation as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(delegation_workload);
         let batch_payment_workload = BatchPaymentWorkloadBuilder::from(
-            batch_payment_weight as f32 / total_weight as f32,
+            weights.batch_payment as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
             batch_payment_size,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(batch_payment_workload);
         let adversarial_workload = AdversarialWorkloadBuilder::from(
-            adversarial_weight as f32 / total_weight as f32,
+            weights.adversarial as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
             adversarial_cfg,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(adversarial_workload);
         let randomness_workload = RandomnessWorkloadBuilder::from(
-            randomness_weight as f32 / total_weight as f32,
+            weights.randomness as f32 / total_weight as f32,
             target_qps,
             num_workers,
             in_flight_ratio,
             reference_gas_price,
             duration,
-            workload_group,
+            group,
         );
         workload_builders.push(randomness_workload);
+        let expected_failure_workload = ExpectedFailureWorkloadBuilder::from(
+            weights.expected_failure as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            num_transfer_accounts,
+            expected_failure_cfg,
+            duration,
+            group,
+        );
+        workload_builders.push(expected_failure_workload);
 
         workload_builders
     }

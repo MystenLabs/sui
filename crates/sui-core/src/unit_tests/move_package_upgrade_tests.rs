@@ -15,7 +15,12 @@ use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
-use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::execution_config_utils::to_binary_config;
@@ -48,11 +53,62 @@ macro_rules! move_call {
     }
 }
 
+enum FileOverlay<'a> {
+    Remove(&'a str),
+    Add {
+        file_name: &'a str,
+        contents: &'a str,
+    },
+}
+
+fn build_upgrade_test_modules_with_overlay(
+    base_pkg: &str,
+    overlay: FileOverlay<'_>,
+) -> (Vec<u8>, Vec<Vec<u8>>) {
+    // Root temp dirs under `move_upgrade` directory so that dependency paths remain correct.
+    let mut tmp_dir_root_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    tmp_dir_root_path.extend(["src", "unit_tests", "data", "move_upgrade"]);
+
+    let tmp_dir = tempfile::TempDir::new_in(tmp_dir_root_path).unwrap();
+    let tmp_dir_path = tmp_dir.path();
+
+    let mut copy_options = fs_extra::dir::CopyOptions::new();
+    copy_options.copy_inside = true;
+    copy_options.content_only = true;
+    let source_dir = pkg_path_of(base_pkg);
+    fs_extra::dir::copy(source_dir, tmp_dir_path, &copy_options).unwrap();
+
+    match overlay {
+        FileOverlay::Remove(file_name) => {
+            let file_path = tmp_dir_path.join(format!("sources/{}", file_name));
+            std::fs::remove_file(file_path).unwrap();
+        }
+        FileOverlay::Add {
+            file_name,
+            contents,
+        } => {
+            let new_file_path = tmp_dir_path.join(format!("sources/{}", file_name));
+            std::fs::write(new_file_path, contents).unwrap();
+        }
+    }
+
+    build_pkg_at_path(tmp_dir_path)
+}
+
 fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
+    let path = pkg_path_of(test_dir);
+    build_pkg_at_path(&path)
+}
+
+fn pkg_path_of(pkg_name: &str) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
+    path.extend(["src", "unit_tests", "data", "move_upgrade", pkg_name]);
+    path
+}
+
+fn build_pkg_at_path(path: &Path) -> (Vec<u8>, Vec<Vec<u8>>) {
     let with_unpublished_deps = false;
-    let package = BuildConfig::new_for_testing().build(&path).unwrap();
+    let package = BuildConfig::new_for_testing().build(path).unwrap();
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
@@ -458,6 +514,116 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
 }
 
 #[tokio::test]
+async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
+    // Allow new modules in deps-only mode for this test.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
+        config
+    });
+
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let base_pkg = "dep_only_upgrade";
+    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
+    let (digest, modules) = build_upgrade_test_modules_with_overlay(
+        base_pkg,
+        FileOverlay::Add {
+            file_name: "new_module.move",
+            contents: "module base_addr::new_module;",
+        },
+    );
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+}
+
+#[tokio::test]
+async fn test_upgrade_package_invalid_dep_only_upgrade_pre_v68() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
+        config
+    });
+
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let base_pkg = "dep_only_upgrade";
+    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
+    let overlays = [
+        FileOverlay::Add {
+            file_name: "new_friend_module.move",
+            contents: r#"
+module base_addr::new_friend_module; 
+public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
+        "#,
+        },
+        FileOverlay::Remove("friend_module.move"),
+    ];
+    for overlay in overlays {
+        let (digest, modules) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
+        let effects = runner
+            .upgrade(
+                UpgradePolicy::DEP_ONLY,
+                digest,
+                modules,
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+            )
+            .await;
+
+        assert_eq!(
+            effects.into_status().unwrap_err().0,
+            ExecutionFailureStatus::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+            },
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_invalid_dep_only_upgrades() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let base_pkg = "dep_only_upgrade";
+    assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
+    let overlays = [
+        FileOverlay::Add {
+            file_name: "new_module.move",
+            contents: "module base_addr::new_module;",
+        },
+        FileOverlay::Add {
+            file_name: "new_friend_module.move",
+            contents: r#"
+module base_addr::new_friend_module; 
+public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
+        "#,
+        },
+        FileOverlay::Remove("friend_module.move"),
+    ];
+
+    for overlay in overlays {
+        let (digest, modules) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
+        let effects = runner
+            .upgrade(
+                UpgradePolicy::DEP_ONLY,
+                digest,
+                modules,
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+            )
+            .await;
+
+        assert_eq!(
+            effects.into_status().unwrap_err().0,
+            ExecutionFailureStatus::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+            },
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_upgrade_package_compatible_in_additive_mode() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
@@ -572,18 +738,7 @@ async fn test_upgrade_package_additive_dep_only_mode() {
 #[tokio::test]
 async fn test_upgrade_package_dep_only_mode() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-
-    let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade");
-    let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
-        )
-        .await;
-
-    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+    assert_valid_dep_only_upgrade(&mut runner, "dep_only_upgrade").await;
 }
 
 #[tokio::test]
@@ -1431,4 +1586,18 @@ async fn test_upgrade_more_than_max_packages_error() {
             }
         }
     );
+}
+
+async fn assert_valid_dep_only_upgrade(runner: &mut UpgradeStateRunner, package_name: &str) {
+    let (digest, modules) = build_upgrade_test_modules(package_name);
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }

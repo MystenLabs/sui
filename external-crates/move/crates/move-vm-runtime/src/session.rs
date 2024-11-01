@@ -101,7 +101,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(
@@ -134,7 +134,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         gas_meter: &mut impl GasMeter,
         tracer: Option<&mut MoveTraceBuilder>,
     ) -> VMResult<SerializedReturnValues> {
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(
@@ -144,7 +144,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             }
         }
 
-        let tracer = if cfg!(feature = "gas-profiler") {
+        let tracer = if cfg!(feature = "tracing") {
             tracer
         } else {
             None

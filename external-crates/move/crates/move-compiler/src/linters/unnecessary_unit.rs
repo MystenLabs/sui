@@ -1,47 +1,22 @@
 //! Detects an unnecessary unit expression in a block, sequence, if, or else.
 
 use crate::{
-    diag,
-    diagnostics::WarningFilters,
-    ice,
+    diag, ice,
     linters::StyleCodes,
-    shared::CompilationEnv,
     typing::{
         ast::{self as T, SequenceItem_, UnannotatedExp_},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        visitor::simple_visitor,
     },
 };
 use move_ir_types::location::Loc;
 
-pub struct UnnecessaryUnit;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for UnnecessaryUnit {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    UnnecessaryUnit,
     fn visit_seq_custom(&mut self, loc: Loc, (_, seq_): &T::Sequence) -> bool {
         let n = seq_.len();
         match n {
             0 => {
-                self.env
-                    .add_diag(ice!((loc, "Unexpected empty block without a value")));
+                self.add_diag(ice!((loc, "Unexpected empty block without a value")));
             }
             1 => {
                 // TODO probably too noisy for now, we would need more information about
@@ -57,7 +32,7 @@ impl TypingVisitorContext for Context<'_> {
                 for (i, stmt) in seq_.iter().enumerate() {
                     if i != last && is_unit_seq(self, stmt) {
                         let msg = "Unnecessary unit in sequence '();'. Consider removing";
-                        self.env.add_diag(diag!(
+                        self.add_diag(diag!(
                             StyleCodes::UnnecessaryUnit.diag_info(),
                             (stmt.loc, msg),
                         ));
@@ -66,8 +41,7 @@ impl TypingVisitorContext for Context<'_> {
             }
         }
         false
-    }
-
+    },
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use UnannotatedExp_ as TE;
         let TE::IfElse(e_cond, e_true, e_false_opt) = &e.exp.value else {
@@ -82,7 +56,7 @@ impl TypingVisitorContext for Context<'_> {
                 (e_cond.exp.loc, if_msg),
             );
             diag.add_note("For example 'if (cond) () else e' can be simplified to 'if (!cond) e'");
-            self.env.add_diag(diag);
+            self.add_diag(diag);
         }
         if let Some(e_false) = e_false_opt {
             if is_unit(self, e_false) {
@@ -97,12 +71,12 @@ impl TypingVisitorContext for Context<'_> {
                 diag.add_note(
                     "For example 'if (cond) e else ()' can be simplified to 'if (cond) e'",
                 );
-                self.env.add_diag(diag);
+                self.add_diag(diag);
             }
         }
         false
     }
-}
+);
 
 fn is_unit_seq(context: &mut Context, s: &T::SequenceItem) -> bool {
     match &s.value {
@@ -117,9 +91,7 @@ fn is_unit(context: &mut Context, e: &T::Exp) -> bool {
         TE::Unit { .. } => true,
         TE::Annotate(inner, _) => is_unit(context, inner),
         TE::Block((_, seq)) if seq.is_empty() => {
-            context
-                .env
-                .add_diag(ice!((e.exp.loc, "Unexpected empty block without a value")));
+            context.add_diag(ice!((e.exp.loc, "Unexpected empty block without a value")));
             false
         }
         TE::Block((_, seq)) if seq.len() == 1 => is_unit_seq(context, &seq[0]),

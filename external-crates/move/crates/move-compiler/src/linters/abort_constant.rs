@@ -6,6 +6,7 @@
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
+use crate::diagnostics::warning_filters::{WarningFilters, WarningFiltersScope};
 use crate::linters::StyleCodes;
 use crate::{
     cfgir::{
@@ -13,7 +14,7 @@ use crate::{
         visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::WarningFilters,
+    diagnostics::{Diagnostic, Diagnostics},
     editions::FeatureGate,
     hlir::ast as H,
     shared::CompilationEnv,
@@ -23,29 +24,46 @@ pub struct AssertAbortNamedConstants;
 
 pub struct Context<'a> {
     package_name: Option<Symbol>,
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
+    warning_filters_scope: WarningFiltersScope,
 }
 
 impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
         let package_name = program
             .modules
             .iter()
             .next()
             .and_then(|(_, _, mdef)| mdef.package_name);
-        Context { env, package_name }
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        Context {
+            env,
+            warning_filters_scope,
+            package_name,
+        }
+    }
+}
+
+impl Context<'_> {
+    fn add_diag(&self, diag: Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    #[allow(unused)]
+    fn add_diags(&self, diags: Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
     }
 }
 
 impl CFGIRVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
+        self.warning_filters_scope.pop()
     }
 
     fn visit_command_custom(&mut self, cmd: &H::Command) -> bool {
@@ -76,7 +94,7 @@ impl Context<'_> {
                 diag.add_note("Consider using an error constant with the '#[error]' to allow for a more descriptive error.");
             }
 
-            self.env.add_diag(diag);
+            self.add_diag(diag);
         }
     }
 }

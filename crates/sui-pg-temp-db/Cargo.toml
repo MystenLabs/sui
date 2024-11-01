@@ -1,0 +1,16 @@
+[package]
+name = "sui-pg-temp-db"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+diesel.workspace = true
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+url.workspace = true

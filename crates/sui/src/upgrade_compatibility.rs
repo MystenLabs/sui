@@ -5,15 +5,12 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{stdout, IsTerminal};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Error};
-use codespan_reporting::diagnostic::{Diagnostic, Label};
-use codespan_reporting::files::SimpleFiles;
-use codespan_reporting::term;
 
 use move_binary_format::{
     compatibility::Compatibility,
@@ -22,10 +19,21 @@ use move_binary_format::{
     normalized::{Enum, Function, Module, Struct},
     CompiledModule,
 };
+use move_command_line_common::files::FileHash;
+use move_compiler::diagnostics::codes::DiagnosticInfo;
+use move_compiler::{
+    diag,
+    diagnostics::{
+        codes::{custom, Severity},
+        report_diagnostics_to_buffer, Diagnostic, Diagnostics,
+    },
+    shared::files::{FileName, FilesSourceText},
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
 };
+use move_ir_types::location::Loc;
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
@@ -36,7 +44,6 @@ use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 /// Errors that can occur during upgrade compatibility checks.
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub(crate) enum UpgradeCompatibilityModeError {
     ModuleMissing {
         name: Identifier,
@@ -353,6 +360,57 @@ impl CompatibilityMode for CliCompatibilityMode {
     }
 }
 
+const COMPATIBILITY_PREFIX: &str = "Compatibility ";
+/// Generates an enum Category along with individual enum for each individual category
+/// and impls into diagnostic info for each category.
+macro_rules! upgrade_codes {
+    ($($cat:ident: [
+        $($code:ident: { msg: $code_msg:literal }),* $(,)?
+    ]),* $(,)?) => {
+        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
+        #[repr(u8)]
+        pub enum Category {
+            #[allow(dead_code)]
+            ZeroPlaceholder,
+            $($cat,)*
+        }
+
+        $(
+            #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+            #[repr(u8)]
+            pub enum $cat {
+                #[allow(dead_code)]
+                ZeroPlaceholder,
+                $($code,)*
+            }
+
+            // impl into diagnostic info
+            impl Into<DiagnosticInfo> for $cat {
+                fn into(self) -> DiagnosticInfo {
+                    match self {
+                        Self::ZeroPlaceholder =>
+                            panic!("do not use placeholder error code"),
+                        $(Self::$code => custom(
+                            COMPATIBILITY_PREFIX,
+                            Severity::NonblockingError,
+                            Category::$cat as u8,
+                            self as u8,
+                            $code_msg,
+                        ),)*
+                    }
+                }
+            }
+        )*
+    };
+}
+
+// Used to generate diagnostics primary labels for upgrade compatibility errors.
+upgrade_codes!(
+    Declarations: [
+        PublicMissing: { msg: "missing public declaration" },
+    ],
+);
+
 /// Check the upgrade compatibility of a new package with an existing on-chain package.
 pub(crate) async fn check_compatibility(
     client: &SuiClient,
@@ -429,14 +487,10 @@ fn compare_packages(
         return Ok(());
     }
 
-    let mut files = SimpleFiles::new();
-    let config = term::Config::default();
-    let mut writer = if stdout().is_terminal() {
-        term::termcolor::Buffer::ansi()
-    } else {
-        term::termcolor::Buffer::no_color()
-    };
-    let mut file_id_map = HashMap::new();
+    let mut files: FilesSourceText = HashMap::new();
+    let mut file_set = HashSet::new();
+
+    let mut diags = Diagnostics::new();
 
     for (name, err) in errors {
         let compiled_unit_with_source = new_package
@@ -444,48 +498,66 @@ fn compare_packages(
             .get_module_by_name_from_root(name.as_str())
             .context("Unable to get module")?;
 
-        let source_path = compiled_unit_with_source.source_path.as_path();
-        let file_id = match file_id_map.entry(source_path) {
-            Occupied(entry) => *entry.get(),
-            Vacant(entry) => {
-                let source = fs::read_to_string(&compiled_unit_with_source.source_path)
-                    .context("Unable to read source file")?;
-                *entry.insert(files.add(source_path.to_string_lossy(), source))
-            }
-        };
+        if !file_set.contains(&compiled_unit_with_source.source_path) {
+            let file_contents: Arc<str> =
+                fs::read_to_string(&compiled_unit_with_source.source_path)
+                    .context("Unable to read source file")?
+                    .into();
+            let file_hash = FileHash::new(&file_contents);
 
-        term::emit(
-            &mut writer,
-            &config,
-            &files,
-            &diag_from_error(err, compiled_unit_with_source, file_id),
-        )?;
+            files.insert(
+                file_hash,
+                (
+                    FileName::from(compiled_unit_with_source.source_path.to_string_lossy()),
+                    file_contents,
+                ),
+            );
+
+            file_set.insert(compiled_unit_with_source.source_path.clone());
+        }
+
+        diags.add(diag_from_error(&err, compiled_unit_with_source))
     }
 
     Err(anyhow!(
         "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.",
-        String::from_utf8(writer.into_inner()).context("Unable to convert buffer to string")?
+        String::from_utf8(report_diagnostics_to_buffer(&files.into(), diags, stdout().is_terminal())).context("Unable to convert buffer to string")?
     ))
 }
 
 /// Convert an error to a diagnostic using the specific error type's function.
 fn diag_from_error(
-    error: UpgradeCompatibilityModeError,
+    error: &UpgradeCompatibilityModeError,
     compiled_unit_with_source: &CompiledUnitWithSource,
-    file_id: usize,
-) -> Diagnostic<usize> {
+) -> Diagnostic {
     match error {
-        UpgradeCompatibilityModeError::StructMissing { name, .. } => {
-            missing_definition_diag("struct", &name, compiled_unit_with_source, file_id)
-        }
-        UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
-            missing_definition_diag("enum", &name, compiled_unit_with_source, file_id)
-        }
+        UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
+            Declarations::PublicMissing,
+            "struct",
+            &name,
+            compiled_unit_with_source,
+        ),
+        UpgradeCompatibilityModeError::EnumMissing { name, .. } => missing_definition_diag(
+            Declarations::PublicMissing,
+            "enum",
+            &name,
+            compiled_unit_with_source,
+        ),
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
-            missing_definition_diag("public function", &name, compiled_unit_with_source, file_id)
+            missing_definition_diag(
+                Declarations::PublicMissing,
+                "public function",
+                &name,
+                compiled_unit_with_source,
+            )
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
-            missing_definition_diag("entry function", &name, compiled_unit_with_source, file_id)
+            missing_definition_diag(
+                Declarations::PublicMissing,
+                "entry function",
+                &name,
+                compiled_unit_with_source,
+            )
         }
         _ => todo!("Implement diag_from_error for {:?}", error),
     }
@@ -493,33 +565,33 @@ fn diag_from_error(
 
 /// Return a diagnostic for a missing definition.
 fn missing_definition_diag(
+    error: impl Into<DiagnosticInfo>,
     declaration_kind: &str,
     identifier_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
-    file_id: usize,
-) -> Diagnostic<usize> {
+) -> Diagnostic {
     let module_name = compiled_unit_with_source.unit.name;
-
-    let start = compiled_unit_with_source
+    let loc = compiled_unit_with_source
         .unit
         .source_map
-        .definition_location
-        .start() as usize;
+        .definition_location;
 
-    let end = compiled_unit_with_source
-        .unit
-        .source_map
-        .definition_location
-        .end() as usize;
-
-    Diagnostic::error()
-        .with_message(format!("{declaration_kind} is missing"))
-        .with_labels(vec![Label::primary(file_id, start..end).with_message(
-            format!(
-                "Module '{module_name}' expected {declaration_kind} '{identifier_name}', but found none"
-            ),
-        )])
-        .with_notes(vec![format!(
-            "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade, add back the {declaration_kind} '{identifier_name}'."
-        )])
+    Diagnostic::new(
+        error,
+        (loc, format!(
+            "{declaration_kind} '{identifier_name}' is missing",
+            declaration_kind = declaration_kind,
+            identifier_name = identifier_name,
+        )),
+        std::iter::empty::<(Loc, String)>(),
+        vec![format!(
+            "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', but found none",
+        ),
+         format!(
+             "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade",
+         ),
+         format!(
+             "add missing {declaration_kind} '{identifier_name}' back to the module '{module_name}'.",
+         )]
+    )
 }

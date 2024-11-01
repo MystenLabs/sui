@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -1473,8 +1474,13 @@ impl SuiNode {
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 
+        let tls_config = sui_tls::create_rustls_server_config(
+            config.network_key_pair().copy().private(),
+            SUI_TLS_SERVER_NAME.to_string(),
+            sui_tls::AllowAll,
+        );
         let server = server_builder
-            .bind(config.network_address())
+            .bind(config.network_address(), Some(tls_config))
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
         let local_addr = server.local_addr();

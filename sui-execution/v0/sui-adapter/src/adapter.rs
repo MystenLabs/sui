@@ -5,7 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    #[cfg(feature = "gas-profiler")]
+    #[cfg(feature = "tracing")]
     use move_vm_config::runtime::VMProfilerConfig;
     use std::path::PathBuf;
     use std::{collections::BTreeMap, sync::Arc};
@@ -45,9 +45,9 @@ mod checked {
         protocol_config: &ProtocolConfig,
         _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
-        #[cfg(not(feature = "gas-profiler"))]
+        #[cfg(not(feature = "tracing"))]
         let vm_profiler_config = None;
-        #[cfg(feature = "gas-profiler")]
+        #[cfg(feature = "tracing")]
         let vm_profiler_config = _enable_profiler.clone().map(|path| VMProfilerConfig {
             full_path: path,
             track_bytecode_instructions: false,

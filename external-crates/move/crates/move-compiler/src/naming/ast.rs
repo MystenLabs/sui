@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
         DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, TargetKind,

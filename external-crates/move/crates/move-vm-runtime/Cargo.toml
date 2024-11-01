@@ -39,11 +39,9 @@ move-compiler.workspace = true
 default = []
 fuzzing = ["move-vm-types/fuzzing"]
 failpoints = ["fail/failpoints"]
-# Enable tracing and debugging also for release builds. By default, it is only enabled for debug builds.
-debugging = []
 testing = []
 lazy_natives = []
-gas-profiler = [
-    "move-vm-config/gas-profiler",
-    "move-vm-profiler/gas-profiler",
+tracing = [
+    "move-vm-config/tracing",
+    "move-vm-profiler/tracing",
 ]

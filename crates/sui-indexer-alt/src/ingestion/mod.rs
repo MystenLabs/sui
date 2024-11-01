@@ -51,11 +51,11 @@ pub struct IngestionConfig {
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
-    buffer_size: usize,
+    checkpoint_buffer_size: usize,
 
     /// Maximum number of checkpoints to attempt to fetch concurrently.
     #[arg(long, default_value_t = 200)]
-    concurrency: usize,
+    ingest_concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
     #[arg(
@@ -109,7 +109,7 @@ impl IngestionService {
         mpsc::Receiver<Arc<CheckpointData>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
-        let (sender, receiver) = mpsc::channel(self.config.buffer_size);
+        let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
         self.subscribers.push(sender);
         (receiver, self.ingest_hi_tx.clone())
     }
@@ -147,11 +147,11 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.concurrency);
+        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
 
         let regulator = regulator(
             checkpoints,
-            config.buffer_size,
+            config.checkpoint_buffer_size,
             ingest_hi_rx,
             checkpoint_tx,
             cancel.clone(),
@@ -186,16 +186,16 @@ mod tests {
 
     async fn test_ingestion(
         uri: String,
-        buffer_size: usize,
-        concurrency: usize,
+        checkpoint_buffer_size: usize,
+        ingest_concurrency: usize,
         cancel: CancellationToken,
     ) -> IngestionService {
         IngestionService::new(
             IngestionConfig {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
                 local_ingestion_path: None,
-                buffer_size,
-                concurrency,
+                checkpoint_buffer_size,
+                ingest_concurrency,
                 retry_interval: Duration::from_millis(200),
             },
             Arc::new(test_metrics()),

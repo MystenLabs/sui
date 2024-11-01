@@ -103,6 +103,8 @@ members = [
     "crates/sui-e2e-tests",
     "crates/sui-enum-compat-util",
     "crates/sui-faucet",
+    "crates/sui-field-count",
+    "crates/sui-field-count-derive",
     "crates/sui-framework",
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
@@ -128,6 +130,7 @@ members = [
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-move-lsp",
+    "crates/sui-mvr-indexer",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -136,6 +139,7 @@ members = [
     "crates/sui-package-dump",
     "crates/sui-package-management",
     "crates/sui-package-resolver",
+    "crates/sui-pg-temp-db",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
@@ -205,7 +209,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.37.0"
+version = "1.38.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -258,6 +262,7 @@ async-graphql = "=7.0.1"
 async-graphql-axum = "=7.0.1"
 async-graphql-value = "=7.0.1"
 async-recursion = "1.0.4"
+async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
 aws-config = "0.56"
@@ -629,6 +634,8 @@ sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
+sui-field-count = { path = "crates/sui-field-count" }
+sui-field-count-derive = { path = "crates/sui-field-count-derive" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
@@ -644,11 +651,13 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
+sui-kvstore = {path = "crates/sui-kvstore"}
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
+sui-mvr-indexer = { path = "crates/sui-mvr-indexer" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
@@ -656,6 +665,7 @@ sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
+sui-pg-temp-db = { path = "crates/sui-pg-temp-db" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }

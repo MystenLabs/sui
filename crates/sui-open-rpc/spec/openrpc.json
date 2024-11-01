@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.37.0"
+    "version": "1.38.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "66",
+              "maxSupportedProtocolVersion": "68",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1310,6 +1310,7 @@
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "disallow_new_modules_in_deps_only_packages": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
                 "enable_effects_v2": false,
@@ -1428,6 +1429,7 @@
                 "consensus_max_num_transactions_in_block": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
+                "consensus_voting_rounds": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
@@ -1593,6 +1595,7 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "gas_budget_based_txn_cost_absolute_cap_commit_count": null,
                 "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
@@ -10722,7 +10725,7 @@
       "TransactionFilter": {
         "oneOf": [
           {
-            "description": "Query by checkpoint.",
+            "description": "CURRENTLY NOT SUPPORTED. Query by checkpoint.",
             "type": "object",
             "required": [
               "Checkpoint"
@@ -10858,7 +10861,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Query txs that have a given address as sender or recipient.",
+            "description": "CURRENTLY NOT SUPPORTED. Query txs that have a given address as sender or recipient.",
             "type": "object",
             "required": [
               "FromOrToAddress"

@@ -21,7 +21,7 @@ anyhow.workspace = true
 clap.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["full"] }
-fastcrypto = { workspace = true }
+fastcrypto.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true

@@ -424,7 +424,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                 self.exp_symbols(e1);
                 self.exp_symbols(e2);
             }
-            E::Abort(e) => self.exp_symbols(e),
+            E::Abort(oe) => {
+                if let Some(e) = oe.as_ref() {
+                    self.exp_symbols(e)
+                }
+            }
             E::Return(_, oe) => {
                 if let Some(e) = oe.as_ref() {
                     self.exp_symbols(e)

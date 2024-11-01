@@ -25,7 +25,7 @@ use vfs::VfsPath;
 /// Parses program's targets and dependencies, both of which are read from different virtual file
 /// systems (vfs and deps_out_vfs, respectively).
 pub(crate) fn parse_program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     named_address_maps: NamedAddressMaps,
     mut targets: Vec<IndexedVfsPackagePath>,
     mut deps: Vec<IndexedVfsPackagePath>,
@@ -113,7 +113,7 @@ fn ensure_targets_deps_dont_intersect(
 
 fn parse_file(
     path: &VfsPath,
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     files: &mut MappedFiles,
     package: Option<Symbol>,
 ) -> anyhow::Result<(
@@ -126,8 +126,9 @@ fn parse_file(
     let file_hash = FileHash::new(&source_buffer);
     let fname = Symbol::from(path.as_str());
     let source_str = Arc::from(source_buffer);
+    let warning_filters = compilation_env.top_level_warning_filter_scope();
     if let Err(ds) = verify_string(file_hash, &source_str) {
-        compilation_env.add_diags(ds);
+        compilation_env.add_diags(warning_filters, ds);
         files.add(file_hash, fname, source_str);
         return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
     }
@@ -135,7 +136,7 @@ fn parse_file(
     {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
-            compilation_env.add_diags(ds);
+            compilation_env.add_diags(warning_filters, ds);
             (vec![], MatchedFileCommentMap::new())
         }
     };

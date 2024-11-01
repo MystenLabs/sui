@@ -4,7 +4,7 @@
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
-    diagnostics::codes::WarningFilter,
+    diagnostics::warning_filters::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     linters::{LintLevel, LinterDiagnosticCategory, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},

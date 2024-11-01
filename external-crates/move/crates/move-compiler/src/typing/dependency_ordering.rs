@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) {
     let imm_modules = &modules;
@@ -38,7 +38,7 @@ pub fn program(
         Err(cycle_node) => {
             let cycle_ident = *cycle_node.node_id();
             let error = cycle_error(&module_neighbors, cycle_ident);
-            compilation_env.add_diag(error);
+            compilation_env.add_error_diag(error);
         }
         Ok(ordered_ids) => {
             for (order, mident) in ordered_ids.iter().rev().enumerate() {
@@ -63,7 +63,7 @@ enum DepType {
 }
 
 struct Context<'a, 'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
@@ -79,7 +79,7 @@ struct Context<'a, 'env> {
 
 impl<'a, 'env> Context<'a, 'env> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     ) -> Self {
         Context {
@@ -372,7 +372,7 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
             }
         }
         L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
-            context.env.add_diag(ice!((
+            context.env.add_error_diag(ice!((
                 *loc,
                 "variant unpacking shouldn't occur before match expansion"
             )));
@@ -420,7 +420,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             }
         }
         E::VariantMatch(..) => {
-            context.env.add_diag(ice!((
+            context.env.add_error_diag(ice!((
                 e.exp.loc,
                 "shouldn't find variant match before HLIR lowering"
             )));

@@ -35,7 +35,7 @@ pub(super) fn broadcaster(
 
         match ReceiverStream::new(checkpoint_rx)
             .map(Ok)
-            .try_for_each_concurrent(/* limit */ config.concurrency, |cp| {
+            .try_for_each_concurrent(/* limit */ config.ingest_concurrency, |cp| {
                 let client = client.clone();
                 let metrics = metrics.clone();
                 let subscribers = subscribers.clone();

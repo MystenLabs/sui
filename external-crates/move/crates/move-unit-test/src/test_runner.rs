@@ -262,7 +262,7 @@ impl SharedTestingConfig {
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             use move_vm_types::gas::GasMeter;
             gas_meter.set_profiler(GasProfiler::init_default_cfg(

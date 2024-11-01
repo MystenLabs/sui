@@ -1198,9 +1198,18 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
@@ -5911,6 +5920,7 @@ async fn test_consensus_handler_per_object_congestion_control(
         }
     }
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
+    protocol_config.set_max_txn_cost_overage_per_object_in_commit_for_testing(0);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -6139,6 +6149,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     protocol_config
         .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(100_000_000);
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(2);
+    protocol_config.set_max_txn_cost_overage_per_object_in_commit_for_testing(0);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)

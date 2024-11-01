@@ -155,7 +155,8 @@
                   }
                 }
               },
-              "application/bcs": {}
+              "application/bcs": {},
+              "application/x-protobuf": {}
             }
           },
           "410": {
@@ -305,9 +306,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Object"
+                  "$ref": "#/components/schemas/ObjectResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -352,9 +354,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Object"
+                  "$ref": "#/components/schemas/ObjectResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -462,69 +465,6 @@
         }
       }
     },
-    "/checkpoints/full": {
-      "get": {
-        "tags": [
-          "Checkpoint"
-        ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nList Full Checkpoints\n\nRequest a page of checkpoints and all data associated with them including:\n- CheckpointSummary\n- Validator Signature\n- CheckpointContents\n- Transactions, Effects, Events, as well as all input and output objects\n\nIf the requested page is below the Node's `lowest_available_checkpoint_objects`, a 410 will be\nreturned.",
-        "operationId": "List Full Checkpoints",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "direction",
-            "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
-            "schema": {
-              "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Direction"
-                }
-              ]
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "description": "Page size limit for the response.\n\nDefaults to `5` if not provided with a maximum page size of `10`.",
-            "schema": {
-              "description": "Page size limit for the response.\n\nDefaults to `5` if not provided with a maximum page size of `10`.",
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "start",
-            "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
-            "schema": {
-              "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "style": "form"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/bcs": {}
-            }
-          },
-          "410": {
-            "description": ""
-          },
-          "500": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/transactions/{transaction}": {
       "get": {
         "tags": [
@@ -552,6 +492,7 @@
                   "$ref": "#/components/schemas/TransactionResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -616,6 +557,7 @@
                   }
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -690,6 +632,7 @@
                   "$ref": "#/components/schemas/TransactionExecutionResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -725,6 +668,7 @@
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -750,6 +694,7 @@
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -940,6 +885,7 @@
                   "$ref": "#/components/schemas/TransactionSimulationResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -1017,6 +963,7 @@
                   "$ref": "#/components/schemas/ResolveTransactionResponse"
                 }
               },
+              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -1398,18 +1345,22 @@
       "CheckpointResponse": {
         "type": "object",
         "required": [
-          "checkpoint",
-          "signature"
+          "digest",
+          "signature",
+          "summary"
         ],
         "properties": {
-          "checkpoint": {
-            "$ref": "#/components/schemas/CheckpointSummary"
-          },
           "contents": {
             "$ref": "#/components/schemas/CheckpointContents"
           },
+          "digest": {
+            "$ref": "#/components/schemas/CheckpointDigest"
+          },
           "signature": {
             "$ref": "#/components/schemas/ValidatorAggregatedSignature"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CheckpointSummary"
           }
         }
       },
@@ -3930,6 +3881,21 @@
           },
           "reference": {
             "$ref": "#/components/schemas/ObjectReference"
+          }
+        }
+      },
+      "ObjectResponse": {
+        "type": "object",
+        "required": [
+          "digest",
+          "object"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "object": {
+            "$ref": "#/components/schemas/Object"
           }
         }
       },

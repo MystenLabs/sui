@@ -24,7 +24,7 @@ mod tracing;
 mod tracing2;
 
 // Only include debugging functionality in debug builds
-#[cfg(any(debug_assertions, feature = "debugging"))]
+#[cfg(any(debug_assertions, feature = "tracing"))]
 mod debug;
 
 #[cfg(test)]
