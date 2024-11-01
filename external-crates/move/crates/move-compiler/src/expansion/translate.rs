@@ -6,8 +6,8 @@ use crate::{
     diag,
     diagnostics::{
         warning_filters::{
-            WarningFilter, WarningFiltersArc, WarningFiltersBuilder, WarningFiltersTable,
-            FILTER_ALL, FILTER_UNUSED,
+            WarningFilter, WarningFilters, WarningFiltersBuilder, WarningFiltersTable, FILTER_ALL,
+            FILTER_UNUSED,
         },
         Diagnostic, DiagnosticReporter, Diagnostics,
     },
@@ -85,7 +85,7 @@ struct Context<'env, 'map> {
     warning_filters_table: Mutex<WarningFiltersTable>,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
-    all_filter_alls: WarningFiltersArc,
+    all_filter_alls: WarningFilters,
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
@@ -300,7 +300,7 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.defn_context.push_warning_filter_scope(filters)
     }
 
@@ -331,7 +331,7 @@ impl DefnContext<'_, '_> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub(super) fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
+    pub(super) fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -1255,7 +1255,7 @@ fn module_warning_filter(
     context: &mut Context,
     package: Option<Symbol>,
     attributes: &E::Attributes,
-) -> WarningFiltersArc {
+) -> WarningFilters {
     let mut filters = warning_filter_(context, attributes);
     let is_dep = !context.defn_context.is_source_definition || {
         let pkg = context.current_package();
@@ -1276,7 +1276,7 @@ fn module_warning_filter(
     }
 }
 
-fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFiltersArc {
+fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let wf = warning_filter_(context, attributes);
     context.warning_filters_table.get_mut().unwrap().add(wf)
 }

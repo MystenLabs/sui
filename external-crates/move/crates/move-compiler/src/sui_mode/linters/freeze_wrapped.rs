@@ -11,7 +11,7 @@ use crate::{
     diag,
     diagnostics::{
         codes::{custom, DiagnosticInfo, Severity},
-        warning_filters::WarningFiltersArc,
+        warning_filters::WarningFilters,
         Diagnostic, DiagnosticReporter, Diagnostics,
     },
     expansion::ast as E,
@@ -156,7 +156,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         false
     }
 
-    fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc) {
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

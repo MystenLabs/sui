@@ -75,7 +75,7 @@ enum WarningFiltersScope_ {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct WarningFiltersScopeNode {
-    filters: WarningFiltersArc,
+    filters: WarningFilters,
     prev: WarningFiltersScope_,
 }
 
@@ -83,9 +83,9 @@ struct WarningFiltersScopeNode {
 pub struct WarningFiltersTable(HashSet<Pin<Box<WarningFiltersBuilder>>>);
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-pub struct WarningFiltersArc(*const WarningFiltersBuilder);
-unsafe impl Send for WarningFiltersArc {}
-unsafe impl Sync for WarningFiltersArc {}
+pub struct WarningFilters(*const WarningFiltersBuilder);
+unsafe impl Send for WarningFilters {}
+unsafe impl Sync for WarningFilters {}
 
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Used to filter out diagnostics, specifically used for warning suppression
@@ -148,7 +148,7 @@ impl WarningFiltersScope {
         }
     }
 
-    pub fn push(&mut self, filters: WarningFiltersArc) {
+    pub fn push(&mut self, filters: WarningFilters) {
         let node = Arc::new(WarningFiltersScopeNode {
             filters,
             prev: self.0.clone(),
@@ -202,16 +202,16 @@ impl WarningFiltersTable {
         Self(HashSet::new())
     }
 
-    pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFiltersArc {
+    pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFilters {
         let pinned = Box::pin(filters);
         let wf = {
             let pinned_ref: &WarningFiltersBuilder = &pinned;
-            WarningFiltersArc(pinned_ref as *const WarningFiltersBuilder)
+            WarningFilters(pinned_ref as *const WarningFiltersBuilder)
         };
         match self.0.get(&pinned) {
             Some(existing) => {
                 let existing_ref: &WarningFiltersBuilder = existing;
-                WarningFiltersArc(existing_ref as *const WarningFiltersBuilder)
+                WarningFilters(existing_ref as *const WarningFiltersBuilder)
             }
             None => {
                 self.0.insert(pinned);
@@ -221,7 +221,7 @@ impl WarningFiltersTable {
     }
 }
 
-impl WarningFiltersArc {
+impl WarningFilters {
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
         self.borrow().is_filtered(diag)
     }
@@ -501,7 +501,7 @@ impl WarningFilter {
     }
 }
 
-impl AstDebug for WarningFiltersArc {
+impl AstDebug for WarningFilters {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
         self.borrow().ast_debug(w);
     }

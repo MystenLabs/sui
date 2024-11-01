@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::{WarningFiltersArc, WarningFiltersTable},
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
         DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, TargetKind,
@@ -139,7 +139,7 @@ pub type SyntaxMethods = BTreeMap<TypeName, SyntaxMethodEntry>;
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
     pub loc: Loc,
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -165,7 +165,7 @@ pub struct DatatypeTypeParameter {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StructDefinition {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub loc: Loc,
@@ -183,7 +183,7 @@ pub enum StructFields {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub loc: Loc,
@@ -227,7 +227,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -245,7 +245,7 @@ pub struct Function {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Constant {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,

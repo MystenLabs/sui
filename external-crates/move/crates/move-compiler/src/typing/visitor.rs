@@ -3,7 +3,7 @@
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFiltersArc,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
@@ -43,7 +43,7 @@ pub enum LValueKind {
 }
 
 pub trait TypingVisitorContext {
-    fn push_warning_filter_scope(&mut self, filters: WarningFiltersArc);
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -611,7 +611,7 @@ macro_rules! simple_visitor {
         impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
             fn push_warning_filter_scope(
                 &mut self,
-                filters: crate::diagnostics::warning_filters::WarningFiltersArc,
+                filters: crate::diagnostics::warning_filters::WarningFilters,
             ) {
                 self.reporter.push_warning_filter_scope(filters)
             }
@@ -646,7 +646,7 @@ pub trait TypingMutVisitorConstructor: Send + Sync {
 }
 
 pub trait TypingMutVisitorContext {
-    fn push_warning_filter_scope(&mut self, filter: WarningFiltersArc);
+    fn push_warning_filter_scope(&mut self, filter: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::{WarningFiltersArc, WarningFiltersTable},
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
         FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
@@ -130,7 +130,7 @@ pub type ModuleIdent = Spanned<ModuleIdent_>;
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -172,7 +172,7 @@ pub struct DatatypeTypeParameter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -191,7 +191,7 @@ pub enum StructFields {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -244,7 +244,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -262,7 +262,7 @@ pub struct Function {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Constant {
-    pub warning_filter: WarningFiltersArc,
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
