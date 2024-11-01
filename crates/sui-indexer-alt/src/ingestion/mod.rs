@@ -20,7 +20,7 @@ use crate::ingestion::regulator::regulator;
 use crate::metrics::IndexerMetrics;
 
 mod broadcaster;
-mod client;
+pub mod client;
 pub mod error;
 mod local_client;
 mod regulator;
@@ -92,6 +92,11 @@ impl IngestionService {
             subscribers,
             cancel,
         })
+    }
+
+    /// The client this service uses to fetch checkpoints.
+    pub fn client(&self) -> &IngestionClient {
+        &self.client
     }
 
     /// Add a new subscription to the ingestion service. Note that the service is susceptible to

@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
 use db::{Db, DbConfig};
-use ingestion::{IngestionConfig, IngestionService};
+use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{concurrent, sequential, PipelineConfig, Processor};
@@ -132,6 +132,11 @@ impl Indexer {
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
         })
+    }
+
+    /// The ingestion client used by the indexer to fetch checkpoints.
+    pub fn ingestion_client(&self) -> &IngestionClient {
+        self.ingestion_service.client()
     }
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
