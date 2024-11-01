@@ -18,8 +18,8 @@ use sui_bridge_indexer::storage::PgBridgePersistent;
 use sui_bridge_indexer::{create_sui_indexer, schema};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer::database::Connection;
-use sui_indexer::tempdb::TempDb;
 use sui_indexer_builder::indexer_builder::IndexerProgressStore;
+use sui_pg_temp_db::TempDb;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/migrations");
 

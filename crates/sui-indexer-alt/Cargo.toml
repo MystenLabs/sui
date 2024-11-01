@@ -36,12 +36,13 @@ url.workspace = true
 
 mysten-metrics.workspace = true
 sui-field-count.workspace = true
+sui-pg-temp-db.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
-wiremock.workspace = true
 tempfile.workspace = true
+wiremock.workspace = true
 
 sui-types = { workspace = true, features = ["test-utils"] }
