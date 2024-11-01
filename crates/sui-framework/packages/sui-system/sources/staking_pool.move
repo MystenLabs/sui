@@ -687,37 +687,31 @@ module sui_system::staking_pool {
     #[test_only]
     public use fun fungible_staked_sui_data_principal_value as FungibleStakedSuiData.principal_value;
 
-    // NEVER remove `#[test_only]`
     #[test_only]
-    public(package) fun process_pending_stake_withdraw_test_only(pool: &mut StakingPool) {
+    public(package) fun process_pending_stake_withdraw_for_testing(pool: &mut StakingPool) {
         pool.process_pending_stake_withdraw()
     }
 
-    // NEVER remove `#[test_only]`
     #[test_only]
-    public(package) fun increase_pending_pool_token_withdraw_test_only(pool: &mut StakingPool, delta: u64) {
+    public(package) fun increase_pending_pool_token_withdraw_for_testing(pool: &mut StakingPool, delta: u64) {
         pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + delta
     }
 
-    // NEVER remove `#[test_only]`
     #[test_only]
-    public(package) fun increase_pending_total_sui_withdraw_test_only(pool: &mut StakingPool, delta: u64) {
+    public(package) fun increase_pending_total_sui_withdraw_for_testing(pool: &mut StakingPool, delta: u64) {
         pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + delta
     }
 
-    // NEVER remove `#[test_only]`
     #[test_only]
     public(package) fun pending_total_sui_withdraw(pool: &StakingPool): u64 {
         pool.pending_total_sui_withdraw
     }
 
-    // NEVER remove `#[test_only]`
     #[test_only]
     public(package) fun pool_token_balance(pool: &StakingPool): u64 {
         pool.pool_token_balance
     }
 
-    // NEVER remove `#[test_only]`
     #[test_only]
     public(package) fun pending_pool_token_withdraw(pool: &StakingPool): u64 {
         pool.pending_pool_token_withdraw

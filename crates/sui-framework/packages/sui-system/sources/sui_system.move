@@ -698,7 +698,6 @@ module sui_system::sui_system {
         self.set_epoch_for_testing(epoch_num)
     }
 
-    // NEVER remove `#[test_only]`
     #[test_only]
     public(package) fun increment_epoch_for_testing(wrapper: &mut SuiSystemState) {
         let self = load_system_state_mut(wrapper);
