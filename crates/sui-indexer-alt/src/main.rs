@@ -6,6 +6,7 @@ use clap::Parser;
 use sui_indexer_alt::args::Command;
 use sui_indexer_alt::bootstrap::bootstrap;
 use sui_indexer_alt::db::reset_database;
+use sui_indexer_alt::handlers::kv_feature_flags::KvFeatureFlags;
 use sui_indexer_alt::handlers::kv_protocol_configs::KvProtocolConfigs;
 use sui_indexer_alt::{
     args::Args,
@@ -42,11 +43,13 @@ async fn main() -> Result<()> {
             let mut indexer = Indexer::new(args.db_config, indexer, cancel.clone()).await?;
 
             let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
-            let kv_protocol_configs = KvProtocolConfigs(genesis.clone());
+            let kv_feature_flags = KvFeatureFlags(genesis.clone());
+            let kv_protocol_configs = KvProtocolConfigs(genesis);
 
             indexer.concurrent_pipeline(EvEmitMod).await?;
             indexer.concurrent_pipeline(EvStructInst).await?;
             indexer.concurrent_pipeline(KvCheckpoints).await?;
+            indexer.concurrent_pipeline(kv_feature_flags).await?;
             indexer.concurrent_pipeline(KvObjects).await?;
             indexer.concurrent_pipeline(kv_protocol_configs).await?;
             indexer.concurrent_pipeline(KvTransactions).await?;

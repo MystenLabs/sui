@@ -4,7 +4,15 @@
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
 
-use crate::schema::kv_protocol_configs;
+use crate::schema::{kv_feature_flags, kv_protocol_configs};
+
+#[derive(Insertable, Debug, Clone, FieldCount)]
+#[diesel(table_name = kv_feature_flags)]
+pub struct StoredFeatureFlag {
+    pub protocol_version: i64,
+    pub flag_name: String,
+    pub flag_value: bool,
+}
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_protocol_configs)]

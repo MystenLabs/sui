@@ -31,6 +31,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_feature_flags (protocol_version, flag_name) {
+        protocol_version -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
+    }
+}
+
+diesel::table! {
     kv_genesis (genesis_digest) {
         genesis_digest -> Bytea,
         initial_protocol_version -> Int8,
@@ -205,6 +213,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     ev_emit_mod,
     ev_struct_inst,
     kv_checkpoints,
+    kv_feature_flags,
     kv_genesis,
     kv_objects,
     kv_protocol_configs,
