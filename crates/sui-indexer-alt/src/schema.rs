@@ -46,6 +46,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     kv_transactions (tx_digest) {
         tx_digest -> Bytea,
         cp_sequence_number -> Int8,
@@ -199,6 +207,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_genesis,
     kv_objects,
+    kv_protocol_configs,
     kv_transactions,
     obj_versions,
     sum_coin_balances,

@@ -5,6 +5,7 @@ pub mod ev_emit_mod;
 pub mod ev_struct_inst;
 pub mod kv_checkpoints;
 pub mod kv_objects;
+pub mod kv_protocol_configs;
 pub mod kv_transactions;
 pub mod obj_versions;
 pub mod sum_coin_balances;
