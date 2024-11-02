@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use sui_indexer_alt::args::Command;
+use sui_indexer_alt::bootstrap::bootstrap;
 use sui_indexer_alt::db::reset_database;
 use sui_indexer_alt::{
     args::Args,
@@ -36,7 +37,10 @@ async fn main() -> Result<()> {
             indexer,
             consistent_range: lag,
         } => {
+            let retry_interval = indexer.ingestion_config.retry_interval;
             let mut indexer = Indexer::new(args.db_config, indexer, cancel.clone()).await?;
+
+            bootstrap(&indexer, retry_interval, cancel.clone()).await?;
 
             indexer.concurrent_pipeline::<EvEmitMod>().await?;
             indexer.concurrent_pipeline::<EvStructInst>().await?;

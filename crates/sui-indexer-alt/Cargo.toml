@@ -38,6 +38,7 @@ url.workspace = true
 mysten-metrics.workspace = true
 sui-field-count.workspace = true
 sui-pg-temp-db.workspace = true
+sui-protocol-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 

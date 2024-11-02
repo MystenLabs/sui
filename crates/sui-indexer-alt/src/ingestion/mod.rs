@@ -41,20 +41,20 @@ pub struct IngestionService {
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
     #[arg(long, required = true, group = "source")]
-    remote_store_url: Option<Url>,
+    pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
     #[arg(long, required = true, group = "source")]
-    local_ingestion_path: Option<PathBuf>,
+    pub local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
-    checkpoint_buffer_size: usize,
+    pub checkpoint_buffer_size: usize,
 
     /// Maximum number of checkpoints to attempt to fetch concurrently.
     #[arg(long, default_value_t = 200)]
-    ingest_concurrency: usize,
+    pub ingest_concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
     #[arg(
@@ -63,7 +63,7 @@ pub struct IngestionConfig {
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis)
     )]
-    retry_interval: Duration,
+    pub retry_interval: Duration,
 }
 
 impl IngestionService {
