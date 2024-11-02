@@ -5,7 +5,6 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use anemo::types::request::IntoRequest;
 use anyhow::{anyhow, Context, Error};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -740,14 +739,14 @@ fn function_signature_mismatch_diag(
         .get_function_source_map(FunctionDefinitionIndex::new(*old_func_index))
         .context("Unable to get function source map")?;
 
-    let identifier_loc = new_func_sourcemap.definition_location;
+    let def_loc = new_func_sourcemap.definition_location;
 
     // handle function arguments
     if old_function.parameters.len() != new_function.parameters.len() {
         diags.add(
             Diagnostic::new(
                 Function_::SignatureMismatch,
-                (identifier_loc, format!("Function '{function_name}' expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
+                (def_loc, format!("Function '{function_name}' expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![
                     "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
@@ -755,7 +754,7 @@ fn function_signature_mismatch_diag(
                 ],
             )
         );
-    } else if old_function.parameters.eq(&new_function.parameters) {
+    } else if old_function.parameters != new_function.parameters {
         for ((i, old_param), new_param) in old_function
             .parameters
             .iter()
@@ -789,7 +788,7 @@ fn function_signature_mismatch_diag(
         diags.add(
             Diagnostic::new(
                 Function_::SignatureMismatch,
-                (identifier_loc, format!("Function '{function_name}' expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
+                (def_loc, format!("Function '{function_name}' expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![
                     "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
