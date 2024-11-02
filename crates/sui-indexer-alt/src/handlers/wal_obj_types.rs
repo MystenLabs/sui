@@ -23,8 +23,8 @@ impl Processor for WalObjTypes {
 
     type Value = StoredObjectUpdate<StoredSumObjType>;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        SumObjTypes::process(checkpoint)
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+        SumObjTypes.process(checkpoint)
     }
 }
 

@@ -23,8 +23,8 @@ impl Processor for WalCoinBalances {
 
     type Value = StoredObjectUpdate<StoredSumCoinBalance>;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        SumCoinBalances::process(checkpoint)
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+        SumCoinBalances.process(checkpoint)
     }
 }
 

@@ -29,7 +29,7 @@ pub trait Processor {
     type Value: Send + Sync + 'static;
 
     /// The processing logic for turning a checkpoint into rows of the table.
-    fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
@@ -41,7 +41,8 @@ pub trait Processor {
 ///
 /// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
 /// an error -- there is no retry logic at this level.
-pub(super) fn processor<P: Processor + 'static>(
+pub(super) fn processor<P: Processor + Send + Sync + 'static>(
+    processor: P,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
     tx: mpsc::Sender<Indexed<P>>,
     metrics: Arc<IndexerMetrics>,
@@ -56,6 +57,8 @@ pub(super) fn processor<P: Processor + 'static>(
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let cancel = cancel.clone();
+                let processor = &processor;
+
                 async move {
                     if cancel.is_cancelled() {
                         return Err(Break::Cancel);
@@ -71,7 +74,7 @@ pub(super) fn processor<P: Processor + 'static>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let values = P::process(&checkpoint)?;
+                    let values = processor.process(&checkpoint)?;
                     let elapsed = guard.stop_and_record();
 
                     let epoch = checkpoint.checkpoint_summary.epoch;

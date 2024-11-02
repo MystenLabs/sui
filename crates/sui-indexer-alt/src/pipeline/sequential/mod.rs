@@ -85,7 +85,8 @@ pub trait Handler: Processor {
 /// channels are created to communicate between its various components. The pipeline can be
 /// shutdown using its `cancel` token, and will also shutdown if any of its input or output
 /// channels close, or any of its independent tasks fail.
-pub(crate) fn pipeline<H: Handler + 'static>(
+pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+    handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
     checkpoint_lag: Option<u64>,
@@ -97,7 +98,13 @@ pub(crate) fn pipeline<H: Handler + 'static>(
 ) -> (JoinHandle<()>, JoinHandle<()>) {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
-    let processor = processor::<H>(checkpoint_rx, processor_tx, metrics.clone(), cancel.clone());
+    let processor = processor(
+        handler,
+        checkpoint_rx,
+        processor_tx,
+        metrics.clone(),
+        cancel.clone(),
+    );
 
     let committer = committer::<H>(
         config.clone(),
