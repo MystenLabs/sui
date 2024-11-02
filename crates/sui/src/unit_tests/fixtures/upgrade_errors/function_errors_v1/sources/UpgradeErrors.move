@@ -8,7 +8,7 @@ module upgrades::upgrades {
     public fun func_with_wrong_param(a: u64): u64 {
         0
     } 
-    
+
     public fun func_with_wrong_return(): u64 {
         0
     }
@@ -24,6 +24,5 @@ module upgrades::upgrades {
     public fun func_with_wrong_return_length(): (u64, u64) {
         (0,0)
     }
-    
 }
 

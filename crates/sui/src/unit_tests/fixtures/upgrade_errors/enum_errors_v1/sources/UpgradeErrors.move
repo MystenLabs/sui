@@ -7,10 +7,14 @@
 module upgrades::upgrades {
 
     public enum EnumAddAbility has copy { // add drop
-        FirstVariant,
+        A,
     }
 
     public enum EnumRemoveAbility has copy, drop {
+        A,
+    }
+
+    public enum EnumAddAndRemoveAbility has copy, drop {
         A,
     }
 

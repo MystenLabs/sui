@@ -14,6 +14,10 @@ module upgrades::upgrades {
         A,
     }
 
+    public enum EnumAddAndRemoveAbility has copy, store {
+        A,
+    }
+
     public enum EnumAddVariant {
         A,
         B, // added
@@ -31,14 +35,14 @@ module upgrades::upgrades {
 
     public enum EnumChangeAndAddVariant {
         A,
-        B, // to be changed to C
-        // D, to be added
+        C, // to be changed to C
+        D // added
     }
 
     public enum EnumChangeAndRemoveVariant {
         A,
-        B, // to be changed to C
-        C, // to be removed
+        C, // changed to C
+        // removed C,
     }
 
     // with types

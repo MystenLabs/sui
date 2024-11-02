@@ -1,0 +1,60 @@
+---
+source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+expression: err.to_string()
+---
+error[Compatibility E02001]: function signature mismatch
+  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
+  │
+9 │     public fun func_with_wrong_param(a: u32): u64 {
+  │                                      ^ Function 'func_with_wrong_param' unexpected parameter u32 at position 0, expected u64
+  │
+  = Functions are part of a module's public interface and cannot be changed during an upgrade.
+  = Restore the original function's parameters for function 'func_with_wrong_param'.
+
+error[Compatibility E02001]: function signature mismatch
+   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:14:42
+   │
+14 │     public fun func_with_wrong_return(): u32 {
+   │                                          ^^^ Function 'func_with_wrong_return' has an unexpected return type u32, expected u64
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's return types for function 'func_with_wrong_return'.
+
+error[Compatibility E02001]: function signature mismatch
+   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:49
+   │
+19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
+   │                                                 ^ Function 'func_with_wrong_param_and_return' unexpected parameter u32 at position 0, expected u64
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's parameters for function 'func_with_wrong_param_and_return'.
+
+error[Compatibility E02001]: function signature mismatch
+   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:58
+   │
+19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
+   │                                                          ^^^ Function 'func_with_wrong_param_and_return' has an unexpected return type u32, expected u64
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's return types for function 'func_with_wrong_param_and_return'.
+
+error[Compatibility E02001]: function signature mismatch
+   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:24:16
+   │
+24 │     public fun func_with_wrong_param_length(a: u64): u64 {
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function 'func_with_wrong_param_length' expected 2 parameters, have 1
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's parameters for function 'func_with_wrong_param_length', expected 2 parameters.
+
+error[Compatibility E02001]: function signature mismatch
+   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:29:16
+   │
+29 │     public fun func_with_wrong_return_length(): u64 {
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function 'func_with_wrong_return_length' expected to have 2 return type(s), have 1
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's return types for function 'func_with_wrong_return_length'.
+
+
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.

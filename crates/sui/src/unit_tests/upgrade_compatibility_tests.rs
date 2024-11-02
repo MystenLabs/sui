@@ -28,7 +28,7 @@ fn test_declarations_missing() {
 }
 
 #[test]
-fn test_function_signature() {
+fn test_function() {
     let (pkg_v1, pkg_v2) = get_packages("function_errors");
     let result = compare_packages(pkg_v1, pkg_v2);
 
