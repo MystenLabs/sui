@@ -1172,7 +1172,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                     }
                     _ => match self.resolve_datatype_constructor(sp(mloc, ma_), "pattern") {
                         Some(ctor) => ResolvedPatternTerm::Constructor(Box::new(ctor)),
-                        None => todo!(),
+                        None => ResolvedPatternTerm::Unbound, // TODO: some cases here may be handled
                     },
                 }
             }
