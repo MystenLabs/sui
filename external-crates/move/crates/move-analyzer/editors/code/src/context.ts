@@ -14,6 +14,14 @@ import { log } from './log';
 import { assert } from 'console';
 import { IndentAction } from 'vscode';
 
+/**
+ *  Info about compiler edition passed to the IDE
+ */
+interface EditionInfo {
+    edition: string;
+    release?: string;
+}
+
 function version(path: string, args?: readonly string[]): string | null {
     const versionString = childProcess.spawnSync(
         path, args, { encoding: 'utf8' },
@@ -42,9 +50,9 @@ function semanticVersion(versionString: string | null): semver.SemVer | null {
 }
 
 function shouldInstall(bundledVersionString: string | null,
-                       bundledVersion: semver.SemVer | null,
-                       highestVersionString: string | null,
-                       highestVersion: semver.SemVer | null): boolean {
+    bundledVersion: semver.SemVer | null,
+    highestVersionString: string | null,
+    highestVersion: semver.SemVer | null): boolean {
     if (bundledVersionString === null || bundledVersion === null) {
         log.info('No bundled binary');
         return false;
@@ -124,7 +132,7 @@ export class Context {
     ): void {
         const disposable = vscode.commands.registerCommand(
             `move.${name}`,
-            async (...args: Array<any>) : Promise<any> => {
+            async (...args: Array<any>): Promise<any> => {
                 const ret = await command(this, ...args);
                 return ret;
             },
@@ -204,6 +212,17 @@ export class Context {
             serverOptions,
             clientOptions,
         );
+
+        // Register the handler for the custom notification
+        client.onNotification('customNotification/edition', (result: EditionInfo) => {
+            let msg = 'Compiler edition: ' + result.edition;
+            if (result.release !== undefined) {
+                msg += ' release: ' + result.release;
+            }
+            log.info(msg);
+        });
+
+
         log.info('Starting client...');
         const res = client.start();
         this.extensionContext.subscriptions.push({ dispose: async () => client.stop() });
@@ -260,10 +279,10 @@ export class Context {
                 this.inlayHintsParam = this.configuration.inlayHintsForParam;
                 try {
                     await this.stopClient();
-                        if (pathsChanged) {
-                            await this.installServerBinary(this.extensionContext);
-                        }
-                        await this.startClient();
+                    if (pathsChanged) {
+                        await this.installServerBinary(this.extensionContext);
+                    }
+                    await this.startClient();
                 } catch (err) {
                     // Handle error
                     log.info(String(err));
@@ -288,13 +307,13 @@ export class Context {
                 log.info(`Deleting existing move-analyzer binary at '${this.configuration.defaultServerPath}'`);
                 await vscode.workspace.fs.delete(this.configuration.defaultServerPath);
             }
-         } else {
+        } else {
             log.info(`Creating directory for move-analyzer binary at '${this.configuration.defaultServerDir}'`);
             await vscode.workspace.fs.createDirectory(this.configuration.defaultServerDir);
-         }
+        }
 
-         log.info(`Copying move-analyzer binary to '${this.configuration.defaultServerPath}'`);
-         await vscode.workspace.fs.copy(bundledServerPath, this.configuration.defaultServerPath);
+        log.info(`Copying move-analyzer binary to '${this.configuration.defaultServerPath}'`);
+        await vscode.workspace.fs.copy(bundledServerPath, this.configuration.defaultServerPath);
     }
 
     /**
@@ -333,8 +352,8 @@ export class Context {
 
         // Check if server binary is bundled with the extension
         const bundledServerPath = vscode.Uri.joinPath(extensionContext.extensionUri,
-                                                    'language-server',
-                                                    this.configuration.serverName);
+            'language-server',
+            this.configuration.serverName);
         const bundledVersionString = version(bundledServerPath.fsPath, serverVersionArgs);
         const bundledVersion = semanticVersion(bundledVersionString);
         log.info(`Bundled version: ${bundledVersion}`);
@@ -380,7 +399,7 @@ export class Context {
             this.resolvedServerPath = this.configuration.serverPath;
             this.resolvedServerArgs = serverArgs;
             log.info(`Setting v${standaloneVersion.version} of installed standalone move-analyzer ` +
-                    ` at '${this.resolvedServerPath}' as the highest one`);
+                ` at '${this.resolvedServerPath}' as the highest one`);
         }
 
         if (cliVersion !== null && (highestVersion === null || semver.gt(cliVersion, highestVersion))) {
@@ -389,7 +408,7 @@ export class Context {
             this.resolvedServerPath = this.configuration.suiPath;
             this.resolvedServerArgs = cliArgs;
             log.info(`Setting v${cliVersion.version} of installed CLI move-analyzer ` +
-                    ` at '${this.resolvedServerPath}' as the highest one`);
+                ` at '${this.resolvedServerPath}' as the highest one`);
         }
 
         if (shouldInstall(bundledVersionString, bundledVersion, highestVersionString, highestVersion)) {

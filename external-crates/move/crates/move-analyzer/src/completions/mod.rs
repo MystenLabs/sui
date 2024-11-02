@@ -10,7 +10,10 @@ use crate::{
         utils::{completion_item, PRIMITIVE_TYPE_COMPLETIONS},
     },
     context::Context,
-    symbols::{self, CursorContext, PrecomputedPkgDepsInfo, SymbolicatorRunner, Symbols},
+    symbols::{
+        get_symbols, CursorContext, PrecomputedPkgDepsInfo, SymbolicationResult,
+        SymbolicatorRunner, Symbols,
+    },
 };
 use lsp_server::Request;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
@@ -166,7 +169,7 @@ fn compute_completions_new_symbols(
     };
     let cursor_path = path.to_path_buf();
     let cursor_info = Some((&cursor_path, cursor_position));
-    let (symbols, _diags) = symbols::get_symbols(
+    let SymbolicationResult { symbols, .. } = get_symbols(
         pkg_dependencies,
         ide_files_root,
         &pkg_path,
