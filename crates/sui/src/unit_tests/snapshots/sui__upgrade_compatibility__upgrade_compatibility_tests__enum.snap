@@ -6,7 +6,7 @@ error[Compatibility E01003]: ability mismatch
   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:9:17
   │
 9 │     public enum EnumAddAbility has copy, drop { // add drop
-  │                 ^^^^^^^^^^^^^^ Enum 'EnumAddAbility' has unexpected abilities 'drop'
+  │                 ^^^^^^^^^^^^^^ Unexpected abilities 'drop'
   │
   = Enums are part of a module's public interface and cannot be changed during an upgrade.
   = Restore the original enum's abilities for enum 'EnumAddAbility' including the ordering.
@@ -15,7 +15,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:13:17
    │
 13 │     public enum EnumRemoveAbility has copy { // drop removed
-   │                 ^^^^^^^^^^^^^^^^^ Enum 'EnumRemoveAbility' has missing abilities 'drop'
+   │                 ^^^^^^^^^^^^^^^^^ Missing abilities 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumRemoveAbility' including the ordering.
@@ -24,7 +24,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:17:17
    │
 17 │     public enum EnumAddAndRemoveAbility has copy, store {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^ Enum 'EnumAddAndRemoveAbility' has mismatched abilities: missing 'drop', unexpected 'store'
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'drop', unexpected 'store'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumAddAndRemoveAbility' including the ordering.
@@ -36,7 +36,7 @@ error[Compatibility E01002]: type mismatch
    │                 -------------- Enum definition
 22 │         A,
 23 │         B, // added
-   │         ^ Enum 'EnumAddVariant' has a new unexpected variant 'B'.
+   │         ^ New unexpected variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumAddVariant' including the ordering.
@@ -45,7 +45,7 @@ error[Compatibility E01002]: type mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:26:17
    │
 26 │     public enum EnumRemoveVariant {
-   │                 ^^^^^^^^^^^^^^^^^ Enum 'EnumRemoveVariant' has a missing variant 'B'.
+   │                 ^^^^^^^^^^^^^^^^^ Missing variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'B' for enum 'EnumRemoveVariant' including the ordering.
@@ -57,7 +57,7 @@ error[Compatibility E01002]: type mismatch
    │                 ----------------- Enum definition
 32 │         A,
 33 │         C, // changed from B
-   │         ^ Enum 'EnumChangeVariant' has mismatched variant name 'C', expected 'B'.
+   │         ^ Mismatched variant name 'C', expected 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade
    = Restore the original enum's variants for enum 'EnumChangeVariant' including the ordering.
@@ -69,7 +69,7 @@ error[Compatibility E01002]: type mismatch
    │                 ----------------------- Enum definition
 37 │         A,
 38 │         C, // to be changed to C
-   │         ^ Enum 'EnumChangeAndAddVariant' has a new unexpected variant 'C'.
+   │         ^ New unexpected variant 'C'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
@@ -81,7 +81,7 @@ error[Compatibility E01002]: type mismatch
    │                 ----------------------- Enum definition
 37 │         A,
 38 │         C, // to be changed to C
-   │         ^ Enum 'EnumChangeAndAddVariant' has mismatched variant name 'C', expected 'B'.
+   │         ^ Mismatched variant name 'C', expected 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
@@ -93,7 +93,7 @@ error[Compatibility E01002]: type mismatch
    │                 ----------------------- Enum definition
    ·
 39 │         D // added
-   │         ^ Enum 'EnumChangeAndAddVariant' has a new unexpected variant 'D'.
+   │         ^ New unexpected variant 'D'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
@@ -102,7 +102,7 @@ error[Compatibility E01002]: type mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:42:17
    │
 42 │     public enum EnumChangeAndRemoveVariant {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Enum 'EnumChangeAndRemoveVariant' has a missing variant 'C'.
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing variant 'C'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'C' for enum 'EnumChangeAndRemoveVariant' including the ordering.
@@ -114,7 +114,7 @@ error[Compatibility E01002]: type mismatch
    │                 -------------------------- Enum definition
 43 │         A,
 44 │         C, // changed to C
-   │         ^ Enum 'EnumChangeAndRemoveVariant' has mismatched variant name 'C', expected 'B'.
+   │         ^ Mismatched variant name 'C', expected 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade
    = Restore the original enum's variants for enum 'EnumChangeAndRemoveVariant' including the ordering.
@@ -123,7 +123,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:49:17
    │
 49 │     public enum EnumAddAbilityWithTypes has copy, drop { // drop added
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^ Enum 'EnumAddAbilityWithTypes' has unexpected abilities 'drop'
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^ Unexpected abilities 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumAddAbilityWithTypes' including the ordering.
@@ -132,7 +132,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:53:17
    │
 53 │     public enum EnumRemoveAbilityWithTypes has copy { // drop removed
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Enum 'EnumRemoveAbilityWithTypes' has missing abilities 'drop'
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumRemoveAbilityWithTypes' including the ordering.
@@ -144,7 +144,7 @@ error[Compatibility E01002]: type mismatch
    │                 ----------------------- Enum definition
 58 │         A { a: u8 },
 59 │         B { b: u8 }, // added
-   │         ^^^^^^^^^^^ Enum 'EnumAddVariantWithTypes' has a new unexpected variant 'B'.
+   │         ^^^^^^^^^^^ New unexpected variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumAddVariantWithTypes' including the ordering.
@@ -153,7 +153,7 @@ error[Compatibility E01002]: type mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:62:17
    │
 62 │     public enum EnumRemoveVariantWithTypes {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Enum 'EnumRemoveVariantWithTypes' has a missing variant 'B'.
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'B' for enum 'EnumRemoveVariantWithTypes' including the ordering.
@@ -165,7 +165,7 @@ error[Compatibility E01002]: type mismatch
    │                 -------------------------- Enum definition
 68 │         A { a: u8 },
 69 │         C { b: u8 }, // changed to C
-   │         ^^^^^^^^^^^ Enum 'EnumChangeVariantWithTypes' has mismatched variant name 'C', expected 'B'.
+   │         ^^^^^^^^^^^ Mismatched variant name 'C', expected 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade
    = Restore the original enum's variants for enum 'EnumChangeVariantWithTypes' including the ordering.
@@ -177,7 +177,7 @@ error[Compatibility E01002]: type mismatch
    │                 -------------------------------- Enum definition
 73 │         A { a: u8 },
 74 │         C { b: u8 }, // to be changed to C
-   │         ^^^^^^^^^^^ Enum 'EnumChangeAndAddVariantWithTypes' has a new unexpected variant 'C'.
+   │         ^^^^^^^^^^^ New unexpected variant 'C'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariantWithTypes' including the ordering.
@@ -189,7 +189,7 @@ error[Compatibility E01002]: type mismatch
    │                 -------------------------------- Enum definition
 73 │         A { a: u8 },
 74 │         C { b: u8 }, // to be changed to C
-   │         ^^^^^^^^^^^ Enum 'EnumChangeAndAddVariantWithTypes' has mismatched variant name 'C', expected 'B'.
+   │         ^^^^^^^^^^^ Mismatched variant name 'C', expected 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariantWithTypes' including the ordering.
@@ -201,7 +201,7 @@ error[Compatibility E01002]: type mismatch
    │                 -------------------------------- Enum definition
    ·
 75 │         D { d: u8 }, // added
-   │         ^^^^^^^^^^^ Enum 'EnumChangeAndAddVariantWithTypes' has a new unexpected variant 'D'.
+   │         ^^^^^^^^^^^ New unexpected variant 'D'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariantWithTypes' including the ordering.

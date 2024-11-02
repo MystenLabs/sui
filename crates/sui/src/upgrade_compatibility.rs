@@ -746,7 +746,7 @@ fn function_signature_mismatch_diag(
         diags.add(
             Diagnostic::new(
                 Function_::SignatureMismatch,
-                (def_loc, format!("Function '{function_name}' expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
+                (def_loc, format!("Expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![
                     "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
@@ -771,7 +771,7 @@ fn function_signature_mismatch_diag(
                 diags.add(
                     Diagnostic::new(
                         Function_::SignatureMismatch,
-                        (param_loc, format!("Function '{function_name}' unexpected parameter {new_param} at position {i}, expected {old_param}")),
+                        (param_loc, format!("Unexpected parameter {new_param}, expected {old_param}")),
                         Vec::<(Loc, String)>::new(),
                         vec![
                             "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
@@ -788,7 +788,7 @@ fn function_signature_mismatch_diag(
         diags.add(
             Diagnostic::new(
                 Function_::SignatureMismatch,
-                (def_loc, format!("Function '{function_name}' expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
+                (def_loc, format!("Expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
                 Vec::<(Loc, String)>::new(),
                 vec![
                     "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
@@ -812,9 +812,9 @@ fn function_signature_mismatch_diag(
                     Diagnostic::new(
                         Function_::SignatureMismatch,
                         (*return_, if new_function.return_.len() == 1 {
-                            format!("Function '{function_name}' has an unexpected return type {new_return}, expected {old_return}")
+                            format!("Unexpected return type {new_return}, expected {old_return}")
                         } else {
-                            format!("Function '{function_name}' unexpected return type {new_return} at position {i}, expected {old_return}")
+                            format!("Unexpected return type {new_return} at position {i}, expected {old_return}")
                         }),
                         Vec::<(Loc, String)>::new(),
                         vec![
@@ -865,7 +865,7 @@ fn struct_ability_mismatch_diag(
             extra_abilities != AbilitySet::EMPTY,
         ) {
             (true, true) => format!(
-                "Struct '{struct_name}' has mismatched abilities: missing {}, unexpected {}",
+                "Mismatched abilities: missing {}, unexpected {}",
                 format_list(
                     missing_abilities
                         .into_iter()
@@ -878,7 +878,7 @@ fn struct_ability_mismatch_diag(
                 ),
             ),
             (true, false) => format!(
-                "Struct '{struct_name}' has missing abilities {}",
+                "Missing abilities {}",
                 format_list(
                     missing_abilities
                         .into_iter()
@@ -886,7 +886,7 @@ fn struct_ability_mismatch_diag(
                 )
             ),
             (false, true) => format!(
-                "Struct '{struct_name}' has unexpected abilities {}",
+                "Unexpected abilities {}",
                 format_list(
                     extra_abilities
                         .into_iter()
@@ -937,7 +937,7 @@ fn struct_field_mismatch_diag(
     if old_struct.fields.len() != new_struct.fields.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeMismatch,
-            (def_loc, format!("Struct '{struct_name}' has an incorrect number of fields: expected {}, found {}", old_struct.fields.len(), new_struct.fields.len())),
+            (def_loc, format!("Incorrect number of fields: expected {}, found {}", old_struct.fields.len(), new_struct.fields.len())),
             Vec::<(Loc, String)>::new(),
             vec![
                 "Structs are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
@@ -963,15 +963,15 @@ fn struct_field_mismatch_diag(
                     old_field.type_ != new_field.type_,
                 ) {
                     (true, true) => format!(
-                        "Struct '{struct_name}' has mismatched field '{}: {}' expected '{}: {}'.",
+                        "Mismatched field '{}: {}' expected '{}: {}'.",
                         new_field.name, new_field.type_, old_field.name, old_field.type_
                     ),
                     (true, false) => format!(
-                        "Struct '{struct_name}' has mismatched field name '{}', expected '{}'.",
+                        "Mismatched field name '{}', expected '{}'.",
                         new_field.name, old_field.name
                     ),
                     (false, true) => format!(
-                        "Struct '{struct_name}' has mismatched field type '{}', expected '{}'.",
+                        "Mismatched field type '{}', expected '{}'.",
                         new_field.type_, old_field.type_
                     ),
                     (false, false) => unreachable!("Fields should no be the same"),
@@ -1030,7 +1030,7 @@ fn enum_ability_mismatch_diag(
             extra_abilities != AbilitySet::EMPTY,
         ) {
             (true, true) => format!(
-                "Enum '{enum_name}' has mismatched abilities: missing {}, unexpected {}",
+                "Mismatched abilities: missing {}, unexpected {}",
                 format_list(
                     missing_abilities
                         .into_iter()
@@ -1043,7 +1043,7 @@ fn enum_ability_mismatch_diag(
                 ),
             ),
             (true, false) => format!(
-                "Enum '{enum_name}' has missing abilities {}",
+                "Missing abilities {}",
                 format_list(
                     missing_abilities
                         .into_iter()
@@ -1051,7 +1051,7 @@ fn enum_ability_mismatch_diag(
                 ),
             ),
             (false, true) => format!(
-                "Enum '{enum_name}' has unexpected abilities {}",
+                "Unexpected abilities {}",
                 format_list(
                     extra_abilities
                         .into_iter()
@@ -1117,11 +1117,11 @@ fn enum_variant_mismatch_diag(
                 old_variant.fields != new_variant.fields,
             ) {
                 (true, true) => format!(
-                    "Enum '{enum_name}' has mismatched variant '{}', expected '{}'.",
+                    "Mismatched variant '{}', expected '{}'.",
                     new_variant.name, old_variant.name
                 ),
                 (true, false) => format!(
-                    "Enum '{enum_name}' has mismatched variant name '{}', expected '{}'.",
+                    "Mismatched variant name '{}', expected '{}'.",
                     new_variant.name, old_variant.name
                 ),
                 (false, true) => {
@@ -1140,7 +1140,7 @@ fn enum_variant_mismatch_diag(
                         .join(", ");
 
                     format!(
-                        "Enum '{enum_name}' has mismatched variant field '{}', expected '{}'.",
+                        "Mismatched variant field '{}', expected '{}'.",
                         new_variant_fields, old_variant_fields
                     )
                 }
@@ -1205,7 +1205,7 @@ fn enum_new_variant_diag(
                 Diagnostic::new(
                     Declarations::TypeMismatch,
                     (variant_loc, format!(
-                        "Enum '{enum_name}' has a new unexpected variant '{}'.",
+                        "New unexpected variant '{}'.",
                         new_variant.name
                     )),
                     vec![(def_loc, "Enum definition".to_string())],
@@ -1251,7 +1251,7 @@ fn enum_variant_missing_diag(
         Declarations::TypeMismatch,
         (
             enum_sourcemap.definition_location,
-            format!("Enum '{enum_name}' has a missing variant '{variant_name}'.",),
+            format!("Missing variant '{variant_name}'.",),
         ),
         Vec::<(Loc, String)>::new(),
         vec![

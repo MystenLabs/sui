@@ -6,7 +6,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:10:19
    │
 10 │     public struct AddExtraAbility has copy {} // added copy
-   │                   ^^^^^^^^^^^^^^^ Struct 'AddExtraAbility' has unexpected abilities 'copy'
+   │                   ^^^^^^^^^^^^^^^ Unexpected abilities 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's abilities for struct 'AddExtraAbility'.
@@ -15,7 +15,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:11:19
    │
 11 │     public struct RemoveAbility has drop {} // removed copy
-   │                   ^^^^^^^^^^^^^ Struct 'RemoveAbility' has missing abilities 'copy'
+   │                   ^^^^^^^^^^^^^ Missing abilities 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's abilities for struct 'RemoveAbility'.
@@ -24,7 +24,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:12:19
    │
 12 │     public struct AddAndRemoveAbility has drop, store {} // remove copy, add store
-   │                   ^^^^^^^^^^^^^^^^^^^ Struct 'AddAndRemoveAbility' has mismatched abilities: missing 'copy', unexpected 'store'
+   │                   ^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'store'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's abilities for struct 'AddAndRemoveAbility'.
@@ -33,7 +33,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:13:19
    │
 13 │     public struct RemoveMultipleAbilities has drop {} // remove copy, store
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Struct 'RemoveMultipleAbilities' has missing abilities 'copy' and 'store'
+   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities 'copy' and 'store'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's abilities for struct 'RemoveMultipleAbilities'.
@@ -42,7 +42,7 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:14:19
    │
 14 │     public struct AddMultipleAbilities has drop, copy {}
-   │                   ^^^^^^^^^^^^^^^^^^^^ Struct 'AddMultipleAbilities' has unexpected abilities 'copy' and 'drop'
+   │                   ^^^^^^^^^^^^^^^^^^^^ Unexpected abilities 'copy' and 'drop'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's abilities for struct 'AddMultipleAbilities'.
@@ -51,7 +51,7 @@ error[Compatibility E01002]: type mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:17:19
    │
 17 │     public struct AddField {
-   │                   ^^^^^^^^ Struct 'AddField' has an incorrect number of fields: expected 1, found 2
+   │                   ^^^^^^^^ Incorrect number of fields: expected 1, found 2
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'AddField' including the ordering.
@@ -60,7 +60,7 @@ error[Compatibility E01002]: type mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:22:19
    │
 22 │     public struct RemoveField {
-   │                   ^^^^^^^^^^^ Struct 'RemoveField' has an incorrect number of fields: expected 2, found 1
+   │                   ^^^^^^^^^^^ Incorrect number of fields: expected 2, found 1
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'RemoveField' including the ordering.
@@ -72,7 +72,7 @@ error[Compatibility E01002]: type mismatch
    │                   --------------- Struct definition
 29 │         a: u64,
 30 │         c: u64, // changed from b to c
-   │         ^ Struct 'ChangeFieldName' has mismatched field name 'c', expected 'b'.
+   │         ^ Mismatched field name 'c', expected 'b'.
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'ChangeFieldName' including the ordering.
@@ -84,7 +84,7 @@ error[Compatibility E01002]: type mismatch
    │                   --------------- Struct definition
 35 │         a: u64,
 36 │         b: u32, // changed to u32
-   │         ^ Struct 'ChangeFieldType' has mismatched field type 'u32', expected 'u64'.
+   │         ^ Mismatched field type 'u32', expected 'u64'.
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'ChangeFieldType' including the ordering.
