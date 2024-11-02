@@ -28,18 +28,6 @@ error[E04007]: incompatible types
   │         Invalid deconstruction assignment
   │         Given: '0x42::M::Bar'
 
-error[E04007]: incompatible types
-  ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
-  │
-5 │     fun f(x: Foo) {
-  │              --- Expected: '0x42::M::Foo'
-  ·
-9 │         Bar(_, _) = x;
-  │         ^^^^^^^^^
-  │         │
-  │         Invalid deconstruction assignment
-  │         Given: '0x42::M::Bar'
-
 error[E03010]: unbound field
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
   │
@@ -51,6 +39,18 @@ error[E03010]: unbound field
   │
 9 │         Bar(_, _) = x;
   │         ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
+  │
+5 │     fun f(x: Foo) {
+  │              --- Expected: '0x42::M::Foo'
+  ·
+9 │         Bar(_, _) = x;
+  │         ^^^^^^^^^
+  │         │
+  │         Invalid deconstruction assignment
+  │         Given: '0x42::M::Bar'
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:13:13
@@ -76,18 +76,6 @@ error[E04007]: incompatible types
    │             Invalid deconstruction binding
    │             Given: '0x42::M::Bar'
 
-error[E04007]: incompatible types
-   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
-   │
-12 │     fun g(x: Foo) {
-   │              --- Expected: '0x42::M::Foo'
-   ·
-15 │         let Bar(c, d) = x;
-   │             ^^^^^^^^^
-   │             │
-   │             Invalid deconstruction binding
-   │             Given: '0x42::M::Bar'
-
 error[E03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
    │
@@ -99,6 +87,18 @@ error[E03010]: unbound field
    │
 15 │         let Bar(c, d) = x;
    │             ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
+   │
+12 │     fun g(x: Foo) {
+   │              --- Expected: '0x42::M::Foo'
+   ·
+15 │         let Bar(c, d) = x;
+   │             ^^^^^^^^^
+   │             │
+   │             Invalid deconstruction binding
+   │             Given: '0x42::M::Bar'
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:17

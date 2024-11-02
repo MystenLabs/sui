@@ -67,7 +67,7 @@ struct Diagnostics_ {
     severity_count: BTreeMap<Severity, usize>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 #[must_use]
 pub struct Diagnostic {
     info: DiagnosticInfo,
@@ -225,7 +225,7 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags:
     diags.diagnostics.sort_by(|e1, e2| {
         let loc1: &Loc = &e1.primary_label.0;
         let loc2: &Loc = &e2.primary_label.0;
-        loc1.cmp(loc2)
+        loc1.cmp(loc2).then_with(|| e1.cmp(e2))
     });
     match format {
         DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
