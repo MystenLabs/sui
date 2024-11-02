@@ -13092,6 +13092,7 @@ dependencies = [
  "serde_json",
  "serde_with 3.9.0",
  "shared-crypto",
+ "strum_macros 0.24.3",
  "sui-authority-aggregation",
  "sui-config",
  "sui-json-rpc-api",
