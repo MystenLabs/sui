@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { relative } from 'node:path';
 import { deserialize } from '@mysten/move-bytecode-template';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
 import type ts from 'typescript';
 
+import { renderTypeSignature } from './render-types.js';
 import type { DeserializedModule, TypeSignature } from './types.js';
 import { mapToObject, parseTS, printStatements } from './utils.js';
 
-const MOVE_STDLIB_ADDRESS = normalizeSuiAddress('0x1').slice(2);
 const SUI_FRAMEWORK_ADDRESS = normalizeSuiAddress('0x2').slice(2);
 
 class ModuleBuilder {
@@ -24,7 +25,9 @@ class ModuleBuilder {
 	}
 
 	static async fromFile(file: string) {
-		return new ModuleBuilder(deserialize(await readFile(file)));
+		const bytes = await readFile(file);
+
+		return new ModuleBuilder(deserialize(bytes));
 	}
 
 	addImport(module: string, name: string) {
@@ -59,7 +62,11 @@ class ModuleBuilder {
 
 			const fieldObject = mapToObject(fields, (field) => [
 				field.name,
-				this.bcsFromTypeSignature(field.signature),
+				renderTypeSignature(field.signature, {
+					format: 'bcs',
+					moduleDef: this.moduleDef,
+					onDependency: (address, mod) => this.addStarImport(`./deps/${address}/${mod}`, mod),
+				}),
 			]);
 
 			const params = handle.type_parameters.filter((param) => !param.is_phantom);
@@ -95,7 +102,11 @@ class ModuleBuilder {
 				name: this.moduleDef.identifiers[variant.variant_name],
 				fields: variant.fields.map((field) => ({
 					name: this.moduleDef.identifiers[field.name],
-					signature: this.bcsFromTypeSignature(field.signature),
+					signature: renderTypeSignature(field.signature, {
+						format: 'bcs',
+						moduleDef: this.moduleDef,
+						onDependency: (address, mod) => this.addStarImport(`./deps/${address}/${mod}`, mod),
+					}),
 				})),
 			}));
 
@@ -146,22 +157,56 @@ class ModuleBuilder {
 			const name = this.moduleDef.identifiers[handle.name];
 			const moduleName =
 				this.moduleDef.identifiers[this.moduleDef.module_handles[handle.module].name];
+			const parameters = this.moduleDef.signatures[handle.parameters].filter(
+				(param) => !this.isContextReference(param),
+			);
+
+			this.addImport('./utils/index.ts', 'normalizeMoveArguments');
+			this.addImport('./utils/index.ts', 'type RawTransactionArgument');
 
 			names.push(name);
 			statements.push(
-				...parseTS/* ts */ `function ${name}(options: {
-					arguments: [
-					${this.moduleDef.signatures[handle.parameters]
-						.filter((param) => !this.isContextReference(param))
-						.map((param) => this.typeFromTypeSignature(param))
-						.join(',\n')}],
+				...parseTS/* ts */ `function
+					${name}${
+						handle.type_parameters.length
+							? `<
+							${handle.type_parameters.map((_, i) => `T${i} extends BcsType<any>`)}
+						>`
+							: ''
+					}(options: {
+						arguments: [
+						${parameters
+							.map((param) =>
+								renderTypeSignature(param, {
+									format: 'typescriptArg',
+									moduleDef: this.moduleDef,
+									onDependency: (address, mod) =>
+										this.addStarImport(`./deps/${address}/${mod}`, mod),
+								}),
+							)
+							.map((type) => `RawTransactionArgument<${type}>`)
+							.join(',\n')}],
+
+						${
+							handle.type_parameters.length
+								? `typeArguments: [${handle.type_parameters.map(() => 'string').join(', ')}]`
+								: ''
+						}
 				}) {
+					const argumentsTypes = [
+						${parameters
+							.map((param) =>
+								renderTypeSignature(param, { format: 'typeTag', moduleDef: this.moduleDef }),
+							)
+							.map((tag) => (tag.includes('{') ? `\`${tag}\`` : `'${tag}'`))
+							.join(',\n')}
+					]
 					return (tx: Transaction) => tx.moveCall({
 						package: packageAddress,
 						module: '${moduleName}',
 						function: '${name}',
-						arguments: options.arguments, // TODO: map arguments
-						${false ? 'typeArguments: options.typeArguments' : ''}
+						arguments: normalizeMoveArguments(options.arguments, argumentsTypes),
+						${handle.type_parameters.length ? 'typeArguments: options.typeArguments' : ''}
 					})
 				}`,
 			);
@@ -175,177 +220,6 @@ class ModuleBuilder {
 				return { ${names.join(', ')} }
 			}`,
 		);
-	}
-
-	bcsFromTypeSignature(type: TypeSignature): string {
-		switch (type) {
-			case 'Address':
-				return `bcs.Address`;
-			case 'Bool':
-				return `bcs.bool()`;
-			case 'U8':
-				return `bcs.u8()`;
-			case 'U16':
-				return `bcs.u16()`;
-			case 'U32':
-				return `bcs.u32()`;
-			case 'U64':
-				return `bcs.u64()`;
-			case 'U128':
-				return `bcs.u128()`;
-			case 'U256':
-				return `bcs.u256()`;
-		}
-
-		if ('Datatype' in type) {
-			return this.bcsFromDatatypeReference(type.Datatype);
-		}
-
-		if ('DatatypeInstantiation' in type) {
-			const [datatype, typeParameters] = type.DatatypeInstantiation;
-			return this.bcsFromDatatypeReference(datatype, typeParameters);
-		}
-
-		if ('Reference' in type) {
-			return this.bcsFromTypeSignature(type.Reference);
-		}
-
-		if ('MutableReference' in type) {
-			return this.bcsFromTypeSignature(type.MutableReference);
-		}
-
-		if ('Vector' in type) {
-			return `bcs.vector(${this.bcsFromTypeSignature(type.Vector)})`;
-		}
-
-		if ('TypeParameter' in type) {
-			return `typeParameters[${type.TypeParameter}]`;
-		}
-
-		throw new Error(`Unknown type signature: ${JSON.stringify(type, null, 2)}`);
-	}
-
-	typeFromTypeSignature(type: TypeSignature): string {
-		switch (type) {
-			case 'Address':
-				return `string`;
-			case 'Bool':
-				return `boolean`;
-			case 'U8':
-			case 'U16':
-			case 'U32':
-			case 'U64':
-			case 'U128':
-			case 'U256':
-				return 'number';
-		}
-
-		if ('Datatype' in type) {
-			return this.typeFromDatatypeReference(type.Datatype);
-		}
-
-		if ('DatatypeInstantiation' in type) {
-			const [datatype, typeParameters] = type.DatatypeInstantiation;
-			return this.typeFromDatatypeReference(datatype, typeParameters);
-		}
-
-		if ('Reference' in type) {
-			return this.typeFromTypeSignature(type.Reference);
-		}
-
-		if ('MutableReference' in type) {
-			return this.typeFromTypeSignature(type.MutableReference);
-		}
-
-		if ('Vector' in type) {
-			return `${this.typeFromTypeSignature(type.Vector)}[]`;
-		}
-
-		if ('TypeParameter' in type) {
-			return `T${type.TypeParameter}`;
-		}
-
-		throw new Error(`Unknown type signature: ${JSON.stringify(type, null, 2)}`);
-	}
-
-	bcsFromDatatypeReference(type: number, typeParameters: TypeSignature[] = []): string {
-		const handle = this.moduleDef.datatype_handles[type];
-		const typeName = this.moduleDef.identifiers[handle.name];
-
-		if (handle.module === this.moduleDef.self_module_handle_idx) {
-			return `${typeName}(${typeParameters.map((type) => this.bcsFromTypeSignature(type)).join(', ')})`;
-		}
-
-		const moduleHandle = this.moduleDef.module_handles[handle.module];
-		const moduleAddress = this.moduleDef.address_identifiers[moduleHandle.address];
-		const moduleName = this.moduleDef.identifiers[moduleHandle.name];
-
-		if (moduleAddress === MOVE_STDLIB_ADDRESS) {
-			if (moduleName === 'ascii' && typeName === 'String') {
-				return `bcs.string()`;
-			}
-			if (moduleName === 'string' && typeName === 'String') {
-				return `bcs.string()`;
-			}
-
-			if (moduleName === 'option' && typeName === 'Option') {
-				return `bcs.option(${this.bcsFromTypeSignature(typeParameters[0])})`;
-			}
-		}
-
-		if (moduleAddress === SUI_FRAMEWORK_ADDRESS) {
-			if (moduleName === 'object' && typeName === 'ID') {
-				return `bcs.Address`;
-			}
-		}
-
-		this.addStarImport(`./deps/${moduleAddress}/${moduleName}`, moduleName);
-		return `${moduleName}.${typeName}(
-			${typeParameters.map((type) => this.bcsFromTypeSignature(type)).join(', ')})`;
-	}
-
-	typeFromDatatypeReference(type: number, typeParameters: TypeSignature[] = []): string {
-		const handle = this.moduleDef.datatype_handles[type];
-		const typeName = this.moduleDef.identifiers[handle.name];
-
-		const moduleHandle = this.moduleDef.module_handles[handle.module];
-		const moduleAddress = this.moduleDef.address_identifiers[moduleHandle.address];
-		const moduleName = this.moduleDef.identifiers[moduleHandle.name];
-
-		if (moduleAddress === MOVE_STDLIB_ADDRESS) {
-			if (moduleName === 'ascii' && typeName === 'String') {
-				return `string`;
-			}
-			if (moduleName === 'string' && typeName === 'String') {
-				return `string`;
-			}
-
-			if (moduleName === 'option' && typeName === 'Option') {
-				// TODO: handle option of struct
-				return `${this.typeFromTypeSignature(typeParameters[0])} | null`;
-			}
-		}
-
-		if (moduleAddress === SUI_FRAMEWORK_ADDRESS) {
-			if (moduleName === 'object' && typeName === 'ID') {
-				return `string`;
-			}
-		}
-
-		const typeNameRef =
-			handle.module === this.moduleDef.self_module_handle_idx
-				? typeName
-				: `${moduleName}.${typeName}`;
-
-		if (handle.module !== this.moduleDef.self_module_handle_idx) {
-			this.addStarImport(`./deps/${moduleAddress}/${moduleName}`, moduleName);
-		}
-
-		if (typeParameters.length === 0) {
-			return `ReturnType<typeof ${typeNameRef}>['$inferType']`;
-		}
-
-		return `ReturnType<typeof ${typeNameRef}<${typeParameters.map((type) => this.typeFromTypeSignature(type)).join(', ')}>>['$inferType']`;
 	}
 
 	isContextReference(type: TypeSignature): boolean {
@@ -373,15 +247,24 @@ class ModuleBuilder {
 		return false;
 	}
 
-	toString() {
+	toString(path: string) {
 		const importStatements = [...this.imports.entries()].flatMap(
-			([module, names]) => parseTS`import { ${[...names].join(', ')} } from '${module}'`,
+			([module, names]) =>
+				parseTS`import { ${[...names].join(', ')} } from '${modulePath(module)}'`,
 		);
 		const starImportStatements = [...this.starImports.entries()].flatMap(
-			([name, module]) => parseTS`import * as ${name} from '${module}'`,
+			([name, module]) => parseTS`import * as ${name} from '${modulePath(module)}'`,
 		);
 
 		return printStatements([...importStatements, ...starImportStatements, ...this.statements]);
+
+		function modulePath(mod: string) {
+			if (mod.startsWith('./')) {
+				return relative(path, mod).slice(1);
+			}
+
+			return mod;
+		}
 	}
 }
 
@@ -390,6 +273,7 @@ async function main() {
 		'./tests/move/paywalrus/build/paywalrus/bytecode_modules/feed.mv',
 		'./tests/move/paywalrus/build/paywalrus/bytecode_modules/policy.mv',
 		'./tests/move/paywalrus/build/paywalrus/bytecode_modules/other.mv',
+		'./tests/move/paywalrus/build/paywalrus/bytecode_modules/managed.mv',
 	];
 
 	const builders = await Promise.all(modules.map(ModuleBuilder.fromFile));
@@ -400,8 +284,41 @@ async function main() {
 		const module = builder.moduleDef.module_handles[builder.moduleDef.self_module_handle_idx];
 		await writeFile(
 			`./tests/generated/${builder.moduleDef.identifiers[module.name]}.ts`,
-			builder.toString(),
+			builder.toString(`./${builder.moduleDef.identifiers[module.name]}.ts`),
 		);
+
+		console.log(builder.moduleDef.function_defs[2].code);
+	}
+
+	const depDirs = await readdir(
+		'./tests/move/paywalrus/build/paywalrus/bytecode_modules/dependencies',
+	);
+
+	for (const dir of depDirs) {
+		const modules = await readdir(
+			`./tests/move/paywalrus/build/paywalrus/bytecode_modules/dependencies/${dir}`,
+		);
+
+		for (const modFile of modules) {
+			let builder;
+			try {
+				builder = await ModuleBuilder.fromFile(
+					`./tests/move/paywalrus/build/paywalrus/bytecode_modules/dependencies/${dir}/${modFile}`,
+				);
+			} catch (e) {
+				console.log(e);
+				continue;
+			}
+			const module = builder.moduleDef.module_handles[builder.moduleDef.self_module_handle_idx];
+			const moduleName = builder.moduleDef.identifiers[module.name];
+			const moduleAddress = builder.moduleDef.address_identifiers[module.address];
+			builder.renderBCSTypes();
+			await mkdir(`./tests/generated/deps/${moduleAddress}`, { recursive: true });
+			await writeFile(
+				`./tests/generated/deps/${moduleAddress}/${moduleName}.ts`,
+				builder.toString(`./deps/${moduleAddress}/${moduleName}.ts`),
+			);
+		}
 	}
 }
 

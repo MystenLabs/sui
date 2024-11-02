@@ -1,5 +1,6 @@
 import { bcs, type BcsType } from "@mysten/sui/bcs";
 import { type Transaction } from "@mysten/sui/transactions";
+import { normalizeMoveArguments, type RawTransactionArgument } from "./utils/index.ts";
 import * as object from "./deps/0000000000000000000000000000000000000000000000000000000000000002/object";
 export function Box<T0 extends BcsType<any>>(...typeParameters: [
     T0
@@ -10,29 +11,58 @@ export function Box<T0 extends BcsType<any>>(...typeParameters: [
     }));
 }
 export function init(packageAddress: string) {
-    function create_box(options: {
+    function create_box<T0 extends BcsType<any>>(options: {
         arguments: [
-            T0
+            RawTransactionArgument<T0>
+        ];
+        typeArguments: [
+            string
         ];
     }) {
+        const argumentsTypes = [
+            `${options.typeArguments[0]}`
+        ];
         return (tx: Transaction) => tx.moveCall({
             package: packageAddress,
             module: "other",
             function: "create_box",
-            arguments: options.arguments,
+            arguments: normalizeMoveArguments(options.arguments, argumentsTypes),
+            typeArguments: options.typeArguments
         });
     }
-    function box_id(options: {
+    function box_id<T0 extends BcsType<any>>(options: {
         arguments: [
-            ReturnType<typeof Box<T0>>["$inferType"]
+            RawTransactionArgument<string>
+        ];
+        typeArguments: [
+            string
         ];
     }) {
+        const argumentsTypes = [
+            `0000000000000000000000000000000000000000000000000000000000000000::other::Box<${options.typeArguments[0]}>`
+        ];
         return (tx: Transaction) => tx.moveCall({
             package: packageAddress,
             module: "other",
             function: "box_id",
-            arguments: options.arguments,
+            arguments: normalizeMoveArguments(options.arguments, argumentsTypes),
+            typeArguments: options.typeArguments
         });
     }
-    return { create_box, box_id };
+    function bitwise_not(options: {
+        arguments: [
+            RawTransactionArgument<number | bigint>
+        ];
+    }) {
+        const argumentsTypes = [
+            "u64"
+        ];
+        return (tx: Transaction) => tx.moveCall({
+            package: packageAddress,
+            module: "other",
+            function: "bitwise_not",
+            arguments: normalizeMoveArguments(options.arguments, argumentsTypes),
+        });
+    }
+    return { create_box, box_id, bitwise_not };
 }

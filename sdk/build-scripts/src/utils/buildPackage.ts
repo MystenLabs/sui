@@ -59,6 +59,7 @@ async function buildCJS(
 		target: 'es2020',
 		entryPoints,
 		outdir: 'dist/cjs',
+		outbase: 'src',
 		sourcemap: true,
 		...buildOptions,
 	});
@@ -90,6 +91,7 @@ async function buildESM(
 		target: 'es2020',
 		entryPoints,
 		outdir: 'dist/esm',
+		outbase: 'src',
 		sourcemap: true,
 
 		...buildOptions,

@@ -54,3 +54,4 @@ export {
 } from './plugins/NamedPackagesPlugin.js';
 
 export { type NamedPackagesPluginCache } from './plugins/utils.js';
+export { isArgument } from './utils.js';

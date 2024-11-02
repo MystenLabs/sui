@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { is } from 'valibot';
+
 import type { SuiMoveNormalizedType } from '../client/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import { Argument } from './data/internal.js';
 import type { CallArg } from './data/internal.js';
 
 export function extractMutableReference(
@@ -63,4 +66,8 @@ export function getIdFromCallArg(arg: string | CallArg) {
 	}
 
 	return undefined;
+}
+
+export function isArgument(value: unknown): value is Argument {
+	return is(Argument, value);
 }
