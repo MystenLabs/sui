@@ -111,7 +111,8 @@ impl<H: Handler> Batched<H> {
 /// channels are created to communicate between its various components. The pipeline can be
 /// shutdown using its `cancel` token, and will also shutdown if any of its independent tasks
 /// reports an issue.
-pub(crate) fn pipeline<H: Handler + 'static>(
+pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+    handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
     db: Db,
@@ -128,7 +129,13 @@ pub(crate) fn pipeline<H: Handler + 'static>(
     let (collector_tx, committer_rx) = mpsc::channel(config.write_concurrency + PIPELINE_BUFFER);
     let (committer_tx, watermark_rx) = mpsc::channel(config.write_concurrency + PIPELINE_BUFFER);
 
-    let processor = processor::<H>(checkpoint_rx, processor_tx, metrics.clone(), cancel.clone());
+    let processor = processor(
+        handler,
+        checkpoint_rx,
+        processor_tx,
+        metrics.clone(),
+        cancel.clone(),
+    );
 
     let collector = collector::<H>(
         config.clone(),

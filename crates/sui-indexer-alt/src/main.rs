@@ -42,25 +42,24 @@ async fn main() -> Result<()> {
 
             bootstrap(&indexer, retry_interval, cancel.clone()).await?;
 
-            indexer.concurrent_pipeline::<EvEmitMod>().await?;
-            indexer.concurrent_pipeline::<EvStructInst>().await?;
-            indexer.concurrent_pipeline::<KvCheckpoints>().await?;
-            indexer.concurrent_pipeline::<KvObjects>().await?;
-            indexer.concurrent_pipeline::<KvTransactions>().await?;
-            indexer.concurrent_pipeline::<ObjVersions>().await?;
-            indexer.concurrent_pipeline::<TxAffectedAddress>().await?;
-            indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
-            indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
-            indexer.concurrent_pipeline::<TxCallsFun>().await?;
-            indexer.concurrent_pipeline::<TxDigests>().await?;
-            indexer.concurrent_pipeline::<TxKinds>().await?;
-            indexer.concurrent_pipeline::<TxKinds>().await?;
-            indexer.concurrent_pipeline::<WalCoinBalances>().await?;
-            indexer.concurrent_pipeline::<WalObjTypes>().await?;
-            indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;
-            indexer.sequential_pipeline::<SumDisplays>(None).await?;
-            indexer.sequential_pipeline::<SumObjTypes>(lag).await?;
-            indexer.sequential_pipeline::<SumPackages>(None).await?;
+            indexer.concurrent_pipeline(EvEmitMod).await?;
+            indexer.concurrent_pipeline(EvStructInst).await?;
+            indexer.concurrent_pipeline(KvCheckpoints).await?;
+            indexer.concurrent_pipeline(KvObjects).await?;
+            indexer.concurrent_pipeline(KvTransactions).await?;
+            indexer.concurrent_pipeline(ObjVersions).await?;
+            indexer.concurrent_pipeline(TxAffectedAddress).await?;
+            indexer.concurrent_pipeline(TxAffectedObjects).await?;
+            indexer.concurrent_pipeline(TxBalanceChanges).await?;
+            indexer.concurrent_pipeline(TxCallsFun).await?;
+            indexer.concurrent_pipeline(TxDigests).await?;
+            indexer.concurrent_pipeline(TxKinds).await?;
+            indexer.concurrent_pipeline(WalCoinBalances).await?;
+            indexer.concurrent_pipeline(WalObjTypes).await?;
+            indexer.sequential_pipeline(SumCoinBalances, lag).await?;
+            indexer.sequential_pipeline(SumDisplays, None).await?;
+            indexer.sequential_pipeline(SumObjTypes, lag).await?;
+            indexer.sequential_pipeline(SumPackages, None).await?;
 
             let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 

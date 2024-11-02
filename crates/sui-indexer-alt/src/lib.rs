@@ -151,7 +151,10 @@ impl Indexer {
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
     /// exists for, for their pipeline.
-    pub async fn concurrent_pipeline<H: concurrent::Handler + 'static>(&mut self) -> Result<()> {
+    pub async fn concurrent_pipeline<H: concurrent::Handler + Send + Sync + 'static>(
+        &mut self,
+        handler: H,
+    ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
@@ -163,7 +166,8 @@ impl Indexer {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
-        let (processor, collector, committer, watermark) = concurrent::pipeline::<H>(
+        let (processor, collector, committer, watermark) = concurrent::pipeline(
+            handler,
             watermark,
             self.pipeline_config.clone(),
             self.db.clone(),
@@ -190,8 +194,9 @@ impl Indexer {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H: sequential::Handler + 'static>(
+    pub async fn sequential_pipeline<H: sequential::Handler + Send + Sync + 'static>(
         &mut self,
+        handler: H,
         checkpoint_lag: Option<u64>,
     ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
@@ -204,7 +209,8 @@ impl Indexer {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        let (processor, committer) = sequential::pipeline::<H>(
+        let (processor, committer) = sequential::pipeline(
+            handler,
             watermark,
             self.pipeline_config.clone(),
             checkpoint_lag,
