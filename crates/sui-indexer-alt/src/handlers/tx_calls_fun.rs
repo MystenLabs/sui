@@ -9,8 +9,8 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::{
-    db, models::transactions::StoredTxCallsFun, pipeline::concurrent::Handler, pipeline::Processor,
-    schema::tx_calls_fun,
+    db, models::transactions::StoredTxCalls, pipeline::concurrent::Handler, pipeline::Processor,
+    schema::tx_calls,
 };
 
 pub struct TxCallsFun;
@@ -18,7 +18,7 @@ pub struct TxCallsFun;
 impl Processor for TxCallsFun {
     const NAME: &'static str = "tx_calls_fun";
 
-    type Value = StoredTxCallsFun;
+    type Value = StoredTxCalls;
 
     fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
@@ -39,11 +39,11 @@ impl Processor for TxCallsFun {
 
                 calls
                     .iter()
-                    .map(|(package, module, func)| StoredTxCallsFun {
+                    .map(|(package, module, function)| StoredTxCalls {
                         tx_sequence_number,
                         package: package.to_vec(),
                         module: module.to_string(),
-                        func: func.to_string(),
+                        function: function.to_string(),
                         sender: sender.clone(),
                     })
                     .collect::<Vec<_>>()
@@ -59,7 +59,7 @@ impl Handler for TxCallsFun {
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
-        Ok(diesel::insert_into(tx_calls_fun::table)
+        Ok(diesel::insert_into(tx_calls::table)
             .values(values)
             .on_conflict_do_nothing()
             .execute(conn)

@@ -9,9 +9,8 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::{
     db,
-    models::transactions::{StoredTxKind, TxKind},
-    pipeline::concurrent::Handler,
-    pipeline::Processor,
+    models::transactions::{StoredKind, StoredTxKind},
+    pipeline::{concurrent::Handler, Processor},
     schema::tx_kinds,
 };
 
@@ -35,14 +34,14 @@ impl Processor for TxKinds {
         for (i, tx) in transactions.iter().enumerate() {
             let tx_sequence_number = (first_tx + i) as i64;
             let tx_kind = if tx.transaction.is_system_tx() {
-                TxKind::SystemTransaction
+                StoredKind::SystemTransaction
             } else {
-                TxKind::ProgrammableTransaction
+                StoredKind::ProgrammableTransaction
             };
 
             values.push(StoredTxKind {
                 tx_sequence_number,
-                tx_kind: tx_kind as i16,
+                tx_kind,
             });
         }
 
