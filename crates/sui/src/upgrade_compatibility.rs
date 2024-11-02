@@ -44,7 +44,6 @@ use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 /// Errors that can occur during upgrade compatibility checks.
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) enum UpgradeCompatibilityModeError {
     ModuleMissing {
@@ -435,7 +434,7 @@ macro_rules! upgrade_codes {
                 $($code,)*
             }
 
-            // impl into diagnostic info
+            #[allow(clippy::from_over_into)]
             impl Into<DiagnosticInfo> for $cat {
                 fn into(self) -> DiagnosticInfo {
                     match self {
@@ -574,7 +573,7 @@ fn compare_packages(
                 ),
             );
 
-            file_set.insert(compiled_unit_with_source.source_path.clone());
+            file_set.insert(&compiled_unit_with_source.source_path);
         }
 
         diags.extend(diag_from_error(
@@ -598,14 +597,14 @@ fn diag_from_error(
 ) -> Result<Diagnostics, Error> {
     match error {
         UpgradeCompatibilityModeError::StructMissing { name, .. } => {
-            missing_definition_diag("struct", &name, compiled_unit_with_source)
+            missing_definition_diag("struct", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::StructAbilityMismatch {
             name,
             old_struct,
             new_struct,
         } => struct_ability_mismatch_diag(
-            &name,
+            name,
             old_struct,
             new_struct,
             compiled_unit_with_source,
@@ -616,28 +615,28 @@ fn diag_from_error(
             old_struct,
             new_struct,
         } => struct_field_mismatch_diag(
-            &name,
+            name,
             old_struct,
             new_struct,
             compiled_unit_with_source,
             lookup,
         ),
         UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
-            missing_definition_diag("enum", &name, compiled_unit_with_source)
+            missing_definition_diag("enum", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::EnumAbilityMismatch {
             name,
             old_enum,
             new_enum,
         } => {
-            enum_ability_mismatch_diag(&name, old_enum, new_enum, compiled_unit_with_source, lookup)
+            enum_ability_mismatch_diag(name, old_enum, new_enum, compiled_unit_with_source, lookup)
         }
         UpgradeCompatibilityModeError::EnumNewVariant {
             name,
             old_enum,
             new_enum,
         } => enum_new_variant_diag(
-            &name,
+            name,
             old_enum,
             new_enum,
             // *tag,
@@ -648,27 +647,27 @@ fn diag_from_error(
             name,
             tag,
             old_enum,
-        } => enum_variant_missing_diag(&name, old_enum, *tag, compiled_unit_with_source, lookup),
+        } => enum_variant_missing_diag(name, old_enum, *tag, compiled_unit_with_source, lookup),
         UpgradeCompatibilityModeError::EnumVariantMismatch {
             name,
             old_enum,
             new_enum,
             ..
         } => {
-            enum_variant_mismatch_diag(&name, old_enum, new_enum, compiled_unit_with_source, lookup)
+            enum_variant_mismatch_diag(name, old_enum, new_enum, compiled_unit_with_source, lookup)
         }
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
-            missing_definition_diag("public function", &name, compiled_unit_with_source)
+            missing_definition_diag("public function", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
-            missing_definition_diag("entry function", &name, compiled_unit_with_source)
+            missing_definition_diag("entry function", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionSignatureMismatch {
             name,
             old_function,
             new_function,
         } => function_signature_mismatch_diag(
-            &name,
+            name,
             old_function,
             new_function,
             compiled_unit_with_source,
@@ -955,8 +954,7 @@ fn struct_field_mismatch_diag(
                 let field_loc = struct_sourcemap
                     .fields
                     .get(i)
-                    .context("Unable to get field location")?
-                    .clone();
+                    .context("Unable to get field location")?;
 
                 let label = match (
                     old_field.name != new_field.name,
@@ -980,7 +978,7 @@ fn struct_field_mismatch_diag(
                 diags.add(
                     Diagnostic::new(
                         Declarations::TypeMismatch,
-                        (field_loc, label),
+                        (*field_loc, label),
                         vec![(def_loc, "Struct definition".to_string())],
                         vec![
                             "Structs are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
@@ -1187,7 +1185,7 @@ fn enum_new_variant_diag(
     let old_enum_map = old_enum
         .variants
         .iter()
-        .map(|v| v.name.clone())
+        .map(|v| &v.name)
         .collect::<HashSet<_>>();
 
     let def_loc = enum_sourcemap.definition_location;
