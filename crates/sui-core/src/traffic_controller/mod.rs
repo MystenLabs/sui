@@ -284,10 +284,7 @@ async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficC
         metrics
             .connection_ip_blocklist_len
             .set(blocklists.clients.len() as i64);
-        error!(
-            "TESTNG -- connection_ip_blocklist: {:?}",
-            blocklists.clients
-        );
+        debug!("Connection_ip_blocklist: {:?}", blocklists.clients);
         metrics
             .proxy_ip_blocklist_len
             .set(blocklists.proxied_clients.len() as i64);
@@ -435,9 +432,10 @@ async fn handle_error_tally(
     if !error_weight.is_sampled() {
         return Ok(());
     }
-    error!(
-        "TESTNG -- handling error_type {:?} from client {:?}",
-        error_type, tally.direct,
+    trace!(
+        "Handling error_type {:?} from client {:?}",
+        error_type,
+        tally.direct,
     );
     metrics
         .tally_error_types

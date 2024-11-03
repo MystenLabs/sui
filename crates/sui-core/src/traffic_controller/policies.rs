@@ -14,7 +14,7 @@ use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
-use tracing::{error, info};
+use tracing::{info, trace};
 
 const HIGHEST_RATES_CAPACITY: usize = 20;
 
@@ -361,9 +361,11 @@ impl FreqThresholdPolicy {
             let key = SketchKey(source, ClientType::Direct);
             self.sketch.increment_count(&key);
             let req_rate = self.sketch.get_request_rate(&key);
-            error!(
-                "TESTNG -- req_rate: {:?}, client_threshold: {:?}, client: {:?}",
-                req_rate, self.client_threshold, source,
+            trace!(
+                "FreqThresholdPolicy handling tally -- req_rate: {:?}, client_threshold: {:?}, client: {:?}",
+                req_rate,
+                self.client_threshold,
+                source,
             );
             if req_rate >= self.client_threshold as f64 {
                 Some(source)
