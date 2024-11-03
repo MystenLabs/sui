@@ -5,6 +5,7 @@
 use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use count_min_sketch::CountMinSketch32;
+use itertools::Itertools;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use std::cmp::Reverse;
@@ -193,22 +194,28 @@ impl TrafficSketch {
         }
     }
 
-    pub fn highest_direct_rate(&self) -> Option<(u64, IpAddr)> {
+    pub fn highest_direct_rates(&self, n: u64) -> Vec<(u64, IpAddr)> {
         self.highest_rates
             .direct
             .iter()
             .map(|Reverse(v)| v)
-            .max_by(|a, b| a.0.partial_cmp(&b.0).expect("Failed to compare rates"))
             .copied()
+            .sorted_by(|a, b| a.0.partial_cmp(&b.0).expect("Failed to compare rates"))
+            .rev()
+            .take(n as usize)
+            .collect()
     }
 
-    pub fn highest_proxied_rate(&self) -> Option<(u64, IpAddr)> {
+    pub fn highest_proxied_rates(&self, n: u64) -> Vec<(u64, IpAddr)> {
         self.highest_rates
             .proxied
             .iter()
             .map(|Reverse(v)| v)
-            .max_by(|a, b| a.0.partial_cmp(&b.0).expect("Failed to compare rates"))
             .copied()
+            .sorted_by(|a, b| a.0.partial_cmp(&b.0).expect("Failed to compare rates"))
+            .rev()
+            .take(n as usize)
+            .collect()
     }
 
     fn rotate_window(&mut self) {
@@ -348,12 +355,12 @@ impl FreqThresholdPolicy {
         }
     }
 
-    pub fn highest_direct_rate(&self) -> Option<(u64, IpAddr)> {
-        self.sketch.highest_direct_rate()
+    pub fn highest_direct_rates(&self, n: u64) -> Vec<(u64, IpAddr)> {
+        self.sketch.highest_direct_rates(n)
     }
 
-    pub fn highest_proxied_rate(&self) -> Option<(u64, IpAddr)> {
-        self.sketch.highest_proxied_rate()
+    pub fn highest_proxied_rates(&self, n: u64) -> Vec<(u64, IpAddr)> {
+        self.sketch.highest_proxied_rates(n)
     }
 
     pub fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
@@ -541,12 +548,14 @@ mod tests {
             assert_eq!(response.block_client, None);
         }
 
-        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
-        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
-        assert_eq!(direct_ip_addr, alice.direct.unwrap());
-        assert!(direct_rate < 1);
-        assert_eq!(proxied_ip_addr, alice.through_fullnode.unwrap());
-        assert!(proxied_rate < 1);
+        let highest_direct_rates = policy.highest_direct_rates(1);
+        let (direct_rate, direct_ip_addr) = highest_direct_rates.first().unwrap();
+        let highest_proxied_rates = policy.highest_proxied_rates(1);
+        let (proxied_rate, proxied_ip_addr) = highest_proxied_rates.first().unwrap();
+        assert_eq!(*direct_ip_addr, alice.direct.unwrap());
+        assert!(*direct_rate < 1);
+        assert_eq!(*proxied_ip_addr, alice.through_fullnode.unwrap());
+        assert!(*proxied_rate < 1);
 
         // meanwhile bob spams 10 requests at once and is blocked
         for _ in 0..9 {
@@ -559,12 +568,14 @@ mod tests {
         assert_eq!(response.block_proxied_client, bob.through_fullnode);
 
         // highest rates should now show bob
-        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
-        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
-        assert_eq!(direct_ip_addr, bob.direct.unwrap());
-        assert_eq!(direct_rate, 2);
-        assert_eq!(proxied_ip_addr, bob.through_fullnode.unwrap());
-        assert_eq!(proxied_rate, 2);
+        let highest_direct_rates = policy.highest_direct_rates(1);
+        let (direct_rate, direct_ip_addr) = highest_direct_rates.first().unwrap();
+        let highest_proxied_rates = policy.highest_proxied_rates(1);
+        let (proxied_rate, proxied_ip_addr) = highest_proxied_rates.first().unwrap();
+        assert_eq!(*direct_ip_addr, bob.direct.unwrap());
+        assert_eq!(*direct_rate, 2);
+        assert_eq!(*proxied_ip_addr, bob.through_fullnode.unwrap());
+        assert_eq!(*proxied_rate, 2);
 
         // 2 more tallies, so far we are above 2 tallies
         // per second, but over the average window of 5 seconds
@@ -582,15 +593,17 @@ mod tests {
         assert_eq!(response.block_client, None);
         assert_eq!(response.block_proxied_client, bob.through_fullnode);
 
-        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
-        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
+        let highest_direct_rates = policy.highest_direct_rates(1);
+        let (direct_rate, direct_ip_addr) = highest_direct_rates.first().unwrap();
+        let highest_proxied_rates = policy.highest_proxied_rates(1);
+        let (proxied_rate, proxied_ip_addr) = highest_proxied_rates.first().unwrap();
         // direct rate increased due to alice going through same fullnode
-        assert_eq!(direct_ip_addr, alice.direct.unwrap());
-        assert_eq!(direct_rate, 3);
+        assert_eq!(*direct_ip_addr, alice.direct.unwrap());
+        assert_eq!(*direct_rate, 3);
         // highest rate should now have been updated given that Bob's rate
         // recently decreased
-        assert_eq!(proxied_ip_addr, bob.through_fullnode.unwrap());
-        assert_eq!(proxied_rate, 2);
+        assert_eq!(*proxied_ip_addr, bob.through_fullnode.unwrap());
+        assert_eq!(*proxied_rate, 2);
 
         // close to threshold for alice, but still below
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -606,12 +619,14 @@ mod tests {
         assert_eq!(response.block_client, None);
         assert_eq!(response.block_proxied_client, alice.through_fullnode);
 
-        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
-        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
-        assert_eq!(direct_ip_addr, alice.direct.unwrap());
-        assert_eq!(direct_rate, 4);
-        assert_eq!(proxied_ip_addr, bob.through_fullnode.unwrap());
-        assert_eq!(proxied_rate, 2);
+        let highest_direct_rates = policy.highest_direct_rates(1);
+        let (direct_rate, direct_ip_addr) = highest_direct_rates.first().unwrap();
+        let highest_proxied_rates = policy.highest_proxied_rates(1);
+        let (proxied_rate, proxied_ip_addr) = highest_proxied_rates.first().unwrap();
+        assert_eq!(*direct_ip_addr, alice.direct.unwrap());
+        assert_eq!(*direct_rate, 4);
+        assert_eq!(*proxied_ip_addr, bob.through_fullnode.unwrap());
+        assert_eq!(*proxied_rate, 2);
 
         // spam through charlie to block connection
         for i in 0..2 {
@@ -640,12 +655,14 @@ mod tests {
         // has not since they have not yet sent a new request
         let _ = policy.handle_tally(alice.clone());
         let _ = policy.handle_tally(bob.clone());
-        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
-        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
-        assert_eq!(direct_ip_addr, alice.direct.unwrap());
-        assert_eq!(direct_rate, 0);
-        assert_eq!(proxied_ip_addr, charlie.through_fullnode.unwrap());
-        assert_eq!(proxied_rate, 1);
+        let highest_direct_rates = policy.highest_direct_rates(1);
+        let (direct_rate, direct_ip_addr) = highest_direct_rates.first().unwrap();
+        let highest_proxied_rates = policy.highest_proxied_rates(1);
+        let (proxied_rate, proxied_ip_addr) = highest_proxied_rates.first().unwrap();
+        assert_eq!(*direct_ip_addr, alice.direct.unwrap());
+        assert_eq!(*direct_rate, 0);
+        assert_eq!(*proxied_ip_addr, charlie.through_fullnode.unwrap());
+        assert_eq!(*proxied_rate, 1);
     }
 
     #[sim_test]
