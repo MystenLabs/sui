@@ -284,6 +284,10 @@ async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficC
         metrics
             .connection_ip_blocklist_len
             .set(blocklists.clients.len() as i64);
+        error!(
+            "TESTNG -- connection_ip_blocklist: {:?}",
+            blocklists.clients
+        );
         metrics
             .proxy_ip_blocklist_len
             .set(blocklists.proxied_clients.len() as i64);
@@ -425,18 +429,20 @@ async fn handle_error_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    let error_weight = if let Some((error_weight, error_type)) = tally.clone().error_info {
-        metrics
-            .tally_error_types
-            .with_label_values(&[error_type.as_str()])
-            .inc();
-        error_weight
-    } else {
+    let Some((error_weight, error_type)) = tally.clone().error_info else {
         return Ok(());
     };
     if !error_weight.is_sampled() {
         return Ok(());
     }
+    error!(
+        "TESTNG -- handling error_type {:?} from client {:?}",
+        error_type, tally.direct,
+    );
+    metrics
+        .tally_error_types
+        .with_label_values(&[error_type.as_str()])
+        .inc();
     let resp = policy.handle_tally(tally);
     metrics.error_tally_handled.inc();
     if let Some(fw_config) = fw_config {
