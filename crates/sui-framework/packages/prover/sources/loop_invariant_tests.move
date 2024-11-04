@@ -1,3 +1,4 @@
+#[allow(unused)]
 module prover::loop_invariant_tests;
 
 #[verify_only]

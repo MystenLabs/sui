@@ -1,3 +1,4 @@
+#[allow(unused)]
 module prover::opaque_tests;
 
 #[verify_only]

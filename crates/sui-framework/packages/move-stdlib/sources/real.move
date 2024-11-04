@@ -1,86 +1,86 @@
-module std::real {
-    #[verify_only]
-    use std::integer::Integer;
+module std::real;
 
-    #[verify_only]
-    native public struct Real has copy, drop, store;
+#[verify_only]
+use std::integer::Integer;
 
-    #[verify_only]
-    native public fun from_integer(x: Integer): Real;
-    #[verify_only]
-    native public fun to_integer(x: Real): Integer;
+#[verify_only]
+native public struct Real has copy, drop, store;
 
-    #[verify_only]
-    public fun from_u8(x: u8): Real {
-        x.to_int().to_real()
-    }
-    #[verify_only]
-    public fun from_u16(x: u16): Real {
-        x.to_int().to_real()
-    }
-    #[verify_only]
-    public fun from_u32(x: u32): Real {
-        x.to_int().to_real()
-    }
-    #[verify_only]
-    public fun from_u64(x: u64): Real {
-        x.to_int().to_real()
-    }
-    #[verify_only]
-    public fun from_u128(x: u128): Real {
-        x.to_int().to_real()
-    }
-    #[verify_only]
-    public fun from_u256(x: u256): Real {
-        x.to_int().to_real()
-    }
+#[verify_only]
+native public fun from_integer(x: Integer): Real;
+#[verify_only]
+native public fun to_integer(x: Real): Integer;
 
-    #[verify_only]
-    public fun to_u8(x: Real): u8 {
-        x.to_integer().to_u8()
-    }
-    #[verify_only]
-    public fun to_u16(x: Real): u16 {
-        x.to_integer().to_u16()
-    }
-    #[verify_only]
-    public fun to_u32(x: Real): u32 {
-        x.to_integer().to_u32()
-    }
-    #[verify_only]
-    public fun to_u64(x: Real): u64 {
-        x.to_integer().to_u64()
-    }
-    #[verify_only]
-    public fun to_u128(x: Real): u128 {
-        x.to_integer().to_u128()
-    }
-    #[verify_only]
-    public fun to_u256(x: Real): u256 {
-        x.to_integer().to_u256()
-    }
-
-    #[verify_only]
-    native public fun add(x: Real, y: Real): Real;
-    #[verify_only]
-    native public fun sub(x: Real, y: Real): Real;
-    #[verify_only]
-    native public fun neg(x: Real): Real;
-    #[verify_only]
-    native public fun mul(x: Real, y: Real): Real;
-    #[verify_only]
-    native public fun div(x: Real, y: Real): Real;
-    #[verify_only]
-    native public fun sqrt(x: Real, y: Real): Real;
-    #[verify_only]
-    native public fun exp(x: Real, y: Real): Real;
-
-    #[verify_only]
-    native public fun lt(x: Real, y: Real): bool;
-    #[verify_only]
-    native public fun gt(x: Real, y: Real): bool;
-    #[verify_only]
-    native public fun lte(x: Real, y: Real): bool;
-    #[verify_only]
-    native public fun gte(x: Real, y: Real): bool;
+#[verify_only]
+public fun from_u8(x: u8): Real {
+    x.to_int().to_real()
 }
+#[verify_only]
+public fun from_u16(x: u16): Real {
+    x.to_int().to_real()
+}
+#[verify_only]
+public fun from_u32(x: u32): Real {
+    x.to_int().to_real()
+}
+#[verify_only]
+public fun from_u64(x: u64): Real {
+    x.to_int().to_real()
+}
+#[verify_only]
+public fun from_u128(x: u128): Real {
+    x.to_int().to_real()
+}
+#[verify_only]
+public fun from_u256(x: u256): Real {
+    x.to_int().to_real()
+}
+
+#[verify_only]
+public fun to_u8(x: Real): u8 {
+    x.to_integer().to_u8()
+}
+#[verify_only]
+public fun to_u16(x: Real): u16 {
+    x.to_integer().to_u16()
+}
+#[verify_only]
+public fun to_u32(x: Real): u32 {
+    x.to_integer().to_u32()
+}
+#[verify_only]
+public fun to_u64(x: Real): u64 {
+    x.to_integer().to_u64()
+}
+#[verify_only]
+public fun to_u128(x: Real): u128 {
+    x.to_integer().to_u128()
+}
+#[verify_only]
+public fun to_u256(x: Real): u256 {
+    x.to_integer().to_u256()
+}
+
+#[verify_only]
+native public fun add(x: Real, y: Real): Real;
+#[verify_only]
+native public fun sub(x: Real, y: Real): Real;
+#[verify_only]
+native public fun neg(x: Real): Real;
+#[verify_only]
+native public fun mul(x: Real, y: Real): Real;
+#[verify_only]
+native public fun div(x: Real, y: Real): Real;
+#[verify_only]
+native public fun sqrt(x: Real, y: Real): Real;
+#[verify_only]
+native public fun exp(x: Real, y: Real): Real;
+
+#[verify_only]
+native public fun lt(x: Real, y: Real): bool;
+#[verify_only]
+native public fun gt(x: Real, y: Real): bool;
+#[verify_only]
+native public fun lte(x: Real, y: Real): bool;
+#[verify_only]
+native public fun gte(x: Real, y: Real): bool;

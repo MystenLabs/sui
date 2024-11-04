@@ -1,3 +1,4 @@
+#[allow(unused)]
 module prover::ghost_tests;
 
 #[verify_only]
