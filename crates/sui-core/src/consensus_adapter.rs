@@ -184,6 +184,11 @@ impl ConsensusAdapterMetrics {
     }
 }
 
+/// An object that can be used to check if the consensus is overloaded.
+pub trait ConsensusOverloadChecker: Sync + Send + 'static {
+    fn check_consensus_overload(&self) -> SuiResult;
+}
+
 #[mockall::automock]
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
@@ -193,6 +198,7 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult;
 }
+
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
@@ -576,7 +582,7 @@ impl ConsensusAdapter {
 
     /// Performs weakly consistent checks on internal buffers to quickly
     /// discard transactions if we are overloaded
-    pub fn check_limits(&self) -> bool {
+    fn check_limits(&self) -> bool {
         // First check total transactions (waiting and in submission)
         if self.num_inflight_transactions.load(Ordering::Relaxed) as usize
             > self.max_pending_transactions
@@ -585,14 +591,6 @@ impl ConsensusAdapter {
         }
         // Then check if submit_semaphore has permits
         self.submit_semaphore.available_permits() > 0
-    }
-
-    pub(crate) fn check_consensus_overload(&self) -> SuiResult {
-        fp_ensure!(
-            self.check_limits(),
-            SuiError::TooManyTransactionsPendingConsensus
-        );
-        Ok(())
     }
 
     fn submit_unchecked(
@@ -976,6 +974,24 @@ pub fn get_position_in_list(
         .find_position(|authority| *authority == search_authority)
         .expect("Couldn't find ourselves in shuffled committee")
         .0
+}
+
+impl ConsensusOverloadChecker for ConsensusAdapter {
+    fn check_consensus_overload(&self) -> SuiResult {
+        fp_ensure!(
+            self.check_limits(),
+            SuiError::TooManyTransactionsPendingConsensus
+        );
+        Ok(())
+    }
+}
+
+pub struct NoopConsensusOverloadChecker {}
+
+impl ConsensusOverloadChecker for NoopConsensusOverloadChecker {
+    fn check_consensus_overload(&self) -> SuiResult {
+        Ok(())
+    }
 }
 
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {

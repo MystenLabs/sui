@@ -21,6 +21,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV3, HandleTransactionResponseV2,
 };
@@ -41,10 +42,6 @@ use sui_types::{
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
-};
-use sui_types::{
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
-    messages_grpc::TransactionStatus,
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
@@ -405,6 +402,8 @@ impl ValidatorService {
         self.transaction(request).await
     }
 
+    // When making changes to this function, see if the changes should be applied to
+    // `handle_transaction_v2()` and `SuiTxValidator::vote_transaction()` as well.
     async fn handle_transaction(
         &self,
         request: tonic::Request<Transaction>,
@@ -430,7 +429,7 @@ impl ValidatorService {
         // higher chance to succeed.
         let mut validator_pushback_error = None;
         let overload_check_res = state.check_system_overload(
-            &consensus_adapter,
+            &*consensus_adapter,
             transaction.data(),
             state.check_system_overload_at_signing(),
         );
@@ -511,7 +510,7 @@ impl ValidatorService {
 
         // Check system overload
         let overload_check_res = self.state.check_system_overload(
-            &consensus_adapter,
+            &*consensus_adapter,
             transaction.data(),
             state.check_system_overload_at_signing(),
         );
@@ -535,7 +534,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
         let span = error_span!("validator_state_process_tx_v2", ?tx_digest);
 
-        let tx_status = state
+        let tx_output = state
             .handle_transaction_v2(&epoch_store, transaction.clone())
             .instrument(span)
             .await
@@ -544,25 +543,18 @@ impl ValidatorService {
                     metrics.num_rejected_tx_in_epoch_boundary.inc();
                 }
             })?;
-        if let Some((
-            _sender_signed_data,
-            // TODO(fastpath): Suppress duplicate transaction submission in consensus
-            // adapter, if not already done. (If we get back `TransactionStatus::Signed``
-            // here we still need to proceed with submission logic, because the previous
-            // RPC might have been dropped after signing but before submission.)
-            TransactionStatus::Executed(_sign_info, signed_effects, events),
-        )) = tx_status
-        {
+        // Fetch remaining fields if the transaction has been executed.
+        if let Some((effects, events)) = tx_output {
             let input_objects = include_input_objects
-                .then(|| state.get_transaction_input_objects(signed_effects.data()))
+                .then(|| state.get_transaction_input_objects(&effects))
                 .and_then(Result::ok);
             let output_objects = include_output_objects
-                .then(|| state.get_transaction_output_objects(signed_effects.data()))
+                .then(|| state.get_transaction_output_objects(&effects))
                 .and_then(Result::ok);
 
             return Ok((
                 tonic::Response::new(HandleTransactionResponseV2 {
-                    effects: signed_effects.into_data(),
+                    effects,
                     events: include_events.then_some(events),
                     input_objects,
                     output_objects,
@@ -683,7 +675,7 @@ impl ValidatorService {
         // Check system overload
         for certificate in &certificates {
             let overload_check_res = self.state.check_system_overload(
-                &self.consensus_adapter,
+                &*self.consensus_adapter,
                 certificate.data(),
                 self.state.check_system_overload_at_execution(),
             );

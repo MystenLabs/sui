@@ -8,14 +8,17 @@ use fastcrypto_tbls::dkg;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
-    error::SuiError,
+    error::{SuiError, SuiResult},
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+    transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
-    authority::AuthorityState, checkpoints::CheckpointServiceNotify,
+    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
+    checkpoints::CheckpointServiceNotify,
+    consensus_adapter::ConsensusOverloadChecker,
     transaction_manager::TransactionManager,
 };
 
@@ -23,6 +26,7 @@ use crate::{
 #[derive(Clone)]
 pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
+    consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
@@ -31,6 +35,7 @@ pub struct SuiTxValidator {
 impl SuiTxValidator {
     pub fn new(
         authority_state: Arc<AuthorityState>,
+        consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
@@ -42,6 +47,7 @@ impl SuiTxValidator {
         );
         Self {
             authority_state,
+            consensus_overload_checker,
             checkpoint_service,
             _transaction_manager: transaction_manager,
             metrics,
@@ -131,31 +137,37 @@ impl SuiTxValidator {
                 continue;
             };
 
-            // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
-            // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
-            if tx
-                .validity_check(epoch_store.protocol_config(), epoch_store.epoch())
-                .is_err()
-            {
-                result.push(i as TransactionIndex);
-                continue;
-            }
-            let Ok(tx) = epoch_store.verify_transaction(*tx.clone()) else {
-                result.push(i as TransactionIndex);
-                continue;
-            };
-
-            if self
-                .authority_state
-                .handle_transaction_v2(&epoch_store, tx)
-                .await
-                .is_err()
-            {
+            if let Err(e) = self.vote_transaction(&epoch_store, tx).await {
+                debug!("Failed to vote transaction: {:?}", e);
                 result.push(i as TransactionIndex);
             }
         }
 
         result
+    }
+
+    async fn vote_transaction(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx: Box<Transaction>,
+    ) -> SuiResult<()> {
+        // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
+        // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
+        tx.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+
+        self.authority_state.check_system_overload(
+            &*self.consensus_overload_checker,
+            tx.data(),
+            self.authority_state.check_system_overload_at_signing(),
+        )?;
+
+        let tx = epoch_store.verify_transaction(*tx)?;
+
+        self.authority_state
+            .handle_transaction_v2(epoch_store, tx)
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -240,7 +252,10 @@ mod tests {
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
+        consensus_adapter::{
+            consensus_tests::{test_certificates, test_gas_objects},
+            NoopConsensusOverloadChecker,
+        },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
 
@@ -273,6 +288,7 @@ mod tests {
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
             state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             metrics,

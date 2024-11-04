@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::jsonrpc_index::CoinIndexKey2;
@@ -142,7 +143,6 @@ use crate::authority::authority_store_pruner::{
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::CheckpointStore;
-use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::{
     CheckpointCache, ExecutionCacheCommit, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
@@ -1017,19 +1017,21 @@ impl AuthorityState {
         }
     }
 
+    /// When Ok, returns None if the transaction has not been executed, and returns
+    /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_transaction_v2(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<Option<(SenderSignedData, TransactionStatus)>> {
+    ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
         let tx_digest = *transaction.digest();
         debug!("handle_transaction_v2");
 
-        // Ensure an idempotent answer.
-        let tx_status = self.get_transaction_status(&tx_digest, epoch_store)?;
-        if tx_status.is_some() {
-            return Ok(tx_status);
+        // Check if the transaction has already been executed.
+        let tx_output = self.get_transaction_output(&tx_digest)?;
+        if tx_output.is_some() {
+            return Ok(tx_output);
         }
 
         let _metrics_guard = self
@@ -1059,10 +1061,7 @@ impl AuthorityState {
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(e) => self
-                .get_transaction_status(&tx_digest, epoch_store)?
-                .ok_or(e)
-                .map(Some),
+            Err(e) => self.get_transaction_output(&tx_digest)?.ok_or(e).map(Some),
         }
     }
 
@@ -1080,7 +1079,7 @@ impl AuthorityState {
 
     pub(crate) fn check_system_overload(
         &self,
-        consensus_adapter: &Arc<ConsensusAdapter>,
+        consensus_overload_checker: &(impl ConsensusOverloadChecker + ?Sized),
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
@@ -1094,9 +1093,11 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
-        consensus_adapter.check_consensus_overload().tap_err(|_| {
-            self.update_overload_metrics("consensus");
-        })?;
+        consensus_overload_checker
+            .check_consensus_overload()
+            .tap_err(|_| {
+                self.update_overload_metrics("consensus");
+            })?;
         Ok(())
     }
 
@@ -4164,6 +4165,27 @@ impl AuthorityState {
                 .map(|o| self.insert_genesis_object(o.clone())),
         )
         .await;
+    }
+
+    /// Gets the execution outputs of a transaction if they exist
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_transaction_output(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
+        let effects = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(transaction_digest)?;
+        if let Some(effects) = effects {
+            let events = if let Some(digest) = effects.events_digest() {
+                self.get_transaction_events(digest)?
+            } else {
+                TransactionEvents::default()
+            };
+            Ok(Some((effects, events)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Make a status response for a transaction
