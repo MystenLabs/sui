@@ -69,6 +69,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    sum_displays (object_type) {
+        object_type -> Bytea,
+        display_id -> Bytea,
+        display_version -> Int2,
+        display -> Bytea,
+    }
+}
+
+diesel::table! {
     sum_obj_types (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -185,6 +194,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_transactions,
     obj_versions,
     sum_coin_balances,
+    sum_displays,
     sum_obj_types,
     sum_packages,
     tx_affected_addresses,
