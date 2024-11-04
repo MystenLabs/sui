@@ -349,48 +349,6 @@ macro_rules! match_reference_impls {
 // -------------------------------------------------------------------------------------------------
 // Reference Conversions
 // -------------------------------------------------------------------------------------------------
-// Helpers to obtain a Rust reference to a value via a VM reference. Required for equalities and
-// borrowing.
-
-trait VMValueRef<T> {
-    fn value_ref(&self) -> PartialVMResult<&T>;
-}
-
-macro_rules! impl_vm_value_ref {
-    ($ty: ty, $tc: ident) => {
-        impl VMValueRef<$ty> for ValueImpl {
-            fn value_ref(&self) -> PartialVMResult<&$ty> {
-                match self {
-                    ValueImpl::$tc(x) => Ok(x),
-                    _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message(format!("cannot take {:?} as &{}", self, stringify!($ty)))),
-                }
-            }
-        }
-    };
-}
-
-impl_vm_value_ref!(u8, U8);
-impl_vm_value_ref!(u16, U16);
-impl_vm_value_ref!(u32, U32);
-impl_vm_value_ref!(u64, U64);
-impl_vm_value_ref!(u128, U128);
-impl_vm_value_ref!(u256::U256, U256);
-impl_vm_value_ref!(bool, Bool);
-impl_vm_value_ref!(AccountAddress, Address);
-
-impl ValueImpl {
-    fn as_value_ref<T>(&self) -> PartialVMResult<&T>
-    where
-        Self: VMValueRef<T>,
-    {
-        VMValueRef::value_ref(self)
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Reference Conversions
-// -------------------------------------------------------------------------------------------------
 // Helpers to obtain a Rust reference to a value via a VM reference. Required for equalities.
 // Implementation of Move copy. It is intentional we avoid implementing the standard library trait
 // Clone, to prevent surprising behaviors from happening.
