@@ -1,9 +1,9 @@
 ---
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
-expression: err.to_string()
+expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01003]: ability mismatch
-  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:9:17
+  ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:9:17
   │
 9 │     public enum EnumAddAbility has copy, drop { // add drop
   │                 ^^^^^^^^^^^^^^ Unexpected abilities 'drop'

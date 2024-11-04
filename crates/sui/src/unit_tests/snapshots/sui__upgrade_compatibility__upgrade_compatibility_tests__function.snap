@@ -1,9 +1,9 @@
 ---
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
-expression: err.to_string()
+expression: normalize_path(err.to_string())
 ---
 error[Compatibility E02001]: function signature mismatch
-  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
+  ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
   │
 9 │     public fun func_with_wrong_param(a: u32): u64 {
   │                                      ^ Unexpected parameter u32, expected u64

@@ -34,7 +34,7 @@ fn test_function() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert_snapshot!(err.to_string());
+    assert_snapshot!(normalize_path(err.to_string()));
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn test_struct() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert_snapshot!(err.to_string());
+    assert_snapshot!(normalize_path(err.to_string()));
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn test_enum() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert_snapshot!(err.to_string());
+    assert_snapshot!(normalize_path(err.to_string()));
 }
 
 #[test]

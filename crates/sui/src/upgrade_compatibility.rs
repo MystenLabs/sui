@@ -8,7 +8,6 @@ mod upgrade_compatibility_tests;
 use anyhow::{anyhow, Context, Error};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
-use std::io::{stdout, IsTerminal};
 use std::sync::Arc;
 
 use move_binary_format::file_format::{
@@ -583,9 +582,10 @@ fn compare_packages(
         )?);
     }
 
+    // use colors but inline
     Err(anyhow!(
         "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.",
-        String::from_utf8(report_diagnostics_to_buffer(&files.into(), diags, stdout().is_terminal())).context("Unable to convert buffer to string")?
+        String::from_utf8(report_diagnostics_to_buffer(&files.into(), diags, use_colors())).context("Unable to convert buffer to string")?
     ))
 }
 
@@ -1274,5 +1274,20 @@ fn format_list(items: impl IntoIterator<Item = impl std::fmt::Display>) -> Strin
             let last = items.last().unwrap();
             format!("{}, and {}", all_but_last, last)
         }
+    }
+}
+
+/// Helper function to determine if colors should be used in the output.
+/// disables colors in tests
+fn use_colors() -> bool {
+    #[cfg(test)]
+    {
+        false
+    }
+
+    #[cfg(not(test))]
+    {
+        use std::io::{stdout, IsTerminal};
+        stdout().is_terminal()
     }
 }
