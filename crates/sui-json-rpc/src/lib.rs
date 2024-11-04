@@ -25,7 +25,8 @@ pub use balance_changes::*;
 pub use object_changes::*;
 pub use sui_config::node::ServerType;
 use sui_json_rpc_api::{
-    CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
+    CLIENT_REQUEST_METHOD_HEADER, CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER,
+    CLIENT_TARGET_API_VERSION_HEADER,
 };
 use sui_open_rpc::{Module, Project};
 
@@ -121,6 +122,7 @@ impl JsonRpcServerBuilder {
                 HeaderName::from_static(CLIENT_SDK_VERSION_HEADER),
                 HeaderName::from_static(CLIENT_TARGET_API_VERSION_HEADER),
                 HeaderName::from_static(APP_NAME_HEADER),
+                HeaderName::from_static(CLIENT_REQUEST_METHOD_HEADER),
             ]);
         Ok(cors)
     }
