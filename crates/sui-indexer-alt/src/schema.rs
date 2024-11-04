@@ -31,6 +31,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_genesis (genesis_digest) {
+        genesis_digest -> Bytea,
+        initial_protocol_version -> Int8,
+    }
+}
+
+diesel::table! {
     kv_objects (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -190,6 +197,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     ev_emit_mod,
     ev_struct_inst,
     kv_checkpoints,
+    kv_genesis,
     kv_objects,
     kv_transactions,
     obj_versions,
