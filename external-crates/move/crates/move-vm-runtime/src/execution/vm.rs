@@ -302,12 +302,12 @@ impl<'extensions> MoveVM<'extensions> {
             return_values,
         )
         .map_err(|e| e.finish(Location::Undefined))?;
-        assert!(mut_ref_args.len() <= ref_ids.len());
-        let serialized_mut_ref_outputs = ref_ids.into_iter().zip(mut_ref_args.into_iter())
-            .map(|(ref_id, (ndx, ty))| {
+        let serialized_mut_ref_outputs = mut_ref_args.into_iter()
+            .map(|(ndx, ty)| {
+                let heap_ref_id = ref_ids.get(&ndx).expect("No heap ref for ref argument");
                 // take the value of each reference; return values first in the case that a value
                 // points into this local
-                let local_val = self.base_heap.take_loc(ref_id)?;
+                let local_val = self.base_heap.take_loc(*heap_ref_id)?;
                 let (bytes, layout) =
                     serialize_return_value(&self.virtual_tables, &self.vm_config, &ty, local_val)?;
                 Ok((ndx as LocalIndex, bytes, layout))

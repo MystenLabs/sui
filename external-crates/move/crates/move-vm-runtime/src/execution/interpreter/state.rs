@@ -193,7 +193,7 @@ impl MachineState {
             error!("Verification error during runtime: {:?}", err);
             let new_err = PartialVMError::new(StatusCode::VERIFICATION_ERROR);
             let new_err = match err.message() {
-                None => new_err,
+                None => new_err.with_message("No message provided for core dump".to_owned()),
                 Some(msg) => new_err.with_message(msg.to_owned()),
             };
             new_err.finish(err.location().clone())

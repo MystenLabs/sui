@@ -93,7 +93,7 @@ impl BaseHeap {
             .get(&ndx)
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Index out of bounds: {}", ndx))
+                    .with_message(format!("Local index out of bounds: {}", ndx))
             })
             .and_then(|value| Ok(value.take_ref()?))
     }
@@ -222,7 +222,7 @@ impl StackFrame {
             .get(ndx)
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Index out of bounds: {}", ndx))
+                    .with_message(format!("Local index out of bounds: {}", ndx))
             })
             .and_then(|value| Ok(value.copy_value()))
     }
@@ -244,7 +244,7 @@ impl StackFrame {
     pub fn store_loc(&mut self, ndx: usize, x: Value) -> PartialVMResult<()> {
         if ndx >= self.slice.len() {
             return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message(format!("Index out of bounds: {}", ndx)));
+                .with_message(format!("Local index out of bounds: {}", ndx)));
         }
         arena::to_mut_ref_slice(self.slice)[ndx] = x;
         Ok(())
@@ -273,7 +273,7 @@ impl StackFrame {
             .map(|value| matches!(value, Value(ValueImpl::Invalid)))
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Index out of bounds: {}", ndx))
+                    .with_message(format!("Local index out of bounds: {}", ndx))
             })
     }
 
@@ -343,121 +343,6 @@ impl std::fmt::Display for BaseHeapId {
 
 impl Drop for StackFrame {
     fn drop(&mut self) {
-        // _ = self.drop_all_values();
+        _ = self.drop_all_values();
     }
 }
-
-/*
-{
-    /// Creates a new stack frame from a set of parameter values and a total size.
-    /// - `params` is initial params, **in order** (ordered `0, 1, ..., n`).
-    /// - `size` is total size, which should include `params` size.
-    pub fn allocate_stack_frame(params: Vec<Value>, size: usize) -> &[] {
-        debug_assert!(size < LOCALS_PER_FRAME_LIMIT);
-        let invalids_len = size - params.len();
-        let local_values = params
-            .into_iter()
-            .map(|v| v.0)
-            .chain((0..invalids_len).map(|_| ValueImpl::Invalid))
-            .collect();
-        Self(Rc::new(RefCell::new(local_values)))
-    }
-
-    pub fn copy_loc(&self, ndx: usize) -> PartialVMResult<Value> {
-        let v = self.0.borrow();
-        match v.get(ndx) {
-            Some(ValueImpl::Invalid) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("cannot copy invalid value at index {}", ndx))),
-            Some(v) => Ok(Value(v.copy_value()?)),
-            None => Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    format!("local index out of bounds: got {}, len: {}", ndx, v.len()),
-                ),
-            ),
-        }
-    }
-
-    #[inline]
-    fn swap_loc(&mut self, ndx: usize, x: Value, violation_check: bool) -> PartialVMResult<Value> {
-        let mut v = self.0.borrow_mut();
-        match v.get_mut(ndx) {
-            Some(v) => {
-                if violation_check {
-                    if let ValueImpl::Container(c) = v {
-                        if c.rc_count() > 1 {
-                            return Err(PartialVMError::new(
-                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            )
-                            .with_message(
-                                "moving container with dangling references".to_string(),
-                            ));
-                        }
-                    }
-                }
-                Ok(Value(std::mem::replace(v, x.0)))
-            }
-            None => Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    format!("local index out of bounds: got {}, len: {}", ndx, v.len()),
-                ),
-            ),
-        }
-    }
-
-    pub fn move_loc(&mut self, ndx: usize, violation_check: bool) -> PartialVMResult<Value> {
-        match self.swap_loc(ndx, Value(ValueImpl::Invalid), violation_check)? {
-            Value(ValueImpl::Invalid) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("cannot move invalid value at index {}", ndx))),
-            v => Ok(v),
-        }
-    }
-
-    pub fn store_loc(
-        &mut self,
-        ndx: usize,
-        x: Value,
-        violation_check: bool,
-    ) -> PartialVMResult<()> {
-        self.swap_loc(ndx, x, violation_check)?;
-        Ok(())
-    }
-
-    /// Drop all Move values onto a different Vec to avoid leaking memory.
-    /// References are excluded since they may point to invalid data.
-    pub fn drop_all_values(&mut self) -> impl Iterator<Item = (usize, Value)> {
-        let mut res = vec![];
-
-        for ndx in 0..self.slice.len() {
-            match &self.slice[ndx] {
-                ValueImpl::Invalid => (),
-                ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) => {
-                    self.slice[ndx] = ValueImpl::Invalid;
-                }
-                _ => res.push((
-                    ndx,
-                    Value(std::mem::replace(&mut self.slice[ndx], ValueImpl::Invalid)),
-                )),
-            }
-        }
-
-        res.into_iter()
-    }
-
-    pub fn is_invalid(&self, ndx: usize) -> PartialVMResult<bool> {
-        let v = self.0.borrow();
-        match v.get(ndx) {
-            Some(ValueImpl::Invalid) => Ok(true),
-            Some(_) => Ok(false),
-            None => Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    format!("local index out of bounds: got {}, len: {}", ndx, v.len()),
-                ),
-            ),
-        }
-    }
-}
-*/

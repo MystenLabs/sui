@@ -17,7 +17,7 @@ use move_vm_config::runtime::VMConfig;
 
 use tracing::warn;
 
-use std::borrow::Borrow;
+use std::{borrow::Borrow, collections::BTreeMap};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -64,13 +64,14 @@ pub fn deserialize_value(
     }
 }
 
+/// Returns the list of mutable references plus the vector of values.
 pub fn deserialize_args(
     vtables: &VMDispatchTables,
     _vm_config: &VMConfig,
     heap: &mut BaseHeap,
     arg_tys: Vec<Type>,
     serialized_args: Vec<impl Borrow<[u8]>>,
-) -> PartialVMResult<(Vec<BaseHeapId>, Vec<Value>)> {
+) -> PartialVMResult<(BTreeMap<usize, BaseHeapId>, Vec<Value>)> {
     if arg_tys.len() != serialized_args.len() {
         return Err(
             PartialVMError::new(StatusCode::NUMBER_OF_ARGUMENTS_MISMATCH).with_message(format!(
@@ -81,25 +82,26 @@ pub fn deserialize_args(
         );
     }
 
-    let mut allocated_heap_ids = vec![];
+    let mut heap_refs = BTreeMap::new();
     // Arguments for the invoked function. These can be owned values or references
     let deserialized_args = arg_tys
         .into_iter()
         .zip(serialized_args)
-        .map(|(arg_ty, arg_bytes)| match &arg_ty {
+        .enumerate()
+        .map(|(idx, (arg_ty, arg_bytes))| match &arg_ty {
             Type::MutableReference(inner_t) | Type::Reference(inner_t) => {
                 // Each ref-arg value stored on the base heap, borrowed, and passed by
                 // reference to the invoked function.
                 let (ndx, value) = heap.allocate_and_borrow_loc(
                     deserialize_value(vtables, inner_t, arg_bytes)?,
                 )?;
-                allocated_heap_ids.push(ndx);
+                heap_refs.insert(idx, ndx);
                 Ok(value)
             }
             _ => deserialize_value(vtables, &arg_ty, arg_bytes),
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
-    Ok((allocated_heap_ids, deserialized_args))
+    Ok((heap_refs, deserialized_args))
 }
 
 pub fn serialize_return_value(

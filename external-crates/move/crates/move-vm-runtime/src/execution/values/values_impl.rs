@@ -116,7 +116,7 @@ enum GlobalDataStatus {
 }
 
 #[derive(Debug)]
-struct FixedSizeVec(Box<[ValueImpl]>);
+pub struct FixedSizeVec(Box<[ValueImpl]>);
 
 // -------------------------------------------------------------------------------------------------
 // Alias Types
@@ -989,8 +989,9 @@ impl VectorRef {
         macro_rules! prim_vec_case {
             ($vec:ident, $ty:ty, $ctor:ident) => {{
                 if index >= $vec.len() {
-                    return Err(PartialVMError::new(StatusCode::INDEX_OUT_OF_BOUNDS)
-                        .with_message("Index out of bounds".to_string()));
+                    return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
+                        .with_sub_status(INDEX_OUT_OF_BOUNDS)
+                        .with_message("Vector index out of bounds".to_string()));
                 }
                 let elem_ref: ArenaPointer<$ty> = ArenaPointer::from_ref(&$vec[index]);
                 Ok(Value(ValueImpl::Reference(ReferenceImpl::$ctor(elem_ref))))
@@ -1001,8 +1002,9 @@ impl VectorRef {
             // For a vector of `ValueImpl`, borrow the element at `index`.
             Container::Vec(values) => {
                 if index >= values.len() {
-                    return Err(PartialVMError::new(StatusCode::INDEX_OUT_OF_BOUNDS)
-                        .with_message("Index out of bounds".to_string()));
+                    return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
+                        .with_sub_status(INDEX_OUT_OF_BOUNDS)
+                        .with_message("Vector container index out of bounds".to_string()));
                 }
                 let elem = &values[index];
                 Ok(Value(ValueImpl::Reference(elem.as_ref().take_ref()?)))
@@ -2600,11 +2602,11 @@ impl Value {
     }
 
     pub fn simple_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
-        bcs::to_bytes(&AnnotatedValue {
+        Some(bcs::to_bytes(&AnnotatedValue {
             layout,
             val: &self.0,
         })
-        .ok()
+        .expect("BCS failed"))
     }
 }
 
@@ -2632,7 +2634,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
             (MoveTypeLayout::Address, ValueImpl::Address(x)) => x.serialize(serializer),
 
             (MoveTypeLayout::Struct(struct_layout), ValueImpl::Container(c))
-                if matches!(**c, Container::Variant(_)) =>
+                if matches!(**c, Container::Struct(_)) =>
             {
                 let Container::Struct(r) = &**c else {
                     unreachable!()
