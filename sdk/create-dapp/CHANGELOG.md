@@ -1,5 +1,11 @@
 # @mysten/create-dapp
 
+## 0.3.30
+
+### Patch Changes
+
+- 325955b: Fixes issue regarding refetching object data too soon after executing transactions
+
 ## 0.3.29
 
 ### Patch Changes
