@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use db::{Db, DbConfig};
 use ingestion::{IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
@@ -145,6 +145,13 @@ impl Indexer {
             return Ok(());
         };
 
+        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
+        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
+        // and writes should be idempotent.
+        if !self.pipeline_config.skip_watermark {
+            self.check_first_checkpoint_consistency::<H>(&watermark)?;
+        }
+
         let (processor, collector, committer, watermark) = concurrent::pipeline::<H>(
             watermark,
             self.pipeline_config.clone(),
@@ -180,6 +187,10 @@ impl Indexer {
             return Ok(());
         };
 
+        // For a sequential pipeline, data must be written in the order of checkpoints.
+        // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
+        self.check_first_checkpoint_consistency::<H>(&watermark)?;
+
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
         let (processor, committer) = sequential::pipeline::<H>(
@@ -195,6 +206,27 @@ impl Indexer {
 
         self.handles.push(processor);
         self.handles.push(committer);
+
+        Ok(())
+    }
+
+    /// Checks that the first checkpoint override is consistent with the watermark for the pipeline.
+    /// If the watermark does not exist, the override can be anything. If the watermark exists, the
+    /// override must not leave any gap in the data: it can be in the past, or at the tip of the
+    /// network, but not in the future.
+    fn check_first_checkpoint_consistency<P: Processor>(
+        &self,
+        watermark: &Option<CommitterWatermark>,
+    ) -> Result<()> {
+        if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
+            ensure!(
+                first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
+                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
+                P::NAME,
+                first_checkpoint,
+                watermark.checkpoint_hi_inclusive,
+            );
+        }
 
         Ok(())
     }

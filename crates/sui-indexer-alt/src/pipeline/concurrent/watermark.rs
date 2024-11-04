@@ -185,6 +185,8 @@ pub(super) fn watermark<H: Handler + 'static>(
                             .with_label_values(&[H::NAME])
                             .start_timer();
 
+                        // TODO: If initial_watermark is empty, when we update watermark
+                        // for the first time, we should also update the low watermark.
                         match watermark.update(&mut conn).await {
                             // If there's an issue updating the watermark, log it but keep going,
                             // it's OK for the watermark to lag from a correctness perspective.

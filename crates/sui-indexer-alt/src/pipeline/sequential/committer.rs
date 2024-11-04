@@ -240,6 +240,8 @@ pub(super) fn committer<H: Handler + 'static>(
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.
                     let affected = conn.transaction::<_, anyhow::Error, _>(|conn| async {
+                        // TODO: If initial_watermark is empty, when we update watermark
+                        // for the first time, we should also update the low watermark.
                         watermark.update(conn).await?;
                         H::commit(&batch, conn).await
                     }.scope_boxed()).await;
