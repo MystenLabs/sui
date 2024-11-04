@@ -68,10 +68,11 @@ impl SafeClientMetricsBase {
                 registry,
             )
             .unwrap(),
+            // Address label is removed to reduce high cardinality, can be added back if needed
             latency: register_histogram_vec_with_registry!(
                 "safe_client_latency",
-                "RPC latency observed by safe client aggregator, group by address and method",
-                &["address", "method"],
+                "RPC latency observed by safe client aggregator, group by method",
+                &["method"],
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -113,16 +114,16 @@ impl SafeClientMetrics {
 
         let handle_transaction_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_transaction"]);
+            .with_label_values(&["handle_transaction"]);
         let handle_certificate_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_certificate"]);
+            .with_label_values(&["handle_certificate"]);
         let handle_obj_info_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+            .with_label_values(&["handle_object_info_request"]);
         let handle_tx_info_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+            .with_label_values(&["handle_transaction_info_request"]);
 
         Self {
             total_requests_handle_transaction_info_request,
