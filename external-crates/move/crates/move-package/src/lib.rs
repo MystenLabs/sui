@@ -254,11 +254,7 @@ impl BuildConfig {
         path: &Path,
         model_config: ModelConfig,
     ) -> Result<GlobalEnv> {
-        let flags = if self.verify_mode {
-            Flags::verifying()
-        } else {
-            Flags::empty()
-        };
+        let flags = self.compiler_flags();
 
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
@@ -335,14 +331,13 @@ impl BuildConfig {
     }
 
     pub fn compiler_flags(&self) -> Flags {
-        let flags = if self.verify_mode {
-            Flags::verifying()
-        } else if self.test_mode {
+        let flags = if self.test_mode {
             Flags::testing()
         } else {
             Flags::empty()
         };
         flags
+            .set_verify(self.verify_mode)
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)

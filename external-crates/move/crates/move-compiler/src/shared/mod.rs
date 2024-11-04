@@ -752,18 +752,10 @@ impl Flags {
         }
     }
 
-    pub fn verifying() -> Self {
+    pub fn set_verify(self, value: bool) -> Self {
         Self {
-            test: false,
-            verify: true,
-            shadow: false,
-            bytecode_version: None,
-            warnings_are_errors: false,
-            json_errors: false,
-            silence_warnings: false,
-            keep_testing_functions: false,
-            ide_mode: false,
-            ide_test_mode: false,
+            verify: value,
+            ..self
         }
     }
 

@@ -1,6 +1,8 @@
 module prover::ghost_tests;
 
-use prover::prover::{requires, ensures, asserts, max_u64};
+#[verify_only]
+use prover::prover::{requires, ensures, asserts};
+use prover::prover::{max_u64};
 use prover::ghost::Self;
 
 fun inc(x: u64): u64 {
@@ -9,6 +11,7 @@ fun inc(x: u64): u64 {
 
 public struct GhostStruct {}
 
+#[verify_only]
 #[ext(no_verify)]
 fun inc_spec(x: u64): u64 {
     ghost::declare_global_mut<GhostStruct, bool>();
@@ -32,6 +35,7 @@ fun inc_saturated(x: u64): u64 {
     }
 }
 
+#[verify_only]
 fun inc_saturated_spec(x: u64): u64 {
     ghost::declare_global_mut<GhostStruct, bool>();
     requires(ghost::global<GhostStruct, _>() == false);
@@ -47,6 +51,7 @@ public struct Wrapper<T> {
     value: T
 }
 
+#[verify_only]
 fun wrapper_well_formed_spec() {
     ghost::declare_global<GhostStruct, Wrapper<u64>>();
     ensures(ghost::global<GhostStruct, Wrapper<u64>>().value <= max_u64());

@@ -91,7 +91,7 @@ public macro fun do_eq($stop: u256, $f: |u256|) {
     std::macros::do_eq!($stop, $f)
 }
 
-// #[test_only]
+#[verify_only]
 public use fun std::integer::from_u256 as u256.to_int;
-// #[test_only]
+#[verify_only]
 public use fun std::real::from_u256 as u256.to_real;

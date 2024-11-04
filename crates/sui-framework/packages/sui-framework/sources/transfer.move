@@ -130,22 +130,25 @@ fun share_object_impl_spec<T: key>(obj: T) {
     share_object_impl(obj)
 }
 
-use std::type_name;
-use std::ascii;
-use prover::prover::{requires, ensures};
-use prover::ghost;
-
 public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
+#[verify_only]
+use prover::prover::{requires, ensures};
+#[verify_only]
+use prover::ghost;
+
+#[verify_only]
 public struct SpecTransferAddress {}
+#[verify_only]
 public struct SpecTransferAddressExists {}
+
+#[verify_only]
 fun transfer_impl_spec<T: key>(obj: T, recipient: address) {
     ghost::declare_global_mut<SpecTransferAddressExists, bool>();
     ghost::declare_global_mut<SpecTransferAddress, address>();
-    // requires(ghost::global<SpecTransferAddressExists, bool>() == false);
-    // let coin_type_prefix = ascii::string(b"sui::Coin");
-    // requires(type_name::get<T>().borrow_string().substring(0, coin_type_prefix.length()) != coin_type_prefix);
+
     transfer_impl(obj, recipient);
+
     ensures(ghost::global<SpecTransferAddressExists, bool>() == true);
     ensures(ghost::global<SpecTransferAddress, address>() == recipient);
 }

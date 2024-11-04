@@ -67,7 +67,7 @@ public fun fresh_object_address(ctx: &mut TxContext): address {
 #[allow(unused_function)]
 /// Return the number of id's created by the current transaction.
 /// Hidden for now, but may expose later
-public fun ids_created(self: &TxContext): u64 {
+fun ids_created(self: &TxContext): u64 {
     self.ids_created
 }
 

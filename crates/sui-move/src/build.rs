@@ -69,6 +69,7 @@ impl Build {
     ) -> anyhow::Result<()> {
         if generate_boogie {
             config.verify_mode = true;
+            config.dev_mode = true;
 
             let model = config.move_model_for_package(
                 rerooted_path,
