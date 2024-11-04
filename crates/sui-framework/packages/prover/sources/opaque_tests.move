@@ -1,8 +1,8 @@
 #[allow(unused)]
 module prover::opaque_tests;
 
-#[verify_only]
-use prover::prover::{requires, ensures, asserts, old, max_u64, fresh};
+use std::u64;
+use prover::prover::{requires, ensures, asserts, old, fresh};
 
 fun inc(x: u64): u64 {
     x + 1
@@ -10,7 +10,7 @@ fun inc(x: u64): u64 {
 
 #[verify_only]
 fun inc_spec(x: u64): u64 {
-    asserts((x as u128) + 1 <= max_u64() as u128);
+    asserts((x as u128) + 1 <= u64::max_value!() as u128);
 
     let result = inc(x);
 
@@ -25,7 +25,7 @@ fun add(x: u64, y: u64): u64 {
 
 #[verify_only]
 fun add_spec(x: u64, y: u64): u64 {
-    asserts((x as u128) + (y as u128) <= max_u64() as u128);
+    asserts((x as u128) + (y as u128) <= u64::max_value!() as u128);
 
     let result = add(x, y);
 
@@ -40,7 +40,7 @@ fun double(x: u64): u64 {
 
 #[verify_only]
 fun double_spec(x: u64): u64 {
-    asserts((x as u128) * 2 <= max_u64() as u128);
+    asserts((x as u128) * 2 <= u64::max_value!() as u128);
 
     let result = double(x);
 
@@ -123,7 +123,7 @@ fun add_size_spec<T, U>(r1: &Range<T>, r2: &Range<U>): u64 {
     requires(r1.x <= r1.y);
     requires(r2.x <= r2.y);
 
-    asserts(((r1.y - r1.x) as u128) + ((r2.y - r2.x) as u128) <= max_u64() as u128);
+    asserts(((r1.y - r1.x) as u128) + ((r2.y - r2.x) as u128) <= u64::max_value!() as u128);
 
     let result0 = add_size(r1, r2);
 
@@ -143,7 +143,7 @@ fun scale_spec<T>(r: &mut Range<T>, k: u64) {
 
     requires(r.x <= r.y);
 
-    asserts(r.y.to_int().mul(k.to_int()).lte(max_u64().to_int()));
+    asserts(r.y.to_int().mul(k.to_int()).lte(u64::max_value!().to_int()));
 
     scale(r, k);
 
@@ -227,7 +227,7 @@ public fun mint_balance<T>(
 public fun mint_balance_spec<T>(
     cap: &mut TreasuryCap<T>, value: u64
 ): Balance<T> {
-    asserts(cap.total_supply() < max_u64() - value);
+    asserts(cap.total_supply() < u64::max_value!() - value);
 
     cap.mint_balance(value)
 }
