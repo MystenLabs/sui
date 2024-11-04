@@ -24,7 +24,7 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
-	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC'];
+	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC'];
 	for (const pool of pools) {
 		console.log(pool);
 		console.log(await dbClient.accountOpenOrders(pool, 'AMBER'));
