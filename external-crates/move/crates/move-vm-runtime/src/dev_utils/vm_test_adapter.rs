@@ -58,7 +58,7 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
         let pkg = self.get_package_from_store(&package_id)?;
         Ok(LinkageContext::new(
             package_id,
-            HashMap::from_iter(pkg.linkage_table.into_iter()),
+            HashMap::from_iter(pkg.linkage_table),
         ))
     }
 

@@ -624,7 +624,7 @@ fn alloc_function(
         .signature_at(handle.parameters)
         .0
         .iter()
-        .map(|tok| type_cache::make_type(&module, tok))
+        .map(|tok| type_cache::make_type(module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
     // Native functions do not have a code unit
     let (locals_len, jump_tables) = match &def.code {
@@ -638,7 +638,7 @@ fn alloc_function(
         .signature_at(handle.return_)
         .0
         .iter()
-        .map(|tok| type_cache::make_type(&module, tok))
+        .map(|tok| type_cache::make_type(module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
     let type_parameters = handle.type_parameters.clone();
     let fun = Function {

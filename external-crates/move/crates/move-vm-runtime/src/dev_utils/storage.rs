@@ -224,7 +224,7 @@ impl InMemoryStorage {
             println!("Linkage context: {:?}", stored_package.linkage_context);
             println!("Type origins: {:?}", stored_package.type_origin_table);
             println!("Modules:");
-            for (module_name, _blob) in &stored_package.modules {
+            for module_name in stored_package.modules.keys() {
                 println!("\tModule: {:?}", module_name);
             }
         }

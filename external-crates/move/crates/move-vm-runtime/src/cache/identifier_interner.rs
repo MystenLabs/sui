@@ -10,7 +10,7 @@ use move_core_types::{
 use lasso::{Spur, ThreadedRodeo};
 
 /// A wrapper around a lasso ThreadedRoade with some niceties to make it easier to use in the VM.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct IdentifierInterner(ThreadedRodeo);
 
 pub type IdentifierKey = Spur;
@@ -79,11 +79,5 @@ impl IdentifierInterner {
                 ),
             ),
         }
-    }
-}
-
-impl Default for IdentifierInterner {
-    fn default() -> Self {
-        Self(ThreadedRodeo::default())
     }
 }

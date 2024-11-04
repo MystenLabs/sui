@@ -674,7 +674,7 @@ fn op_step_impl(
                 .current_frame
                 .resolver
                 .instantiate_single_type(*si, state.current_frame.ty_args())?;
-            let res = vec_ref.borrow_elem(idx, &ty);
+            let res = vec_ref.borrow_elem(idx, ty);
             gas_meter.charge_vec_borrow(true, make_ty!(ty), res.is_ok())?;
             state.push_operand(res?)?;
         }

@@ -12,6 +12,7 @@ use move_binary_format::file_format::{
 
 // #[test]
 // TODO: Determine what this was trying to test and fix it.
+#[allow(dead_code)]
 fn leak_with_abort() {
     let mut locals = vec![U128, MutableReference(Box::new(U128))];
     // Make locals bigger so each leak is bigger

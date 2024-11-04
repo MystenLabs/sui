@@ -280,6 +280,7 @@ impl Container {
 
 impl FixedSizeVec {
     /// Returns the length of the fixed-size vector.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -294,13 +295,17 @@ impl FixedSizeVec {
         self.0.iter()
     }
 
-    /// Consumes the `FixedSizeVec` and returns an iterator that owns the elements.
-    pub fn into_iter(self) -> std::vec::IntoIter<ValueImpl> {
-        self.0.into_vec().into_iter()
-    }
-
     pub fn as_slice(&self) -> &[ValueImpl] {
         &self.0
+    }
+}
+
+impl std::iter::IntoIterator for FixedSizeVec {
+    type Item = ValueImpl;
+    type IntoIter = std::vec::IntoIter<ValueImpl>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_vec().into_iter()
     }
 }
 
@@ -398,7 +403,7 @@ impl Container {
                 let copied_values: Vec<ValueImpl> =
                     fixed_size_vec.iter().map(|v| v.copy_value()).collect();
                 Container::Variant(Box::new((
-                    variant_tag.clone(),
+                    *variant_tag,
                     FixedSizeVec::from_vec(copied_values),
                 )))
             }
@@ -728,7 +733,9 @@ impl ReferenceImpl {
 
 impl StructRef {
     pub fn read_ref(self) -> PartialVMResult<Value> {
-        Ok(Value(ValueImpl::Container(Box::new(self.0.to_ref().copy_value()))))
+        Ok(Value(ValueImpl::Container(Box::new(
+            self.0.to_ref().copy_value(),
+        ))))
     }
 }
 
@@ -1999,6 +2006,7 @@ impl Vector {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
         self.0.legacy_size()
     }
@@ -2425,6 +2433,7 @@ pub mod debug {
         }
     }
 
+    #[allow(clippy::borrowed_box)]
     fn print_box_value_impl<B: Write>(buf: &mut B, val: &Box<ValueImpl>) -> PartialVMResult<()> {
         print_value_impl(buf, val.as_ref())
     }
@@ -2560,11 +2569,13 @@ impl Value {
     }
 
     pub fn simple_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
-        Some(bcs::to_bytes(&AnnotatedValue {
-            layout,
-            val: &self.0,
-        })
-        .expect("BCS failed"))
+        Some(
+            bcs::to_bytes(&AnnotatedValue {
+                layout,
+                val: &self.0,
+            })
+            .expect("BCS failed"),
+        )
     }
 }
 
@@ -2798,13 +2809,13 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
                     L::U128 => Container::VecU128(Vec::deserialize(deserializer)?),
                     L::U256 => Container::VecU256(Vec::deserialize(deserializer)?),
                     L::Bool => Container::VecBool(Vec::deserialize(deserializer)?),
-                    L::Address => Container::VecAddress(Vec::deserialize( deserializer)?),
+                    L::Address => Container::VecAddress(Vec::deserialize(deserializer)?),
                     layout => {
                         // TODO: Box this as part of deserialization to avoid the second iteration?
                         let v = deserializer
                             .deserialize_seq(VectorElementVisitor(SeedWrapper { layout }))?
                             .into_iter()
-                            .map(|v| Box::new(v))
+                            .map(Box::new)
                             .collect();
                         Container::Vec(v)
                     }
@@ -3007,14 +3018,14 @@ impl Container {
                     }
                 }
             }
-            VecU8(r) => visitor.visit_vec_u8(depth, &r),
-            VecU16(r) => visitor.visit_vec_u16(depth, &r),
-            VecU32(r) => visitor.visit_vec_u32(depth, &r),
-            VecU64(r) => visitor.visit_vec_u64(depth, &r),
-            VecU128(r) => visitor.visit_vec_u128(depth, &r),
-            VecU256(r) => visitor.visit_vec_u256(depth, &r),
-            VecBool(r) => visitor.visit_vec_bool(depth, &r),
-            VecAddress(r) => visitor.visit_vec_address(depth, &r),
+            VecU8(r) => visitor.visit_vec_u8(depth, r),
+            VecU16(r) => visitor.visit_vec_u16(depth, r),
+            VecU32(r) => visitor.visit_vec_u32(depth, r),
+            VecU64(r) => visitor.visit_vec_u64(depth, r),
+            VecU128(r) => visitor.visit_vec_u128(depth, r),
+            VecU256(r) => visitor.visit_vec_u256(depth, r),
+            VecBool(r) => visitor.visit_vec_bool(depth, r),
+            VecAddress(r) => visitor.visit_vec_address(depth, r),
         }
     }
 

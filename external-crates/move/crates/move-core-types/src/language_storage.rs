@@ -141,7 +141,7 @@ impl TypeTag {
                 | TypeTag::U256
                 | TypeTag::Address
                 | TypeTag::Signer => (),
-                TypeTag::Vector(inner) => find_addresses_recur(account_addresses, &*inner),
+                TypeTag::Vector(inner) => find_addresses_recur(account_addresses, inner),
                 TypeTag::Struct(tag) => {
                     let StructTag {
                         address,

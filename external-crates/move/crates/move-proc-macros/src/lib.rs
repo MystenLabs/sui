@@ -3,7 +3,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DataEnum, DeriveInput, ItemFn, Ident};
+use syn::{parse_macro_input, Data, DataEnum, DeriveInput, Ident, ItemFn};
 
 /// This macro generates a function `order_to_variant_map` which returns a map
 /// of the position of each variant to the name of the variant.

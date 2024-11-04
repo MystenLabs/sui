@@ -4,7 +4,7 @@
 
 #[allow(unused_imports)]
 use crate::{
-    execution::values::{VMValueCast, Reference, Value},
+    execution::values::{Reference, VMValueCast, Value},
     jit::execution::ast::Type,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},
@@ -48,7 +48,7 @@ fn native_print(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let val = args.pop_back().unwrap();
+    let _val = args.pop_back().unwrap();
     let _ty = ty_args.pop().unwrap();
 
     // No-op if the feature flag is not present.
@@ -59,7 +59,7 @@ fn native_print(
         let include_int_types = false;
 
         let mut out = "[debug] ".to_string();
-        let ref_ = VMValueCast::<Reference>::cast(val)?.read_ref()?;
+        let ref_ = VMValueCast::<Reference>::cast(_val)?.read_ref()?;
 
         testing::print_value(
             _context,
@@ -190,7 +190,9 @@ pub fn make_all(
 #[cfg(feature = "testing")]
 mod testing {
     use crate::{
-        execution::values::{Value, VMValueCast}, jit::execution::ast::Type, natives::functions::NativeContext,
+        execution::values::{VMValueCast, Value},
+        jit::execution::ast::Type,
+        natives::functions::NativeContext,
     };
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{

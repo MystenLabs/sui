@@ -143,11 +143,7 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
                     ))
                     .finish(Location::Undefined));
             };
-            let modules = account_cache
-                .module_map
-                .iter()
-                .map(|(_, blob)| blob.clone())
-                .collect();
+            let modules = account_cache.module_map.values().cloned().collect();
             // TODO(vm-rewrite): Update this to include linkage info and type origins
             package.modules = modules;
         }

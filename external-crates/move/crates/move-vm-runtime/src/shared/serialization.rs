@@ -4,7 +4,8 @@
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
-        values::{Reference, VMValueCast, Value}, interpreter::locals::{BaseHeap, BaseHeapId},
+        interpreter::locals::{BaseHeap, BaseHeapId},
+        values::{Reference, VMValueCast, Value},
     },
     jit::execution::ast::Type,
 };
@@ -92,9 +93,8 @@ pub fn deserialize_args(
             Type::MutableReference(inner_t) | Type::Reference(inner_t) => {
                 // Each ref-arg value stored on the base heap, borrowed, and passed by
                 // reference to the invoked function.
-                let (ndx, value) = heap.allocate_and_borrow_loc(
-                    deserialize_value(vtables, inner_t, arg_bytes)?,
-                )?;
+                let (ndx, value) =
+                    heap.allocate_and_borrow_loc(deserialize_value(vtables, inner_t, arg_bytes)?)?;
                 heap_refs.insert(idx, ndx);
                 Ok(value)
             }

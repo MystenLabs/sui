@@ -2,7 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{execution::{interpreter::locals::MachineHeap, values::*}, jit::execution::ast::Type, shared::views::*};
+use crate::{
+    execution::{interpreter::locals::MachineHeap, values::*},
+    jit::execution::ast::Type,
+    shared::views::*,
+};
 use move_binary_format::errors::*;
 use move_core_types::{account_address::AccountAddress, u256::U256};
 
@@ -37,7 +41,7 @@ fn locals() -> PartialVMResult<()> {
 
 #[test]
 fn struct_pack_and_unpack() -> PartialVMResult<()> {
-    let vals = vec![
+    let vals = [
         Value::u8(10),
         Value::u16(12),
         Value::u32(15),
@@ -131,17 +135,23 @@ fn struct_borrow_nested() -> PartialVMResult<()> {
 
 #[test]
 fn global_value_non_struct() -> PartialVMResult<()> {
-    assert!(GlobalValue::cached(Value::u64(100)).is_err(), "cache error 0");
-    assert!(GlobalValue::cached(Value::bool(false)).is_err(), "cache error 1");
+    assert!(
+        GlobalValue::cached(Value::u64(100)).is_err(),
+        "cache error 0"
+    );
+    assert!(
+        GlobalValue::cached(Value::bool(false)).is_err(),
+        "cache error 1"
+    );
 
     let mut heap = MachineHeap::new();
     let mut locals = heap.allocate_stack_frame(vec![], 1)?;
 
-    // locals.store_loc(0, Value::u8(0)).expect("stored");
-    // let r = locals.borrow_loc(0).expect("borrowed");
-    // assert!(GlobalValue::cached(r).is_err(), "cache error 2");
+    locals.store_loc(0, Value::u8(0)).expect("stored");
+    let r = locals.borrow_loc(0).expect("borrowed");
+    assert!(GlobalValue::cached(r).is_err(), "cache error 2");
 
-    // heap.free_stack_frame(locals);
+    let _ = heap.free_stack_frame(locals);
 
     Ok(())
 }

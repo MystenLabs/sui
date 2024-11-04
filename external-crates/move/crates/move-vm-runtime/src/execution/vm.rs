@@ -4,7 +4,10 @@
 use crate::{
     cache::arena::ArenaPointer,
     dbg_println,
-    execution::{dispatch_tables::VMDispatchTables, interpreter::{self, locals::BaseHeap}},
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        interpreter::{self, locals::BaseHeap},
+    },
     jit::execution::ast::{Function, IntraPackageKey, Type, VTableKey},
     natives::extensions::NativeContextExtensions,
     shared::{
@@ -202,7 +205,7 @@ impl<'extensions> MoveVM<'extensions> {
             .get_identifier(&module_id)
             .map_err(|err| err.finish(Location::Undefined))?;
         let member_name = string_interner
-            .get_ident_str(&function_name)
+            .get_ident_str(function_name)
             .map_err(|err| err.finish(Location::Undefined))?;
         let vtable_key = VTableKey {
             package_key,
@@ -300,7 +303,8 @@ impl<'extensions> MoveVM<'extensions> {
             return_values,
         )
         .map_err(|e| e.finish(Location::Undefined))?;
-        let serialized_mut_ref_outputs = mut_ref_args.into_iter()
+        let serialized_mut_ref_outputs = mut_ref_args
+            .into_iter()
             .map(|(ndx, ty)| {
                 let heap_ref_id = ref_ids.get(&ndx).expect("No heap ref for ref argument");
                 // take the value of each reference; return values first in the case that a value

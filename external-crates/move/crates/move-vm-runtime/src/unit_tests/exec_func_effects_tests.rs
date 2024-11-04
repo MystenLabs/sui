@@ -113,7 +113,7 @@ type ModuleCode = (ModuleId, String);
 fn setup_vm(modules: &[ModuleCode]) -> InMemoryTestAdapter {
     let mut adapter = InMemoryTestAdapter::new();
     let modules: Vec<_> = modules
-        .into_iter()
+        .iter()
         .map(|(_, code)| {
             let mut units = compile_units(code).unwrap();
             as_module(units.pop().unwrap())

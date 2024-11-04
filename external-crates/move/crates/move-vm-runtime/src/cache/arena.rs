@@ -158,6 +158,7 @@ impl<T> PartialEq for ArenaPointer<T> {
 impl<T> Eq for ArenaPointer<T> {}
 
 impl<T> Clone for ArenaPointer<T> {
+    #[allow(clippy::non_canonical_clone_impl)]
     fn clone(&self) -> Self {
         self.ptr_clone()
     }

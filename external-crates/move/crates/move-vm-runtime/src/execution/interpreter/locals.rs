@@ -4,8 +4,9 @@
 #![allow(unsafe_code)]
 
 use crate::{
+    cache::arena,
     execution::values::{values_impl::Value, ValueImpl},
-    shared::constants::{CALL_STACK_SIZE_LIMIT, LOCALS_PER_FRAME_LIMIT}, cache::arena,
+    shared::constants::{CALL_STACK_SIZE_LIMIT, LOCALS_PER_FRAME_LIMIT},
 };
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -50,8 +51,13 @@ pub struct StackFrame {
 // Base (Machine-External) Heap
 // -------------------------------------------------------------------------------------------------
 
-impl BaseHeap {
+impl Default for BaseHeap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
+impl BaseHeap {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
@@ -60,7 +66,10 @@ impl BaseHeap {
     }
 
     /// Allocate a slot for the value in the base heap, and then
-    pub fn allocate_and_borrow_loc(&mut self, value: Value) -> PartialVMResult<(BaseHeapId, Value)> {
+    pub fn allocate_and_borrow_loc(
+        &mut self,
+        value: Value,
+    ) -> PartialVMResult<(BaseHeapId, Value)> {
         let next_id = BaseHeapId(self.next_id);
         self.next_id += 1;
         self.values.insert(next_id, Box::new(value));
@@ -80,7 +89,8 @@ impl BaseHeap {
         let Some(value_box) = self.values.get_mut(&ndx) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Invalid index: {}", ndx)));
+                    .with_message(format!("Invalid index: {}", ndx)),
+            );
         };
 
         let value = std::mem::replace(value_box.as_mut(), Value::invalid());
@@ -95,7 +105,7 @@ impl BaseHeap {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                     .with_message(format!("Local index out of bounds: {}", ndx))
             })
-            .and_then(|value| Ok(value.take_ref()?))
+            .and_then(|value| value.take_ref())
     }
 
     /// Checks if the value at the location is invalid
@@ -108,16 +118,24 @@ impl BaseHeap {
                     .with_message(format!("Invalid index: {}", ndx))
             })
     }
-
 }
 
 // -------------------------------------------------------------------------------------------------
 // Machine (Runtime) Heap
 // -------------------------------------------------------------------------------------------------
 
+impl Default for MachineHeap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MachineHeap {
     pub fn new() -> Self {
-        let heap = (0..CALL_STACK_SIZE_LIMIT * LOCALS_PER_FRAME_LIMIT).map(|_| Value::invalid()).collect::<Vec<_>>().into_boxed_slice();
+        let heap = (0..CALL_STACK_SIZE_LIMIT * LOCALS_PER_FRAME_LIMIT)
+            .map(|_| Value::invalid())
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
         Self {
             heap,
             current_index: 0,
@@ -224,7 +242,7 @@ impl StackFrame {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                     .with_message(format!("Local index out of bounds: {}", ndx))
             })
-            .and_then(|value| Ok(value.copy_value()))
+            .map(|value| value.copy_value())
     }
 
     /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
@@ -236,7 +254,10 @@ impl StackFrame {
             );
         }
 
-        let value = std::mem::replace(&mut arena::to_mut_ref_slice(self.slice)[ndx], Value::invalid());
+        let value = std::mem::replace(
+            &mut arena::to_mut_ref_slice(self.slice)[ndx],
+            Value::invalid(),
+        );
         Ok(value)
     }
 
@@ -263,7 +284,7 @@ impl StackFrame {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                     .with_message(format!("Index out of bounds: {}", ndx))
             })
-            .and_then(|value| Ok(value.take_ref()?))
+            .and_then(|value| value.take_ref())
     }
 
     /// Checks if the value at the location is invalid
@@ -290,14 +311,16 @@ impl StackFrame {
                 }
                 _ => res.push((
                     ndx,
-                    std::mem::replace(&mut arena::to_mut_ref_slice(self.slice)[ndx], Value::invalid()),
+                    std::mem::replace(
+                        &mut arena::to_mut_ref_slice(self.slice)[ndx],
+                        Value::invalid(),
+                    ),
                 )),
             }
         }
 
         res.into_iter()
     }
-
 }
 
 // -------------------------------------------------------------------------------------------------

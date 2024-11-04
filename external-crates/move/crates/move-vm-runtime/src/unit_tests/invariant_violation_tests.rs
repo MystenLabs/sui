@@ -14,6 +14,7 @@ use move_core_types::vm_status::StatusCode;
 
 //#[test]
 // TODO: Determine what this was trying to test and fix it.
+#[allow(dead_code)]
 fn merge_borrow_states_infinite_loop() {
     let mut m = empty_module();
     m.version = 6;

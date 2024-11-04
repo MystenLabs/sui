@@ -178,12 +178,12 @@ impl VMDispatchTables {
         def_idx: &VTableKey,
         depth_cache: &mut BTreeMap<VTableKey, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
-        let datatype = self.resolve_type(&VTableKey::from(def_idx.clone()))?.1;
+        let datatype = self.resolve_type(&def_idx.clone())?.1;
         // If we've already computed this datatypes depth, no more work remains to be done.
         if let Some(form) = &datatype.depth {
             return Ok(form.clone());
         }
-        if let Some(form) = depth_cache.get(&def_idx) {
+        if let Some(form) = depth_cache.get(def_idx) {
             return Ok(form.clone());
         }
 
@@ -265,7 +265,7 @@ impl VMDispatchTables {
     }
 
     pub fn type_at(&self, idx: &VTableKey) -> PartialVMResult<Arc<CachedDatatype>> {
-        Ok(self.resolve_type(&VTableKey::from(idx.clone()))?.1)
+        Ok(self.resolve_type(&idx.clone())?.1)
     }
 
     // -------------------------------------------

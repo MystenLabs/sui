@@ -4,7 +4,7 @@
 use crate::{
     cache::move_cache::MoveCache,
     dbg_println,
-    execution::{dispatch_tables::VMDispatchTables, vm::MoveVM, interpreter::locals::BaseHeap},
+    execution::{dispatch_tables::VMDispatchTables, interpreter::locals::BaseHeap, vm::MoveVM},
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     shared::{gas::GasMeter, linkage_context::LinkageContext, types::RuntimePackageId},
@@ -122,8 +122,8 @@ impl MoveRuntime {
             .collect();
         validate_for_vm_execution(validation_packages)?;
         let runtime_packages = packages
-            .into_iter()
-            .map(|(_, pkg)| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
+            .into_values()
+            .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
             .collect::<HashMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
         let virtual_tables = VMDispatchTables::new(runtime_packages)?;
@@ -186,7 +186,7 @@ impl MoveRuntime {
         let mut data_cache = TransactionDataCache::new(data_cache);
         let link_context = LinkageContext::new(
             pkg.storage_id,
-            HashMap::from_iter(pkg.linkage_table.clone().into_iter()),
+            HashMap::from_iter(pkg.linkage_table.clone()),
         );
 
         // Verify a provided serialized package. This will validate the provided serialized
