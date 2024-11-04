@@ -601,7 +601,7 @@ export class DeepBookClient {
 	/**
 	 * @description Get the DEEP price conversion for a pool
 	 * @param {string} poolKey Key of the pool
-	 * @returns {Promise<number>} Deep price conversion
+	 * @returns {Promise<{ asset_is_base: bool, deep_per_quote: number }>} Deep price conversion
 	 */
 	async getPoolDeepPrice(poolKey: string) {
 		const tx = new Transaction();
