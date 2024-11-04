@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.14.1
+
+### Patch Changes
+
+- 69ef100: revert adding client-request-method header
+
 ## 1.14.0
 
 ### Minor Changes
