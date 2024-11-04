@@ -337,6 +337,7 @@ pub fn read_size_from_env(var_name: &str) -> Option<usize> {
         .ok()
 }
 
+pub const CLIENT_REQUEST_METHOD_HEADER: &str = "client-request-method";
 pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 /// The version number of the SDK itself. This can be different from the API version.
 pub const CLIENT_SDK_VERSION_HEADER: &str = "client-sdk-version";
