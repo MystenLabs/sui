@@ -216,7 +216,7 @@ impl Indexer {
         if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
             ensure!(
                 first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead than watermark {}. This could create gaps in the data.",
+                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
                 P::NAME,
                 first_checkpoint,
                 watermark.checkpoint_hi_inclusive,
