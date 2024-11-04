@@ -164,7 +164,6 @@ pub async fn start_indexer_writer_for_testing_with_mvr_mode(
                 snapshot_config,
                 retention_config,
                 token_clone,
-                None,
                 mvr_mode,
             )
             .await

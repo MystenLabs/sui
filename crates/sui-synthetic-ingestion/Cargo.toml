@@ -8,11 +8,14 @@ edition = "2021"
 
 [dependencies]
 async-trait.workspace = true
+clap.workspace = true
 simulacrum.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
+telemetry-subscribers.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+sui-storage.workspace = true
 tempfile.workspace = true
