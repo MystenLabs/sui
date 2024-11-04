@@ -226,6 +226,9 @@ const commonConfig: () => Promise<Configuration> = async () => {
 				silent: true,
 			}),
 		],
+		externals: {
+			'node:crypto': 'commonjs crypto',
+		},
 	};
 };
 

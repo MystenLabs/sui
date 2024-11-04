@@ -143,6 +143,7 @@
 		"buffer": "^6.0.3",
 		"class-variance-authority": "^0.7.0",
 		"clsx": "^2.1.1",
+		"crypto-browserify": "^3.12.1",
 		"dexie": "^3.2.4",
 		"dexie-export-import": "^4.0.7",
 		"formik": "^2.4.2",
