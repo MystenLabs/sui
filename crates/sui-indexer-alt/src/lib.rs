@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub mod args;
+pub mod bootstrap;
 pub mod db;
 pub mod handlers;
 pub mod ingestion;
