@@ -358,7 +358,7 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
-    Dot(Box<ExpDotted>, Field, Loc),
+    Dot(Box<ExpDotted>, /* dot loation */ Loc, Field),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
     DotAutocomplete(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
@@ -1890,7 +1890,7 @@ impl AstDebug for ExpDotted_ {
         use ExpDotted_ as D;
         match self {
             D::Exp(e) => e.ast_debug(w),
-            D::Dot(e, n, _) => {
+            D::Dot(e, _, n) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n))
             }

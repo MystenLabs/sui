@@ -2901,7 +2901,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             resolve_call(context, eloc, ma, is_macro, tys_opt, rhs)
         }
-        EE::MethodCall(edot, n, is_macro, tys_opt, rhs, dot_loc) => match dotted(context, *edot) {
+        EE::MethodCall(edot, dot_loc, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
             None => {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
@@ -2978,8 +2978,8 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
                 _ => N::ExpDotted_::Exp(ne),
             }
         }
-        E::ExpDotted_::Dot(d, f, loc) => {
-            N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f), loc)
+        E::ExpDotted_::Dot(d, loc, f) => {
+            N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), loc, Field(f))
         }
         E::ExpDotted_::DotUnresolved(loc, d) => {
             N::ExpDotted_::DotAutocomplete(loc, Box::new(dotted(context, *d)?))

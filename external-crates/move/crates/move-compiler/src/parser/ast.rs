@@ -629,15 +629,15 @@ pub enum Exp_ {
     Borrow(bool, Box<Exp>),
 
     // e.f (along with the location of the dot)
-    Dot(Box<Exp>, Name, Loc),
+    Dot(Box<Exp>, /* dot location */ Loc, Name),
     // e.f(earg,*)
     DotCall(
         Box<Exp>,
+        Loc, // location of the dot
         Name,
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
-        Loc, // location of the dot
     ),
     // e[e']
     Index(Box<Exp>, Spanned<Vec<Exp>>), // spec only
@@ -2129,11 +2129,11 @@ impl AstDebug for Exp_ {
                 }
                 e.ast_debug(w);
             }
-            E::Dot(e, n, _) => {
+            E::Dot(e, _, n) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n));
             }
-            E::DotCall(e, n, is_macro, tyargs, sp!(_, rhs), _) => {
+            E::DotCall(e, _, n, is_macro, tyargs, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n));
                 if is_macro.is_some() {

@@ -447,7 +447,7 @@ impl<'a> ParsingAnalysisContext<'a> {
             }
             E::Borrow(_, e) => self.exp_symbols(e),
             E::Dot(e, _, _) => self.exp_symbols(e),
-            E::DotCall(e, name, _, vo, v, _) => {
+            E::DotCall(e, _, name, _, vo, v) => {
                 self.exp_symbols(e);
                 if let Some(v) = vo {
                     v.iter().for_each(|t| self.type_symbols(t));

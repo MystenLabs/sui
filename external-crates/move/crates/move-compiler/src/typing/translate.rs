@@ -3079,9 +3079,9 @@ fn resolve_index_funs_and_type(
 #[derive(Debug)]
 enum ExpDottedAccess {
     Field(
+        /* dot location */ Loc,
         Field,
         /* base type */ Type,
-        /* dot location */ Loc,
     ),
     Index {
         index_loc: Loc,
@@ -3118,7 +3118,7 @@ impl ExpDotted {
     fn last_type(&self) -> Type {
         if let Some(accessor) = self.accessors.last() {
             match accessor {
-                ExpDottedAccess::Field(_, ty, _) => ty.clone(),
+                ExpDottedAccess::Field(_, _, ty) => ty.clone(),
                 ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
             }
         } else {
@@ -3211,7 +3211,7 @@ fn process_exp_dotted(
     ) -> ExpDotted {
         match ndot_ {
             N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
-            N::ExpDotted_::Dot(ndot, field, dot_loc) => {
+            N::ExpDotted_::Dot(ndot, dot_loc, field) => {
                 let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
                 assert!(inner.autocomplete_last.is_none());
                 let inner_ty = inner.last_type();
@@ -3219,7 +3219,7 @@ fn process_exp_dotted(
                 inner.loc = dloc;
                 inner
                     .accessors
-                    .push(ExpDottedAccess::Field(field, field_type, dot_loc));
+                    .push(ExpDottedAccess::Field(dot_loc, field, field_type));
                 inner
             }
             N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
@@ -3332,12 +3332,12 @@ fn resolve_exp_dotted(
         // generate autocomplete information for all dots in the path
         for i in (0..edotted.accessors.len()).rev() {
             let accessor = &edotted.accessors[i];
-            if let ExpDottedAccess::Field(_, _, dot_loc) = accessor {
+            if let ExpDottedAccess::Field(dot_loc, _, _) = accessor {
                 let prefix_ty = if i == 0 {
                     edotted.base_type.clone()
                 } else {
                     match &edotted.accessors[i - 1] {
-                        ExpDottedAccess::Field(_, ty, _) => ty.clone(),
+                        ExpDottedAccess::Field(_, _, ty) => ty.clone(),
                         ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
                     }
                 };
@@ -3536,7 +3536,7 @@ fn borrow_exp_dotted(
     for accessor in accessors {
         check_mut(context, error_loc, exp.ty.clone(), mut_);
         match accessor {
-            ExpDottedAccess::Field(name, ty, _) => {
+            ExpDottedAccess::Field(_, name, ty) => {
                 // report autocomplete information for the IDE
                 ide_report_autocomplete(context, &name.loc(), &exp.ty);
                 let e_ = TE::Borrow(mut_, exp, name);
@@ -3625,7 +3625,7 @@ fn exp_dotted_to_owned(
     use T::UnannotatedExp_ as TE;
     let (access_msg, access_type) = if let Some(accessor) = ed.accessors.last() {
         match accessor {
-            ExpDottedAccess::Field(name, ty, _) => (format!("field '{}'", name), ty.clone()),
+            ExpDottedAccess::Field(_, name, ty) => (format!("field '{}'", name), ty.clone()),
             ExpDottedAccess::Index { base_type, .. } => {
                 ("index result".to_string(), base_type.clone())
             }

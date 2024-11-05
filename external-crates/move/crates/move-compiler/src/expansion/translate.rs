@@ -2728,14 +2728,14 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             }
         }
 
-        PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs), dot_loc) => {
+        PE::DotCall(pdotted, dot_loc, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
                     let pkg = context.current_package();
                     context.check_feature(pkg, FeatureGate::DotCall, loc);
                     let tys_opt = optional_types(context, ptys_opt);
                     let ers = sp(rloc, exps(context, prs));
-                    EE::MethodCall(edotted, n, is_macro, tys_opt, ers, dot_loc)
+                    EE::MethodCall(edotted, dot_loc, n, is_macro, tys_opt, ers)
                 }
                 None => {
                     assert!(context.env().has_errors());
@@ -2922,9 +2922,9 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
     use P::Exp_ as PE;
     let sp!(loc, pdotted_) = *pdotted;
     let edotted_ = match pdotted_ {
-        PE::Dot(plhs, field, dot_loc) => {
+        PE::Dot(plhs, dot_loc, field) => {
             let lhs = exp_dotted(context, plhs)?;
-            EE::Dot(lhs, field, dot_loc)
+            EE::Dot(lhs, dot_loc, field)
         }
         PE::Index(plhs, sp!(argloc, args)) => {
             let cur_pkg = context.current_package();
