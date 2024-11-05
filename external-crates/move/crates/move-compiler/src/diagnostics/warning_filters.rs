@@ -9,7 +9,6 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
-    pin::Pin,
     sync::Arc,
 };
 
