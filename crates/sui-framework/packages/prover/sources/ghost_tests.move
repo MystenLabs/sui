@@ -2,6 +2,7 @@
 module prover::ghost_tests;
 
 use std::u64;
+#[verify_only]
 use prover::prover::{requires, ensures, asserts};
 use prover::ghost;
 

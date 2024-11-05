@@ -2,6 +2,7 @@
 module prover::opaque_tests;
 
 use std::u64;
+#[verify_only]
 use prover::prover::{requires, ensures, asserts, old, fresh};
 
 fun inc(x: u64): u64 {
