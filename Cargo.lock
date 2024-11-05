@@ -7519,6 +7519,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
+ "indexmap 2.2.6",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
