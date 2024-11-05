@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use axum::{
     routing::{any, get},
     Router,
@@ -44,6 +46,9 @@ async fn main() {
     // Build a reqwest client that supports HTTP/2
     let client = reqwest::ClientBuilder::new()
         .http2_prior_knowledge()
+        .http2_keep_alive_while_idle(true)
+        .pool_idle_timeout(None)
+        .pool_max_idle_per_host(config.max_idle_connections.unwrap_or(100))
         .build()
         .unwrap();
 

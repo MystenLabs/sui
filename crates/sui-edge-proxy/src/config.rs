@@ -13,6 +13,7 @@ pub struct ProxyConfig {
     pub metrics_address: SocketAddr,
     pub execution_peer: PeerConfig,
     pub read_peer: PeerConfig,
+    pub max_idle_connections: Option<usize>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

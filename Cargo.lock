@@ -13337,11 +13337,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
-<<<<<<< HEAD
  "derive_more 1.0.0",
-=======
- "derivative",
->>>>>>> d97168f50b (rewrite proxy using axum and reqwest client)
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -14118,13 +14114,12 @@ dependencies = [
  "bcs",
  "chrono",
  "clap",
-<<<<<<< HEAD
  "const-str",
- "clap 4.5.4",
-=======
->>>>>>> d97168f50b (rewrite proxy using axum and reqwest client)
  "diesel",
  "diesel-async",
+ "diesel_migrations",
+ "futures",
+ "itertools 0.13.0",
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",
