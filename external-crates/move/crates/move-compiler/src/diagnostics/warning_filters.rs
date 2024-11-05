@@ -85,10 +85,10 @@ struct WarningFiltersScopeNode {
 }
 
 #[derive(Debug, Clone)]
-/// An intern table for warning filters. The `Pin` is likely unnecessary given the usage of
-/// `WarningFiltersTable`, but it is added to ensure the underlying `Box` is not moved.
+/// An intern table for warning filters. The underlying `Box` is not moved, so the pointer to the
+/// filter is stable.
 /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
-pub struct WarningFiltersTable(HashSet<Pin<Box<WarningFiltersBuilder>>>);
+pub struct WarningFiltersTable(HashSet<Box<WarningFiltersBuilder>>);
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 /// An unsafe pointer into the intern table for warning filters.
@@ -216,18 +216,18 @@ impl WarningFiltersTable {
     }
 
     pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFilters {
-        let pinned = Box::pin(filters);
+        let boxed = Box::new(filters);
         let wf = {
-            let pinned_ref: &WarningFiltersBuilder = &pinned;
+            let pinned_ref: &WarningFiltersBuilder = &boxed;
             WarningFilters(pinned_ref as *const WarningFiltersBuilder)
         };
-        match self.0.get(&pinned) {
+        match self.0.get(&boxed) {
             Some(existing) => {
                 let existing_ref: &WarningFiltersBuilder = existing;
                 WarningFilters(existing_ref as *const WarningFiltersBuilder)
             }
             None => {
-                self.0.insert(pinned);
+                self.0.insert(boxed);
                 wf
             }
         }
