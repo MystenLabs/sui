@@ -1503,10 +1503,26 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
-        NE::MethodCall(ndotted, f, /* is_macro */ None, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::MethodCall(
+            ndotted,
+            f,
+            /* is_macro */ None,
+            ty_args_opt,
+            sp!(argloc, nargs_),
+            dot_loc,
+        ) => {
             let edotted = process_exp_dotted(context, None, ndotted);
             let args = exp_vec(context, nargs_);
-            let ty_call_opt = method_call(context, eloc, edotted, f, ty_args_opt, argloc, args);
+            let ty_call_opt = method_call(
+                context,
+                eloc,
+                edotted,
+                f,
+                ty_args_opt,
+                argloc,
+                args,
+                dot_loc,
+            );
             match ty_call_opt {
                 None => {
                     assert!(context.env.has_errors());
@@ -1519,7 +1535,14 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let args = exp_vec(context, nargs_);
             module_call(context, eloc, m, f, ty_args_opt, argloc, args)
         }
-        NE::MethodCall(ndotted, f, Some(macro_call_loc), ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::MethodCall(
+            ndotted,
+            f,
+            Some(macro_call_loc),
+            ty_args_opt,
+            sp!(argloc, nargs_),
+            dot_loc,
+        ) => {
             let edotted = process_exp_dotted(context, None, ndotted);
             let ty_call_opt = macro_method_call(
                 context,
@@ -1530,6 +1553,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 ty_args_opt,
                 argloc,
                 nargs_,
+                dot_loc,
             );
             match ty_call_opt {
                 None => {
@@ -3054,7 +3078,11 @@ fn resolve_index_funs_and_type(
 
 #[derive(Debug)]
 enum ExpDottedAccess {
-    Field(Field, /* base type */ Type),
+    Field(
+        Field,
+        /* base type */ Type,
+        /* dot location */ Loc,
+    ),
     Index {
         index_loc: Loc,
         syntax_methods: Option<IndexSyntaxMethods>,
@@ -3090,7 +3118,7 @@ impl ExpDotted {
     fn last_type(&self) -> Type {
         if let Some(accessor) = self.accessors.last() {
             match accessor {
-                ExpDottedAccess::Field(_, ty) => ty.clone(),
+                ExpDottedAccess::Field(_, ty, _) => ty.clone(),
                 ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
             }
         } else {
@@ -3183,7 +3211,7 @@ fn process_exp_dotted(
     ) -> ExpDotted {
         match ndot_ {
             N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
-            N::ExpDotted_::Dot(ndot, field) => {
+            N::ExpDotted_::Dot(ndot, field, dot_loc) => {
                 let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
                 assert!(inner.autocomplete_last.is_none());
                 let inner_ty = inner.last_type();
@@ -3191,7 +3219,7 @@ fn process_exp_dotted(
                 inner.loc = dloc;
                 inner
                     .accessors
-                    .push(ExpDottedAccess::Field(field, field_type));
+                    .push(ExpDottedAccess::Field(field, field_type, dot_loc));
                 inner
             }
             N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
@@ -3229,14 +3257,14 @@ fn exp_dotted_usage(
     let constraint_verb = match &ndotted.value {
         N::ExpDotted_::Exp(_) => None,
         _ if matches!(usage, DottedUsage::Borrow(_)) => Some("borrow"),
-        N::ExpDotted_::Dot(_, _) | N::ExpDotted_::DotAutocomplete(_, _) => Some("dot access"),
+        N::ExpDotted_::Dot(_, _, _) | N::ExpDotted_::DotAutocomplete(_, _) => Some("dot access"),
         N::ExpDotted_::Index(_, _) => Some("index"),
     };
     let edotted = process_exp_dotted(context, constraint_verb, ndotted);
     if matches!(usage, DottedUsage::Borrow(_)) && edotted.accessors.is_empty() {
         context.add_base_type_constraint(exp_loc, "Invalid borrow", edotted.base.ty.clone());
     }
-    resolve_exp_dotted(context, usage, exp_loc, edotted)
+    resolve_exp_dotted(context, usage, exp_loc, edotted, None)
 }
 
 fn exp_dotted_expression(
@@ -3250,7 +3278,7 @@ fn exp_dotted_expression(
     if matches!(usage, DottedUsage::Borrow(_)) && edotted.accessors.is_empty() {
         context.add_base_type_constraint(error_loc, "Invalid borrow", edotted.base.ty.clone());
     }
-    resolve_exp_dotted(context, usage, error_loc, edotted)
+    resolve_exp_dotted(context, usage, error_loc, edotted, None)
 }
 
 // This comment servees to document the function below. Depending on the shape of the dotted
@@ -3287,6 +3315,7 @@ fn resolve_exp_dotted(
     usage: DottedUsage,
     error_loc: Loc,
     edotted: ExpDotted,
+    method_dot_loc: Option<Loc>,
 ) -> Box<T::Exp> {
     use T::UnannotatedExp_ as TE;
 
@@ -3296,6 +3325,30 @@ fn resolve_exp_dotted(
 
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
     let autocomplete_last = edotted.autocomplete_last;
+    if context.env.ide_mode() {
+        if let Some(mdot_loc) = method_dot_loc {
+            ide_report_autocomplete(context, &mdot_loc, &edotted_ty);
+        }
+        // generate autocomplete information for all dots in the path
+        for i in (0..edotted.accessors.len()).rev() {
+            let accessor = &edotted.accessors[i];
+            if let ExpDottedAccess::Field(_, _, dot_loc) = accessor {
+                let prefix_ty = if i == 0 {
+                    edotted.base_type.clone()
+                } else {
+                    match &edotted.accessors[i - 1] {
+                        ExpDottedAccess::Field(_, ty, _) => ty.clone(),
+                        ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
+                    }
+                };
+                ide_report_autocomplete(
+                    context,
+                    dot_loc,
+                    &core::unfold_type(&context.subst, prefix_ty),
+                );
+            }
+        }
+    }
 
     let result = match usage {
         DottedUsage::Move(loc) => {
@@ -3393,7 +3446,7 @@ fn resolve_exp_dotted(
 
     if let Some(loc) = autocomplete_last {
         assert!(context.env.ide_mode());
-        debug_print!(context.debug.autocomplete_resolution, ("computing autocomplete" => result; dbg));
+        debug_print!(context.debug.autocomplete_resolution, ("computing unresolved dot autocomplete" => result; dbg));
         ide_report_autocomplete(context, &loc, &edotted_ty);
         result
     } else {
@@ -3483,7 +3536,7 @@ fn borrow_exp_dotted(
     for accessor in accessors {
         check_mut(context, error_loc, exp.ty.clone(), mut_);
         match accessor {
-            ExpDottedAccess::Field(name, ty) => {
+            ExpDottedAccess::Field(name, ty, _) => {
                 // report autocomplete information for the IDE
                 ide_report_autocomplete(context, &name.loc(), &exp.ty);
                 let e_ = TE::Borrow(mut_, exp, name);
@@ -3572,7 +3625,7 @@ fn exp_dotted_to_owned(
     use T::UnannotatedExp_ as TE;
     let (access_msg, access_type) = if let Some(accessor) = ed.accessors.last() {
         match accessor {
-            ExpDottedAccess::Field(name, ty) => (format!("field '{}'", name), ty.clone()),
+            ExpDottedAccess::Field(name, ty, _) => (format!("field '{}'", name), ty.clone()),
             ExpDottedAccess::Index { base_type, .. } => {
                 ("index result".to_string(), base_type.clone())
             }
@@ -3728,6 +3781,7 @@ fn method_call(
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     mut args: Vec<T::Exp>,
+    dot_loc: Loc,
 ) -> Option<(Type, T::UnannotatedExp_)> {
     use T::UnannotatedExp_ as TE;
     let mut edotted = edotted;
@@ -3738,8 +3792,13 @@ fn method_call(
                 // Even if the method name fails to resolve, we want autocomplete information.
                 edotted.autocomplete_last = Some(method.loc);
                 let err_ty = context.error_type(call_loc);
-                let dot_output =
-                    resolve_exp_dotted(context, DottedUsage::Borrow(false), call_loc, edotted);
+                let dot_output = resolve_exp_dotted(
+                    context,
+                    DottedUsage::Borrow(false),
+                    call_loc,
+                    edotted,
+                    Some(dot_loc),
+                );
                 return Some((err_ty, dot_output.exp.value));
             }
             ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
@@ -3748,7 +3807,7 @@ fn method_call(
     if context.env.ide_mode() {
         edotted.autocomplete_last = Some(method.loc);
     }
-    let first_arg = *resolve_exp_dotted(context, usage, call_loc, edotted);
+    let first_arg = *resolve_exp_dotted(context, usage, call_loc, edotted, Some(dot_loc));
     args.insert(0, first_arg);
     let (mut call, ret_ty) = module_call_impl(context, call_loc, m, f, fty, argloc, args);
     call.method_name = Some(method);
@@ -4243,6 +4302,7 @@ fn macro_method_call(
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     nargs: Vec<N::Exp>,
+    dot_loc: Loc,
 ) -> Option<(Type, T::UnannotatedExp_)> {
     let mut edotted = edotted;
     let (m, f, fty, usage) = match method_call_resolve(context, loc, &edotted, method, ty_args_opt)
@@ -4252,7 +4312,13 @@ fn macro_method_call(
             // Even if the method name fails to resolve, we want autocomplete information.
             edotted.autocomplete_last = Some(method.loc);
             let err_ty = context.error_type(loc);
-            let dot_output = resolve_exp_dotted(context, DottedUsage::Borrow(false), loc, edotted);
+            let dot_output = resolve_exp_dotted(
+                context,
+                DottedUsage::Borrow(false),
+                loc,
+                edotted,
+                Some(dot_loc),
+            );
             return Some((err_ty, dot_output.exp.value));
         }
         ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
@@ -4261,7 +4327,7 @@ fn macro_method_call(
     if context.env.ide_mode() {
         edotted.autocomplete_last = Some(method.loc);
     }
-    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
+    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted, Some(dot_loc));
     let mut args = vec![macro_expand::EvalStrategy::ByValue(first_arg)];
     args.extend(
         nargs

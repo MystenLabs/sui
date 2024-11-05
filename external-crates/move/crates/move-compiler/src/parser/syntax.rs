@@ -2618,7 +2618,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         match parse_u8(contents) {
                             Ok((parsed, NumberFormat::Decimal)) => {
                                 let field_access = Name::new(loc, format!("{parsed}").into());
-                                Exp_::Dot(Box::new(lhs), field_access)
+                                Exp_::Dot(Box::new(lhs), field_access, first_token_loc)
                             }
                             Ok((_, NumberFormat::Hex)) => {
                                 let msg = "Invalid field access. Expected a decimal number but was given a hexadecimal";
@@ -2627,7 +2627,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 context.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
-                                Exp_::Dot(Box::new(lhs), field_access)
+                                Exp_::Dot(Box::new(lhs), field_access, first_token_loc)
                             }
                             Err(_) => {
                                 let msg = format!(
@@ -2639,7 +2639,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 context.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
-                                Exp_::Dot(Box::new(lhs), field_access)
+                                Exp_::Dot(Box::new(lhs), field_access, first_token_loc)
                             }
                         }
                     }
@@ -2665,9 +2665,16 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                     parse_macro_opt_and_tyargs_opt(context, false, n.loc);
                                 let tys = tys.map(|t| t.value);
                                 let args = parse_call_args(context);
-                                Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
+                                Exp_::DotCall(
+                                    Box::new(lhs),
+                                    n,
+                                    is_macro,
+                                    tys,
+                                    args,
+                                    first_token_loc,
+                                )
                             } else {
-                                Exp_::Dot(Box::new(lhs), n)
+                                Exp_::Dot(Box::new(lhs), n, first_token_loc)
                             }
                         }
                     },

@@ -358,7 +358,7 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
-    Dot(Box<ExpDotted>, Field),
+    Dot(Box<ExpDotted>, Field, Loc),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
     DotAutocomplete(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
@@ -421,6 +421,7 @@ pub enum Exp_ {
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
+        Loc, // location of the dot
     ),
     VarCall(Var, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
@@ -1636,7 +1637,7 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs), _) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", f));
                 if is_macro.is_some() {
@@ -1889,7 +1890,7 @@ impl AstDebug for ExpDotted_ {
         use ExpDotted_ as D;
         match self {
             D::Exp(e) => e.ast_debug(w),
-            D::Dot(e, n) => {
+            D::Dot(e, n, _) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n))
             }
