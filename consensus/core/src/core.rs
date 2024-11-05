@@ -1501,16 +1501,9 @@ mod test {
         assert_eq!(block.round(), 11);
         assert_eq!(block.ancestors().len(), 4);
 
-        let our_ancestor_included = block
-            .ancestors()
-            .iter()
-            .find(|block_ref: &&BlockRef| block_ref.author == context.own_index);
-        assert_eq!(
-            our_ancestor_included
-                .expect("There should be our own ancestor included")
-                .round,
-            10
-        );
+        let our_ancestor_included = block.ancestors()[0];
+        assert_eq!(our_ancestor_included.author, context.own_index);
+        assert_eq!(our_ancestor_included.round, 10);
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
