@@ -83,9 +83,13 @@ pub enum MacroExpansion {
 }
 
 pub(super) struct TypingDebugFlags {
+    #[allow(dead_code)]
     pub(super) match_counterexample: bool,
+    #[allow(dead_code)]
     pub(super) autocomplete_resolution: bool,
+    #[allow(dead_code)]
     pub(super) function_translation: bool,
+    #[allow(dead_code)]
     pub(super) type_elaboration: bool,
 }
 
@@ -94,6 +98,7 @@ pub struct Context<'env> {
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env CompilationEnv,
     pub reporter: DiagnosticReporter<'env>,
+    #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
     deprecations: Deprecations,

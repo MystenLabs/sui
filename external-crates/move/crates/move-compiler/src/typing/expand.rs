@@ -9,7 +9,7 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
-    shared::{ide::IDEAnnotation, string_utils::debug_print, AstDebug},
+    shared::{ide::IDEAnnotation, string_utils::debug_print},
     typing::{
         ast::{self as T},
         core::{self, Context},

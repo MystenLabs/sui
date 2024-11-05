@@ -119,17 +119,24 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 //**************************************************************************************************
 
 pub(super) struct HLIRDebugFlags {
+    #[allow(dead_code)]
     pub(super) match_variant_translation: bool,
+    #[allow(dead_code)]
     pub(super) match_translation: bool,
+    #[allow(dead_code)]
     pub(super) match_specialization: bool,
+    #[allow(dead_code)]
     pub(super) match_work_queue: bool,
+    #[allow(dead_code)]
     pub(super) function_translation: bool,
+    #[allow(dead_code)]
     pub(super) eval_order: bool,
 }
 
 pub(super) struct Context<'env> {
     pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
+    #[allow(dead_code)]
     pub debug: HLIRDebugFlags,
     pub reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
