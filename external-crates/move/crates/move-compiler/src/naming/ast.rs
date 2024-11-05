@@ -417,11 +417,11 @@ pub enum Exp_ {
     ),
     MethodCall(
         ExpDotted,
+        Loc, // location of the dot
         Name,
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
-        Loc, // location of the dot
     ),
     VarCall(Var, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
@@ -1637,7 +1637,7 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs), _) => {
+            E::MethodCall(e, _, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", f));
                 if is_macro.is_some() {

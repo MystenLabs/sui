@@ -401,7 +401,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es), _) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)

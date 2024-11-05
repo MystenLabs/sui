@@ -1505,11 +1505,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
         NE::MethodCall(
             ndotted,
+            dot_loc,
             f,
             /* is_macro */ None,
             ty_args_opt,
             sp!(argloc, nargs_),
-            dot_loc,
         ) => {
             let edotted = process_exp_dotted(context, None, ndotted);
             let args = exp_vec(context, nargs_);
@@ -1537,11 +1537,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
         NE::MethodCall(
             ndotted,
+            dot_loc,
             f,
             Some(macro_call_loc),
             ty_args_opt,
             sp!(argloc, nargs_),
-            dot_loc,
         ) => {
             let edotted = process_exp_dotted(context, None, ndotted);
             let ty_call_opt = macro_method_call(

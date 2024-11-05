@@ -2912,7 +2912,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 if is_macro.is_some() {
                     context.check_feature(context.current_package, FeatureGate::MacroFuns, eloc);
                 }
-                NE::MethodCall(d, n, is_macro, ty_args, nes, dot_loc)
+                NE::MethodCall(d, dot_loc, n, is_macro, ty_args, nes)
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
@@ -4330,7 +4330,7 @@ fn remove_unused_bindings_exp(
                 remove_unused_bindings_exp(context, used, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es), _) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
             for e in es {
                 remove_unused_bindings_exp(context, used, e)

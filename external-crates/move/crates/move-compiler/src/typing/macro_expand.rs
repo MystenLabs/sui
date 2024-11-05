@@ -642,7 +642,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                 recolor_exp(ctx, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es), _) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             recolor_exp_dotted(ctx, ed);
             for e in es {
                 recolor_exp(ctx, e)
@@ -941,7 +941,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             }
             exps(context, es)
         }
-        N::Exp_::MethodCall(ed, _, _, tys_opt, sp!(_, es), _) => {
+        N::Exp_::MethodCall(ed, _, _, _, tys_opt, sp!(_, es)) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
