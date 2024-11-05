@@ -12,7 +12,7 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
-use tracing::debug;
+use tracing::trace;
 
 // SharedObjectCongestionTracker stores the accumulated cost of executing transactions on an object, for
 // all transactions in a consensus commit.
@@ -58,7 +58,7 @@ impl SharedObjectCongestionTracker {
         let gas_budget_based_txn_cost_absolute_cap =
             gas_budget_based_txn_cost_absolute_cap_commit_count
                 .map(|m| m * max_accumulated_txn_cost_per_object_in_commit);
-        debug!(
+        trace!(
             "created SharedObjectCongestionTracker with
              {} initial object debts,
              mode: {mode:?}, 
