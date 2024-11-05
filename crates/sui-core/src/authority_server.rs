@@ -198,6 +198,7 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
     forwarded_header_not_included: IntCounter,
+    client_id_source_config_mismatch: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -326,6 +327,12 @@ impl ValidatorServiceMetrics {
             forwarded_header_not_included: register_int_counter_with_registry!(
                 "validator_service_forwarded_header_not_included",
                 "Number of times x-forwarded-for header was (unexpectedly) not included in request",
+                registry,
+            )
+            .unwrap(),
+            client_id_source_config_mismatch: register_int_counter_with_registry!(
+                "validator_service_client_id_source_config_mismatch",
+                "Number of times detected that client id source config doesn't agree with x-forwarded-for header",
                 registry,
             )
             .unwrap(),
@@ -1225,19 +1232,19 @@ impl ValidatorService {
                                 return None;
                             }
                             let contents_len = header_contents.len();
-                            // Network topology should not be very dynamic, therefore if it changes and the above
-                            // invariant is violated, we should fail loudly so that the node config can be updated.
-                            assert!(
-                                contents_len >= *num_hops,
-                                "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
-                                Expected at least {} values. Please correctly set the `x-forwarded-for` value under \
-                                `client-id-source` in the node config.",
-                                header_contents,
-                                contents_len,
-                                num_hops,
-                                contents_len,
-                            );
-                            let contents_len = header_contents.len();
+                            if contents_len < *num_hops {
+                                error!(
+                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
+                                    Expected at least {} values. Please correctly set the `x-forwarded-for` value under \
+                                    `client-id-source` in the node config.",
+                                    header_contents,
+                                    contents_len,
+                                    num_hops,
+                                    contents_len,
+                                );
+                                self.metrics.client_id_source_config_mismatch.inc();
+                                return None;
+                            }
                             let Some(client_ip) = header_contents.get(contents_len - num_hops)
                             else {
                                 error!(
@@ -1337,8 +1344,10 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
 // TODO: refine error matching here
 fn normalize(err: SuiError) -> Weight {
     match err {
-        SuiError::UserInputError { .. }
-        | SuiError::InvalidSignature { .. }
+        SuiError::UserInputError {
+            error: UserInputError::IncorrectUserSignature { .. },
+        } => Weight::one(),
+        SuiError::InvalidSignature { .. }
         | SuiError::SignerSignatureAbsent { .. }
         | SuiError::SignerSignatureNumberMismatch { .. }
         | SuiError::IncorrectSigner { .. }

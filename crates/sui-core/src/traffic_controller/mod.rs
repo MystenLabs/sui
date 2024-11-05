@@ -284,7 +284,6 @@ async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficC
         metrics
             .connection_ip_blocklist_len
             .set(blocklists.clients.len() as i64);
-        debug!("Connection_ip_blocklist: {:?}", blocklists.clients);
         metrics
             .proxy_ip_blocklist_len
             .set(blocklists.proxied_clients.len() as i64);
@@ -379,13 +378,13 @@ async fn run_tally_loop(
                     metrics
                         .highest_direct_spam_rate
                         .set(highest_direct_rate.0 as i64);
-                    trace!("Recent highest direct spam rate: {:?}", highest_direct_rate);
+                    debug!("Recent highest direct spam rate: {:?}", highest_direct_rate);
                 }
                 if let Some(highest_proxied_rate) = spam_policy.highest_proxied_rate() {
                     metrics
                         .highest_proxied_spam_rate
                         .set(highest_proxied_rate.0 as i64);
-                    trace!(
+                    debug!(
                         "Recent highest proxied spam rate: {:?}",
                         highest_proxied_rate
                     );
@@ -396,7 +395,7 @@ async fn run_tally_loop(
                     metrics
                         .highest_direct_error_rate
                         .set(highest_direct_rate.0 as i64);
-                    trace!(
+                    debug!(
                         "Recent highest direct error rate: {:?}",
                         highest_direct_rate
                     );
@@ -405,7 +404,7 @@ async fn run_tally_loop(
                     metrics
                         .highest_proxied_error_rate
                         .set(highest_proxied_rate.0 as i64);
-                    trace!(
+                    debug!(
                         "Recent highest proxied error rate: {:?}",
                         highest_proxied_rate
                     );
