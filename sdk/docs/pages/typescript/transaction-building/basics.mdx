@@ -140,7 +140,7 @@ tx.transferObjects([coin], tx.pure.address('0xSomeSuiAddress'));
 tx.transferObjects([coin], tx.pure(bcs.Address.serialize('0xSomeSuiAddress')));
 ```
 
-To pass `vector` or `option` types, you you can pass use the corresponding methods on `tx.pure`, use
+To pass `vector` or `option` types, you can pass use the corresponding methods on `tx.pure`, use
 tx.pure as a function with a type argument, or serialize the value before passing it to tx.pure
 using the bcs sdk:
 
