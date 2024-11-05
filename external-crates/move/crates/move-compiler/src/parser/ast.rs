@@ -206,7 +206,6 @@ pub struct ModuleDefinition {
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
-    pub is_spec_module: bool,
     pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }
@@ -219,7 +218,6 @@ pub enum ModuleMember {
     Use(UseDecl),
     Friend(FriendDecl),
     Constant(Constant),
-    Spec(Spanned<String>),
 }
 
 //**************************************************************************************************
@@ -645,9 +643,6 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     // (e: t)
     Annotate(Box<Exp>, Type),
-
-    // spec { ... }
-    Spec(Spanned<String>),
 
     // Internal node marking an error was added to the error list
     // This is here so the pass can continue even when an error is hit
@@ -1449,17 +1444,12 @@ impl AstDebug for ModuleDefinition {
             loc: _loc,
             address,
             name,
-            is_spec_module,
             members,
             definition_mode: _,
         } = self;
         attributes.ast_debug(w);
         match address {
-            None => w.write(format!(
-                "module {}{}",
-                if *is_spec_module { "spec " } else { "" },
-                name
-            )),
+            None => w.write(format!("module {}", name)),
             Some(addr) => w.write(format!("module {}::{}", addr, name)),
         };
         w.block(|w| {
@@ -1479,7 +1469,6 @@ impl AstDebug for ModuleMember {
             ModuleMember::Use(u) => u.ast_debug(w),
             ModuleMember::Friend(f) => f.ast_debug(w),
             ModuleMember::Constant(c) => c.ast_debug(w),
-            ModuleMember::Spec(s) => w.write(&s.value),
         }
     }
 }
@@ -2166,9 +2155,6 @@ impl AstDebug for Exp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(s) => {
-                w.write(&s.value);
             }
             E::UnresolvedError => w.write("_|_"),
             E::DotUnresolved(_, e) => {

@@ -191,7 +191,6 @@ fn filter_module<T: FilterContext>(
         loc,
         address,
         name,
-        is_spec_module,
         members,
         definition_mode,
     } = module_def;
@@ -206,7 +205,6 @@ fn filter_module<T: FilterContext>(
         loc,
         address,
         name,
-        is_spec_module,
         members: new_members,
         definition_mode,
     })
@@ -221,7 +219,6 @@ fn filter_module_member<T: FilterContext>(
     match module_member {
         PM::Function(func_def) => context.filter_map_function(func_def).map(PM::Function),
         PM::Struct(struct_def) => context.filter_map_struct(struct_def).map(PM::Struct),
-        x @ PM::Spec(_) => Some(x),
         PM::Enum(enum_def) => context.filter_map_enum(enum_def).map(PM::Enum),
         PM::Use(use_decl) => context.filter_map_use(use_decl).map(PM::Use),
         PM::Friend(friend_decl) => context.filter_map_friend(friend_decl).map(PM::Friend),
