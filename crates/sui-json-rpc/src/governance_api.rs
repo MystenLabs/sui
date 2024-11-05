@@ -485,6 +485,16 @@ fn backfill_rates(
     filled_rates
 }
 
+impl SuiRpcModule for GovernanceReadApi {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        GovernanceReadApiOpenRpc::module_doc()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,15 +533,5 @@ mod tests {
             (1, rate1),
         ];
         assert_eq!(backfill_rates(rates), expected);
-    }
-}
-
-impl SuiRpcModule for GovernanceReadApi {
-    fn rpc(self) -> RpcModule<Self> {
-        self.into_rpc()
-    }
-
-    fn rpc_doc_module() -> Module {
-        GovernanceReadApiOpenRpc::module_doc()
     }
 }
