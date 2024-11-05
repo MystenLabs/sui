@@ -444,9 +444,6 @@ describe('coinWithBalance', () => {
 		});
 
 		expect(result.effects?.status.status).toBe('success');
-		console.log('results', result);
-		console.log('objectChanges', result.objectChanges);
-		console.log('effects', result.effects);
 		expect(
 			result.objectChanges?.filter((change) => {
 				if (change.type !== 'created') return false;
