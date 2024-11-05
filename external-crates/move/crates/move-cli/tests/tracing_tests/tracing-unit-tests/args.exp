@@ -10,6 +10,7 @@ Running Move unit tests
 [ PASS    ] 0x1::errors::bad_cast
 [ PASS    ] 0x1::errors::div_0
 [ PASS    ] 0x1::errors::fail_during_abort
+[ PASS    ] 0x1::errors::fail_in_native
 [ PASS    ] 0x1::errors::overshift_l
 [ PASS    ] 0x1::errors::overshift_r
 [ PASS    ] 0x1::errors::underflow
@@ -24,5 +25,5 @@ Running Move unit tests
 [ PASS    ] 0x1::references::test_struct_borrow
 [ PASS    ] 0x1::references::test_vector_mut_borrow
 [ PASS    ] 0x1::references::test_vector_mut_borrow_pop
-Test result: OK. Total tests: 22; passed: 22; failed: 0
+Test result: OK. Total tests: 23; passed: 23; failed: 0
 External Command `diff -qr new_traces saved_traces`:
