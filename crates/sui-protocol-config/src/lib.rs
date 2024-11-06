@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 68;
+const MAX_PROTOCOL_VERSION: u64 = 69;
 
 // Record history of protocol version allocations here:
 //
@@ -195,6 +195,7 @@ const MAX_PROTOCOL_VERSION: u64 = 68;
 //             Enable gas based congestion control with overage.
 //             Further reduce minimum number of random beacon shares.
 //             Disallow adding new modules in `deps-only` packages.
+// Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2939,7 +2940,8 @@ impl ProtocolConfig {
                     cfg.random_beacon_reduction_lower_bound = Some(500);
 
                     cfg.feature_flags.disallow_new_modules_in_deps_only_packages = true;
-
+                }
+                69 => {
                     // Sets number of rounds allowed for fastpath voting in consensus.
                     cfg.consensus_voting_rounds = Some(40);
                 }
