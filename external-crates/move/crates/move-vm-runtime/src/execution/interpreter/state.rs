@@ -5,8 +5,8 @@ use crate::{
     cache::{arena::ArenaPointer, type_cache},
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::locals::MachineHeap,
-        values::{self, VMValueCast, Value},
+        interpreter::{locals::MachineHeap, set_err_info},
+        values::values_impl::{self as values, VMValueCast, Value},
     },
     jit::execution::ast::{CallType, Constant, Function, Module, Type, VTableKey},
     shared::{
@@ -52,14 +52,6 @@ macro_rules! debug_writeln {
     };
 }
 
-macro_rules! set_err_info {
-    ($frame:ident, $e:expr) => {{
-        let function = $frame.function();
-        $e.at_code_offset(function.index(), $frame.pc)
-            .finish($frame.location())
-    }};
-}
-
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
@@ -69,24 +61,26 @@ macro_rules! set_err_info {
 /// An `MachineState` instance is a stand alone execution context for a function.
 /// It mimics execution on a single thread, with an call stack and an operand stack.
 pub(crate) struct MachineState {
-    /// Operand stack, where Move `Value`s are stored for stack operations.
-    pub(super) operand_stack: Stack,
-    /// The stack of active functions.
     pub(super) call_stack: CallStack,
-    /// The current frame we are computing in.
-    pub(super) current_frame: CallFrame,
-    /// The current heap.
-    pub(super) heap: MachineHeap,
+    /// Operand stack, where Move `Value`s are stored for stack operations.
+    pub(super) operand_stack: ValueStack,
 }
 
 /// The operand stack.
-pub(super) struct Stack {
+pub(super) struct ValueStack {
     pub(super) value: Vec<Value>,
 }
 
 /// A call stack.
 // #[derive(Debug)]
-pub(super) struct CallStack(Vec<CallFrame>);
+pub(super) struct CallStack {
+    /// The current frame we are computing in.
+    pub(super) current_frame: CallFrame,
+    /// The current heap.
+    pub(super) heap: MachineHeap,
+    /// The stack of active functions.
+    pub(super) frames: Vec<CallFrame>,
+}
 
 // A Resolver is a simple and small structure allocated on the stack and used by the
 // interpreter. It's the only API known to the interpreter and it's tailored to the interpreter
@@ -100,8 +94,8 @@ pub(crate) struct ModuleDefinitionResolver {
 /// the function itself.
 #[derive(Debug)]
 pub(super) struct CallFrame {
-    pub(super) function: ArenaPointer<Function>,
     pub(super) pc: u16,
+    pub(super) function: ArenaPointer<Function>,
     pub(super) resolver: ModuleDefinitionResolver,
     pub(super) stack_frame: StackFrame,
     pub(super) ty_args: Vec<Type>,
@@ -117,12 +111,10 @@ pub(super) struct ResolvableType<'a, 'b> {
 // -------------------------------------------------------------------------------------------------
 
 impl MachineState {
-    pub(super) fn new(heap: MachineHeap, initial_frame: CallFrame) -> Self {
+    pub(super) fn new(call_stack: CallStack) -> Self {
         MachineState {
-            operand_stack: Stack::new(),
-            call_stack: CallStack::new(),
-            current_frame: initial_frame,
-            heap,
+            operand_stack: ValueStack::new(),
+            call_stack,
         }
     }
 
@@ -166,19 +158,28 @@ impl MachineState {
     /// Push a new call frame (setting the machine's `current_frame` to the provided `new_frame`).
     /// Produces a `VMError` using the machine state's previous `current_frame` if this would
     /// overflow the call stack.
-    pub(super) fn push_call_frame(&mut self, new_frame: CallFrame) -> VMResult<()> {
-        let prev_frame = std::mem::replace(&mut self.current_frame, new_frame);
-        // cswords: This code previously took the "prev frame" as the one to push, so the error here
-        // is logically the same despite the change.
-        self.call_stack.push(prev_frame).map_err(|frame| {
-            let err = PartialVMError::new(StatusCode::CALL_STACK_OVERFLOW);
-            let err = set_err_info!(frame, err);
-            self.maybe_core_dump_with_frame(err, &frame)
-        })
+    #[inline]
+    pub fn push_call(
+        &mut self,
+        resolver: ModuleDefinitionResolver,
+        function: ArenaPointer<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+    ) -> VMResult<()> {
+        self.call_stack.push_call(resolver, function, ty_args, args)
     }
 
-    pub(super) fn pop_call_frame(&mut self) -> Option<CallFrame> {
-        self.call_stack.pop()
+    /// Returns true if there is a frame to pop.
+    #[inline]
+    pub(super) fn can_pop_call_frame(&self) -> bool {
+        !self.call_stack.frames.is_empty()
+    }
+
+    /// Frees the current stack frame and puts the previous one there, or throws an error if there
+    /// is not a frame to pop.
+    #[inline]
+    pub(super) fn pop_call_frame(&mut self) -> VMResult<()>{
+        self.call_stack.pop_frame()
     }
 
     //
@@ -200,14 +201,8 @@ impl MachineState {
         } else {
             err
         };
-        self.maybe_core_dump_with_frame(err, &self.current_frame)
-    }
-
-    /// Given an `VMStatus` generate a core dump if the error is an `InvariantViolation`. Uses the
-    /// provided `CallFrame` to perform the core dump.
-    fn maybe_core_dump_with_frame(&self, err: VMError, frame: &CallFrame) -> VMError {
         if err.status_type() == StatusType::InvariantViolation {
-            let state = self.internal_state_str(frame);
+            let state = self.internal_state_str();
             error!(
                 "Error: {:?}\nCORE DUMP: >>>>>>>>>>>>\n{}\n<<<<<<<<<<<<\n",
                 err, state,
@@ -288,8 +283,8 @@ impl MachineState {
         vtables: &VMDispatchTables,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
-        self.debug_print_frame(buf, vtables, 0, &self.current_frame)?;
-        for (i, frame) in self.call_stack.0.iter().enumerate() {
+        self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
+        for (i, frame) in self.call_stack.frames.iter().enumerate() {
             self.debug_print_frame(buf, vtables, i + 1, frame)?;
         }
         debug_writeln!(buf, "Operand Stack:")?;
@@ -309,10 +304,10 @@ impl MachineState {
     /// It is used when generating a core dump but can be used for debugging of the interpreter.
     /// It will be exposed via a debug module to give developers a way to print the internals
     /// of an execution.
-    fn internal_state_str(&self, current_frame: &CallFrame) -> String {
+    fn internal_state_str(&self) -> String {
         let mut internal_state = "Call stack:\n".to_string();
 
-        for (i, frame) in self.call_stack.0.iter().enumerate() {
+        for (i, frame) in self.call_stack.frames.iter().enumerate() {
             internal_state.push_str(
                 format!(
                     " frame #{}: {} [pc = {}]\n",
@@ -326,14 +321,14 @@ impl MachineState {
         internal_state.push_str(
             format!(
                 "*frame #{}: {} [pc = {}]:\n",
-                self.call_stack.0.len(),
-                current_frame.function().pretty_string(),
-                current_frame.pc,
+                self.call_stack.frames.len(),
+                self.call_stack.current_frame.function().pretty_string(),
+                self.call_stack.current_frame.pc,
             )
             .as_str(),
         );
-        let code = current_frame.function().code();
-        let pc = current_frame.pc as usize;
+        let code = self.call_stack.current_frame.function().code();
+        let pc = self.call_stack.current_frame.pc as usize;
         if pc < code.len() {
             let mut i = 0;
             for bytecode in &code[..pc] {
@@ -345,8 +340,8 @@ impl MachineState {
         internal_state.push_str(
             format!(
                 "Locals (start: {}):\n{}\n",
-                current_frame.stack_frame.base_index(),
-                current_frame.stack_frame
+                self.call_stack.current_frame.stack_frame.base_index(),
+                self.call_stack.current_frame.stack_frame
             )
             .as_str(),
         );
@@ -358,7 +353,7 @@ impl MachineState {
     }
 
     pub(super) fn set_location(&self, err: PartialVMError) -> VMError {
-        err.finish(self.current_frame.location())
+        err.finish(self.call_stack.current_frame.location())
     }
 
     pub(super) fn get_internal_state(&self) -> ExecutionState {
@@ -372,7 +367,7 @@ impl MachineState {
         // is the last one)
         let stack_trace = self
             .call_stack
-            .0
+            .frames
             .iter()
             .rev()
             .take(count)
@@ -385,10 +380,10 @@ impl MachineState {
     }
 }
 
-impl Stack {
+impl ValueStack {
     /// Create a new empty operand stack.
     fn new() -> Self {
-        Stack { value: vec![] }
+        ValueStack { value: vec![] }
     }
 
     /// Push a `Value` on the stack if the max stack size has not been reached. Abort execution
@@ -440,49 +435,82 @@ impl Stack {
 
 impl CallStack {
     /// Create a new empty call stack.
-    fn new() -> Self {
-        CallStack(vec![])
-    }
-
-    /// Push a `Frame` on the call stack.
-    fn push(&mut self, frame: CallFrame) -> ::std::result::Result<(), CallFrame> {
-        if self.0.len() < CALL_STACK_SIZE_LIMIT {
-            self.0.push(frame);
-            Ok(())
-        } else {
-            Err(frame)
-        }
-    }
-
-    /// Pop a `Frame` off the call stack.
-    fn pop(&mut self) -> Option<CallFrame> {
-        self.0.pop()
-    }
-}
-
-impl CallFrame {
-    /// Create a new `Frame` given a `Function` and the function's `ty_args` and `args`.
-    /// This loads the locals, padding appropriately.
-    #[inline]
     pub fn new(
-        heap: &mut MachineHeap,
         resolver: ModuleDefinitionResolver,
         function: ArenaPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> PartialVMResult<Self> {
+        let mut heap = MachineHeap::new();
+
         let fun_ref = function.to_ref();
         let stack_frame = heap.allocate_stack_frame(args, fun_ref.local_count())?;
-        let call_frame = CallFrame {
+        let current_frame = CallFrame {
             pc: 0,
             stack_frame,
             resolver,
             function,
             ty_args,
         };
-        Ok(call_frame)
+
+        Ok(Self {
+            current_frame,
+            heap,
+            frames: vec![],
+        })
     }
 
+    /// Create a new `Frame` given a `Function` and the function's `ty_args` and `args`.
+    /// This loads the locals, padding appropriately, and sets the call stack's current frame.
+    #[inline]
+    pub fn push_call(
+        &mut self,
+        resolver: ModuleDefinitionResolver,
+        function: ArenaPointer<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+    ) -> VMResult<()> {
+        let fun_ref = function.to_ref();
+        let stack_frame = self
+            .heap
+            .allocate_stack_frame(args, fun_ref.local_count())
+            .map_err(|err| set_err_info!(&self.current_frame, err))?;
+        let new_frame = CallFrame {
+            pc: 0,
+            stack_frame,
+            resolver,
+            function,
+            ty_args,
+        };
+        if self.frames.len() < CALL_STACK_SIZE_LIMIT {
+            let prev_frame = std::mem::replace(&mut self.current_frame, new_frame);
+            self.frames.push(prev_frame);
+            Ok(())
+        } else {
+            let err = PartialVMError::new(StatusCode::CALL_STACK_OVERFLOW);
+            let err = set_err_info!(new_frame, err);
+            Err(err)
+        }
+    }
+
+    /// Pop a `Frame` off the call stack, freeing the old one. Returns an error if there is no
+    /// frame to pop.
+    #[inline]
+    fn pop_frame(&mut self) -> VMResult<()> {
+        let Some(return_frame) = self.frames.pop()  else {
+            let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
+            let err = set_err_info!(self.current_frame, err);
+            return Err(err)
+        };
+        let frame = std::mem::replace(&mut self.current_frame, return_frame);
+        let index = frame.function().index();
+        let pc = frame.pc;
+        let loc = frame.location();
+        self.heap.free_stack_frame(frame.stack_frame).map_err(|e| e.at_code_offset(index, pc).finish(loc))
+    }
+}
+
+impl CallFrame {
     pub(super) fn function<'a>(&self) -> &'a Function {
         self.function.to_ref()
     }

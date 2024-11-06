@@ -5,7 +5,7 @@
 
 use crate::{
     cache::arena,
-    execution::values::{values_impl::Value, ValueImpl},
+    execution::values::values_impl::{Value, ValueImpl},
     shared::constants::{CALL_STACK_SIZE_LIMIT, LOCALS_PER_FRAME_LIMIT},
 };
 
@@ -132,7 +132,7 @@ impl Default for MachineHeap {
 
 impl MachineHeap {
     pub fn new() -> Self {
-        let heap = (0..CALL_STACK_SIZE_LIMIT * LOCALS_PER_FRAME_LIMIT)
+        let heap = (0..(1024 * 16))
             .map(|_| Value::invalid())
             .collect::<Vec<_>>()
             .into_boxed_slice();

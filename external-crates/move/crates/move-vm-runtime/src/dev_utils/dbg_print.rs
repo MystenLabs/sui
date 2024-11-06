@@ -13,9 +13,10 @@ pub struct DebugFlags {
 pub const DEBUG_FLAGS: DebugFlags = DebugFlags {
     function_list_sizes: true,
     function_resolution: true,
-    eval_step: false,
+    eval_step: true,
 };
 
+#[cfg(debug_assertions)]
 #[macro_export]
 macro_rules! dbg_println {
     ($( $args:expr ),*$(,)?) => {
