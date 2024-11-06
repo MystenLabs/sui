@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 1.14.2
+
+### Patch Changes
+
+- e7bc63e: Allow 0 amounts with `coinWithBalance` intent when the wallet has no coin objects of the
+  required type.
+
 ## 1.14.1
 
 ### Patch Changes
