@@ -14,14 +14,6 @@ warning[Lint W04004]: unneeded return
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01008]: excessive nesting
-  ┌─ tests/linter/move_2024/unneeded_return_branch.move:9:33
-  │
-9 │     if (cond) { return 5 } else { return 0 }
-  │                                 ^^^^^^^^^^^^ Detected excessive block nesting. Consider refactoring to simplify the code.
-  │
-  = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return_branch.move:9:35
   │

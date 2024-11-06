@@ -1,44 +1,28 @@
 module 0x42::excessive_nesting_true_positive {
-    public fun deeply_nested_function(x: u64) {
+
+    #[allow(unused_assignment)]
+    fun deeply_nested_if(x: u64) {
         if (x > 0) {
-            {
-                {
-                    {
-                        {
-                            // This is the 5th level of nesting, which exceeds the threshold of 3
-                            let y = x + 1;
-                            if (y > 10) {
-                                {
-                                    // Even deeper nesting
-                                }
-                            };
-                        }
+            if (x > 10) {
+                if (x > 20) {
+                    if (x > 30) { // This exceeds MAX_NESTING_LEVEL (3)
+                        x = x + 1;
                     }
                 }
             }
-        };
+        }
     }
 
-    public fun multiple_nested_blocks(x: u64): u64 {
-        {
-            {
-                {
-                    {
-                        // 4th level of nesting
+    fun deeply_nested_loops(x: u64) {
+        while (x > 0) {
+            while (x > 10) {
+                while (x > 20) {
+                    loop { // This exceeds MAX_NESTING_LEVEL (3)
+                        if (x == 0) break;
+                        x = x - 1;
                     }
                 }
             }
-        };
-        // Another set of nested blocks
-        {
-            {
-                {
-                    {
-                        // Another 4th level of nesting
-                    }
-                }
-            }
-        };
-        x
+        }
     }
 }

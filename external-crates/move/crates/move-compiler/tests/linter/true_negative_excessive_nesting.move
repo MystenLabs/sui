@@ -1,29 +1,26 @@
 module 0x42::excessive_nesting_true_negative {
-    public fun shallow_nesting(x: u64) {
-        if (x > 0) {
-            {
-                // This is only the 2nd level of nesting
-                let y = x + 1;
-                if (y > 10) {
-                    // This is the 3rd level, which is at the threshold but not exceeding it
-                };
-            }
+
+    #[allow(unused_assignment)]
+    fun flat_code(x: u64) {
+        if (x > 10) {
+            x = x + 1;
         };
+        if (x > 20) {
+            x = x + 2;
+        };
+        if (x > 30) {
+            x = x + 3;
+        }
     }
 
-    public fun multiple_shallow_blocks(x: u64) {
-        {
-            // 1st level
-        };
-        {
-            {
-                // 2nd level
+    #[allow(unused_assignment)]
+    fun acceptable_nesting(x: u64) {
+        if (x > 0) {
+            if (x > 10) {
+                if (x > 20) { // At MAX_NESTING_LEVEL (3)
+                    x = x + 1;
+                }
             }
-        };
-        if (x > 5) {
-            {
-                // Still only 2nd level
-            }
-        };
+        }
     }
 }

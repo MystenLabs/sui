@@ -1,34 +1,14 @@
-module 0x42::excessive_nesting_false_positive {
-    public fun nested_match_expression(x: u64) {
-        match x {
-            0 => {
-                {
-                    {
-                        {
-                            // This is technically 4 levels deep, but the outer level is a match expression
-                            // which might be necessary and not truly contributing to excessive nesting
-                        }
+module 0x42::reasonable_nesting {
+    fun match_nested(x: u64): u64 {
+        if (x > 0) {
+            if (x > 10) {
+                if (x > 20) {
+                    if (x > 30) { // Complex but necessary business logic
+                        return 1
                     }
                 }
-            },
-            _ => {}
-        }
-    }
-
-    public fun nested_let_bindings() {
-        let a = {
-            let b = {
-                let c = {
-                    let d = {
-                        // This looks like 4 levels of nesting, but it's actually a series of let bindings
-                        // which might be more readable in this format than flattened
-                        10
-                    };
-                    d + 1
-                };
-                c * 2
-            };
-            b - 5
+            }
         };
+        0
     }
 }

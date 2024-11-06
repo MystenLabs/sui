@@ -1,14 +1,62 @@
-warning[Lint W01008]: excessive nesting
-   ┌─ tests/linter/true_positive_excessive_nesting.move:6:21
-   │  
- 6 │ ╭                     {
- 7 │ │                         {
- 8 │ │                             // This is the 5th level of nesting, which exceeds the threshold of 3
- 9 │ │                             let y = x + 1;
-   · │
-15 │ │                         }
-16 │ │                     }
-   │ ╰─────────────────────^ Detected excessive block nesting. Consider refactoring to simplify the code.
-   │  
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/true_positive_excessive_nesting.move:5:9
+   │    
+ 5 │ ╭ ╭         if (x > 0) {
+ 6 │ │ │             if (x > 10) {
+ 7 │ │ │                 if (x > 20) {
+ 8 │ │ │                     if (x > 30) { // This exceeds MAX_NESTING_LEVEL (3)
+   · │ │
+12 │ │ │             }
+13 │ │ │         }
+   │ ╰─│─────────^ Nesting level of 4 exceeds maximum allowed (3)
+   │   ╰─────────' Consider refactoring to reduce nesting
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/true_positive_excessive_nesting.move:17:9
+   │    
+17 │ ╭ ╭         while (x > 0) {
+18 │ │ │             while (x > 10) {
+19 │ │ │                 while (x > 20) {
+20 │ │ │                     loop { // This exceeds MAX_NESTING_LEVEL (3)
+   · │ │
+25 │ │ │             }
+26 │ │ │         }
+   │ ╰─│─────────^ Nesting level of 5 exceeds maximum allowed (3)
+   │   ╰─────────' Consider refactoring to reduce nesting
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/true_positive_excessive_nesting.move:17:23
+   │    
+17 │             while (x > 0) {
+   │ ╭─────────────────────────^
+   │ │ ╭───────────────────────'
+18 │ │ │             while (x > 10) {
+19 │ │ │                 while (x > 20) {
+20 │ │ │                     loop { // This exceeds MAX_NESTING_LEVEL (3)
+   · │ │
+25 │ │ │             }
+26 │ │ │         }
+   │ ╰─│─────────^ Nesting level of 4 exceeds maximum allowed (3)
+   │   ╰─────────' Consider refactoring to reduce nesting
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/true_positive_excessive_nesting.move:18:13
+   │    
+18 │ ╭ ╭             while (x > 10) {
+19 │ │ │                 while (x > 20) {
+20 │ │ │                     loop { // This exceeds MAX_NESTING_LEVEL (3)
+21 │ │ │                         if (x == 0) break;
+   · │ │
+24 │ │ │                 }
+25 │ │ │             }
+   │ ╰─│─────────────^ Nesting level of 4 exceeds maximum allowed (3)
+   │   ╰─────────────' Consider refactoring to reduce nesting
+   │    
    = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
