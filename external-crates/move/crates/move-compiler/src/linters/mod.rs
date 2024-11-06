@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub mod abort_constant;
+pub mod combinable_bool_conditions;
 pub mod constant_naming;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
@@ -162,6 +163,12 @@ lints!(
         "unnecessary_unit",
         "unit `()` expression can be removed or simplified"
     ),
+    (
+        CombinableBoolConditions,
+        LinterDiagnosticCategory::Complexity,
+        "combinable_bool_conditions",
+        "boolean condition can be simplified"
+    )
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -199,6 +206,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 self_assignment::SelfAssignmentVisitor.visitor(),
                 redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
+                combinable_bool_conditions::CombinableBoolConditionsVisitor.visitor(),
             ]
         }
     }

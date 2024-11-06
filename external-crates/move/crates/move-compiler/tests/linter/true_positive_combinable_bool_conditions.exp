@@ -1,0 +1,76 @@
+warning[Lint W01011]: boolean condition can be simplified
+  ┌─ tests/linter/true_positive_combinable_bool_conditions.move:7:13
+  │
+7 │         if (x == y || x < y) {};
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/true_positive_combinable_bool_conditions.move:7:30
+  │
+7 │         if (x == y || x < y) {};
+  │             ---------------  ^^ Unnecessary unit '()'
+  │             │                 
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: boolean condition can be simplified
+   ┌─ tests/linter/true_positive_combinable_bool_conditions.move:10:13
+   │
+10 │         if (x == y && x > y) {};
+   │             ^^^^^^^^^^^^^^^ This is always contradictory and can be simplified to false
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_combinable_bool_conditions.move:10:30
+   │
+10 │         if (x == y && x > y) {};
+   │             ---------------  ^^ Unnecessary unit '()'
+   │             │                 
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: boolean condition can be simplified
+   ┌─ tests/linter/true_positive_combinable_bool_conditions.move:13:13
+   │
+13 │         if (x >= y && x == y) {};
+   │             ^^^^^^^^^^^^^^^^ Consider simplifying to `==`.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_combinable_bool_conditions.move:13:31
+   │
+13 │         if (x >= y && x == y) {};
+   │             ----------------  ^^ Unnecessary unit '()'
+   │             │                  
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: boolean condition can be simplified
+   ┌─ tests/linter/true_positive_combinable_bool_conditions.move:16:13
+   │
+16 │         if (x == y || x > y) {};
+   │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_positive_combinable_bool_conditions.move:16:30
+   │
+16 │         if (x == y || x > y) {};
+   │             ---------------  ^^ Unnecessary unit '()'
+   │             │                 
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

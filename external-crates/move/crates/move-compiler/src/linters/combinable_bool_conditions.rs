@@ -1,138 +1,142 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! The `CombinableBool` detects and warns about boolean conditions in Move code that can be simplified.
 //! It identifies comparisons that are logically equivalent and suggests more concise alternatives.
 //! This rule focuses on simplifying expressions involving `==`, `<`, `>`, and `!=` operators to improve code readability.
-use move_ir_types::location::Loc;
 
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    linters::StyleCodes,
     parser::ast::BinOp_,
-    shared::CompilationEnv,
     typing::{
         ast::{self as T, UnannotatedExp_},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        visitor::simple_visitor,
     },
 };
+use lazy_static::lazy_static;
+use move_ir_types::location::Loc;
+use std::collections::HashMap;
 
-use super::{LinterDiagnosticCategory, COMBINABLE_COMPARISON_DIAG_CODE, LINT_WARNING_PREFIX};
-
-const COMBINABLE_BOOL_COND_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    COMBINABLE_COMPARISON_DIAG_CODE,
-    "",
-);
-
-pub struct CombinableBool;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
+#[derive(Debug, Clone, Copy)]
+enum Simplification {
+    Contradiction,
+    UseComparison,
+    UseEquality,
 }
 
-impl TypingVisitorConstructor for CombinableBool {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
+impl Simplification {
+    fn message(&self) -> &'static str {
+        match self {
+            Simplification::Contradiction => {
+                "This is always contradictory and can be simplified to false"
+            }
+            Simplification::UseComparison => "Consider simplifying to `<=` or `>=` respectively.",
+            Simplification::UseEquality => "Consider simplifying to `==`.",
+        }
     }
 }
 
-impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
-        let UnannotatedExp_::BinopExp(e1, op, _, e2) = &exp.exp.value else {
-            return false;
-        };
-        let (
-            UnannotatedExp_::BinopExp(lhs1, op1, _, rhs1),
-            UnannotatedExp_::BinopExp(lhs2, op2, _, rhs2),
-        ) = (&e1.exp.value, &e2.exp.value)
-        else {
-            return false;
-        };
-        // Check both exp side are the same
-        if lhs1 == lhs2 && rhs1 == rhs2 {
-            if is_module_call(lhs1) || is_module_call(rhs1) {
-                return false;
-            };
-            process_combinable_exp(self.env, exp.exp.loc, &op1.value, &op2.value, &op.value);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Operator {
+    Eq,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    And,
+    Or,
+}
+
+impl From<&BinOp_> for Operator {
+    fn from(op: &BinOp_) -> Self {
+        match op {
+            BinOp_::Eq => Operator::Eq,
+            BinOp_::Lt => Operator::Lt,
+            BinOp_::Gt => Operator::Gt,
+            BinOp_::Le => Operator::Le,
+            BinOp_::Ge => Operator::Ge,
+            BinOp_::And => Operator::And,
+            BinOp_::Or => Operator::Or,
+            _ => panic!("Unexpected operator"),
         }
+    }
+}
+
+lazy_static! {
+    static ref OPERATOR_COMBINATIONS: HashMap<(Operator, Operator, Operator), Simplification> = {
+        let mut m = HashMap::new();
+        // Contradictions
+        for ops in [(Operator::Eq, Operator::Lt), (Operator::Eq, Operator::Gt)] {
+            m.insert((ops.0, ops.1, Operator::And), Simplification::Contradiction);
+            m.insert((ops.1, ops.0, Operator::And), Simplification::Contradiction);
+        }
+        // Use comparison operators
+        for ops in [(Operator::Eq, Operator::Lt), (Operator::Eq, Operator::Gt)] {
+            m.insert((ops.0, ops.1, Operator::Or), Simplification::UseComparison);
+            m.insert((ops.1, ops.0, Operator::Or), Simplification::UseComparison);
+        }
+        // Use equality
+        for ops in [(Operator::Ge, Operator::Eq), (Operator::Le, Operator::Eq)] {
+            m.insert((ops.0, ops.1, Operator::And), Simplification::UseEquality);
+            m.insert((ops.1, ops.0, Operator::And), Simplification::UseEquality);
+        }
+        m
+    };
+}
+
+simple_visitor!(
+    CombinableBoolConditionsVisitor,
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
+        if let UnannotatedExp_::BinopExp(e1, op, _, e2) = &exp.exp.value {
+            if let (
+                UnannotatedExp_::BinopExp(lhs1, op1, _, rhs1),
+                UnannotatedExp_::BinopExp(lhs2, op2, _, rhs2),
+            ) = (&e1.exp.value, &e2.exp.value)
+            {
+                check_combinable_conditions(
+                    self,
+                    exp.exp.loc,
+                    lhs1,
+                    rhs1,
+                    lhs2,
+                    rhs2,
+                    &op1.value,
+                    &op2.value,
+                    &op.value,
+                );
+            }
+        }
+
         false
     }
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
+);
 
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
-
-fn process_combinable_exp(
-    env: &mut CompilationEnv,
+fn check_combinable_conditions(
+    context: &mut Context,
     loc: Loc,
+    lhs1: &T::Exp,
+    rhs1: &T::Exp,
+    lhs2: &T::Exp,
+    rhs2: &T::Exp,
     op1: &BinOp_,
     op2: &BinOp_,
     parent_op: &BinOp_,
 ) {
-    match (op1, op2) {
-        (BinOp_::Eq, BinOp_::Lt)
-        | (BinOp_::Lt, BinOp_::Eq)
-        | (BinOp_::Eq, BinOp_::Gt)
-        | (BinOp_::Gt, BinOp_::Eq)
-        | (BinOp_::Ge, BinOp_::Eq)
-        | (BinOp_::Eq, BinOp_::Ge)
-        | (BinOp_::Le, BinOp_::Eq)
-        | (BinOp_::Eq, BinOp_::Le)
-        | (BinOp_::Neq, BinOp_::Lt)
-        | (BinOp_::Lt, BinOp_::Neq)
-        | (BinOp_::Neq, BinOp_::Gt)
-        | (BinOp_::Gt, BinOp_::Neq) => {
-            suggest_simplification(env, loc, op1, op2, parent_op);
+    if lhs1 == lhs2 && rhs1 == rhs2 && !is_module_call(lhs1) && !is_module_call(rhs1) {
+        let key = (
+            Operator::from(op1),
+            Operator::from(op2),
+            Operator::from(parent_op),
+        );
+        if let Some(simplification) = OPERATOR_COMBINATIONS.get(&key) {
+            let diagnostic = diag!(
+                StyleCodes::CombinableBoolConditions.diag_info(),
+                (loc, simplification.message())
+            );
+            context.add_diag(diagnostic); // Using context instead of self
         }
-        _ => {}
     }
-}
-
-fn suggest_simplification(
-    env: &mut CompilationEnv,
-    loc: Loc,
-    op1: &BinOp_,
-    op2: &BinOp_,
-    parent_op: &BinOp_,
-) {
-    let message = match (op1, op2, parent_op) {
-        (BinOp_::Eq, BinOp_::Lt, BinOp_::And)
-        | (BinOp_::Eq, BinOp_::Gt, BinOp_::And)
-        | (BinOp_::Gt, BinOp_::Eq, BinOp_::And)
-        | (BinOp_::Lt, BinOp_::Eq, BinOp_::And) => {
-            "This is always contradictory and can be simplified to false"
-        }
-        (BinOp_::Eq, BinOp_::Lt, _)
-        | (BinOp_::Eq, BinOp_::Gt, _)
-        | (BinOp_::Lt, BinOp_::Eq, _)
-        | (BinOp_::Gt, BinOp_::Eq, _) => "Consider simplifying to `<=` or `>=` respectively.",
-        (BinOp_::Ge, BinOp_::Eq, BinOp_::And)
-        | (BinOp_::Le, BinOp_::Eq, BinOp_::And)
-        | (BinOp_::Eq, BinOp_::Le, BinOp_::And)
-        | (BinOp_::Eq, BinOp_::Ge, BinOp_::And) => "Consider simplifying to `==`.",
-        (BinOp_::Neq, BinOp_::Lt, BinOp_::And)
-        | (BinOp_::Neq, BinOp_::Gt, BinOp_::And)
-        | (BinOp_::Gt, BinOp_::Neq, BinOp_::And)
-        | (BinOp_::Lt, BinOp_::Neq, BinOp_::And) => {
-            "Consider simplifying to `<` or `>` respectively."
-        }
-        _ => return,
-    };
-    add_replaceable_comparison_diag(env, loc, message);
-}
-
-fn add_replaceable_comparison_diag(env: &mut CompilationEnv, loc: Loc, message: &str) {
-    let d = diag!(COMBINABLE_BOOL_COND_DIAG, (loc, message));
-    env.add_diag(d);
 }
 
 fn is_module_call(exp: &T::Exp) -> bool {

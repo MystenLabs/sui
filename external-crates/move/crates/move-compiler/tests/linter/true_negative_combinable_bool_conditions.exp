@@ -1,0 +1,50 @@
+error[E03009]: unbound variable
+  ┌─ tests/linter/true_negative_combinable_bool_conditions.move:7:23
+  │
+7 │         if (x == y || z < y) {};
+  │                       ^ Unbound variable 'z'
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/true_negative_combinable_bool_conditions.move:7:30
+  │
+7 │         if (x == y || z < y) {};
+  │             ---------------  ^^ Unnecessary unit '()'
+  │             │                 
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_negative_combinable_bool_conditions.move:10:29
+   │
+10 │         if (x > y || x < y) {};
+   │             --------------  ^^ Unnecessary unit '()'
+   │             │                
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_negative_combinable_bool_conditions.move:13:42
+   │
+13 │         if ((x + 1) == y || (x - 1) < y) {};
+   │             ---------------------------  ^^ Unnecessary unit '()'
+   │             │                             
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/true_negative_combinable_bool_conditions.move:16:30
+   │
+16 │         if (x != y && x > 0) {};
+   │             ---------------  ^^ Unnecessary unit '()'
+   │             │                 
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

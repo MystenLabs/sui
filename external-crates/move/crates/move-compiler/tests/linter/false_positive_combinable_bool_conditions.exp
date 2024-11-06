@@ -1,0 +1,66 @@
+error[E03005]: unbound unscoped name
+  ┌─ tests/linter/false_positive_combinable_bool_conditions.move:7:13
+  │
+7 │         if (get_value() == y || get_value() < y) {};
+  │             ^^^^^^^^^ Unbound function 'get_value' in current scope
+
+warning[Lint W01011]: boolean condition can be simplified
+  ┌─ tests/linter/false_positive_combinable_bool_conditions.move:7:13
+  │
+7 │         if (get_value() == y || get_value() < y) {};
+  │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03005]: unbound unscoped name
+  ┌─ tests/linter/false_positive_combinable_bool_conditions.move:7:33
+  │
+7 │         if (get_value() == y || get_value() < y) {};
+  │                                 ^^^^^^^^^ Unbound function 'get_value' in current scope
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/false_positive_combinable_bool_conditions.move:7:50
+  │
+7 │         if (get_value() == y || get_value() < y) {};
+  │             -----------------------------------  ^^ Unnecessary unit '()'
+  │             │                                     
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/linter/false_positive_combinable_bool_conditions.move:10:13
+   │
+10 │         if (x as u64 == y || x as u64 < y) {};
+   │             ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+warning[Lint W01011]: boolean condition can be simplified
+   ┌─ tests/linter/false_positive_combinable_bool_conditions.move:10:13
+   │
+10 │         if (x as u64 == y || x as u64 < y) {};
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/linter/false_positive_combinable_bool_conditions.move:10:30
+   │
+10 │         if (x as u64 == y || x as u64 < y) {};
+   │                              ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/false_positive_combinable_bool_conditions.move:10:44
+   │
+10 │         if (x as u64 == y || x as u64 < y) {};
+   │             -----------------------------  ^^ Unnecessary unit '()'
+   │             │                               
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

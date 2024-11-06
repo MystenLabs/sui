@@ -1,0 +1,25 @@
+warning[W10007]: issue with attribute value
+  ┌─ tests/linter/suppressed_lints.move:6:18
+  │
+6 │     #[allow(lint(combinable_comparison))]
+  │                  ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'lint(combinable_comparison)'
+
+warning[Lint W01011]: boolean condition can be simplified
+  ┌─ tests/linter/suppressed_lints.move:8:13
+  │
+8 │         if (x < y || x == y) {}; // should be x <= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/suppressed_lints.move:8:30
+  │
+8 │         if (x < y || x == y) {}; // should be x <= y
+  │             ---------------  ^^ Unnecessary unit '()'
+  │             │                 
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
