@@ -66,7 +66,7 @@ CREATE TABLE objects_history (
     CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id, object_version)
 ) PARTITION BY RANGE (checkpoint_sequence_number);
 CREATE INDEX objects_history_id_version ON objects_history (object_id, object_version, checkpoint_sequence_number);
--- CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
+CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 -- CREATE INDEX objects_history_coin_owner ON objects_history (checkpoint_sequence_number, owner_id, coin_type, object_id) WHERE coin_type IS NOT NULL AND owner_type = 1;
 -- CREATE INDEX objects_history_coin_only ON objects_history (checkpoint_sequence_number, coin_type, object_id) WHERE coin_type IS NOT NULL;
 -- CREATE INDEX objects_history_type ON objects_history (checkpoint_sequence_number, object_type);
@@ -99,7 +99,7 @@ CREATE TABLE objects_snapshot (
     df_object_id                bytea
 );
 CREATE INDEX objects_snapshot_checkpoint_sequence_number ON objects_snapshot (checkpoint_sequence_number);
--- CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id, object_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
+CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id, object_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 -- CREATE INDEX objects_snapshot_coin_owner ON objects_snapshot (owner_id, coin_type, object_id) WHERE coin_type IS NOT NULL AND owner_type = 1;
 -- CREATE INDEX objects_snapshot_coin_only ON objects_snapshot (coin_type, object_id) WHERE coin_type IS NOT NULL;
 -- CREATE INDEX objects_snapshot_type_id ON objects_snapshot (object_type_package, object_type_module, object_type_name, object_type, object_id);
