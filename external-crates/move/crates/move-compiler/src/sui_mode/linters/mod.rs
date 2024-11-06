@@ -8,7 +8,6 @@ use crate::{
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     linters::{LintLevel, LinterDiagnosticCategory, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
-    naming::ast as N,
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -182,15 +181,6 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
             ]);
             visitors
         }
-    }
-}
-
-pub fn base_type(t: &N::Type) -> Option<&N::Type> {
-    use N::Type_ as T;
-    match &t.value {
-        T::Ref(_, inner_t) => base_type(inner_t),
-        T::Apply(_, _, _) | T::Param(_) => Some(t),
-        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => None,
     }
 }
 

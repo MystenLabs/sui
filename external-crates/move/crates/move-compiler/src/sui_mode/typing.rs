@@ -783,7 +783,7 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
         Type_::Apply(_, sp!(_, n), targs)
             if n.is(&STD_ADDR_VALUE, ASCII_MODULE_NAME, ASCII_TYPE_NAME)
                 || n.is(&STD_ADDR_VALUE, UTF_MODULE_NAME, UTF_TYPE_NAME)
-                || n.is(&STD_ADDR_VALUE, OBJECT_MODULE_NAME, ID_TYPE_NAME) =>
+                || n.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, ID_TYPE_NAME) =>
         {
             debug_assert!(targs.is_empty());
             true
