@@ -901,12 +901,16 @@ Returns values are amount of pool tokens withdrawn and withdrawn principal porti
     // Check that the stake information matches the pool.
     <b>assert</b>!(staked_sui.pool_id == <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(pool), <a href="staking_pool.md#0x3_staking_pool_EWrongPool">EWrongPool</a>);
 
+    // TODO: after fixing the inactive stake issue, change this <b>to</b> always
+    // look forward and find the next available rate. It's guaranteed
+    // the next available rate can be found, otherwise we will never reach
+    // this function, instead we will exit earlier in the inactive stake check.
     <b>let</b> exchange_rate_at_staking_epoch = <a href="staking_pool.md#0x3_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool, staked_sui.stake_activation_epoch);
     <b>let</b> principal_withdraw = <a href="staking_pool.md#0x3_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
     <b>let</b> pool_token_withdraw_amount = <a href="staking_pool.md#0x3_staking_pool_get_token_amount">get_token_amount</a>(
-		&exchange_rate_at_staking_epoch,
-		principal_withdraw.value()
-	);
+        &exchange_rate_at_staking_epoch,
+        principal_withdraw.value()
+    );
 
     (
         pool_token_withdraw_amount,
@@ -1025,8 +1029,15 @@ Also called immediately upon withdrawal if the pool is inactive.
 
 
 <pre><code><b>fun</b> <a href="staking_pool.md#0x3_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x3_staking_pool_StakingPool">StakingPool</a>) {
-    pool.sui_balance = pool.sui_balance - pool.pending_total_sui_withdraw;
-    pool.pool_token_balance = pool.pool_token_balance - pool.pending_pool_token_withdraw;
+    pool.sui_balance =
+        <b>if</b> (pool.sui_balance &gt;= pool.pending_total_sui_withdraw)
+            pool.sui_balance - pool.pending_total_sui_withdraw
+        <b>else</b> 0;
+
+    pool.pool_token_balance =
+        <b>if</b> (pool.pool_token_balance &gt;= pool.pending_pool_token_withdraw)
+            pool.pool_token_balance - pool.pending_pool_token_withdraw
+        <b>else</b> 0;
     pool.pending_total_sui_withdraw = 0;
     pool.pending_pool_token_withdraw = 0;
 }

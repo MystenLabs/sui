@@ -2203,6 +2203,7 @@ gas coins.
         storage_fund_reinvestment_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     );
 
+    // TODO: <b>assert</b> ctx.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_epoch">epoch</a>() == self.epoch before the increment
     self.epoch = self.epoch + 1;
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
     <b>assert</b>!(new_epoch == self.epoch, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>);

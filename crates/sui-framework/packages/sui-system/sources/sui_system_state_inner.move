@@ -905,6 +905,7 @@ module sui_system::sui_system_state_inner {
             storage_fund_reinvestment_amount as u64,
         );
 
+        // TODO: assert ctx.epoch() == self.epoch before the increment
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, EAdvancedToWrongEpoch);

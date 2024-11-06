@@ -734,7 +734,7 @@ module sui_system::rewards_distribution_tests {
         assert!(test.ctx().epoch() == epoch);
         sui_system.set_epoch_for_testing(epoch);
 
-        // staker 1 stakes 101 sui in epoch 2
+        // staker 1 stakes 100 sui in epoch 2
         test.next_tx(STAKER_ADDR_1);
         sui_system.request_add_stake(coin::mint_for_testing(100 * MIST_PER_SUI, test.ctx()), VALIDATOR_ADDR_1, test.ctx());
         test.next_tx(STAKER_ADDR_1);
@@ -781,33 +781,83 @@ module sui_system::rewards_distribution_tests {
         sui_system.request_withdraw_stake(staked_sui, test.ctx());
         let val = sui_system.active_validator_by_address(VALIDATOR_ADDR_1);
         let pool = val.get_staking_pool_ref();
-        assert!(pool.pending_total_sui_withdraw() == 120 * MIST_PER_SUI); // 100 pricinpal + 20 rewards
         // Pool's exchange rate for epoch 2 is missing because of safe mode
         // So it fallbacks to epoch 1's exchange rate: PoolTokenExchangeRate {
         //   sui_amount: 125000000000,
         //   pool_token_amount: 100000000000
         // }
-        // pending pool token to withdraw: 100 / 125 * 100 = 80
+        // pending pool token to withdraw: 100 (principal) / 125 * 100 = 80
         assert!(pool.pending_pool_token_withdraw() == 80 * MIST_PER_SUI);
+        // exchange rate for epoch 5: 1666...6: 250
+        // total withdraw: 80 * 250 / 166...6 = 120 sui
+        assert!(pool.pending_total_sui_withdraw() == 120 * MIST_PER_SUI); // 100 pricinpal + 20 rewards
 
         // Epoch 6:
         epoch = epoch + 1; // 6
-        test.ctx().increment_epoch_number(); // epoch 5 exit safe mode
-        assert!(test.ctx().epoch() == epoch);
         sui_system
             .inner_mut_for_testing()
             .advance_epoch(epoch, 65, balance::zero(), balance::create_for_testing(100 * MIST_PER_SUI), 0, 0, 0, 0, epoch_start_time, test.ctx())
             .destroy_for_testing(); // balance returned from `advance_epoch`
 
-        assert!(test.ctx().epoch() == epoch);
-
+        test.ctx().increment_epoch_number(); // epoch 5 exit safe mode
         // Validator unstakes
         test.next_tx(VALIDATOR_ADDR_1);
         let staked_sui = test.take_from_address<StakedSui>(VALIDATOR_ADDR_1);
         sui_system.request_withdraw_stake(staked_sui, test.ctx());
+
         let val = sui_system.active_validator_by_address(VALIDATOR_ADDR_1);
         let pool = val.get_staking_pool_ref();
+        assert!(pool.sui_balance() == 155000000000);
+        assert!(pool.pending_total_sui_withdraw() == 155000000000);
+        // epoch 0's exchange rate: PoolTokenExchangeRate {
+        //   sui_amount: 100000000000,
+        //   pool_token_amount: 100000000000
+        // }
+        // pending pool token to withdraw: 100 (principal) / 100 * 100 = 100
+        // exchange rate for epoch 6: 155000000000: 86666666666
+        // total withdraw: min(100 * 155000000000 / 86666666666, pool.sui_balance()) = 155000000000
+        assert!(pool.pending_total_sui_withdraw() == 155 * MIST_PER_SUI); // 100 pricinpal + 55 rewards
+
+
+        let exchange_rates = pool.exchange_rates();
+        let exchange_rate_epoch_0 = exchange_rates.borrow(0);
+        assert!(
+            exchange_rate_epoch_0.sui_amount() == 0,
+        );
+        assert!(
+            exchange_rate_epoch_0.pool_token_amount() == 0,
+        );
+        let exchange_rate_epoch_1 = exchange_rates.borrow(1);
+        assert!(
+            exchange_rate_epoch_1.sui_amount() == 125000000000,
+        );
+        assert!(
+            exchange_rate_epoch_1.pool_token_amount() == 100000000000,
+        );
+        assert!(!exchange_rates.contains(2));
+        assert!(!exchange_rates.contains(3));
+        assert!(!exchange_rates.contains(4));
+        let exchange_rate_epoch_5 = exchange_rates.borrow(5);
+        assert!(
+            exchange_rate_epoch_5.sui_amount() == 250000000000,
+        );
+        assert!(
+            exchange_rate_epoch_5.pool_token_amount() == 166666666666,
+        );
+        let exchange_rate_epoch_6 = exchange_rates.borrow(6);
+        assert!(
+            exchange_rate_epoch_6.sui_amount() == 155000000000,
+        );
+        assert!(
+            exchange_rate_epoch_6.pool_token_amount() == 86666666666,
+        );
+
         // insufficient pool token balance
+        assert!(pool.sui_balance() == 155000000000);
+        assert!(pool.pending_total_sui_withdraw() == 155000000000);
+        assert!(pool.pool_token_balance() == 86666666666);
+        assert!(pool.pending_pool_token_withdraw() == 100000000000);
+
         assert!(pool.pool_token_balance() < pool.pending_pool_token_withdraw());
         test.next_tx(VALIDATOR_ADDR_1);
 
