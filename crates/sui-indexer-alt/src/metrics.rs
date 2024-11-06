@@ -11,8 +11,8 @@ use prometheus::{
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec,
-    IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -60,6 +60,8 @@ pub struct IndexerMetrics {
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
+
+    pub latest_ingested_checkpoint: IntGauge,
 
     pub ingested_checkpoint_latency: Histogram,
 
@@ -197,6 +199,12 @@ impl IndexerMetrics {
                 "indexer_total_ingested_not_found_retries",
                 "Total number of retries due to the not found errors while fetching data from the \
                  remote store",
+                registry,
+            )
+            .unwrap(),
+            latest_ingested_checkpoint: register_int_gauge_with_registry!(
+                "indexer_latest_ingested_checkpoint",
+                "Latest checkpoint sequence number fetched from the remote store",
                 registry,
             )
             .unwrap(),
