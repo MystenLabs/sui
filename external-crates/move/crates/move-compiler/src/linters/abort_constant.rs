@@ -3,8 +3,6 @@
 
 //! Lint to encourage the use of named constants with 'abort' and 'assert' for enhanced code readability.
 //! Detects cases where non-constants are used and issues a warning.
-use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
 
 use crate::diagnostics::warning_filters::WarningFilters;
 use crate::diagnostics::DiagnosticReporter;
@@ -20,6 +18,8 @@ use crate::{
     hlir::ast as H,
     shared::CompilationEnv,
 };
+use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 pub struct AssertAbortNamedConstants;
 

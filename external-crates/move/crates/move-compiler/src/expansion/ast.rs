@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
         FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
@@ -16,7 +16,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::VecDeque, fmt, hash::Hash};
+use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
 
 //**************************************************************************************************
 // Program
@@ -24,6 +24,8 @@ use std::{collections::VecDeque, fmt, hash::Hash};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     // Map of declared named addresses, and their values if specified
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
@@ -971,7 +973,10 @@ impl std::fmt::Display for Value_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules } = self;
+        let Program {
+            warning_filters_table: _,
+            modules,
+        } = self;
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));

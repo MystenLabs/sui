@@ -137,6 +137,7 @@ pub fn program(
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
+        warning_filters_table,
         info: _,
     } = prog;
 
@@ -158,6 +159,9 @@ pub fn program(
             units.push(unit)
         }
     }
+    // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
+    // are gone, the table can safely be dropped.
+    drop(warning_filters_table);
     units
 }
 

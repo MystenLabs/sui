@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
         DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, TargetKind,
@@ -24,6 +24,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -33,6 +34,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: NamingProgramInfo,
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub inner: Program_,
 }
 

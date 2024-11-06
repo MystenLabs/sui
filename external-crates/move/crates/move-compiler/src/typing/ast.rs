@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
     },
@@ -32,6 +32,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: Arc<TypingProgramInfo>,
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -393,7 +395,11 @@ impl fmt::Display for BuiltinFunction_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, info: _ } = self;
+        let Program {
+            modules,
+            info: _,
+            warning_filters_table: _,
+        } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));

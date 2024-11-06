@@ -375,7 +375,7 @@ fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefi
 }
 
 fn module(context: &mut Context, mdef: &T::ModuleDefinition) {
-    context.push_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter);
     for (_, cname, cdef) in &mdef.constants {
         constant(context, cname, cdef);
     }
@@ -395,7 +395,7 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
         body,
         ..
     } = f;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(*warning_filter);
     function_body(context, body);
     context.pop_warning_filter_scope();
 }
@@ -412,7 +412,7 @@ fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
 //**************************************************************************************************
 
 fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
-    context.push_warning_filter_scope(cdef.warning_filter.clone());
+    context.push_warning_filter_scope(cdef.warning_filter);
     let eloc = cdef.value.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();
