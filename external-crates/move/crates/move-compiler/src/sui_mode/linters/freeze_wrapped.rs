@@ -18,17 +18,19 @@ use crate::{
     naming::ast as N,
     parser::ast::{self as P, Ability_},
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    sui_mode::SUI_ADDR_VALUE,
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
 use super::{
     base_type, LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, LINT_WARNING_PREFIX,
-    PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
+    PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
 };
 
 const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
@@ -39,9 +41,9 @@ const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
     "attempting to freeze wrapped objects",
 );
 
-const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
+const FREEZE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
 /// Information about a field that wraps other objects.
@@ -128,7 +130,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         use T::UnannotatedExp_ as E;
         if let E::ModuleCall(fun) = &exp.exp.value {
             if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
-                fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
+                fun.module.value.is(addr, *module) && &fun.name.value().as_str() == fname
             }) {
                 let Some(bt) = base_type(&fun.type_arguments[0]) else {
                     // not an (potentially dereferenced) N::Type_::Apply nor N::Type_::Param

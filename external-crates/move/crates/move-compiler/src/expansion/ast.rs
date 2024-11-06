@@ -655,6 +655,13 @@ impl Address {
         }
     }
 
+    pub fn is<Addr>(&self, address: &Addr) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
+        self.numerical_value().is_some_and(|sp!(_, v)| v == address)
+    }
+
     pub fn numerical_value(&self) -> Option<&Spanned<NumericalAddress>> {
         match self {
             Self::Numerical { value, .. } => Some(value),
@@ -676,7 +683,7 @@ impl ModuleIdent_ {
             address: a,
             module: m,
         } = self;
-        a.numerical_value().is_some_and(|sp!(_, v)| v == address) && m == module.as_ref()
+        a.is(address) && m == module.as_ref()
     }
 }
 

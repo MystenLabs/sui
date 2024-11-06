@@ -25,8 +25,6 @@ pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
 
-pub const SUI_PKG_NAME: &str = "sui";
-
 pub const TRANSFER_MOD_NAME: &str = "transfer";
 pub const TRANSFER_FUN: &str = "transfer";
 pub const PUBLIC_TRANSFER_FUN: &str = "public_transfer";
