@@ -1,0 +1,104 @@
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  ┌─ tests/linter/true_positive_equal_operand.move:6:17
+  │
+6 │         let _ = x == x;  // lint warning expected
+  │                 ^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  │
+  = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  ┌─ tests/linter/true_positive_equal_operand.move:7:17
+  │
+7 │         let _ = x != x;  // lint warning expected
+  │                 ^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  │
+  = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  ┌─ tests/linter/true_positive_equal_operand.move:8:17
+  │
+8 │         let _ = x > x;   // lint warning expected
+  │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  │
+  = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  ┌─ tests/linter/true_positive_equal_operand.move:9:17
+  │
+9 │         let _ = x >= x;  // lint warning expected
+  │                 ^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  │
+  = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:10:17
+   │
+10 │         let _ = x < x;   // lint warning expected
+   │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:11:17
+   │
+11 │         let _ = x <= x;  // lint warning expected
+   │                 ^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:14:17
+   │
+14 │         let _ = true && true;    // lint warning expected
+   │                 ^^^^^^^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:15:17
+   │
+15 │         let _ = false || false;  // lint warning expected
+   │                 ^^^^^^^^^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:18:17
+   │
+18 │         let _ = x & x;   // lint warning expected
+   │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:19:17
+   │
+19 │         let _ = x | x;   // lint warning expected
+   │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:20:17
+   │
+20 │         let _ = x ^ x;   // lint warning expected
+   │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:23:17
+   │
+23 │         let _ = x - x;   // lint warning expected
+   │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_equal_operand.move:24:17
+   │
+24 │         let _ = x / x;   // lint warning expected
+   │                 ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

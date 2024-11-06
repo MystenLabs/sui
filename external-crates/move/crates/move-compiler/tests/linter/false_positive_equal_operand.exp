@@ -1,0 +1,78 @@
+warning[W09002]: unused variable
+  ┌─ tests/linter/false_positive_equal_operand.move:4:13
+  │
+4 │         let mut_ref = &mut 0;
+  │             ^^^^^^^ Unused local variable 'mut_ref'. Consider removing or prefixing with an underscore: '_mut_ref'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/linter/false_positive_equal_operand.move:5:15
+  │
+5 │         while *mut_ref != *mut_ref {  // Legitimate use: checking for changes in mutable reference
+  │               ^
+  │               │
+  │               Unexpected '*'
+  │               Expected '('
+
+warning[W09002]: unused variable
+   ┌─ tests/linter/false_positive_equal_operand.move:10:13
+   │
+10 │         let nan_check = is_nan(1.0);  // Simulated floating point check
+   │             ^^^^^^^^^ Unused local variable 'nan_check'. Consider removing or prefixing with an underscore: '_nan_check'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/linter/false_positive_equal_operand.move:10:34
+   │
+10 │         let nan_check = is_nan(1.0);  // Simulated floating point check
+   │                                  ^
+   │                                  │
+   │                                  Unexpected '0'
+   │                                  Expected an identifier or a decimal number
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/linter/false_positive_equal_operand.move:10:34
+   │
+10 │         let nan_check = is_nan(1.0);  // Simulated floating point check
+   │                                  ^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/false_positive_equal_operand.move:19:17
+   │
+19 │         assert!(x <= x && x <= y, 0); // Legitimate use in monotonicity checks
+   │                 ^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/linter/false_positive_equal_operand.move:33:9
+   │
+31 │     fun reference_equals<T>(a: &T, b: &T): bool {
+   │                                -- Given: '&T'
+32 │         // Simulated reference equality check
+33 │         std::hash::sha2_256(a) == std::hash::sha2_256(b)
+   │         ^^^^^^^^^^^^^^^^^^^^^^ Invalid call of 'std::hash::sha2_256'. Invalid argument for parameter 'data'
+   │
+   ┌─ /Users/dmr/Projects/rust/sui-network/external-crates/move/crates/move-stdlib/sources/hash.move:9:38
+   │
+ 9 │     native public fun sha2_256(data: vector<u8>): vector<u8>;
+   │                                      ---------- Expected: 'vector<u8>'
+
+error[E04007]: incompatible types
+   ┌─ tests/linter/false_positive_equal_operand.move:33:35
+   │
+31 │     fun reference_equals<T>(a: &T, b: &T): bool {
+   │                                       -- Given: '&T'
+32 │         // Simulated reference equality check
+33 │         std::hash::sha2_256(a) == std::hash::sha2_256(b)
+   │                                   ^^^^^^^^^^^^^^^^^^^^^^ Invalid call of 'std::hash::sha2_256'. Invalid argument for parameter 'data'
+   │
+   ┌─ /Users/dmr/Projects/rust/sui-network/external-crates/move/crates/move-stdlib/sources/hash.move:9:38
+   │
+ 9 │     native public fun sha2_256(data: vector<u8>): vector<u8>;
+   │                                      ---------- Expected: 'vector<u8>'
+

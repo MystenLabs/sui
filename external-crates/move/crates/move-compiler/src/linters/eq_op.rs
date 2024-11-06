@@ -3,84 +3,44 @@
 
 //! Implements a lint to detect and warn about binary operations with equal operands in Move code.
 //! Targets comparison, logical, bitwise, subtraction, and division operations where such usage might indicate errors or redundancies.
+
+use super::StyleCodes;
+use crate::parser::ast::BinOp_;
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
-    parser::ast::BinOp_,
-    shared::CompilationEnv,
     typing::{
         ast::{self as T, UnannotatedExp_},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        visitor::simple_visitor,
     },
 };
-use move_ir_types::location::Loc;
 
-use super::{LinterDiagnosticCategory, EQUAL_OPERANDS_DIAG_CODE, LINT_WARNING_PREFIX};
-
-const EQUAL_OPERANDS_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Suspicious as u8,
-    EQUAL_OPERANDS_DIAG_CODE,
-    "Equal operands detected in binary operation, which might indicate a logical error or redundancy.",
-);
-
-pub struct EqualOperandsCheck;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for EqualOperandsCheck {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+simple_visitor!(
+    EqualOperandsCheck,
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let UnannotatedExp_::BinopExp(lhs, sp!(_, op), _, rhs) = &exp.exp.value {
-            if lhs.exp.value == rhs.exp.value && is_relevant_op(op) {
-                report_equal_operands(self.env, exp.exp.loc);
+            if should_check_operands(lhs, rhs, op) {
+                let diag = diag!(
+                    StyleCodes::EqualOperands.diag_info(),
+                    (
+                        exp.exp.loc,
+                        "Equal operands detected in binary operation, which might indicate a logical error or redundancy."
+                    )
+                );
+                self.add_diag(diag);
             }
         }
         false
     }
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
+);
 
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
+fn should_check_operands(lhs: &T::Exp, rhs: &T::Exp, op: &BinOp_) -> bool {
+    lhs.exp.value == rhs.exp.value && is_relevant_op(op)
 }
 
 fn is_relevant_op(op: &BinOp_) -> bool {
+    use BinOp_::*;
     matches!(
         op,
-        BinOp_::Eq
-            | BinOp_::Neq
-            | BinOp_::Gt
-            | BinOp_::Ge
-            | BinOp_::Lt
-            | BinOp_::Le
-            | BinOp_::And
-            | BinOp_::Or
-            | BinOp_::BitAnd
-            | BinOp_::BitOr
-            | BinOp_::Xor
-            | BinOp_::Sub
-            | BinOp_::Div
+        Eq | Neq | Gt | Ge | Lt | Le | And | Or | BitAnd | BitOr | Xor | Sub | Div
     )
-}
-
-fn report_equal_operands(env: &mut CompilationEnv, loc: Loc) {
-    let msg = "Equal operands detected in binary operation, which might indicate a logical error or redundancy.";
-    let diag = diag!(EQUAL_OPERANDS_DIAG, (loc, msg));
-    env.add_diag(diag);
 }

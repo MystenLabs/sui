@@ -173,6 +173,14 @@ warning[Lint W01003]: math operator can be simplified
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   ┌─ tests/linter/true_positive_meaningless_math_operation.move:28:14
+   │
+28 │         x - (1 - 1);
+   │              ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+   │
+   = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:32:9
    │

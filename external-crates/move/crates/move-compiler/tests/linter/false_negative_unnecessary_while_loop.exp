@@ -1,0 +1,8 @@
+warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  ┌─ tests/linter/false_negative_unnecessary_while_loop.move:7:16
+  │
+7 │         while (true && true) {};
+  │                ^^^^^^^^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
+  │
+  = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
