@@ -655,12 +655,10 @@ impl Address {
         }
     }
 
-    pub fn is(&self, address: impl AsRef<str>) -> bool {
+    pub fn numerical_value(&self) -> Option<&Spanned<NumericalAddress>> {
         match self {
-            Self::Numerical { name: Some(n), .. } | Self::NamedUnassigned(n) => {
-                n.value.as_str() == address.as_ref()
-            }
-            Self::Numerical { name: None, .. } => false,
+            Self::Numerical { value, .. } => Some(value),
+            Self::NamedUnassigned(_) => None,
         }
     }
 }
@@ -670,12 +668,15 @@ impl ModuleIdent_ {
         Self { address, module }
     }
 
-    pub fn is(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
+    pub fn is<Addr>(&self, address: &Addr, module: impl AsRef<str>) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         let Self {
             address: a,
             module: m,
         } = self;
-        a.is(address) && m == module.as_ref()
+        a.numerical_value().is_some_and(|sp!(_, v)| v == address) && m == module.as_ref()
     }
 }
 
