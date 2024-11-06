@@ -364,6 +364,17 @@ export class Runtime extends EventEmitter {
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
             // if function is native then the next event will be CloseFrame
             if (currentEvent.isNative) {
+                // see if naitve function aborted
+                if (this.trace.events.length > this.eventIndex + 1) {
+                    const nextEvent = this.trace.events[this.eventIndex + 1];
+                    if (nextEvent.type === TraceEventKind.Effect &&
+                        nextEvent.effect.type === TraceEffectKind.ExecutionError) {
+                        this.sendEvent(RuntimeEvents.stopOnException, nextEvent.effect.msg);
+                        return ExecutionResult.Exception;
+                    }
+                }
+                // if native functino executed successfully, then the next event
+                // should be CloseFrame
                 if (this.trace.events.length <= this.eventIndex + 1 ||
                     this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
                     throw new Error('Expected an CloseFrame event after native OpenFrame event');
