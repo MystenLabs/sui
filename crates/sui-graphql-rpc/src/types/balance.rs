@@ -270,7 +270,7 @@ fn balance_query(
 /// Applies the filtering criteria for balances to the input `RawQuery` and returns a new
 /// `RawQuery`.
 fn filter(mut query: RawQuery, owner: SuiAddress, coin_type: Option<TypeTag>) -> RawQuery {
-    query = filter!(query, "coin_type IS NOT NULL");
+    query = filter!(query, "coin_type IS NOT NULL AND object_status = 0");
 
     query = filter!(
         query,
