@@ -204,7 +204,6 @@ fn default_sketch_tolerance() -> f64 {
 
 // Serializable representation of policy types, used in config
 // in order to easily change in tests or to killswitch
-#[serde(rename_all = "kebab-case")]
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub enum PolicyType {
     /// Does nothing
