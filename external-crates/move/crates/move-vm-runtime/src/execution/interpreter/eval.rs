@@ -83,9 +83,9 @@ pub(super) fn run(
 
     // Run until we're done or we produce an error and bail.
     while step(&mut state, &mut run_context, gas_meter)? != StepStatus::Done {
-        println!("-------------------------------------");
-        println!("Call Frame:\n{:?}", state.call_stack.current_frame);
-        println!("{}", {
+        dbg_println!(flag: eval_step, "-------------------------------------");
+        dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.call_stack.current_frame);
+        dbg_println!(flag: eval_step, "{}", {
             let mut buf = String::new();
             let _ = state.debug_print_stack_trace(&mut buf, run_context.vtables);
             buf

@@ -2278,7 +2278,7 @@ impl Display for ValueImpl {
             Self::Bool(x) => write!(f, "{}", x),
             Self::Address(addr) => write!(f, "Address({})", addr.short_str_lossless()),
 
-            Self::Container(r) => write!(f, "{}", r),
+            Self::Container(r) => write!(f, "Container({})", r),
             Self::Reference(r) => write!(f, "(&){}", r),
         }
     }

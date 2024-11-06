@@ -339,8 +339,7 @@ impl MachineState {
         }
         internal_state.push_str(
             format!(
-                "Locals (start: {}):\n{}\n",
-                self.call_stack.current_frame.stack_frame.base_index(),
+                "Locals:\n{}\n",
                 self.call_stack.current_frame.stack_frame
             )
             .as_str(),

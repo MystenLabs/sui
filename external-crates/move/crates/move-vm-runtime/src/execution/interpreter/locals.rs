@@ -35,16 +35,13 @@ pub struct BaseHeapId(usize);
 /// stackframes.
 #[derive(Debug)]
 pub struct MachineHeap {
-    heap: Box<[Value]>,
-    current_index: u64,
 }
 
 /// A stack frame is an allocated frame. It was allocated starting at `start` in the heap. When it
 /// is freed, we need to check that we are freeing the one on the end of the heap.
 #[derive(Debug)]
 pub struct StackFrame {
-    base_index: usize,
-    slice: *mut [Value],
+    slice: Vec<Value>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -132,13 +129,7 @@ impl Default for MachineHeap {
 
 impl MachineHeap {
     pub fn new() -> Self {
-        let heap = (0..(1024 * 16))
-            .map(|_| Value::invalid())
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
         Self {
-            heap,
-            current_index: 0,
         }
     }
 
@@ -149,19 +140,6 @@ impl MachineHeap {
         params: Vec<Value>,
         size: usize,
     ) -> PartialVMResult<StackFrame> {
-        let base_index = self.current_index as usize;
-        let remaining_space = self.heap.len() - base_index;
-
-        // Check if there's enough space to allocate the frame
-        if size > remaining_space {
-            return Err(
-                PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED).with_message(format!(
-                    "Failed to allocate stack frame: requested size {}, remaining space {}",
-                    size, remaining_space
-                )),
-            );
-        }
-
         // Calculate how many invalid values need to be added
         let invalids_len = size - params.len();
 
@@ -171,45 +149,11 @@ impl MachineHeap {
             .chain((0..invalids_len).map(|_| Value::invalid())) // Fill the rest with `Invalid`
             .collect::<Vec<Value>>();
 
-        // Create the stack frame
-        // SAFETY: We are manually creating a slice from the heap array with known bounds,
-        // and we ensure that the range does not exceed the heap size.
-        let slice = {
-            // This is safe because we already checked bounds above.
-            let slice = &self.heap[base_index..base_index + size];
-            slice as *const [Value] as *mut [Value]
-        };
-        {
-            let borrow_slice = arena::to_mut_ref_slice(slice);
-            for (ndx, value) in local_values.into_iter().enumerate() {
-                borrow_slice[ndx] = value;
-            }
-        }
-        let frame = StackFrame { base_index, slice };
-
-        // Move the current index forward
-        self.current_index += size as u64;
-
-        Ok(frame)
+        Ok(StackFrame { slice: local_values })
     }
 
     /// Frees the given stack frame, ensuring that it is the last frame on the heap.
-    pub fn free_stack_frame(&mut self, frame: StackFrame) -> PartialVMResult<()> {
-        let current_index = self.current_index as usize;
-
-        // Ensure that we are freeing the most recently allocated frame
-        if frame.base_index + frame.slice.len() != current_index {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "Attempt to free a stack frame that is not the last allocated frame"
-                        .to_string(),
-                ),
-            );
-        }
-
-        // Move the current index back, effectively freeing the space
-        self.current_index -= frame.slice.len() as u64;
-
+    pub fn free_stack_frame(&mut self, _frame: StackFrame) -> PartialVMResult<()> {
         Ok(())
     }
 }
@@ -220,12 +164,7 @@ impl MachineHeap {
 
 impl StackFrame {
     pub fn iter(&self) -> std::slice::Iter<'_, Value> {
-        arena::mut_to_ref_slice(self.slice).iter()
-    }
-
-    /// Only used for debug prints
-    pub fn base_index(&self) -> usize {
-        self.base_index
+        self.slice.iter()
     }
 
     /// Makes a copy of the value, via `value.copy_value`
@@ -236,7 +175,7 @@ impl StackFrame {
                     .with_message("Cannot copy from an invalid memory location".to_string()),
             );
         }
-        arena::mut_to_ref_slice(self.slice)
+        self.slice
             .get(ndx)
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
@@ -255,7 +194,7 @@ impl StackFrame {
         }
 
         let value = std::mem::replace(
-            &mut arena::to_mut_ref_slice(self.slice)[ndx],
+            &mut self.slice[ndx],
             Value::invalid(),
         );
         Ok(value)
@@ -267,7 +206,7 @@ impl StackFrame {
             return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("Local index out of bounds: {}", ndx)));
         }
-        arena::to_mut_ref_slice(self.slice)[ndx] = x;
+        self.slice[ndx] = x;
         Ok(())
     }
 
@@ -278,7 +217,7 @@ impl StackFrame {
                     .with_message("Cannot copy from an invalid memory location".to_string()),
             );
         }
-        arena::mut_to_ref_slice(self.slice)
+        self.slice
             .get(ndx)
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
@@ -289,7 +228,7 @@ impl StackFrame {
 
     /// Checks if the value at the location is invalid
     pub fn is_invalid(&self, ndx: usize) -> PartialVMResult<bool> {
-        arena::mut_to_ref_slice(self.slice)
+        self.slice
             .get(ndx)
             .map(|value| matches!(value, Value(ValueImpl::Invalid)))
             .ok_or_else(|| {
@@ -303,22 +242,28 @@ impl StackFrame {
     pub fn drop_all_values(&mut self) -> impl Iterator<Item = (usize, Value)> {
         let mut res = vec![];
 
-        for ndx in 0..self.slice.len() {
-            match &arena::mut_to_ref_slice(self.slice)[ndx].0 {
+        for (ndx, value) in self.slice.iter_mut().enumerate() {
+            match &value.0 {
                 ValueImpl::Invalid => (),
                 ValueImpl::Reference(_) => {
-                    arena::to_mut_ref_slice(self.slice)[ndx] = Value(ValueImpl::Invalid);
+                    let _ = std::mem::replace(value, Value::invalid());
                 }
-                _ => res.push((
-                    ndx,
-                    std::mem::replace(
-                        &mut arena::to_mut_ref_slice(self.slice)[ndx],
-                        Value::invalid(),
-                    ),
-                )),
+                ValueImpl::U8(_) |
+                ValueImpl::U16(_) |
+                ValueImpl::U32(_) |
+                ValueImpl::U64(_) |
+                ValueImpl::U128(_) |
+                ValueImpl::U256(_) |
+                ValueImpl::Bool(_) |
+                ValueImpl::Address(_) |
+                ValueImpl::Container(_) => {
+                    res.push((
+                        ndx,
+                        std::mem::replace(value, Value::invalid())
+                    ))
+                }
             }
         }
-
         res.into_iter()
     }
 }
@@ -327,25 +272,14 @@ impl StackFrame {
 // Display
 // -------------------------------------------------------------------------------------------------
 
-impl std::fmt::Display for MachineHeap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Heap(current_index: {})", self.current_index)?;
-        for (i, value) in self.heap.iter().enumerate() {
-            writeln!(f, "  [{}]: {:?}", i, value)?;
-        }
-        Ok(())
-    }
-}
-
 impl std::fmt::Display for StackFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(
             f,
-            "StackFrame(start: {}, size: {})",
-            self.base_index,
+            "StackFrame(size: {})",
             self.slice.len()
         )?;
-        for (i, value) in arena::mut_to_ref_slice(self.slice).iter().enumerate() {
+        for (i, value) in self.slice.iter().enumerate() {
             writeln!(f, "  [{}]: {:?}", i, value)?;
         }
         Ok(())
