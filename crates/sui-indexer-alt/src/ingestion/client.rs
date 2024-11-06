@@ -172,12 +172,21 @@ impl IngestionClient {
             "Fetched checkpoint"
         );
 
+        let lag =
+            chrono::Utc::now().timestamp_millis() - data.checkpoint_summary.timestamp_ms as i64;
+        self.metrics
+            .ingested_checkpoint_timestamp_lag
+            .observe((lag as f64) / 1000.0);
+
         let new_seq = data.checkpoint_summary.sequence_number;
         let old_seq = self
             .latest_ingested_checkpoint
             .fetch_max(new_seq, Ordering::Relaxed);
         if new_seq > old_seq {
             self.metrics.latest_ingested_checkpoint.set(new_seq as i64);
+            self.metrics
+                .latest_ingested_checkpoint_timestamp_lag_ms
+                .set(lag);
         }
 
         self.metrics.total_ingested_checkpoints.inc();

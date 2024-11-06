@@ -25,6 +25,13 @@ const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
 ];
 
+/// Histogram buckets for the distribution of ingestion lag (difference between the system time and
+/// the timestamp in the checkpoint).
+const INGESTION_LAG_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.95, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0,
+];
+
 /// Histogram buckets for the distribution of latencies for processing a checkpoint in the indexer
 /// (without having to call out to other services).
 const PROCESSING_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -62,6 +69,8 @@ pub struct IndexerMetrics {
     pub total_ingested_not_found_retries: IntCounter,
 
     pub latest_ingested_checkpoint: IntGauge,
+    pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
+    pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
 
@@ -205,6 +214,21 @@ impl IndexerMetrics {
             latest_ingested_checkpoint: register_int_gauge_with_registry!(
                 "indexer_latest_ingested_checkpoint",
                 "Latest checkpoint sequence number fetched from the remote store",
+                registry,
+            )
+            .unwrap(),
+            latest_ingested_checkpoint_timestamp_lag_ms: register_int_gauge_with_registry!(
+                "latest_ingested_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was fetched and the \
+                 timestamp in the checkpoint, in milliseconds",
+                registry,
+            )
+            .unwrap(),
+            ingested_checkpoint_timestamp_lag: register_histogram_with_registry!(
+                "indexer_ingested_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was fetched and the \
+                 timestamp in each checkpoint, in seconds",
+                INGESTION_LAG_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
