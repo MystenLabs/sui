@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::mem;
 
 use tap::tap::TapFallible;
 use tokio_util::sync::CancellationToken;
@@ -48,10 +49,33 @@ where
             break;
         }
 
+        metrics.unprocessed_length.set(unprocessed.len() as i64);
+        metrics
+            .unprocessed_capacity
+            .set(unprocessed.capacity() as i64);
+        metrics
+            .unprocessed_memory_size
+            .set(mem::size_of_val(&unprocessed) as i64);
+
         // split the batch into smaller batches per epoch to handle partitioning
         for checkpoint in indexed_checkpoint_batch {
             unprocessed.insert(checkpoint.checkpoint.sequence_number, checkpoint);
         }
+
+        metrics.unprocessed_length.set(unprocessed.len() as i64);
+        metrics
+            .unprocessed_capacity
+            .set(unprocessed.capacity() as i64);
+        metrics
+            .unprocessed_memory_size
+            .set(mem::size_of_val(&unprocessed) as i64);
+
+        metrics.batch_length.set(batch.len() as i64);
+        metrics.batch_capacity.set(batch.capacity() as i64);
+        metrics
+            .batch_memory_size
+            .set(mem::size_of_val(&batch) as i64);
+
         while let Some(checkpoint) = unprocessed.remove(&next_checkpoint_sequence_number) {
             let epoch = checkpoint.epoch.clone();
             batch.push(checkpoint);
@@ -60,8 +84,35 @@ where
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
+                metrics.unprocessed_length.set(unprocessed.len() as i64);
+                metrics
+                    .unprocessed_capacity
+                    .set(unprocessed.capacity() as i64);
+                metrics
+                    .unprocessed_memory_size
+                    .set(mem::size_of_val(&unprocessed) as i64);
+
+                metrics.batch_length.set(batch.len() as i64);
+                metrics.batch_capacity.set(batch.capacity() as i64);
+                metrics
+                    .batch_memory_size
+                    .set(mem::size_of_val(&batch) as i64);
+
                 commit_checkpoints(&state, batch, epoch, &metrics).await;
                 batch = vec![];
+                metrics.unprocessed_length.set(unprocessed.len() as i64);
+                metrics
+                    .unprocessed_capacity
+                    .set(unprocessed.capacity() as i64);
+                metrics
+                    .unprocessed_memory_size
+                    .set(mem::size_of_val(&unprocessed) as i64);
+
+                metrics.batch_length.set(batch.len() as i64);
+                metrics.batch_capacity.set(batch.capacity() as i64);
+                metrics
+                    .batch_memory_size
+                    .set(mem::size_of_val(&batch) as i64);
             }
             if let Some(epoch_number) = epoch_number_option {
                 state.upload_display(epoch_number).await.tap_err(|e| {
@@ -73,9 +124,35 @@ where
                 })?;
             }
         }
+        metrics.unprocessed_length.set(unprocessed.len() as i64);
+        metrics
+            .unprocessed_capacity
+            .set(unprocessed.capacity() as i64);
+        metrics
+            .unprocessed_memory_size
+            .set(mem::size_of_val(&unprocessed) as i64);
+
+        metrics.batch_length.set(batch.len() as i64);
+        metrics.batch_capacity.set(batch.capacity() as i64);
+        metrics
+            .batch_memory_size
+            .set(mem::size_of_val(&batch) as i64);
         if !batch.is_empty() {
             commit_checkpoints(&state, batch, None, &metrics).await;
             batch = vec![];
+            metrics.unprocessed_length.set(unprocessed.len() as i64);
+            metrics
+                .unprocessed_capacity
+                .set(unprocessed.capacity() as i64);
+            metrics
+                .unprocessed_memory_size
+                .set(mem::size_of_val(&unprocessed) as i64);
+
+            metrics.batch_length.set(batch.len() as i64);
+            metrics.batch_capacity.set(batch.capacity() as i64);
+            metrics
+                .batch_memory_size
+                .set(mem::size_of_val(&batch) as i64);
         }
     }
     Ok(())
