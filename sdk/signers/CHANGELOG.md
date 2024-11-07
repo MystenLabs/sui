@@ -1,4 +1,4 @@
-# @mysten/kms
+# @mysten/signers
 
 ## 0.0.10
 
