@@ -264,6 +264,7 @@ mod test {
 
     struct TxnSizeVerifier {}
 
+    #[async_trait::async_trait]
     impl TransactionVerifier for TxnSizeVerifier {
         // Fails verification if any transaction is < 4 bytes.
         fn verify_batch(&self, transactions: &[&[u8]]) -> Result<(), ValidationError> {
@@ -278,8 +279,11 @@ mod test {
             Ok(())
         }
 
-        fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
-            vec![]
+        async fn verify_and_vote_batch(
+            &self,
+            _batch: &[&[u8]],
+        ) -> Result<Vec<TransactionIndex>, ValidationError> {
+            Ok(vec![])
         }
     }
 

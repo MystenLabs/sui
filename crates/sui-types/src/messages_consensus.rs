@@ -111,7 +111,6 @@ pub enum ConsensusTransactionKey {
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
     RandomnessDkgMessage(AuthorityName),
     RandomnessDkgConfirmation(AuthorityName),
-    UserTransaction(TransactionDigest),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -144,7 +143,6 @@ impl Debug for ConsensusTransactionKey {
             Self::RandomnessDkgConfirmation(name) => {
                 write!(f, "RandomnessDkgConfirmation({:?})", name.concise())
             }
-            Self::UserTransaction(digest) => write!(f, "UserTransaction({:?})", digest),
         }
     }
 }
@@ -555,13 +553,17 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::RandomnessDkgConfirmation(*authority)
             }
             ConsensusTransactionKind::UserTransaction(tx) => {
-                ConsensusTransactionKey::UserTransaction(*tx.digest())
+                // Use the same key format as ConsensusTransactionKind::CertifiedTransaction,
+                // because existing usages of ConsensusTransactionKey should not differentiate
+                // between CertifiedTransaction and UserTransaction.
+                ConsensusTransactionKey::Certificate(*tx.digest())
             }
         }
     }
 
-    pub fn is_certified_transaction(&self) -> bool {
+    pub fn is_executable_transaction(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
+            || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
     pub fn is_user_transaction(&self) -> bool {

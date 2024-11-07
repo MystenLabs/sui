@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::jsonrpc_index::CoinIndexKey2;
@@ -142,7 +143,6 @@ use crate::authority::authority_store_pruner::{
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::CheckpointStore;
-use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::{
     CheckpointCache, ExecutionCacheCommit, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
@@ -924,8 +924,9 @@ impl AuthorityState {
     async fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
+        sign: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransaction> {
+    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         // Ensure that validator cannot reconfigure while we are signing the tx
         let _execution_lock = self.execution_lock_for_signing().await;
 
@@ -934,19 +935,29 @@ impl AuthorityState {
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
-        let signed_transaction = VerifiedSignedTransaction::new(
-            epoch_store.epoch(),
-            transaction,
-            self.name,
-            &*self.secret,
-        );
+        let tx_digest = *transaction.digest();
+        let signed_transaction = if sign {
+            Some(VerifiedSignedTransaction::new(
+                epoch_store.epoch(),
+                transaction,
+                self.name,
+                &*self.secret,
+            ))
+        } else {
+            None
+        };
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.get_cache_writer()
-            .acquire_transaction_locks(epoch_store, &owned_objects, signed_transaction.clone())
+            .acquire_transaction_locks(
+                epoch_store,
+                &owned_objects,
+                tx_digest,
+                signed_transaction.clone(),
+            )
             .await?;
 
         Ok(signed_transaction)
@@ -973,9 +984,11 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self.handle_transaction_impl(transaction, epoch_store).await;
+        let signed = self
+            .handle_transaction_impl(transaction, true, epoch_store)
+            .await;
         match signed {
-            Ok(s) => {
+            Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
                     if let Some(validator_tx_finalizer) = &self.validator_tx_finalizer {
                         let tx = s.clone();
@@ -991,6 +1004,7 @@ impl AuthorityState {
                     status: TransactionStatus::Signed(s.into_inner().into_sig()),
                 })
             }
+            Ok(None) => panic!("handle_transaction_impl should return a signed transaction"),
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
@@ -1003,19 +1017,21 @@ impl AuthorityState {
         }
     }
 
+    /// When Ok, returns None if the transaction has not been executed, and returns
+    /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_transaction_v2(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<Option<(SenderSignedData, TransactionStatus)>> {
+    ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
         let tx_digest = *transaction.digest();
         debug!("handle_transaction_v2");
 
-        // Ensure an idempotent answer.
-        let tx_status = self.get_transaction_status(&tx_digest, epoch_store)?;
-        if tx_status.is_some() {
-            return Ok(tx_status);
+        // Check if the transaction has already been executed.
+        let tx_output = self.get_transaction_output(&tx_digest)?;
+        if tx_output.is_some() {
+            return Ok(tx_output);
         }
 
         let _metrics_guard = self
@@ -1034,17 +1050,18 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self.handle_transaction_impl(transaction, epoch_store).await {
-            // TODO(fastpath): We don't actually need the signed transaction here but just call
-            // into this function to acquire locks. Consider refactoring to avoid the extra work.
-            Ok(_signed) => Ok(None),
+        match self
+            .handle_transaction_impl(transaction, false, epoch_store)
+            .await
+        {
+            Ok(Some(_)) => {
+                panic!("handle_transaction_impl should not return a signed transaction")
+            }
+            Ok(None) => Ok(None),
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(e) => self
-                .get_transaction_status(&tx_digest, epoch_store)?
-                .ok_or(e)
-                .map(Some),
+            Err(e) => self.get_transaction_output(&tx_digest)?.ok_or(e).map(Some),
         }
     }
 
@@ -1062,7 +1079,7 @@ impl AuthorityState {
 
     pub(crate) fn check_system_overload(
         &self,
-        consensus_adapter: &Arc<ConsensusAdapter>,
+        consensus_overload_checker: &(impl ConsensusOverloadChecker + ?Sized),
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
@@ -1076,9 +1093,11 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
-        consensus_adapter.check_consensus_overload().tap_err(|_| {
-            self.update_overload_metrics("consensus");
-        })?;
+        consensus_overload_checker
+            .check_consensus_overload()
+            .tap_err(|_| {
+                self.update_overload_metrics("consensus");
+            })?;
         Ok(())
     }
 
@@ -2643,6 +2662,9 @@ impl AuthorityState {
         u64::try_from(ts_ms).expect("Travelling in time machine")
     }
 
+    // TODO(fastpath): update this handler for Mysticeti fastpath.
+    // There will no longer be validator quorum signed transactions or effects.
+    // The proof of finality needs to come from checkpoints.
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_transaction_info_request(
         &self,
@@ -2973,7 +2995,14 @@ impl AuthorityState {
         &self.transaction_manager
     }
 
-    /// Adds certificates to transaction manager for ordered execution.
+    /// Adds transactions / certificates to transaction manager for ordered execution.
+    pub fn enqueue_transactions_for_execution(
+        &self,
+        txns: Vec<VerifiedExecutableTransaction>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        self.transaction_manager.enqueue(txns, epoch_store)
+    }
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -4139,6 +4168,27 @@ impl AuthorityState {
                 .map(|o| self.insert_genesis_object(o.clone())),
         )
         .await;
+    }
+
+    /// Gets the execution outputs of a transaction if they exist
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_transaction_output(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
+        let effects = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(transaction_digest)?;
+        if let Some(effects) = effects {
+            let events = if let Some(digest) = effects.events_digest() {
+                self.get_transaction_events(digest)?
+            } else {
+                TransactionEvents::default()
+            };
+            Ok(Some((effects, events)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Make a status response for a transaction
