@@ -216,10 +216,10 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     /// Fails if any one of the transactions is invalid.
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 
-    /// Returns indices of transactions to reject.
-    /// Currently only uncertified user transactions can be rejected.
-    /// The rest of transactions are implicitly voted to accept.
-    // TODO: add rejection reasons, add VoteError and wrap the return in Result<>.
+    /// Returns indices of transactions to reject, validator error over transactions.
+    /// Currently only uncertified user transactions can be rejected. The rest of transactions
+    /// are implicitly voted to be accepted.
+    /// When the result is an error, the whole block should be rejected from local DAG instead.
     async fn verify_and_vote_batch(
         &self,
         batch: &[&[u8]],

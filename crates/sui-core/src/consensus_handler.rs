@@ -1321,8 +1321,8 @@ mod tests {
             vec![
                 "cap(10)".to_string(),
                 "cap(1)".to_string(),
-                "user(100)".to_string(),
-                "user(42)".to_string(),
+                "certified(100)".to_string(),
+                "certified(42)".to_string(),
             ]
         );
 
@@ -1342,12 +1342,12 @@ mod tests {
             vec![
                 "cap(10)".to_string(),
                 "cap(1)".to_string(),
-                "user(1200)".to_string(),
-                "user(1000)".to_string(),
-                "user(1000)".to_string(),
-                "user(100)".to_string(),
-                "user(42)".to_string(),
-                "user(12)".to_string(),
+                "certified(1200)".to_string(),
+                "certified(1000)".to_string(),
+                "certified(1000)".to_string(),
+                "certified(100)".to_string(),
+                "certified(42)".to_string(),
+                "certified(12)".to_string(),
             ]
         );
 
@@ -1386,7 +1386,7 @@ mod tests {
                     format!("cap({})", cap.generation)
                 }
                 ConsensusTransactionKind::CertifiedTransaction(txn) => {
-                    format!("user({})", txn.transaction_data().gas_price())
+                    format!("certified({})", txn.transaction_data().gas_price())
                 }
                 ConsensusTransactionKind::UserTransaction(txn) => {
                     format!("user({})", txn.transaction_data().gas_price())

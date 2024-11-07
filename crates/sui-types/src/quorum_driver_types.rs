@@ -80,10 +80,16 @@ pub enum TransactionType {
     SharedObject, // Txes that use at least one shared object
 }
 
+/// Proof of finality of transaction effects.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum EffectsFinalityInfo {
+    /// Effects are certified by a quorum of validators.
     Certified(AuthorityStrongQuorumSignInfo),
+
+    /// Effects are included in a checkpoint.
     Checkpointed(EpochId, CheckpointSequenceNumber),
+
+    /// A quorum of validators have acknowledged effects.
     QuorumExecuted(EpochId),
 }
 

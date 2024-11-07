@@ -2662,6 +2662,9 @@ impl AuthorityState {
         u64::try_from(ts_ms).expect("Travelling in time machine")
     }
 
+    // TODO(fastpath): update this handler for Mysticeti fastpath.
+    // There will no longer be validator quorum signed transactions or effects.
+    // The proof of finality needs to come from checkpoints.
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_transaction_info_request(
         &self,

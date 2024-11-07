@@ -222,7 +222,7 @@ impl ValidatorServiceMetrics {
             .unwrap(),
             consensus_latency: register_histogram_with_registry!(
                 "validator_service_consensus_latency",
-                "Time spent between submitting a shared obj txn to consensus and getting result",
+                "Time spent between submitting a txn to consensus and getting back local acknowledgement. Execution and finalization time are not included.",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -769,17 +769,7 @@ impl ValidatorService {
             if !epoch_store.all_external_consensus_messages_processed(
                 consensus_transactions.iter().map(|tx| tx.key()),
             )? {
-                let _metrics_guard = if consensus_transactions.iter().any(|tx| match &tx.kind {
-                    ConsensusTransactionKind::CertifiedTransaction(tx) => {
-                        tx.contains_shared_object()
-                    }
-                    ConsensusTransactionKind::UserTransaction(tx) => tx.contains_shared_object(),
-                    _ => false,
-                }) {
-                    Some(self.metrics.consensus_latency.start_timer())
-                } else {
-                    None
-                };
+                let _metrics_guard = self.metrics.consensus_latency.start_timer();
                 self.consensus_adapter.submit_batch(
                     &consensus_transactions,
                     Some(&reconfiguration_lock),

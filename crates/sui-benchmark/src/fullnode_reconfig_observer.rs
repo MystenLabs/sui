@@ -56,10 +56,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
         Box::new(self.clone())
     }
 
-    async fn run(
-        &mut self,
-        updatable: Arc<dyn AuthorityAggregatorUpdatable<NetworkAuthorityClient>>,
-    ) {
+    async fn run(&mut self, driver: Arc<dyn AuthorityAggregatorUpdatable<NetworkAuthorityClient>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             match self
@@ -70,7 +67,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
             {
                 Ok(sui_system_state) => {
                     let epoch_id = sui_system_state.epoch;
-                    if epoch_id > updatable.epoch() {
+                    if epoch_id > driver.epoch() {
                         debug!(epoch_id, "Got SuiSystemState in newer epoch");
                         let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
                         let _ = self
@@ -83,7 +80,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             self.auth_agg_metrics.clone(),
                             Arc::new(HashMap::new()),
                         );
-                        updatable.update_authority_aggregator(Arc::new(auth_agg));
+                        driver.update_authority_aggregator(Arc::new(auth_agg));
                     } else {
                         trace!(
                             epoch_id,
