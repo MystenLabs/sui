@@ -150,6 +150,8 @@ interface JSONTraceEffect {
     Pop?: JSONTracePopEffect;
     Write?: JSONTraceWriteEffect;
     Read?: JSONTraceReadEffect;
+    ExecutionError?: string;
+
 }
 
 interface JSONTraceCloseFrame {
@@ -222,7 +224,8 @@ export type TraceEvent =
  * Kind of an effect of an instruction.
  */
 export enum TraceEffectKind {
-    Write = 'Write'
+    Write = 'Write',
+    ExecutionError = 'ExecutionError'
     // TODO: other effect types
 }
 
@@ -230,7 +233,8 @@ export enum TraceEffectKind {
  * Effect of an instruction.
  */
 export type EventEffect =
-    | { type: TraceEffectKind.Write, loc: IRuntimeVariableLoc, value: RuntimeValueType };
+    | { type: TraceEffectKind.Write, loc: IRuntimeVariableLoc, value: RuntimeValueType }
+    | { type: TraceEffectKind.ExecutionError, msg: string };
 
 /**
  * Execution trace consisting of a sequence of trace events.
@@ -447,6 +451,15 @@ export function readTrace(
                         }
                     });
                 }
+            }
+            if (effect.ExecutionError) {
+                events.push({
+                    type: TraceEventKind.Effect,
+                    effect: {
+                        type: TraceEffectKind.ExecutionError,
+                        msg: effect.ExecutionError
+                    }
+                });
             }
         }
     }
