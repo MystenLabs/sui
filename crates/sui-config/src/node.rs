@@ -186,6 +186,9 @@ pub struct NodeConfig {
     pub firewall_config: Option<RemoteFirewallConfig>,
 
     #[serde(default)]
+    pub trusted_certificate_forwarders: Vec<Multiaddr>,
+
+    #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
 
     // step 1 in removing the old state accumulator

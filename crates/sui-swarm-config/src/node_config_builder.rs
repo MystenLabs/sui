@@ -43,6 +43,7 @@ pub struct ValidatorConfigBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     state_accumulator_v2: bool,
+    trusted_certificate_forwarders: Vec<Multiaddr>,
 }
 
 impl ValidatorConfigBuilder {
@@ -113,6 +114,14 @@ impl ValidatorConfigBuilder {
 
     pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
         self.state_accumulator_v2 = enabled;
+        self
+    }
+
+    pub fn with_trusted_certificate_forwarders(
+        mut self,
+        trusted_certificate_forwarders: Vec<Multiaddr>,
+    ) -> Self {
+        self.trusted_certificate_forwarders = trusted_certificate_forwarders;
         self
     }
 
@@ -247,6 +256,7 @@ impl ValidatorConfigBuilder {
             enable_validator_tx_finalizer: true,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
+            trusted_certificate_forwarders: self.trusted_certificate_forwarders,
         }
     }
 
@@ -548,6 +558,7 @@ impl FullnodeConfigBuilder {
             enable_validator_tx_finalizer: false,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
+            trusted_certificate_forwarders: vec![],
         }
     }
 }
