@@ -1005,7 +1005,8 @@ impl CoreSignals {
         // since the underlying blocks are ref counted so a lower buffer here will not reduce memory
         // usage significantly.
         let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<VerifiedBlock>(
-            context.parameters.dag_state_cached_rounds as usize,
+            // context.parameters.dag_state_cached_rounds as usize,
+            100000,
         );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
