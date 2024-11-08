@@ -212,6 +212,10 @@ public fun id_address<T: key>(obj: &T): address {
 /// restrictable in the object's module.
 native fun borrow_uid<T: key>(obj: &T): &UID;
 
+fun borrow_uid_spec<T: key>(obj: &T): &UID {
+    borrow_uid(obj)
+}
+
 /// Generate a new UID specifically used for creating a UID from a hash
 public(package) fun new_uid_from_hash(bytes: address): UID {
     record_new_uid(bytes);
