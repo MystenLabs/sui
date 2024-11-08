@@ -77,10 +77,6 @@ After completing these steps, if you open the root directory of the package wher
 installation [step](#installation) and choose any of the Move source files in this package, you will
 be able to format them by choosing `Format Code` command from VSCode's command palette.
 
-Here is the plugin at work in VSCode:
-
-<img src=move-format.gif width="600px" height="429px">
-
 ## Contribute
 
 If you decide to contribute to this project, please choose the scope of your contribution (e.g.,
