@@ -47,5 +47,4 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-archival.workspace = true
 sui-package-dump.workspace = true
-sui-tls.workspace = true
 bin-version.workspace = true

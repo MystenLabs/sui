@@ -967,24 +967,23 @@ dependencies = [
 
 [[package]]
 name = "async-stream"
-version = "0.3.6"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
+checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
 dependencies = [
  "async-stream-impl",
  "futures-core",
- "pin-project-lite",
 ]
 
 [[package]]
 name = "async-stream-impl"
-version = "0.3.6"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
+checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
 dependencies = [
  "proc-macro2 1.0.87",
  "quote 1.0.35",
- "syn 2.0.79",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -8164,13 +8163,11 @@ name = "mysten-network"
 version = "0.2.0"
 dependencies = [
  "anemo",
- "async-stream",
  "bcs",
  "bytes",
  "eyre",
  "futures",
  "http 1.1.0",
- "hyper-rustls 0.27.2",
  "hyper-util",
  "multiaddr",
  "once_cell",
@@ -8178,7 +8175,6 @@ dependencies = [
  "serde",
  "snap",
  "tokio",
- "tokio-rustls 0.26.0",
  "tokio-stream",
  "tonic 0.12.3",
  "tonic-health",
@@ -13329,7 +13325,6 @@ dependencies = [
  "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
- "sui-tls",
  "sui-transaction-checks",
  "sui-types",
  "tap",
@@ -15262,7 +15257,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-simulator",
  "sui-swarm-config",
- "sui-tls",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -15400,7 +15394,6 @@ dependencies = [
  "sui-sdk",
  "sui-snapshot",
  "sui-storage",
- "sui-tls",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
