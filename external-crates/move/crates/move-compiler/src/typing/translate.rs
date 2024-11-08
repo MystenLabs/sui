@@ -3325,31 +3325,6 @@ fn resolve_exp_dotted(
 
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
     let autocomplete_last = edotted.autocomplete_last;
-    if context.env.ide_mode() {
-        if let Some(mdot_loc) = method_dot_loc {
-            ide_report_autocomplete(context, &mdot_loc, &edotted_ty);
-        }
-        // generate autocomplete information for all dots in the path
-        for i in (0..edotted.accessors.len()).rev() {
-            let accessor = &edotted.accessors[i];
-            if let ExpDottedAccess::Field(dot_loc, _, _) = accessor {
-                let prefix_ty = if i == 0 {
-                    edotted.base_type.clone()
-                } else {
-                    match &edotted.accessors[i - 1] {
-                        ExpDottedAccess::Field(_, _, ty) => ty.clone(),
-                        ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
-                    }
-                };
-                ide_report_autocomplete(
-                    context,
-                    dot_loc,
-                    &core::unfold_type(&context.subst, prefix_ty),
-                );
-            }
-        }
-    }
-
     let result = match usage {
         DottedUsage::Move(loc) => {
             match edotted.base.exp.value {
@@ -3448,10 +3423,13 @@ fn resolve_exp_dotted(
         assert!(context.env.ide_mode());
         debug_print!(context.debug.autocomplete_resolution, ("computing unresolved dot autocomplete" => result; dbg));
         ide_report_autocomplete(context, &loc, &edotted_ty);
-        result
-    } else {
-        result
     }
+    if context.env.ide_mode() {
+        if let Some(mdot_loc) = method_dot_loc {
+            ide_report_autocomplete(context, &mdot_loc, &edotted_ty);
+        }
+    }
+    result
 }
 
 //   Borrowing proceeds based on mutability and if the base expression was originally a
@@ -3527,21 +3505,28 @@ fn borrow_exp_dotted(
             loc,
             mut_,
             Box::new(base),
-            base_type,
+            base_type.clone(),
             warn_on_constant,
         ),
         BaseRefKind::ImmRef | BaseRefKind::MutRef => Box::new(base),
     };
 
+    let mut prev_ty_opt = None;
     for accessor in accessors {
         check_mut(context, error_loc, exp.ty.clone(), mut_);
         match accessor {
-            ExpDottedAccess::Field(_, name, ty) => {
+            ExpDottedAccess::Field(dot_loc, name, ty) => {
                 // report autocomplete information for the IDE
                 ide_report_autocomplete(context, &name.loc(), &exp.ty);
+                if let Some(prev_ty) = &prev_ty_opt {
+                    ide_report_autocomplete(context, &dot_loc, prev_ty);
+                } else {
+                    ide_report_autocomplete(context, &dot_loc, &base_type);
+                }
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
-                exp = Box::new(T::exp(ty, sp(loc, e_)));
+                exp = Box::new(T::exp(ty.clone(), sp(loc, e_)));
+                prev_ty_opt = Some(ty);
             }
             ExpDottedAccess::Index {
                 index_loc,
@@ -3579,7 +3564,10 @@ fn borrow_exp_dotted(
                 };
                 let sp!(argloc, mut args_) = args;
                 args_.insert(0, *exp);
-                let mut_type = sp(index_loc, Type_::Ref(mut_, Box::new(index_base_type)));
+                let mut_type = sp(
+                    index_loc,
+                    Type_::Ref(mut_, Box::new(index_base_type.clone())),
+                );
                 // Note that `module_call` here never raise parameter subtyping errors, since we
                 // already checked them when processing the index functions.
                 let (ret_ty, e_) = module_call(context, error_loc, m, f, None, argloc, args_);
@@ -3594,6 +3582,7 @@ fn borrow_exp_dotted(
                     break;
                 }
                 exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
+                prev_ty_opt = Some(index_base_type);
             }
         }
     }
