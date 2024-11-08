@@ -353,7 +353,6 @@ title: Module `0x3::validator`
 
 ## Struct `StakingRequestEvent`
 
-Event emitted when a new stake request is received.
 
 
 <pre><code><b>struct</b> <a href="validator.md#0x3_validator_StakingRequestEvent">StakingRequestEvent</a> <b>has</b> <b>copy</b>, drop
