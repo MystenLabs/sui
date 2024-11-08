@@ -12,7 +12,6 @@ const { join, indent, group, softline, line, dedent, conditionalGroup } = builde
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'match_expression';
 
-// TODO: re-enable match expression once it has better support in `tree-sitter`.
 export default function (path: AstPath<Node>): treeFn | null {
 	if (path.node.type === NODE_TYPE) {
 		return printMatchExpression;

@@ -248,7 +248,6 @@ export function printTypeParameters(
 
 /**
  * Print `type_parameter` node.
- * TODO: Reimplement this function.
  */
 export function printTypeParameter(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
 	const isDollar = path.node.child(0)?.type == '$';
