@@ -52,6 +52,14 @@ export function print(path: AstPath<Node>, options: MoveOptions, print: printFn)
 			}
 		}
 
+		if (path.node.children.some((n) => n.type === 'MISSING')) {
+			if (options.enableErrorDebug) {
+				return ((path, options, print) => ['/* MISSING: */', path.node.text]) as treeFn;
+			} else {
+				throw new Error('tree-sitter failure on \n```\n' + path.node.text + '\n```');
+			}
+		}
+
 		return null;
 	};
 
