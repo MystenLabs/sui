@@ -26,10 +26,10 @@ export default function (path: AstPath<Node>): treeFn | null {
 
 /**
  * Print `binary_expression` node.
+ * (Currently disabled)
  */
 function printBinaryExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
 	if (path.node.nonFormattingChildren.length != 3) {
-		console.log(path.node.text);
 		throw new Error('`binary_expression` node should have 3 children');
 	}
 
