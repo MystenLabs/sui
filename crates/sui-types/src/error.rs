@@ -11,6 +11,7 @@ use crate::{
     object::Owner,
 };
 
+use rand::distributions::Distribution;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
@@ -669,6 +670,43 @@ pub enum SuiError {
     NoCertificateProvidedError,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Weight(f64);
+
+impl Weight {
+    pub fn new(value: f64) -> Result<Self, &'static str> {
+        if (0.0..=1.0).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err("Weight must be between 0.0 and 1.0")
+        }
+    }
+
+    pub fn one() -> Self {
+        Self(1.0)
+    }
+
+    pub fn zero() -> Self {
+        Self(0.0)
+    }
+
+    pub fn inner(&self) -> f64 {
+        self.0
+    }
+
+    pub fn is_sampled(&self) -> bool {
+        let mut rng = rand::thread_rng();
+        let sample = rand::distributions::Uniform::new(0.0, 1.0).sample(&mut rng);
+        sample <= self.inner()
+    }
+}
+
+impl PartialEq for Weight {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner() == other.inner()
+    }
+}
+
 #[repr(u64)]
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -881,6 +919,24 @@ impl SuiError {
         match self {
             SuiError::ValidatorOverloadedRetryAfter { retry_after_secs } => *retry_after_secs,
             _ => 0,
+        }
+    }
+}
+
+impl From<SuiError> for Weight {
+    // TODO: refine error matching here
+    fn from(error: SuiError) -> Self {
+        match error {
+            SuiError::UserInputError {
+                error: UserInputError::IncorrectUserSignature { .. },
+            } => Weight::one(),
+            SuiError::InvalidSignature { .. }
+            | SuiError::SignerSignatureAbsent { .. }
+            | SuiError::SignerSignatureNumberMismatch { .. }
+            | SuiError::IncorrectSigner { .. }
+            | SuiError::UnknownSigner { .. }
+            | SuiError::WrongEpoch { .. } => Weight::one(),
+            _ => Weight::zero(),
         }
     }
 }

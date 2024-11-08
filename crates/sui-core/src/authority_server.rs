@@ -33,7 +33,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight};
+use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig};
 use sui_types::{effects::TransactionEffectsAPI, messages_grpc::HandleTransactionRequestV2};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
@@ -1318,7 +1318,7 @@ impl ValidatorService {
                 through_fullnode: None,
                 error_info: error.map(|e| {
                     let error_type = String::from(e.clone().as_ref());
-                    let error_weight = normalize(e);
+                    let error_weight = Weight::from(e);
                     (error_weight, error_type)
                 }),
                 spam_weight,
@@ -1339,22 +1339,6 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
     };
     request.extensions_mut().insert(tcp_connect_info);
     request
-}
-
-// TODO: refine error matching here
-fn normalize(err: SuiError) -> Weight {
-    match err {
-        SuiError::UserInputError {
-            error: UserInputError::IncorrectUserSignature { .. },
-        } => Weight::one(),
-        SuiError::InvalidSignature { .. }
-        | SuiError::SignerSignatureAbsent { .. }
-        | SuiError::SignerSignatureNumberMismatch { .. }
-        | SuiError::IncorrectSigner { .. }
-        | SuiError::UnknownSigner { .. }
-        | SuiError::WrongEpoch { .. } => Weight::one(),
-        _ => Weight::zero(),
-    }
 }
 
 /// Implements generic pre- and post-processing. Since this is on the critical

@@ -13,7 +13,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
-use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
+use sui_types::error::Weight;
+use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
 use tracing::{info, trace};
 
 const HIGHEST_RATES_CAPACITY: usize = 20;
