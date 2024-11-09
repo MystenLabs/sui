@@ -12,4 +12,7 @@ tokio = { workspace = true, features = ["full"] }
 
 bin-version.workspace = true
 move-analyzer.workspace = true
-
+sui.workspace = true
+sui-sdk.workspace = true
+sui-config.workspace = true
+sui-package-hooks.workspace = true

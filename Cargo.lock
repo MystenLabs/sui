@@ -12690,10 +12690,8 @@ dependencies = [
  "miette",
  "move-analyzer",
  "move-binary-format",
- "move-bytecode-source-map",
  "move-bytecode-verifier-meter",
  "move-command-line-common",
- "move-compiler",
  "move-core-types",
  "move-ir-types",
  "move-package",
@@ -12730,6 +12728,7 @@ dependencies = [
  "sui-macros",
  "sui-move",
  "sui-move-build",
+ "sui-package-hooks",
  "sui-package-management",
  "sui-protocol-config",
  "sui-replay",
@@ -14317,6 +14316,10 @@ dependencies = [
  "bin-version",
  "clap",
  "move-analyzer",
+ "sui",
+ "sui-config",
+ "sui-package-hooks",
+ "sui-sdk",
  "tokio",
 ]
 
@@ -14652,6 +14655,24 @@ dependencies = [
  "serde_json",
  "sui-types",
  "tracing",
+]
+
+[[package]]
+name = "sui-package-hooks"
+version = "1.38.0"
+dependencies = [
+ "anyhow",
+ "lru 0.10.0",
+ "move-binary-format",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
+ "move-symbol-pool",
+ "sui-json-rpc-types",
+ "sui-move-build",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
 ]
 
 [[package]]
@@ -15166,6 +15187,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-move",
  "sui-move-build",
+ "sui-package-hooks",
  "sui-sdk",
  "sui-source-validation",
  "telemetry-subscribers",

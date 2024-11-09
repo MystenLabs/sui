@@ -137,6 +137,7 @@ members = [
     "crates/sui-open-rpc-macros",
     "crates/sui-oracle",
     "crates/sui-package-dump",
+    "crates/sui-package-hooks",
     "crates/sui-package-management",
     "crates/sui-package-resolver",
     "crates/sui-pg-temp-db",
@@ -663,6 +664,7 @@ sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
 sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
+sui-package-hooks = { path = "crates/sui-package-hooks" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
 sui-pg-temp-db = { path = "crates/sui-pg-temp-db" }
