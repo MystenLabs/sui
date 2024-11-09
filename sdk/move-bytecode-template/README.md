@@ -86,16 +86,16 @@ updated = update_constants(
 // Update SYMBOL
 updated = update_constants(
 	updated,
-	bcs.vector(bcs.string()).serialize('MYC').toBytes(), // new value
-	bcs.vector(bcs.string()).serialize('TMPL').toBytes(), // current value
+	bcs.vector(bcs.string()).serialize('MYC'.split('')).toBytes(), // new value
+	bcs.vector(bcs.string()).serialize('TMPL'.split('')).toBytes(), // current value
 	'Vector(U8)', // type of the constant
 );
 
 // Update NAME
 updated = update_constants(
 	updated,
-	bcs.vector(bcs.string()).serialize('My Coin').toBytes(), // new value
-	bcs.vector(bcs.string()).serialize('Template Coin').toBytes(), // current value
+	bcs.vector(bcs.string()).serialize('My Coin'.split('')).toBytes(), // new value
+	bcs.vector(bcs.string()).serialize('Template Coin'.split('')).toBytes(), // current value
 	'Vector(U8)', // type of the constant
 );
 ```
