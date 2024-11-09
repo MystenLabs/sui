@@ -15,6 +15,8 @@ use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 use super::move_package::{
     self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
 };
+use super::move_registry::named_move_package::NamedMovePackage;
+use super::move_registry::named_type::NamedType;
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -27,7 +29,7 @@ use super::{
     cursor::Page,
     digest::Digest,
     dry_run_result::DryRunResult,
-    epoch::Epoch,
+    epoch::{self, Epoch},
     event::{self, Event, EventFilter},
     move_type::MoveType,
     object::{self, Object, ObjectFilter},
@@ -55,10 +57,18 @@ impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        Ok(ChainIdentifier::query(ctx.data_unchecked())
-            .await
-            .extend()?
-            .to_string())
+        // we want to panic if the chain identifier is missing, as there's something wrong with
+        // the service.
+        let chain_id: ChainIdentifier = *ctx.data_unchecked();
+
+        if let Some(id) = chain_id.0 {
+            Ok(id.to_string())
+        } else {
+            Err(Error::Internal(
+                "Chain identifier not initialized.".to_string(),
+            ))
+            .extend()
+        }
     }
 
     /// Range of checkpoints that the RPC has data available for (for data
@@ -279,11 +289,10 @@ impl Query {
     /// Fetch a structured representation of a concrete type, including its layout information.
     /// Fails if the type is malformed.
     async fn type_(&self, type_: String) -> Result<MoveType> {
-        Ok(MoveType::new(
-            TypeTag::from_str(&type_)
-                .map_err(|e| Error::Client(format!("Bad type: {e}")))
-                .extend()?,
-        ))
+        Ok(TypeTag::from_str(&type_)
+            .map_err(|e| Error::Client(format!("Bad type: {e}")))
+            .extend()?
+            .into())
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
@@ -314,9 +323,8 @@ impl Query {
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
-        TransactionBlock::query(ctx, digest, checkpoint)
-            .await
-            .extend()
+        let lookup = TransactionBlock::by_digest(digest, checkpoint);
+        TransactionBlock::query(ctx, lookup).await.extend()
     }
 
     /// The coin objects that exist in the network.
@@ -345,6 +353,23 @@ impl Query {
         )
         .await
         .extend()
+    }
+
+    // The epochs of the network
+    async fn epochs(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<epoch::Cursor>,
+        last: Option<u64>,
+        before: Option<epoch::Cursor>,
+    ) -> Result<Connection<String, Epoch>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Epoch::paginate(ctx.data_unchecked(), page, checkpoint)
+            .await
+            .extend()
     }
 
     /// The checkpoints that exist in the network.
@@ -414,7 +439,9 @@ impl Query {
         .extend()
     }
 
-    /// The events that exist in the network.
+    /// Query events that are emitted in the network.
+    /// We currently do not support filtering by emitting module and event type
+    /// at the same time so if both are provided in one filter, the query will error.
     async fn events(
         &self,
         ctx: &Context<'_>,
@@ -530,6 +557,27 @@ impl Query {
                 address: a.into(),
                 checkpoint_viewed_at: checkpoint,
             }))
+    }
+
+    /// Fetch a package by its name (using dot move service)
+    async fn package_by_name(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        NamedMovePackage::query(ctx, &name, checkpoint)
+            .await
+            .extend()
+    }
+
+    /// Fetch a type that includes dot move service names in it.
+    async fn type_by_name(&self, ctx: &Context<'_>, name: String) -> Result<MoveType> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let type_tag = NamedType::query(ctx, &name, checkpoint).await?;
+
+        Ok(type_tag.into())
     }
 
     /// The coin metadata associated with the given coin type.

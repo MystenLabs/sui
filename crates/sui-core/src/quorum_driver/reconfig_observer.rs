@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::QuorumDriver;
+use super::AuthorityAggregatorUpdatable;
 use crate::{
     authority_aggregator::AuthAggMetrics,
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 #[async_trait]
 pub trait ReconfigObserver<A: Clone> {
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A>>);
+    async fn run(&mut self, epoch_updatable: Arc<dyn AuthorityAggregatorUpdatable<A>>);
     fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync>;
 }
 
@@ -64,21 +64,21 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         })
     }
 
-    async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
+    async fn run(
+        &mut self,
+        updatable: Arc<dyn AuthorityAggregatorUpdatable<NetworkAuthorityClient>>,
+    ) {
         loop {
             match self.reconfig_rx.recv().await {
                 Ok(system_state) => {
                     let epoch_start_state = system_state.into_epoch_start_state();
                     let committee = epoch_start_state.get_sui_committee();
                     info!("Got reconfig message. New committee: {}", committee);
-                    if committee.epoch() > quorum_driver.current_epoch() {
-                        let new_auth_agg = quorum_driver
+                    if committee.epoch() > updatable.epoch() {
+                        let new_auth_agg = updatable
                             .authority_aggregator()
-                            .load()
                             .recreate_with_new_epoch_start_state(&epoch_start_state);
-                        quorum_driver
-                            .update_validators(Arc::new(new_auth_agg))
-                            .await;
+                        updatable.update_authority_aggregator(Arc::new(new_auth_agg));
                     } else {
                         // This should only happen when the node just starts
                         warn!("Epoch number decreased - ignoring committee: {}", committee);
@@ -112,5 +112,5 @@ where
         Box::new(Self {})
     }
 
-    async fn run(&mut self, _quorum_driver: Arc<QuorumDriver<A>>) {}
+    async fn run(&mut self, _quorum_driver: Arc<dyn AuthorityAggregatorUpdatable<A>>) {}
 }

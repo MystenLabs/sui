@@ -22,6 +22,7 @@ import type {
 } from '_payloads/transactions';
 import { API_ENV } from '_src/shared/api-env';
 import type { NetworkEnvType } from '_src/shared/api-env';
+import { type DisconnectApp } from '_src/shared/messaging/messages/payloads/permissions/DisconnectApp';
 import {
 	isQredoConnectPayload,
 	type QredoConnectPayload,
@@ -30,7 +31,7 @@ import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 import { bcs } from '@mysten/sui/bcs';
 import { isTransaction } from '@mysten/sui/transactions';
-import { fromB64, toB64 } from '@mysten/sui/utils';
+import { fromBase64, toBase64 } from '@mysten/sui/utils';
 import {
 	ReadonlyWalletAccount,
 	SUI_CHAINS,
@@ -40,6 +41,8 @@ import {
 	SUI_TESTNET_CHAIN,
 	type StandardConnectFeature,
 	type StandardConnectMethod,
+	type StandardDisconnectFeature,
+	type StandardDisconnectMethod,
 	type StandardEventsFeature,
 	type StandardEventsListeners,
 	type StandardEventsOnMethod,
@@ -119,6 +122,7 @@ export class SuiWallet implements Wallet {
 
 	get features(): StandardConnectFeature &
 		StandardEventsFeature &
+		StandardDisconnectFeature &
 		SuiFeatures &
 		QredoConnectFeature {
 		return {
@@ -129,6 +133,10 @@ export class SuiWallet implements Wallet {
 			'standard:events': {
 				version: '1.0.0',
 				on: this.#on,
+			},
+			'standard:disconnect': {
+				version: '1.0.0',
+				disconnect: this.#disconnect,
 			},
 			'sui:signTransactionBlock': {
 				version: '1.0.0',
@@ -171,7 +179,7 @@ export class SuiWallet implements Wallet {
 				new ReadonlyWalletAccount({
 					address,
 					label: nickname || undefined,
-					publicKey: publicKey ? fromB64(publicKey) : new Uint8Array(),
+					publicKey: publicKey ? fromBase64(publicKey) : new Uint8Array(),
 					chains: this.#activeChain ? [this.#activeChain] : [],
 					features: ['sui:signAndExecuteTransaction'],
 				}),
@@ -242,6 +250,13 @@ export class SuiWallet implements Wallet {
 		await this.#connected();
 
 		return { accounts: this.accounts };
+	};
+
+	#disconnect: StandardDisconnectMethod = async () => {
+		this.#send<DisconnectApp, void>({
+			type: 'disconnect-app',
+			origin: '', // origin is auto-discovered for wallet's disconnect.
+		});
 	};
 
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({
@@ -334,7 +349,7 @@ export class SuiWallet implements Wallet {
 						txSignatures: [signature],
 						intentMessage: { value: bcsTransaction },
 					},
-				] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+				] = bcs.SenderSignedData.parse(fromBase64(rawTransaction!));
 
 				const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
 
@@ -342,7 +357,7 @@ export class SuiWallet implements Wallet {
 					digest,
 					signature,
 					bytes,
-					effects: toB64(new Uint8Array(rawEffects!)),
+					effects: toBase64(new Uint8Array(rawEffects!)),
 				};
 			},
 		);
@@ -353,7 +368,7 @@ export class SuiWallet implements Wallet {
 			this.#send<SignMessageRequest, SignMessageRequest>({
 				type: 'sign-message-request',
 				args: {
-					message: toB64(message),
+					message: toBase64(message),
 					accountAddress: account.address,
 				},
 			}),
@@ -371,7 +386,7 @@ export class SuiWallet implements Wallet {
 			this.#send<SignMessageRequest, SignMessageRequest>({
 				type: 'sign-message-request',
 				args: {
-					message: toB64(message),
+					message: toBase64(message),
 					accountAddress: account.address,
 				},
 			}),

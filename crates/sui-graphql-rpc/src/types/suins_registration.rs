@@ -31,6 +31,7 @@ use crate::{
     error::Error,
 };
 use async_graphql::{connection::Connection, *};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
@@ -218,8 +219,8 @@ impl SuinsRegistration {
     }
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(&self.super_.super_).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(&self.super_.super_).owner().await
     }
 
     /// The transaction block that created this version of the object.
@@ -495,24 +496,29 @@ impl NameService {
 
         let Some((checkpoint_timestamp_ms, results)) = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                let timestamp_ms = Checkpoint::query_timestamp(conn, checkpoint_viewed_at)?;
+                    let timestamp_ms =
+                        Checkpoint::query_timestamp(conn, checkpoint_viewed_at).await?;
 
-                let sql = build_objects_query(
-                    View::Consistent,
-                    range,
-                    &page,
-                    move |query| filter.apply(query),
-                    move |newer| newer,
-                );
+                    let sql = build_objects_query(
+                        View::Consistent,
+                        range,
+                        &page,
+                        move |query| filter.apply(query),
+                        move |newer| newer,
+                    );
 
-                let objects: Vec<StoredHistoryObject> =
-                    conn.results(move || sql.clone().into_boxed())?;
+                    let objects: Vec<StoredHistoryObject> =
+                        conn.results(move || sql.clone().into_boxed()).await?;
 
-                Ok(Some((timestamp_ms, objects)))
+                    Ok(Some((timestamp_ms, objects)))
+                }
+                .scope_boxed()
             })
             .await?
         else {

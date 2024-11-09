@@ -6,11 +6,3 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
-  ┌─ tests/move_check/parser/return_in_binop.move:4:9
-  │
-4 │         return << 0;
-  │         ^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
-  │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

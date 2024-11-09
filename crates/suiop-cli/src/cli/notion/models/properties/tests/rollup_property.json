@@ -1,0 +1,32 @@
+{
+  "id": "R%7Cm%3F",
+  "type": "rollup",
+  "rollup": {
+    "type": "array",
+    "array": [
+      {
+        "type": "rich_text",
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "personal",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "personal",
+            "href": null
+          }
+        ]
+      }
+    ],
+    "function": "show_original"
+  }
+}

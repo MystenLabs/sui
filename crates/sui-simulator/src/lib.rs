@@ -110,7 +110,7 @@ pub mod configs {
 }
 
 thread_local! {
-    static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+    static NODE_COUNT: AtomicUsize = const { AtomicUsize::new(0) };
 }
 
 pub struct NodeLeakDetector(());

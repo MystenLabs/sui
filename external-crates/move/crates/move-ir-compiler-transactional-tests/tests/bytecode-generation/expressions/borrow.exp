@@ -3,7 +3,7 @@ processed 9 tasks
 task 0, lines 1-13:
 //# print-bytecode
 // Move bytecode v6
-module 1.m {
+module 6.m {
 
 
 
@@ -26,7 +26,7 @@ B0:
 task 1, lines 15-28:
 //# print-bytecode
 // Move bytecode v6
-module 2.m {
+module 7.m {
 
 
 

@@ -378,7 +378,7 @@ Update validators with the decided voting power.
 
 
 <pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_update_voting_power">update_voting_power</a>(validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, <b>mut</b> info_list: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>&gt;) {
-    <b>while</b> (!info_list.is_empty()) {
+    <b>while</b> (info_list.length() != 0) {
         <b>let</b> <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index,
             <a href="voting_power.md#0x3_voting_power">voting_power</a>,

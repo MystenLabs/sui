@@ -36,8 +36,6 @@ tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
 fastcrypto.workspace = true
 
-narwhal-storage.workspace = true
-narwhal-types.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-network.workspace = true
@@ -49,4 +47,5 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-archival.workspace = true
 sui-package-dump.workspace = true
+sui-tls.workspace = true
 bin-version.workspace = true

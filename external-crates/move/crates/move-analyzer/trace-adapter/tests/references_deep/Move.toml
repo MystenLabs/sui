@@ -1,0 +1,10 @@
+[package]
+name = "references_deep"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+references_deep = "0x0"
+std = "0x1"

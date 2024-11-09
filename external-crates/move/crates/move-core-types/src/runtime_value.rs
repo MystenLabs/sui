@@ -50,15 +50,15 @@ pub enum MoveValue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveStructLayout(pub Vec<MoveTypeLayout>);
+pub struct MoveStructLayout(pub Box<Vec<MoveTypeLayout>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveEnumLayout(pub Vec<Vec<MoveTypeLayout>>);
+pub struct MoveEnumLayout(pub Box<Vec<Vec<MoveTypeLayout>>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MoveDatatypeLayout {
-    Struct(MoveStructLayout),
-    Enum(MoveEnumLayout),
+    Struct(Box<MoveStructLayout>),
+    Enum(Box<MoveEnumLayout>),
 }
 
 impl MoveDatatypeLayout {
@@ -86,7 +86,7 @@ pub enum MoveTypeLayout {
     #[serde(rename(serialize = "vector", deserialize = "vector"))]
     Vector(Box<MoveTypeLayout>),
     #[serde(rename(serialize = "struct", deserialize = "struct"))]
-    Struct(MoveStructLayout),
+    Struct(Box<MoveStructLayout>),
     #[serde(rename(serialize = "signer", deserialize = "signer"))]
     Signer,
 
@@ -98,7 +98,7 @@ pub enum MoveTypeLayout {
     #[serde(rename(serialize = "u256", deserialize = "u256"))]
     U256,
     #[serde(rename(serialize = "enum", deserialize = "enum"))]
-    Enum(MoveEnumLayout),
+    Enum(Box<MoveEnumLayout>),
 }
 
 impl MoveValue {
@@ -192,7 +192,7 @@ impl MoveStruct {
             type_: type_.clone(),
             fields: vals
                 .into_iter()
-                .zip(fields)
+                .zip(fields.iter())
                 .map(|(v, l)| (l.name.clone(), v.decorate(&l.layout)))
                 .collect(),
         }
@@ -228,7 +228,7 @@ impl MoveVariant {
             tag,
             fields: fields
                 .into_iter()
-                .zip(v_layout)
+                .zip(v_layout.iter())
                 .map(|(v, l)| (l.name.clone(), v.decorate(&l.layout)))
                 .collect(),
             variant_name: v_name.clone(),
@@ -246,7 +246,7 @@ impl MoveVariant {
 
 impl MoveStructLayout {
     pub fn new(types: Vec<MoveTypeLayout>) -> Self {
-        Self(types)
+        Self(Box::new(types))
     }
 
     pub fn fields(&self) -> &[MoveTypeLayout] {
@@ -254,7 +254,7 @@ impl MoveStructLayout {
     }
 
     pub fn into_fields(self) -> Vec<MoveTypeLayout> {
-        self.0
+        *self.0
     }
 }
 

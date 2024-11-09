@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { UsdcPromo } from '_pages/home/usdc-promo/UsdcPromo';
 import { SwapPage } from '_pages/swap';
-import { FromAssets } from '_pages/swap/FromAssets';
+import { CoinsSelectionPage } from '_pages/swap/CoinsSelectionPage';
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
 import { type LedgerAccountsPublicKeys } from '_src/shared/messaging/messages/payloads/MethodPayload';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import { useEffect, useMemo } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { throttle } from 'throttle-debounce';
@@ -115,7 +116,7 @@ const App = () => {
 								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
 								publicKeysToStore.push({
 									accountID: id,
-									publicKey: toB64(publicKey),
+									publicKey: toBase64(publicKey),
 								});
 							} catch (e) {
 								// do nothing
@@ -168,6 +169,7 @@ const App = () => {
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="kiosk" element={<KioskDetailsPage />} />
 				<Route path="nft-details" element={<NFTDetailsPage />} />
+				<Route path="usdc-promo" element={<UsdcPromo />} />
 				<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
 				<Route path="nfts/*" element={<AssetsPage />} />
 				<Route path="onramp" element={<OnrampPage />} />
@@ -176,7 +178,7 @@ const App = () => {
 				<Route path="send/select" element={<CoinsSelectorPage />} />
 				<Route path="stake/*" element={<Staking />} />
 				<Route path="swap/*" element={<SwapPage />} />
-				<Route path="swap/from-assets" element={<FromAssets />} />
+				<Route path="swap/coins-select" element={<CoinsSelectionPage />} />
 				<Route path="tokens/*" element={<TokenDetailsPage />} />
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />

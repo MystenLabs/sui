@@ -24,6 +24,7 @@ use async_graphql::{
     *,
 };
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{models::checkpoints::StoredCheckpoint, schema::checkpoints};
@@ -261,12 +262,16 @@ impl Checkpoint {
 
         let stored: Option<StoredCheckpoint> = db
             .execute(move |conn| {
-                conn.first(move || {
-                    dsl::checkpoints
-                        .filter(dsl::sequence_number.le(checkpoint_viewed_at as i64))
-                        .order_by(dsl::sequence_number.desc())
-                })
-                .optional()
+                async move {
+                    conn.first(move || {
+                        dsl::checkpoints
+                            .filter(dsl::sequence_number.le(checkpoint_viewed_at as i64))
+                            .order_by(dsl::sequence_number.desc())
+                    })
+                    .await
+                    .optional()
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
@@ -279,17 +284,19 @@ impl Checkpoint {
 
     /// Look up a `Checkpoint` in the database and retrieve its `timestamp_ms` field. This method
     /// takes a connection, so that it can be used within a transaction.
-    pub(crate) fn query_timestamp(
-        conn: &mut Conn,
+    pub(crate) async fn query_timestamp(
+        conn: &mut Conn<'_>,
         seq_num: u64,
     ) -> Result<u64, diesel::result::Error> {
         use checkpoints::dsl;
 
-        let stored: i64 = conn.first(move || {
-            dsl::checkpoints
-                .select(dsl::timestamp_ms)
-                .filter(dsl::sequence_number.eq(seq_num as i64))
-        })?;
+        let stored: i64 = conn
+            .first(move || {
+                dsl::checkpoints
+                    .select(dsl::timestamp_ms)
+                    .filter(dsl::sequence_number.eq(seq_num as i64))
+            })
+            .await?;
 
         Ok(stored as u64)
     }
@@ -318,18 +325,23 @@ impl Checkpoint {
 
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_query::<StoredCheckpoint, _, _, _>(
-                    conn,
-                    checkpoint_viewed_at,
-                    move || {
-                        let mut query = dsl::checkpoints.into_boxed();
-                        query = query.filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));
-                        if let Some(epoch) = filter {
-                            query = query.filter(dsl::epoch.eq(epoch as i64));
-                        }
-                        query
-                    },
-                )
+                async move {
+                    page.paginate_query::<StoredCheckpoint, _, _, _>(
+                        conn,
+                        checkpoint_viewed_at,
+                        move || {
+                            let mut query = dsl::checkpoints.into_boxed();
+                            query =
+                                query.filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));
+                            if let Some(epoch) = filter {
+                                query = query.filter(dsl::epoch.eq(epoch as i64));
+                            }
+                            query
+                        },
+                    )
+                    .await
+                }
+                .scope_boxed()
             })
             .await?;
 
@@ -407,10 +419,14 @@ impl Loader<SeqNumKey> for Db {
 
         let checkpoints: Vec<StoredCheckpoint> = self
             .execute(move |conn| {
-                conn.results(move || {
-                    dsl::checkpoints
-                        .filter(dsl::sequence_number.eq_any(checkpoint_ids.iter().cloned()))
-                })
+                async move {
+                    conn.results(move || {
+                        dsl::checkpoints
+                            .filter(dsl::sequence_number.eq_any(checkpoint_ids.iter().cloned()))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;
@@ -452,9 +468,14 @@ impl Loader<DigestKey> for Db {
 
         let checkpoints: Vec<StoredCheckpoint> = self
             .execute(move |conn| {
-                conn.results(move || {
-                    dsl::checkpoints.filter(dsl::checkpoint_digest.eq_any(digests.iter().cloned()))
-                })
+                async move {
+                    conn.results(move || {
+                        dsl::checkpoints
+                            .filter(dsl::checkpoint_digest.eq_any(digests.iter().cloned()))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;

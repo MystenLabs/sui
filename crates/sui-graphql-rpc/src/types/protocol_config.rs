@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use async_graphql::*;
 use diesel::{ExpressionMethods, QueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer::schema::{epochs, feature_flags, protocol_configs};
 
 use crate::{
@@ -94,11 +95,15 @@ impl ProtocolConfigs {
         } else {
             let latest_version: i64 = db
                 .execute(move |conn| {
-                    conn.first(move || {
-                        e::epochs
-                            .select(e::protocol_version)
-                            .order_by(e::epoch.desc())
-                    })
+                    async move {
+                        conn.first(move || {
+                            e::epochs
+                                .select(e::protocol_version)
+                                .order_by(e::epoch.desc())
+                        })
+                        .await
+                    }
+                    .scope_boxed()
                 })
                 .await
                 .map_err(|e| {
@@ -112,11 +117,15 @@ impl ProtocolConfigs {
         // TODO: This could be optimized by fetching all configs and flags in a single query.
         let configs: BTreeMap<String, Option<String>> = db
             .execute(move |conn| {
-                conn.results(move || {
-                    p::protocol_configs
-                        .select((p::config_name, p::config_value))
-                        .filter(p::protocol_version.eq(version as i64))
-                })
+                async move {
+                    conn.results(move || {
+                        p::protocol_configs
+                            .select((p::config_name, p::config_value))
+                            .filter(p::protocol_version.eq(version as i64))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch protocol configs in db: {e}")))?
@@ -125,11 +134,15 @@ impl ProtocolConfigs {
 
         let feature_flags: BTreeMap<String, bool> = db
             .execute(move |conn| {
-                conn.results(move || {
-                    f::feature_flags
-                        .select((f::flag_name, f::flag_value))
-                        .filter(f::protocol_version.eq(version as i64))
-                })
+                async move {
+                    conn.results(move || {
+                        f::feature_flags
+                            .select((f::flag_name, f::flag_value))
+                            .filter(f::protocol_version.eq(version as i64))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch feature flags in db: {e}")))?

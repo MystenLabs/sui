@@ -8,7 +8,7 @@ use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
 pub trait Map<'a, K, V>
 where
-    K: Serialize + DeserializeOwned + ?Sized,
+    K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
     type Error: Error;
@@ -47,6 +47,9 @@ where
 
     /// Removes every key-value pair from the map.
     fn unsafe_clear(&self) -> Result<(), Self::Error>;
+
+    /// Removes every key-value pair from the map by deleting the underlying file.
+    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError>;
 
     /// Uses delete range on the entire key range
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError>;
@@ -148,7 +151,7 @@ where
 #[async_trait]
 pub trait AsyncMap<'a, K, V>
 where
-    K: Serialize + DeserializeOwned + ?Sized + std::marker::Sync,
+    K: Serialize + DeserializeOwned + std::marker::Sync,
     V: Serialize + DeserializeOwned + std::marker::Sync + std::marker::Send,
 {
     type Error: Error;

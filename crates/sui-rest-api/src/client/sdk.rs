@@ -4,23 +4,26 @@
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
-use sui_sdk2::types::Address;
-use sui_sdk2::types::CheckpointData;
-use sui_sdk2::types::CheckpointDigest;
-use sui_sdk2::types::CheckpointSequenceNumber;
-use sui_sdk2::types::EpochId;
-use sui_sdk2::types::Object;
-use sui_sdk2::types::ObjectId;
-use sui_sdk2::types::SignedCheckpointSummary;
-use sui_sdk2::types::SignedTransaction;
-use sui_sdk2::types::StructTag;
-use sui_sdk2::types::TransactionDigest;
-use sui_sdk2::types::ValidatorCommittee;
-use sui_sdk2::types::Version;
+use sui_sdk_types::types::Address;
+use sui_sdk_types::types::CheckpointData;
+use sui_sdk_types::types::CheckpointDigest;
+use sui_sdk_types::types::CheckpointSequenceNumber;
+use sui_sdk_types::types::EpochId;
+use sui_sdk_types::types::Object;
+use sui_sdk_types::types::ObjectId;
+use sui_sdk_types::types::SignedCheckpointSummary;
+use sui_sdk_types::types::SignedTransaction;
+use sui_sdk_types::types::StructTag;
+use sui_sdk_types::types::Transaction;
+use sui_sdk_types::types::TransactionDigest;
+use sui_sdk_types::types::UnresolvedTransaction;
+use sui_sdk_types::types::ValidatorCommittee;
+use sui_sdk_types::types::Version;
 use tap::Pipe;
 
 use crate::accounts::AccountOwnedObjectInfo;
 use crate::accounts::ListAccountOwnedObjectsQueryParameters;
+use crate::checkpoints::CheckpointResponse;
 use crate::checkpoints::ListCheckpointsQueryParameters;
 use crate::coins::CoinInfo;
 use crate::health::Threshold;
@@ -33,8 +36,11 @@ use crate::system::SystemStateSummary;
 use crate::system::X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION;
 use crate::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
 use crate::transactions::ListTransactionsQueryParameters;
+use crate::transactions::ResolveTransactionQueryParameters;
+use crate::transactions::ResolveTransactionResponse;
 use crate::transactions::TransactionExecutionResponse;
 use crate::transactions::TransactionResponse;
+use crate::transactions::TransactionSimulationResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
 use crate::types::X_SUI_CHECKPOINT_HEIGHT;
@@ -88,14 +94,9 @@ impl Client {
     pub async fn node_info(&self) -> Result<Response<NodeInfo>> {
         let url = self.url().join("")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn health_check(&self, threshold_seconds: Option<u32>) -> Result<Response<()>> {
@@ -110,14 +111,9 @@ impl Client {
     pub async fn get_coin_info(&self, coin_type: &StructTag) -> Result<Response<CoinInfo>> {
         let url = self.url().join(&format!("coins/{coin_type}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn list_account_objects(
@@ -127,28 +123,17 @@ impl Client {
     ) -> Result<Response<Vec<AccountOwnedObjectInfo>>> {
         let url = self.url().join(&format!("account/{account}/objects"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url).query(parameters);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<Object>> {
         let url = self.url().join(&format!("objects/{object_id}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn get_object_with_version(
@@ -160,14 +145,9 @@ impl Client {
             .url()
             .join(&format!("objects/{object_id}/version/{version}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn list_dynamic_fields(
@@ -177,28 +157,17 @@ impl Client {
     ) -> Result<Response<Vec<DynamicFieldInfo>>> {
         let url = self.url().join(&format!("objects/{object_id}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url).query(parameters);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn get_gas_info(&self) -> Result<Response<GasInfo>> {
         let url = self.url().join("system/gas")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn get_reference_gas_price(&self) -> Result<u64> {
@@ -211,14 +180,9 @@ impl Client {
     pub async fn get_current_protocol_config(&self) -> Result<Response<ProtocolConfigResponse>> {
         let url = self.url().join("system/protocol")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn get_protocol_config(
@@ -227,71 +191,46 @@ impl Client {
     ) -> Result<Response<ProtocolConfigResponse>> {
         let url = self.url().join(&format!("system/protocol/{version}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn get_system_state_summary(&self) -> Result<Response<SystemStateSummary>> {
         let url = self.url().join("system")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.json(response).await
+        self.json(request).await
     }
 
     pub async fn get_current_committee(&self) -> Result<Response<ValidatorCommittee>> {
         let url = self.url().join("system/committee")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn get_committee(&self, epoch: EpochId) -> Result<Response<ValidatorCommittee>> {
         let url = self.url().join(&format!("system/committee/{epoch}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn get_checkpoint(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Response<SignedCheckpointSummary>> {
+    ) -> Result<Response<CheckpointResponse>> {
         let url = self
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
@@ -299,6 +238,7 @@ impl Client {
             limit: Some(1),
             start: None,
             direction: None,
+            contents: false,
         };
 
         let (mut page, parts) = self.list_checkpoints(&parameters).await?.into_parts();
@@ -316,15 +256,17 @@ impl Client {
     ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
         let url = self.url().join("checkpoints")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url).query(parameters);
 
-        self.bcs(response).await
+        self.bcs(request).await
+        // self.protobuf::<crate::proto::ListCheckpointResponse>(request)
+        //     .await?
+        //     .try_map(|page| {
+        //         page.checkpoints
+        //             .into_iter()
+        //             .map(TryInto::try_into)
+        //             .collect()
+        //     })
     }
 
     pub async fn get_full_checkpoint(
@@ -335,14 +277,16 @@ impl Client {
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
+        // self.protobuf::<crate::proto::FullCheckpoint>(request)
+        //     .await?
+        //     // TODO make this more efficient and convert directly into the sui-sdk-types version
+        //     .try_map(|proto| {
+        //         sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
+        //             .and_then(TryInto::try_into)
+        //     })
     }
 
     pub async fn get_transaction(
@@ -351,14 +295,9 @@ impl Client {
     ) -> Result<Response<TransactionResponse>> {
         let url = self.url().join(&format!("transactions/{transaction}"))?;
 
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn list_transactions(
@@ -367,15 +306,9 @@ impl Client {
     ) -> Result<Response<Vec<TransactionResponse>>> {
         let url = self.url().join("transactions")?;
 
-        let response = self
-            .inner
-            .get(url)
-            .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.get(url).query(parameters);
 
-        self.bcs(response).await
+        self.bcs(request).await
     }
 
     pub async fn execute_transaction(
@@ -387,17 +320,58 @@ impl Client {
 
         let body = bcs::to_bytes(transaction)?;
 
-        let response = self
+        let request = self
             .inner
             .post(url)
             .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
-            .body(body)
-            .send()
-            .await?;
+            .body(body);
 
-        self.bcs(response).await
+        self.bcs(request).await
+    }
+
+    pub async fn simulate_transaction(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<Response<TransactionSimulationResponse>> {
+        let url = self.url().join("transactions/simulate")?;
+
+        let body = bcs::to_bytes(transaction)?;
+
+        let request = self
+            .inner
+            .post(url)
+            .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
+            .body(body);
+
+        self.bcs(request).await
+    }
+
+    pub async fn resolve_transaction(
+        &self,
+        unresolved_transaction: &UnresolvedTransaction,
+    ) -> Result<Response<ResolveTransactionResponse>> {
+        let url = self.url.join("transactions/resolve")?;
+
+        let request = self.inner.post(url).json(unresolved_transaction);
+
+        self.bcs(request).await
+    }
+
+    pub async fn resolve_transaction_with_parameters(
+        &self,
+        unresolved_transaction: &UnresolvedTransaction,
+        parameters: &ResolveTransactionQueryParameters,
+    ) -> Result<Response<ResolveTransactionResponse>> {
+        let url = self.url.join("transactions/resolve")?;
+
+        let request = self
+            .inner
+            .post(url)
+            .query(&parameters)
+            .json(unresolved_transaction);
+
+        self.bcs(request).await
     }
 
     async fn check_response(
@@ -426,8 +400,13 @@ impl Client {
 
     async fn json<T: serde::de::DeserializeOwned>(
         &self,
-        response: reqwest::Response,
+        request: reqwest::RequestBuilder,
     ) -> Result<Response<T>> {
+        let response = request
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
+            .send()
+            .await?;
+
         let (response, parts) = self.check_response(response).await?;
 
         let json = response.json().await?;
@@ -436,13 +415,37 @@ impl Client {
 
     pub(super) async fn bcs<T: serde::de::DeserializeOwned>(
         &self,
-        response: reqwest::Response,
+        request: reqwest::RequestBuilder,
     ) -> Result<Response<T>> {
+        let response = request
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
+            .send()
+            .await?;
+
         let (response, parts) = self.check_response(response).await?;
 
         let bytes = response.bytes().await?;
         match bcs::from_bytes(&bytes) {
             Ok(bcs) => Ok(Response::new(bcs, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
+    }
+
+    #[allow(unused)]
+    pub(super) async fn protobuf<T: prost::Message + std::default::Default>(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<Response<T>> {
+        let response = request
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_PROTOBUF)
+            .send()
+            .await?;
+
+        let (response, parts) = self.check_response(response).await?;
+
+        let bytes = response.bytes().await?;
+        match T::decode(bytes) {
+            Ok(v) => Ok(Response::new(v, parts)),
             Err(e) => Err(Error::from_error(e).with_parts(parts)),
         }
     }
@@ -556,8 +559,20 @@ impl<T> Response<T> {
     where
         F: FnOnce(T) -> U,
     {
-        let (inner, state) = self.into_parts();
-        Response::new(f(inner), state)
+        let (inner, parts) = self.into_parts();
+        Response::new(f(inner), parts)
+    }
+
+    pub fn try_map<U, F, E>(self, f: F) -> Result<Response<U>>
+    where
+        F: FnOnce(T) -> Result<U, E>,
+        E: Into<BoxError>,
+    {
+        let (inner, parts) = self.into_parts();
+        match f(inner) {
+            Ok(out) => Ok(Response::new(out, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
     }
 }
 
@@ -664,5 +679,11 @@ impl From<bcs::Error> for Error {
 impl From<url::ParseError> for Error {
     fn from(error: url::ParseError) -> Self {
         Self::from_error(error)
+    }
+}
+
+impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for Error {
+    fn from(value: sui_types::sui_sdk_types_conversions::SdkTypeConversionError) -> Self {
+        Self::from_error(value)
     }
 }

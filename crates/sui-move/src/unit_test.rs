@@ -10,23 +10,14 @@ use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{
-    collections::BTreeMap,
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::{cell::RefCell, collections::BTreeMap, path::Path, sync::Arc};
 use sui_move_build::decorate_warnings;
 use sui_move_natives::test_scenario::InMemoryTestStore;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    error::SuiResult,
-    gas_model::tables::initial_cost_schedule_for_unit_tests,
-    in_memory_storage::InMemoryStorage,
+    gas_model::tables::initial_cost_schedule_for_unit_tests, in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
-    object::Object,
-    storage::ChildObjectResolver,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -63,30 +54,10 @@ impl Test {
     }
 }
 
-struct DummyChildObjectStore {}
-
-impl ChildObjectResolver for DummyChildObjectStore {
-    fn read_child_object(
-        &self,
-        _parent: &ObjectID,
-        _child: &ObjectID,
-        _child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        Ok(None)
-    }
-    fn get_object_received_at_version(
-        &self,
-        _owner: &ObjectID,
-        _receiving_object_id: &ObjectID,
-        _receive_object_at_version: SequenceNumber,
-        _epoch_id: sui_types::committee::EpochId,
-    ) -> SuiResult<Option<Object>> {
-        Ok(None)
-    }
+// Create a separate test store per-thread.
+thread_local! {
+    static TEST_STORE_INNER: RefCell<InMemoryStorage> = RefCell::new(InMemoryStorage::default());
 }
-
-static TEST_STORE_INNER: Lazy<RwLock<InMemoryStorage>> =
-    Lazy::new(|| RwLock::new(InMemoryStorage::default()));
 
 static TEST_STORE: Lazy<InMemoryTestStore> = Lazy::new(|| InMemoryTestStore(&TEST_STORE_INNER));
 

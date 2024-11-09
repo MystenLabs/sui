@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 
+use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::ObjectRef,
     committee::Committee,
@@ -13,8 +14,8 @@ use sui_types::{
     transaction::Transaction,
 };
 
-/// Define aspect of Sui state that needs to be certified in a proof
-#[derive(Default)]
+/// Define aspect of Sui state that need to be certified in a proof
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ProofTarget {
     /// Objects that need to be certified.
     pub objects: Vec<(ObjectRef, Object)>,
@@ -58,6 +59,7 @@ impl ProofTarget {
 
 /// Part of a proof that provides evidence relating to a specific transaction to
 /// certify objects and events.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionProof {
     /// Checkpoint contents including this transaction.
     pub checkpoint_contents: CheckpointContents,
@@ -74,6 +76,7 @@ pub struct TransactionProof {
 
 /// A proof for specific targets. It certifies a checkpoint summary and optionally includes
 /// transaction evidence to certify objects and events.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Proof {
     /// Targets of the proof are a committee, objects, or events that need to be certified.
     pub targets: ProofTarget,

@@ -27,7 +27,7 @@ fn test_deps_arent_tested() {
     let mut iter = test_plan.module_tests.into_iter();
     let (mod_id, _) = iter.next().unwrap();
     let expected_mod_id = ModuleId::new(
-        AccountAddress::from_hex_literal("0x1").unwrap(),
+        AccountAddress::from_hex_literal("0x6").unwrap(),
         Identifier::new("B").unwrap(),
     );
     assert!(mod_id == expected_mod_id);

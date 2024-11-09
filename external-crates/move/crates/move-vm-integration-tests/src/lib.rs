@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(test)]
-
+#[cfg(test)]
 mod compiler;
+#[cfg(test)]
 mod tests;

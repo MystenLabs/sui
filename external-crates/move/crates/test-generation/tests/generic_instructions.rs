@@ -13,7 +13,7 @@ use test_generation::transitions::Subst;
 #[test]
 fn unify_no_subst() {
     use SignatureToken::*;
-    let tys = vec![Bool, U64, Vector(Box::new(U8)), Address];
+    let tys = [Bool, U64, Vector(Box::new(U8)), Address];
     for tok1 in tys.iter() {
         for tok2 in tys.iter() {
             let should_unify = tok1.clone() == tok2.clone();

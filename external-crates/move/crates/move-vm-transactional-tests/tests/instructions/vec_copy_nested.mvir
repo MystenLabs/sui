@@ -98,7 +98,7 @@ module 0x42.DeepCopy {
 }
 
 //# run
-module 0x42.m {
+module 0x43.m {
 import 0x42.DeepCopy;
 
 entry foo() {

@@ -22,7 +22,7 @@ struct GoogleCloudStorageClient {
 
 impl GoogleCloudStorageClient {
     pub fn new(bucket: &str) -> Result<Self> {
-        let mut builder = ClientBuilder::new();
+        let mut builder = ClientBuilder::new().pool_idle_timeout(None);
         builder = builder.user_agent(DEFAULT_USER_AGENT);
         let client = builder.https_only(false).build()?;
         let bucket_name_encoded = percent_encode(bucket.as_bytes(), NON_ALPHANUMERIC).to_string();

@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:53
+  │
+9 │             Three::Tuple(x, _, _) | Three::Tuple(_, y, _) | Three::Tuple(_, _, x) => { let _y = x; },
+  │                                                     ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:53
   │
@@ -17,14 +25,6 @@ error[E03019]: invalid pattern
   │             left or-pattern does not
   │
   = Both sides of an or-pattern must bind the same variables.
-
-warning[W09002]: unused variable
-  ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:53
-  │
-9 │             Three::Tuple(x, _, _) | Three::Tuple(_, y, _) | Three::Tuple(_, _, x) => { let _y = x; },
-  │                                                     ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
-  │
-  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:80

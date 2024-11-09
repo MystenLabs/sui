@@ -74,11 +74,12 @@ const textStyles = cva([], {
 export interface TextProps extends VariantProps<typeof textStyles> {
 	children: ReactNode;
 	title?: string;
+	className?: string;
 }
 
-export function Text({ children, title, ...styleProps }: TextProps) {
+export function Text({ children, title, className, ...styleProps }: TextProps) {
 	return (
-		<div title={title} className={textStyles(styleProps)}>
+		<div title={title} className={textStyles({ ...styleProps, className })}>
 			{children}
 		</div>
 	);

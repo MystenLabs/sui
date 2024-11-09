@@ -22,7 +22,6 @@ use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
     base_types::*, crypto::AuthorityPublicKeyBytes, messages_grpc::TransactionInfoRequest,
-    object::Owner,
 };
 
 use clap::*;
@@ -417,59 +416,6 @@ pub enum ToolCommand {
         )]
         sender_signed_data: String,
     },
-}
-
-trait OptionDebug<T> {
-    fn opt_debug(&self, def_str: &str) -> String;
-}
-trait OptionDisplay<T> {
-    fn opt_display(&self, def_str: &str) -> String;
-}
-
-impl<T> OptionDebug<T> for Option<T>
-where
-    T: std::fmt::Debug,
-{
-    fn opt_debug(&self, def_str: &str) -> String {
-        match self {
-            None => def_str.to_string(),
-            Some(t) => format!("{:?}", t),
-        }
-    }
-}
-
-impl<T> OptionDisplay<T> for Option<T>
-where
-    T: std::fmt::Display,
-{
-    fn opt_display(&self, def_str: &str) -> String {
-        match self {
-            None => def_str.to_string(),
-            Some(t) => format!("{}", t),
-        }
-    }
-}
-
-struct OwnerOutput(Owner);
-
-// grep/awk-friendly output for Owner
-impl std::fmt::Display for OwnerOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Owner::AddressOwner(address) => {
-                write!(f, "address({})", address)
-            }
-            Owner::ObjectOwner(address) => {
-                write!(f, "object({})", address)
-            }
-            Owner::Immutable => {
-                write!(f, "immutable")
-            }
-            Owner::Shared { .. } => {
-                write!(f, "shared")
-            }
-        }
-    }
 }
 
 async fn check_locked_object(

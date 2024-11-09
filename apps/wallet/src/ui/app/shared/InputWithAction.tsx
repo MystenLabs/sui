@@ -124,7 +124,7 @@ export function InputWithAction({
 
 const inputWithActionZodFormStyles = cva(
 	[
-		'transition flex flex-row items-center px-3 py-2 text-body font-semibold',
+		'transition flex flex-row items-center px-3 py-2 text-body font-semibold overflow-hidden',
 		'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)]',
 		'border-solid border text-steel-darker',
 		'relative',
@@ -250,7 +250,7 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 					)}
 
 					{(onActionClicked || info) && (
-						<div className="z-10 flex gap-2 items-center justify-end absolute mx-2 right-0 overflow-hidden">
+						<div className="z-10 flex gap-2 items-center justify-end absolute mx-2 right-0 overflow-hidden bg-white">
 							{info}
 							{onActionClicked && (
 								<Pill

@@ -238,7 +238,8 @@ Delete a VerifiedID
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_delete">delete</a>(verified_id: <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a>) {
-    <b>let</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a> { id, owner: _, key_claim_name: _, key_claim_value: _, issuer: _, audience: _ } = verified_id;
+    <b>let</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a> { id, owner: _, key_claim_name: _, key_claim_value: _, issuer: _, audience: _ } =
+        verified_id;
     id.<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_delete">delete</a>();
 }
 </code></pre>
@@ -301,7 +302,7 @@ This function has been disabled.
     _key_claim_value: &String,
     _issuer: &String,
     _audience: &String,
-    _pin_hash: u256
+    _pin_hash: u256,
 ): bool {
     <b>assert</b>!(<b>false</b>, <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_EFunctionDisabled">EFunctionDisabled</a>);
     <b>false</b>
@@ -338,7 +339,7 @@ string or if the inputs are longer than the allowed upper bounds: <code>kc_name<
     key_claim_value: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     issuer: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     audience: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    pin_hash: u256
+    pin_hash: u256,
 ): bool;
 </code></pre>
 

@@ -59,6 +59,17 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:21
+   │
+13 │         let _tmp1 = _s.;
+   │                     ^^ Possible in-scope names
+   │
+   = members: 'A -> a::m::A', 'B -> a::m::B', 'foo -> a::m::foo', or 'unit_test_poison -> a::m::unit_test_poison'
+   = modules: 'Self -> a::m'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
 note[I15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:23
    │
@@ -73,6 +84,17 @@ error[E01002]: unexpected token
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:21
+   │
+14 │         let _tmp2 = _s.a.;
+   │                     ^^ Possible in-scope names
+   │
+   = members: 'A -> a::m::A', 'B -> a::m::B', 'foo -> a::m::foo', or 'unit_test_poison -> a::m::unit_test_poison'
+   = modules: 'Self -> a::m'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
 note[I15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:24

@@ -5,18 +5,20 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use move_symbol_pool::Symbol;
 use petgraph::{algo, prelude::DiGraphMap, Direction};
+
+use std::io::BufRead;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     fmt,
     fs::File,
-    io::{Read, Write},
+    io::{BufReader, Read, Write},
     path::{Path, PathBuf},
     process::Command,
 };
 
 use crate::{
     lock_file::{schema, LockFile},
-    package_hooks::{self, custom_resolve_pkg_id, resolve_version, PackageIdentifier},
+    package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
     source_package::{
         layout::SourcePackageLayout,
         manifest_parser::{
@@ -232,6 +234,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let lock_file = File::open(lock_path);
         let digest_and_lock_contents = lock_file
             .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
+                Ok(header) if header.version < schema::VERSION => None, // outdated lock file - regenerate
                 Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string_opt)),
                 Err(_) => None, // malformed header - regenerate lock file
             })
@@ -375,8 +378,9 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let mut resolved_id_deps = BTreeMap::new();
         let mut dep_orig_names = BTreeMap::new();
         let mut overrides = BTreeMap::new();
+
         for (dep_pkg_name, dep) in dependencies {
-            let (pkg_graph, is_override, is_external, resolved_pkg_id, resolved_version) = self
+            let new_deps = self
                 .new_for_dep(
                     parent,
                     &dep,
@@ -392,34 +396,38 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         parent_pkg_name
                     )
                 })?;
-            dep_graphs.insert(
-                resolved_pkg_id,
-                DependencyGraphInfo::new(
-                    pkg_graph,
-                    mode,
-                    is_override,
-                    is_external,
-                    resolved_version,
-                ),
-            );
-            resolved_id_deps.insert(resolved_pkg_id, dep.clone());
-            dep_orig_names.insert(resolved_pkg_id, dep_pkg_name);
 
-            if is_override {
-                let kind = match dep {
-                    PM::Dependency::Internal(d) => d.kind,
-                    PM::Dependency::External(_) => {
-                        // external dependencies cannot be overrides
-                        panic!("Unexpected external dependency override")
-                    }
-                };
-                let mut dep_pkg = Package {
-                    kind,
-                    resolver: None,
-                    version: resolved_version,
-                };
-                dep_pkg.kind.reroot(parent)?;
-                overrides.insert(resolved_pkg_id, dep_pkg);
+            for (pkg_graph, is_override, is_external, resolved_pkg_id, resolved_version) in new_deps
+            {
+                dep_graphs.insert(
+                    resolved_pkg_id,
+                    DependencyGraphInfo::new(
+                        pkg_graph,
+                        mode,
+                        is_override,
+                        is_external,
+                        resolved_version,
+                    ),
+                );
+                resolved_id_deps.insert(resolved_pkg_id, dep.clone());
+                dep_orig_names.insert(resolved_pkg_id, dep_pkg_name);
+
+                if is_override {
+                    let kind = match dep {
+                        PM::Dependency::Internal(ref d) => d.kind.clone(),
+                        PM::Dependency::External(_) => {
+                            // external dependencies cannot be overrides
+                            panic!("Unexpected external dependency override")
+                        }
+                    };
+                    let mut dep_pkg = Package {
+                        kind,
+                        resolver: None,
+                        version: resolved_version,
+                    };
+                    dep_pkg.kind.reroot(parent)?;
+                    overrides.insert(resolved_pkg_id, dep_pkg);
+                }
             }
         }
         Ok((dep_graphs, resolved_id_deps, dep_orig_names, overrides))
@@ -435,8 +443,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         parent_pkg_name: PM::PackageName,
         dep_pkg_name: PM::PackageName,
         dep_pkg_path: PathBuf,
-    ) -> Result<(DependencyGraph, bool, bool, Symbol, Option<Symbol>)> {
-        let (pkg_graph, is_override, is_external, resolved_pkg_name, resolved_version) = match dep {
+    ) -> Result<Vec<(DependencyGraph, bool, bool, Symbol, Option<Symbol>)>> {
+        match dep {
             PM::Dependency::Internal(d) => {
                 self.dependency_cache
                     .download_and_update_if_remote(dep_pkg_name, &d.kind, &mut self.progress_output)
@@ -481,16 +489,16 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         p.kind.reroot(&d.kind)?;
                     }
                 }
-                (
+                Ok(vec![(
                     pkg_graph,
                     d.dep_override,
                     false,
                     resolved_pkg_id,
                     resolved_version,
-                )
+                )])
             }
             PM::Dependency::External(resolver) => {
-                let pkg_graph = DependencyGraph::get_external(
+                let external_deps = DependencyGraph::get_external(
                     mode,
                     parent_pkg_id,
                     parent_pkg_name,
@@ -499,18 +507,21 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     &dep_pkg_path,
                     &mut self.progress_output,
                 )?;
-                // TODO: support resolved_pkg_name and resolved_version for
-                // externally resolved deps.
-                (pkg_graph, false, true, dep_pkg_name, None)
+
+                Ok(external_deps
+                    .into_iter()
+                    .map(|(pkg_graph, _, resolved_pkg_id, resolved_pkg_version)| {
+                        (
+                            pkg_graph,
+                            false,
+                            true,
+                            resolved_pkg_id,
+                            resolved_pkg_version,
+                        )
+                    })
+                    .collect())
             }
-        };
-        Ok((
-            pkg_graph,
-            is_override,
-            is_external,
-            resolved_pkg_name,
-            resolved_version,
-        ))
+        }
     }
 
     /// Computes dependency hashes.
@@ -959,9 +970,8 @@ impl DependencyGraph {
                 Ok(true)
             }
             PM::Dependency::External(_) => {
-                // the way that external graphs are constructed, edges between the (root) package of
-                // the outer graph and dependencies in the sub-graph are already present in the
-                // sub-graph
+                // External dependencies exist in the subgraph of the root package and are added to
+                // the package_graph as such.
                 let d = sub_graph
                     .package_graph
                     .edge_weight(self.root_package_id, dep_pkg_id)
@@ -1066,39 +1076,41 @@ impl DependencyGraph {
         package_graph.add_node(root_package_id);
 
         for schema::Dependency {
-            name,
+            id: dep_id,
+            name: dep_name,
             subst,
             digest,
         } in packages.root_dependencies.into_iter().flatten()
         {
             package_graph.add_edge(
                 root_package_id,
-                Symbol::from(name.as_str()),
+                PackageIdentifier::from(dep_id.as_str()),
                 Dependency {
                     mode: DependencyMode::Always,
                     subst: subst.map(parse_substitution).transpose()?,
                     digest: digest.map(Symbol::from),
                     dep_override: false,
-                    dep_name: PM::PackageName::from(name),
+                    dep_name: PM::PackageName::from(dep_name),
                 },
             );
         }
 
         for schema::Dependency {
-            name,
+            id: dep_id,
+            name: dep_name,
             subst,
             digest,
         } in packages.root_dev_dependencies.into_iter().flatten()
         {
             package_graph.add_edge(
                 root_package_id,
-                Symbol::from(name.as_str()),
+                PackageIdentifier::from(dep_id.as_str()),
                 Dependency {
                     mode: DependencyMode::DevOnly,
                     subst: subst.map(parse_substitution).transpose()?,
                     digest: digest.map(Symbol::from),
                     dep_override: false,
-                    dep_name: PM::PackageName::from(name.as_str()),
+                    dep_name: PM::PackageName::from(dep_name),
                 },
             );
         }
@@ -1106,30 +1118,30 @@ impl DependencyGraph {
         // Fill in the remaining dependencies, and the package source information from the lock
         // file.
         for schema::Package {
-            name: pkg_name,
+            id: pkg_id,
             source,
             version,
             dependencies,
             dev_dependencies,
         } in packages.packages.into_iter().flatten()
         {
-            let pkg_name = PM::PackageName::from(pkg_name.as_str());
-            let source = parse_dependency(pkg_name.as_str(), source)
-                .with_context(|| format!("Deserializing dependency '{pkg_name}'"))?;
+            let pkg_id = PackageIdentifier::from(pkg_id.as_str());
+            let source = parse_dependency(source)
+                .with_context(|| format!("Deserializing dependency '{pkg_id}'"))?;
 
             let source = match source {
                 PM::Dependency::Internal(source) => source,
                 PM::Dependency::External(resolver) => {
-                    bail!("Unexpected dependency '{pkg_name}' resolved externally by '{resolver}'");
+                    bail!("Unexpected dependency '{pkg_id}' resolved externally by '{resolver}'");
                 }
             };
 
             if source.subst.is_some() {
-                bail!("Unexpected 'addr_subst' in source for '{pkg_name}'")
+                bail!("Unexpected 'addr_subst' in source for '{pkg_id}'")
             }
 
             if source.digest.is_some() {
-                bail!("Unexpected 'digest' in source for '{pkg_name}'")
+                bail!("Unexpected 'digest' in source for '{pkg_id}'")
             }
 
             let pkg = Package {
@@ -1138,7 +1150,7 @@ impl DependencyGraph {
                 version: version.map(Symbol::from),
             };
 
-            match package_table.entry(pkg_name) {
+            match package_table.entry(pkg_id) {
                 Entry::Vacant(entry) => {
                     entry.insert(pkg);
                 }
@@ -1148,7 +1160,7 @@ impl DependencyGraph {
                 Entry::Occupied(entry) => {
                     bail!(
                         "Conflicting dependencies found:\n{0} = {1}\n{0} = {2}",
-                        pkg_name,
+                        pkg_id,
                         PackageWithResolverTOML(entry.get()),
                         PackageWithResolverTOML(&pkg),
                     );
@@ -1156,14 +1168,15 @@ impl DependencyGraph {
             };
 
             for schema::Dependency {
+                id: dep_id,
                 name: dep_name,
                 subst,
                 digest,
             } in dependencies.into_iter().flatten()
             {
                 package_graph.add_edge(
-                    pkg_name,
-                    PM::PackageName::from(dep_name.as_str()),
+                    pkg_id,
+                    PackageIdentifier::from(dep_id.as_str()),
                     Dependency {
                         mode: DependencyMode::Always,
                         subst: subst.map(parse_substitution).transpose()?,
@@ -1175,14 +1188,15 @@ impl DependencyGraph {
             }
 
             for schema::Dependency {
+                id: dep_id,
                 name: dep_name,
                 subst,
                 digest,
             } in dev_dependencies.into_iter().flatten()
             {
                 package_graph.add_edge(
-                    pkg_name,
-                    PM::PackageName::from(dep_name.as_str()),
+                    pkg_id,
+                    PackageIdentifier::from(dep_id.as_str()),
                     Dependency {
                         mode: DependencyMode::DevOnly,
                         subst: subst.map(parse_substitution).transpose()?,
@@ -1232,7 +1246,7 @@ impl DependencyGraph {
         for (id, pkg) in &self.package_table {
             writeln!(writer, "\n[[move.package]]")?;
 
-            writeln!(writer, "name = {}", str_escape(id.as_str())?)?;
+            writeln!(writer, "id = {}", str_escape(id.as_str())?)?;
             writeln!(writer, "source = {}", PackageTOML(pkg))?;
             if let Some(version) = &pkg.version {
                 writeln!(writer, "version = {}", str_escape(version.as_str())?)?;
@@ -1350,13 +1364,15 @@ impl DependencyGraph {
             .map(|(_, dep_name, dep)| (dep_name, dep, &self.package_table[&dep_name]))
     }
 
-    /// Resolves the packages described at dependency `to` of package `from` with manifest at path
-    /// `package_path` by running the binary `resolver.  `mode` decides whether the resulting
-    /// packages are added to `self` as dependencies of `package_name` or dev-dependencies.
+    /// Resolves the packages described at dependency `to` the dependency specified by`from`
+    /// with manifest at path `package_path` by running the binary `resolver`. `mode`
+    /// decides whether the resulting packages are added to `self` as dependencies of
+    /// `package_name` or dev-dependencies.
     ///
     /// Sends progress updates to `progress_output`, including stderr from the resolver, and
-    /// captures stdout, which is assumed to be a lock file containing the result of package
-    /// resolution.
+    /// captures stdout. The output is expected to be one or more null-separated string content.
+    /// Each string is interpreted as a dependency graph, as represented by the Move.lock TOML
+    /// schema. It returns each subgraph to be merged into the whole program dependency graph.
     fn get_external<Progress: Write>(
         mode: DependencyMode,
         from_id: PackageIdentifier,
@@ -1365,7 +1381,14 @@ impl DependencyGraph {
         resolver: Symbol,
         package_path: &Path,
         progress_output: &mut Progress,
-    ) -> Result<DependencyGraph> {
+    ) -> Result<
+        Vec<(
+            DependencyGraph,
+            PM::Dependency,
+            PM::PackageName,
+            Option<Symbol>, // version
+        )>,
+    > {
         let mode_label = if mode == DependencyMode::DevOnly {
             "dev-dependencies"
         } else {
@@ -1384,6 +1407,7 @@ impl DependencyGraph {
         )?;
 
         // Call out to the external resolver
+        // TODO(optimization): this will collect all stdout in memory, but can be streamed instead.
         let output = Command::new(resolver.as_str())
             .arg(format!("--resolve-move-{mode_label}"))
             .arg(to_name.as_str())
@@ -1411,20 +1435,59 @@ impl DependencyGraph {
             }
         }
 
-        let sub_graph = DependencyGraph::read_from_lock(
-            package_path.to_path_buf(),
-            from_id,
-            from_name,
-            &mut output.stdout.as_slice(),
-            Some(resolver),
-        )
-        .with_context(|| {
-            format!(
-                "Parsing response from '{resolver}' for dependency '{to_name}' of package '{from_id}'"
-            )
-        })?;
+        let mut result = Vec::new();
+        let mut reader = BufReader::new(output.stdout.as_slice());
+        let mut buffer = Vec::new();
+        // Loop over null-separated lock file contents, creating the graph and adding it to the result.
+        loop {
+            match reader.read_until(0, &mut buffer) {
+                Ok(0) => break, // EOF
+                Ok(_) => {
+                    // Remove the null byte if it's present
+                    if buffer.last() == Some(&0) {
+                        buffer.pop();
+                    }
 
-        Ok(sub_graph)
+                    let sub_graph = DependencyGraph::read_from_lock(
+                        package_path.to_path_buf(),
+                        from_id,
+                        from_name,
+                        &mut buffer.as_slice(),
+                        Some(resolver),
+                    ).with_context(|| {
+                        format!("Parsing response from '{resolver}' for dependency '{to_name}' of package '{from_id}'")
+                    })?;
+
+                    let root_sub_package_id = match sub_graph
+                        .package_graph
+                        .edges(from_id)
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                    {
+                        [(_, id, _)] => *id,
+                        // TODO: We can in fact allow allow multiple root packages / graphs and relax this constraint.
+                        _ => bail!("Expected a single root dependency but none or multiple found"),
+                    };
+                    let root_sub_package_version = sub_graph
+                        .package_table
+                        .get(&root_sub_package_id)
+                        .unwrap()
+                        .version;
+
+                    let new_dep = PM::Dependency::External(root_sub_package_id);
+                    result.push((
+                        sub_graph,
+                        new_dep,
+                        root_sub_package_id,
+                        root_sub_package_version,
+                    ));
+                    buffer.clear();
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Ok(result)
     }
 
     /// Checks that every dependency in the graph, excluding the root package, is present in the
@@ -1518,23 +1581,9 @@ impl fmt::Display for Package {
                 f.write_str(&path_escape(subdir)?)?;
             }
 
-            PM::DependencyKind::Custom(PM::CustomDepInfo {
-                node_url,
-                package_address,
-                subdir,
-                package_name: _,
-            }) => {
-                let custom_key = package_hooks::custom_dependency_key().ok_or(fmt::Error)?;
-
-                f.write_str(&custom_key)?;
-                write!(f, " = ")?;
-                f.write_str(&str_escape(node_url.as_str())?)?;
-
-                write!(f, ", address = ")?;
-                f.write_str(&str_escape(package_address.as_str())?)?;
-
-                write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(subdir)?)?;
+            PM::DependencyKind::OnChain(PM::OnChainInfo { id }) => {
+                write!(f, "id = ")?;
+                f.write_str(&str_escape(id.as_str())?)?;
             }
         }
 
@@ -1566,20 +1615,23 @@ impl<'a> fmt::Display for PackageWithResolverTOML<'a> {
 impl<'a> fmt::Display for DependencyTOML<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let DependencyTOML(
-            name,
+            id,
             Dependency {
                 mode: _,
                 subst,
                 digest,
                 dep_override: _,
-                dep_name: _,
+                dep_name,
             },
         ) = self;
 
         f.write_str("{ ")?;
 
-        write!(f, "name = ")?;
-        f.write_str(&str_escape(name.as_str())?)?;
+        write!(f, "id = ")?;
+        f.write_str(&str_escape(id.as_str())?)?;
+
+        write!(f, ", name = ")?;
+        f.write_str(&str_escape(dep_name.as_str())?)?;
 
         if let Some(digest) = digest {
             write!(f, ", digest = ")?;

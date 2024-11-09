@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58 } from '@mysten/bcs';
+import { fromBase64, toBase58 } from '@mysten/bcs';
 import type {
 	MoveValue,
 	ProtocolConfigValue,
@@ -15,6 +15,7 @@ import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten
 import type {
 	ObjectFilter,
 	QueryEventsQueryVariables,
+	QueryTransactionBlocksQueryVariables,
 	Rpc_Checkpoint_FieldsFragment,
 	Rpc_Transaction_FieldsFragment,
 } from './generated/queries.js';
@@ -580,7 +581,7 @@ export const RPC_METHODS: {
 		}));
 	},
 	async queryTransactionBlocks(transport, [{ filter, options }, cursor, limit = 20, descending]) {
-		const pagination = descending
+		const pagination: Partial<QueryTransactionBlocksQueryVariables> = descending
 			? {
 					last: limit,
 					before: cursor,
@@ -621,8 +622,8 @@ export const RPC_METHODS: {
 										: undefined,
 								inputObject: 'InputObject' in filter ? filter.InputObject : undefined,
 								changedObject: 'ChangedObject' in filter ? filter.ChangedObject : undefined,
-								signAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
-								recvAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
+								sentAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
+								affectedAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
 								kind:
 									'TransactionKind' in filter
 										? filter.TransactionKind === 'ProgrammableTransaction'
@@ -887,17 +888,17 @@ export const RPC_METHODS: {
 			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
 			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
 			data: events.map((event) => ({
-				bcs: event.bcs,
+				bcs: event.contents.bcs,
 				id: {
 					eventSeq: '', // TODO
 					txDigest: '', // TODO
 				},
 				packageId: event.sendingModule?.package.address!,
-				parsedJson: event.json ? JSON.parse(event.json) : undefined,
+				parsedJson: event.contents.json ? JSON.parse(event.contents.json) : undefined,
 				sender: event.sender?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
-				type: toShortTypeString(event.type?.repr)!,
+				type: toShortTypeString(event.contents.type?.repr)!,
 			})),
 		};
 	},
@@ -947,12 +948,12 @@ export const RPC_METHODS: {
 									: {
 											Result: ref.input.cmd,
 										},
-						Array.from(fromB64(ref.bcs)),
+						Array.from(fromBase64(ref.bcs)),
 						toShortTypeString(ref.type.repr),
 					],
 				),
 				returnValues: result.returnValues?.map((value) => [
-					Array.from(fromB64(value.bcs)),
+					Array.from(fromBase64(value.bcs)),
 					toShortTypeString(value.type.repr),
 				]),
 			})),
@@ -973,7 +974,7 @@ export const RPC_METHODS: {
 
 		return {
 			data: fields.map((field) => ({
-				bcsName: field.name?.bcs && toB58(fromB64(field.name.bcs)),
+				bcsName: field.name?.bcs && toBase58(fromBase64(field.name.bcs)),
 				digest: (field.value?.__typename === 'MoveObject' ? field.value.digest : undefined)!,
 				name: {
 					type: toShortTypeString(field.name?.type.repr)!,
@@ -1019,7 +1020,7 @@ export const RPC_METHODS: {
 			(data) => {
 				return data.owner?.dynamicObjectField?.value?.__typename === 'MoveObject'
 					? data.owner.dynamicObjectField.value.owner?.__typename === 'Parent'
-						? data.owner.dynamicObjectField.value.owner.parent
+						? data.owner.dynamicObjectField.value.owner.parent?.asObject
 						: undefined
 					: undefined;
 			},
@@ -1076,7 +1077,7 @@ export const RPC_METHODS: {
 		);
 
 		if (!effects?.transactionBlock) {
-			const tx = Transaction.from(fromB64(txBytes));
+			const tx = Transaction.from(fromBase64(txBytes));
 			return { errors: errors ?? undefined, digest: await tx.getDigest() };
 		}
 
@@ -1089,7 +1090,7 @@ export const RPC_METHODS: {
 		);
 	},
 	async dryRunTransactionBlock(transport, [txBytes]) {
-		const tx = Transaction.from(fromB64(txBytes));
+		const tx = Transaction.from(fromBase64(txBytes));
 		const { transaction, error } = await transport.graphqlQuery(
 			{
 				query: DryRunTransactionBlockDocument,
@@ -1362,6 +1363,7 @@ export const RPC_METHODS: {
 			binary_friend_decls: 'u16',
 			max_package_dependencies: 'u32',
 			bridge_should_try_to_finalize_committee: 'bool',
+			consensus_voting_rounds: 'u32',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {

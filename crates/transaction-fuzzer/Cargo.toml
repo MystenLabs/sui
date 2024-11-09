@@ -7,6 +7,9 @@ description = "Tool to fuzz the system with randomly generated transactions"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 proptest.workspace = true
 proptest-derive.workspace = true

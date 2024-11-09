@@ -76,6 +76,14 @@ impl PassthroughCache {
             })
             .ok();
     }
+
+    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) -> SuiResult {
+        self.store.bulk_insert_genesis_objects(objects)
+    }
+
+    fn insert_genesis_object_impl(&self, object: Object) -> SuiResult {
+        self.store.insert_genesis_object(object)
+    }
 }
 
 impl ObjectCacheRead for PassthroughCache {
@@ -273,10 +281,16 @@ impl ExecutionCacheWrite for PassthroughCache {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> BoxFuture<'a, SuiResult> {
         self.store
-            .acquire_transaction_locks(epoch_store, owned_input_objects, transaction)
+            .acquire_transaction_locks(
+                epoch_store,
+                owned_input_objects,
+                tx_digest,
+                signed_transaction,
+            )
             .boxed()
     }
 }

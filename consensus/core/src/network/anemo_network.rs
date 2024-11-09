@@ -233,6 +233,29 @@ impl NetworkClient for AnemoClient {
         let body = response.into_body();
         Ok(body.blocks)
     }
+
+    async fn get_latest_rounds(
+        &self,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Round>> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = GetLatestRoundsRequest {};
+        let response = client
+            .get_latest_rounds(anemo::Request::new(request).with_timeout(timeout))
+            .await
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!(
+                        "get_latest_rounds timeout: {e:?}"
+                    ))
+                } else {
+                    ConsensusError::NetworkRequest(format!("get_latest_rounds failed: {e:?}"))
+                }
+            })?;
+        let body = response.into_body();
+        Ok(body.highest_received)
+    }
 }
 
 /// Proxies Anemo requests to NetworkService with actual handler implementation.
@@ -267,7 +290,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer_id not found",
             ));
         };
-        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+        let index = *self.peer_map.get(peer_id).ok_or_else(|| {
             anemo::rpc::Status::new_with_message(
                 anemo::types::response::StatusCode::BadRequest,
                 "peer not found",
@@ -275,7 +298,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         })?;
         let block = request.into_body().block;
         self.service
-            .handle_send_block(*index, block)
+            .handle_send_block(index, block)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -296,7 +319,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer_id not found",
             ));
         };
-        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+        let index = *self.peer_map.get(peer_id).ok_or_else(|| {
             anemo::rpc::Status::new_with_message(
                 anemo::types::response::StatusCode::BadRequest,
                 "peer not found",
@@ -319,7 +342,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
 
         let blocks = self
             .service
-            .handle_fetch_blocks(*index, block_refs, highest_accepted_rounds)
+            .handle_fetch_blocks(index, block_refs, highest_accepted_rounds)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -340,7 +363,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer_id not found",
             ));
         };
-        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+        let index = *self.peer_map.get(peer_id).ok_or_else(|| {
             anemo::rpc::Status::new_with_message(
                 anemo::types::response::StatusCode::BadRequest,
                 "peer not found",
@@ -349,7 +372,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         let request = request.into_body();
         let (commits, certifier_blocks) = self
             .service
-            .handle_fetch_commits(*index, (request.start..=request.end).into())
+            .handle_fetch_commits(index, (request.start..=request.end).into())
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -381,7 +404,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer_id not found",
             ));
         };
-        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+        let index = *self.peer_map.get(peer_id).ok_or_else(|| {
             anemo::rpc::Status::new_with_message(
                 anemo::types::response::StatusCode::BadRequest,
                 "peer not found",
@@ -390,7 +413,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         let body = request.into_body();
         let blocks = self
             .service
-            .handle_fetch_latest_blocks(*index, body.authorities)
+            .handle_fetch_latest_blocks(index, body.authorities)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -399,6 +422,35 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 )
             })?;
         Ok(Response::new(FetchLatestBlocksResponse { blocks }))
+    }
+
+    async fn get_latest_rounds(
+        &self,
+        request: anemo::Request<GetLatestRoundsRequest>,
+    ) -> Result<anemo::Response<GetLatestRoundsResponse>, anemo::rpc::Status> {
+        let Some(peer_id) = request.peer_id() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer_id not found",
+            ));
+        };
+        let index = *self.peer_map.get(peer_id).ok_or_else(|| {
+            anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer not found",
+            )
+        })?;
+        let highest_received = self
+            .service
+            .handle_get_latest_rounds(index)
+            .await
+            .map_err(|e| {
+                anemo::rpc::Status::new_with_message(
+                    anemo::types::response::StatusCode::InternalServerError,
+                    format!("{e}"),
+                )
+            })?;
+        Ok(Response::new(GetLatestRoundsResponse { highest_received }))
     }
 }
 
@@ -724,4 +776,13 @@ pub(crate) struct FetchLatestBlocksRequest {
 pub(crate) struct FetchLatestBlocksResponse {
     // Serialized SignedBlocks.
     blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct GetLatestRoundsRequest {}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct GetLatestRoundsResponse {
+    // Highest received round per authority.
+    highest_received: Vec<u32>,
 }

@@ -6,7 +6,7 @@ Tested using:
 
 ## Prerequisites and Setup
 
-1. Confirm you have either [Docker Engine](https://docs.docker.com/engine/install/) or [Docker Desktop](https://docs.docker.com/desktop/install/linux-install/) instllled, as well as [Docker Compose](https://github.com/docker/compose#linux).
+1. Confirm you have either [Docker Engine](https://docs.docker.com/engine/install/) or [Docker Desktop](https://docs.docker.com/desktop/install/linux-install/) installed, as well as [Docker Compose](https://github.com/docker/compose#linux).
 
 2. Update [validator.yaml](../config/validator.yaml) and place it in the same directory as `docker-compose.yaml`.
 

@@ -1,0 +1,1 @@
+module bar::bar {}

@@ -4,7 +4,7 @@
 use std::{env, fmt};
 
 use crate::{error::SuiError, sui_serde::Readable};
-use fastcrypto::encoding::{Base58, Encoding};
+use fastcrypto::encoding::{Base58, Encoding, Hex};
 use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -157,6 +157,9 @@ impl fmt::UpperHex for Digest {
 )]
 pub struct ChainIdentifier(CheckpointDigest);
 
+pub const MAINNET_CHAIN_IDENTIFIER_BASE58: &str = "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S";
+pub const TESTNET_CHAIN_IDENTIFIER_BASE58: &str = "69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD";
+
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
@@ -179,6 +182,24 @@ static SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: Lazy<Option<Chain>> = Lazy::new(|| {
 });
 
 impl ChainIdentifier {
+    /// take a short 4 byte identifier and convert it into a ChainIdentifier
+    /// short ids come from the JSON RPC getChainIdentifier and are encoded in hex
+    pub fn from_chain_short_id(short_id: &String) -> Option<Self> {
+        if Hex::from_bytes(&Base58::decode(MAINNET_CHAIN_IDENTIFIER_BASE58).ok()?)
+            .encoded_with_format()
+            .starts_with(&format!("0x{}", short_id))
+        {
+            Some(get_mainnet_chain_identifier())
+        } else if Hex::from_bytes(&Base58::decode(TESTNET_CHAIN_IDENTIFIER_BASE58).ok()?)
+            .encoded_with_format()
+            .starts_with(&format!("0x{}", short_id))
+        {
+            Some(get_testnet_chain_identifier())
+        } else {
+            None
+        }
+    }
+
     pub fn chain(&self) -> Chain {
         let mainnet_id = get_mainnet_chain_identifier();
         let testnet_id = get_testnet_chain_identifier();
@@ -206,7 +227,7 @@ impl ChainIdentifier {
 pub fn get_mainnet_chain_identifier() -> ChainIdentifier {
     let digest = MAINNET_CHAIN_IDENTIFIER.get_or_init(|| {
         let digest = CheckpointDigest::new(
-            Base58::decode("4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S")
+            Base58::decode(MAINNET_CHAIN_IDENTIFIER_BASE58)
                 .expect("mainnet genesis checkpoint digest literal is invalid")
                 .try_into()
                 .expect("Mainnet genesis checkpoint digest literal has incorrect length"),
@@ -219,7 +240,7 @@ pub fn get_mainnet_chain_identifier() -> ChainIdentifier {
 pub fn get_testnet_chain_identifier() -> ChainIdentifier {
     let digest = TESTNET_CHAIN_IDENTIFIER.get_or_init(|| {
         let digest = CheckpointDigest::new(
-            Base58::decode("69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD")
+            Base58::decode(TESTNET_CHAIN_IDENTIFIER_BASE58)
                 .expect("testnet genesis checkpoint digest literal is invalid")
                 .try_into()
                 .expect("Testnet genesis checkpoint digest literal has incorrect length"),
@@ -396,6 +417,14 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
     }
 }
 
+impl TryFrom<Vec<u8>> for CheckpointContentsDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(CheckpointContentsDigest)
+    }
+}
+
 impl From<CheckpointContentsDigest> for [u8; 32] {
     fn from(digest: CheckpointContentsDigest) -> Self {
         digest.into_inner()
@@ -503,6 +532,10 @@ impl TransactionDigest {
         Self(Digest::new(digest))
     }
 
+    pub const fn from_digest(digest: Digest) -> Self {
+        Self(digest)
+    }
+
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
     /// Note that this is not the same as the digest of the genesis transaction,
@@ -596,6 +629,14 @@ impl TryFrom<&[u8]> for TransactionDigest {
     }
 }
 
+impl TryFrom<Vec<u8>> for TransactionDigest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(TransactionDigest)
+    }
+}
+
 impl std::str::FromStr for TransactionDigest {
     type Err = anyhow::Error;
 
@@ -654,6 +695,14 @@ impl AsRef<[u8]> for TransactionEffectsDigest {
 impl AsRef<[u8; 32]> for TransactionEffectsDigest {
     fn as_ref(&self) -> &[u8; 32] {
         self.0.as_ref()
+    }
+}
+
+impl TryFrom<Vec<u8>> for TransactionEffectsDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(TransactionEffectsDigest)
     }
 }
 
@@ -736,6 +785,14 @@ impl AsRef<[u8]> for TransactionEventsDigest {
 impl AsRef<[u8; 32]> for TransactionEventsDigest {
     fn as_ref(&self) -> &[u8; 32] {
         self.0.as_ref()
+    }
+}
+
+impl TryFrom<Vec<u8>> for TransactionEventsDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(TransactionEventsDigest)
     }
 }
 
@@ -1005,5 +1062,34 @@ impl fmt::Debug for ConsensusCommitDigest {
         f.debug_tuple("ConsensusCommitDigest")
             .field(&self.0)
             .finish()
+    }
+}
+
+mod test {
+    #[allow(unused_imports)]
+    use crate::digests::ChainIdentifier;
+    // check that the chain id returns mainnet
+    #[test]
+    fn test_chain_id_mainnet() {
+        let chain_id = ChainIdentifier::from_chain_short_id(&String::from("35834a8a"));
+        assert_eq!(
+            chain_id.unwrap().chain(),
+            sui_protocol_config::Chain::Mainnet
+        );
+    }
+
+    #[test]
+    fn test_chain_id_testnet() {
+        let chain_id = ChainIdentifier::from_chain_short_id(&String::from("4c78adac"));
+        assert_eq!(
+            chain_id.unwrap().chain(),
+            sui_protocol_config::Chain::Testnet
+        );
+    }
+
+    #[test]
+    fn test_chain_id_unknown() {
+        let chain_id = ChainIdentifier::from_chain_short_id(&String::from("unknown"));
+        assert_eq!(chain_id, None);
     }
 }

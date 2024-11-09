@@ -18,7 +18,7 @@ use fastcrypto::encoding::Base64;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::MoveTypeLayout;
-use move_core_types::identifier::IdentStr;
+use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_metrics::monitored_scope;
 use sui_json::{primitive_type, SuiJsonValue};
@@ -1803,7 +1803,7 @@ impl SuiProgrammableTransactionBlock {
     }
 
     fn resolve_input_type(
-        inputs: &Vec<CallArg>,
+        inputs: &[CallArg],
         commands: &[Command],
         module_cache: &impl GetModule,
     ) -> Vec<Option<MoveTypeLayout>> {
@@ -1811,9 +1811,17 @@ impl SuiProgrammableTransactionBlock {
         for command in commands.iter() {
             match command {
                 Command::MoveCall(c) => {
-                    let id = ModuleId::new(c.package.into(), c.module.clone());
+                    let Ok(module) = Identifier::new(c.module.clone()) else {
+                        return result_types;
+                    };
+
+                    let Ok(function) = Identifier::new(c.function.clone()) else {
+                        return result_types;
+                    };
+
+                    let id = ModuleId::new(c.package.into(), module);
                     let Some(types) =
-                        get_signature_types(id, c.function.as_ident_str(), module_cache)
+                        get_signature_types(id, function.as_ident_str(), module_cache)
                     else {
                         return result_types;
                     };
@@ -1863,7 +1871,7 @@ fn get_signature_types(
                 .signature_at(func.parameters)
                 .0
                 .iter()
-                .map(|s| primitive_type(module, &[], s).1)
+                .map(|s| primitive_type(module, &[], s))
                 .collect(),
         )
     } else {
@@ -2337,7 +2345,7 @@ impl From<EffectsWithInput> for SuiTransactionBlockEffects {
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionFilter {
-    /// Query by checkpoint.
+    /// CURRENTLY NOT SUPPORTED. Query by checkpoint.
     Checkpoint(
         #[schemars(with = "BigInt<u64>")]
         #[serde_as(as = "Readable<BigInt<u64>, _>")]
@@ -2353,13 +2361,15 @@ pub enum TransactionFilter {
     InputObject(ObjectID),
     /// Query by changed object, including created, mutated and unwrapped objects.
     ChangedObject(ObjectID),
+    /// Query for transactions that touch this object.
+    AffectedObject(ObjectID),
     /// Query by sender address.
     FromAddress(SuiAddress),
     /// Query by recipient address.
     ToAddress(SuiAddress),
     /// Query by sender and recipient address.
     FromAndToAddress { from: SuiAddress, to: SuiAddress },
-    /// Query txs that have a given address as sender or recipient.
+    /// CURRENTLY NOT SUPPORTED. Query txs that have a given address as sender or recipient.
     FromOrToAddress { addr: SuiAddress },
     /// Query by transaction kind
     TransactionKind(String),
@@ -2382,6 +2392,18 @@ impl Filter<EffectsWithInput> for TransactionFilter {
                 .mutated()
                 .iter()
                 .any(|oref: &OwnedObjectRef| &oref.reference.object_id == o),
+            TransactionFilter::AffectedObject(o) => item
+                .effects
+                .created()
+                .iter()
+                .chain(item.effects.mutated().iter())
+                .chain(item.effects.unwrapped().iter())
+                .map(|oref: &OwnedObjectRef| &oref.reference)
+                .chain(item.effects.shared_objects().iter())
+                .chain(item.effects.deleted().iter())
+                .chain(item.effects.unwrapped_then_deleted().iter())
+                .chain(item.effects.wrapped().iter())
+                .any(|oref| &oref.object_id == o),
             TransactionFilter::FromAddress(a) => &item.input.sender() == a,
             TransactionFilter::ToAddress(a) => {
                 let mutated: &[OwnedObjectRef] = item.effects.mutated();

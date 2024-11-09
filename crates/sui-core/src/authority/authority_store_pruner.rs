@@ -1152,6 +1152,8 @@ mod pprof_tests {
     }
 
     #[tokio::test]
+    // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
+    #[ignore]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
     ) -> Result<(), anyhow::Error> {
         // This test writes a bunch of objects to objects table, invokes pruning on it and
@@ -1188,6 +1190,8 @@ mod pprof_tests {
     }
 
     #[tokio::test]
+    // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
+    #[ignore]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_after_flush(
     ) -> Result<(), anyhow::Error> {
         // This test writes a bunch of objects to objects table, invokes pruning on it and

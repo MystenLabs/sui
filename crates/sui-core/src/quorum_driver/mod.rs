@@ -51,6 +51,12 @@ const TASK_QUEUE_SIZE: usize = 2000;
 const EFFECTS_QUEUE_SIZE: usize = 10000;
 const TX_MAX_RETRY_TIMES: u32 = 10;
 
+pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
+    fn epoch(&self) -> EpochId;
+    fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>>;
+    fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>);
+}
+
 #[derive(Clone)]
 pub struct QuorumDriverTask {
     pub request: ExecuteTransactionRequestV3,
@@ -127,7 +133,7 @@ impl<A: Clone> QuorumDriver<A> {
                     }
                     self.metrics
                         .transaction_retry_count
-                        .report(task.retry_times as u64);
+                        .observe(task.retry_times as f64);
                 }
             })
             .map_err(|e| SuiError::QuorumDriverCommunicationError {
@@ -210,7 +216,7 @@ impl<A: Clone> QuorumDriver<A> {
                 self.metrics.total_ok_responses.inc();
                 self.metrics
                     .attempt_times_ok_response
-                    .report(total_attempts as u64);
+                    .observe(total_attempts as f64);
                 Ok((transaction.clone(), resp.clone()))
             }
             Err(err) => {
@@ -354,8 +360,7 @@ where
                 );
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx: None,
-                    retried_tx_success: None,
+                    retried_tx_status: None,
                 }))
             }
 
@@ -450,8 +455,7 @@ where
                 );
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx: None,
-                    retried_tx_success: None,
+                    retried_tx_status: None,
                 }))
             }
             Ok(success) => {
@@ -468,8 +472,7 @@ where
                 }
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx: Some(conflicting_tx_digest),
-                    retried_tx_success: Some(success),
+                    retried_tx_status: Some((conflicting_tx_digest, success)),
                 }))
             }
         }
@@ -510,14 +513,6 @@ where
             })?;
 
         Ok(response)
-    }
-
-    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
-        info!(
-            "Quorum Driver updating AuthorityAggregator with committee {}",
-            new_validators.committee
-        );
-        self.validators.store(new_validators);
     }
 
     /// Returns Some(true) if the conflicting transaction is executed successfully
@@ -610,6 +605,27 @@ where
             });
         // We only try it once
         Ok(result.is_ok())
+    }
+}
+
+impl<A> AuthorityAggregatorUpdatable<A> for QuorumDriver<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    fn epoch(&self) -> EpochId {
+        self.validators.load().committee.epoch
+    }
+
+    fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.validators.load_full()
+    }
+
+    fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>) {
+        info!(
+            "Quorum Driver updating AuthorityAggregator with committee {}",
+            new_authorities.committee
+        );
+        self.validators.store(new_authorities);
     }
 }
 

@@ -1,3 +1,3 @@
-module 0x1::AAA {
+module 0x6::AAA {
     public fun foo() {}
 }

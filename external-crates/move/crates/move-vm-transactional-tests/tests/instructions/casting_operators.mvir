@@ -1,5 +1,5 @@
 //# run
-module 0x1.m {
+module 0x6.m {
 
 // Casting to u8.
 entry foo() {
@@ -35,7 +35,7 @@ label b0:
 
 // Casting to u16.
 //# run
-module 0x2.m {
+module 0x7.m {
 
 entry foo() {
 label b0:
@@ -70,7 +70,7 @@ label b0:
 
 // Casting to u32.
 //# run
-module 0x3.m {
+module 0x8.m {
 
 entry foo() {
 label b0:
@@ -105,7 +105,7 @@ label b0:
 
 // Casting to u64.
 //# run
-module 0x4.m {
+module 0x9.m {
 
 entry foo() {
 label b0:
@@ -130,7 +130,7 @@ label b0:
 
 // Casting to u128.
 //# run
-module 0x5.m {
+module 0xa.m {
 
 entry foo() {
 label b0:
@@ -156,7 +156,7 @@ label b0:
 
 // Casting to u256.
 //# run
-module 0x6.m {
+module 0xb.m {
 
 entry foo() {
 label b0:
@@ -191,7 +191,7 @@ label b0:
 
 // Casting to u8, overflowing.
 //# run
-module 0x7.m {
+module 0xc.m {
 
 entry foo() {
 label b0:
@@ -202,7 +202,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x8.m {
+module 0xd.m {
 
 entry foo() {
 label b0:
@@ -213,7 +213,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x9.m {
+module 0xe.m {
 
 entry foo() {
 label b0:
@@ -224,7 +224,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x10.m {
+module 0x15.m {
 
 entry foo() {
 label b0:
@@ -235,7 +235,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x11.m {
+module 0x16.m {
 
 entry foo() {
 label b0:
@@ -246,7 +246,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x12.m {
+module 0x17.m {
 
 entry foo() {
 label b0:
@@ -257,7 +257,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x13.m {
+module 0x18.m {
 
 entry foo() {
 label b0:
@@ -268,7 +268,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x14.m {
+module 0x19.m {
 
 entry foo() {
 label b0:
@@ -279,7 +279,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x15.m {
+module 0x1a.m {
 
 entry foo() {
 label b0:
@@ -290,7 +290,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x16.m {
+module 0x1b.m {
 
 entry foo() {
 label b0:
@@ -301,7 +301,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x17.m {
+module 0x1c.m {
 
 entry foo() {
 label b0:
@@ -312,7 +312,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x18.m {
+module 0x1d.m {
 
 entry foo() {
 label b0:
@@ -324,7 +324,7 @@ label b0:
 
 // Casting to u64, overflowing.
 //# run
-module 0x19.m {
+module 0x1e.m {
 
 entry foo() {
 label b0:
@@ -335,7 +335,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x20.m {
+module 0x25.m {
 
 entry foo() {
 label b0:
@@ -346,7 +346,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x21.m {
+module 0x26.m {
 
 entry foo() {
 label b0:
@@ -357,7 +357,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x22.m {
+module 0x27.m {
 
 entry foo() {
 label b0:
@@ -368,7 +368,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x23.m {
+module 0x28.m {
 
 entry foo() {
 label b0:
@@ -379,7 +379,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x24.m {
+module 0x29.m {
 
 entry foo() {
 label b0:
@@ -391,7 +391,7 @@ label b0:
 
 // Casting to u16, overflowing.
 //# run
-module 0x25.m {
+module 0x2a.m {
 
 entry foo() {
 label b0:
@@ -402,7 +402,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x26.m {
+module 0x2b.m {
 
 entry foo() {
 label b0:
@@ -413,7 +413,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x27.m {
+module 0x2c.m {
 
 entry foo() {
 label b0:
@@ -424,7 +424,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x28.m {
+module 0x2d.m {
 
 entry foo() {
 label b0:
@@ -435,7 +435,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x29.m {
+module 0x2e.m {
 
 entry foo() {
 label b0:
@@ -446,7 +446,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x30.m {
+module 0x35.m {
 
 entry foo() {
 label b0:
@@ -457,7 +457,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x31.m {
+module 0x36.m {
 
 entry foo() {
 label b0:
@@ -468,7 +468,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x32.m {
+module 0x37.m {
 
 entry foo() {
 label b0:
@@ -480,7 +480,7 @@ label b0:
 
 // Casting to u32, overflowing.
 //# run
-module 0x33.m {
+module 0x38.m {
 
 entry foo() {
 label b0:
@@ -491,7 +491,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x34.m {
+module 0x39.m {
 
 entry foo() {
 label b0:
@@ -502,7 +502,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x35.m {
+module 0x3a.m {
 
 entry foo() {
 label b0:
@@ -513,7 +513,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x36.m {
+module 0x3b.m {
 
 entry foo() {
 label b0:
@@ -524,7 +524,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x37.m {
+module 0x3c.m {
 
 entry foo() {
 label b0:
@@ -535,7 +535,7 @@ label b0:
 }// check: ARITHMETIC_ERROR
 
 //# run
-module 0x38.m {
+module 0x3d.m {
 
 entry foo() {
 label b0:

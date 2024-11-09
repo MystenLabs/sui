@@ -1,4 +1,4 @@
 #[test_only]
-module 0x1::MTest {
+module 0x6::MTest {
     public fun foo() { }
 }

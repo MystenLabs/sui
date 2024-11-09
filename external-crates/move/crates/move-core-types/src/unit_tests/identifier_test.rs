@@ -53,6 +53,9 @@ fn invalid_identifiers() {
         "foo.",
         "foo-bar",
         "foo\u{1f389}",
+        ">>><<<",
+        "foo::bar::<<>>",
+        "foo!!bar!!<<>>",
     ];
     for identifier in &invalid_identifiers {
         assert!(
@@ -60,6 +63,31 @@ fn invalid_identifiers() {
             "Identifier '{}' should be invalid",
             identifier
         );
+    }
+}
+
+#[test]
+fn invalid_identifier_deser() {
+    let invalid_identifiers = [
+        "",
+        "_",
+        "0",
+        "01",
+        "9876",
+        "0foo",
+        ":foo",
+        "fo\\o",
+        "fo/o",
+        "foo.",
+        "foo-bar",
+        "foo\u{1f389}",
+        ">>><<<",
+        "foo::bar::<<>>",
+        "foo!!bar!!<<>>",
+    ];
+    for identifier in &invalid_identifiers {
+        let bytes = bcs::to_bytes(identifier).unwrap();
+        bcs::from_bytes::<Identifier>(&bytes).unwrap_err();
     }
 }
 

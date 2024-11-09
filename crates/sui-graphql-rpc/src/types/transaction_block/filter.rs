@@ -10,20 +10,51 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionBlockFilter {
+    /// Filter transactions by move function called. Calls can be filtered by the `package`,
+    /// `package::module`, or the `package::module::name` of their function.
     pub function: Option<FqNameFilter>,
 
     /// An input filter selecting for either system or programmable transactions.
     pub kind: Option<TransactionBlockKindInput>,
+
+    /// Limit to transactions that occured strictly after the given checkpoint.
     pub after_checkpoint: Option<UInt53>,
+
+    /// Limit to transactions in the given checkpoint.
     pub at_checkpoint: Option<UInt53>,
+
+    /// Limit to transaction that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
-    pub sign_address: Option<SuiAddress>,
-    pub recv_address: Option<SuiAddress>,
+    /// Limit to transactions that interacted with the given address. The address could be a
+    /// sender, sponsor, or recipient of the transaction.
+    pub affected_address: Option<SuiAddress>,
 
+    /// Limit to transactions that interacted with the given object. The object could have been
+    /// created, read, modified, deleted, wrapped, or unwrapped by the transaction. Objects that
+    /// were passed as a `Receiving` input are not considered to have been affected by a
+    /// transaction unless they were actually received.
+    #[cfg(feature = "staging")]
+    pub affected_object: Option<SuiAddress>,
+
+    /// Limit to transactions that were sent by the given address.
+    pub sent_address: Option<SuiAddress>,
+
+    /// Limit to transactions that accepted the given object as an input. NOTE: this input filter
+    /// has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
+    ///
+    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+    /// `affectedObject` is introduced, whichever is later.
     pub input_object: Option<SuiAddress>,
+
+    /// Limit to transactions that output a versioon of this object. NOTE: this input filter has
+    /// been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+    ///
+    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+    /// `affectedObject` is introduced, whichever is later.
     pub changed_object: Option<SuiAddress>,
 
+    /// Select transactions by their digest.
     pub transaction_ids: Option<Vec<Digest>>,
 }
 
@@ -47,8 +78,10 @@ impl TransactionBlockFilter {
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
 
-            sign_address: intersect!(sign_address, intersect::by_eq)?,
-            recv_address: intersect!(recv_address, intersect::by_eq)?,
+            affected_address: intersect!(affected_address, intersect::by_eq)?,
+            #[cfg(feature = "staging")]
+            affected_object: intersect!(affected_object, intersect::by_eq)?,
+            sent_address: intersect!(sent_address, intersect::by_eq)?,
             input_object: intersect!(input_object, intersect::by_eq)?,
             changed_object: intersect!(changed_object, intersect::by_eq)?,
 
@@ -67,7 +100,9 @@ impl TransactionBlockFilter {
         [
             self.function.is_some(),
             self.kind.is_some(),
-            self.recv_address.is_some(),
+            self.affected_address.is_some(),
+            #[cfg(feature = "staging")]
+            self.affected_object.is_some(),
             self.input_object.is_some(),
             self.changed_object.is_some(),
             self.transaction_ids.is_some(),
@@ -79,30 +114,38 @@ impl TransactionBlockFilter {
     }
 
     /// If we don't query a lookup table that has a denormalized sender column, we need to
-    /// explicitly sp
+    /// explicitly specify the sender with a query on `tx_sender`. This function returns the sender
+    /// we need to add an explicit query for if one is required, or `None` otherwise.
     pub(crate) fn explicit_sender(&self) -> Option<SuiAddress> {
-        if self.function.is_none()
+        let missing_implicit_sender = self.function.is_none()
             && self.kind.is_none()
-            && self.recv_address.is_none()
+            && self.affected_address.is_none()
             && self.input_object.is_none()
-            && self.changed_object.is_none()
-        {
-            self.sign_address
-        } else {
-            None
-        }
+            && self.changed_object.is_none();
+
+        #[cfg(feature = "staging")]
+        let missing_implicit_sender = missing_implicit_sender && self.affected_object.is_none();
+
+        missing_implicit_sender
+            .then_some(self.sent_address)
+            .flatten()
     }
 
     /// A TransactionBlockFilter is considered not to have any filters if no filters are specified,
     /// or if the only filters are on `checkpoint`.
     pub(crate) fn has_filters(&self) -> bool {
-        self.function.is_some()
+        let has_filters = self.function.is_some()
             || self.kind.is_some()
-            || self.sign_address.is_some()
-            || self.recv_address.is_some()
+            || self.sent_address.is_some()
+            || self.affected_address.is_some()
             || self.input_object.is_some()
             || self.changed_object.is_some()
-            || self.transaction_ids.is_some()
+            || self.transaction_ids.is_some();
+
+        #[cfg(feature = "staging")]
+        let has_filters = has_filters || self.affected_object.is_some();
+
+        has_filters
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -121,7 +164,7 @@ impl TransactionBlockFilter {
             )
             // If SystemTx, sender if specified must be 0x0. Conversely, if sender is 0x0, kind must be SystemTx.
             || matches!(
-                (self.kind, self.sign_address),
+                (self.kind, self.sent_address),
                 (Some(kind), Some(signer))
                     if (kind == TransactionBlockKindInput::SystemTx)
                         != (signer == SuiAddress::from(NativeSuiAddress::ZERO))

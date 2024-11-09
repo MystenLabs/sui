@@ -10,9 +10,15 @@ use sui_graphql_rpc::server::builder::export_schema;
 fn test_schema_sdl_export() {
     let sdl = export_schema();
 
+    let file = if cfg!(feature = "staging") {
+        "staging.graphql"
+    } else {
+        "schema.graphql"
+    };
+
     // update the current schema file
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.graphql");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(file);
     fs::write(path, &sdl).unwrap();
 
-    assert_snapshot!(sdl);
+    assert_snapshot!(file, sdl);
 }

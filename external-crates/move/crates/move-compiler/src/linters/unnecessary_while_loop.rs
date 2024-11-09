@@ -3,51 +3,17 @@
 //! Aims to enhance code readability and adherence to Rust idioms.
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
     expansion::ast::Value_,
-    shared::CompilationEnv,
+    linters::StyleCodes,
     typing::{
         ast::{self as T, UnannotatedExp_},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        visitor::simple_visitor,
     },
 };
 
-use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, WHILE_TRUE_TO_LOOP_DIAG_CODE};
-
-const WHILE_TRUE_TO_LOOP_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    WHILE_TRUE_TO_LOOP_DIAG_CODE,
-    "unnecessary 'while (true)', replace with 'loop'",
-);
-
-pub struct WhileTrueToLoop;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for WhileTrueToLoop {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+simple_visitor!(
+    WhileTrueToLoop,
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         let UnannotatedExp_::While(_, cond, _) = &exp.exp.value else {
             return false;
         };
@@ -56,13 +22,13 @@ impl TypingVisitorContext for Context<'_> {
         };
 
         let msg = "'while (true)' can be always replaced with 'loop'";
-        let mut diag = diag!(WHILE_TRUE_TO_LOOP_DIAG, (exp.exp.loc, msg));
+        let mut diag = diag!(StyleCodes::WhileTrueToLoop.diag_info(), (exp.exp.loc, msg));
         diag.add_note(
             "A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a \
             'break' with a value, e.g. 'let x = loop { break 42 };'",
         );
-        self.env.add_diag(diag);
+        self.add_diag(diag);
 
         false
     }
-}
+);

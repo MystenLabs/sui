@@ -42,6 +42,14 @@ AuthenticatorStateUpdate:
         TYPENAME: SequenceNumber
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
+AuthorityQuorumSignInfo:
+  STRUCT:
+    - epoch: U64
+    - signature:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
+    - signers_map: BYTES
 CallArg:
   ENUM:
     0:
@@ -97,6 +105,15 @@ CheckpointContentsV1:
         SEQ:
           SEQ:
             TYPENAME: GenericSignature
+CheckpointData:
+  STRUCT:
+    - checkpoint_summary:
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::messages_checkpoint::CheckpointSummary, sui_types::crypto::AuthorityQuorumSignInfo<true>>"
+    - checkpoint_contents:
+        TYPENAME: CheckpointContents
+    - transactions:
+        SEQ:
+          TYPENAME: CheckpointTransaction
 CheckpointDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -121,6 +138,21 @@ CheckpointSummary:
           TYPENAME: EndOfEpochData
     - version_specific_data:
         SEQ: U8
+CheckpointTransaction:
+  STRUCT:
+    - transaction:
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>"
+    - effects:
+        TYPENAME: TransactionEffects
+    - events:
+        OPTION:
+          TYPENAME: TransactionEvents
+    - input_objects:
+        SEQ:
+          TYPENAME: Object
+    - output_objects:
+        SEQ:
+          TYPENAME: Object
 Command:
   ENUM:
     0:
@@ -156,7 +188,7 @@ Command:
       MakeMoveVec:
         TUPLE:
           - OPTION:
-              TYPENAME: TypeTag
+              TYPENAME: TypeInput
           - SEQ:
               TYPENAME: Argument
     6:
@@ -340,16 +372,20 @@ EndOfEpochTransactionKind:
       BridgeCommitteeInit:
         NEWTYPE:
           TYPENAME: SequenceNumber
-Envelope:
+Event:
   STRUCT:
-    - data:
-        TYPENAME: SenderSignedData
-    - auth_signature:
-        TYPENAME: EmptySignInfo
+    - package_id:
+        TYPENAME: ObjectID
+    - transaction_module: STR
+    - sender:
+        TYPENAME: SuiAddress
+    - type_:
+        TYPENAME: StructTag
+    - contents: BYTES
 ExecutionData:
   STRUCT:
     - transaction:
-        TYPENAME: Envelope
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>"
     - effects:
         TYPENAME: TransactionEffects
 ExecutionDigests:
@@ -542,8 +578,6 @@ IDOperation:
       Created: UNIT
     2:
       Deleted: UNIT
-Identifier:
-  NEWTYPESTRUCT: STR
 Intent:
   STRUCT:
     - scope: U8
@@ -569,8 +603,7 @@ ModuleId:
   STRUCT:
     - address:
         TYPENAME: AccountAddress
-    - name:
-        TYPENAME: Identifier
+    - name: STR
 MoveLocation:
   STRUCT:
     - module:
@@ -643,6 +676,15 @@ MultiSigPublicKey:
             - TYPENAME: PublicKey
             - U8
     - threshold: U16
+Object:
+  STRUCT:
+    - data:
+        TYPENAME: Data
+    - owner:
+        TYPENAME: Owner
+    - previous_transaction:
+        TYPENAME: TransactionDigest
+    - storage_rebate: U64
 ObjectArg:
   ENUM:
     0:
@@ -760,13 +802,11 @@ ProgrammableMoveCall:
   STRUCT:
     - package:
         TYPENAME: ObjectID
-    - module:
-        TYPENAME: Identifier
-    - function:
-        TYPENAME: Identifier
+    - module: STR
+    - function: STR
     - type_arguments:
         SEQ:
-          TYPENAME: TypeTag
+          TYPENAME: TypeInput
     - arguments:
         SEQ:
           TYPENAME: Argument
@@ -828,14 +868,21 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+StructInput:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - module: STR
+    - name: STR
+    - type_args:
+        SEQ:
+          TYPENAME: TypeInput
 StructTag:
   STRUCT:
     - address:
         TYPENAME: AccountAddress
-    - module:
-        TYPENAME: Identifier
-    - name:
-        TYPENAME: Identifier
+    - module: STR
+    - name: STR
     - type_args:
         SEQ:
           TYPENAME: TypeTag
@@ -983,6 +1030,11 @@ TransactionEffectsV2:
     - aux_data_digest:
         OPTION:
           TYPENAME: EffectsAuxDataDigest
+TransactionEvents:
+  STRUCT:
+    - data:
+        SEQ:
+          TYPENAME: Event
 TransactionEventsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -1038,6 +1090,34 @@ TypeArgumentError:
       TypeNotFound: UNIT
     1:
       ConstraintNotSatisfied: UNIT
+TypeInput:
+  ENUM:
+    0:
+      bool: UNIT
+    1:
+      u8: UNIT
+    2:
+      u64: UNIT
+    3:
+      u128: UNIT
+    4:
+      address: UNIT
+    5:
+      signer: UNIT
+    6:
+      vector:
+        NEWTYPE:
+          TYPENAME: TypeInput
+    7:
+      struct:
+        NEWTYPE:
+          TYPENAME: StructInput
+    8:
+      u16: UNIT
+    9:
+      u32: UNIT
+    10:
+      u256: UNIT
 TypeOrigin:
   STRUCT:
     - module_name: STR
@@ -1123,4 +1203,16 @@ ZkLoginAuthenticatorAsBytes:
 ZkLoginPublicIdentifier:
   NEWTYPESTRUCT:
     SEQ: U8
+"sui_types::message_envelope::Envelope<sui_types::messages_checkpoint::CheckpointSummary, sui_types::crypto::AuthorityQuorumSignInfo<true>>":
+  STRUCT:
+    - data:
+        TYPENAME: CheckpointSummary
+    - auth_signature:
+        TYPENAME: AuthorityQuorumSignInfo
+"sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>":
+  STRUCT:
+    - data:
+        TYPENAME: SenderSignedData
+    - auth_signature:
+        TYPENAME: EmptySignInfo
 

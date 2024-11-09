@@ -2,18 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
+use crate::filter;
 use crate::raw_query::RawQuery;
-use crate::{
-    data::{DieselBackend, Query},
-    filter,
-};
 use async_graphql::*;
-use diesel::{
-    expression::{is_aggregate::No, ValidGrouping},
-    query_builder::QueryFragment,
-    sql_types::{Binary, Text},
-    AppearsOnTable, Expression, ExpressionMethods, QueryDsl, QuerySource,
-};
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};
 use sui_types::{
@@ -67,89 +58,7 @@ pub(crate) enum Error {
     InvalidFormat(&'static str),
 }
 
-/// Trait for a field that can be used in a query.
-pub(crate) trait Field<Type, QS: QuerySource>:
-    ExpressionMethods
-    + Expression<SqlType = Type>
-    + QueryFragment<DieselBackend>
-    + AppearsOnTable<QS>
-    + ValidGrouping<(), IsAggregate = No>
-    + Send
-    + 'static
-{
-}
-
-impl<T, Type, QS: QuerySource> Field<Type, QS> for T where
-    T: ExpressionMethods
-        + Expression<SqlType = Type>
-        + QueryFragment<DieselBackend>
-        + AppearsOnTable<QS>
-        + ValidGrouping<(), IsAggregate = No>
-        + Send
-        + 'static
-{
-}
-
 impl TypeFilter {
-    /// Modify `query` to apply this filter to `type_field`, `package_field`, `module_field`
-    /// and `name_field`, where `type_field` stores the full type tag while the rest
-    /// store the package, module and name of the type tag respectively. The new query
-    /// after applying the filter is returned.
-    pub(crate) fn apply<T, P, M, N, QS, ST, GB>(
-        &self,
-        query: Query<ST, QS, GB>,
-        // Field storing the full type tag, including type parameters.
-        type_field: T,
-        package_field: P,
-        module_field: M,
-        // Name field only includes the name of the struct, like `Coin`, not including type parameters.
-        name_field: N,
-    ) -> Query<ST, QS, GB>
-    where
-        Query<ST, QS, GB>: QueryDsl,
-        T: Field<Text, QS>,
-        P: Field<Binary, QS>,
-        M: Field<Text, QS>,
-        N: Field<Text, QS>,
-        QS: QuerySource,
-    {
-        match self {
-            TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
-                query.filter(package_field.eq(p.into_vec()))
-            }
-
-            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => query
-                .filter(package_field.eq(p.into_vec()))
-                .filter(module_field.eq(m.clone())),
-
-            // A type filter without type parameters is interpreted as either an exact match, or a
-            // match for all generic instantiations of the type so we check against only package, module
-            // and name fields.
-            TypeFilter::ByType(tag) if tag.type_params.is_empty() => {
-                let p = tag.address.to_vec();
-                let m = tag.module.to_string();
-                let n = tag.name.to_string();
-                query
-                    .filter(package_field.eq(p))
-                    .filter(module_field.eq(m))
-                    .filter(name_field.eq(n))
-            }
-
-            TypeFilter::ByType(tag) => {
-                let p = tag.address.to_vec();
-                let m = tag.module.to_string();
-                let n = tag.name.to_string();
-                let exact = tag.to_canonical_string(/* with_prefix */ true);
-                // We check against the full type field for an exact match, including type parameters.
-                query
-                    .filter(package_field.eq(p))
-                    .filter(module_field.eq(m))
-                    .filter(name_field.eq(n))
-                    .filter(type_field.eq(exact))
-            }
-        }
-    }
-
     /// Modify `query` to apply this filter to `field`, returning the new query.
     pub(crate) fn apply_raw(
         &self,
@@ -295,28 +204,6 @@ impl FqNameFilter {
 }
 
 impl ModuleFilter {
-    /// Modify `query` to apply this filter, treating `package` as the column containing the package
-    /// address and `module` as the module containing the module name.
-    pub(crate) fn apply<P, M, QS, ST, GB>(
-        &self,
-        query: Query<ST, QS, GB>,
-        package: P,
-        module: M,
-    ) -> Query<ST, QS, GB>
-    where
-        Query<ST, QS, GB>: QueryDsl,
-        P: Field<Binary, QS>,
-        M: Field<Text, QS>,
-        QS: QuerySource,
-    {
-        match self {
-            ModuleFilter::ByPackage(p) => query.filter(package.eq(p.into_vec())),
-            ModuleFilter::ByModule(p, m) => query
-                .filter(package.eq(p.into_vec()))
-                .filter(module.eq(m.clone())),
-        }
-    }
-
     /// Try to create a filter whose results are the intersection of the results of the input
     /// filters (`self` and `other`). This may not be possible if the resulting filter is
     /// inconsistent (e.g. a filter that requires the module's package to be at two different

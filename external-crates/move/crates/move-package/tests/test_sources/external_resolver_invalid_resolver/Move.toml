@@ -1,0 +1,5 @@
+[package]
+name = "Root"
+
+[dependencies]
+A = { r = { foo = "bar" , baz = "quz" } }

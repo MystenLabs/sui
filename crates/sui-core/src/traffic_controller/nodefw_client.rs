@@ -32,7 +32,7 @@ impl NodeFWClient {
     pub async fn block_addresses(&self, addresses: BlockAddresses) -> Result<(), reqwest::Error> {
         let response = self
             .client
-            .post(&format!("{}/block_addresses", self.remote_fw_url))
+            .post(format!("{}/block_addresses", self.remote_fw_url))
             .json(&addresses)
             .send()
             .await?;
@@ -44,7 +44,7 @@ impl NodeFWClient {
 
     pub async fn list_addresses(&self) -> Result<BlockAddresses, reqwest::Error> {
         self.client
-            .get(&format!("{}/list_addresses", self.remote_fw_url))
+            .get(format!("{}/list_addresses", self.remote_fw_url))
             .send()
             .await?
             .error_for_status()?

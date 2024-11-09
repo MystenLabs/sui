@@ -28,6 +28,7 @@ use super::uint53::UInt53;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
@@ -173,8 +174,8 @@ impl Coin {
     }
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(&self.super_.super_).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(&self.super_.super_).owner().await
     }
 
     /// The transaction block that created this version of the object.
@@ -335,15 +336,22 @@ impl Coin {
 
         let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    checkpoint_viewed_at,
-                    coins_query(coin_type, owner, range, &page),
-                )?))
+                    Ok(Some(
+                        page.paginate_raw_query::<StoredHistoryObject>(
+                            conn,
+                            checkpoint_viewed_at,
+                            coins_query(coin_type, owner, range, &page),
+                        )
+                        .await?,
+                    ))
+                }
+                .scope_boxed()
             })
             .await?
         else {
@@ -427,7 +435,7 @@ fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddre
 
     query = filter!(
         query,
-        "coin_type IS NOT NULL AND coin_type = {}",
+        "coin_type IS NOT NULL AND coin_type = {} AND object_status = 0",
         coin_type.to_canonical_display(/* with_prefix */ true)
     );
 

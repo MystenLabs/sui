@@ -24,7 +24,9 @@ struct State {
 
 #[async_trait::async_trait]
 impl Worker for TransactionObjectsHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    type Result = ();
+
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
@@ -36,7 +38,7 @@ impl Worker for TransactionObjectsHandler {
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                &checkpoint_transaction,
+                checkpoint_transaction,
                 &checkpoint_transaction.effects,
                 &mut state,
             );

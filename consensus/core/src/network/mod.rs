@@ -41,8 +41,9 @@ mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
 }
 
+pub mod connection_monitor;
+
 pub(crate) mod anemo_network;
-pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 mod metrics_layer;
@@ -114,6 +115,13 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         authorities: Vec<AuthorityIndex>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Gets the latest received rounds of all authorities from the peer.
+    async fn get_latest_rounds(
+        &self,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Round>>;
 }
 
 /// Network service for handling requests from peers.
@@ -157,6 +165,9 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         peer: AuthorityIndex,
         authorities: Vec<AuthorityIndex>,
     ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Handles the request to get the latest received rounds of all authorities.
+    async fn handle_get_latest_rounds(&self, peer: AuthorityIndex) -> ConsensusResult<Vec<Round>>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

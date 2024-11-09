@@ -378,6 +378,7 @@ where
 
                 // TODO: spawn a task for this
                 if attempt_times >= MAX_SIGNING_ATTEMPTS {
+                    metrics.err_signature_aggregation_too_many_failures.inc();
                     error!("Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}", e);
                     return;
                 }
@@ -542,10 +543,10 @@ where
                 let sender_clone = execution_queue_sender.clone();
                 spawn_logged_monitored_task!(async move {
                     // If it fails for too many times, log and ask for manual intervention.
-                    metrics_clone
-                        .err_sui_transaction_submission_too_many_failures
-                        .inc();
                     if attempt_times >= MAX_EXECUTION_ATTEMPTS {
+                        metrics_clone
+                            .err_sui_transaction_submission_too_many_failures
+                            .inc();
                         error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
                         return;
                     }
@@ -1359,6 +1360,7 @@ mod tests {
                 sui_tx_digest,
                 sui_tx_event_index,
                 Ok(signed_action.clone()),
+                None,
             );
             signed_actions.insert(secret.public().into(), signed_action.into_sig().signature);
         }
@@ -1375,6 +1377,7 @@ mod tests {
                 sui_tx_digest,
                 sui_tx_event_index,
                 Err(BridgeError::RestAPIError("small issue".into())),
+                None,
             );
         }
     }
@@ -1510,9 +1513,9 @@ mod tests {
 
         let committee = BridgeCommittee::new(authorities).unwrap();
 
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(committee)),
+        )));
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
         let sui_token_type_tags = Arc::new(ArcSwap::new(Arc::new(sui_token_type_tags)));

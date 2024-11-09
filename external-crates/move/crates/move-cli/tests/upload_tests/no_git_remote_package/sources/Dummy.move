@@ -1,1 +1,1 @@
-module 0x1::Dummy {}
+module 0x6::Dummy {}

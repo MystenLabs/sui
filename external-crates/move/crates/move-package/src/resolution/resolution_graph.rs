@@ -8,7 +8,7 @@ use move_command_line_common::files::{
 };
 use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::editions::Edition;
-use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
+use move_compiler::{diagnostics::warning_filters::WarningFiltersBuilder, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use std::fs::File;
@@ -125,7 +125,7 @@ impl ResolvedGraph {
                 match dep {
                     PM::Dependency::External(_) => continue,
                     PM::Dependency::Internal(internal) => {
-                        if let PM::DependencyKind::Custom(_) = internal.kind {
+                        if let PM::DependencyKind::OnChain(_) = internal.kind {
                             continue;
                         }
                         let dep_path = &resolved_pkg.package_path.join(local_path(&internal.kind));
@@ -557,6 +557,16 @@ impl Package {
         .collect())
     }
 
+    pub fn get_bytecodes_bytes(&self) -> Result<Vec<Vec<u8>>> {
+        let mut ret = vec![];
+        for path in self.get_bytecodes()? {
+            let bytes = std::fs::read(path.to_string())?;
+            ret.push(bytes);
+        }
+
+        Ok(ret)
+    }
+
     pub(crate) fn compiler_config(
         &self,
         is_dependency: bool,
@@ -576,7 +586,7 @@ impl Package {
                 .edition
                 .or(config.default_edition)
                 .unwrap_or(Edition::LEGACY), // TODO require edition
-            warning_filter: WarningFilters::new_for_source(),
+            warning_filter: WarningFiltersBuilder::new_for_source(),
         }
     }
 }
@@ -600,6 +610,9 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
     }
 
     places_to_look
+        .into_iter()
+        .filter(|path| path.exists())
+        .collect()
 }
 
 fn package_digest_for_config(package_path: &Path, config: &BuildConfig) -> Result<PackageDigest> {

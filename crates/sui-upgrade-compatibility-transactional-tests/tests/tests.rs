@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
-    file_format::AbilitySet,
     normalized, CompiledModule,
 };
 use sui_move_build::{BuildConfig, SuiPackageHooks};
@@ -52,47 +51,12 @@ fn check_all_compatibilities(
     assert_eq!(base.len(), upgraded.len());
 
     let compatibility_types = [
+        // Full compat skip check private entry linking
+        Compatibility::upgrade_check(),
+        // Full compat but allow any new abilities
         Compatibility::full_check(),
-        // Full compat but allow private entry functions to change
-        Compatibility {
-            check_datatype_and_pub_function_linking: true,
-            check_datatype_layout: true,
-            check_friend_linking: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_datatype_type_params: true,
-            disallow_new_variants: true,
-        },
-        // Full compat but allow private entry functions and friends to change
-        Compatibility {
-            check_datatype_and_pub_function_linking: true,
-            check_datatype_layout: true,
-            check_friend_linking: false,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_datatype_type_params: true,
-            disallow_new_variants: true,
-        },
-        // Full compat but allow friends to change
-        Compatibility {
-            check_datatype_and_pub_function_linking: true,
-            check_datatype_layout: true,
-            check_friend_linking: false,
-            check_private_entry_linking: true,
-            disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_datatype_type_params: true,
-            disallow_new_variants: true,
-        },
-        // Full compat but allow new enum variants to be added
-        Compatibility {
-            check_datatype_and_pub_function_linking: true,
-            check_datatype_layout: true,
-            check_friend_linking: true,
-            check_private_entry_linking: true,
-            disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_datatype_type_params: true,
-            disallow_new_variants: true,
-        },
+        // Full compat only disallow new key ability
+        Compatibility::framework_upgrade_check(),
         Compatibility::no_check(),
     ];
 

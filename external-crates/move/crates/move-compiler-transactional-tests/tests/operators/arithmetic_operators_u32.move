@@ -1,5 +1,5 @@
 //# run
-module 1::m {
+module 6::m {
 fun main() {
     assert!(0u32 + 0u32 == 0u32, 1000);
     assert!(0u32 + 1u32 == 1u32, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-module 2::m {
+module 7::m {
 fun main() {
     // should fail
     1u32 + 4294967295u32;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-module 4::m {
+module 9::m {
 fun main() {
     // should fail
     4294967295u32 + 4294967295u32;
@@ -31,7 +31,7 @@ fun main() {
 }
 
 //# run
-module 5::m {
+module 10::m {
 fun main() {
     assert!(0u32 - 0u32 == 0u32, 2000);
     assert!(1u32 - 0u32 == 1u32, 2001);
@@ -46,7 +46,7 @@ fun main() {
 }
 
 //# run
-module 6::m {
+module 0x11::m {
 fun main() {
     // should fail
     0u32 - 1u32;
@@ -54,7 +54,7 @@ fun main() {
 }
 
 //# run
-module 7::m {
+module 0x12::m {
 fun main() {
     // should fail
     54u32 - 100u32;
@@ -63,7 +63,7 @@ fun main() {
 
 
 //# run
-module 8::m {
+module 0x13::m {
 fun main() {
     assert!(0u32 * 0u32 == 0u32, 3000);
     assert!(1u32 * 0u32 == 0u32, 3001);
@@ -77,7 +77,7 @@ fun main() {
 }
 
 //# run
-module 9::m {
+module 0x14::m {
 fun main() {
     // should fail
     1147483647u32 * 2147483647u32;
@@ -85,7 +85,7 @@ fun main() {
 }
 
 //# run
-module 10::m {
+module 0x15::m {
 fun main() {
     // should fail
     1147483647u32 * 2u32;
@@ -95,7 +95,7 @@ fun main() {
 
 
 //# run
-module 11::m {
+module 0x16::m {
 fun main() {
     assert!(0u32 / 1u32 == 0u32, 4000);
     assert!(1u32 / 1u32 == 1u32, 4001);
@@ -110,7 +110,7 @@ fun main() {
 }
 
 //# run
-module 12::m {
+module 0x17::m {
 fun main() {
     // should fail
     0u32 / 0u32;
@@ -119,7 +119,7 @@ fun main() {
 // check: ARITHMETIC_ERROR
 
 //# run
-module 13::m {
+module 0x18::m {
 fun main() {
     1u32 / 0u32;
 }
@@ -135,7 +135,7 @@ fun main() {
 
 
 //# run
-module 14::m {
+module 0x19::m {
 fun main() {
     assert!(0u32 % 1u32 == 0u32, 5000);
     assert!(1u32 % 1u32 == 0u32, 5001);
@@ -150,7 +150,7 @@ fun main() {
 }
 
 //# run
-module 15::m {
+module 0x20::m {
 fun main() {
     // should fail
     0u32 % 0u32;
@@ -158,7 +158,7 @@ fun main() {
 }
 
 //# run
-module 16::m {
+module 0x21::m {
 fun main() {
     // should fail
     1u32 % 0u32;
@@ -166,7 +166,7 @@ fun main() {
 }
 
 //# run
-module 17::m {
+module 0x22::m {
 fun main() {
     // should fail
     4294967294u32 % 0u32;

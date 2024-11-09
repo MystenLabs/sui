@@ -50,6 +50,7 @@ pub(crate) enum MoveObjectDowncastError {
 
 /// This interface is implemented by types that represent a Move object on-chain (A Move value whose
 /// type has `key`).
+#[allow(clippy::duplicated_attributes)]
 #[derive(Interface)]
 #[graphql(
     name = "IMoveObject",
@@ -241,8 +242,8 @@ impl MoveObject {
     }
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(&self.super_).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(&self.super_).owner().await
     }
 
     /// The transaction block that created this version of the object.
@@ -430,9 +431,9 @@ impl MoveObjectImpl<'_> {
     }
 
     pub(crate) async fn has_public_transfer(&self, ctx: &Context<'_>) -> Result<bool> {
-        let type_ = MoveType::new(TypeTag::from(self.0.native.type_().clone()));
+        let type_: MoveType = self.0.native.type_().clone().into();
         let set = type_.abilities_impl(ctx.data_unchecked()).await.extend()?;
-        Ok(set.has_key() && set.has_store())
+        Ok(set.is_some_and(|s| s.has_key() && s.has_store()))
     }
 }
 

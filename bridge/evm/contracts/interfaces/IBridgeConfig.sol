@@ -43,6 +43,29 @@ interface IBridgeConfig {
     /// @notice Returns the chain ID of the bridge.
     function chainID() external view returns (uint8);
 
+    /// @notice Event for the addition of a new token.
+    /// @param nonce The governance action nonce.
+    /// @param tokenIDs The IDs of the tokens added.
+    /// @param tokenAddresses The addresses of the tokens added.
+    /// @param suiDecimals The added token's decimal places on Sui.
+    /// @param tokenPrices The prices of the tokens added in USD.
+    event TokensAddedV2(
+        uint64 nonce,
+        uint8[] tokenIDs,
+        address[] tokenAddresses,
+        uint8[] suiDecimals,
+        uint64[] tokenPrices
+    );
+
+    /// @dev (deprecated in favor of TokensAddedV2)
     event TokenAdded(uint8 tokenID, address tokenAddress, uint8 suiDecimal, uint64 tokenPrice);
+
+    /// @notice Event for the price update of a token.
+    /// @param nonce The governance action nonce.
+    /// @param tokenID The ID of the token updated.
+    /// @param tokenPrice The new price of the token in USD.
+    event TokenPriceUpdatedV2(uint64 nonce, uint8 tokenID, uint64 tokenPrice);
+
+    /// @dev (deprecated in favor of TokenPriceUpdatedV2)
     event TokenPriceUpdated(uint8 tokenID, uint64 tokenPrice);
 }

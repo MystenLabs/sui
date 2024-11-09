@@ -3,8 +3,10 @@
 
 use std::sync::Arc;
 
-use sui_sdk2::types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
-use sui_sdk2::types::{Object, ObjectId, Version};
+use sui_sdk_types::types::{
+    CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee,
+};
+use sui_sdk_types::types::{Object, ObjectId, Version};
 use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::ObjectStore;
 use sui_types::storage::RestStateReader;
@@ -26,20 +28,22 @@ impl StateReader {
         &self.inner
     }
 
-    pub fn get_object(&self, object_id: ObjectId) -> Result<Option<Object>> {
+    pub fn get_object(&self, object_id: ObjectId) -> crate::Result<Option<Object>> {
         self.inner
             .get_object(&object_id.into())
-            .map(|maybe| maybe.map(Into::into))
+            .map_err(Into::into)
+            .and_then(|maybe| maybe.map(TryInto::try_into).transpose().map_err(Into::into))
     }
 
     pub fn get_object_with_version(
         &self,
         object_id: ObjectId,
         version: Version,
-    ) -> Result<Option<Object>> {
+    ) -> crate::Result<Option<Object>> {
         self.inner
             .get_object_by_key(&object_id.into(), version.into())
-            .map(|maybe| maybe.map(Into::into))
+            .map_err(Into::into)
+            .and_then(|maybe| maybe.map(TryInto::try_into).transpose().map_err(Into::into))
     }
 
     pub fn get_committee(&self, epoch: EpochId) -> Result<Option<ValidatorCommittee>> {
@@ -60,11 +64,11 @@ impl StateReader {
 
     pub fn get_transaction(
         &self,
-        digest: sui_sdk2::types::TransactionDigest,
+        digest: sui_sdk_types::types::TransactionDigest,
     ) -> crate::Result<(
-        sui_sdk2::types::SignedTransaction,
-        sui_sdk2::types::TransactionEffects,
-        Option<sui_sdk2::types::TransactionEvents>,
+        sui_sdk_types::types::SignedTransaction,
+        sui_sdk_types::types::TransactionEffects,
+        Option<sui_sdk_types::types::TransactionEvents>,
     )> {
         use super::transactions::TransactionNotFoundError;
         use sui_types::effects::TransactionEffectsAPI;
@@ -90,12 +94,16 @@ impl StateReader {
             None
         };
 
-        Ok((transaction.into(), effects.into(), events.map(Into::into)))
+        Ok((
+            transaction.try_into()?,
+            effects.try_into()?,
+            events.map(TryInto::try_into).transpose()?,
+        ))
     }
 
     pub fn get_transaction_response(
         &self,
-        digest: sui_sdk2::types::TransactionDigest,
+        digest: sui_sdk_types::types::TransactionDigest,
     ) -> crate::Result<super::transactions::TransactionResponse> {
         let (
             SignedTransaction {
@@ -260,6 +268,7 @@ impl Iterator for CheckpointTransactionsIter {
 pub struct CursorInfo {
     pub checkpoint: CheckpointSequenceNumber,
     pub timestamp_ms: u64,
+    #[allow(unused)]
     pub index: u64,
 
     // None if there are no more transactions in the store

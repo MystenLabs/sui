@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use sui_data_ingestion::{
-    ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, DynamoDBProgressStore,
-    KVStoreTaskConfig, KVStoreWorker,
+    ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker,
+    DynamoDBProgressStore, KVStoreTaskConfig, KVStoreWorker,
 };
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
+use sui_kvstore::{BigTableClient, KvWorker};
 use tokio::signal;
 use tokio::sync::oneshot;
 
@@ -21,6 +22,7 @@ enum Task {
     Archival(ArchivalConfig),
     Blob(BlobTaskConfig),
     KV(KVStoreTaskConfig),
+    BigTableKV(BigTableTaskConfig),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -38,6 +40,11 @@ struct ProgressStoreConfig {
     pub aws_secret_access_key: String,
     pub aws_region: String,
     pub table_name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct BigTableTaskConfig {
+    instance_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,10 +125,15 @@ async fn main() -> Result<()> {
     for task_config in config.tasks {
         match task_config.task {
             Task::Archival(archival_config) => {
-                let worker_pool = WorkerPool::new(
-                    ArchivalWorker::new(archival_config).await?,
+                let reducer = ArchivalReducer::new(archival_config).await?;
+                executor
+                    .update_watermark(task_config.name.clone(), reducer.get_watermark().await?)
+                    .await?;
+                let worker_pool = WorkerPool::new_with_reducer(
+                    ArchivalWorker,
                     task_config.name,
                     task_config.concurrency,
+                    Box::new(reducer),
                 );
                 executor.register(worker_pool).await?;
             }
@@ -136,6 +148,15 @@ async fn main() -> Result<()> {
             Task::KV(kv_config) => {
                 let worker_pool = WorkerPool::new(
                     KVStoreWorker::new(kv_config).await,
+                    task_config.name,
+                    task_config.concurrency,
+                );
+                executor.register(worker_pool).await?;
+            }
+            Task::BigTableKV(kv_config) => {
+                let client = BigTableClient::new_remote(kv_config.instance_id, false, None).await?;
+                let worker_pool = WorkerPool::new(
+                    KvWorker { client },
                     task_config.name,
                     task_config.concurrency,
                 );

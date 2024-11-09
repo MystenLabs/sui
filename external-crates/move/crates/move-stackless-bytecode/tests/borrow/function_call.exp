@@ -2444,102 +2444,90 @@ public fun string::bytes($t0|s: &string::String): &vector<u8> {
 [variant baseline]
 public fun string::substring($t0|s: &string::String, $t1|i: u64, $t2|j: u64): string::String {
      var $t3|tmp#$3: bool
-     var $t4|tmp#$4: bool
-     var $t5|tmp#$5: bool
-     var $t6|bytes#1#0: &vector<u8>
-     var $t7|l#1#0: u64
-     var $t8: &string::String
-     var $t9: &vector<u8>
-     var $t10: &vector<u8>
+     var $t4|bytes#1#0: &vector<u8>
+     var $t5|l#1#0: u64
+     var $t6: &string::String
+     var $t7: &vector<u8>
+     var $t8: &vector<u8>
+     var $t9: u64
+     var $t10: u64
      var $t11: u64
-     var $t12: u64
+     var $t12: bool
      var $t13: u64
-     var $t14: bool
-     var $t15: u64
-     var $t16: u64
-     var $t17: bool
+     var $t14: u64
+     var $t15: bool
+     var $t16: &vector<u8>
+     var $t17: u64
      var $t18: bool
-     var $t19: bool
-     var $t20: &vector<u8>
-     var $t21: u64
+     var $t19: &vector<u8>
+     var $t20: u64
+     var $t21: bool
      var $t22: bool
      var $t23: bool
      var $t24: bool
-     var $t25: &vector<u8>
-     var $t26: u64
-     var $t27: bool
-     var $t28: bool
-     var $t29: bool
-     var $t30: &vector<u8>
-     var $t31: u64
-     var $t32: &vector<u8>
-     var $t33: u64
-     var $t34: u64
-     var $t35: vector<u8>
-     var $t36: string::String
-  0: $t8 := move($t0)
-  1: $t9 := borrow_field<string::String>.bytes($t8)
-  2: $t6 := $t9
-  3: $t10 := copy($t6)
-  4: $t11 := vector::length<u8>($t10)
-  5: $t7 := $t11
-  6: $t12 := copy($t2)
-  7: $t13 := move($t7)
-  8: $t14 := <=($t12, $t13)
-  9: if ($t14) goto 10 else goto 16
+     var $t25: bool
+     var $t26: &vector<u8>
+     var $t27: u64
+     var $t28: &vector<u8>
+     var $t29: u64
+     var $t30: u64
+     var $t31: vector<u8>
+     var $t32: string::String
+  0: $t6 := move($t0)
+  1: $t7 := borrow_field<string::String>.bytes($t6)
+  2: $t4 := $t7
+  3: $t8 := copy($t4)
+  4: $t9 := vector::length<u8>($t8)
+  5: $t5 := $t9
+  6: $t10 := copy($t2)
+  7: $t11 := move($t5)
+  8: $t12 := <=($t10, $t11)
+  9: if ($t12) goto 10 else goto 34
  10: label L1
- 11: $t15 := copy($t1)
- 12: $t16 := copy($t2)
- 13: $t17 := <=($t15, $t16)
- 14: $t3 := $t17
- 15: goto 20
- 16: label L0
- 17: $t18 := false
- 18: $t3 := $t18
- 19: goto 20
- 20: label L2
- 21: $t19 := move($t3)
- 22: if ($t19) goto 23 else goto 29
- 23: label L4
- 24: $t20 := copy($t6)
- 25: $t21 := copy($t1)
- 26: $t22 := string::internal_is_char_boundary($t20, $t21)
- 27: $t4 := $t22
- 28: goto 33
- 29: label L3
- 30: $t23 := false
- 31: $t4 := $t23
- 32: goto 33
- 33: label L5
- 34: $t24 := move($t4)
- 35: if ($t24) goto 36 else goto 42
- 36: label L7
- 37: $t25 := copy($t6)
- 38: $t26 := copy($t2)
- 39: $t27 := string::internal_is_char_boundary($t25, $t26)
- 40: $t5 := $t27
- 41: goto 46
- 42: label L6
- 43: $t28 := false
- 44: $t5 := $t28
- 45: goto 46
- 46: label L8
- 47: $t29 := move($t5)
- 48: if ($t29) goto 49 else goto 51
- 49: label L10
- 50: goto 56
- 51: label L9
- 52: $t30 := move($t6)
- 53: destroy($t30)
- 54: $t31 := 2
- 55: abort($t31)
- 56: label L11
- 57: $t32 := move($t6)
- 58: $t33 := move($t1)
- 59: $t34 := move($t2)
- 60: $t35 := string::internal_sub_string($t32, $t33, $t34)
- 61: $t36 := pack string::String($t35)
- 62: return $t36
+ 11: $t13 := copy($t1)
+ 12: $t14 := copy($t2)
+ 13: $t15 := <=($t13, $t14)
+ 14: if ($t15) goto 15 else goto 30
+ 15: label L3
+ 16: $t16 := copy($t4)
+ 17: $t17 := copy($t1)
+ 18: $t18 := string::internal_is_char_boundary($t16, $t17)
+ 19: if ($t18) goto 20 else goto 26
+ 20: label L5
+ 21: $t19 := copy($t4)
+ 22: $t20 := copy($t2)
+ 23: $t21 := string::internal_is_char_boundary($t19, $t20)
+ 24: $t3 := $t21
+ 25: goto 38
+ 26: label L4
+ 27: $t22 := false
+ 28: $t3 := $t22
+ 29: goto 38
+ 30: label L2
+ 31: $t23 := false
+ 32: $t3 := $t23
+ 33: goto 38
+ 34: label L0
+ 35: $t24 := false
+ 36: $t3 := $t24
+ 37: goto 38
+ 38: label L6
+ 39: $t25 := move($t3)
+ 40: if ($t25) goto 41 else goto 43
+ 41: label L8
+ 42: goto 48
+ 43: label L7
+ 44: $t26 := move($t4)
+ 45: destroy($t26)
+ 46: $t27 := 2
+ 47: abort($t27)
+ 48: label L9
+ 49: $t28 := move($t4)
+ 50: $t29 := move($t1)
+ 51: $t30 := move($t2)
+ 52: $t31 := string::internal_sub_string($t28, $t29, $t30)
+ 53: $t32 := pack string::String($t31)
+ 54: return $t32
 }
 
 
@@ -4236,12 +4224,12 @@ public fun string::bytes($t0|s: string::String): vector<u8> {
 [variant baseline]
 public fun string::substring($t0|s: string::String, $t1|i: u64, $t2|j: u64): string::String {
      var $t3|tmp#$3: bool
-     var $t4|tmp#$4: bool
-     var $t5|tmp#$5: bool
-     var $t6|bytes#1#0: vector<u8>
-     var $t7|l#1#0: u64
-     var $t8: vector<u8>
-     var $t9: u64
+     var $t4|bytes#1#0: vector<u8>
+     var $t5|l#1#0: u64
+     var $t6: vector<u8>
+     var $t7: u64
+     var $t8: bool
+     var $t9: bool
      var $t10: bool
      var $t11: bool
      var $t12: bool
@@ -4249,43 +4237,41 @@ public fun string::substring($t0|s: string::String, $t1|i: u64, $t2|j: u64): str
      var $t14: u64
      var $t15: vector<u8>
      var $t16: string::String
-  0: $t8 := get_field<string::String>.bytes($t0)
-  1: $t9 := vector::length<u8>($t8)
-  2: $t10 := <=($t2, $t9)
-  3: if ($t10) goto 4 else goto 7
+  0: $t6 := get_field<string::String>.bytes($t0)
+  1: $t7 := vector::length<u8>($t6)
+  2: $t8 := <=($t2, $t7)
+  3: if ($t8) goto 4 else goto 21
   4: label L1
-  5: $t3 := <=($t1, $t2)
-  6: goto 10
-  7: label L0
-  8: $t11 := false
-  9: $t3 := $t11
- 10: label L2
- 11: if ($t3) goto 12 else goto 15
- 12: label L4
- 13: $t4 := string::internal_is_char_boundary($t8, $t1)
- 14: goto 18
- 15: label L3
- 16: $t12 := false
- 17: $t4 := $t12
- 18: label L5
- 19: if ($t4) goto 20 else goto 23
- 20: label L7
- 21: $t5 := string::internal_is_char_boundary($t8, $t2)
- 22: goto 26
- 23: label L6
- 24: $t13 := false
- 25: $t5 := $t13
+  5: $t9 := <=($t1, $t2)
+  6: if ($t9) goto 7 else goto 17
+  7: label L3
+  8: $t10 := string::internal_is_char_boundary($t6, $t1)
+  9: if ($t10) goto 10 else goto 13
+ 10: label L5
+ 11: $t3 := string::internal_is_char_boundary($t6, $t2)
+ 12: goto 24
+ 13: label L4
+ 14: $t11 := false
+ 15: $t3 := $t11
+ 16: goto 24
+ 17: label L2
+ 18: $t12 := false
+ 19: $t3 := $t12
+ 20: goto 24
+ 21: label L0
+ 22: $t13 := false
+ 23: $t3 := $t13
+ 24: label L6
+ 25: if ($t3) goto 26 else goto 28
  26: label L8
- 27: if ($t5) goto 28 else goto 30
- 28: label L10
- 29: goto 33
- 30: label L9
- 31: $t14 := 2
- 32: abort($t14)
- 33: label L11
- 34: $t15 := string::internal_sub_string($t8, $t1, $t2)
- 35: $t16 := pack string::String($t15)
- 36: return $t16
+ 27: goto 31
+ 28: label L7
+ 29: $t14 := 2
+ 30: abort($t14)
+ 31: label L9
+ 32: $t15 := string::internal_sub_string($t6, $t1, $t2)
+ 33: $t16 := pack string::String($t15)
+ 34: return $t16
 }
 
 

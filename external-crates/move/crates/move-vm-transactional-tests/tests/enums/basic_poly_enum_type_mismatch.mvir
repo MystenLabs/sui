@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x1.MonomorphicEnums {
+module 0x6.MonomorphicEnums {
     enum EnumWithTwoVariants<T> {
         One { },
         Two { x: u64 }
@@ -24,7 +24,7 @@ module 0x1.MonomorphicEnums {
 }
 
 //# publish
-module 0x1.MonomorphicEnums {
+module 0x6.MonomorphicEnums {
     enum EnumWithTwoVariants<T> {
         One { },
         Two { x: u64 }

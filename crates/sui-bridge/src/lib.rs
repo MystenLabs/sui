@@ -19,24 +19,25 @@ pub mod node;
 pub mod orchestrator;
 pub mod server;
 pub mod storage;
+pub mod sui_bridge_watchdog;
 pub mod sui_client;
 pub mod sui_syncer;
 pub mod sui_transaction_builder;
 pub mod types;
 pub mod utils;
 
-#[cfg(test)]
+#[cfg(any(feature = "test-utils", test))]
 pub(crate) mod eth_mock_provider;
 
 #[cfg(test)]
 pub(crate) mod sui_mock_client;
 
-#[cfg(test)]
+#[cfg(any(feature = "test-utils", test))]
 pub mod test_utils;
 
 pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 45;
 
-#[cfg(test)]
+#[cfg(any(feature = "test-utils", test))]
 pub mod e2e_tests;
 
 #[macro_export]

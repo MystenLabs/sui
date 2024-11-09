@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
+import { toBase64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
@@ -50,19 +50,19 @@ describe('Keypair', () => {
 		const sig2 = await k2.signWithIntent(data, 'TransactionData');
 		const sig3 = await k3.signWithIntent(bytes, 'PersonalMessage');
 
-		expect(sig1.bytes).toEqual(toB64(bytes));
+		expect(sig1.bytes).toEqual(toBase64(bytes));
 		expect(sig1.bytes).toEqual('CQAAAAVIZWxsbw==');
 		expect(sig1.signature).toEqual(
 			'ADXvYCSZk+ZtVL6VfB4+5zson++q0uWYINW4u1QKbbPisLUnNgYPFieiwXxp2SroKzqrULJOXdkPiDESw+IWJgVa4iC0svZel3wS7eYVef9RcLbCLABhaMN7XnxhrwGAgw==',
 		);
 
-		expect(sig2.bytes).toEqual(toB64(data));
+		expect(sig2.bytes).toEqual(toBase64(data));
 		expect(sig2.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig2.signature).toEqual(
 			'AdF5r9uq1AygqXu+WrGoe+fSVU2ld1F3lxTAcj9Uh38lR9j6trumZ7VPvIuzsnIlDqeiPKzo98KSVXy+AVraiKsCHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzY=',
 		);
 
-		expect(sig3.bytes).toEqual(toB64(bytes));
+		expect(sig3.bytes).toEqual(toBase64(bytes));
 		expect(sig3.bytes).toEqual('CQAAAAVIZWxsbw==');
 		expect(sig3.signature).toEqual(
 			'Apd48/4qVHSja5u2i7ZxobPL6iTLulNIuCxbd5GhfWVvcd69k9BtIqpFGMYXYyn7zapyvnJbtUZsF2ILc7Rp/X0CJzIrOokaCigNa8H7LLsj0o9UkG/WQH9fdB9t71diYJo=',
@@ -76,19 +76,19 @@ describe('Keypair', () => {
 		const sig2 = await k2.signTransaction(data);
 		const sig3 = await k3.signTransaction(data);
 
-		expect(sig1.bytes).toEqual(toB64(data));
+		expect(sig1.bytes).toEqual(toBase64(data));
 		expect(sig1.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig1.signature).toEqual(
 			'AKu3E+/SrcDpRHQYYljHAxkcUBzXHwkXtdi7X57rYd3f/VeckrWHfU6GgFiwFLEvLexGWNYPGSJKL12VJTCzFQpa4iC0svZel3wS7eYVef9RcLbCLABhaMN7XnxhrwGAgw==',
 		);
 
-		expect(sig2.bytes).toEqual(toB64(data));
+		expect(sig2.bytes).toEqual(toBase64(data));
 		expect(sig2.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig2.signature).toEqual(
 			'AdF5r9uq1AygqXu+WrGoe+fSVU2ld1F3lxTAcj9Uh38lR9j6trumZ7VPvIuzsnIlDqeiPKzo98KSVXy+AVraiKsCHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzY=',
 		);
 
-		expect(sig3.bytes).toEqual(toB64(data));
+		expect(sig3.bytes).toEqual(toBase64(data));
 		expect(sig3.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig3.signature).toEqual(
 			'AvKS25z99kTnsHe70qf2Dd9+Lz0DHTzM7cKFrMF47Z2RNy6qSFzOV87thExeKqug6VvEFiaqYhplx3fsT/rgk9kCJzIrOokaCigNa8H7LLsj0o9UkG/WQH9fdB9t71diYJo=',
@@ -102,19 +102,19 @@ describe('Keypair', () => {
 		const sig2 = await k2.signPersonalMessage(data);
 		const sig3 = await k3.signPersonalMessage(data);
 
-		expect(sig1.bytes).toEqual(toB64(data));
+		expect(sig1.bytes).toEqual(toBase64(data));
 		expect(sig1.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig1.signature).toEqual(
 			'ADXvYCSZk+ZtVL6VfB4+5zson++q0uWYINW4u1QKbbPisLUnNgYPFieiwXxp2SroKzqrULJOXdkPiDESw+IWJgVa4iC0svZel3wS7eYVef9RcLbCLABhaMN7XnxhrwGAgw==',
 		);
 
-		expect(sig2.bytes).toEqual(toB64(data));
+		expect(sig2.bytes).toEqual(toBase64(data));
 		expect(sig2.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig2.signature).toEqual(
 			'AViWuVdzTX9lJ2DBIPd4YR2bqTHC07AC9NZ1vbA1k/YeeSCuH6Kd1g3izZB332JgLP7GxjppPmWk4GwNlvbH0vICHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzY=',
 		);
 
-		expect(sig3.bytes).toEqual(toB64(data));
+		expect(sig3.bytes).toEqual(toBase64(data));
 		expect(sig3.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig3.signature).toEqual(
 			'Apd48/4qVHSja5u2i7ZxobPL6iTLulNIuCxbd5GhfWVvcd69k9BtIqpFGMYXYyn7zapyvnJbtUZsF2ILc7Rp/X0CJzIrOokaCigNa8H7LLsj0o9UkG/WQH9fdB9t71diYJo=',

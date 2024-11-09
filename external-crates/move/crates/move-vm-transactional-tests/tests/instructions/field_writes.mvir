@@ -42,7 +42,7 @@ module 0x42.VTest {
 
 //# publish
 
-module 0x42.RTest {
+module 0x43.RTest {
     struct T{fint: u64, fr: bool}
 
     public new(x: u64, y: bool): Self.T {
@@ -94,9 +94,9 @@ module 0x42.RTest {
 }
 
 //# run
-module 0x42.m {
+module 0x44.m {
 
-import 0x42.RTest;
+import 0x43.RTest;
 import 0x42.VTest;
 
 entry foo() {

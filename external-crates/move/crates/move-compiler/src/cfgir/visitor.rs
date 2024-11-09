@@ -11,7 +11,7 @@ use crate::{
         CFGContext,
     },
     command_line::compiler::Visitor,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, Diagnostics},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName},
@@ -23,8 +23,8 @@ use move_proc_macros::growing_stack;
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
-pub trait CFGIRVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program);
+pub trait CFGIRVisitor: Send + Sync {
+    fn visit(&self, env: &CompilationEnv, program: &G::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -34,13 +34,8 @@ pub trait CFGIRVisitor {
     }
 }
 
-pub trait AbstractInterpreterVisitor {
-    fn verify(
-        &mut self,
-        env: &CompilationEnv,
-        context: &CFGContext,
-        cfg: &ImmForwardCFG,
-    ) -> Diagnostics;
+pub trait AbstractInterpreterVisitor: Send + Sync {
+    fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics;
 
     fn visitor(self) -> Visitor
     where
@@ -51,53 +46,49 @@ pub trait AbstractInterpreterVisitor {
 }
 
 //**************************************************************************************************
-// simple ast visitor
+// CFGIR visitor
 //**************************************************************************************************
 
-pub trait CFGIRVisitorConstructor {
+pub trait CFGIRVisitorConstructor: Send {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a>;
 
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program) {
+    fn visit(env: &CompilationEnv, program: &G::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
 }
 
 pub trait CFGIRVisitorContext {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
-    fn visit_module_custom(
-        &mut self,
-        _ident: ModuleIdent,
-        _mdef: &mut G::ModuleDefinition,
-    ) -> bool {
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
         false
     }
 
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
     /// required.
-    fn visit(&mut self, program: &mut G::Program) {
-        for (mident, mdef) in program.modules.key_cloned_iter_mut() {
-            self.add_warning_filter_scope(mdef.warning_filter.clone());
+    fn visit(&mut self, program: &G::Program) {
+        for (mident, mdef) in program.modules.key_cloned_iter() {
+            self.push_warning_filter_scope(mdef.warning_filter);
             if self.visit_module_custom(mident, mdef) {
                 self.pop_warning_filter_scope();
                 continue;
             }
 
-            for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
+            for (struct_name, sdef) in mdef.structs.key_cloned_iter() {
                 self.visit_struct(mident, struct_name, sdef)
             }
-            for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
+            for (enum_name, edef) in mdef.enums.key_cloned_iter() {
                 self.visit_enum(mident, enum_name, edef)
             }
-            for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
+            for (constant_name, cdef) in mdef.constants.key_cloned_iter() {
                 self.visit_constant(mident, constant_name, cdef)
             }
-            for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
+            for (function_name, fdef) in mdef.functions.key_cloned_iter() {
                 self.visit_function(mident, function_name, fdef)
             }
 
@@ -111,7 +102,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _struct_name: DatatypeName,
-        _sdef: &mut H::StructDefinition,
+        _sdef: &H::StructDefinition,
     ) -> bool {
         false
     }
@@ -119,9 +110,9 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         struct_name: DatatypeName,
-        sdef: &mut H::StructDefinition,
+        sdef: &H::StructDefinition,
     ) {
-        self.add_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter);
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -133,7 +124,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _enum_name: DatatypeName,
-        _edef: &mut H::EnumDefinition,
+        _edef: &H::EnumDefinition,
     ) -> bool {
         false
     }
@@ -141,9 +132,9 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         enum_name: DatatypeName,
-        edef: &mut H::EnumDefinition,
+        edef: &H::EnumDefinition,
     ) {
-        self.add_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter);
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -155,7 +146,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _constant_name: ConstantName,
-        _cdef: &mut G::Constant,
+        _cdef: &G::Constant,
     ) -> bool {
         false
     }
@@ -163,9 +154,9 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         constant_name: ConstantName,
-        cdef: &mut G::Constant,
+        cdef: &G::Constant,
     ) {
-        self.add_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter);
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -177,7 +168,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _function_name: FunctionName,
-        _fdef: &mut G::Function,
+        _fdef: &G::Function,
     ) -> bool {
         false
     }
@@ -185,9 +176,9 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         function_name: FunctionName,
-        fdef: &mut G::Function,
+        fdef: &G::Function,
     ) {
-        self.add_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter);
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -197,7 +188,7 @@ pub trait CFGIRVisitorContext {
             start: _,
             block_info: _,
             blocks,
-        } = &mut fdef.body.value
+        } = &fdef.body.value
         {
             for (lbl, block) in blocks {
                 self.visit_block(*lbl, block);
@@ -206,26 +197,26 @@ pub trait CFGIRVisitorContext {
         self.pop_warning_filter_scope();
     }
 
-    fn visit_block_custom(&mut self, _lbl: Label, _block: &mut G::BasicBlock) -> bool {
+    fn visit_block_custom(&mut self, _lbl: Label, _block: &G::BasicBlock) -> bool {
         false
     }
-    fn visit_block(&mut self, _lbl: Label, block: &mut G::BasicBlock) {
+    fn visit_block(&mut self, _lbl: Label, block: &G::BasicBlock) {
         for cmd in block {
             self.visit_command(cmd)
         }
     }
 
-    fn visit_command_custom(&mut self, _cmd: &mut H::Command) -> bool {
+    fn visit_command_custom(&mut self, _cmd: &H::Command) -> bool {
         false
     }
-    fn visit_command(&mut self, cmd: &mut H::Command) {
+    fn visit_command(&mut self, cmd: &H::Command) {
         use H::Command_ as C;
         if self.visit_command_custom(cmd) {
             return;
         }
-        match &mut cmd.value {
+        match &cmd.value {
             C::Assign(_, _, e)
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::Return { exp: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
@@ -241,16 +232,16 @@ pub trait CFGIRVisitorContext {
         }
     }
 
-    fn visit_exp_custom(&mut self, _e: &mut H::Exp) -> bool {
+    fn visit_exp_custom(&mut self, _e: &H::Exp) -> bool {
         false
     }
     #[growing_stack]
-    fn visit_exp(&mut self, e: &mut H::Exp) {
+    fn visit_exp(&mut self, e: &H::Exp) {
         use H::UnannotatedExp_ as E;
         if self.visit_exp_custom(e) {
             return;
         }
-        match &mut e.exp.value {
+        match &e.exp.value {
             E::Unit { .. }
             | E::Move { .. }
             | E::Copy { .. }
@@ -274,7 +265,7 @@ pub trait CFGIRVisitorContext {
             }
 
             E::ModuleCall(m) => {
-                for arg in &mut m.arguments {
+                for arg in &m.arguments {
                     self.visit_exp(arg)
                 }
             }
@@ -292,16 +283,16 @@ pub trait CFGIRVisitorContext {
         }
     }
 
-    fn visit_value_custom(&mut self, _v: &mut H::Value) -> bool {
+    fn visit_value_custom(&mut self, _v: &H::Value) -> bool {
         false
     }
     #[growing_stack]
-    fn visit_value(&mut self, v: &mut H::Value) {
+    fn visit_value(&mut self, v: &H::Value) {
         use H::Value_ as V;
         if self.visit_value_custom(v) {
             return;
         }
-        match &mut v.value {
+        match &v.value {
             V::Address(_)
             | V::U8(_)
             | V::U16(_)
@@ -318,6 +309,70 @@ pub trait CFGIRVisitorContext {
         }
     }
 }
+
+impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
+    fn visit(&self, env: &CompilationEnv, program: &G::Program) {
+        Self::visit(env, program)
+    }
+}
+
+macro_rules! simple_visitor {
+    ($visitor:ident, $($overrides:item),*) => {
+        pub struct $visitor;
+
+        pub struct Context<'a> {
+            #[allow(unused)]
+            env: &'a crate::shared::CompilationEnv,
+            reporter: crate::diagnostics::DiagnosticReporter<'a>,
+        }
+
+        impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
+            type Context<'a> = Context<'a>;
+
+            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+                let reporter = env.diagnostic_reporter_at_top_level();
+                Context {
+                    env,
+                    reporter,
+                }
+            }
+        }
+
+        impl Context<'_> {
+            #[allow(unused)]
+            fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
+                self.reporter.add_diag(diag);
+            }
+
+            #[allow(unused)]
+            fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
+                self.reporter.add_diags(diags);
+            }
+        }
+
+        impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
+            fn push_warning_filter_scope(
+                &mut self,
+                filters: crate::diagnostics::warning_filters::WarningFilters,
+            ) {
+                self.reporter.push_warning_filter_scope(filters)
+            }
+
+            fn pop_warning_filter_scope(&mut self) {
+                self.reporter.pop_warning_filter_scope()
+            }
+
+            $($overrides)*
+        }
+    }
+}
+pub(crate) use simple_visitor;
 
 //**************************************************************************************************
 // simple absint visitor
@@ -440,17 +495,12 @@ pub trait SimpleAbsIntConstructor: Sized {
     /// Given the initial state/domain, construct a new abstract interpreter.
     /// Return None if it should not be run given this context
     fn new<'a>(
-        env: &CompilationEnv,
         context: &'a CFGContext<'a>,
+        cfg: &ImmForwardCFG,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
 
-    fn verify(
-        &mut self,
-        env: &CompilationEnv,
-        context: &CFGContext,
-        cfg: &ImmForwardCFG,
-    ) -> Diagnostics {
+    fn verify(context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
         let mut locals = context
             .locals
             .key_cloned_iter()
@@ -469,7 +519,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(env, context, &mut init_state) else {
+        let Some(mut ai) = Self::new(context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
@@ -534,7 +584,7 @@ pub trait SimpleAbsInt: Sized {
             | C::VariantSwitch { subject: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::Return { exp: e, .. }
-            | C::Abort(e) => {
+            | C::Abort(_, e) => {
                 self.exp(context, state, e);
             }
             C::Jump { .. } => (),
@@ -749,13 +799,135 @@ impl<V: SimpleAbsInt> TransferFunctions for V {
 }
 impl<V: SimpleAbsInt> AbstractInterpreter for V {}
 
-impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
-    fn verify(
-        &mut self,
-        env: &CompilationEnv,
-        context: &CFGContext,
-        cfg: &ImmForwardCFG,
-    ) -> Diagnostics {
-        SimpleAbsIntConstructor::verify(self, env, context, cfg)
+impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: SimpleAbsIntConstructor + Send + Sync> AbstractInterpreterVisitor for V {
+    fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
+        <Self as SimpleAbsIntConstructor>::verify(context, cfg)
+    }
+}
+
+//**************************************************************************************************
+// utils
+//**************************************************************************************************
+
+pub fn cfg_satisfies<FCommand, FExp>(
+    cfg: &ImmForwardCFG,
+    mut p_command: FCommand,
+    mut p_exp: FExp,
+) -> bool
+where
+    FCommand: FnMut(&Command) -> bool,
+    FExp: FnMut(&Exp) -> bool,
+{
+    cfg_satisfies_(cfg, &mut p_command, &mut p_exp)
+}
+
+pub fn command_satisfies<FCommand, FExp>(
+    cmd: &Command,
+    mut p_command: FCommand,
+    mut p_exp: FExp,
+) -> bool
+where
+    FCommand: FnMut(&Command) -> bool,
+    FExp: FnMut(&Exp) -> bool,
+{
+    command_satisfies_(cmd, &mut p_command, &mut p_exp)
+}
+
+pub fn exp_satisfies<F>(e: &Exp, mut p: F) -> bool
+where
+    F: FnMut(&Exp) -> bool,
+{
+    exp_satisfies_(e, &mut p)
+}
+
+pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
+    cfg_satisfies(cfg, |_| true, |e| is_special_function(special, e))
+}
+
+pub fn calls_special_function_command(special: &[(&str, &str, &str)], cmd: &Command) -> bool {
+    command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
+}
+
+pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+    exp_satisfies(e, |e| is_special_function(special, e))
+}
+
+fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+    use H::UnannotatedExp_ as E;
+    matches!(
+        &e.exp.value,
+        E::ModuleCall(call) if special.iter().any(|(a, m, f)| call.is(a, m, f)),
+    )
+}
+
+fn cfg_satisfies_(
+    cfg: &ImmForwardCFG,
+    p_command: &mut impl FnMut(&Command) -> bool,
+    p_exp: &mut impl FnMut(&Exp) -> bool,
+) -> bool {
+    cfg.blocks().values().any(|block| {
+        block
+            .iter()
+            .any(|cmd| command_satisfies_(cmd, p_command, p_exp))
+    })
+}
+
+fn command_satisfies_(
+    cmd @ sp!(_, cmd_): &Command,
+    p_command: &mut impl FnMut(&Command) -> bool,
+    p_exp: &mut impl FnMut(&Exp) -> bool,
+) -> bool {
+    use H::Command_ as C;
+    p_command(cmd)
+        || match cmd_ {
+            C::Assign(_, _, e)
+            | C::Abort(_, e)
+            | C::Return { exp: e, .. }
+            | C::IgnoreAndPop { exp: e, .. }
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => exp_satisfies_(e, p_exp),
+            C::Mutate(el, er) => exp_satisfies_(el, p_exp) || exp_satisfies_(er, p_exp),
+            C::Jump { .. } => false,
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
+        }
+}
+
+#[growing_stack]
+fn exp_satisfies_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
+    use H::UnannotatedExp_ as E;
+    if p(e) {
+        return true;
+    }
+    match &e.exp.value {
+        E::Unit { .. }
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::Constant(_)
+        | E::ErrorConstant { .. }
+        | E::BorrowLocal(_, _)
+        | E::Unreachable
+        | E::UnresolvedError
+        | E::Value(_) => false,
+
+        E::Freeze(e)
+        | E::Dereference(e)
+        | E::UnaryExp(_, e)
+        | E::Borrow(_, e, _, _)
+        | E::Cast(e, _) => exp_satisfies_(e, p),
+
+        E::BinopExp(el, _, er) => exp_satisfies_(el, p) || exp_satisfies_(er, p),
+
+        E::ModuleCall(call) => call.arguments.iter().any(|arg| exp_satisfies_(arg, p)),
+        E::Vector(_, _, _, es) | E::Multiple(es) => es.iter().any(move |e| exp_satisfies_(e, p)),
+
+        E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
+            es.iter().any(|(_, _, e)| exp_satisfies_(e, p))
+        }
     }
 }

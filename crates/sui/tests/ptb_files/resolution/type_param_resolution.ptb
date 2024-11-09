@@ -1,0 +1,4 @@
+--move-call 0x2::table::new<address, u64>
+--assign table
+--move-call 0x2::table::add<address, u64> table @0x2 0
+--transfer-objects [table] @0x0

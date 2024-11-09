@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 async-trait.workspace = true
 anemo.workspace = true
@@ -53,8 +56,6 @@ move-vm-profiler.workspace = true
 num-traits = "0.2.18"
 num-bigint = { version = "0.4", default-features = false, features = ["rand"] }
 
-narwhal-config.workspace = true
-narwhal-crypto.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 mysten-network.workspace = true
@@ -75,7 +76,7 @@ proptest-derive.workspace = true
 better_any.workspace = true
 lru.workspace = true
 
-sui-sdk2.workspace = true
+sui-sdk-types.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true
@@ -100,9 +101,8 @@ harness = false
 [features]
 default = []
 test-utils = []
-gas-profiler = [
-    "move-vm-profiler/gas-profiler",
-    "move-vm-types/gas-profiler",
-    "move-vm-test-utils/gas-profiler",
+tracing = [
+    "move-vm-profiler/tracing",
+    "move-vm-test-utils/tracing",
 ]
 fuzzing = ["move-core-types/fuzzing"]

@@ -9,7 +9,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x43.m {
 
 entry foo() {
 label b0:
@@ -19,7 +19,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x44.m {
 
 entry foo() {
 label b0:
@@ -29,7 +29,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x45.m {
 
 entry foo() {
 label b0:
@@ -39,7 +39,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x46.m {
 
 entry foo() {
 label b0:
@@ -49,7 +49,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x47.m {
 
 entry foo() {
 label b0:

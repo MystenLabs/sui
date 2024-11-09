@@ -1,5 +1,80 @@
 # @mysten/sui.js
 
+## 1.14.2
+
+### Patch Changes
+
+- e7bc63e: Allow 0 amounts with `coinWithBalance` intent when the wallet has no coin objects of the
+  required type.
+
+## 1.14.1
+
+### Patch Changes
+
+- 69ef100: revert adding client-request-method header
+
+## 1.14.0
+
+### Minor Changes
+
+- c24814b: Adds a custom header; 'Client-Request-Method' which will contain the method name used in
+  each outgoing jsonrpc request
+
+## 1.13.0
+
+### Minor Changes
+
+- 477d2a4: Add new errors to ExecutionFailureStatus enum
+
+## 1.12.0
+
+### Minor Changes
+
+- 5436a90: Update GraphQL schemas
+- 5436a90: add deriveDynamicFieldID util
+
+## 1.11.0
+
+### Minor Changes
+
+- 489f421: Updated hex, base64, and base58 utility names for better consistency
+
+  All existing methods will continue to work, but the following methods have been deprecated and
+  replaced with methods with improved names:
+
+  - `toHEX` -> `toHEX`
+  - `fromHEX` -> `fromHex`
+  - `toB64` -> `toBase64`
+  - `fromB64` -> `fromBase64`
+  - `toB58` -> `toBase58`
+  - `fromB58` -> `fromBase58`
+
+- 489f421: support Bech32 secrets in the Keypair.fromSecretKey methods
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+  - @mysten/bcs@1.1.0
+
+## 1.10.0
+
+### Minor Changes
+
+- 830b8d8: Introduce new naming scheme for named packages plugin
+
+## 1.9.0
+
+### Minor Changes
+
+- 2c96b06: Adds experimental named packages plugin
+- 1fd22cc: Require name to register global transaction plugins
+
+## 1.8.0
+
+### Minor Changes
+
+- 569511a: Add data to result of executeTransaction methods on Transaction executor classes
+
 ## 1.7.0
 
 ### Minor Changes

@@ -114,6 +114,7 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 /// Defines how the network receiver handles incoming primary messages.
 pub struct PrimaryReceiverHandler<V> {
     // The id of this authority.
+    #[allow(unused)]
     pub authority_id: AuthorityIdentifier,
     // The id of this worker.
     pub id: WorkerId,
@@ -127,6 +128,7 @@ pub struct PrimaryReceiverHandler<V> {
     // Timeout on RequestBatches RPC.
     pub request_batches_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
+    #[allow(unused)]
     pub request_batches_retry_nodes: usize,
     // Synchronize header payloads from other workers.
     pub network: Option<Network>,

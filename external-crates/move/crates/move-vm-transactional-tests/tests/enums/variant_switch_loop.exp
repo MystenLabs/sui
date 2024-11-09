@@ -3,7 +3,7 @@ processed 3 tasks
 task 0, lines 1-22:
 //# print-bytecode
 // Move bytecode v7
-module 1.InfiniteSwith {
+module 6.InfiniteSwith {
 
 
 enum EnumWithOneVariant {
@@ -37,7 +37,7 @@ task 2, lines 48-58:
 Error: Function execution failed with VMError: {
     major_status: OUT_OF_GAS,
     sub_status: None,
-    location: 0x1::InfiniteSwith,
+    location: 0x6::InfiniteSwith,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }

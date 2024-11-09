@@ -117,6 +117,9 @@ impl SimpleFaucet {
             .filter(|coin| coin.0.balance.value() >= (config.amount * config.num_coins as u64))
             .collect::<Vec<GasCoin>>();
         let metrics = FaucetMetrics::new(prometheus_registry);
+        // set initial balance when faucet starts
+        let balance = coins.iter().map(|coin| coin.0.balance.value()).sum::<u64>();
+        metrics.balance.set(balance as i64);
 
         let wal = WriteAheadLog::open(wal_path);
         let mut pending = vec![];
@@ -328,6 +331,7 @@ impl SimpleFaucet {
     /// Check if the gas coin is still valid. A valid gas coin
     /// 1. Exists presently
     /// 2. is a gas coin
+    ///
     /// If the coin is valid, return Ok(Some(GasCoin))
     /// If the coin invalid, return Ok(None)
     /// If the fullnode returns an unexpected error, returns Err(e)
@@ -481,6 +485,17 @@ impl SimpleFaucet {
                 } else {
                     self.recycle_gas_coin(coin_id, uuid).await;
                 }
+
+                if let Some(ref balances) = result.balance_changes {
+                    let sui_used = balances
+                        .iter()
+                        .find(|balance| balance.owner == self.active_address)
+                        .map(|b| b.amount)
+                        .unwrap_or_else(|| 0);
+                    info!("SUI used in this tx {}: {}", tx_digest, sui_used);
+                    self.metrics.balance.add(sui_used as i64);
+                }
+
                 Ok(result)
             }
         }
@@ -617,11 +632,14 @@ impl SimpleFaucet {
 
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
+
         Ok(client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
-                SuiTransactionBlockResponseOptions::new().with_effects(),
+                SuiTransactionBlockResponseOptions::new()
+                    .with_effects()
+                    .with_balance_changes(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
@@ -1303,7 +1321,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![coin_amount];
+        let amounts = &[coin_amount];
 
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
@@ -1384,7 +1402,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![1; 1];
+        let amounts = &[1; 1];
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
             .map(|_| SuiAddress::random_for_testing_only())
@@ -1635,7 +1653,7 @@ mod tests {
         let candidates = faucet.drain_gas_queue(gas_coins.len() - 1).await;
 
         assert_eq!(discarded, 1);
-        assert!(candidates.get(&tiny_coin_id).is_none());
+        assert!(!candidates.contains(&tiny_coin_id));
     }
 
     #[tokio::test]

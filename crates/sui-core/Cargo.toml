@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 arc-swap.workspace = true
@@ -68,14 +71,7 @@ telemetry-subscribers.workspace = true
 typed-store.workspace = true
 
 mysten-metrics.workspace = true
-narwhal-config.workspace = true
-narwhal-crypto.workspace = true
-narwhal-executor.workspace = true
-narwhal-network.workspace = true
-narwhal-node.workspace = true
-narwhal-test-utils.workspace = true
 narwhal-types.workspace = true
-narwhal-worker.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
 sui-config.workspace = true
@@ -92,6 +88,7 @@ sui-protocol-config.workspace = true
 sui-transaction-checks.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
+sui-tls.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
 nonempty.workspace = true

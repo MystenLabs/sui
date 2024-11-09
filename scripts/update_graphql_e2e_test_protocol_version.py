@@ -65,4 +65,4 @@ if __name__ == "__main__":
     new_version = input("Enter the new protocol version (YY): ")
     replace_protocol_version_in_repo(repo_path, old_version, new_version, args.yes_to_all, args.dry_run)
     if not args.dry_run:
-        print(f"Next step. Running `env UB=1 cargo nextest run --features pg_integration` in `crates/sui-graphql-e2e-tests` to update all the snapshots.")
+        print(f"Next step. Running `env UB=1 cargo nextest run` in `crates/sui-graphql-e2e-tests` to update all the snapshots.")

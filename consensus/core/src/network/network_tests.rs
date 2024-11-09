@@ -31,7 +31,11 @@ trait ManagerBuilder {
 struct AnemoManagerBuilder {}
 
 impl ManagerBuilder for AnemoManagerBuilder {
-    fn build(&self, context: Arc<Context>, network_keypair: NetworkKeyPair) -> AnemoManager {
+    fn build(
+        &self,
+        context: Arc<Context>,
+        network_keypair: NetworkKeyPair,
+    ) -> impl NetworkManager<Mutex<TestService>> {
         AnemoManager::new(context, network_keypair)
     }
 }
@@ -39,7 +43,11 @@ impl ManagerBuilder for AnemoManagerBuilder {
 struct TonicManagerBuilder {}
 
 impl ManagerBuilder for TonicManagerBuilder {
-    fn build(&self, context: Arc<Context>, network_keypair: NetworkKeyPair) -> TonicManager {
+    fn build(
+        &self,
+        context: Arc<Context>,
+        network_keypair: NetworkKeyPair,
+    ) -> impl NetworkManager<Mutex<TestService>> {
         TonicManager::new(context, network_keypair)
     }
 }

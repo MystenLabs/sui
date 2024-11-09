@@ -904,7 +904,7 @@ impl AuthorityStore {
             .iter()
             .map(|(id, new_object)| {
                 let version = new_object.version();
-                debug!(?id, ?version, "writing object");
+                trace!(?id, ?version, "writing object");
                 let StoreObjectPair(store_object, indirect_object) =
                     get_store_object_pair(new_object.clone(), self.indirect_objects_threshold);
                 (
@@ -993,9 +993,9 @@ impl AuthorityStore {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult {
-        let tx_digest = *transaction.digest();
         let epoch = epoch_store.epoch();
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
@@ -1067,7 +1067,7 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            epoch_tables.write_transaction_locks(transaction, locks_to_write.into_iter())?;
+            epoch_tables.write_transaction_locks(signed_transaction, locks_to_write.into_iter())?;
         }
 
         Ok(())

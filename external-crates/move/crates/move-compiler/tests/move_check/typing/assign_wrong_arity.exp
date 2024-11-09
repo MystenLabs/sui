@@ -14,6 +14,14 @@ error[E04005]: expected a single type
   │         │    
   │         Invalid type for local
 
+error[E04005]: expected a single type
+  ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
+  │
+7 │         x = (0, 1, 2);
+  │         ^   --------- Expected a single type, but found expression list type: '(u64, u64, u64)'
+  │         │    
+  │         Invalid type for local
+
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
   │
@@ -23,14 +31,6 @@ error[E04007]: incompatible types
   │         ^   --------- Given: '({integer}, {integer}, {integer})'
   │         │    
   │         Invalid assignment to variable 'x'
-
-error[E04005]: expected a single type
-  ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
-  │
-7 │         x = (0, 1, 2);
-  │         ^   --------- Expected a single type, but found expression list type: '(u64, u64, u64)'
-  │         │    
-  │         Invalid type for local
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/assign_wrong_arity.move:8:9

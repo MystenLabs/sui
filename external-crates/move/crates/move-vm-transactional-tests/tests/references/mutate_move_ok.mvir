@@ -1,5 +1,5 @@
 //# publish
-module 0x1.B {
+module 0x6.B {
     struct T has drop {g: u64}
 
     public new(v: u64): Self.T {
@@ -26,7 +26,7 @@ module 0x1.B {
 
 //# run
 module 0x42.m {
-import 0x1.B;
+import 0x6.B;
 
 entry foo() {
     let x: B.T;

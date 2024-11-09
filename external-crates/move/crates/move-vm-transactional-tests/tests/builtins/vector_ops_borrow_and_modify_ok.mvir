@@ -1,5 +1,5 @@
 //# publish
-module 0x1.M {
+module 0x5.M {
 
     public new(): vector<u64> {
         let v: vector<u64>;
@@ -23,8 +23,8 @@ module 0x1.M {
 }
 
 //# publish
-module 0x2.test {
-    import 0x1.M;
+module 0x6.test {
+    import 0x5.M;
     public test() {
         let v: vector<u64>;
     label b0:
@@ -35,4 +35,4 @@ module 0x2.test {
     }
 }
 
-//# run 0x2::test::test
+//# run 0x6::test::test

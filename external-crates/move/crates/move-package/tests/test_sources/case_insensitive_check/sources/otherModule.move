@@ -1,2 +1,2 @@
-module 0x2::seT {
+module 0x7::seT {
 }

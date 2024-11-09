@@ -6,9 +6,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{
-    ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
-};
+use sui_graphql_rpc::config::{ServerConfig, ServiceConfig, Version};
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -18,8 +16,8 @@ bin_version::git_revision!();
 
 // VERSION mimics what other sui binaries use for the same const
 static VERSION: Version = Version {
-    year: env!("CARGO_PKG_VERSION_MAJOR"),
-    month: env!("CARGO_PKG_VERSION_MINOR"),
+    major: env!("CARGO_PKG_VERSION_MAJOR"),
+    minor: env!("CARGO_PKG_VERSION_MINOR"),
     patch: env!("CARGO_PKG_VERSION_PATCH"),
     sha: GIT_REVISION,
     full: const_str::concat!(
@@ -51,18 +49,11 @@ async fn main() {
         }
 
         Command::StartServer {
-            ide_title,
-            db_url,
-            db_pool_size,
-            port,
-            host,
+            ide,
+            connection,
             config,
-            node_rpc_url,
-            prom_host,
-            prom_port,
+            tx_exec_full_node,
         } => {
-            let connection =
-                ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
@@ -74,8 +65,8 @@ async fn main() {
             let server_config = ServerConfig {
                 connection,
                 service: service_config,
-                ide: Ide::new(ide_title),
-                tx_exec_full_node: TxExecFullNodeConfig::new(node_rpc_url),
+                ide,
+                tx_exec_full_node,
                 ..ServerConfig::default()
             };
 

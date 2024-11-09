@@ -20,10 +20,12 @@ use crate::{
 };
 
 /// In-memory storage for testing.
+#[allow(unused)]
 pub(crate) struct MemStore {
     inner: RwLock<Inner>,
 }
 
+#[allow(unused)]
 struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,

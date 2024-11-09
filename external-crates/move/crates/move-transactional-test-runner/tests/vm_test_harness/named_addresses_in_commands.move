@@ -1,9 +1,9 @@
-//# init --addresses A=42
+//# init --addresses A=43
 
 //# run --args @A
 module 0x42::m {
     fun main(a: &address) {
-        assert!(*a == @42, 1000);
+        assert!(*a == @43, 1000);
     }
 }
 
@@ -14,8 +14,8 @@ module A::M {
     }
 
     public fun test(): Foo {
-        Foo { x: 42 }
+        Foo { x: 43 }
     }
 }
 
-//# run 42::M::test
+//# run 43::M::test

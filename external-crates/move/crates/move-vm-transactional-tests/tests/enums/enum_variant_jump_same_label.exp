@@ -3,7 +3,7 @@ processed 5 tasks
 task 0, lines 1-43:
 //# print-bytecode
 // Move bytecode v7
-module 1.Enums {
+module 6.Enums {
 
 
 enum EnumWithThreeVariants<Ty0> {
@@ -62,21 +62,21 @@ Jump tables:
 }
 
 task 3, line 101:
-//# run 0x1::Enums::call_fail_1 --type-args u64
+//# run 0x6::Enums::call_fail_1 --type-args u64
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,
-    location: 0x1::Enums,
+    location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(3), 3)],
 }
 
 task 4, line 103:
-//# run 0x1::Enums::call_fail_3 --type-args u64
+//# run 0x6::Enums::call_fail_3 --type-args u64
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,
-    location: 0x1::Enums,
+    location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(3), 3)],
 }

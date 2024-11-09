@@ -68,7 +68,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::main {
+module 0x43::main {
     use 0x42::m::{t00, t01, t02, t03, t04, t05};
 
     fun main() {

@@ -156,7 +156,7 @@ pub fn ensure_gcloud() -> Result<()> {
     }
 }
 
-pub fn ensure_setup() -> Result<()> {
+pub fn ensure_pulumi_setup() -> Result<()> {
     let home = env::var("HOME").unwrap();
     // check for marker file
     let setup_marker = PathBuf::from(format!("{}/.suiop/pulumi_setup", home));

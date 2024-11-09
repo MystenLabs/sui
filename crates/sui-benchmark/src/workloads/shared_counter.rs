@@ -6,8 +6,8 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{
-    Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
-    STORAGE_COST_PER_COUNTER,
+    ExpectedFailureType, Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST,
+    MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER,
 };
 use crate::workloads::GasCoinConfig;
 use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
@@ -71,6 +71,9 @@ impl Payload for SharedCounterTestPayload {
                 self.counter_initial_shared_version,
             )
             .build_and_sign(self.gas.2.as_ref())
+    }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 
@@ -230,11 +233,12 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref.execute_transaction_block(transaction).await {
-                    effects.created()[0].0
-                } else {
-                    panic!("Failed to create shared counter!");
-                }
+                proxy_ref
+                    .execute_transaction_block(transaction)
+                    .await
+                    .unwrap()
+                    .created()[0]
+                    .0
             });
         }
         self.counters = join_all(futures).await;

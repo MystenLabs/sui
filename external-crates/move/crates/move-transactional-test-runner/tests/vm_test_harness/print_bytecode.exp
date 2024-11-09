@@ -18,7 +18,7 @@ B0:
 task 1, lines 9-13:
 //# print-bytecode
 // Move bytecode v6
-module 42.M {
+module 43.M {
 
 
 

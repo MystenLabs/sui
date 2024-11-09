@@ -5,7 +5,7 @@
 // dep: ../move-stdlib/sources/string.move
 // dep: ../move-stdlib/sources/vector.move
 
-module 0x1::ReturnRefsIntoVec {
+module 0x6::ReturnRefsIntoVec {
 
     // should not complain
     fun return_vec_index_immut(v: &vector<u64>): &u64 {

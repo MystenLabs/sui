@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 integer-encoding.workspace = true
 async-trait.workspace = true
@@ -38,6 +41,7 @@ hyper-rustls.workspace = true
 base64-url.workspace = true
 telemetry-subscribers.workspace = true
 indicatif.workspace = true
+moka.workspace = true
 
 sui-types.workspace = true
 mysten-metrics.workspace = true
@@ -62,5 +66,5 @@ pretty_assertions.workspace = true
 once_cell.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
-sui-macros = { workspace = true }
-sui-simulator = { workspace = true }
+sui-macros.workspace = true
+sui-simulator.workspace = true

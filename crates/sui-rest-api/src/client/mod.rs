@@ -30,12 +30,16 @@ impl Client {
         }
     }
 
+    pub fn inner(&self) -> &sdk::Client {
+        &self.inner
+    }
+
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
         self.inner
             .get_latest_checkpoint()
             .await
             .map(Response::into_inner)
-            .map(Into::into)
+            .and_then(|checkpoint| checkpoint.try_into().map_err(Into::into))
     }
 
     pub async fn get_full_checkpoint(
@@ -47,15 +51,15 @@ impl Client {
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
 
-        let response = self
-            .inner
-            .client()
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.client().get(url);
 
-        self.inner.bcs(response).await.map(Response::into_inner)
+        self.inner.bcs(request).await.map(Response::into_inner)
+        // let proto = self
+        //     .inner
+        //     .protobuf::<crate::proto::FullCheckpoint>(request)
+        //     .await?
+        //     .into_inner();
+        // proto.try_into().map_err(Into::into)
     }
 
     pub async fn get_checkpoint_summary(
@@ -66,7 +70,14 @@ impl Client {
             .get_checkpoint(checkpoint_sequence_number)
             .await
             .map(Response::into_inner)
-            .map(Into::into)
+            .and_then(|checkpoint| {
+                sui_sdk_types::types::SignedCheckpointSummary {
+                    checkpoint: checkpoint.summary,
+                    signature: checkpoint.signature,
+                }
+                .try_into()
+                .map_err(Into::into)
+            })
     }
 
     pub async fn get_object(&self, object_id: ObjectID) -> Result<Object> {
@@ -74,7 +85,7 @@ impl Client {
             .get_object(object_id.into())
             .await
             .map(Response::into_inner)
-            .map(Into::into)
+            .and_then(|object| object.try_into().map_err(Into::into))
     }
 
     pub async fn get_object_with_version(
@@ -86,7 +97,7 @@ impl Client {
             .get_object_with_version(object_id.into(), version.into())
             .await
             .map(Response::into_inner)
-            .map(Into::into)
+            .and_then(|object| object.try_into().map_err(Into::into))
     }
 
     pub async fn execute_transaction(
@@ -106,18 +117,15 @@ impl Client {
             signatures: &transaction.inner().tx_signatures,
         })?;
 
-        let response = self
+        let request = self
             .inner
             .client()
             .post(url)
             .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
-            .body(body)
-            .send()
-            .await?;
+            .body(body);
 
-        self.inner.bcs(response).await.map(Response::into_inner)
+        self.inner.bcs(request).await.map(Response::into_inner)
     }
 }
 

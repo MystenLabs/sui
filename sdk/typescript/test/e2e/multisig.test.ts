@@ -3,7 +3,7 @@
 
 import { tmpdir } from 'os';
 import path from 'path';
-import { fromB64 } from '@mysten/bcs';
+import { fromBase64 } from '@mysten/bcs';
 import { describe, expect, it } from 'vitest';
 
 import { decodeSuiPrivateKey } from '../../src/cryptography';
@@ -95,7 +95,7 @@ describe('MultiSig with zklogin signature', () => {
 		const zkLoginSig = getZkLoginSignature({
 			inputs: zkLoginInputs,
 			maxEpoch: '2',
-			userSignature: fromB64(ephemeralSig),
+			userSignature: fromBase64(ephemeralSig),
 		});
 
 		// combine to multisig and execute the transaction.

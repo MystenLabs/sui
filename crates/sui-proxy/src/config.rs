@@ -38,7 +38,7 @@ pub struct RemoteWriteConfig {
     pub pool_max_idle_per_host: usize,
 }
 
-/// DynamicPeerValidationConfig controls what sui-node binaries that are functioning as a validator that we'll speak with.
+/// DynamicPeerValidationConfig controls what sui-node & sui-bridge binaries that are functioning as a validator that we'll speak with.
 /// Peer in this case is peers within the consensus committee, for each epoch.  This membership is determined dynamically
 /// for each epoch via json-rpc calls to a full node.
 #[serde_as]
@@ -79,8 +79,6 @@ pub struct StaticPeerValidationConfig {
 pub struct StaticPubKey {
     /// friendly name we will see in metrics
     pub name: String,
-    /// friendly ip address we may see in metrics
-    pub p2p_address: String,
     /// the peer_id from a node config file (Ed25519 PublicKey)
     pub peer_id: String,
 }

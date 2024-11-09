@@ -30,8 +30,9 @@ use async_graphql::dataloader::Loader;
 use async_graphql::*;
 use diesel::prelude::QueryableByName;
 use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, Selectable};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredFullHistoryObject;
 use sui_indexer::schema::packages;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
 use sui_types::is_system_package;
@@ -122,9 +123,10 @@ struct TypeOrigin {
 #[derive(Selectable, QueryableByName)]
 #[diesel(table_name = packages)]
 struct StoredHistoryPackage {
+    checkpoint_sequence_number: i64,
     original_id: Vec<u8>,
     #[diesel(embed)]
-    object: StoredHistoryObject,
+    object: StoredFullHistoryObject,
 }
 
 pub(crate) struct MovePackageDowncastError;
@@ -135,6 +137,10 @@ pub(crate) type Cursor = BcsCursor<PackageCursor>;
 /// The inner struct for the `MovePackage` cursor. The package is identified by the checkpoint it
 /// was created in, its original ID, and its version, and the `checkpoint_viewed_at` specifies the
 /// checkpoint snapshot that the data came from.
+///
+/// The cursor includes the checkpoint the package was created in as well, so that when we paginate
+/// through all the packages on-chain, if we pause half way through, we can pick back up based on
+/// the checkpoint we've seen so far.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub(crate) struct PackageCursor {
     pub checkpoint_sequence_number: u64,
@@ -307,8 +313,8 @@ impl MovePackage {
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
     /// Packages are always Immutable.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(&self.super_).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(&self.super_).owner().await
     }
 
     /// The transaction block that published or upgraded this package.
@@ -542,6 +548,17 @@ impl MovePackage {
         Some(type_origins)
     }
 
+    /// BCS representation of the package itself, as a MovePackage.
+    async fn package_bcs(&self) -> Result<Option<Base64>> {
+        let bcs = bcs::to_bytes(&self.native)
+            .map_err(|_| {
+                Error::Internal(format!("Failed to serialize package {}", self.native.id()))
+            })
+            .extend()?;
+
+        Ok(Some(bcs.into()))
+    }
+
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
     async fn module_bcs(&self) -> Result<Option<Base64>> {
@@ -707,31 +724,35 @@ impl MovePackage {
 
         let (prev, next, results) = db
             .execute(move |conn| {
-                let mut q = query!(
-                    r#"
-                    SELECT
-                            p.original_id,
-                            o.*
-                    FROM
-                            packages p
-                    INNER JOIN
-                            objects_history o
-                    ON
-                            p.package_id = o.object_id
-                    AND     p.package_version = o.object_version
-                    AND     p.checkpoint_sequence_number = o.checkpoint_sequence_number
-                "#
-                );
+                async move {
+                    let mut q = query!(
+                        r#"
+                            SELECT
+                                    p.checkpoint_sequence_number,
+                                    p.original_id,
+                                    o.*
+                            FROM
+                                    packages p
+                            INNER JOIN
+                                    full_objects_history o
+                            ON
+                                    p.package_id = o.object_id
+                            AND     p.package_version = o.object_version
+                        "#
+                    );
 
-                q = filter!(
-                    q,
-                    format!("o.checkpoint_sequence_number < {before_checkpoint}")
-                );
-                if let Some(after) = after_checkpoint {
-                    q = filter!(q, format!("{after} < o.checkpoint_sequence_number"));
+                    q = filter!(
+                        q,
+                        format!("p.checkpoint_sequence_number < {before_checkpoint}")
+                    );
+                    if let Some(after) = after_checkpoint {
+                        q = filter!(q, format!("{after} < p.checkpoint_sequence_number"));
+                    }
+
+                    page.paginate_raw_query::<StoredHistoryPackage>(conn, checkpoint_viewed_at, q)
+                        .await
                 }
-
-                page.paginate_raw_query::<StoredHistoryPackage>(conn, checkpoint_viewed_at, q)
+                .scope_boxed()
             })
             .await?;
 
@@ -740,8 +761,7 @@ impl MovePackage {
         // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let package =
-                MovePackage::try_from_stored_history_object(stored.object, checkpoint_viewed_at)?;
+            let package = MovePackage::try_from_serialized(stored.object, checkpoint_viewed_at)?;
             conn.edges.push(Edge::new(cursor, package));
         }
 
@@ -772,15 +792,19 @@ impl MovePackage {
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_raw_query::<StoredHistoryPackage>(
-                    conn,
-                    checkpoint_viewed_at,
-                    if is_system_package(package) {
-                        system_package_version_query(package, filter)
-                    } else {
-                        user_package_version_query(package, filter)
-                    },
-                )
+                async move {
+                    page.paginate_raw_query::<StoredHistoryPackage>(
+                        conn,
+                        checkpoint_viewed_at,
+                        if is_system_package(package) {
+                            system_package_version_query(package, filter)
+                        } else {
+                            user_package_version_query(package, filter)
+                        },
+                    )
+                    .await
+                }
+                .scope_boxed()
             })
             .await?;
 
@@ -789,8 +813,7 @@ impl MovePackage {
         // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let package =
-                MovePackage::try_from_stored_history_object(stored.object, checkpoint_viewed_at)?;
+            let package = MovePackage::try_from_serialized(stored.object, checkpoint_viewed_at)?;
             conn.edges.push(Edge::new(cursor, package));
         }
 
@@ -800,15 +823,20 @@ impl MovePackage {
     /// `checkpoint_viewed_at` points to the checkpoint snapshot that this `MovePackage` came from.
     /// This is stored in the `MovePackage` so that related fields from the package are read from
     /// the same checkpoint (consistently).
-    pub(crate) fn try_from_stored_history_object(
-        history_object: StoredHistoryObject,
+    pub(crate) fn try_from_serialized(
+        history_object: StoredFullHistoryObject,
         checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
-        let object = Object::try_from_stored_history_object(
-            history_object,
+        let object = Object::new_serialized(
+            SuiAddress::from_bytes(&history_object.object_id)
+                .map_err(|_| Error::Internal("Invalid package ID".to_string()))?,
+            history_object.object_version as u64,
+            history_object.serialized_object,
             checkpoint_viewed_at,
-            /* root_version */ None,
-        )?;
+            history_object.object_version as u64,
+        )
+        .ok_or_else(|| Error::Internal("Not a package!".to_string()))?;
+
         Self::try_from(&object).map_err(|_| Error::Internal("Not a package!".to_string()))
     }
 }
@@ -824,12 +852,12 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
         filter!(
             query,
             format!(
-                "o.checkpoint_sequence_number > {cp} OR (\
-                 o.checkpoint_sequence_number = {cp} AND
-                 original_id > '\\x{id}'::bytea OR (\
-                 original_id = '\\x{id}'::bytea AND \
-                 o.object_version >= {pv}\
-                 ))",
+                "(p.checkpoint_sequence_number > {cp} OR (\
+                  p.checkpoint_sequence_number = {cp} AND \
+                 (original_id > '\\x{id}'::bytea OR (\
+                  original_id = '\\x{id}'::bytea AND \
+                  object_version >= {pv}\
+                 ))))",
                 cp = cursor.checkpoint_sequence_number,
                 id = hex::encode(&cursor.original_id),
                 pv = cursor.package_version,
@@ -841,12 +869,12 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
         filter!(
             query,
             format!(
-                "o.checkpoint_sequence_number < {cp} OR (\
-                 o.checkpoint_sequence_number = {cp} AND
-                 original_id < '\\x{id}'::bytea OR (\
-                 original_id = '\\x{id}'::bytea AND \
-                 o.object_version <= {pv}\
-                 ))",
+                "(p.checkpoint_sequence_number < {cp} OR (\
+                  p.checkpoint_sequence_number = {cp} AND \
+                 (original_id < '\\x{id}'::bytea OR (\
+                  original_id = '\\x{id}'::bytea AND \
+                  object_version <= {pv}\
+                 ))))",
                 cp = cursor.checkpoint_sequence_number,
                 id = hex::encode(&cursor.original_id),
                 pv = cursor.package_version,
@@ -857,14 +885,14 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
     fn order(asc: bool, query: RawQuery) -> RawQuery {
         if asc {
             query
-                .order_by("o.checkpoint_sequence_number ASC")
-                .order_by("original_id ASC")
-                .order_by("o.object_version ASC")
+                .order_by("1 ASC") // checkpoint_sequence_number
+                .order_by("2 ASC") // original_id
+                .order_by("object_version ASC")
         } else {
             query
-                .order_by("o.checkpoint_sequence_number DESC")
-                .order_by("original_id DESC")
-                .order_by("o.object_version DESC")
+                .order_by("1 DESC") // checkpoint_sequence_number
+                .order_by("2 DESC") // original_id
+                .order_by("object_version DESC")
         }
     }
 }
@@ -872,7 +900,7 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
 impl Target<Cursor> for StoredHistoryPackage {
     fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(PackageCursor {
-            checkpoint_sequence_number: self.object.checkpoint_sequence_number as u64,
+            checkpoint_sequence_number: self.checkpoint_sequence_number as u64,
             original_id: self.original_id.clone(),
             package_version: self.object.object_version as u64,
             checkpoint_viewed_at,
@@ -901,26 +929,32 @@ impl Loader<PackageVersionKey> for Db {
 
         let stored_packages: Vec<(Vec<u8>, i64, Vec<u8>)> = self
             .execute(move |conn| {
-                conn.results(|| {
-                    let mut query = dsl::packages
-                        .inner_join(other.on(dsl::original_id.eq(other.field(dsl::original_id))))
-                        .select((
-                            dsl::package_id,
-                            other.field(dsl::package_version),
-                            other.field(dsl::package_id),
-                        ))
-                        .into_boxed();
+                async move {
+                    conn.results(|| {
+                        let mut query = dsl::packages
+                            .inner_join(
+                                other.on(dsl::original_id.eq(other.field(dsl::original_id))),
+                            )
+                            .select((
+                                dsl::package_id,
+                                other.field(dsl::package_version),
+                                other.field(dsl::package_id),
+                            ))
+                            .into_boxed();
 
-                    for (id, version) in id_versions.iter().cloned() {
-                        query = query.or_filter(
-                            dsl::package_id
-                                .eq(id)
-                                .and(other.field(dsl::package_version).eq(version)),
-                        );
-                    }
+                        for (id, version) in id_versions.iter().cloned() {
+                            query = query.or_filter(
+                                dsl::package_id
+                                    .eq(id)
+                                    .and(other.field(dsl::package_version).eq(version)),
+                            );
+                        }
 
-                    query
-                })
+                        query
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to load packages: {e}")))?;
@@ -962,28 +996,33 @@ impl Loader<LatestKey> for Db {
             .into_iter()
             .map(|(checkpoint_viewed_at, ids)| {
                 self.execute(move |conn| {
-                    let results: Vec<(Vec<u8>, Vec<u8>)> = conn.results(|| {
-                        let o_original_id = other.field(dsl::original_id);
-                        let o_package_id = other.field(dsl::package_id);
-                        let o_cp_seq_num = other.field(dsl::checkpoint_sequence_number);
-                        let o_version = other.field(dsl::package_version);
+                    async move {
+                        let results: Vec<(Vec<u8>, Vec<u8>)> = conn
+                            .results(|| {
+                                let o_original_id = other.field(dsl::original_id);
+                                let o_package_id = other.field(dsl::package_id);
+                                let o_cp_seq_num = other.field(dsl::checkpoint_sequence_number);
+                                let o_version = other.field(dsl::package_version);
 
-                        let query = dsl::packages
-                            .inner_join(other.on(dsl::original_id.eq(o_original_id)))
-                            .select((dsl::package_id, o_package_id))
-                            .filter(dsl::package_id.eq_any(ids.iter().cloned()))
-                            .filter(o_cp_seq_num.le(checkpoint_viewed_at as i64))
-                            .order_by((dsl::package_id, dsl::original_id, o_version.desc()))
-                            .distinct_on((dsl::package_id, dsl::original_id));
-                        query
-                    })?;
+                                let query = dsl::packages
+                                    .inner_join(other.on(dsl::original_id.eq(o_original_id)))
+                                    .select((dsl::package_id, o_package_id))
+                                    .filter(dsl::package_id.eq_any(ids.iter().cloned()))
+                                    .filter(o_cp_seq_num.le(checkpoint_viewed_at as i64))
+                                    .order_by((dsl::package_id, dsl::original_id, o_version.desc()))
+                                    .distinct_on((dsl::package_id, dsl::original_id));
+                                query
+                            })
+                            .await?;
 
-                    Ok::<_, diesel::result::Error>(
-                        results
-                            .into_iter()
-                            .map(|(p, latest)| (checkpoint_viewed_at, p, latest))
-                            .collect::<Vec<_>>(),
-                    )
+                        Ok::<_, diesel::result::Error>(
+                            results
+                                .into_iter()
+                                .map(|(p, latest)| (checkpoint_viewed_at, p, latest))
+                                .collect::<Vec<_>>(),
+                        )
+                    }
+                    .scope_boxed()
                 })
             });
 
@@ -1029,7 +1068,11 @@ impl TryFrom<&Object> for MovePackage {
 }
 
 /// Query for fetching all the versions of a system package (assumes that `package` has already been
-/// verified as a system package). This is an `objects_history` query disguised as a package query.
+/// verified as a system package). This is a `full_objects_history` query disguised as a package query.
+///
+/// We do this because the `packages` table contains only one entry per package ID. For the system
+/// packages, this is the latest version of the package (for user packages, there is only one entry
+/// per package ID anyway as each version of a package gets its own ID).
 fn system_package_version_query(
     package: SuiAddress,
     filter: Option<MovePackageVersionFilter>,
@@ -1038,35 +1081,42 @@ fn system_package_version_query(
     let mut q = query!(
         r#"
             SELECT
-                    o.object_id AS original_id,
+                    p.checkpoint_sequence_number,
+                    p.original_id,
                     o.*
-            FROM
-                    objects_version v
+            FROM (
+                    SELECT
+                        object_id AS package_id,
+                        object_id AS original_id,
+                        object_version AS package_version,
+                        cp_sequence_number AS checkpoint_sequence_number
+                    FROM
+                        objects_version
+            ) p
             LEFT JOIN
-                    objects_history o
+                    full_objects_history o
             ON
-                    v.object_id = o.object_id
-            AND     v.object_version = o.object_version
-            AND     v.cp_sequence_number = o.checkpoint_sequence_number
+                    p.package_id = o.object_id
+            AND     p.package_version = o.object_version
         "#
     );
 
     q = filter!(
         q,
         format!(
-            "v.object_id = '\\x{}'::bytea",
+            "original_id = '\\x{}'::bytea",
             hex::encode(package.into_vec())
         )
     );
 
     if let Some(after) = filter.as_ref().and_then(|f| f.after_version) {
         let a: u64 = after.into();
-        q = filter!(q, format!("v.object_version > {a}"));
+        q = filter!(q, format!("object_version > {a}"));
     }
 
     if let Some(before) = filter.as_ref().and_then(|f| f.before_version) {
         let b: u64 = before.into();
-        q = filter!(q, format!("v.object_version < {b}"));
+        q = filter!(q, format!("object_version < {b}"));
     }
 
     q
@@ -1081,20 +1131,19 @@ fn user_package_version_query(
     let mut q = query!(
         r#"
             SELECT
+                    p.checkpoint_sequence_number,
                     p.original_id,
                     o.*
             FROM
                     packages q
             INNER JOIN
                     packages p
-            ON
-                    q.original_id = p.original_id
+            USING  (original_id)
             INNER JOIN
-                    objects_history o
+                    full_objects_history o
             ON
                     p.package_id = o.object_id
             AND     p.package_version = o.object_version
-            AND     p.checkpoint_sequence_number = o.checkpoint_sequence_number
         "#
     );
 

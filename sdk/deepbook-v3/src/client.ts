@@ -270,8 +270,12 @@ export class DeepBookClient {
 			expire_timestamp: bcs.u64(),
 		});
 
-		const orderInformation = res.results![0].returnValues![0][0];
-		return Order.parse(new Uint8Array(orderInformation));
+		try {
+			const orderInformation = res.results![0].returnValues![0][0];
+			return Order.parse(new Uint8Array(orderInformation));
+		} catch (e) {
+			return null;
+		}
 	}
 
 	/**
@@ -431,5 +435,210 @@ export class DeepBookClient {
 			(parsed_mid_price * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
 
 		return Number(adjusted_mid_price.toFixed(9));
+	}
+
+	/**
+	 * @description Get the trade parameters for a given pool, including taker fee, maker fee, and stake required.
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ takerFee: number, makerFee: number, stakeRequired: number }>}
+	 */
+	async poolTradeParams(poolKey: string) {
+		const tx = new Transaction();
+
+		tx.add(this.deepBook.poolTradeParams(poolKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const takerFee = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const makerFee = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const stakeRequired = Number(
+			bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])),
+		);
+
+		return {
+			takerFee: Number(takerFee / FLOAT_SCALAR),
+			makerFee: Number(makerFee / FLOAT_SCALAR),
+			stakeRequired: Number(stakeRequired / DEEP_SCALAR),
+		};
+	}
+
+	/**
+	 * @description Get the trade parameters for a given pool, including tick size, lot size, and min size.
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ tickSize: number, lotSize: number, minSize: number }>}
+	 */
+	async poolBookParams(poolKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
+
+		tx.add(this.deepBook.poolBookParams(poolKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const tickSize = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const lotSize = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const minSize = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			tickSize: Number((tickSize * baseScalar) / quoteScalar / FLOAT_SCALAR),
+			lotSize: Number(lotSize / baseScalar),
+			minSize: Number(minSize / baseScalar),
+		};
+	}
+
+	/**
+	 * @description Get the account information for a given pool and balance manager
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @returns {Promise<Object>} A promise that resolves to an object containing the account information
+	 */
+	async account(poolKey: string, managerKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
+
+		tx.add(this.deepBook.account(poolKey, managerKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const ID = bcs.struct('ID', {
+			bytes: bcs.Address,
+		});
+
+		const Balances = bcs.struct('Balances', {
+			base: bcs.u64(),
+			quote: bcs.u64(),
+			deep: bcs.u64(),
+		});
+
+		const VecSet = bcs.struct('VecSet', {
+			constants: bcs.vector(bcs.U128),
+		});
+
+		const Account = bcs.struct('Account', {
+			epoch: bcs.u64(),
+			open_orders: VecSet,
+			taker_volume: bcs.u128(),
+			maker_volume: bcs.u128(),
+			active_stake: bcs.u64(),
+			inactive_stake: bcs.u64(),
+			created_proposal: bcs.bool(),
+			voted_proposal: bcs.option(ID),
+			unclaimed_rebates: Balances,
+			settled_balances: Balances,
+			owed_balances: Balances,
+		});
+
+		const accountInformation = res.results![0].returnValues![0][0];
+		const accountInfo = Account.parse(new Uint8Array(accountInformation));
+
+		return {
+			epoch: accountInfo.epoch,
+			open_orders: accountInfo.open_orders,
+			taker_volume: Number(accountInfo.taker_volume) / baseScalar,
+			maker_volume: Number(accountInfo.maker_volume) / baseScalar,
+			active_stake: Number(accountInfo.active_stake) / DEEP_SCALAR,
+			inactive_stake: Number(accountInfo.inactive_stake) / DEEP_SCALAR,
+			created_proposal: accountInfo.created_proposal,
+			voted_proposal: accountInfo.voted_proposal,
+			unclaimed_rebates: {
+				base: Number(accountInfo.unclaimed_rebates.base) / baseScalar,
+				quote: Number(accountInfo.unclaimed_rebates.quote) / quoteScalar,
+				deep: Number(accountInfo.unclaimed_rebates.deep) / DEEP_SCALAR,
+			},
+			settled_balances: {
+				base: Number(accountInfo.settled_balances.base) / baseScalar,
+				quote: Number(accountInfo.settled_balances.quote) / quoteScalar,
+				deep: Number(accountInfo.settled_balances.deep) / DEEP_SCALAR,
+			},
+			owed_balances: {
+				base: Number(accountInfo.owed_balances.base) / baseScalar,
+				quote: Number(accountInfo.owed_balances.quote) / quoteScalar,
+				deep: Number(accountInfo.owed_balances.deep) / DEEP_SCALAR,
+			},
+		};
+	}
+
+	/**
+	 * @description Get the locked balances for a pool and balance manager
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @returns {Promise<{ base: number, quote: number, deep: number }>}
+	 * An object with base, quote, and deep locked for the balance manager in the pool
+	 */
+	async lockedBalance(poolKey: string, balanceManagerKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
+
+		tx.add(this.deepBook.lockedBalance(poolKey, balanceManagerKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const baseLocked = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const quoteLocked = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const deepLocked = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			base: Number((baseLocked / baseScalar).toFixed(9)),
+			quote: Number((quoteLocked / quoteScalar).toFixed(9)),
+			deep: Number((deepLocked / DEEP_SCALAR).toFixed(9)),
+		};
+	}
+
+	/**
+	 * @description Get the DEEP price conversion for a pool
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ asset_is_base: bool, deep_per_quote: number }>} Deep price conversion
+	 */
+	async getPoolDeepPrice(poolKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		tx.add(this.deepBook.getPoolDeepPrice(poolKey));
+
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const deepCoin = this.#config.getCoin('DEEP');
+
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const OrderDeepPrice = bcs.struct('OrderDeepPrice', {
+			asset_is_base: bcs.bool(),
+			deep_per_asset: bcs.u64(),
+		});
+
+		const poolDeepPriceBytes = res.results![0].returnValues![0][0];
+		const poolDeepPrice = OrderDeepPrice.parse(new Uint8Array(poolDeepPriceBytes));
+
+		if (poolDeepPrice.asset_is_base) {
+			return {
+				asset_is_base: poolDeepPrice.asset_is_base,
+				deep_per_base:
+					((Number(poolDeepPrice.deep_per_asset) / FLOAT_SCALAR) * baseCoin.scalar) /
+					deepCoin.scalar,
+			};
+		} else {
+			return {
+				asset_is_base: poolDeepPrice.asset_is_base,
+				deep_per_quote:
+					((Number(poolDeepPrice.deep_per_asset) / FLOAT_SCALAR) * quoteCoin.scalar) /
+					deepCoin.scalar,
+			};
+		}
 	}
 }

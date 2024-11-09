@@ -18,7 +18,7 @@ const references = [
 		items: [
 			{
 				type: 'category',
-				label: 'GraphQL',
+				label: 'GraphQL (Beta)',
 				link: {
 					type: 'doc',
 					id: 'references/sui-graphql',

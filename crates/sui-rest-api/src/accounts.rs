@@ -8,8 +8,8 @@ use crate::{Page, RestService};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use openapiv3::v3_1::Operation;
-use sui_sdk2::types::{Address, ObjectId, StructTag, Version};
-use sui_types::sui_sdk2_conversions::struct_tag_core_to_sdk;
+use sui_sdk_types::types::{Address, ObjectId, StructTag, Version};
+use sui_types::sui_sdk_types_conversions::struct_tag_core_to_sdk;
 use tap::Pipe;
 
 pub struct ListAccountObjects;
@@ -55,14 +55,17 @@ async fn list_account_objects(
     let mut object_info = state
         .inner()
         .account_owned_objects_info_iter(address.into(), start)?
-        .map(|info| AccountOwnedObjectInfo {
-            owner: info.owner.into(),
-            object_id: info.object_id.into(),
-            version: info.version.into(),
-            type_: struct_tag_core_to_sdk(info.type_.into()),
-        })
         .take(limit + 1)
-        .collect::<Vec<_>>();
+        .map(|info| {
+            AccountOwnedObjectInfo {
+                owner: info.owner.into(),
+                object_id: info.object_id.into(),
+                version: info.version.into(),
+                type_: struct_tag_core_to_sdk(info.type_.into())?,
+            }
+            .pipe(Ok)
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     let cursor = if object_info.len() > limit {
         // SAFETY: We've already verified that object_info is greater than limit, which is

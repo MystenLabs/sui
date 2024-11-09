@@ -4,7 +4,9 @@
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, LockDetails};
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
+use mysten_common::*;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
@@ -12,6 +14,8 @@ use sui_types::transaction::VerifiedSignedTransaction;
 use tracing::{debug, info, instrument, trace};
 
 use super::writeback_cache::WritebackCache;
+
+type RefCount = usize;
 
 pub(super) struct ObjectLocks {
     // When acquire transaction locks, lock entries are briefly inserted into this map. The map
@@ -23,7 +27,7 @@ pub(super) struct ObjectLocks {
     // those objects. Therefore we do a db read for each object we are locking.
     //
     // TODO: find a strategy to allow us to avoid db reads for each object.
-    locked_transactions: DashMap<ObjectRef, LockDetails>,
+    locked_transactions: DashMap<ObjectRef, (RefCount, LockDetails)>,
 }
 
 impl ObjectLocks {
@@ -38,29 +42,10 @@ impl ObjectLocks {
         obj_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<LockDetails>> {
-        match self.locked_transactions.entry(*obj_ref) {
-            DashMapEntry::Vacant(vacant) => {
-                let tables = epoch_store.tables()?;
-                let lock = tables.get_locked_transaction(obj_ref)?;
-                if let Some(lock_details) = lock {
-                    vacant.insert(lock_details);
-                }
-                Ok(lock)
-            }
-            DashMapEntry::Occupied(occupied) => {
-                if cfg!(debug_assertions) {
-                    if let Some(lock_details) = epoch_store
-                        .tables()
-                        .unwrap()
-                        .get_locked_transaction(obj_ref)
-                        .unwrap()
-                    {
-                        assert_eq!(*occupied.get(), lock_details);
-                    }
-                }
-                Ok(Some(*occupied.get()))
-            }
-        }
+        // We don't consult the in-memory state here. We are only interested in state that
+        // has been committed to the db. This is because in memory state is reverted
+        // if the transaction is not successfully locked.
+        epoch_store.tables()?.get_locked_transaction(obj_ref)
     }
 
     /// Attempts to atomically test-and-set a transaction lock on an object.
@@ -96,15 +81,18 @@ impl ObjectLocks {
                 let tables = epoch_store.tables()?;
                 if let Some(lock_details) = tables.get_locked_transaction(obj_ref)? {
                     trace!("read lock from db: {:?}", lock_details);
-                    vacant.insert(lock_details);
+                    vacant.insert((1, lock_details));
                     lock_details
                 } else {
                     trace!("set lock: {:?}", new_lock);
-                    vacant.insert(new_lock);
+                    vacant.insert((1, new_lock));
                     new_lock
                 }
             }
-            DashMapEntry::Occupied(occupied) => *occupied.get(),
+            DashMapEntry::Occupied(mut occupied) => {
+                occupied.get_mut().0 += 1;
+                occupied.get().1
+            }
         };
 
         if prev_lock != new_lock {
@@ -141,7 +129,6 @@ impl ObjectLocks {
 
         let live_digest = live_object.digest();
         if obj_ref.2 != live_digest {
-            debug!("object digest mismatch: {:?} vs {:?}", obj_ref, live_digest);
             return Err(SuiError::UserInputError {
                 error: UserInputError::InvalidObjectDigest {
                     object_id: obj_ref.0,
@@ -156,14 +143,20 @@ impl ObjectLocks {
     fn clear_cached_locks(&self, locks: &[(ObjectRef, LockDetails)]) {
         for (obj_ref, lock) in locks {
             let entry = self.locked_transactions.entry(*obj_ref);
-            let occupied = match entry {
-                DashMapEntry::Vacant(_) => panic!("lock must exist"),
+            let mut occupied = match entry {
+                DashMapEntry::Vacant(_) => {
+                    debug_fatal!("lock must exist for object: {:?}", obj_ref);
+                    continue;
+                }
                 DashMapEntry::Occupied(occupied) => occupied,
             };
 
-            if occupied.get() == lock {
-                trace!("clearing lock: {:?}", lock);
-                occupied.remove();
+            if occupied.get().1 == *lock {
+                occupied.get_mut().0 -= 1;
+                if occupied.get().0 == 0 {
+                    trace!("clearing lock: {:?}", lock);
+                    occupied.remove();
+                }
             } else {
                 // this is impossible because the only case in which we overwrite a
                 // lock is when the lock is from a previous epoch. but we are holding
@@ -200,10 +193,9 @@ impl ObjectLocks {
         cache: &WritebackCache,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult {
-        let tx_digest = *transaction.digest();
-
         let object_ids = owned_input_objects.iter().map(|o| o.0).collect::<Vec<_>>();
         let live_objects = Self::multi_get_objects_must_exist(cache, &object_ids)?;
 
@@ -251,7 +243,7 @@ impl ObjectLocks {
         // commit all writes to DB
         epoch_store
             .tables()?
-            .write_transaction_locks(transaction, locks_to_write.iter().cloned())?;
+            .write_transaction_locks(signed_transaction, locks_to_write.iter().cloned())?;
 
         // remove pending locks from unbounded storage
         self.clear_cached_locks(&locks_to_write);
@@ -287,7 +279,7 @@ mod tests {
             let tx1 = s.make_signed_transaction(&outputs.transaction);
 
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx1)
+                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], *tx1.digest(), Some(tx1))
                 .await
                 .expect("locks should be available");
 
@@ -299,19 +291,34 @@ mod tests {
 
             // both locks are held by tx1, so this should fail
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2.clone())
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, new2],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .await
                 .unwrap_err();
 
             // new3 is lockable, but new2 is not, so this should fail
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new3, new2], tx2.clone())
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new3, new2],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .await
                 .unwrap_err();
 
             // new3 is unlocked
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new3], tx2)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new3],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .await
                 .expect("new3 should be unlocked");
         })
@@ -340,14 +347,24 @@ mod tests {
 
             // fails because we are referring to an old object
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx.clone())
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, old2],
+                    *tx.digest(),
+                    Some(tx.clone()),
+                )
                 .await
                 .unwrap_err();
 
             // succeeds because the above call releases the lock on new1 after failing
             // to get the lock on old2
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, new2],
+                    *tx.digest(),
+                    Some(tx.clone()),
+                )
                 .await
                 .expect("new1 should be unlocked after revert");
         })
@@ -376,7 +393,12 @@ mod tests {
 
             // fails because we are referring to an old object
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, old2],
+                    *tx.digest(),
+                    Some(tx.clone()),
+                )
                 .await
                 .unwrap_err();
 
@@ -389,7 +411,7 @@ mod tests {
             // succeeds because the above call releases the lock on new1 after failing
             // to get the lock on old2
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2)
+                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], *tx2.digest(), Some(tx2))
                 .await
                 .expect("new1 should be unlocked after revert");
         })
@@ -415,7 +437,12 @@ mod tests {
             // assert that acquire_transaction_locks is sync in non-simtest, which causes the
             // fail_point_async! macros above to be elided
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &objects, tx2)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &objects,
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .now_or_never()
                 .unwrap()
                 .unwrap();

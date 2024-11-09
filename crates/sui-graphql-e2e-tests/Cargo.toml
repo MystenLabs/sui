@@ -7,7 +7,11 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dev-dependencies]
+telemetry-subscribers.workspace = true
 datatest-stable.workspace = true
 sui-graphql-rpc.workspace = true
 sui-transactional-test-runner.workspace = true
@@ -19,10 +23,8 @@ harness = false
 
 [dependencies]
 
-[features]
-default = ["pg_backend"]
-pg_integration = []
-pg_backend = []
-
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
+
+[features]
+staging = ["sui-graphql-rpc/staging"]

@@ -81,7 +81,7 @@ fn check_disabled_features(
             deny_if_true!(
                 filter_config.zklogin_disabled_providers().contains(
                     &OIDCProvider::from_iss(z.get_iss())
-                        .map_err(|_| SuiError::UnexpectedMessage)?
+                        .map_err(|_| SuiError::UnexpectedMessage(z.get_iss().to_string()))?
                         .to_string()
                 ),
                 "zkLogin OAuth provider is temporarily disabled"

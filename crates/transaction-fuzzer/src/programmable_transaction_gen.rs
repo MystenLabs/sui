@@ -404,7 +404,7 @@ pub fn gen_move_vec_input(
 
 /// A helper function to generate enough input coins for a command (transfer, merge, or create vector)
 /// - either collect them all from previous command or generate additional ones if the previous
-/// command does not deliver enough.
+///     command does not deliver enough.
 fn gen_enough_arguments(
     builder: &mut ProgrammableTransactionBuilder,
     prev_cmd_num: i64,

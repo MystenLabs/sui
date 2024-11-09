@@ -299,7 +299,7 @@ fn generate_randomised_dag(
 /// * nodes that don't create certificates at all for some rounds (failures)
 /// * leaders that don't get enough support (f+1) for their immediate round
 /// * slow nodes - nodes that create certificates but those might not referenced by nodes of
-/// subsequent rounds.
+///     subsequent rounds.
 pub fn make_certificates_with_parameters(
     seed: u64,
     committee: &Committee,

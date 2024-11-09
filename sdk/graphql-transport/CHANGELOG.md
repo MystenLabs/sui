@@ -1,5 +1,89 @@
 # @mysten/graphql-transport
 
+## 0.2.27
+
+### Patch Changes
+
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+
+## 0.2.26
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+
+## 0.2.25
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+
+## 0.2.24
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+
+## 0.2.23
+
+### Patch Changes
+
+- 5299c18: Update the GraphQL transport to account for the removal of recvAddress and the
+  introduction of affectedAddress.
+
+## 0.2.22
+
+### Patch Changes
+
+- af39b6a: Update to reflect GraphQL schema renaming TransactionBlockFilter.signAddress to
+  .sentAddress.
+- 4d63e50: Update GraphQL transport layer to accommodate change in schema
+- 2cddd9d: Update the GraphQL transport to account for the removal of recvAddress and the
+  introduction of affectedAddress.
+
+## 0.2.21
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+
+## 0.2.20
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+  - @mysten/bcs@1.1.0
+
+## 0.2.19
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+
+## 0.2.18
+
+### Patch Changes
+
+- Updated dependencies [2c96b06]
+- Updated dependencies [1fd22cc]
+  - @mysten/sui@1.9.0
+
+## 0.2.17
+
+### Patch Changes
+
+- Updated dependencies [569511a]
+  - @mysten/sui@1.8.0
+
 ## 0.2.16
 
 ### Patch Changes

@@ -365,10 +365,7 @@ must be at a valid utf8 char boundary.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/string.md#0x1_string_String">String</a>, at: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, o: <a href="../move-stdlib/string.md#0x1_string_String">String</a>) {
     <b>let</b> bytes = &s.bytes;
-    <b>assert</b>!(
-        at &lt;= bytes.<a href="../move-stdlib/string.md#0x1_string_length">length</a>() && <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, at),
-        <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>,
-    );
+    <b>assert</b>!(at &lt;= bytes.<a href="../move-stdlib/string.md#0x1_string_length">length</a>() && <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, at), <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>);
     <b>let</b> l = s.<a href="../move-stdlib/string.md#0x1_string_length">length</a>();
     <b>let</b> <b>mut</b> front = s.<a href="../move-stdlib/string.md#0x1_string_substring">substring</a>(0, at);
     <b>let</b> end = s.<a href="../move-stdlib/string.md#0x1_string_substring">substring</a>(at, l);
@@ -406,9 +403,9 @@ guaranteeing that the result is valid utf8.
     <b>let</b> l = bytes.<a href="../move-stdlib/string.md#0x1_string_length">length</a>();
     <b>assert</b>!(
         j &lt;= l &&
-        i &lt;= j &&
-        <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, i) &&
-        <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, j),
+            i &lt;= j &&
+            <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, i) &&
+            <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, j),
         <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>,
     );
     <a href="../move-stdlib/string.md#0x1_string_String">String</a> { bytes: <a href="../move-stdlib/string.md#0x1_string_internal_sub_string">internal_sub_string</a>(bytes, i, j) }

@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use enum_dispatch::enum_dispatch;
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
-use num_enum::TryFromPrimitive;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-
 use crate::base_types::ObjectID;
 use crate::base_types::SequenceNumber;
 use crate::collection_types::LinkedTableNode;
@@ -26,6 +18,14 @@ use crate::{
     error::SuiError,
     id::UID,
 };
+use enum_dispatch::enum_dispatch;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
+use num_enum::TryFromPrimitive;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use strum_macros::Display;
 
 pub type BridgeInnerDynamicField = Field<u64, BridgeInnerV1>;
 pub type BridgeRecordDyanmicField = Field<
@@ -71,7 +71,17 @@ pub const TOKEN_ID_USDC: u8 = 3;
 pub const TOKEN_ID_USDT: u8 = 4;
 
 #[derive(
-    Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, JsonSchema, Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    TryFromPrimitive,
+    JsonSchema,
+    Hash,
+    Display,
 )]
 #[repr(u8)]
 pub enum BridgeChainId {
@@ -167,6 +177,22 @@ pub struct BridgeSummary {
     /// Whether the bridge is currently frozen or not
     pub is_frozen: bool,
     // TODO: add treasury
+}
+
+impl Default for BridgeSummary {
+    fn default() -> Self {
+        BridgeSummary {
+            bridge_version: 1,
+            message_version: 1,
+            chain_id: 1,
+            sequence_nums: vec![],
+            committee: BridgeCommitteeSummary::default(),
+            treasury: BridgeTreasurySummary::default(),
+            bridge_records_id: ObjectID::random(),
+            limiter: BridgeLimiterSummary::default(),
+            is_frozen: false,
+        }
+    }
 }
 
 pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrapper, SuiError> {

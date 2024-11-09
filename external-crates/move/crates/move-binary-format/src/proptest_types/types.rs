@@ -24,9 +24,6 @@ use proptest::{
 use std::collections::BTreeSet;
 
 #[derive(Debug)]
-struct TypeSignatureIndex(u16);
-
-#[derive(Debug)]
 pub struct StDefnMaterializeState {
     pub self_module_handle_idx: ModuleHandleIndex,
     pub identifiers_len: usize,

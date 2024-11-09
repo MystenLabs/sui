@@ -67,7 +67,7 @@ impl Loader<u64> for Db {
     > {
         let latest_sui_system_state = self
             .inner
-            .spawn_blocking(move |this| this.get_latest_sui_system_state())
+            .get_latest_sui_system_state()
             .await
             .map_err(|_| Error::Internal("Failed to fetch latest Sui system state".to_string()))?;
         let governance_api = GovernanceReadApi::new(self.inner.clone());

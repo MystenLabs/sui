@@ -1,0 +1,12 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/named_block_invalid_if.move:4:5
+  │  
+4 │ ╭     'a: {
+5 │ │         if (cond) { return 'a 5 }
+  │ │         -------------------------
+  │ │         │           │
+  │ │         │           Found: integer. It is not compatible with the other type.
+  │ │         Found: '()'. It is not compatible with the other type.
+6 │ │     }
+  │ ╰─────^ Invalid named block
+

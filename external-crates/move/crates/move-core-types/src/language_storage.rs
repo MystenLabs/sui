@@ -6,7 +6,7 @@ use crate::{
     account_address::AccountAddress,
     gas_algebra::{AbstractMemorySize, BOX_ABSTRACT_SIZE, ENUM_BASE_ABSTRACT_SIZE},
     identifier::{IdentStr, Identifier},
-    parser::{parse_struct_tag, parse_type_tag},
+    parsing::types::{ParsedModuleId, ParsedStructType, ParsedType},
 };
 use move_proc_macros::test_variant_order;
 use once_cell::sync::Lazy;
@@ -59,22 +59,27 @@ pub enum TypeTag {
 }
 
 impl TypeTag {
-    /// Return a canonical string representation of the type. All types are represented
-    /// using their source syntax:
-    /// "u8", "u64", "u128", "bool", "address", "vector", "signer" for ground types.
-    /// Struct types are represented as fully qualified type names; e.g.
-    /// `00000000000000000000000000000001::string::String` or
-    /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`
-    /// With or without the prefix 0x depending on the `with_prefix` flag.
-    /// Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
-    /// Note: this function is guaranteed to be stable, and this is suitable for use inside
-    /// Move native functions or the VM. By contrast, the `Display` implementation is subject
-    /// to change and should not be used inside stable code.
+    /// Return a canonical string representation of the type. All types are represented using their
+    /// source syntax:
+    ///
+    /// - "bool", "u8", "u16", "u32", "u64", "u128", "u256", "address", "signer", "vector" for
+    ///   ground types.
+    ///
+    /// - Structs are represented as fully qualified type names, with or without the prefix "0x"
+    ///   depending on the `with_prefix` flag, e.g. `0x000...0001::string::String` or
+    ///   `0x000...000a::m::T<0x000...000a::n::U<u64>>`.
+    ///
+    /// - Addresses are hex-encoded lowercase values of length 32 (zero-padded).
+    ///
+    /// Note: this function is guaranteed to be stable -- suitable for use inside Move native
+    /// functions or the VM. By contrast, this type's `Display` implementation is subject to change
+    /// and should be used inside code that needs to return a stable output (e.g. that might be
+    /// committed to effects on-chain).
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         self.to_canonical_display(with_prefix).to_string()
     }
 
-    /// Return the canonical string representation of the TypeTag conditionally with prefix 0x
+    /// Implements the canonical string representation of the type with optional prefix 0x
     pub fn to_canonical_display(&self, with_prefix: bool) -> impl std::fmt::Display + '_ {
         struct CanonicalDisplay<'a> {
             data: &'a TypeTag,
@@ -132,7 +137,7 @@ impl FromStr for TypeTag {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_type_tag(s)
+        ParsedType::parse(s)?.into_type_tag(&|_| None)
     }
 }
 
@@ -174,20 +179,22 @@ impl StructTag {
     }
 
     /// Return a canonical string representation of the struct.
-    /// Struct types are represented as fully qualified type names; e.g.
-    /// `00000000000000000000000000000001::string::String`,
-    /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`,
-    /// or `0000000000000000000000000000000a::module_name2::type_name2<bool,u64,u128>.
-    /// With or without the prefix 0x depending on the `with_prefix` flag.
-    /// Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
-    /// Note: this function is guaranteed to be stable, and this is suitable for use inside
-    /// Move native functions or the VM. By contrast, the `Display` implementation is subject
-    /// to change and should not be used inside stable code.
+    ///
+    /// - Structs are represented as fully qualified type names, with or without the prefix "0x"
+    ///   depending on the `with_prefix` flag, e.g. `0x000...0001::string::String` or
+    ///   `0x000...000a::m::T<0x000...000a::n::U<u64>>`.
+    ///
+    /// - Addresses are hex-encoded lowercase values of length 32 (zero-padded).
+    ///
+    /// Note: this function is guaranteed to be stable -- suitable for use inside Move native
+    /// functions or the VM. By contrast, this type's `Display` implementation is subject to change
+    /// and should be used inside code that needs to return a stable output (e.g. that might be
+    /// committed to effects on-chain).
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         self.to_canonical_display(with_prefix).to_string()
     }
 
-    /// Implements the canonical string representation of the StructTag with the prefix 0x
+    /// Implements the canonical string representation of the StructTag with optional prefix 0x
     pub fn to_canonical_display(&self, with_prefix: bool) -> impl std::fmt::Display + '_ {
         struct CanonicalDisplay<'a> {
             data: &'a StructTag,
@@ -245,7 +252,7 @@ impl FromStr for StructTag {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_struct_tag(s)
+        ParsedStructType::parse(s)?.into_struct_tag(&|_| None)
     }
 }
 
@@ -317,6 +324,13 @@ impl ModuleId {
 impl Display for ModuleId {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_canonical_display(/* with_prefix */ false))
+    }
+}
+
+impl FromStr for ModuleId {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ParsedModuleId::parse(s)?.into_module_id(&|_| None)
     }
 }
 

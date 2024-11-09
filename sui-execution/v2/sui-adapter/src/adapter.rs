@@ -4,7 +4,7 @@
 pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    #[cfg(feature = "gas-profiler")]
+    #[cfg(feature = "tracing")]
     use move_vm_config::runtime::VMProfilerConfig;
     use std::path::PathBuf;
     use std::{collections::BTreeMap, sync::Arc};
@@ -44,9 +44,9 @@ mod checked {
         protocol_config: &ProtocolConfig,
         _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
-        #[cfg(not(feature = "gas-profiler"))]
+        #[cfg(not(feature = "tracing"))]
         let vm_profiler_config = None;
-        #[cfg(feature = "gas-profiler")]
+        #[cfg(feature = "tracing")]
         let vm_profiler_config = _enable_profiler.clone().map(|path| VMProfilerConfig {
             full_path: path,
             track_bytecode_instructions: false,
@@ -55,7 +55,7 @@ mod checked {
         MoveVM::new_with_config(
             natives,
             VMConfig {
-                verifier: protocol_config.verifier_config(/* for_signing */ false),
+                verifier: protocol_config.verifier_config(/* signing_limits */ None),
                 max_binary_format_version: protocol_config.move_binary_format_version(),
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
@@ -72,6 +72,7 @@ mod checked {
                 binary_config: to_binary_config(protocol_config),
                 rethrow_serialization_type_layout_errors: protocol_config
                     .rethrow_serialization_type_layout_errors(),
+                max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

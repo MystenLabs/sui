@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::operations::Operations;
-use crate::types::{
-    Block, BlockHash, BlockIdentifier, BlockResponse, Transaction, TransactionIdentifier,
-};
-use crate::Error;
-use async_trait::async_trait;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+use crate::operations::Operations;
+use crate::types::{
+    Block, BlockHash, BlockIdentifier, BlockResponse, Transaction, TransactionIdentifier,
+};
+use crate::{CoinMetadataCache, Error};
 
 #[cfg(test)]
 #[path = "unit_tests/balance_changing_tx_tests.rs"]
@@ -20,14 +23,20 @@ mod balance_changing_tx_tests;
 #[derive(Clone)]
 pub struct OnlineServerContext {
     pub client: SuiClient,
+    pub coin_metadata_cache: CoinMetadataCache,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
 
 impl OnlineServerContext {
-    pub fn new(client: SuiClient, block_provider: Arc<dyn BlockProvider + Send + Sync>) -> Self {
+    pub fn new(
+        client: SuiClient,
+        block_provider: Arc<dyn BlockProvider + Send + Sync>,
+        coin_metadata_cache: CoinMetadataCache,
+    ) -> Self {
         Self {
-            client,
+            client: client.clone(),
             block_provider,
+            coin_metadata_cache,
         }
     }
 
@@ -53,6 +62,7 @@ pub trait BlockProvider {
 #[derive(Clone)]
 pub struct CheckpointBlockProvider {
     client: SuiClient,
+    coin_metadata_cache: CoinMetadataCache,
 }
 
 #[async_trait]
@@ -103,8 +113,11 @@ impl BlockProvider for CheckpointBlockProvider {
 }
 
 impl CheckpointBlockProvider {
-    pub fn new(client: SuiClient) -> Self {
-        Self { client }
+    pub fn new(client: SuiClient, coin_metadata_cache: CoinMetadataCache) -> Self {
+        Self {
+            client,
+            coin_metadata_cache,
+        }
     }
 
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
@@ -127,7 +140,8 @@ impl CheckpointBlockProvider {
             for tx in transaction_responses.into_iter() {
                 transactions.push(Transaction {
                     transaction_identifier: TransactionIdentifier { hash: tx.digest },
-                    operations: Operations::try_from(tx)?,
+                    operations: Operations::try_from_response(tx, &self.coin_metadata_cache)
+                        .await?,
                     related_transactions: vec![],
                     metadata: None,
                 })

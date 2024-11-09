@@ -5,7 +5,7 @@ task 1, lines 26-36:
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,
-    location: 0x1::PolymorphicEnums,
+    location: 0x6::PolymorphicEnums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 11)],
 }

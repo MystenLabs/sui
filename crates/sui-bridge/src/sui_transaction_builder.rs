@@ -617,6 +617,8 @@ pub fn build_committee_update_url_transaction(
 #[cfg(test)]
 mod tests {
     use crate::crypto::BridgeAuthorityKeyPair;
+    use crate::e2e_tests::test_utils::TestClusterWrapperBuilder;
+    use crate::metrics::BridgeMetrics;
     use crate::sui_client::SuiClient;
     use crate::types::BridgeAction;
     use crate::types::EmergencyAction;
@@ -628,14 +630,13 @@ mod tests {
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
             get_test_sui_to_eth_bridge_action,
         },
-        BRIDGE_ENABLE_PROTOCOL_VERSION,
     };
     use ethers::types::Address as EthAddress;
     use std::collections::HashMap;
+    use std::sync::Arc;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDC};
     use sui_types::crypto::get_key_pair;
     use sui_types::crypto::ToFromBytes;
-    use test_cluster::TestClusterBuilder;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_token_transfer() {
@@ -645,22 +646,24 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(bridge_keys, true)
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
             .await;
 
-        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
-        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+        let bridge_authority_keys = test_cluster.authority_keys_clone();
 
         // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
         // is not initialized during the construction of `BridgeCommittee`.
         test_cluster
             .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
             .await;
-        let context = &mut test_cluster.wallet;
+        let context = &mut test_cluster.inner.wallet;
         let sender = context.active_address().unwrap();
         let usdc_amount = 5000000;
         let bridge_object_arg = sui_client
@@ -716,19 +719,22 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_emergency_op() {
         telemetry_subscribers::init_for_testing();
+        let num_valdiator = 2;
         let mut bridge_keys = vec![];
-        for _ in 0..=3 {
+        for _ in 0..num_valdiator {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(bridge_keys, true)
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
             .await;
-        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
-        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+        let bridge_authority_keys = test_cluster.authority_keys_clone();
 
         // Wait until committee is set up
         test_cluster
@@ -737,7 +743,7 @@ mod tests {
         let summary = sui_client.get_bridge_summary().await.unwrap();
         assert!(!summary.is_frozen);
 
-        let context = &mut test_cluster.wallet;
+        let context = &mut test_cluster.inner.wallet;
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()
             .await;
@@ -790,14 +796,16 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(bridge_keys, true)
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
             .await;
-        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
-        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+        let bridge_authority_keys = test_cluster.authority_keys_clone();
 
         // Wait until committee is set up
         test_cluster
@@ -809,7 +817,7 @@ mod tests {
             assert!(!member.1.blocklisted);
         }
 
-        let context = &mut test_cluster.wallet;
+        let context = &mut test_cluster.inner.wallet;
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()
             .await;
@@ -878,14 +886,16 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(bridge_keys, true)
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
             .await;
-        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
-        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+        let bridge_authority_keys = test_cluster.authority_keys_clone();
 
         // Wait until committee is set up
         test_cluster
@@ -901,7 +911,7 @@ mod tests {
             .map(|(s, d, l)| ((s, d), l))
             .collect::<HashMap<_, _>>();
 
-        let context = &mut test_cluster.wallet;
+        let context = &mut test_cluster.inner.wallet;
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()
             .await;
@@ -947,14 +957,16 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(bridge_keys, true)
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
             .await;
-        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
-        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+        let bridge_authority_keys = test_cluster.authority_keys_clone();
 
         // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
         // is not initialized during the construction of `BridgeCommittee`.
@@ -964,7 +976,7 @@ mod tests {
         let notional_values = sui_client.get_notional_values().await.unwrap();
         assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 
-        let context = &mut test_cluster.wallet;
+        let context = &mut test_cluster.inner.wallet;
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()
             .await;

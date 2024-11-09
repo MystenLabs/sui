@@ -65,6 +65,7 @@ module escrow::shared {
 
     // === Public Functions ===
 
+    //docs::#noemit
     public fun create<T: key + store>(
         escrowed: T,
         exchange_key: ID,
@@ -78,6 +79,7 @@ module escrow::shared {
             exchange_key,
         };
 
+        //docs::#noemit-pause
         event::emit(EscrowCreated {
             escrow_id: object::id(&escrow),
             key_id: exchange_key,
@@ -85,11 +87,13 @@ module escrow::shared {
             recipient,
             item_id: object::id(&escrowed),
         });
+        //docs::#noemit-resume
 
         dof::add(&mut escrow.id, EscrowedObjectKey {}, escrowed);
 
         transfer::public_share_object(escrow);
     }
+    //docs::/#noemit
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
     public fun swap<T: key + store, U: key + store>(
@@ -184,9 +188,12 @@ module escrow::shared {
         coin::mint_for_testing<SUI>(42, ts.ctx())
     }
 
+    //docs::#test
     #[test]
     fun test_successful_swap() {
         let mut ts = ts::begin(@0x0);
+        
+        //docs::#test-pause:// Rest of the test ...
 
         // Bob locks the object they want to trade.
         let (i2, ik2) = {
@@ -212,6 +219,7 @@ module escrow::shared {
 
         // Bob responds by offering their object, and gets Alice's object in
         // return.
+        // docs::#bob
         {
             ts.next_tx(BOB);
             let escrow: Escrow<Coin<SUI>> = ts.take_shared();
@@ -221,7 +229,9 @@ module escrow::shared {
 
             transfer::public_transfer(c, BOB);
         };
+        // docs::/#bob
 
+        // docs::#finish
         // Commit effects from the swap
         ts.next_tx(@0x0);
 
@@ -236,9 +246,12 @@ module escrow::shared {
             let c: Coin<SUI> = ts.take_from_address_by_id(BOB, i1);
             ts::return_to_address(BOB, c);
         };
+        // docs::/#finish
+        //docs::#test-resume
 
         ts::end(ts);
     }
+    //docs::/#test
 
     #[test]
     #[expected_failure(abort_code = EMismatchedSenderRecipient)]

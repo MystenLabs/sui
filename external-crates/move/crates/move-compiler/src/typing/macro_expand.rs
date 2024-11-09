@@ -64,7 +64,7 @@ pub(crate) fn call(
     let reloc_clever_errors = match &context.macro_expansion[0] {
         core::MacroExpansion::Call(call) => call.invocation,
         core::MacroExpansion::Argument { .. } => {
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 call_loc,
                 "ICE top level macro scope should never be an argument"
             )));
@@ -92,7 +92,7 @@ pub(crate) fn call(
                 return None;
             }
             Err(Some(diag)) => {
-                context.env.add_diag(*diag);
+                context.add_diag(*diag);
                 return None;
             }
         };
@@ -288,9 +288,7 @@ fn bind_lambda(
                 "Unable to bind lambda to parameter '{}'. The lambda must be passed directly",
                 param.name
             );
-            context
-                .env
-                .add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.loc, msg)));
+            context.add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.loc, msg)));
             None
         }
     }
@@ -551,10 +549,12 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_lvalues(ctx, lvalues);
             recolor_exp(ctx, e)
         }
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             recolor_exp(ctx, econd);
             recolor_exp(ctx, et);
-            recolor_exp(ctx, ef);
+            if let Some(ef) = ef_opt {
+                recolor_exp(ctx, ef);
+            }
         }
         N::Exp_::Match(subject, arms) => {
             recolor_exp(ctx, subject);
@@ -745,9 +745,7 @@ fn report_unused_argument(context: &mut core::Context, loc: EvalStrategy<Loc, Lo
     };
     let msg = "Unused macro argument. \
     Its expression will not be type checked and it will not evaluated";
-    context
-        .env
-        .add_diag(diag!(UnusedItem::DeadCode, (loc, msg)));
+    context.add_diag(diag!(UnusedItem::DeadCode, (loc, msg)));
 }
 
 fn types(context: &mut Context, tys: &mut [Type]) {
@@ -833,10 +831,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             lvalues(context, lvs);
             exp(context, e)
         }
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             exp(context, econd);
             exp(context, et);
-            exp(context, ef);
+            if let Some(ef) = ef_opt {
+                exp(context, ef)
+            }
         }
         N::Exp_::Match(subject, arms) => {
             macro_rules! take_and_mut_replace {
@@ -1061,7 +1061,6 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             if context.core.env.ide_mode() {
                 context
                     .core
-                    .env
                     .add_ide_annotation(*eloc, IDEAnnotation::ExpandedLambda);
             }
             *e_ = block;
@@ -1100,7 +1099,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         N::Exp_::VarCall(sp!(_, v_), _) if context.by_name_args.contains_key(v_) => {
             context.mark_used(v_);
             let (arg, _expected_ty) = context.by_name_args.get(v_).unwrap();
-            context.core.env.add_diag(diag!(
+            context.core.add_diag(diag!(
                 TypeSafety::CannotExpandMacro,
                 (*eloc, "Cannot call non-lambda argument"),
                 (arg.loc, "Expected a lambda argument")

@@ -178,6 +178,7 @@ impl Cluster {
     /// Returns all the running authorities. Any authority that:
     /// * has been started ever
     /// * or has been stopped
+    ///
     /// will not be returned by this method.
     pub async fn authorities(&self) -> Vec<AuthorityDetails> {
         let mut result = Vec::new();
@@ -753,6 +754,7 @@ impl AuthorityDetails {
                     .get(worker_id)
                     .unwrap()
                     .transactions_address,
+                None,
             )
             .unwrap();
 

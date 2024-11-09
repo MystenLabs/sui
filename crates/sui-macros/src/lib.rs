@@ -528,7 +528,7 @@ mod test {
         assert_eq!(Foo::new(1, 2).b, 2);
         assert_eq!(new_foo(1).a, 1);
 
-        let v = vec![Foo::new(1, 2), Foo::new(3, 2)];
+        let v = [Foo::new(1, 2), Foo::new(3, 2)];
 
         assert_eq!(v[0].a, 1);
         assert_eq!(v[1].b, 2);
@@ -720,7 +720,7 @@ mod test {
             assert_eq!(Foo::new(1, 2).b, 2);
             assert_eq!(new_foo(1).a, 1);
 
-            let v = vec![Foo::new(1, 2), Foo::new(3, 2)];
+            let v = [Foo::new(1, 2), Foo::new(3, 2)];
 
             assert_eq!(v[0].a, 1);
             assert_eq!(v[1].b, 2);
