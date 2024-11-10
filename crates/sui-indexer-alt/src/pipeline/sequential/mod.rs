@@ -95,7 +95,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> (JoinHandle<()>, JoinHandle<()>) {
+) -> JoinHandle<()> {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
     let processor = processor(
@@ -117,5 +117,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         cancel.clone(),
     );
 
-    (processor, committer)
+    tokio::spawn(async move {
+        let (_, _) = futures::join!(processor, committer);
+    })
 }

@@ -47,7 +47,7 @@ use super::Handler;
 /// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and
 /// the watermark cannot be progressed. If the `config` specifies `skip_watermark`, the task will
 /// shutdown immediately.
-pub(super) fn watermark<H: Handler + 'static>(
+pub(super) fn commit_watermark<H: Handler + 'static>(
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
@@ -57,7 +57,7 @@ pub(super) fn watermark<H: Handler + 'static>(
 ) -> JoinHandle<()> {
     spawn_monitored_task!(async move {
         if config.skip_watermark {
-            info!(pipeline = H::NAME, "Skipping watermark task");
+            info!(pipeline = H::NAME, "Skipping commit watermark task");
             return;
         }
 
@@ -82,7 +82,7 @@ pub(super) fn watermark<H: Handler + 'static>(
         let mut next_loud_watermark_update =
             watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
 
-        info!(pipeline = H::NAME, ?watermark, "Starting watermark");
+        info!(pipeline = H::NAME, ?watermark, "Starting commit watermark");
 
         loop {
             tokio::select! {
@@ -96,12 +96,12 @@ pub(super) fn watermark<H: Handler + 'static>(
                         warn!(
                             pipeline = H::NAME,
                             pending = precommitted.len(),
-                            "Pipeline has a large number of pending watermarks",
+                            "Pipeline has a large number of pending commit watermarks",
                         );
                     }
 
                     let Ok(mut conn) = db.connect().await else {
-                        warn!(pipeline = H::NAME, "Committer failed to get connection for DB");
+                        warn!(pipeline = H::NAME, "Commit watermark task failed to get connection for DB");
                         continue;
                     };
 
@@ -196,7 +196,7 @@ pub(super) fn watermark<H: Handler + 'static>(
                                     pipeline = H::NAME,
                                     elapsed_ms = elapsed * 1000.0,
                                     ?watermark,
-                                    "Error updating watermark: {e}",
+                                    "Error updating commit watermark: {e}",
                                 );
                             }
 
@@ -275,6 +275,10 @@ pub(super) fn watermark<H: Handler + 'static>(
             }
         }
 
-        info!(pipeline = H::NAME, ?watermark, "Stopping watermark task");
+        info!(
+            pipeline = H::NAME,
+            ?watermark,
+            "Stopping committer watermark task"
+        );
     })
 }
