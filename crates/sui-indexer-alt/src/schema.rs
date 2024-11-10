@@ -235,7 +235,7 @@ diesel::table! {
         timestamp_ms_hi_inclusive -> Int8,
         epoch_lo -> Int8,
         reader_lo -> Int8,
-        pruner_timestamp_ms -> Int8,
+        pruner_timestamp -> Timestamp,
         pruner_hi -> Int8,
     }
 }

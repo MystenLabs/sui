@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use chrono::{DateTime, Utc};
+use chrono::{naive::NaiveDateTime, DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
@@ -20,7 +20,7 @@ pub struct StoredWatermark {
     pub timestamp_ms_hi_inclusive: i64,
     pub epoch_lo: i64,
     pub reader_lo: i64,
-    pub pruner_timestamp_ms: i64,
+    pub pruner_timestamp: NaiveDateTime,
     pub pruner_hi: i64,
 }
 
@@ -95,7 +95,7 @@ impl<'p> From<CommitterWatermark<'p>> for StoredWatermark {
             timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
             epoch_lo: 0,
             reader_lo: 0,
-            pruner_timestamp_ms: 0,
+            pruner_timestamp: NaiveDateTime::UNIX_EPOCH,
             pruner_hi: 0,
         }
     }

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS watermarks
     -- some data needs to be dropped. The pruner uses this column to determine
     -- whether to prune or wait long enough that all in-flight reads complete
     -- or timeout before it acts on an updated watermark.
-    pruner_timestamp_ms         BIGINT        NOT NULL,
+    pruner_timestamp            TIMESTAMP     NOT NULL,
     -- Column used by the pruner to track its true progress. Data below this
     -- watermark can be immediately pruned.
     pruner_hi                   BIGINT        NOT NULL
