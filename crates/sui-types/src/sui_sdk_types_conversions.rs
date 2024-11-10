@@ -9,7 +9,7 @@
 //! directly to avoid going through the BCS machinery.
 
 use fastcrypto::traits::ToFromBytes;
-use sui_sdk_types::*;
+use sui_sdk_types::types::*;
 use tap::Pipe;
 
 #[derive(Debug)]
@@ -85,6 +85,8 @@ bcs_convert_impl!(
 bcs_convert_impl!(crate::signature::GenericSignature, UserSignature);
 bcs_convert_impl!(crate::effects::TransactionEvents, TransactionEvents);
 bcs_convert_impl!(crate::transaction::Command, Command);
+bcs_convert_impl!(crate::transaction::TransactionKind, TransactionKind);
+bcs_convert_impl!(crate::move_package::MovePackage, MovePackage);
 
 impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
     for ValidatorAggregatedSignature
