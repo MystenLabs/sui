@@ -5,9 +5,9 @@
 module my_first_package::example {
 
     // Part 1: These imports are provided by default
-    // use sui::object::{Self, UID};
-    // use sui::transfer;
-    // use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
 
     // Part 2: struct definitions
     public struct Sword has key, store {
