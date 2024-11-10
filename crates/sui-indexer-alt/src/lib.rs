@@ -8,7 +8,10 @@ use db::{Db, DbConfig};
 use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
-use pipeline::{concurrent, sequential, PipelineConfig, Processor};
+use pipeline::{
+    concurrent::{self, PrunerConfig},
+    sequential, PipelineConfig, Processor,
+};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -154,6 +157,7 @@ impl Indexer {
     pub async fn concurrent_pipeline<H: concurrent::Handler + Send + Sync + 'static>(
         &mut self,
         handler: H,
+        pruner_config: Option<PrunerConfig>,
     ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
@@ -166,20 +170,16 @@ impl Indexer {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
-        let (processor, collector, committer, watermark) = concurrent::pipeline(
+        self.handles.push(concurrent::pipeline(
             handler,
             watermark,
             self.pipeline_config.clone(),
+            pruner_config,
             self.db.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
-        );
-
-        self.handles.push(processor);
-        self.handles.push(collector);
-        self.handles.push(committer);
-        self.handles.push(watermark);
+        ));
 
         Ok(())
     }
@@ -209,7 +209,7 @@ impl Indexer {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        let (processor, committer) = sequential::pipeline(
+        self.handles.push(sequential::pipeline(
             handler,
             watermark,
             self.pipeline_config.clone(),
@@ -219,10 +219,7 @@ impl Indexer {
             watermark_tx,
             self.metrics.clone(),
             self.cancel.clone(),
-        );
-
-        self.handles.push(processor);
-        self.handles.push(committer);
+        ));
 
         Ok(())
     }

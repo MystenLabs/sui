@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
+use reader_watermark::reader_watermark;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -15,11 +16,12 @@ use crate::{
 
 use super::{processor::processor, PipelineConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
-use self::{collector::collector, committer::committer, watermark::watermark};
+use self::{collector::collector, commit_watermark::commit_watermark, committer::committer};
 
 mod collector;
+mod commit_watermark;
 mod committer;
-mod watermark;
+mod reader_watermark;
 
 /// The maximum number of watermarks that can show up in a single batch. This limit exists to deal
 /// with pipelines that produce no data for a majority of checkpoints -- the size of these
@@ -61,6 +63,18 @@ pub trait Handler: Processor {
     /// affected.
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
         -> anyhow::Result<usize>;
+}
+
+#[derive(Debug, Clone)]
+pub struct PrunerConfig {
+    /// How often the pruner should check whether there is any data to prune.
+    pub interval: Duration,
+
+    /// How much data to keep, this is measured in checkpoints.
+    pub retention: u64,
+
+    /// The maximum range to try and prune in one request, measured in checkpoints.
+    pub max_chunk_size: u64,
 }
 
 /// Values ready to be written to the database. This is an internal type used to communicate
@@ -113,21 +127,25 @@ impl<H: Handler> Batched<H> {
 /// reports an issue.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_watermark: Option<CommitterWatermark<'static>>,
-    config: PipelineConfig,
+    initial_commit_watermark: Option<CommitterWatermark<'static>>,
+    commit_config: PipelineConfig,
+    pruner_config: Option<PrunerConfig>,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> (
-    JoinHandle<()>,
-    JoinHandle<()>,
-    JoinHandle<()>,
-    JoinHandle<()>,
-) {
+) -> JoinHandle<()> {
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
-    let (collector_tx, committer_rx) = mpsc::channel(config.write_concurrency + PIPELINE_BUFFER);
-    let (committer_tx, watermark_rx) = mpsc::channel(config.write_concurrency + PIPELINE_BUFFER);
+    let (collector_tx, committer_rx) =
+        mpsc::channel(commit_config.write_concurrency + PIPELINE_BUFFER);
+    let (committer_tx, watermark_rx) =
+        mpsc::channel(commit_config.write_concurrency + PIPELINE_BUFFER);
+
+    // The pruner is not connected to the rest of the tasks by channels, so it needs to be
+    // explicitly signalled to shutdown when the other tasks shutdown, in addition to listening to
+    // the global cancel signal. We achieve this by creating a child cancel token that we call
+    // cancle on once the committer tasks have shutdown.
+    let pruner_cancel = cancel.child_token();
 
     let processor = processor(
         handler,
@@ -138,7 +156,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let collector = collector::<H>(
-        config.clone(),
+        commit_config.clone(),
         collector_rx,
         collector_tx,
         metrics.clone(),
@@ -146,7 +164,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
-        config.clone(),
+        commit_config.clone(),
         committer_rx,
         committer_tx,
         db.clone(),
@@ -154,7 +172,21 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         cancel.clone(),
     );
 
-    let watermark = watermark::<H>(initial_watermark, config, watermark_rx, db, metrics, cancel);
+    let commit_watermark = commit_watermark::<H>(
+        initial_commit_watermark,
+        commit_config,
+        watermark_rx,
+        db.clone(),
+        metrics.clone(),
+        cancel,
+    );
 
-    (processor, collector, committer, watermark)
+    let reader_watermark = reader_watermark::<H>(pruner_config, db, metrics, pruner_cancel.clone());
+
+    tokio::spawn(async move {
+        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+
+        pruner_cancel.cancel();
+        let _ = futures::join!(reader_watermark);
+    })
 }

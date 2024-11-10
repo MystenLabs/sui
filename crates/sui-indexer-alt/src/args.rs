@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use crate::db::DbConfig;
 use crate::IndexerConfig;
 use clap::Subcommand;
@@ -21,6 +23,16 @@ pub enum Command {
     Indexer {
         #[command(flatten)]
         indexer: IndexerConfig,
+
+        /// How often to check whether write-ahead logs related to the consistent range can be
+        /// pruned.
+        #[arg(
+            long,
+            default_value = "300",
+            value_name = "SECONDS",
+            value_parser = |s: &str| s.parse().map(Duration::from_secs),
+        )]
+        consistent_pruning_interval: Duration,
 
         /// Number of checkpoints to delay indexing summary tables for.
         #[clap(long)]
