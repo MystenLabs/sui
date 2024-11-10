@@ -7,6 +7,7 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use tracing::info;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
@@ -374,6 +375,8 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
+        info!("TemporaryStore::read_object - input_objects: {:?}", self.input_objects);
+        info!("TemporaryStore::read_object - written objects: {:?}", self.execution_results.written_objects);
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
         self.execution_results
             .written_objects

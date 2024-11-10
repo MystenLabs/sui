@@ -1,0 +1,23 @@
+[package]
+name = "sui-replay-2"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+bcs.workspace = true
+clap = { version = "4.1.4", features = ["derive"] }
+move-core-types.workspace = true
+prometheus.workspace = true
+sui-execution.workspace = true
+sui-graphql-client.workspace = true
+sui-framework.workspace = true
+sui-sdk-types.workspace = true
+#sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk", package = "sui-sdk-types", branch = "gql_for_replay" }
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
