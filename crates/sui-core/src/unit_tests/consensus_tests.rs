@@ -7,26 +7,12 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::mock_consensus::with_block_status;
-use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
-<<<<<<< HEAD
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-<<<<<<< HEAD
-=======
 use parking_lot::Mutex;
-=======
-use narwhal_types::Transactions;
-use narwhal_types::TransactionsServer;
-use narwhal_types::{Empty, TransactionProto};
-use parking_lot::Mutex;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
->>>>>>> 13eec9e83d ([fix] reformat)
 use sui_network::tonic;
->>>>>>> b33bb8f465 ([test] refactor tests so submit result status can be used.)
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
