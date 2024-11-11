@@ -16,11 +16,14 @@ use crate::{
 
 use super::{processor::processor, PipelineConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
-use self::{collector::collector, commit_watermark::commit_watermark, committer::committer};
+use self::{
+    collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
+};
 
 mod collector;
 mod commit_watermark;
 mod committer;
+mod pruner;
 mod reader_watermark;
 
 /// The maximum number of watermarks that can show up in a single batch. This limit exists to deal
@@ -63,12 +66,22 @@ pub trait Handler: Processor {
     /// affected.
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
         -> anyhow::Result<usize>;
+
+    /// Clean up data between checkpoints `_from` and `_to` (inclusive) in the database, returning
+    /// the number of rows affected. This function is optional, and defaults to not pruning at all.
+    async fn prune(_from: u64, _to: u64, _conn: &mut db::Connection<'_>) -> anyhow::Result<usize> {
+        Ok(0)
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct PrunerConfig {
     /// How often the pruner should check whether there is any data to prune.
     pub interval: Duration,
+
+    /// How long to wait after the reader low watermark was set, until it is safe to prune up until
+    /// this new watermark.
+    pub delay: Duration,
 
     /// How much data to keep, this is measured in checkpoints.
     pub retention: u64,
@@ -181,12 +194,19 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         cancel,
     );
 
-    let reader_watermark = reader_watermark::<H>(pruner_config, db, metrics, pruner_cancel.clone());
+    let reader_watermark = reader_watermark::<H>(
+        pruner_config.clone(),
+        db.clone(),
+        metrics.clone(),
+        pruner_cancel.clone(),
+    );
+
+    let pruner = pruner::<H>(pruner_config, db, metrics, pruner_cancel.clone());
 
     tokio::spawn(async move {
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
 
         pruner_cancel.cancel();
-        let _ = futures::join!(reader_watermark);
+        let _ = futures::join!(reader_watermark, pruner);
     })
 }
