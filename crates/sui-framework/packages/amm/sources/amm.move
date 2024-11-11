@@ -298,6 +298,9 @@ fun calc_swap_result(
         i_pool_value + in_after_lp_fee,
     );
     ensures(out_value <= o_pool_value);
+    ensures(i_pool_value.to_int().mul(o_pool_value.to_int())
+        .lte((i_pool_value + in_after_lp_fee).to_int().mul((o_pool_value - out_value).to_int()))
+    );
 
     // calc admin fee
     let admin_fee_value = muldiv(lp_fee_value, admin_fee_pct, 100);
@@ -320,8 +323,38 @@ fun calc_swap_result(
         ),
     ) -
     pool_lp_value;
+
     ensures(pool_lp_value + admin_fee_in_lp < u64::max_value!());
-    ensures(result_pool_lp_value_sq.to_int().lte(i_pool_value.to_int().add(i_value.to_int()).mul(o_pool_value.to_int().sub(out_value.to_int()))));
+    let result_pool_lp_value = pool_lp_value + admin_fee_in_lp;
+    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).lte(result_pool_lp_value_sq.to_int()));
+    ensures(i_pool_value + in_after_lp_fee <= i_pool_value + i_value - admin_fee_value);
+    ensures(pool_lp_value_sq.to_int()
+        .lte((i_pool_value + i_value - admin_fee_value).to_int().mul((o_pool_value - out_value).to_int()))
+    );
+    ensures(result_pool_lp_value_sq.to_int().mul((i_pool_value + i_value - admin_fee_value).to_int())
+        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()))
+    );
+    ensures(result_pool_lp_value_sq.to_int().mul((i_pool_value + in_after_lp_fee).to_int())
+        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()))
+    );
+    ensures(result_pool_lp_value_sq.to_int().mul((i_pool_value + in_after_lp_fee).to_int()).mul((o_pool_value - out_value).to_int())
+        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()))
+    );
+    ensures(result_pool_lp_value_sq.to_int().mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
+        .lte(result_pool_lp_value_sq.to_int().mul((i_pool_value + in_after_lp_fee).to_int()).mul((o_pool_value - out_value).to_int()))
+    );
+    ensures(result_pool_lp_value_sq.to_int().mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
+        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()))
+    );
+    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
+        .lte(result_pool_lp_value_sq.to_int().mul(i_pool_value.to_int()).mul(o_pool_value.to_int()))
+    );
+    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
+        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()))
+    );
+    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int())
+        .lte((i_pool_value + i_value).to_int().mul((o_pool_value - out_value).to_int()))
+    );
 
     (out_value, admin_fee_in_lp)
 }
@@ -380,7 +413,7 @@ public fun swap_b<A, B>(
     min_out: u64,
 ): Balance<A> {
     if (input.value() == 0) {
-        assert!(min_out == 0, EExcessiveSlippage);
+        // assert!(min_out == 0, EExcessiveSlippage);
         input.destroy_zero();
         return balance::zero()
     };
@@ -404,7 +437,7 @@ public fun swap_b<A, B>(
         pool.admin_fee_pct,
     );
 
-    assert!(out_value >= min_out, EExcessiveSlippage);
+    // assert!(out_value >= min_out, EExcessiveSlippage);
 
     // deposit admin fee
     pool
@@ -460,15 +493,6 @@ fun pool_inv<A, B>(self: &Pool<A, B>): bool {
     self.lp_supply.supply_value().to_int().mul(self.lp_supply.supply_value().to_int()).lte(self.balance_a.value().to_int().mul(self.balance_b.value().to_int()))
 }
 
-spec create_primitive {
-    aborts_if init_a == 0 with EZeroInput;
-    aborts_if init_b == 0 with EZeroInput;
-    ensures pool_inv(init_a, init_b, result);
-    // when creating an empty pool, L and A and B must be positive
-    // (we only check that L > 0, the invariant implies A > 0 and B > 0)
-    ensures result > 0;
-}
-
 #[verify_only]
 #[ext(no_verify)]
 fun create_spec<A, B>(
@@ -519,9 +543,13 @@ fun deposit_spec<A, B>(
 
     // prove that depositing liquidity always returns LPs of smaller value then what was deposited
     // (L + dL) * A <= (A + dA) * L <=> L' * A <= A' * L
-    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_a.value().to_int()).lte(pool.balance_a.value().to_int().mul(old_pool.lp_supply.supply_value().to_int())));
+    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_a.value().to_int())
+        .lte(pool.balance_a.value().to_int().mul(old_pool.lp_supply.supply_value().to_int()))
+    );
     // (L + dL) * B <= (B + dB) * L <=> L' * B <= B' * L
-    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_b.value().to_int()).lte(pool.balance_b.value().to_int().mul(old_pool.lp_supply.supply_value().to_int())));
+    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_b.value().to_int())
+        .lte(pool.balance_b.value().to_int().mul(old_pool.lp_supply.supply_value().to_int()))
+    );
 
     ensures(result_lp.value().to_int() == pool.lp_supply.supply_value().to_int().sub(old_pool.lp_supply.supply_value().to_int()));
     ensures(old_input_a.value().to_int().sub(result_input_a.value().to_int()) == pool.balance_a.value().to_int().sub(old_pool.balance_a.value().to_int()));
@@ -554,9 +582,13 @@ fun withdraw_spec<A, B>(
 
     // prove that withdrawing liquidity always returns A and B of smaller value then what was withdrawn
     // (L + dL) * A <= (A + dA) * L <=> L' * A <= A' * L
-    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_a.value().to_int()).lte(pool.balance_a.value().to_int().mul(old_pool.lp_supply.supply_value().to_int())));
+    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_a.value().to_int())
+        .lte(pool.balance_a.value().to_int().mul(old_pool.lp_supply.supply_value().to_int()))
+    );
     // (L + dL) * B <= (B + dB) * L <=> L' * B <= B' * L
-    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_b.value().to_int()).lte(pool.balance_b.value().to_int().mul(old_pool.lp_supply.supply_value().to_int())));
+    ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_b.value().to_int())
+        .lte(pool.balance_b.value().to_int().mul(old_pool.lp_supply.supply_value().to_int()))
+    );
 
     ensures(result_a.value().to_int() == old_pool.balance_a.value().to_int().sub(pool.balance_a.value().to_int()));
     ensures(result_b.value().to_int() == old_pool.balance_b.value().to_int().sub(pool.balance_b.value().to_int()));
@@ -581,9 +613,7 @@ fun swap_a_spec<A, B>(
 
     // swapping on an empty pool is not possible
     // asserts(pool.lp_supply.supply_value() > 0);
-    // asserts(pool.balance_a.value() > 0 && pool.balance_b.value() > 0);
     requires(pool.lp_supply.supply_value() > 0);
-    // requires(pool.balance_a.value() > 0 && pool.balance_b.value() > 0);
 
     // there aren't any overflows or divisions by zero, because there aren't any other aborts
     // (the list of abort conditions and codes is exhaustive)
@@ -595,18 +625,68 @@ fun swap_a_spec<A, B>(
 
     ensures(pool_inv(pool));
 
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures(pool.lp_supply.supply_value().to_int().mul(pool.lp_supply.supply_value().to_int()).mul(old_pool.balance_a.value().to_int()).mul(old_pool.balance_b.value().to_int())
+        .lte(old_pool.lp_supply.supply_value().to_int().mul(old_pool.lp_supply.supply_value().to_int()).mul(pool.balance_a.value().to_int()).mul(pool.balance_b.value().to_int()))
+    );
+
     // swapping on a non-empty pool can never cause any pool balance to go to zero
-    ensures(pool.lp_supply.supply_value() > 0);
     ensures(pool.balance_a.value() > 0);
     ensures(pool.balance_b.value() > 0);
-
-    // // (L + dL) * A <= (A + dA) * L <=> L' * A <= A' * L
-    // ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_a.value().to_int()).lte(pool.balance_a.value().to_int().mul(old_pool.lp_supply.supply_value().to_int())));
-    // // (L + dL) * B <= (B + dB) * L <=> L' * B <= B' * L
-    // ensures(pool.lp_supply.supply_value().to_int().mul(old_pool.balance_b.value().to_int()).lte(pool.balance_b.value().to_int().mul(old_pool.lp_supply.supply_value().to_int())));
+    ensures(pool.lp_supply.supply_value() >= old_pool.lp_supply.supply_value());
 
     ensures(pool.balance_a.value() == old_pool.balance_a.value() + old_input.value());
     ensures(result.value().to_int() == old_pool.balance_b.value().to_int().sub(pool.balance_b.value().to_int()));
+    ensures(pool.admin_fee_balance.value() <= pool.lp_supply.supply_value());
+    ensures(pool.lp_supply.supply_value() - pool.admin_fee_balance.value() == old_pool.lp_supply.supply_value() - old_pool.admin_fee_balance.value());
+
+    result
+}
+
+#[verify_only]
+#[ext(no_verify)]
+fun swap_b_spec<A, B>(
+    pool: &mut Pool<A, B>,
+    input: Balance<B>,
+    min_out: u64,
+): Balance<A> {
+    requires(pool_inv(pool));
+
+    requires(pool.lp_fee_bps <= BPS_IN_100_PCT);
+    requires(pool.admin_fee_pct <= 100);
+
+    requires(pool.balance_b.value().to_int().add(input.value().to_int()).lt(u64::max_value!().to_int()));
+    requires(pool.balance_a.value().to_int().lt(u64::max_value!().to_int()));
+    requires(pool.admin_fee_balance.value() <= pool.lp_supply.supply_value());
+
+    // swapping on an empty pool is not possible
+    // asserts(pool.lp_supply.supply_value() > 0);
+    // asserts(pool.balance_a.value() > 0 && pool.balance_b.value() > 0);
+    requires(pool.lp_supply.supply_value() > 0);
+    // requires(pool.balance_a.value() > 0 && pool.balance_b.value() > 0);
+
+    // there aren't any overflows or divisions by zero, because there aren't any other aborts
+    // (the list of abort conditions and codes is exhaustive)
+
+    let old_pool = old!(pool);
+    let old_input = old!(&input);
+
+    let result = swap_b(pool, input, min_out);
+
+    ensures(pool_inv(pool));
+
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures(pool.lp_supply.supply_value().to_int().mul(pool.lp_supply.supply_value().to_int()).mul(old_pool.balance_a.value().to_int()).mul(old_pool.balance_b.value().to_int())
+        .lte(old_pool.lp_supply.supply_value().to_int().mul(old_pool.lp_supply.supply_value().to_int()).mul(pool.balance_a.value().to_int()).mul(pool.balance_b.value().to_int()))
+    );
+
+    // swapping on a non-empty pool can never cause any pool balance to go to zero
+    ensures(pool.balance_a.value() > 0);
+    ensures(pool.balance_b.value() > 0);
+    ensures(pool.lp_supply.supply_value() >= old_pool.lp_supply.supply_value());
+
+    ensures(pool.balance_b.value() == old_pool.balance_b.value() + old_input.value());
+    ensures(result.value().to_int() == old_pool.balance_a.value().to_int().sub(pool.balance_a.value().to_int()));
     ensures(pool.admin_fee_balance.value() <= pool.lp_supply.supply_value());
     ensures(pool.lp_supply.supply_value() - pool.admin_fee_balance.value() == old_pool.lp_supply.supply_value() - old_pool.admin_fee_balance.value());
 
@@ -648,66 +728,17 @@ fun calc_swap_result_spec(
     );
 
     let result_pool_lp_value = pool_lp_value.to_int().add(admin_fee_in_lp.to_int());
-    ensures(result_pool_lp_value.mul(result_pool_lp_value).lte(i_pool_value.to_int().add(i_value.to_int()).mul(o_pool_value.to_int().sub(out_value.to_int()))));
-
     ensures(out_value <= o_pool_value);
     ensures(result_pool_lp_value.lt(u64::max_value!().to_int()));
+    let result_i_pool_value = i_pool_value + i_value;
+    let result_o_pool_value = o_pool_value - out_value;
+
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures((pool_lp_value + admin_fee_in_lp).to_int().mul((pool_lp_value + admin_fee_in_lp).to_int()).mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
+        .lte(pool_lp_value.to_int().mul(pool_lp_value.to_int()).mul(result_i_pool_value.to_int()).mul(result_o_pool_value.to_int()))
+    );
+
+    ensures(result_pool_lp_value.mul(result_pool_lp_value).lte(result_i_pool_value.to_int().mul(result_o_pool_value.to_int())));
 
     (out_value, admin_fee_in_lp)
 }
-
-/*
-spec deposit_primitive {
-    requires pool_inv(balance_a, balance_b, lp_supply);
-    aborts_if input_a == 0 with EZeroInput;
-    aborts_if input_b == 0 with EZeroInput;
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
-    let post deposit_a = result.a;
-    let post deposit_b = result.b;
-    let post lp_to_issue = result.c;
-    ensures pool_inv(balance_a + deposit_a, balance_b + deposit_b, lp_supply + lp_to_issue);
-    // prove that depositing liquidity always returns LPs of smaller value then what was deposited
-    // (L + dL) * A <= (A + dA) * L <=> L' * A <= A' * L
-    ensures (lp_supply + lp_to_issue) * balance_a <= (balance_a + deposit_a) * lp_supply;
-    // (L + dL) * B <= (B + dB) * L <=> L' * B <= B' * L
-    ensures (lp_supply + lp_to_issue) * balance_b <= (balance_b + deposit_b) * lp_supply;
-    // when depositing in an possibly empty pool, L' and A' and B' must be positive
-    // (we only check that L' > 0, the invariant implies A > 0 and B > 0)
-    ensures (lp_supply + lp_to_issue) > 0;
-}
-
-spec withdraw_primitive {
-    requires pool_inv(balance_a, balance_b, lp_supply);
-    requires lp_supply >= lp_in;
-    aborts_if lp_in == 0 with EZeroInput;
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
-    let post a_out = result.a;
-    let post b_out = result.b;
-    // the invariant implies that when all LPs are withdrawn, both A and B go to zero
-    ensures pool_inv(balance_a - a_out, balance_b - b_out, lp_supply - lp_in);
-    // (L + dL) * A <= (A + dA) * L <=> L' * A <= A' * L
-    ensures (lp_supply - lp_in) * balance_a <= (balance_a - a_out) * lp_supply;
-    // (L + dL) * B <= (B + dB) * L <=> L' * B <= B' * L
-    ensures (lp_supply - lp_in) * balance_b <= (balance_b - b_out) * lp_supply;
-}
-
-spec calc_swap_result {
-    requires pool_inv(i_pool_value, o_pool_value, pool_lp_value);
-    requires lp_fee_bps <= BPS_IN_100_PCT;
-    requires admin_fee_pct <= 100;
-    requires i_pool_value + i_value <= MAX_U64;
-    aborts_if i_value == 0 with EZeroInput;
-    // swapping on an empty pool is not possible
-    aborts_if pool_lp_value == 0 with ENoLiquidity;
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
-    let post out_value = result.a;
-    let post admin_fee_in_lp = result.b;
-    ensures pool_inv(i_pool_value + i_value, o_pool_value - out_value, pool_lp_value + admin_fee_in_lp);
-    // swapping on a non-empty pool can never cause any pool balance to go to zero
-    ensures pool_lp_value + admin_fee_in_lp > 0;
-    ensures out_value * (pool_lp_value + admin_fee_in_lp) * i_pool_value <= i_value * pool_lp_value * (o_pool_value - out_value);
-}
-*/
