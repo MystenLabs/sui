@@ -19,6 +19,7 @@
 		"@fontsource-variable/inter": "^5.0.19",
 		"@fontsource-variable/red-hat-mono": "^5.0.19",
 		"@hookform/resolvers": "^3.9.0",
+		"@markdoc/markdoc": "^0.4.0",
 		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/sui": "workspace:*",
 		"@noble/hashes": "^1.4.0",
