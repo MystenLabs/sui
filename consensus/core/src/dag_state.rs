@@ -50,7 +50,7 @@ pub(crate) struct DagState {
     // CACHED_ROUNDS worth of data. The entries are evicted based on the latest GC round, however the eviction process will respect the CACHED_ROUNDS.
     // For each authority, blocks are only evicted when their round is less than or equal to both `gc_round`, and `highest authority round - cached rounds`.
     // This ensures that the GC requirements are respected (we never clean up any block above `gc_round`), and there are enough blocks cached.
-    recent_blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    recent_blocks: BTreeMap<BlockRef, BlockInfo>,
 
     // Indexes recent block refs by their authorities.
     // Vec position corresponds to the authority index.
@@ -285,7 +285,8 @@ impl DagState {
     /// Updates internal metadata for a block.
     fn update_block_metadata(&mut self, block: &VerifiedBlock) {
         let block_ref = block.reference();
-        self.recent_blocks.insert(block_ref, block.clone());
+        self.recent_blocks
+            .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
@@ -340,8 +341,8 @@ impl DagState {
                 }
                 continue;
             }
-            if let Some(block) = self.recent_blocks.get(block_ref) {
-                blocks[index] = Some(block.clone());
+            if let Some(block_info) = self.recent_blocks.get(block_ref) {
+                blocks[index] = Some(block_info.block.clone());
                 continue;
             }
             missing.push((index, block_ref));
@@ -373,6 +374,25 @@ impl DagState {
         blocks
     }
 
+    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) {
+        if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
+            block_info.set_as_committed();
+        } else {
+            panic!(
+                "Block {:?} not found in cache to set as committed.",
+                block_ref
+            );
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for commit status for a block not in cached data {block_ref}"))
+            .committed
+    }
+
     /// Gets all uncommitted blocks in a slot.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
@@ -380,11 +400,11 @@ impl DagState {
         // or support reading from storage while limiting storage reads to edge cases.
 
         let mut blocks = vec![];
-        for (_block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
         )) {
-            blocks.push(block.clone())
+            blocks.push(block_info.block.clone())
         }
         blocks
     }
@@ -397,7 +417,7 @@ impl DagState {
         }
 
         let mut blocks = vec![];
-        for (_block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
             Excluded(BlockRef::new(
                 round + 1,
@@ -405,7 +425,7 @@ impl DagState {
                 BlockDigest::MIN,
             )),
         )) {
-            blocks.push(block.clone())
+            blocks.push(block_info.block.clone())
         }
         blocks
     }
@@ -466,6 +486,7 @@ impl DagState {
                 .recent_blocks
                 .get(last)
                 .expect("Block should be found in recent blocks")
+                .block
                 .clone();
         }
 
@@ -493,11 +514,11 @@ impl DagState {
             Included(BlockRef::new(start, authority, BlockDigest::MIN)),
             Unbounded,
         )) {
-            let block = self
+            let block_info = self
                 .recent_blocks
                 .get(block_ref)
                 .expect("Block should exist in recent blocks");
-            blocks.push(block.clone());
+            blocks.push(block_info.block.clone());
         }
         blocks
     }
@@ -547,12 +568,12 @@ impl DagState {
                 ))
                 .next_back()
             {
-                let block = self
+                let block_info = self
                     .recent_blocks
                     .get(block_ref)
                     .expect("Block should exist in recent blocks");
 
-                blocks[authority_index] = block.clone();
+                blocks[authority_index] = block_info.block.clone();
             }
         }
 
@@ -973,6 +994,30 @@ impl DagState {
     #[cfg(test)]
     pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
         self.last_commit = Some(commit);
+    }
+}
+
+struct BlockInfo {
+    block: VerifiedBlock,
+    // Whether the block has been committed
+    committed: bool,
+}
+
+impl BlockInfo {
+    fn new(block: VerifiedBlock) -> Self {
+        Self {
+            block,
+            committed: false,
+        }
+    }
+
+    fn set_as_committed(&mut self) {
+        assert!(
+            !self.committed,
+            "Block has been already committed: {:?}",
+            self.block.reference()
+        );
+        self.committed = true;
     }
 }
 
