@@ -39,6 +39,10 @@ ignore = [
 
     # Temporarily allow until arrow family of crates updates `lexical-core` to 1.0
     "RUSTSEC-2023-0086",
+    # allow derivative being unmaintained
+    "RUSTSEC-2024-0388",
+    # allow instant being unmaintained
+    "RUSTSEC-2024-0384",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
