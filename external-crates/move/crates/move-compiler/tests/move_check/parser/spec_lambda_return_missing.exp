@@ -1,6 +1,18 @@
-warning[W00001]: DEPRECATED. will be removed
-  ┌─ tests/move_check/parser/spec_lambda_return_missing.move:2:10
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_lambda_return_missing.move:2:5
   │
 2 │     spec fun do(f: ||) { }
-  │          ^^^^^^^^^^^^^^^^^ Specification blocks are deprecated and are no longer used
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_lambda_return_missing.move:2:22
+  │
+2 │     spec fun do(f: ||) { }
+  │                      ^
+  │                      │
+  │                      Unexpected ')'
+  │                      Expected a type name
 
