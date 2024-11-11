@@ -12,7 +12,7 @@ use std::sync::{Arc, Weak};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
-use sui_types::transaction::VerifiedCertificate;
+use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::debug;

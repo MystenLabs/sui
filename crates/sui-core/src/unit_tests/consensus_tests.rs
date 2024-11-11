@@ -7,24 +7,27 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::mock_consensus::with_block_status;
+use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
+use parking_lot::Mutex;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use parking_lot::Mutex;
-use sui_network::tonic;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
 };
-use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
-    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction},
+    transaction::{
+        CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction,
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    },
 };
 
 /// Fixture: a few test gas objects.
