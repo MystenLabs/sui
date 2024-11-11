@@ -196,6 +196,7 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 //             Further reduce minimum number of random beacon shares.
 //             Disallow adding new modules in `deps-only` packages.
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
+//             Enable smart ancestor selection in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -565,6 +566,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     disallow_new_modules_in_deps_only_packages: bool,
+
+    // Use smart ancestor selection in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_smart_ancestor_selection: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1674,6 +1679,10 @@ impl ProtocolConfig {
     pub fn disallow_new_modules_in_deps_only_packages(&self) -> bool {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages
+    }
+
+    pub fn consensus_smart_ancestor_selection(&self) -> bool {
+        self.feature_flags.consensus_smart_ancestor_selection
     }
 }
 
@@ -2944,6 +2953,11 @@ impl ProtocolConfig {
                 69 => {
                     // Sets number of rounds allowed for fastpath voting in consensus.
                     cfg.consensus_voting_rounds = Some(40);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable smart ancestor selection for devnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
