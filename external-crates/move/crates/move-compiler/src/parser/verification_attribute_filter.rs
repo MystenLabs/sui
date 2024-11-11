@@ -6,7 +6,6 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use crate::{
-    diag,
     parser::{
         ast as P,
         filter::{filter_program, FilterContext},
