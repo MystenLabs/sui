@@ -226,7 +226,8 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                                 }
 
                                 if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
-                                    next_loud_watermark_update += LOUD_WATERMARK_UPDATE_INTERVAL;
+                                    next_loud_watermark_update = watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
+
                                     info!(
                                         pipeline = H::NAME,
                                         epoch = watermark.epoch_hi_inclusive,
