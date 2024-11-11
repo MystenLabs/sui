@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -58,5 +59,12 @@ impl Handler for WalObjTypes {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let filter = wal_obj_types::table
+            .filter(wal_obj_types::cp_sequence_number.between(from as i64, to as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }

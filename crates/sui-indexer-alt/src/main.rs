@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
         Command::Indexer {
             indexer,
             consistent_pruning_interval,
+            pruner_delay,
             consistent_range: lag,
         } => {
             let retry_interval = indexer.ingestion_config.retry_interval;
@@ -61,6 +62,7 @@ async fn main() -> Result<()> {
             // write-ahead log needs to be pruned.
             let pruner_config = lag.map(|l| PrunerConfig {
                 interval: consistent_pruning_interval,
+                delay: pruner_delay,
                 // Retain at least twice as much data as the lag, to guarantee overlap between the
                 // summary table and the write-ahead log.
                 retention: l * 2,

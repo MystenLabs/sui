@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Cow;
+use std::{borrow::Cow, time::Duration};
 
 use chrono::{naive::NaiveDateTime, DateTime, Utc};
-use diesel::prelude::*;
+use diesel::{dsl::sql, prelude::*, sql_types};
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 
@@ -40,6 +40,24 @@ pub struct CommitterWatermark<'p> {
 pub struct ReaderWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub reader_lo: i64,
+}
+
+#[derive(Queryable, Debug, Clone, FieldCount)]
+#[diesel(table_name = watermarks)]
+pub struct PrunerWatermark<'p> {
+    /// The pipeline in question
+    pub pipeline: Cow<'p, str>,
+
+    /// How long to wait from when this query ran on the database until this information can be
+    /// used to prune the database. This number could be negative, meaning no waiting is necessary.
+    pub wait_for: i64,
+
+    /// The pruner can delete up to this checkpoint, (exclusive).
+    pub reader_lo: i64,
+
+    /// The pruner has already deleted up to this checkpoint (exclusive), so can continue from this
+    /// point.
+    pub pruner_hi: i64,
 }
 
 impl StoredWatermark {
@@ -123,6 +141,76 @@ impl<'p> ReaderWatermark<'p> {
             .set((self, watermarks::pruner_timestamp.eq(diesel::dsl::now)))
             .filter(watermarks::pipeline.eq(&self.pipeline))
             .filter(watermarks::reader_lo.lt(self.reader_lo))
+            .execute(conn)
+            .await?
+            > 0)
+    }
+}
+
+impl PrunerWatermark<'static> {
+    /// Get the bounds for the region that the pruner still has to prune for the given `pipeline`,
+    /// along with a duration to wait before acting on this information, based on the time at which
+    /// the pruner last updated the bounds, and the configured `delay`.
+    ///
+    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
+    /// `reader_lo` (exclusive) after `wait_for` milliseconds have passed since this response was
+    /// returned.
+    pub async fn get(
+        conn: &mut Connection<'_>,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> QueryResult<Option<Self>> {
+        //     |---------- + delay ---------------------|
+        //                             |--- wait_for ---|
+        //     |-----------------------|----------------|
+        //     ^                       ^
+        //     pruner_timestamp        NOW()
+        let wait_for = sql::<sql_types::BigInt>(&format!(
+            "CAST({} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+            delay.as_millis(),
+        ));
+
+        watermarks::table
+            .select((
+                watermarks::pipeline,
+                wait_for,
+                watermarks::reader_lo,
+                watermarks::pruner_hi,
+            ))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(conn)
+            .await
+            .optional()
+    }
+}
+
+impl<'p> PrunerWatermark<'p> {
+    /// How long to wait before the pruner can act on this information, or `None`, if there is no
+    /// need to wait.
+    pub fn wait_for(&self) -> Option<Duration> {
+        (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
+    }
+
+    /// Whether the pruner has any work left to do on the range in this watermark.
+    pub fn is_empty(&self) -> bool {
+        self.pruner_hi >= self.reader_lo
+    }
+
+    /// The next chunk that the pruner should work on, to advance the watermark.
+    pub fn next_chunk(&mut self, size: u64) -> (u64, u64) {
+        let from = self.pruner_hi as u64;
+        let to = (from + size).min(self.reader_lo as u64);
+        (from, to)
+    }
+
+    /// Update the pruner high watermark (only) for an existing watermark row, as long as this
+    /// raises the watermark.
+    ///
+    /// Returns a boolean indicating whether the watermark was actually updated or not.
+    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+        Ok(diesel::update(watermarks::table)
+            .set(watermarks::pruner_hi.eq(self.pruner_hi))
+            .filter(watermarks::pipeline.eq(&self.pipeline))
             .execute(conn)
             .await?
             > 0)
