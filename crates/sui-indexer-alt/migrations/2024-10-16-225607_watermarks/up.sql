@@ -19,9 +19,6 @@ CREATE TABLE IF NOT EXISTS watermarks
     -- this field once it can guarantee that all checkpoints at or before this
     -- timestamp have been written to the database.
     timestamp_ms_hi_inclusive   BIGINT        NOT NULL,
-    -- Inclusive lower epoch bound for this entity's data. Pruner updates this
-    -- field when the epoch range exceeds the retention policy.
-    epoch_lo                    BIGINT        NOT NULL,
     -- Inclusive low watermark that the pruner advances. Corresponds to the
     -- epoch id, checkpoint sequence number, or tx sequence number depending on
     -- the entity. Data before this watermark is considered pruned by a reader.
