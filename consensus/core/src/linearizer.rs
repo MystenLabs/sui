@@ -22,10 +22,12 @@ pub(crate) trait BlockStoreAPI {
     fn gc_round(&self) -> Round;
 
     fn gc_enabled(&self) -> bool;
+
+    fn set_committed(&mut self, block_ref: &BlockRef);
 }
 
 impl BlockStoreAPI
-    for parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, DagState>
+    for parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, DagState>
 {
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
         DagState::get_blocks(self, refs)
@@ -37,6 +39,10 @@ impl BlockStoreAPI
 
     fn gc_enabled(&self) -> bool {
         DagState::gc_enabled(self)
+    }
+
+    fn set_committed(&mut self, block_ref: &BlockRef) {
+        DagState::set_committed(self, block_ref);
     }
 }
 
@@ -67,7 +73,7 @@ impl Linearizer {
         reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> (CommittedSubDag, TrustedCommit) {
         // Grab latest commit state from dag state
-        let dag_state = self.dag_state.read();
+        let mut dag_state = self.dag_state.write();
         let last_commit_index = dag_state.last_commit_index();
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
@@ -76,7 +82,7 @@ impl Linearizer {
 
         // Now linearize the sub-dag starting from the leader block
         let (to_commit, rejected_transactions) =
-            Self::linearize_sub_dag(leader_block.clone(), last_committed_rounds, dag_state);
+            Self::linearize_sub_dag(leader_block.clone(), last_committed_rounds, &mut dag_state);
 
         // Create the Commit.
         let commit = Commit::new(
@@ -110,7 +116,7 @@ impl Linearizer {
     pub(crate) fn linearize_sub_dag(
         leader_block: VerifiedBlock,
         last_committed_rounds: Vec<u32>,
-        dag_state: impl BlockStoreAPI,
+        dag_state: &mut impl BlockStoreAPI,
     ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
         let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
@@ -154,6 +160,7 @@ impl Linearizer {
                 .collect();
 
             for ancestor in ancestors {
+                dag_state.set_committed(&ancestor.reference());
                 buffer.push(ancestor.clone());
                 assert!(committed.insert(ancestor.reference()));
             }
