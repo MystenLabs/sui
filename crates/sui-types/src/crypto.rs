@@ -1751,7 +1751,7 @@ impl FromStr for GenericSignature {
 pub type RandomnessSignature = fastcrypto_tbls::types::Signature;
 pub type RandomnessPartialSignature = fastcrypto_tbls::tbls::PartialSignature<RandomnessSignature>;
 pub type RandomnessPrivateKey =
-    fastcrypto_tbls::ecies::PrivateKey<fastcrypto::groups::bls12381::G2Element>;
+    fastcrypto_tbls::ecies_v1::PrivateKey<fastcrypto::groups::bls12381::G2Element>;
 
 /// Round number of generated randomness.
 #[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
