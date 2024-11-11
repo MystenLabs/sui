@@ -34,6 +34,15 @@ pub enum Command {
         )]
         consistent_pruning_interval: Duration,
 
+        /// How long to wait before honouring reader low watermarks.
+        #[arg(
+            long,
+            default_value = "120",
+            value_name = "SECONDS",
+            value_parser = |s: &str| s.parse().map(Duration::from_secs),
+        )]
+        pruner_delay: Duration,
+
         /// Number of checkpoints to delay indexing summary tables for.
         #[clap(long)]
         consistent_range: Option<u64>,
