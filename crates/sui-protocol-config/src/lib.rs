@@ -2953,8 +2953,7 @@ impl ProtocolConfig {
                 69 => {
                     // Sets number of rounds allowed for fastpath voting in consensus.
                     cfg.consensus_voting_rounds = Some(40);
-                }
-                69 => {
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // Enable smart ancestor selection for devnet
                         cfg.feature_flags.consensus_smart_ancestor_selection = true;

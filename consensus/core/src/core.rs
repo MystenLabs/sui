@@ -161,7 +161,8 @@ impl Core {
             .read()
             .reputation_scores
             .clone();
-        let ancestor_state_manager = AncestorStateManager::new(context.clone(), propagation_scores);
+        let mut ancestor_state_manager = AncestorStateManager::new(context.clone());
+        ancestor_state_manager.set_propagation_scores(propagation_scores);
 
         Self {
             context: context.clone(),
@@ -388,12 +389,6 @@ impl Core {
                 return None;
             }
         }
-
-        // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
-        // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
-        // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
-        // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
-        // Probably proposing for all the intermediate rounds might not make much sense.
 
         // Determine the ancestors to be included in proposal.
         // Smart ancestor selection requires distributed scoring to be enabled.
@@ -855,7 +850,7 @@ impl Core {
         // And always include own last proposed block first among ancestors.
         // Start by only including the high scoring ancestors. Low scoring ancestors
         // will be included in a second pass below.
-        let included_ancestors = iter::once(self.last_proposed_block.clone())
+        let included_ancestors = iter::once(self.last_proposed_block().clone())
             .chain(
                 ancestors
                     .into_iter()
@@ -1855,7 +1850,7 @@ mod test {
 
                 assert_eq!(core_fixture.core.last_proposed_round(), round);
 
-                this_round_blocks.push(core_fixture.core.last_proposed_block.clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
             }
 
             last_round_blocks = this_round_blocks;
@@ -1888,7 +1883,7 @@ mod test {
                     }
                 }
 
-                this_round_blocks.push(core_fixture.core.last_proposed_block.clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
                 for block in this_round_blocks.iter() {
                     if block.author() != AuthorityIndex::new_for_test(3) {

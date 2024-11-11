@@ -53,6 +53,8 @@ pub(crate) struct AncestorStateManager {
     propagation_score_update_count: u32,
     quorum_round_update_count: u32,
     pub(crate) quorum_round_per_authority: Vec<QuorumRound>,
+    // This is the reputation scores that we use for leader election but we are
+    // using it here as a signal for high quality block propagation as well.
     pub(crate) propagation_scores: ReputationScores,
 }
 
@@ -73,13 +75,13 @@ impl AncestorStateManager {
     #[cfg(test)]
     const STATE_LOCK_SCORE_UPDATES: u32 = 1;
 
-    // Exclusion threshold is based on reputation scores
+    // Exclusion threshold is based on propagation (reputation) scores
     const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 10;
 
     // Inclusion threshold is based on network quorum round
     const INCLUSION_THRESHOLD_PERCENTAGE: u64 = 90;
 
-    pub(crate) fn new(context: Arc<Context>, propagation_scores: ReputationScores) -> Self {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];
 
         let quorum_round_per_authority = vec![(0, 0); context.committee.size()];
@@ -88,7 +90,7 @@ impl AncestorStateManager {
             state_map,
             propagation_score_update_count: 0,
             quorum_round_update_count: 0,
-            propagation_scores,
+            propagation_scores: ReputationScores::default(),
             quorum_round_per_authority,
         }
     }
@@ -105,12 +107,6 @@ impl AncestorStateManager {
 
     pub(crate) fn get_ancestor_states(&self) -> Vec<AncestorState> {
         self.state_map.iter().map(|info| info.state).collect()
-    }
-
-    pub(crate) fn get_inclusion_stake_threshold(&self) -> u64 {
-        self.context
-            .committee
-            .n_percent_stake_threshold(Self::INCLUSION_THRESHOLD_PERCENTAGE)
     }
 
     /// Updates the state of all ancestors based on the latest scores and quorum rounds
@@ -199,7 +195,7 @@ impl AncestorStateManager {
                 // It should not be possible for the scores to get over the threshold
                 // until the node is back in the INCLUDE state, but adding just in case.
                 if propagation_score > low_score_threshold
-                    || authority_low_quorum_round >= (network_low_quorum_round)
+                    || authority_low_quorum_round >= network_low_quorum_round
                 {
                     ancestor_info.state = AncestorState::Include;
                     ancestor_info.set_lock(
@@ -226,6 +222,7 @@ impl AncestorStateManager {
     /// Calculate the network's quorum round from authorities by inclusion stake
     /// threshold, where quorum round is the highest round a block has been seen
     /// by a percentage (inclusion threshold) of authorities.
+    /// TODO: experiment with using high quorum round
     fn calculate_network_low_quorum_round(&self) -> u32 {
         let committee = &self.context.committee;
         let inclusion_stake_threshold = self.get_inclusion_stake_threshold();
@@ -241,15 +238,20 @@ impl AncestorStateManager {
         let mut network_low_quorum_round = 0;
 
         for (round, stake) in low_quorum_rounds_with_stake.iter().rev() {
-            let reached_quorum_before = total_stake >= inclusion_stake_threshold;
             total_stake += stake;
-            if !reached_quorum_before && total_stake >= inclusion_stake_threshold {
+            if total_stake >= inclusion_stake_threshold {
                 network_low_quorum_round = *round;
                 break;
             }
         }
 
         network_low_quorum_round
+    }
+
+    fn get_inclusion_stake_threshold(&self) -> u64 {
+        self.context
+            .committee
+            .n_percent_stake_threshold(Self::INCLUSION_THRESHOLD_PERCENTAGE)
     }
 }
 
@@ -264,14 +266,15 @@ mod test {
         let context = Arc::new(Context::new_for_test(4).0);
 
         let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3]);
-        let mut ancestor_state_manager = AncestorStateManager::new(context, scores);
+        let mut ancestor_state_manager = AncestorStateManager::new(context);
+        ancestor_state_manager.set_propagation_scores(scores);
 
         // Quorum rounds are not set yet, so we should calculate a network quorum
         // round of 0 to start.
         let network_low_quorum_round = ancestor_state_manager.calculate_network_low_quorum_round();
         assert_eq!(network_low_quorum_round, 0);
 
-        let quorum_rounds = vec![(225, 229), (225, 300), (229, 300), (229, 300)];
+        let quorum_rounds = vec![(100, 229), (225, 300), (229, 300), (229, 300)];
         ancestor_state_manager.set_quorum_round_per_authority(quorum_rounds);
 
         let network_low_quorum_round = ancestor_state_manager.calculate_network_low_quorum_round();
@@ -290,7 +293,8 @@ mod test {
         let context = Arc::new(Context::new_for_test(4).0);
 
         let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3]);
-        let mut ancestor_state_manager = AncestorStateManager::new(context, scores);
+        let mut ancestor_state_manager = AncestorStateManager::new(context);
+        ancestor_state_manager.set_propagation_scores(scores);
 
         let quorum_rounds = vec![(225, 229), (225, 300), (229, 300), (229, 300)];
         ancestor_state_manager.set_quorum_round_per_authority(quorum_rounds);
