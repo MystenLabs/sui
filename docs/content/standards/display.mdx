@@ -62,7 +62,7 @@ public struct Hero has key, store {
 /// One-Time-Witness for the module.
 public struct MY_HERO has drop {}
 
-/// In the module initializer one claims the `Publisher` object
+/// Claim the `Publisher` object in the module initializer 
 /// to then create a `Display`. The `Display` is initialized with
 /// a set of fields (but can be modified later) and published via
 /// the `update_version` call.
