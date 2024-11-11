@@ -50,7 +50,7 @@ public fun add(self: &mut Kiosk, cap: &KioskOwnerCap, name: String) {
     df::add(uid_mut, KioskName {}, name)
 }
 
-/// Try read the name of the Kiosk - if set - return Some(String), if not - None
+/// Try to read the name of the Kiosk - if set - return Some(String), if not - None
 public fun name(self: &Kiosk): Option<String> {
     if (df::exists_(self.uid(), KioskName {})) {
         option::some(*df::borrow(self.uid(), KioskName {}))
