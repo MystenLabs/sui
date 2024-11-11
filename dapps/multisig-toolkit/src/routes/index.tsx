@@ -7,6 +7,7 @@ import MultiSigCombinedSignatureGenerator from './combine-sigs';
 import ExecuteTransaction from './execute-transaction';
 import MultiSigAddressGenerator from './multisig-address';
 import OfflineSigner from './offline-signer';
+import Help from './help';
 import { Root } from './root';
 import SignatureAnalyzer from './signature-analyzer';
 
@@ -38,6 +39,10 @@ export const router = createBrowserRouter([
 			{
 				path: 'execute-transaction',
 				element: <ExecuteTransaction />,
+			},
+			{
+				path: 'help',
+				element: <Help />,
 			},
 		],
 	},
