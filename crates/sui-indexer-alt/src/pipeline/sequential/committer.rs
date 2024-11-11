@@ -104,7 +104,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     if batch_checkpoints == 0
                         && rx.is_closed()
                         && rx.is_empty()
-                        && can_process_pending(next_checkpoint, checkpoint_lag, &pending)
+                        && !can_process_pending(next_checkpoint, checkpoint_lag, &pending)
                     {
                         info!(pipeline = H::NAME, "Process closed channel and no more data to commit");
                         break;
@@ -352,11 +352,13 @@ pub(super) fn committer<H: Handler + 'static>(
                     // next polling interval. This is appropriate if there are a minimum number of
                     // rows to write, and they are already in the batch, or we can process the next
                     // checkpoint to extract them.
-                    if pending_rows < H::MIN_EAGER_ROWS || batch_checkpoints == 0 {
+                    if pending_rows < H::MIN_EAGER_ROWS {
                         continue;
                     }
 
-                    if can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
+                    if batch_checkpoints > 0
+                        || can_process_pending(next_checkpoint, checkpoint_lag, &pending)
+                    {
                         poll.reset_immediately();
                     }
                 }
