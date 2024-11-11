@@ -56,6 +56,9 @@ pub(super) fn committer<H: Handler + 'static>(
         let mut poll = interval(config.collect_interval);
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
+        // If no checkpoint lag is specified, we default it to `0` (no lag).
+        let checkpoint_lag = checkpoint_lag.unwrap_or_default();
+
         // Buffer to gather the next batch to write. A checkpoint's data is only added to the batch
         // when it is known to come from the next checkpoint after `watermark` (the current tip of
         // the batch), and data from previous checkpoints will be discarded to avoid double writes.
@@ -98,38 +101,12 @@ pub(super) fn committer<H: Handler + 'static>(
                 }
 
                 _ = poll.tick() => {
-                    let should_exit = if batch_checkpoints > 0 {
-                        // We still have data to commit to DB and update watermark.
-                        // We should finish them regardless.
-                        false
-                    } else if rx.is_closed() && rx.is_empty() {
-                        // The channel is closed and there is no more data coming.
-                        // We only look at the pending data now.
-                        if pending.is_empty() {
-                            info!(pipeline = H::NAME, "Processor closed channel and no more data to commit");
-                            true
-                        } else {
-                            // unwraps are both safe since pending is not empty.
-                            let (first, _) = pending.first_key_value().unwrap();
-                            let (last, _) = pending.last_key_value().unwrap();
-                            info!(
-                                pipeline = H::NAME,
-                                ?first,
-                                ?last,
-                                ?next_checkpoint,
-                                "Processor closed channel with pending data",
-                            );
-                            // If the next_checkpoint we can commit is already smaller than the first
-                            // checkpoint in the pending data, there is no chance we will ever commit anything.
-                            // If the next checkpoint we can commit, adjusted by checkpoint lag,
-                            // is already beyond the last checkpoint in the pending data,
-                            // there is also no chance we will ever commit anything.
-                            next_checkpoint < *first || next_checkpoint + checkpoint_lag.unwrap_or_default() > *last
-                        }
-                    } else {
-                        false
-                    };
-                    if should_exit {
+                    if batch_checkpoints == 0
+                        && rx.is_closed()
+                        && rx.is_empty()
+                        && can_process_pending(next_checkpoint, checkpoint_lag, &pending)
+                    {
+                        info!(pipeline = H::NAME, "Process closed channel and no more data to commit");
                         break;
                     }
 
@@ -154,19 +131,14 @@ pub(super) fn committer<H: Handler + 'static>(
                     // writes by combining rows, but we will limit the number of checkpoints we try
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
-                    let last_checkpoint = pending.last_key_value().map(|(k, _)| *k);
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
+                        if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
+                            break;
+                        }
+
                         let Some(entry) = pending.first_entry() else {
                             break;
                         };
-
-                        if checkpoint_lag.is_some_and(
-                            // unwrap safe since pending is not empty.
-                            |lag| *entry.key() + lag > last_checkpoint.unwrap()
-                        ) {
-                            // The current entry is not lagging enough comparing to the last entry.
-                            break;
-                        }
 
                         match next_checkpoint.cmp(entry.key()) {
                             // Next pending checkpoint is from the future.
@@ -189,9 +161,9 @@ pub(super) fn committer<H: Handler + 'static>(
                                     .total_watermarks_out_of_order
                                     .with_label_values(&[H::NAME])
                                     .inc();
+
                                 let indexed = entry.remove();
                                 pending_rows -= indexed.len();
-                                continue;
                             }
                         }
                     }
@@ -205,11 +177,12 @@ pub(super) fn committer<H: Handler + 'static>(
                         "Gathered batch",
                     );
 
+                    // If there is no new data to commit, we can skip the rest of the process. Note
+                    // that we cannot use batch_rows for the check, since it is possible that there
+                    // are empty checkpoints with no new rows added, but the watermark still needs
+                    // to be updated.
                     if batch_checkpoints == 0 {
                         assert_eq!(batch_rows, 0);
-                        // If there is no new data to commit, we can skip the rest of the process.
-                        // Note that we cannot use batch_rows for the check, since it is possible
-                        // that there are empty checkpoints with no new rows added.
                         continue;
                     }
 
@@ -364,16 +337,9 @@ pub(super) fn committer<H: Handler + 'static>(
                     batch_rows = 0;
                     attempt = 0;
 
-                    // If there is a pending checkpoint, no greater than the expected next
-                    // checkpoint, and within the checkpoint lag of the last pending checkpoint,
-                    // then the pipeline can do more work immediately (without waiting).
-                    if pending
-                        .first_key_value()
-                        .is_some_and(|(next, _)| {
-                            *next <= next_checkpoint
-                            && *next + checkpoint_lag.unwrap_or_default() <= *pending.last_key_value().unwrap().0
-                        })
-                    {
+                    // If we could make more progress immediately, then schedule more work without
+                    // waiting.
+                    if can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                         poll.reset_immediately();
                     }
                 }
@@ -386,28 +352,12 @@ pub(super) fn committer<H: Handler + 'static>(
                     // next polling interval. This is appropriate if there are a minimum number of
                     // rows to write, and they are already in the batch, or we can process the next
                     // checkpoint to extract them.
-
-                    if pending_rows < H::MIN_EAGER_ROWS {
+                    if pending_rows < H::MIN_EAGER_ROWS || batch_checkpoints == 0 {
                         continue;
                     }
 
-                    if batch_rows > 0 {
+                    if can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                         poll.reset_immediately();
-                        continue;
-                    }
-
-                    let Some((next, _)) = pending.first_key_value() else {
-                        continue;
-                    };
-
-                    match (checkpoint_lag, pending.last_key_value()) {
-                        (Some(_), None) => continue,
-                        (Some(lag), Some((last, _))) if last.saturating_sub(lag) <= *next => {
-                            continue;
-                        }
-                        _ => if *next <= next_checkpoint {
-                            poll.reset_immediately();
-                        }
                     }
                 }
             }
@@ -415,4 +365,25 @@ pub(super) fn committer<H: Handler + 'static>(
 
         info!(pipeline = H::NAME, ?watermark, "Stopping committer");
     })
+}
+
+// Tests whether the first checkpoint in the `pending` buffer can be processed immediately, which
+// is subject to the following conditions:
+//
+// - It is at or before the `next_checkpoint` expected by the committer.
+// - It is at least `checkpoint_lag` checkpoints before the last checkpoint in the buffer.
+fn can_process_pending<T>(
+    next_checkpoint: u64,
+    checkpoint_lag: u64,
+    pending: &BTreeMap<u64, T>,
+) -> bool {
+    let Some((&first, _)) = pending.first_key_value() else {
+        return false;
+    };
+
+    let Some((&last, _)) = pending.last_key_value() else {
+        return false;
+    };
+
+    first <= next_checkpoint && first + checkpoint_lag <= last
 }
