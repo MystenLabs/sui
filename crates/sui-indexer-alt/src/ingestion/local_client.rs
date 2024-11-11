@@ -5,6 +5,8 @@ use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
 use axum::body::Bytes;
 use std::path::PathBuf;
 
+// FIXME: To productionize this, we need to add garbage collection to remove old checkpoint files.
+
 pub struct LocalIngestionClient {
     path: PathBuf,
 }

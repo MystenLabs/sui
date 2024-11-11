@@ -10,6 +10,7 @@ use backoff::backoff::Constant;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_storage::blob::Blob;
@@ -48,17 +49,28 @@ pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
     metrics: Arc<IndexerMetrics>,
+    latest_ingested_checkpoint: Arc<AtomicU64>,
 }
 
 impl IngestionClient {
     pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
-        Ok(IngestionClient { client, metrics })
+        let latest_ingested_checkpoint = Arc::new(AtomicU64::new(0));
+        Ok(IngestionClient {
+            client,
+            metrics,
+            latest_ingested_checkpoint,
+        })
     }
 
     pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
-        IngestionClient { client, metrics }
+        let latest_ingested_checkpoint = Arc::new(AtomicU64::new(0));
+        IngestionClient {
+            client,
+            metrics,
+            latest_ingested_checkpoint,
+        }
     }
 
     /// Fetch checkpoint data by sequence number.
@@ -159,6 +171,14 @@ impl IngestionClient {
             elapsed_ms = elapsed * 1000.0,
             "Fetched checkpoint"
         );
+
+        let new_seq = data.checkpoint_summary.sequence_number;
+        let old_seq = self
+            .latest_ingested_checkpoint
+            .fetch_max(new_seq, Ordering::Relaxed);
+        if new_seq > old_seq {
+            self.metrics.latest_ingested_checkpoint.set(new_seq as i64);
+        }
 
         self.metrics.total_ingested_checkpoints.inc();
 
