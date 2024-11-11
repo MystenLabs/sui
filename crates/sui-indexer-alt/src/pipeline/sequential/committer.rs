@@ -316,7 +316,8 @@ pub(super) fn committer<H: Handler + 'static>(
                         .set(watermark.timestamp_ms_hi_inclusive);
 
                     if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
-                        next_loud_watermark_update += LOUD_WATERMARK_UPDATE_INTERVAL;
+                        next_loud_watermark_update = watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
+
                         info!(
                             pipeline = H::NAME,
                             epoch = watermark.epoch_hi_inclusive,
