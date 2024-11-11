@@ -1,5 +1,6 @@
 module std::real;
 
+#[verify_only]
 use std::integer::Integer;
 
 #[verify_only]

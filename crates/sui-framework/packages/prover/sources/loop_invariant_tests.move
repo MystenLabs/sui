@@ -1,7 +1,9 @@
 #[allow(unused)]
 module prover::loop_invariant_tests;
 
+#[verify_only]
 use std::integer::Integer;
+#[verify_only]
 use prover::prover::{requires, ensures, invariant, old};
 use prover::ghost;
 
