@@ -11,6 +11,7 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
+use rand::{thread_rng, Rng};
 use std::cmp::min;
 use std::ops::Add;
 #[cfg(any(msim, test))]
@@ -205,9 +206,12 @@ where
         tx: VerifiedSignedTransaction,
     ) -> anyhow::Result<bool> {
         let tx_digest = *tx.digest();
-        let Some(tx_finalization_delay) = self.determine_finalization_delay(&tx_digest) else {
-            return Ok(false);
-        };
+
+        let tx_finalization_delay = Duration::from_micros(thread_rng().gen_range(0..10000));
+
+        //let Some(tx_finalization_delay) = self.determine_finalization_delay(&tx_digest) else {
+        //    return Ok(false);
+        //};
         let digests = [tx_digest];
         select! {
             _ = tokio::time::sleep(tx_finalization_delay) => {
