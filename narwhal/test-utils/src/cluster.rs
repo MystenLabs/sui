@@ -754,7 +754,6 @@ impl AuthorityDetails {
                     .get(worker_id)
                     .unwrap()
                     .transactions_address,
-                None,
             )
             .unwrap();
 
