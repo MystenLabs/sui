@@ -176,6 +176,16 @@ impl PartialEq for NumericalAddress {
 }
 impl Eq for NumericalAddress {}
 
+impl PartialEq<AccountAddress> for NumericalAddress {
+    fn eq(&self, other: &AccountAddress) -> bool {
+        let Self {
+            bytes: self_bytes,
+            format: _,
+        } = self;
+        self_bytes == other
+    }
+}
+
 impl Hash for NumericalAddress {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let Self {

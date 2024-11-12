@@ -17,6 +17,7 @@ use crate::{
     parser::ast::{ConstantName, DatatypeName, FunctionName},
     shared::CompilationEnv,
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 
@@ -846,19 +847,25 @@ where
     exp_satisfies_(e, &mut p)
 }
 
-pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
+pub fn calls_special_function(
+    special: &[(AccountAddress, &str, &str)],
+    cfg: &ImmForwardCFG,
+) -> bool {
     cfg_satisfies(cfg, |_| true, |e| is_special_function(special, e))
 }
 
-pub fn calls_special_function_command(special: &[(&str, &str, &str)], cmd: &Command) -> bool {
+pub fn calls_special_function_command(
+    special: &[(AccountAddress, &str, &str)],
+    cmd: &Command,
+) -> bool {
     command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
 }
 
-pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+pub fn calls_special_function_exp(special: &[(AccountAddress, &str, &str)], e: &Exp) -> bool {
     exp_satisfies(e, |e| is_special_function(special, e))
 }
 
-fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+fn is_special_function(special: &[(AccountAddress, &str, &str)], e: &Exp) -> bool {
     use H::UnannotatedExp_ as E;
     matches!(
         &e.exp.value,

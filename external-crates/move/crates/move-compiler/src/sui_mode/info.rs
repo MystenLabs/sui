@@ -19,7 +19,7 @@ use crate::{
         unique_map::UniqueMap,
     },
     sui_mode::{
-        OBJECT_MODULE_NAME, SUI_ADDR_NAME, TRANSFER_FUNCTION_NAME, TRANSFER_MODULE_NAME,
+        OBJECT_MODULE_NAME, SUI_ADDR_VALUE, TRANSFER_FUNCTION_NAME, TRANSFER_MODULE_NAME,
         UID_TYPE_NAME,
     },
     typing::{ast as T, visitor::TypingVisitorContext},
@@ -131,7 +131,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
             N::Type_::Ref(_, inner) => visit_ty(info, visited, uid_holders, inner),
 
             N::Type_::Apply(_, sp!(_, tn_), _)
-                if tn_.is(SUI_ADDR_NAME, OBJECT_MODULE_NAME, UID_TYPE_NAME) =>
+                if tn_.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, UID_TYPE_NAME) =>
             {
                 Some(UIDHolder::IsUID)
             }
@@ -285,7 +285,11 @@ fn add_private_transfers(
             let E::ModuleCall(call) = &e.exp.value else {
                 return false;
             };
-            if !call.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME, TRANSFER_FUNCTION_NAME) {
+            if !call.is(
+                &SUI_ADDR_VALUE,
+                TRANSFER_MODULE_NAME,
+                TRANSFER_FUNCTION_NAME,
+            ) {
                 return false;
             }
             let [sp!(_, ty)] = call.type_arguments.as_slice() else {

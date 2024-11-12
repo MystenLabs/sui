@@ -10,9 +10,13 @@ use crate::{
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast::TypeName_,
     shared::Identifier,
-    sui_mode::linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME},
+    sui_mode::{
+        linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME},
+        SUI_ADDR_VALUE,
+    },
     typing::{ast as T, core, visitor::simple_visitor},
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -25,9 +29,9 @@ const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = custom(
     "freezing potential capability",
 );
 
-const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
+const FREEZE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
 static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r".*Cap(?:[A-Z0-9_]+|ability|$).*").unwrap());
@@ -63,7 +67,7 @@ simple_visitor!(
 
 fn is_freeze_function(fun: &T::ModuleCall) -> bool {
     FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
-        fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
+        fun.module.value.is(addr, *module) && &fun.name.value().as_str() == fname
     })
 }
 
