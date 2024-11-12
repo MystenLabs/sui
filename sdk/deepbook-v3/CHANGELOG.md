@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.5
+
+### Patch Changes
+
+- a24d43d: getOrders and decodeOrderId support
+
 ## 0.12.4
 
 ### Patch Changes
