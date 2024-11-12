@@ -1,0 +1,1 @@
+ALTER TABLE epochs ALTER COLUMN system_state SET NOT NULL;
