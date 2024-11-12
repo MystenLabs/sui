@@ -12,7 +12,7 @@ use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{dkg, dkg_v1};
+use fastcrypto_tbls::dkg_v1;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -308,7 +308,7 @@ pub enum VersionedDkgMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersionedDkgConfirmation {
     V0(), // deprecated
-    V1(dkg::Confirmation<bls12381::G2Element>),
+    V1(dkg_v1::Confirmation<bls12381::G2Element>),
 }
 
 impl Debug for VersionedDkgMessage {
@@ -336,10 +336,10 @@ impl VersionedDkgMessage {
 
     pub fn create(
         dkg_version: u64,
-        party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
+        party: Arc<dkg_v1::Party<bls12381::G2Element, bls12381::G2Element>>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
         assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
-        let msg = party.create_message_v1(&mut rand::thread_rng())?;
+        let msg = party.create_message(&mut rand::thread_rng())?;
         Ok(VersionedDkgMessage::V1(msg))
     }
 
@@ -374,7 +374,7 @@ impl VersionedDkgConfirmation {
         }
     }
 
-    pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+    pub fn unwrap_v1(&self) -> &dkg_v1::Confirmation<bls12381::G2Element> {
         match self {
             VersionedDkgConfirmation::V1(msg) => msg,
             _ => panic!("BUG: expected V1 confirmation"),

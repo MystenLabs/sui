@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
@@ -70,13 +70,13 @@ impl SuiTxValidator {
                     ckpt_batch.push(&signature.summary);
                 }
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                    if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Message too large");
                         return Err(SuiError::InvalidDkgMessageSize);
                     }
                 }
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
-                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                    if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Confirmation too large");
                         return Err(SuiError::InvalidDkgMessageSize);
                     }
