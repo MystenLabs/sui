@@ -1,38 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Keypair } from '@mysten/sui/cryptography';
 import type { SignatureWithBytes } from '@mysten/sui/cryptography';
-import { Keypair, PublicKey, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui/cryptography';
-import type { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
+import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { ZkLoginPublicIdentifier } from '@mysten/sui/zklogin';
 import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { getZkLoginSignature } from '@mysten/zklogin';
 
-export class EnokiPublicKey extends PublicKey {
-	#address: string;
-	#ephemeralPublicKey: Ed25519PublicKey;
-
-	constructor(input: { address: string; ephemeralPublicKey: Ed25519PublicKey }) {
-		super();
-		this.#address = input.address;
-		this.#ephemeralPublicKey = input.ephemeralPublicKey;
-	}
-
-	flag(): number {
-		return SIGNATURE_SCHEME_TO_FLAG['ZkLogin'];
-	}
-
-	toSuiAddress(): string {
-		return this.#address;
-	}
-
-	verify(): never {
-		throw new Error('Verification for EnokiPublicKey is not supported');
-	}
-
-	toRawBytes(): Uint8Array {
-		return this.#ephemeralPublicKey.toRawBytes();
-	}
-}
+export class EnokiPublicKey extends ZkLoginPublicIdentifier {}
 
 export class EnokiKeypair extends Keypair {
 	#proof: ZkLoginSignatureInputs;
@@ -50,10 +26,10 @@ export class EnokiKeypair extends Keypair {
 		this.#proof = input.proof;
 		this.#maxEpoch = input.maxEpoch;
 		this.#ephemeralKeypair = input.ephemeralKeypair;
-		this.#publicKey = new EnokiPublicKey({
-			address: input.address,
-			ephemeralPublicKey: input.ephemeralKeypair.getPublicKey(),
-		});
+
+		this.#publicKey = new EnokiPublicKey(
+			ZkLoginPublicIdentifier.fromSignatureInputs(input.proof).toRawBytes(),
+		);
 	}
 
 	async sign(data: Uint8Array) {
@@ -100,10 +76,12 @@ export class EnokiKeypair extends Keypair {
 		return this.#publicKey;
 	}
 
+	/** @deprecated This method always throws and was only added to implement the Keypair interface, future version of this class will extend Signer instead */
 	export(): never {
 		throw new Error('EnokiKeypair does not support exporting');
 	}
 
+	/** @deprecated This method always throws and was only added to implement the Keypair interface, future version of this class will extend Signer instead */
 	getSecretKey(): never {
 		throw new Error('EnokiKeypair does not support getting the secret key');
 	}
