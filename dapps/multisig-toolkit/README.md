@@ -1,4 +1,4 @@
-# Readme 
+# Readme
 
 The Sui MultiSig Toolkit is a collection of tools ...
 
@@ -6,12 +6,13 @@ The toolkit is [available online](https://multisig-toolkit.mystenlabs.com/).
 
 ## Offline Signer
 
-Use the Offline Signer tool to ...  
+Use the Offline Signer tool to ...
 
 To sign a transaction offline:
+
 1. Click **Connect Wallet** and follow the prompts to connect the wallet that should provide the signature.
 1. Paste the transaction information.
-1. Click **Sign transaction**. 
+1. Click **Sign transaction**.
 
 ### Check Ledger Transaction
 
