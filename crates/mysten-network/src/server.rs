@@ -277,6 +277,8 @@ impl TcpOrTlsListener {
 
         // Determine whether new connection is TLS.
         let mut buf = [0; 1];
+        // `peek` blocks until at least some data is available, so if there is no error then
+        // it must return the one byte we are requesting.
         stream.peek(&mut buf).await?;
         if buf[0] == 0x16 {
             // First byte of a TLS handshake is 0x16.
