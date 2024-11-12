@@ -13,6 +13,7 @@ mod batch_maker;
 mod client;
 mod handlers;
 mod quorum_waiter;
+mod transactions_server;
 mod tx_validator;
 mod worker;
 

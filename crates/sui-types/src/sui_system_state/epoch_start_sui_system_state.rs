@@ -159,7 +159,6 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                         NetworkMetadata {
                             network_address: validator.sui_net_address.clone(),
                             narwhal_primary_address: validator.narwhal_primary_address.clone(),
-                            network_public_key: Some(validator.narwhal_network_pubkey.clone()),
                         },
                     ),
                 )
