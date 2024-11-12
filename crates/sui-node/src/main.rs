@@ -47,6 +47,13 @@ fn main() {
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
 
+    move_vm_profiler::static_assert_tracing_feature_disabled!(
+        "The sui-node binary cannot be built with the `tracing` feature enabled. Try rebuilding without the \
+        `tracing` feature or building the binary separately from all other binaries"
+    );
+
+    // Keep the runtime assertion as the last check before starting the node just on the off-chance
+    // that the static assertion didn't catch it.
     move_vm_profiler::tracing_feature_enabled! {
         panic!("Cannot run the sui-node binary with tracing feature enabled");
     }

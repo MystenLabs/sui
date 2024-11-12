@@ -379,3 +379,20 @@ macro_rules! tracing_feature_disabled {
 macro_rules! tracing_feature_disabled {
     ( $( $tt:tt )* ) => {};
 }
+
+#[cfg(feature = "tracing")]
+#[macro_export]
+macro_rules! static_assert_tracing_feature_disabled {
+    ($err_msg:tt) => {
+        // Disable reporting an error in clippy mode as clippy will try to unify all features
+        // across all crates and will turn on this flag.
+        #[cfg(not(clippy))]
+        compile_error!($err_msg);
+    };
+}
+
+#[cfg(not(feature = "tracing"))]
+#[macro_export]
+macro_rules! static_assert_tracing_feature_disabled {
+    ($_err_msg:tt) => {};
+}
