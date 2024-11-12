@@ -5,6 +5,7 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { DeepBookClient } from '../src/index.js'; // Adjust import source accordingly
 
 /// Example to get [price, quantity] for a balance manager
+/// bids sorted in descending order and asks sorted in ascending order
 (async () => {
 	const env = 'mainnet';
 
@@ -48,7 +49,10 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 			orderMap.set(orderPrice, existingQuantity + remainingQuantity);
 		}
 
-		console.log(`${pool} bid orders:`, Array.from(bidOrdersMap.entries()));
-		console.log(`${pool} ask orders:`, Array.from(askOrdersMap.entries()));
+		const sortedBidOrders = Array.from(bidOrdersMap.entries()).sort((a, b) => b[0] - a[0]);
+		const sortedAskOrders = Array.from(askOrdersMap.entries()).sort((a, b) => a[0] - b[0]);
+
+		console.log(`${pool} bid orders:`, sortedBidOrders);
+		console.log(`${pool} ask orders:`, sortedAskOrders);
 	}
 })();
