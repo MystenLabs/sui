@@ -25,6 +25,7 @@ sui-swarm-config.workspace = true
 sui-macros.workspace = true
 sui-node.workspace = true
 sui-protocol-config.workspace = true
+sui-tls.workspace = true
 sui-types.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true

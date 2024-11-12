@@ -4,7 +4,9 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use fastcrypto::traits::KeyPair;
 use mysten_metrics::spawn_monitored_task;
+use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
@@ -146,6 +148,11 @@ impl AuthorityServer {
         self,
         address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
+        let tls_config = sui_tls::create_rustls_server_config(
+            self.state.config.network_key_pair().copy().private(),
+            SUI_TLS_SERVER_NAME.to_string(),
+            sui_tls::AllowAll,
+        );
         let mut server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
@@ -153,7 +160,7 @@ impl AuthorityServer {
                 self.consensus_adapter,
                 self.metrics,
             )))
-            .bind(&address)
+            .bind(&address, Some(tls_config))
             .await
             .unwrap();
         let local_addr = server.local_addr().to_owned();
