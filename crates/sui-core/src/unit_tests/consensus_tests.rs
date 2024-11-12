@@ -17,6 +17,7 @@ use narwhal_types::{Empty, TransactionProto};
 use parking_lot::Mutex;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use sui_network::tonic;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
