@@ -11,7 +11,7 @@ use crate::{
         CFGContext,
     },
     command_line::compiler::Visitor,
-    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, Diagnostics},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName},
@@ -24,7 +24,7 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
 pub trait CFGIRVisitor: Send + Sync {
-    fn visit(&self, env: &mut CompilationEnv, program: &G::Program);
+    fn visit(&self, env: &CompilationEnv, program: &G::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -35,12 +35,7 @@ pub trait CFGIRVisitor: Send + Sync {
 }
 
 pub trait AbstractInterpreterVisitor: Send + Sync {
-    fn verify(
-        &self,
-        env: &CompilationEnv,
-        context: &CFGContext,
-        cfg: &ImmForwardCFG,
-    ) -> Diagnostics;
+    fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics;
 
     fn visitor(self) -> Visitor
     where
@@ -57,16 +52,16 @@ pub trait AbstractInterpreterVisitor: Send + Sync {
 pub trait CFGIRVisitorConstructor: Send {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a>;
 
-    fn visit(env: &mut CompilationEnv, program: &G::Program) {
+    fn visit(env: &CompilationEnv, program: &G::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
 }
 
 pub trait CFGIRVisitorContext {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
@@ -78,7 +73,7 @@ pub trait CFGIRVisitorContext {
     /// required.
     fn visit(&mut self, program: &G::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter() {
-            self.add_warning_filter_scope(mdef.warning_filter.clone());
+            self.push_warning_filter_scope(mdef.warning_filter);
             if self.visit_module_custom(mident, mdef) {
                 self.pop_warning_filter_scope();
                 continue;
@@ -117,7 +112,7 @@ pub trait CFGIRVisitorContext {
         struct_name: DatatypeName,
         sdef: &H::StructDefinition,
     ) {
-        self.add_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter);
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -139,7 +134,7 @@ pub trait CFGIRVisitorContext {
         enum_name: DatatypeName,
         edef: &H::EnumDefinition,
     ) {
-        self.add_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter);
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -161,7 +156,7 @@ pub trait CFGIRVisitorContext {
         constant_name: ConstantName,
         cdef: &G::Constant,
     ) {
-        self.add_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter);
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -183,7 +178,7 @@ pub trait CFGIRVisitorContext {
         function_name: FunctionName,
         fdef: &G::Function,
     ) {
-        self.add_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter);
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -322,10 +317,62 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
 }
 
 impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
-    fn visit(&self, env: &mut CompilationEnv, program: &G::Program) {
+    fn visit(&self, env: &CompilationEnv, program: &G::Program) {
         Self::visit(env, program)
     }
 }
+
+macro_rules! simple_visitor {
+    ($visitor:ident, $($overrides:item),*) => {
+        pub struct $visitor;
+
+        pub struct Context<'a> {
+            #[allow(unused)]
+            env: &'a crate::shared::CompilationEnv,
+            reporter: crate::diagnostics::DiagnosticReporter<'a>,
+        }
+
+        impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
+            type Context<'a> = Context<'a>;
+
+            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+                let reporter = env.diagnostic_reporter_at_top_level();
+                Context {
+                    env,
+                    reporter,
+                }
+            }
+        }
+
+        impl Context<'_> {
+            #[allow(unused)]
+            fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
+                self.reporter.add_diag(diag);
+            }
+
+            #[allow(unused)]
+            fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
+                self.reporter.add_diags(diags);
+            }
+        }
+
+        impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
+            fn push_warning_filter_scope(
+                &mut self,
+                filters: crate::diagnostics::warning_filters::WarningFilters,
+            ) {
+                self.reporter.push_warning_filter_scope(filters)
+            }
+
+            fn pop_warning_filter_scope(&mut self) {
+                self.reporter.pop_warning_filter_scope()
+            }
+
+            $($overrides)*
+        }
+    }
+}
+pub(crate) use simple_visitor;
 
 //**************************************************************************************************
 // simple absint visitor
@@ -448,13 +495,12 @@ pub trait SimpleAbsIntConstructor: Sized {
     /// Given the initial state/domain, construct a new abstract interpreter.
     /// Return None if it should not be run given this context
     fn new<'a>(
-        env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
 
-    fn verify(env: &CompilationEnv, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
+    fn verify(context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
         let mut locals = context
             .locals
             .key_cloned_iter()
@@ -473,7 +519,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(env, context, cfg, &mut init_state) else {
+        let Some(mut ai) = Self::new(context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
@@ -760,13 +806,8 @@ impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
 }
 
 impl<V: SimpleAbsIntConstructor + Send + Sync> AbstractInterpreterVisitor for V {
-    fn verify(
-        &self,
-        env: &CompilationEnv,
-        context: &CFGContext,
-        cfg: &ImmForwardCFG,
-    ) -> Diagnostics {
-        <Self as SimpleAbsIntConstructor>::verify(env, context, cfg)
+    fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
+        <Self as SimpleAbsIntConstructor>::verify(context, cfg)
     }
 }
 

@@ -178,7 +178,7 @@ impl CompletionTest {
     fn test(
         &self,
         test_idx: usize,
-        compiled_pkg_info: CompiledPkgInfo,
+        mut compiled_pkg_info: CompiledPkgInfo,
         symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
@@ -195,15 +195,18 @@ impl CompletionTest {
         let cursor_path = use_file_path.to_path_buf();
         let cursor_info = Some((&cursor_path, use_pos));
         let mut symbols_computation_data = SymbolsComputationData::new();
+        let mut symbols_computation_data_deps = SymbolsComputationData::new();
         // we only compute cursor context and tag it on the existing symbols to avoid spending time
         // recomputing all symbols (saves quite a bit of time when running the test suite)
         let mut cursor_context = compute_symbols_pre_process(
             &mut symbols_computation_data,
-            &compiled_pkg_info,
+            &mut symbols_computation_data_deps,
+            &mut compiled_pkg_info,
             cursor_info,
         );
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
+            &mut symbols_computation_data_deps,
             &compiled_pkg_info,
             cursor_context,
         );
@@ -239,7 +242,7 @@ impl CursorTest {
     fn test(
         &self,
         test_ndx: usize,
-        compiled_pkg_info: CompiledPkgInfo,
+        mut compiled_pkg_info: CompiledPkgInfo,
         symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         path: &Path,
@@ -257,13 +260,16 @@ impl CursorTest {
         let cursor_path = path.to_path_buf();
         let cursor_info = Some((&cursor_path, Position { line, character }));
         let mut symbols_computation_data = SymbolsComputationData::new();
+        let mut symbols_computation_data_deps = SymbolsComputationData::new();
         let mut cursor_context = compute_symbols_pre_process(
             &mut symbols_computation_data,
-            &compiled_pkg_info,
+            &mut symbols_computation_data_deps,
+            &mut compiled_pkg_info,
             cursor_info,
         );
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
+            &mut symbols_computation_data_deps,
             &compiled_pkg_info,
             cursor_context,
         );
@@ -379,7 +385,11 @@ fn initial_symbols(
     )?;
 
     let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
-    let symbols = compute_symbols(compiled_pkg_info.clone(), None);
+    let symbols = compute_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        compiled_pkg_info.clone(),
+        None,
+    );
 
     Ok((project_path, compiled_pkg_info, symbols))
 }

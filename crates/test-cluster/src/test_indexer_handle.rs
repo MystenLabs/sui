@@ -5,11 +5,11 @@ use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::local_ip_utils::new_local_tcp_socket_for_testing_string;
-use sui_indexer::tempdb::TempDb;
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
 use sui_json_rpc_api::ReadApiClient;
+use sui_pg_temp_db::TempDb;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -45,6 +45,8 @@ impl IndexerHandle {
             None,
             None,
             Some(data_ingestion_path.clone()),
+            None,
+            None,
             None,
         )
         .await;

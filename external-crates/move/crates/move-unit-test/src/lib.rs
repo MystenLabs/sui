@@ -187,7 +187,7 @@ impl UnitTestingConfig {
         let (_, compiler) =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
 
-        let (mut compiler, cfgir) = compiler.into_ast();
+        let (compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let test_plan = unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
         let mapped_files = compilation_env.mapped_files().clone();

@@ -12,6 +12,7 @@ tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 sui-authority-aggregation.workspace = true
 arc-swap.workspace = true
+strum_macros.workspace = true
 num_enum.workspace = true
 move-core-types.workspace = true
 url.workspace = true
@@ -48,12 +49,15 @@ mysten-common.workspace = true
 enum_dispatch.workspace = true
 sui-json-rpc-api.workspace = true
 sui-test-transaction-builder.workspace = true
+hex-literal = { version = "0.3.4", optional = true }
+test-cluster = { workspace = true, optional = true }
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
 sui-json-rpc-types = { workspace = true, features = ["test-utils"] }
 sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
-test-cluster.workspace = true
-hex-literal = "0.3.4"
 maplit = "1.0.2"
+
+[features]
+test-utils = ["hex-literal", "test-cluster"]

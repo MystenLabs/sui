@@ -16,7 +16,7 @@ use crate::{
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 
-use move_command_line_common::address::NumericalAddress;
+use move_core_types::parsing::address::NumericalAddress;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 

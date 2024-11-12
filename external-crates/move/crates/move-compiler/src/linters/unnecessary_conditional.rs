@@ -8,37 +8,15 @@ use crate::expansion::ast::Value;
 use crate::linters::StyleCodes;
 use crate::{
     diag,
-    diagnostics::WarningFilters,
     expansion::ast::Value_,
-    shared::CompilationEnv,
     typing::{
         ast::{self as T, SequenceItem_, UnannotatedExp_},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        visitor::simple_visitor,
     },
 };
 
-pub struct UnnecessaryConditional;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for UnnecessaryConditional {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    UnnecessaryConditional,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         let UnannotatedExp_::IfElse(_, etrue, efalse) = &exp.exp.value else {
             return false;
@@ -46,7 +24,7 @@ impl TypingVisitorContext for Context<'_> {
         let Some(vtrue) = extract_value(etrue) else {
             return false;
         };
-        let Some(vfalse) = extract_value(efalse) else {
+        let Some(vfalse) = efalse.as_ref().and_then(|efalse| extract_value(efalse)) else {
             return false;
         };
 
@@ -58,7 +36,7 @@ impl TypingVisitorContext for Context<'_> {
                     "Detected an unnecessary conditional expression 'if (cond)'. Consider using \
                     the condition directly, i.e. '{negation}cond'",
                 );
-                self.env.add_diag(diag!(
+                self.add_diag(diag!(
                     StyleCodes::UnnecessaryConditional.diag_info(),
                     (exp.exp.loc, msg)
                 ));
@@ -67,7 +45,7 @@ impl TypingVisitorContext for Context<'_> {
                 let msg =
                     "Detected a redundant conditional expression 'if (..) v else v', where each \
                     branch results in the same value 'v'. Consider using the value directly";
-                self.env.add_diag(diag!(
+                self.add_diag(diag!(
                     StyleCodes::UnnecessaryConditional.diag_info(),
                     (exp.exp.loc, msg),
                     (vtrue.loc, "This value"),
@@ -97,7 +75,7 @@ impl TypingVisitorContext for Context<'_> {
         // }
         false
     }
-}
+);
 
 #[growing_stack]
 fn extract_value(block: &T::Exp) -> Option<&Value> {

@@ -7,12 +7,11 @@
 use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    expansion::ast::ModuleIdent,
     naming::ast as N,
-    shared::CompilationEnv,
-    typing::{ast as T, visitor::TypingVisitor},
+    parser::ast::DatatypeName,
+    typing::{ast as T, visitor::simple_visitor},
 };
-use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
 
 use super::{
     LinterDiagnosticCategory, LinterDiagnosticCode, COIN_MOD_NAME, COIN_STRUCT_NAME,
@@ -27,40 +26,35 @@ const COIN_FIELD_DIAG: DiagnosticInfo = custom(
     "sub-optimal 'sui::coin::Coin' field type",
 );
 
-pub struct CoinFieldVisitor;
-
-impl TypingVisitor for CoinFieldVisitor {
-    fn visit(&self, env: &mut CompilationEnv, program: &T::Program) {
-        for (_, _, mdef) in program.modules.iter() {
-            if mdef.attributes.is_test_or_test_only() {
-                continue;
-            }
-            env.add_warning_filter_scope(mdef.warning_filter.clone());
-            mdef.structs
-                .iter()
-                .filter(|(_, _, sdef)| !sdef.attributes.is_test_or_test_only())
-                .for_each(|(sloc, sname, sdef)| struct_def(env, *sname, sdef, sloc));
-            env.pop_warning_filter_scope();
+simple_visitor!(
+    CoinFieldVisitor,
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
+        // skip if test only
+        mdef.attributes.is_test_or_test_only()
+    },
+    // TODO enums
+    fn visit_struct_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _sname: DatatypeName,
+        sdef: &N::StructDefinition,
+    ) -> bool {
+        if sdef.attributes.is_test_or_test_only() {
+            return false;
         }
-    }
-}
 
-fn struct_def(env: &mut CompilationEnv, sname: Symbol, sdef: &N::StructDefinition, sloc: Loc) {
-    env.add_warning_filter_scope(sdef.warning_filter.clone());
-
-    if let N::StructFields::Defined(_, sfields) = &sdef.fields {
-        for (floc, fname, (_, ftype)) in sfields.iter() {
-            if is_field_coin_type(ftype) {
-                let msg = format!("The field '{fname}' of '{sname}' has type 'sui::coin::Coin'");
-                let uid_msg = "Storing 'sui::balance::Balance' in this field will typically be more space-efficient";
-                let d = diag!(COIN_FIELD_DIAG, (sloc, msg), (floc, uid_msg));
-                env.add_diag(d);
+        if let N::StructFields::Defined(_, sfields) = &sdef.fields {
+            for (_floc, _fname, (_, ftype)) in sfields {
+                if is_field_coin_type(ftype) {
+                    let msg = "Sub-optimal 'sui::coin::Coin' field type. Using \
+                        'sui::balance::Balance' instead will be more space efficient";
+                    self.add_diag(diag!(COIN_FIELD_DIAG, (ftype.loc, msg)));
+                }
             }
         }
+        false
     }
-
-    env.pop_warning_filter_scope();
-}
+);
 
 fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
     use N::Type_ as T;

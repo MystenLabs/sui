@@ -1,5 +1,25 @@
 # @mysten/sui.js
 
+## 1.14.2
+
+### Patch Changes
+
+- e7bc63e: Allow 0 amounts with `coinWithBalance` intent when the wallet has no coin objects of the
+  required type.
+
+## 1.14.1
+
+### Patch Changes
+
+- 69ef100: revert adding client-request-method header
+
+## 1.14.0
+
+### Minor Changes
+
+- c24814b: Adds a custom header; 'Client-Request-Method' which will contain the method name used in
+  each outgoing jsonrpc request
+
 ## 1.13.0
 
 ### Minor Changes

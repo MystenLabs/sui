@@ -424,7 +424,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                 self.exp_symbols(e1);
                 self.exp_symbols(e2);
             }
-            E::Abort(e) => self.exp_symbols(e),
+            E::Abort(oe) => {
+                if let Some(e) = oe.as_ref() {
+                    self.exp_symbols(e)
+                }
+            }
             E::Return(_, oe) => {
                 if let Some(e) = oe.as_ref() {
                     self.exp_symbols(e)
@@ -481,9 +485,13 @@ impl<'a> ParsingAnalysisContext<'a> {
         }
     }
 
-    fn match_pattern_symbols(&mut self, sp!(_, pattern): &P::MatchPattern) {
+    fn match_pattern_symbols(&mut self, pattern: &P::MatchPattern) {
         use P::MatchPattern_ as MP;
-        match pattern {
+        // If the cursor is in this match pattern, mark that down.
+        // This may be overridden by the recursion below.
+        update_cursor!(self.cursor, pattern, MatchPattern);
+
+        match &pattern.value {
             MP::PositionalConstructor(chain, sp!(_, v)) => {
                 self.chain_symbols(chain);
                 v.iter().for_each(|e| {

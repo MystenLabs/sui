@@ -141,7 +141,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Bad type: unexpected token Name(\"not_a_type\"), expected type tag",
+      "message": "Bad type: unexpected end of tokens",
       "locations": [
         {
           "line": 3,

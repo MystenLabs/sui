@@ -6,6 +6,7 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use mysten_common::*;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
@@ -192,10 +193,9 @@ impl ObjectLocks {
         cache: &WritebackCache,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult {
-        let tx_digest = *transaction.digest();
-
         let object_ids = owned_input_objects.iter().map(|o| o.0).collect::<Vec<_>>();
         let live_objects = Self::multi_get_objects_must_exist(cache, &object_ids)?;
 
@@ -243,7 +243,7 @@ impl ObjectLocks {
         // commit all writes to DB
         epoch_store
             .tables()?
-            .write_transaction_locks(transaction, locks_to_write.iter().cloned())?;
+            .write_transaction_locks(signed_transaction, locks_to_write.iter().cloned())?;
 
         // remove pending locks from unbounded storage
         self.clear_cached_locks(&locks_to_write);
@@ -279,7 +279,7 @@ mod tests {
             let tx1 = s.make_signed_transaction(&outputs.transaction);
 
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx1)
+                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], *tx1.digest(), Some(tx1))
                 .await
                 .expect("locks should be available");
 
@@ -291,19 +291,34 @@ mod tests {
 
             // both locks are held by tx1, so this should fail
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2.clone())
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, new2],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .await
                 .unwrap_err();
 
             // new3 is lockable, but new2 is not, so this should fail
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new3, new2], tx2.clone())
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new3, new2],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .await
                 .unwrap_err();
 
             // new3 is unlocked
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new3], tx2)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new3],
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .await
                 .expect("new3 should be unlocked");
         })
@@ -332,14 +347,24 @@ mod tests {
 
             // fails because we are referring to an old object
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx.clone())
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, old2],
+                    *tx.digest(),
+                    Some(tx.clone()),
+                )
                 .await
                 .unwrap_err();
 
             // succeeds because the above call releases the lock on new1 after failing
             // to get the lock on old2
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, new2],
+                    *tx.digest(),
+                    Some(tx.clone()),
+                )
                 .await
                 .expect("new1 should be unlocked after revert");
         })
@@ -368,7 +393,12 @@ mod tests {
 
             // fails because we are referring to an old object
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &[new1, old2],
+                    *tx.digest(),
+                    Some(tx.clone()),
+                )
                 .await
                 .unwrap_err();
 
@@ -381,7 +411,7 @@ mod tests {
             // succeeds because the above call releases the lock on new1 after failing
             // to get the lock on old2
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2)
+                .acquire_transaction_locks(&s.epoch_store, &[new1, new2], *tx2.digest(), Some(tx2))
                 .await
                 .expect("new1 should be unlocked after revert");
         })
@@ -407,7 +437,12 @@ mod tests {
             // assert that acquire_transaction_locks is sync in non-simtest, which causes the
             // fail_point_async! macros above to be elided
             s.cache
-                .acquire_transaction_locks(&s.epoch_store, &objects, tx2)
+                .acquire_transaction_locks(
+                    &s.epoch_store,
+                    &objects,
+                    *tx2.digest(),
+                    Some(tx2.clone()),
+                )
                 .now_or_never()
                 .unwrap()
                 .unwrap();

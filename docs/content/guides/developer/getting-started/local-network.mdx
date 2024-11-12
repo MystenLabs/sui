@@ -21,7 +21,7 @@ This command:
 * Instructs Rust to set specific logging through the `RUST_LOG`=`off,sui_node=info` flags, which turns off logging for all components except `sui-node`. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
 
 :::info
-Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network) section.
+Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network-state) section.
 :::
 
 To customize your local Sui network, such as starting other services or changing default ports and hosts, include additional flags or options in the `sui start` command.

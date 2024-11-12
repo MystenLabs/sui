@@ -7,6 +7,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
+    diagnostics::DiagnosticReporter,
     expansion::ast::{
         AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
     },
@@ -38,7 +39,7 @@ type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
 type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &G::Program,
 ) -> (
@@ -127,15 +128,16 @@ fn extract_decls(
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = vec![];
-
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
+        warning_filters_table,
         info: _,
     } = prog;
 
@@ -145,15 +147,27 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
+        if let Some(unit) = module(
+            compilation_env,
+            &reporter,
+            m,
+            mdef,
+            &orderings,
+            &ddecls,
+            &fdecls,
+        ) {
             units.push(unit)
         }
     }
+    // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
+    // are gone, the table can safely be dropped.
+    drop(warning_filters_table);
     units
 }
 
 fn module(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
+    reporter: &DiagnosticReporter,
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
@@ -227,7 +241,7 @@ fn module(
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
             Err(e) => {
-                compilation_env.add_diag(diag!(
+                reporter.add_diag(diag!(
                     Bug::BytecodeGeneration,
                     (ident_loc, format!("IR ERROR: {}", e))
                 ));

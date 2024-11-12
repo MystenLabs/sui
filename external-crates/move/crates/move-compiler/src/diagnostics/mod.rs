@@ -3,19 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod codes;
+pub mod warning_filters;
 
 use crate::{
     command_line::COLOR_MODE_ENV_VAR,
-    diagnostics::codes::{
-        Category, DiagnosticCode, DiagnosticInfo, ExternalPrefix, Severity, WarningFilter,
-        WellKnownFilterName,
+    diagnostics::{
+        codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
+        warning_filters::{FilterName, FilterPrefix, WarningFilters, WarningFiltersScope},
     },
     shared::{
-        ast_debug::AstDebug,
         files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
-        known_attributes, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_MUT_PARAM,
-        FILTER_UNUSED_MUT_REF, FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
+        format_allow_attr,
+        ide::{IDEAnnotation, IDEInfo},
+        known_attributes,
     },
+    Flags,
 };
 use codespan_reporting::{
     self as csr,
@@ -35,21 +37,20 @@ use std::{
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
+    sync::RwLock,
 };
-
-use self::codes::UnusedItem;
 
 //**************************************************************************************************
 // Types
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-#[must_use]
-pub struct Diagnostic {
-    info: DiagnosticInfo,
-    primary_label: (Loc, String),
-    secondary_labels: Vec<(Loc, String)>,
-    notes: Vec<String>,
+#[derive(Clone, Debug)]
+pub struct DiagnosticReporter<'env> {
+    flags: &'env Flags,
+    known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
+    diags: &'env RwLock<Diagnostics>,
+    ide_information: &'env RwLock<IDEInfo>,
+    warning_filters_scope: WarningFiltersScope,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -64,6 +65,15 @@ struct Diagnostics_ {
     // diagnostics filtered in source code
     filtered_source_diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
+#[must_use]
+pub struct Diagnostic {
+    info: DiagnosticInfo,
+    primary_label: (Loc, String),
+    secondary_labels: Vec<(Loc, String)>,
+    notes: Vec<String>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -82,28 +92,6 @@ struct JsonDiagnostic {
     category: u8,
     code: u8,
     msg: String,
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-/// Used to filter out diagnostics, specifically used for warning suppression
-pub struct WarningFilters {
-    filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
-    for_dependency: bool, // if false, the filters are used for source code
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-/// Filters split by category and code
-enum UnprefixedWarningFilters {
-    /// Remove all warnings
-    All,
-    Specified {
-        /// Remove all diags of this category with optional known name
-        categories: BTreeMap<u8, Option<WellKnownFilterName>>,
-        /// Remove specific diags with optional known filter name
-        codes: BTreeMap<(u8, u8), Option<WellKnownFilterName>>,
-    },
-    /// No filter
-    Empty,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
@@ -237,7 +225,7 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags:
     diags.diagnostics.sort_by(|e1, e2| {
         let loc1: &Loc = &e1.primary_label.0;
         let loc2: &Loc = &e2.primary_label.0;
-        loc1.cmp(loc2)
+        loc1.cmp(loc2).then_with(|| e1.cmp(e2))
     });
     match format {
         DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
@@ -380,6 +368,99 @@ pub fn report_migration_to_buffer(files: &MappedFiles, diags: Diagnostics) -> Ve
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
+
+impl<'env> DiagnosticReporter<'env> {
+    pub const fn new(
+        flags: &'env Flags,
+        known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
+        diags: &'env RwLock<Diagnostics>,
+        ide_information: &'env RwLock<IDEInfo>,
+        warning_filters_scope: WarningFiltersScope,
+    ) -> Self {
+        Self {
+            flags,
+            known_filter_names,
+            diags,
+            ide_information,
+            warning_filters_scope,
+        }
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.warning_filters_scope.pop()
+    }
+
+    pub fn add_diag(&self, mut diag: Diagnostic) {
+        if diag.info().severity() <= Severity::NonblockingError
+            && self
+                .diags
+                .read()
+                .unwrap()
+                .any_syntax_error_with_primary_loc(diag.primary_loc())
+        {
+            // do not report multiple diags for the same location (unless they are blocking) to
+            // avoid noise that is likely to confuse the developer trying to localize the problem
+            //
+            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
+            // becomes one
+            return;
+        }
+
+        if !self.warning_filters_scope.is_filtered(&diag) {
+            // add help to suppress warning, if applicable
+            // TODO do we want a centralized place for tips like this?
+            if diag.info().severity() == Severity::Warning {
+                if let Some((prefix, name)) = self.known_filter_names.get(&diag.info().id()) {
+                    let help = format!(
+                        "This warning can be suppressed with '#[{}({})]' \
+                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
+                        known_attributes::DiagnosticAttribute::ALLOW,
+                        format_allow_attr(*prefix, *name),
+                    );
+                    diag.add_note(help)
+                }
+                if self.flags.warnings_are_errors() {
+                    diag = diag.set_severity(Severity::NonblockingError)
+                }
+            }
+            self.diags.write().unwrap().add(diag)
+        } else if !self.warning_filters_scope.is_filtered_for_dependency() {
+            // unwrap above is safe as the filter has been used (thus it must exist)
+            self.diags.write().unwrap().add_source_filtered(diag)
+        }
+    }
+
+    pub fn add_diags(&self, diags: Diagnostics) {
+        for diag in diags.into_vec() {
+            self.add_diag(diag)
+        }
+    }
+
+    pub fn extend_ide_info(&self, info: IDEInfo) {
+        if self.flags.ide_test_mode() {
+            for entry in info.annotations.iter() {
+                let diag = entry.clone().into();
+                self.add_diag(diag);
+            }
+        }
+        self.ide_information.write().unwrap().extend(info);
+    }
+
+    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
+        if self.flags.ide_test_mode() {
+            let diag = (loc, info.clone()).into();
+            self.add_diag(diag);
+        }
+        self.ide_information
+            .write()
+            .unwrap()
+            .add_ide_annotation(loc, info);
+    }
+}
 
 impl Diagnostics {
     pub fn new() -> Self {
@@ -774,9 +855,9 @@ macro_rules! ice {
 
 #[macro_export]
 macro_rules! ice_assert {
-    ($env: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
+    ($reporter: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
         if !$cond {
-            $env.add_diag($crate::ice!((
+            $reporter.add_diag($crate::ice!((
                 $loc,
                 format!($($arg)*),
             )));
@@ -794,180 +875,6 @@ pub fn print_stack_trace() {
             eprintln!("{}", stacktrace);
         }
         BacktraceStatus::Unsupported | BacktraceStatus::Disabled | _ => (),
-    }
-}
-
-impl WarningFilters {
-    pub fn new_for_source() -> Self {
-        Self {
-            filters: BTreeMap::new(),
-            for_dependency: false,
-        }
-    }
-
-    pub fn new_for_dependency() -> Self {
-        Self {
-            filters: BTreeMap::new(),
-            for_dependency: true,
-        }
-    }
-
-    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.is_filtered_by_info(&diag.info)
-    }
-
-    fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
-        let prefix = info.external_prefix();
-        self.filters
-            .get(&prefix)
-            .is_some_and(|filters| filters.is_filtered_by_info(info))
-    }
-
-    pub fn union(&mut self, other: &Self) {
-        for (prefix, filters) in &other.filters {
-            self.filters
-                .entry(*prefix)
-                .or_insert_with(UnprefixedWarningFilters::new)
-                .union(filters);
-        }
-        // if there is a dependency code filter on the stack, it means we are filtering dependent
-        // code and this information must be preserved when stacking up additional filters (which
-        // involves union of the current filter with the new one)
-        self.for_dependency = self.for_dependency || other.for_dependency;
-    }
-
-    pub fn add(&mut self, filter: WarningFilter) {
-        let (prefix, category, code, name) = match filter {
-            WarningFilter::All(prefix) => {
-                self.filters.insert(prefix, UnprefixedWarningFilters::All);
-                return;
-            }
-            WarningFilter::Category {
-                prefix,
-                category,
-                name,
-            } => (prefix, category, None, name),
-            WarningFilter::Code {
-                prefix,
-                category,
-                code,
-                name,
-            } => (prefix, category, Some(code), name),
-        };
-        self.filters
-            .entry(prefix)
-            .or_insert(UnprefixedWarningFilters::Empty)
-            .add(category, code, name)
-    }
-
-    pub fn unused_warnings_filter_for_test() -> Self {
-        Self {
-            filters: BTreeMap::from([(
-                None,
-                UnprefixedWarningFilters::unused_warnings_filter_for_test(),
-            )]),
-            for_dependency: false,
-        }
-    }
-
-    pub fn for_dependency(&self) -> bool {
-        self.for_dependency
-    }
-}
-
-impl UnprefixedWarningFilters {
-    pub fn new() -> Self {
-        Self::Empty
-    }
-
-    fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
-        match self {
-            Self::All => info.severity() <= Severity::Warning,
-            Self::Specified { categories, codes } => {
-                info.severity() <= Severity::Warning
-                    && (categories.contains_key(&info.category())
-                        || codes.contains_key(&(info.category(), info.code())))
-            }
-            Self::Empty => false,
-        }
-    }
-
-    pub fn union(&mut self, other: &Self) {
-        match (self, other) {
-            // if self is empty, just take the other filter
-            (s @ Self::Empty, _) => *s = other.clone(),
-            // if other is empty, or self is ALL, no change to the filter
-            (_, Self::Empty) => (),
-            (Self::All, _) => (),
-            // if other is all, self is now all
-            (s, Self::All) => *s = Self::All,
-            // category and code level union
-            (
-                Self::Specified { categories, codes },
-                Self::Specified {
-                    categories: other_categories,
-                    codes: other_codes,
-                },
-            ) => {
-                categories.extend(other_categories);
-                // remove any codes covered by the category level filter
-                codes.extend(
-                    other_codes
-                        .iter()
-                        .filter(|((category, _), _)| !categories.contains_key(category)),
-                );
-            }
-        }
-    }
-
-    /// Add a specific filter to the filter map.
-    /// If filter_code is None, then the filter applies to all codes in the filter_category.
-    fn add(
-        &mut self,
-        filter_category: u8,
-        filter_code: Option<u8>,
-        filter_name: Option<WellKnownFilterName>,
-    ) {
-        match self {
-            Self::All => (),
-            Self::Empty => {
-                *self = Self::Specified {
-                    categories: BTreeMap::new(),
-                    codes: BTreeMap::new(),
-                };
-                self.add(filter_category, filter_code, filter_name)
-            }
-            Self::Specified { categories, .. } if categories.contains_key(&filter_category) => (),
-            Self::Specified { categories, codes } => {
-                if let Some(filter_code) = filter_code {
-                    codes.insert((filter_category, filter_code), filter_name);
-                } else {
-                    categories.insert(filter_category, filter_name);
-                    codes.retain(|(category, _), _| *category != filter_category);
-                }
-            }
-        }
-    }
-
-    pub fn unused_warnings_filter_for_test() -> Self {
-        let filtered_codes = [
-            (UnusedItem::Function, FILTER_UNUSED_FUNCTION),
-            (UnusedItem::StructField, FILTER_UNUSED_STRUCT_FIELD),
-            (UnusedItem::FunTypeParam, FILTER_UNUSED_TYPE_PARAMETER),
-            (UnusedItem::Constant, FILTER_UNUSED_CONST),
-            (UnusedItem::MutReference, FILTER_UNUSED_MUT_REF),
-            (UnusedItem::MutParam, FILTER_UNUSED_MUT_PARAM),
-        ]
-        .into_iter()
-        .map(|(item, filter)| {
-            let info = item.into_info();
-            ((info.category(), info.code()), Some(filter))
-        })
-        .collect();
-        Self::Specified {
-            categories: BTreeMap::new(),
-            codes: filtered_codes,
-        }
     }
 }
 
@@ -1204,43 +1111,6 @@ impl From<Vec<Diagnostic>> for Diagnostics {
 impl From<Option<Diagnostic>> for Diagnostics {
     fn from(diagnostic_opt: Option<Diagnostic>) -> Self {
         Diagnostics::from(diagnostic_opt.map_or_else(Vec::new, |diag| vec![diag]))
-    }
-}
-
-impl AstDebug for WarningFilters {
-    fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        for (prefix, filters) in &self.filters {
-            let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);
-            match filters {
-                UnprefixedWarningFilters::All => w.write(format!(
-                    "#[{}({})]",
-                    prefix_str,
-                    WarningFilter::All(*prefix).to_str().unwrap(),
-                )),
-                UnprefixedWarningFilters::Specified { categories, codes } => {
-                    w.write(format!("#[{}(", prefix_str));
-                    let items = categories
-                        .iter()
-                        .map(|(cat, n)| WarningFilter::Category {
-                            prefix: *prefix,
-                            category: *cat,
-                            name: *n,
-                        })
-                        .chain(codes.iter().map(|((cat, code), n)| WarningFilter::Code {
-                            prefix: *prefix,
-                            category: *cat,
-                            code: *code,
-                            name: *n,
-                        }));
-                    w.list(items, ",", |w, filter| {
-                        w.write(filter.to_str().unwrap());
-                        false
-                    });
-                    w.write(")]")
-                }
-                UnprefixedWarningFilters::Empty => (),
-            }
-        }
     }
 }
 

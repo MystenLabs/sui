@@ -920,7 +920,7 @@ impl DagState {
     }
 
     pub(crate) fn calculate_scoring_subdag_scores(&self) -> ReputationScores {
-        self.scoring_subdag.calculate_scores()
+        self.scoring_subdag.calculate_distributed_vote_scores()
     }
 
     pub(crate) fn scoring_subdag_commit_range(&self) -> CommitIndex {

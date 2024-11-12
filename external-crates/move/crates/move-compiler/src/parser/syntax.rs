@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::{string_utils::*, *},
@@ -22,21 +22,24 @@ use move_symbol_pool::{symbol, Symbol};
 
 struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     tokens: &'lexer mut Lexer<'input>,
     stop_set: TokenSet,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         tokens: &'lexer mut Lexer<'input>,
         package_name: Option<Symbol>,
     ) -> Self {
         let stop_set = TokenSet::from([Tok::EOF]);
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             current_package: package_name,
             env,
+            reporter,
             tokens,
             stop_set,
         }
@@ -71,8 +74,13 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         }
     }
 
-    fn add_diag(&mut self, diag: Diagnostic) {
-        self.env.add_diag(diag);
+    fn add_diag(&self, diag: Diagnostic) {
+        self.reporter.add_diag(diag);
+    }
+
+    fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env
+            .check_feature(&self.reporter, package, feature, loc)
     }
 }
 
@@ -758,15 +766,13 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
                 "Macro invocation are disallowed here. Expected {}",
                 item_description()
             );
-            context
-                .env
-                .add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
+            context.add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
             is_macro = None;
         }
     }
     if let Some(sp!(ty_loc, _)) = tys {
         if !tyargs_allowed {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Syntax::InvalidName,
                 (
                     ty_loc,
@@ -845,7 +851,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {
             if !macros_allowed {
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Syntax::InvalidName,
                     (
                         *loc,
@@ -857,7 +863,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
         }
         if let Some(sp!(ty_loc, _)) = tys {
             if !tyargs_allowed {
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Syntax::InvalidName,
                     (
                         ty_loc,
@@ -870,7 +876,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
 
         path.push_path_entry(name, tys, is_macro)
             .into_iter()
-            .for_each(|diag| context.env.add_diag(diag));
+            .for_each(|diag| context.add_diag(diag));
     }
     Ok(NameAccessChain_::Path(path))
 }
@@ -1278,7 +1284,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     })?;
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
-        context.env.check_feature(
+        context.check_feature(
             context.current_package,
             FeatureGate::PositionalFields,
             current_loc,
@@ -1912,8 +1918,13 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         }
         Tok::Abort => {
             context.tokens.advance()?;
-            let (e, ends_in_block) = parse_exp_or_sequence(context)?;
-            (Exp_::Abort(Box::new(e)), ends_in_block)
+            let (e, ends_in_block) = if !at_start_of_exp(context) {
+                (None, false)
+            } else {
+                let (e, ends_in_block) = parse_exp_or_sequence(context)?;
+                (Some(Box::new(e)), ends_in_block)
+            };
+            (Exp_::Abort(e), ends_in_block)
         }
         Tok::Break => {
             context.tokens.advance()?;
@@ -2057,27 +2068,36 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
             }
             _ => None,
         };
-        consume_token(context.tokens, Tok::EqualGreater)?;
-        let rhs = match context.tokens.peek() {
-            Tok::LBrace => {
-                let block_start_loc = context.tokens.start_loc();
-                context.tokens.advance()?; // consume the LBrace
-                let block_ = Exp_::Block(parse_sequence(context)?);
-                let block_end_loc = context.tokens.previous_end_loc();
-                let exp = spanned(
-                    context.tokens.file_hash(),
-                    block_start_loc,
-                    block_end_loc,
-                    block_,
-                );
-                Box::new(exp)
+        if let Err(diag) = consume_token(context.tokens, Tok::EqualGreater) {
+            // report incomplete pattern so that auto-completion can work
+            context.add_diag(*diag);
+            MatchArm_ {
+                pattern,
+                guard,
+                rhs: Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
             }
-            _ => Box::new(parse_exp(context)?),
-        };
-        MatchArm_ {
-            pattern,
-            guard,
-            rhs,
+        } else {
+            let rhs = match context.tokens.peek() {
+                Tok::LBrace => {
+                    let block_start_loc = context.tokens.start_loc();
+                    context.tokens.advance()?; // consume the LBrace
+                    let block_ = Exp_::Block(parse_sequence(context)?);
+                    let block_end_loc = context.tokens.previous_end_loc();
+                    let exp = spanned(
+                        context.tokens.file_hash(),
+                        block_start_loc,
+                        block_end_loc,
+                        block_,
+                    );
+                    Box::new(exp)
+                }
+                _ => Box::new(parse_exp(context)?),
+            };
+            MatchArm_ {
+                pattern,
+                guard,
+                rhs,
+            }
         }
     })
 }
@@ -2124,7 +2144,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                                 Syntax::UnexpectedToken,
                                 (loc, "Invalid 'mut' keyword on non-variable pattern")
                             );
-                            context.env.add_diag(diag);
+                            context.add_diag(diag);
                         }
                     }
 
@@ -2587,7 +2607,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                 let loc = current_token_loc(context.tokens);
                 match context.tokens.peek() {
                     Tok::NumValue | Tok::NumTypedValue
-                        if context.env.check_feature(
+                        if context.check_feature(
                             context.current_package,
                             FeatureGate::PositionalFields,
                             loc,
@@ -2946,9 +2966,7 @@ fn parse_type_(
         }
         _ => {
             if context.at_stop_set() {
-                context
-                    .env
-                    .add_diag(*unexpected_token_error(context.tokens, "a type name"));
+                context.add_diag(*unexpected_token_error(context.tokens, "a type name"));
                 Type_::UnresolvedError
             } else {
                 let tn = if whitespace_sensitive_ty_args {
@@ -3450,9 +3468,7 @@ fn parse_enum_variant_fields(context: &mut Context) -> Result<VariantFields, Box
         Tok::LParen => {
             let current_package = context.current_package;
             let loc = current_token_loc(context.tokens);
-            context
-                .env
-                .check_feature(current_package, FeatureGate::PositionalFields, loc);
+            context.check_feature(current_package, FeatureGate::PositionalFields, loc);
 
             let list = parse_comma_list(
                 context,
@@ -3484,9 +3500,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
     // NB this could be an if-let but we will eventually want the match for other vis. support.
     match &visibility {
         Some(Visibility::Public(loc)) => {
-            context
-                .env
-                .check_feature(current_package, FeatureGate::Enums, *loc);
+            context.check_feature(current_package, FeatureGate::Enums, *loc);
         }
         vis => {
             let (loc, vis_str) = match vis {
@@ -3502,7 +3516,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
             let note = "Visibility annotations are required on enum declarations.";
             let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
             err.add_note(note);
-            context.env.add_diag(err);
+            context.add_diag(err);
         }
     }
 }
@@ -3724,7 +3738,7 @@ fn parse_postfix_ability_declarations(
     let has_location = current_token_loc(context.tokens);
 
     if postfix_ability_declaration {
-        context.env.check_feature(
+        context.check_feature(
             context.current_package,
             FeatureGate::PostFixAbilities,
             has_location,
@@ -3772,9 +3786,7 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
     if positional_declaration {
         let current_package = context.current_package;
         let loc = current_token_loc(context.tokens);
-        context
-            .env
-            .check_feature(current_package, FeatureGate::PositionalFields, loc);
+        context.check_feature(current_package, FeatureGate::PositionalFields, loc);
 
         context.stop_set.union(&TYPE_STOP_SET);
         let list = parse_comma_list(
@@ -3803,9 +3815,7 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
 fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context) {
     let current_package = context.current_package;
     if let Some(Visibility::Public(loc)) = &visibility {
-        context
-            .env
-            .check_feature(current_package, FeatureGate::StructTypeVisibility, *loc);
+        context.check_feature(current_package, FeatureGate::StructTypeVisibility, *loc);
     }
 
     let supports_public = context
@@ -3952,9 +3962,7 @@ fn parse_address_block(
                     addr_name.loc.start() as usize,
                     context.tokens.current_token_loc().end() as usize,
                 );
-                context
-                    .env
-                    .add_diag(diag!(Migration::AddressRemove, (loc, "address decl")));
+                context.add_diag(diag!(Migration::AddressRemove, (loc, "address decl")));
             }
             context.tokens.advance()?;
             let mut modules = vec![];
@@ -3969,7 +3977,7 @@ fn parse_address_block(
                     let (module, next_mod_attributes) = parse_module(attributes, context)?;
 
                     if in_migration_mode {
-                        context.env.add_diag(diag!(
+                        context.add_diag(diag!(
                             Migration::AddressAdd,
                             (
                                 module.name.loc(),
@@ -3989,7 +3997,7 @@ fn parse_address_block(
             }
             for module in &modules {
                 if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
-                    context.env.add_diag(diag!(
+                    context.add_diag(diag!(
                         Declarations::InvalidModule,
                         (
                             module.name.loc(),
@@ -4001,9 +4009,7 @@ fn parse_address_block(
 
             if in_migration_mode {
                 let loc = context.tokens.current_token_loc();
-                context
-                    .env
-                    .add_diag(diag!(Migration::AddressRemove, (loc, "close lbrace")));
+                context.add_diag(diag!(Migration::AddressRemove, (loc, "close lbrace")));
             }
 
             consume_token(context.tokens, context.tokens.peek())?;
@@ -4023,7 +4029,7 @@ fn parse_address_block(
                 format!("Replace with '{}::{}'", addr, module.name),
             ));
         }
-        context.env.add_diag(diag);
+        context.add_diag(diag);
     }
 
     Ok(AddressDefinition {
@@ -4054,7 +4060,7 @@ fn parse_friend_decl(
         || "a friend declaration",
     )?;
     if friend.value.is_macro().is_some() || friend.value.has_tyargs() {
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Syntax::InvalidName,
             (friend.loc, "Invalid 'friend' name")
         ))
@@ -4359,7 +4365,7 @@ fn parse_module(
             consume_token(context.tokens, Tok::LBrace)?;
         }
         Tok::Semicolon => {
-            context.env.check_feature(
+            context.check_feature(
                 context.current_package,
                 FeatureGate::ModuleLabel,
                 name.loc(),
@@ -4605,7 +4611,7 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
         ));
     }
 
-    s.push_str(dbg!(context.tokens.content()));
+    s.push_str(context.tokens.content());
     context.tokens.advance()?;
 
     let mut count = 1;
@@ -4669,7 +4675,7 @@ fn parse_file_def(
                             "Either move each 'module' label and definitions into its own file or \
                             define each as 'module <name> { contents }'",
                         );
-                        context.env.add_diag(diag);
+                        context.add_diag(diag);
                     }
                 }
                 defs.push(Definition::Module(module));
@@ -4692,7 +4698,7 @@ fn parse_file_def(
 /// result as either a pair of FileDefinition and doc comments or some Diagnostics. The `file` name
 /// is used to identify source locations in error messages.
 pub fn parse_file_string(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     file_hash: FileHash,
     input: &str,
     package: Option<Symbol>,

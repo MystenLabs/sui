@@ -705,8 +705,52 @@ export class DeepBookClient {
 			deep: Number((deepLocked / DEEP_SCALAR).toFixed(9)),
 		};
 	}
+  
+  /**  
+	 * @description Get the DEEP price conversion for a pool
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ asset_is_base: bool, deep_per_quote: number }>} Deep price conversion
+	 */
+	async getPoolDeepPrice(poolKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		tx.add(this.deepBook.getPoolDeepPrice(poolKey));
 
-	/**
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const deepCoin = this.#config.getCoin('DEEP');
+
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const OrderDeepPrice = bcs.struct('OrderDeepPrice', {
+			asset_is_base: bcs.bool(),
+			deep_per_asset: bcs.u64(),
+		});
+
+		const poolDeepPriceBytes = res.results![0].returnValues![0][0];
+		const poolDeepPrice = OrderDeepPrice.parse(new Uint8Array(poolDeepPriceBytes));
+
+		if (poolDeepPrice.asset_is_base) {
+			return {
+				asset_is_base: poolDeepPrice.asset_is_base,
+				deep_per_base:
+					((Number(poolDeepPrice.deep_per_asset) / FLOAT_SCALAR) * baseCoin.scalar) /
+					deepCoin.scalar,
+			};
+		} else {
+			return {
+				asset_is_base: poolDeepPrice.asset_is_base,
+				deep_per_quote:
+					((Number(poolDeepPrice.deep_per_asset) / FLOAT_SCALAR) * quoteCoin.scalar) /
+					deepCoin.scalar,
+			};
+		}
+	}
+  
+  /**
 	 * @description Decode the order ID to get bid/ask status, price, and orderId
 	 * @param {bigint} encodedOrderId Encoded order ID
 	 * @returns {Object} Object containing isBid, price, and orderId
@@ -717,5 +761,5 @@ export class DeepBookClient {
 		const orderId = Number(encodedOrderId & ((1n << 64n) - 1n));
 
 		return { isBid, price, orderId };
-	}
+  }
 }

@@ -1,5 +1,7 @@
-CREATE TABLE IF NOT EXISTS tx_affected_objects (
+CREATE TABLE IF NOT EXISTS tx_affected_objects
+(
     tx_sequence_number          BIGINT       NOT NULL,
+    -- Object ID of the object touched by this transaction.
     affected                    BYTEA        NOT NULL,
     sender                      BYTEA        NOT NULL,
     PRIMARY KEY(affected, tx_sequence_number)

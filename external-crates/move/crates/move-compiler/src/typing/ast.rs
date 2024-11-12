@@ -3,23 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    debug_display,
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
     },
-    ice,
     naming::ast::{
         BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods,
-        Type, TypeName_, Type_, UseFuns, Var,
+        Type, Type_, UseFuns, Var,
     },
     parser::ast::{
         BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
         ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
-    shared::{
-        ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name,
-    },
+    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -36,6 +32,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: Arc<TypingProgramInfo>,
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -191,7 +189,7 @@ pub enum UnannotatedExp_ {
     Builtin(Box<BuiltinFunction>, Box<Exp>),
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
-    IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     VariantMatch(
         Box<Exp>,
@@ -361,20 +359,6 @@ pub fn single_item(e: Exp) -> ExpListItem {
     ExpListItem::Single(e, ty)
 }
 
-pub fn splat_item(env: &mut CompilationEnv, splat_loc: Loc, e: Exp) -> ExpListItem {
-    let ss = match &e.ty {
-        sp!(_, Type_::Unit) => vec![],
-        sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
-        _ => {
-            let mut diag = ice!((splat_loc, "ICE called `splat_item` on a non-list type"));
-            diag.add_note(format!("Expression: {}", debug_display!(e)));
-            env.add_diag(diag);
-            vec![]
-        }
-    };
-    ExpListItem::Splat(splat_loc, e, ss)
-}
-
 pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
     MatchPattern { ty, pat }
 }
@@ -411,7 +395,11 @@ impl fmt::Display for BuiltinFunction_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, info: _ } = self;
+        let Program {
+            modules,
+            info: _,
+            warning_filters_table: _,
+        } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));
@@ -683,13 +671,15 @@ impl AstDebug for UnannotatedExp_ {
                 });
                 w.write("}");
             }
-            E::IfElse(b, t, f) => {
+            E::IfElse(b, t, f_opt) => {
                 w.write("if (");
                 b.ast_debug(w);
                 w.write(") ");
                 t.ast_debug(w);
-                w.write(" else ");
-                f.ast_debug(w);
+                if let Some(f) = f_opt {
+                    w.write(" else ");
+                    f.ast_debug(w);
+                }
             }
             E::Match(esubject, arms) => {
                 w.write("match (");

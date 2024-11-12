@@ -15,6 +15,7 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
+    diagnostics::DiagnosticReporter,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
     shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name},
@@ -26,6 +27,8 @@ use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
+    pub env: &'a CompilationEnv,
+    pub reporter: &'a DiagnosticReporter<'a>,
     pub info: &'a TypingProgramInfo,
     pub package: Option<Symbol>,
     pub module: ModuleIdent,
@@ -43,16 +46,22 @@ pub enum MemberName {
     Function(Name),
 }
 
-pub fn refine_inference_and_verify(
-    env: &mut CompilationEnv,
-    context: &CFGContext,
-    cfg: &mut MutForwardCFG,
-) {
-    liveness::last_usage(env, context, cfg);
-    let locals_states = locals::verify(env, context, cfg);
+pub fn refine_inference_and_verify(context: &CFGContext, cfg: &mut MutForwardCFG) {
+    liveness::last_usage(context, cfg);
+    let locals_states = locals::verify(context, cfg);
 
     liveness::release_dead_refs(context, &locals_states, cfg);
-    borrows::verify(env, context, cfg);
+    borrows::verify(context, cfg);
+}
+
+impl CFGContext<'_> {
+    fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
+        self.reporter.add_diag(diag);
+    }
+
+    fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
+        self.reporter.add_diags(diags);
+    }
 }
 
 impl MemberName {

@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::diagnostics::warning_filters::WarningFilters;
+use crate::diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics};
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
 use crate::parser::ast::{FunctionName, Visibility};
@@ -15,22 +17,42 @@ use move_proc_macros::growing_stack;
 //**************************************************************************************************
 
 struct Context<'env, 'info> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     info: &'info NamingProgramInfo,
     current_module: ModuleIdent,
 }
 
 impl<'env, 'info> Context<'env, 'info> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         info: &'info NamingProgramInfo,
         current_module: ModuleIdent,
     ) -> Self {
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
+            reporter,
             info,
             current_module,
         }
+    }
+
+    pub fn add_diag(&self, diag: Diagnostic) {
+        self.reporter.add_diag(diag);
+    }
+
+    #[allow(unused)]
+    pub fn add_diags(&self, diags: Diagnostics) {
+        self.reporter.add_diags(diags);
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.reporter.push_warning_filter_scope(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.reporter.pop_warning_filter_scope()
     }
 }
 
@@ -38,7 +60,7 @@ impl<'env, 'info> Context<'env, 'info> {
 // Entry
 //**************************************************************************************************
 
-pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
+pub fn program(env: &CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
     let N::Program_ { modules } = inner;
     for (mident, mdef) in modules.key_cloned_iter_mut() {
         module(env, info, mident, mdef);
@@ -59,15 +81,13 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
 }
 
 fn module(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     info: &mut NamingProgramInfo,
     mident: ModuleIdent,
     mdef: &mut N::ModuleDefinition,
 ) {
     let context = &mut Context::new(env, info, mident);
-    context
-        .env
-        .add_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter);
     use_funs(context, &mut mdef.use_funs);
     for (_, _, c) in &mut mdef.constants {
         constant(context, c);
@@ -75,25 +95,21 @@ fn module(
     for (_, _, f) in &mut mdef.functions {
         function(context, f);
     }
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
 }
 
 fn constant(context: &mut Context, c: &mut N::Constant) {
-    context
-        .env
-        .add_warning_filter_scope(c.warning_filter.clone());
+    context.push_warning_filter_scope(c.warning_filter);
     exp(context, &mut c.value);
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
 }
 
 fn function(context: &mut Context, function: &mut N::Function) {
-    context
-        .env
-        .add_warning_filter_scope(function.warning_filter.clone());
+    context.push_warning_filter_scope(function.warning_filter);
     if let N::FunctionBody_::Defined(seq) = &mut function.body.value {
         sequence(context, seq)
     }
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
 }
 
 //**************************************************************************************************
@@ -128,7 +144,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                 if let Some(public_loc) = nuf.is_public {
                     let defining_module = match &tn.value {
                         N::TypeName_::Multiple(_) => {
-                            context.env.add_diag(ice!((
+                            context.add_diag(ice!((
                                 tn.loc,
                                 "ICE tuple type should not be reachable from use fun"
                             )));
@@ -155,7 +171,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                                 format!("The type '{tn}' is defined here"),
                             ))
                         }
-                        context.env.add_diag(diag);
+                        context.add_diag(diag);
                         nuf.is_public = None;
                     }
                 }
@@ -173,7 +189,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                     }
                     None => format!("But '{m}::{f}' takes no arguments"),
                 };
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Declarations::InvalidUseFun,
                     (loc, msg),
                     (first_ty_loc, first_tn_msg),
@@ -199,9 +215,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
         let Some((target_f, tn)) = is_valid_method(context, &target_m, target_f) else {
             if matches!(ekind, E::ImplicitUseFunKind::UseAlias { used: false }) {
                 let msg = format!("Unused 'use' of alias '{}'. Consider removing it", method);
-                context
-                    .env
-                    .add_diag(diag!(UnusedItem::Alias, (method.loc, msg),))
+                context.add_diag(diag!(UnusedItem::Alias, (method.loc, msg),))
             }
             continue;
         };
@@ -238,7 +252,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                     argument is a type defined in the same module"
                 }
             };
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Declarations::DuplicateItem,
                 (nuf_loc, msg),
                 (prev, "Previously declared here"),
@@ -335,10 +349,12 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             use_fun_color: _,
             body: e,
         }) => exp(context, e),
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             exp(context, econd);
             exp(context, et);
-            exp(context, ef);
+            if let Some(ef) = ef_opt {
+                exp(context, ef);
+            }
         }
         N::Exp_::Match(esubject, arms) => {
             exp(context, esubject);

@@ -1,12 +1,3 @@
-error[E04015]: invalid use of native item
-  ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9
-  │
-3 │     native struct T;
-  │     ------ Struct declared 'native' here
-  ·
-9 │         C::T {}
-  │         ^^^^^^^ Invalid argument usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
-
 error[E04001]: restricted visibility
   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9
   │
@@ -17,13 +8,13 @@ error[E04001]: restricted visibility
   │         ^^^^^^^ Struct '0x42::C::T' can only be instantiated within its defining module '0x42::C'
 
 error[E04015]: invalid use of native item
-   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
-   │
- 3 │     native struct T;
-   │     ------ Struct declared 'native' here
-   ·
-12 │         let C::T {} = c;
-   │             ^^^^^^^ Invalid binding usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
+  ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9
+  │
+3 │     native struct T;
+  │     ------ Struct declared 'native' here
+  ·
+9 │         C::T {}
+  │         ^^^^^^^ Invalid argument usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
 
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
@@ -33,6 +24,15 @@ error[E04001]: restricted visibility
    ·
 12 │         let C::T {} = c;
    │             ^^^^^^^ Struct '0x42::C::T' can only be used in deconstruction binding within its defining module '0x42::C'
+
+error[E04015]: invalid use of native item
+   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
+   │
+ 3 │     native struct T;
+   │     ------ Struct declared 'native' here
+   ·
+12 │         let C::T {} = c;
+   │             ^^^^^^^ Invalid binding usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
 
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18

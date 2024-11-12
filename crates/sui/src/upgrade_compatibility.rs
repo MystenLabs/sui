@@ -5,8 +5,12 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::io::{stdout, IsTerminal};
+use std::sync::Arc;
+
 use anyhow::{anyhow, Context, Error};
-use std::collections::HashMap;
 
 use move_binary_format::{
     compatibility::Compatibility,
@@ -15,19 +19,35 @@ use move_binary_format::{
     normalized::{Enum, Function, Module, Struct},
     CompiledModule,
 };
+use move_command_line_common::files::FileHash;
+use move_compiler::diagnostics::codes::DiagnosticInfo;
+use move_compiler::{
+    diag,
+    diagnostics::{
+        codes::{custom, Severity},
+        report_diagnostics_to_buffer, Diagnostic, Diagnostics,
+    },
+    shared::files::{FileName, FilesSourceText},
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
 };
+use move_ir_types::location::Loc;
+use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
+use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 /// Errors that can occur during upgrade compatibility checks.
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum UpgradeCompatibilityModeError {
+    ModuleMissing {
+        name: Identifier,
+    },
     StructMissing {
         name: Identifier,
         old_struct: Struct,
@@ -102,8 +122,11 @@ pub(crate) enum UpgradeCompatibilityModeError {
 }
 
 impl UpgradeCompatibilityModeError {
+    /// check if the error breaks compatibility for a given [`Compatibility`]
     fn breaks_compatibility(&self, compatability: &Compatibility) -> bool {
         match self {
+            UpgradeCompatibilityModeError::ModuleMissing { .. } => true,
+
             UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
             | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
             | UpgradeCompatibilityModeError::EnumAbilityMismatch { .. }
@@ -149,7 +172,7 @@ pub(crate) struct CliCompatibilityMode {
 }
 
 impl CompatibilityMode for CliCompatibilityMode {
-    type Error = anyhow::Error;
+    type Error = Vec<UpgradeCompatibilityModeError>;
     // ignored, address is not populated pre-tx
     fn module_id_mismatch(
         &mut self,
@@ -323,37 +346,78 @@ impl CompatibilityMode for CliCompatibilityMode {
             });
     }
 
-    fn finish(&self, compatability: &Compatibility) -> Result<(), Self::Error> {
-        let errors: Vec<String> = self
+    fn finish(self, compatability: &Compatibility) -> Result<(), Self::Error> {
+        let errors: Vec<UpgradeCompatibilityModeError> = self
             .errors
-            .iter()
+            .into_iter()
             .filter(|e| e.breaks_compatibility(compatability))
-            .map(|e| format!("- {:?}", e))
             .collect();
 
         if !errors.is_empty() {
-            return Err(anyhow!(
-                "Upgrade compatibility check failed with the following errors:\n{}",
-                errors.join("\n")
-            ));
+            return Err(errors);
         }
         Ok(())
     }
 }
 
+const COMPATIBILITY_PREFIX: &str = "Compatibility ";
+/// Generates an enum Category along with individual enum for each individual category
+/// and impls into diagnostic info for each category.
+macro_rules! upgrade_codes {
+    ($($cat:ident: [
+        $($code:ident: { msg: $code_msg:literal }),* $(,)?
+    ]),* $(,)?) => {
+        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
+        #[repr(u8)]
+        pub enum Category {
+            #[allow(dead_code)]
+            ZeroPlaceholder,
+            $($cat,)*
+        }
+
+        $(
+            #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+            #[repr(u8)]
+            pub enum $cat {
+                #[allow(dead_code)]
+                ZeroPlaceholder,
+                $($code,)*
+            }
+
+            // impl into diagnostic info
+            impl Into<DiagnosticInfo> for $cat {
+                fn into(self) -> DiagnosticInfo {
+                    match self {
+                        Self::ZeroPlaceholder =>
+                            panic!("do not use placeholder error code"),
+                        $(Self::$code => custom(
+                            COMPATIBILITY_PREFIX,
+                            Severity::NonblockingError,
+                            Category::$cat as u8,
+                            self as u8,
+                            $code_msg,
+                        ),)*
+                    }
+                }
+            }
+        )*
+    };
+}
+
+// Used to generate diagnostics primary labels for upgrade compatibility errors.
+upgrade_codes!(
+    Declarations: [
+        PublicMissing: { msg: "missing public declaration" },
+    ],
+);
+
 /// Check the upgrade compatibility of a new package with an existing on-chain package.
 pub(crate) async fn check_compatibility(
     client: &SuiClient,
     package_id: ObjectID,
-    compiled_modules: &[Vec<u8>],
+    new_package: CompiledPackage,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
-    let new_modules = compiled_modules
-        .iter()
-        .map(|b| CompiledModule::deserialize_with_config(b, &to_binary_config(&protocol_config)))
-        .collect::<Result<Vec<_>, _>>()
-        .context("Unable to to deserialize compiled module")?;
-
     let existing_obj_read = client
         .read_api()
         .get_object_with_options(package_id, SuiObjectDataOptions::new().with_bcs())
@@ -378,36 +442,156 @@ pub(crate) async fn check_compatibility(
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 
-    compare_packages(existing_modules, new_modules)
+    compare_packages(existing_modules, new_package)
 }
 
+/// Collect all the errors into a single error message.
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
-    new_modules: Vec<CompiledModule>,
+    new_package: CompiledPackage,
 ) -> Result<(), Error> {
     // create a map from the new modules
-    let new_modules_map: HashMap<Identifier, CompiledModule> = new_modules
-        .iter()
+    let new_modules_map: HashMap<Identifier, CompiledModule> = new_package
+        .get_modules()
         .map(|m| (m.self_id().name().to_owned(), m.clone()))
         .collect();
 
-    // for each existing find the new one run compatibility check
-    for existing_module in existing_modules {
-        let name = existing_module.self_id().name().to_owned();
+    let errors: Vec<(Identifier, UpgradeCompatibilityModeError)> = existing_modules
+        .iter()
+        .flat_map(|existing_module| {
+            let name = existing_module.self_id().name().to_owned();
 
-        // find the new module with the same name
-        match new_modules_map.get(&name) {
-            Some(new_module) => {
-                Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
-                    &Module::new(&existing_module),
-                    &Module::new(new_module),
-                )?;
+            // find the new module with the same name
+            match new_modules_map.get(&name) {
+                Some(new_module) => {
+                    let compatible = Compatibility::upgrade_check()
+                        .check_with_mode::<CliCompatibilityMode>(
+                            &Module::new(existing_module),
+                            &Module::new(new_module),
+                        );
+                    if let Err(errors) = compatible {
+                        errors.into_iter().map(|e| (name.to_owned(), e)).collect()
+                    } else {
+                        vec![]
+                    }
+                }
+                None => vec![(
+                    name.clone(),
+                    UpgradeCompatibilityModeError::ModuleMissing { name },
+                )],
             }
-            None => {
-                Err(anyhow!("Module {} is missing from the package", name))?;
-            }
-        }
+        })
+        .collect();
+
+    if errors.is_empty() {
+        return Ok(());
     }
 
-    Ok(())
+    let mut files: FilesSourceText = HashMap::new();
+    let mut file_set = HashSet::new();
+
+    let mut diags = Diagnostics::new();
+
+    for (name, err) in errors {
+        let compiled_unit_with_source = new_package
+            .package
+            .get_module_by_name_from_root(name.as_str())
+            .context("Unable to get module")?;
+
+        if !file_set.contains(&compiled_unit_with_source.source_path) {
+            let file_contents: Arc<str> =
+                fs::read_to_string(&compiled_unit_with_source.source_path)
+                    .context("Unable to read source file")?
+                    .into();
+            let file_hash = FileHash::new(&file_contents);
+
+            files.insert(
+                file_hash,
+                (
+                    FileName::from(compiled_unit_with_source.source_path.to_string_lossy()),
+                    file_contents,
+                ),
+            );
+
+            file_set.insert(compiled_unit_with_source.source_path.clone());
+        }
+
+        diags.add(diag_from_error(&err, compiled_unit_with_source))
+    }
+
+    Err(anyhow!(
+        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.",
+        String::from_utf8(report_diagnostics_to_buffer(&files.into(), diags, stdout().is_terminal())).context("Unable to convert buffer to string")?
+    ))
+}
+
+/// Convert an error to a diagnostic using the specific error type's function.
+fn diag_from_error(
+    error: &UpgradeCompatibilityModeError,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Diagnostic {
+    match error {
+        UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
+            Declarations::PublicMissing,
+            "struct",
+            &name,
+            compiled_unit_with_source,
+        ),
+        UpgradeCompatibilityModeError::EnumMissing { name, .. } => missing_definition_diag(
+            Declarations::PublicMissing,
+            "enum",
+            &name,
+            compiled_unit_with_source,
+        ),
+        UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
+            missing_definition_diag(
+                Declarations::PublicMissing,
+                "public function",
+                &name,
+                compiled_unit_with_source,
+            )
+        }
+        UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
+            missing_definition_diag(
+                Declarations::PublicMissing,
+                "entry function",
+                &name,
+                compiled_unit_with_source,
+            )
+        }
+        _ => todo!("Implement diag_from_error for {:?}", error),
+    }
+}
+
+/// Return a diagnostic for a missing definition.
+fn missing_definition_diag(
+    error: impl Into<DiagnosticInfo>,
+    declaration_kind: &str,
+    identifier_name: &Identifier,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Diagnostic {
+    let module_name = compiled_unit_with_source.unit.name;
+    let loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    Diagnostic::new(
+        error,
+        (loc, format!(
+            "{declaration_kind} '{identifier_name}' is missing",
+            declaration_kind = declaration_kind,
+            identifier_name = identifier_name,
+        )),
+        std::iter::empty::<(Loc, String)>(),
+        vec![format!(
+            "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', but found none",
+        ),
+         format!(
+             "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade",
+         ),
+         format!(
+             "add missing {declaration_kind} '{identifier_name}' back to the module '{module_name}'.",
+         )]
+    )
 }

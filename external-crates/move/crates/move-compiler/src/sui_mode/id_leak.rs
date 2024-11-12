@@ -20,7 +20,7 @@ use crate::{
     expansion::ast::{ModuleIdent, TargetKind},
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::Ability_,
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    shared::{program_info::TypingProgramInfo, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
 use std::collections::BTreeMap;
@@ -94,7 +94,6 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     type AI<'a> = IDLeakVerifierAI<'a>;
 
     fn new<'a>(
-        env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
@@ -102,7 +101,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
         let module = &context.module;
         let minfo = context.info.module(module);
         let package_name = minfo.package;
-        let config = env.package_config(package_name);
+        let config = context.env.package_config(package_name);
         if config.flavor != Flavor::Sui {
             // Skip if not sui
             return None;

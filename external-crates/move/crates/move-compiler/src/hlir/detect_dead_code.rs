@@ -3,6 +3,7 @@
 
 use crate::{
     diag,
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     expansion::ast::ModuleIdent,
     ice,
     naming::ast::{self as N, BlockLabel},
@@ -188,15 +189,35 @@ impl ControlFlow {
 }
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    #[allow(unused)]
+    env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     // loops: Vec<BlockLabel>,
 }
 
 impl<'env> Context<'env> {
-    pub fn new(env: &'env mut CompilationEnv) -> Self {
+    pub fn new(env: &'env CompilationEnv) -> Self {
         // let loops = vec![];
         // Context { env , loops }
-        Context { env }
+        let reporter = env.diagnostic_reporter_at_top_level();
+        Context { env, reporter }
+    }
+
+    pub fn add_diag(&self, diag: Diagnostic) {
+        self.reporter.add_diag(diag);
+    }
+
+    #[allow(unused)]
+    pub fn add_diags(&self, diags: Diagnostics) {
+        self.reporter.add_diags(diags);
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.reporter.push_warning_filter_scope(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn maybe_report_value_error(&mut self, error: &mut ControlFlow) -> bool {
@@ -208,8 +229,7 @@ impl<'env> Context<'env> {
                 reported,
             } if !*reported => {
                 *reported = true;
-                self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (*loc, VALUE_UNREACHABLE_MSG)));
+                self.add_diag(diag!(UnusedItem::DeadCode, (*loc, VALUE_UNREACHABLE_MSG)));
                 true
             }
             CF::Divergent { .. } | CF::None | CF::Possible => false,
@@ -225,8 +245,7 @@ impl<'env> Context<'env> {
                 reported,
             } if !*reported => {
                 *reported = true;
-                self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (*loc, DIVERGENT_MSG)));
+                self.add_diag(diag!(UnusedItem::DeadCode, (*loc, DIVERGENT_MSG)));
                 true
             }
             CF::Divergent { .. } | CF::None | CF::Possible => false,
@@ -250,7 +269,7 @@ impl<'env> Context<'env> {
                 if let Some(next_loc) = next_stmt {
                     diag.add_secondary_label((*next_loc, UNREACHABLE_MSG));
                 }
-                self.env.add_diag(diag);
+                self.add_diag(diag);
                 true
             }
             CF::Divergent { .. } | CF::None | CF::Possible => false,
@@ -271,7 +290,7 @@ impl<'env> Context<'env> {
                     reported,
                 } if !*reported => {
                     *reported = true;
-                    self.env.add_diag(diag!(
+                    self.add_diag(diag!(
                         UnusedItem::TrailingSemi,
                         (tail_exp.exp.loc, SEMI_MSG),
                         (*loc, DIVERGENT_MSG),
@@ -344,7 +363,7 @@ fn infinite_loop(loc: Loc) -> ControlFlow {
 // Entry
 //**************************************************************************************************
 
-pub fn program(compilation_env: &mut CompilationEnv, prog: &T::Program) {
+pub fn program(compilation_env: &CompilationEnv, prog: &T::Program) {
     let mut context = Context::new(compilation_env);
     modules(&mut context, &prog.modules);
 }
@@ -356,16 +375,14 @@ fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefi
 }
 
 fn module(context: &mut Context, mdef: &T::ModuleDefinition) {
-    context
-        .env
-        .add_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter);
     for (_, cname, cdef) in &mdef.constants {
         constant(context, cname, cdef);
     }
     for (_, fname, fdef) in &mdef.functions {
         function(context, fname, fdef);
     }
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
 }
 
 //**************************************************************************************************
@@ -378,9 +395,9 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
         body,
         ..
     } = f;
-    context.env.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(*warning_filter);
     function_body(context, body);
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
 }
 
 fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
@@ -395,9 +412,7 @@ fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
 //**************************************************************************************************
 
 fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
-    context
-        .env
-        .add_warning_filter_scope(cdef.warning_filter.clone());
+    context.push_warning_filter_scope(cdef.warning_filter);
     let eloc = cdef.value.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();
@@ -408,7 +423,7 @@ fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
         v
     };
     body(context, &tseq);
-    context.env.pop_warning_filter_scope();
+    context.pop_warning_filter_scope();
 }
 
 //**************************************************************************************************
@@ -437,9 +452,9 @@ fn tail(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // -----------------------------------------------------------------------------------------
         // control flow statements
         // -----------------------------------------------------------------------------------------
-        E::IfElse(test, conseq, alt) => do_if(
+        E::IfElse(test, conseq, alt_opt) => do_if(
             context,
-            (eloc, test, conseq, alt),
+            (eloc, test, conseq, alt_opt.as_deref()),
             /* tail_pos */ true,
             tail,
             |context, flow| context.maybe_report_tail_error(flow),
@@ -452,9 +467,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> ControlFlow {
             |context, flow| context.maybe_report_tail_error(flow),
         ),
         E::VariantMatch(..) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            context.add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
             CF::None
         }
 
@@ -508,7 +521,7 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Control
             None => ControlFlow::None,
             Some(sp!(_, S::Seq(last))) => tail(context, last),
             Some(sp!(loc, _)) => {
-                context.env.add_diag(ice!((
+                context.add_diag(ice!((
                     *loc,
                     "ICE last sequence item should have been an exp in dead code analysis"
                 )));
@@ -547,7 +560,7 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // -----------------------------------------------------------------------------------------
         E::IfElse(test, conseq, alt) => do_if(
             context,
-            (eloc, test, conseq, alt),
+            (eloc, test, conseq, alt.as_deref()),
             /* tail_pos */ false,
             value,
             |context, flow| context.maybe_report_value_error(flow),
@@ -560,9 +573,7 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
             |context, flow| context.maybe_report_value_error(flow),
         ),
         E::VariantMatch(_subject, _, _arms) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            context.add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
             CF::None
         }
         E::While(..) => statement(context, e),
@@ -618,7 +629,7 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
                         context.maybe_report_value_error(&mut flow);
                     }
                     T::ExpListItem::Splat(_, _, _) => {
-                        context.env.add_diag(ice!((
+                        context.add_diag(ice!((
                             *eloc,
                             "ICE splat exp unsupported by dead code analysis"
                         )));
@@ -686,7 +697,7 @@ fn value_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Contro
             None => ControlFlow::None,
             Some(sp!(_, S::Seq(last))) => value(context, last),
             Some(sp!(loc, _)) => {
-                context.env.add_diag(ice!((
+                context.add_diag(ice!((
                     *loc,
                     "ICE last sequence item should have been an exp in dead code analysis"
                 )));
@@ -726,7 +737,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // about the final, total view of them.
         E::IfElse(test, conseq, alt) => do_if(
             context,
-            (eloc, test, conseq, alt),
+            (eloc, test, conseq, alt.as_deref()),
             /* tail_pos */ false,
             statement,
             |_, _| false,
@@ -739,9 +750,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
             |_, _| false,
         ),
         E::VariantMatch(_subject, _, _arms) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            context.add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
             CF::None
         }
         E::While(name, test, body) => {
@@ -826,9 +835,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "ICE found unexpanded use")));
+            context.add_diag(ice!((*eloc, "ICE found unexpanded use")));
             CF::None
         }
     }
@@ -910,7 +917,7 @@ fn has_trailing_unit(seq: &VecDeque<T::SequenceItem>) -> bool {
 
 fn do_if<F1, F2>(
     context: &mut Context,
-    (loc, test, conseq, alt): (&Loc, &T::Exp, &T::Exp, &T::Exp),
+    (loc, test, conseq, alt_opt): (&Loc, &T::Exp, &T::Exp, Option<&T::Exp>),
     tail_pos: bool,
     arm_recur: F1,
     arm_error: F2,
@@ -926,10 +933,15 @@ where
     };
 
     let conseq_flow = arm_recur(context, conseq);
-    let alt_flow = arm_recur(context, alt);
+    let alt_flow = alt_opt
+        .map(|alt| arm_recur(context, alt))
+        .unwrap_or(CF::None);
     if tail_pos
         && matches!(conseq.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
-        && matches!(alt.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
+        && matches!(
+            alt_opt.map(|alt| &alt.ty),
+            None | Some(sp!(_, N::Type_::Unit | N::Type_::Anything))
+        )
     {
         return CF::None;
     };

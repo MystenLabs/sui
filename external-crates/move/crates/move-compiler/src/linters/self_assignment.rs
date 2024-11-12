@@ -6,40 +6,17 @@
 use super::StyleCodes;
 use crate::{
     diag,
-    diagnostics::WarningFilters,
     naming::ast::Var,
-    shared::CompilationEnv,
     typing::{
         ast::{self as T},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        visitor::simple_visitor,
     },
 };
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
-pub struct SelfAssignmentVisitor;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for SelfAssignmentVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    SelfAssignmentVisitor,
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         match &e.exp.value {
@@ -49,7 +26,7 @@ impl TypingVisitorContext for Context<'_> {
         }
         false
     }
-}
+);
 
 fn check_mutate(context: &mut Context, loc: Loc, lhs: &T::Exp, rhs: &T::Exp) {
     #[growing_stack]
@@ -202,7 +179,7 @@ fn exp_list_items(e: &T::Exp) -> Vec<&T::Exp> {
 fn report_self_assignment(context: &mut Context, case: &str, eloc: Loc, lloc: Loc, rloc: Loc) {
     let msg =
         format!("Unnecessary self-{case}. The {case} is redundant and will not change the value");
-    context.env.add_diag(diag!(
+    context.add_diag(diag!(
         StyleCodes::SelfAssignment.diag_info(),
         (eloc, msg),
         (lloc, "This location"),

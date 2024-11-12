@@ -3,19 +3,19 @@
 
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use db::{Db, DbConfig};
-use handlers::Handler;
-use ingestion::{IngestionConfig, IngestionService};
+use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
-use pipeline::{concurrent, PipelineConfig};
+use pipeline::{concurrent, sequential, PipelineConfig, Processor};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub mod args;
+pub mod bootstrap;
 pub mod db;
 pub mod handlers;
 pub mod ingestion;
@@ -68,9 +68,6 @@ pub struct IndexerConfig {
     pub ingestion_config: IngestionConfig,
 
     #[command(flatten)]
-    pub db_config: DbConfig,
-
-    #[command(flatten)]
     pub pipeline_config: PipelineConfig,
 
     /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
@@ -95,20 +92,28 @@ pub struct IndexerConfig {
 }
 
 impl Indexer {
-    pub async fn new(config: IndexerConfig, cancel: CancellationToken) -> Result<Self> {
+    pub async fn new(
+        db_config: DbConfig,
+        indexer_config: IndexerConfig,
+        cancel: CancellationToken,
+    ) -> Result<Self> {
         let IndexerConfig {
             ingestion_config,
-            db_config,
             pipeline_config,
             first_checkpoint,
             last_checkpoint,
             pipeline,
             metrics_address,
-        } = config;
+        } = indexer_config;
 
         let db = Db::new(db_config)
             .await
             .context("Failed to connect to database")?;
+
+        // At indexer initialization, we ensure that the DB schema is up-to-date.
+        db.run_migrations()
+            .await
+            .context("Failed to run pending migrations")?;
 
         let (metrics, metrics_service) =
             MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
@@ -130,27 +135,35 @@ impl Indexer {
         })
     }
 
+    /// The database connection pool used by the indexer.
+    pub fn db(&self) -> &Db {
+        &self.db
+    }
+
+    /// The ingestion client used by the indexer to fetch checkpoints.
+    pub fn ingestion_client(&self) -> &IngestionClient {
+        self.ingestion_service.client()
+    }
+
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
-    pub async fn concurrent_pipeline<H: Handler + 'static>(&mut self) -> Result<()> {
-        if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(H::NAME) {
-            info!("Skipping pipeline {}", H::NAME);
+    ///
+    /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
+    /// keep the watermark table up-to-date with the highest point they can guarantee all data
+    /// exists for, for their pipeline.
+    pub async fn concurrent_pipeline<H: concurrent::Handler + 'static>(&mut self) -> Result<()> {
+        let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
+        };
+
+        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
+        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
+        // and writes should be idempotent.
+        if !self.pipeline_config.skip_watermark {
+            self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
-        let mut conn = self.db.connect().await.context("Failed DB connection")?;
-
-        let watermark = CommitterWatermark::get(&mut conn, H::NAME)
-            .await
-            .with_context(|| format!("Failed to get watermark for {}", H::NAME))?;
-
-        // TODO(amnn): Test this (depends on supporting migrations and tempdb).
-        self.first_checkpoint_from_watermark = watermark
-            .as_ref()
-            .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
-            .min(self.first_checkpoint_from_watermark);
-
-        let (processor, committer, watermark) = concurrent::pipeline::<H>(
+        let (processor, collector, committer, watermark) = concurrent::pipeline::<H>(
             watermark,
             self.pipeline_config.clone(),
             self.db.clone(),
@@ -160,8 +173,71 @@ impl Indexer {
         );
 
         self.handles.push(processor);
+        self.handles.push(collector);
         self.handles.push(committer);
         self.handles.push(watermark);
+
+        Ok(())
+    }
+
+    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
+    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
+    ///
+    /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may
+    /// be required to handle pipelines that modify data in-place (where each update is not an
+    /// insert, but could be a modification of an existing row, where ordering between updates is
+    /// important).
+    ///
+    /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
+    /// number of checkpoints (configured by `checkpoint_lag`).
+    pub async fn sequential_pipeline<H: sequential::Handler + 'static>(
+        &mut self,
+        checkpoint_lag: Option<u64>,
+    ) -> Result<()> {
+        let Some(watermark) = self.add_pipeline::<H>().await? else {
+            return Ok(());
+        };
+
+        // For a sequential pipeline, data must be written in the order of checkpoints.
+        // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
+        self.check_first_checkpoint_consistency::<H>(&watermark)?;
+
+        let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
+
+        let (processor, committer) = sequential::pipeline::<H>(
+            watermark,
+            self.pipeline_config.clone(),
+            checkpoint_lag,
+            self.db.clone(),
+            checkpoint_rx,
+            watermark_tx,
+            self.metrics.clone(),
+            self.cancel.clone(),
+        );
+
+        self.handles.push(processor);
+        self.handles.push(committer);
+
+        Ok(())
+    }
+
+    /// Checks that the first checkpoint override is consistent with the watermark for the pipeline.
+    /// If the watermark does not exist, the override can be anything. If the watermark exists, the
+    /// override must not leave any gap in the data: it can be in the past, or at the tip of the
+    /// network, but not in the future.
+    fn check_first_checkpoint_consistency<P: Processor>(
+        &self,
+        watermark: &Option<CommitterWatermark>,
+    ) -> Result<()> {
+        if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
+            ensure!(
+                first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
+                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
+                P::NAME,
+                first_checkpoint,
+                watermark.checkpoint_hi_inclusive,
+            );
+        }
 
         Ok(())
     }
@@ -210,5 +286,32 @@ impl Indexer {
             cancel.cancel();
             metrics_handle.await.unwrap();
         }))
+    }
+
+    /// Update the indexer's first checkpoint based on the watermark for the pipeline by adding for
+    /// handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is disabled,
+    /// `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
+    /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
+    async fn add_pipeline<P: Processor + 'static>(
+        &mut self,
+    ) -> Result<Option<Option<CommitterWatermark<'static>>>> {
+        if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(P::NAME) {
+            info!("Skipping pipeline {}", P::NAME);
+            return Ok(None);
+        }
+
+        let mut conn = self.db.connect().await.context("Failed DB connection")?;
+
+        let watermark = CommitterWatermark::get(&mut conn, P::NAME)
+            .await
+            .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
+
+        // TODO(amnn): Test this (depends on supporting migrations and tempdb).
+        self.first_checkpoint_from_watermark = watermark
+            .as_ref()
+            .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
+            .min(self.first_checkpoint_from_watermark);
+
+        Ok(Some(watermark))
     }
 }

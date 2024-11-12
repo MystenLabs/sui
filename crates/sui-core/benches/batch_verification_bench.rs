@@ -3,6 +3,7 @@
 
 use criterion::*;
 
+use itertools::Itertools as _;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 
@@ -135,7 +136,7 @@ fn batch_verification_bench(c: &mut Criterion) {
                         certs.shuffle(&mut thread_rng());
                         batch_verify_certificates(
                             &committee,
-                            &certs,
+                            &certs.iter().collect_vec(),
                             Arc::new(VerifiedDigestCache::new_empty()),
                         );
                     })

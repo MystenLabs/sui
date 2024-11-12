@@ -9,18 +9,13 @@ use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_types::Transactions;
-use narwhal_types::TransactionsServer;
-use narwhal_types::{Empty, TransactionProto};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_network::tonic;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
 };
-use sui_types::multiaddr::Multiaddr;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
@@ -29,8 +24,6 @@ use sui_types::{
     object::Object,
     transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction},
 };
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
@@ -47,9 +40,18 @@ pub fn test_gas_objects() -> Vec<Object> {
     GAS_OBJECTS.with(|v| v.clone())
 }
 
-/// Fixture: a few test certificates containing a shared object.
+/// Fixture: create a few test certificates containing a shared object.
 pub async fn test_certificates(
     authority: &AuthorityState,
+    shared_object: Object,
+) -> Vec<CertifiedTransaction> {
+    test_certificates_with_gas_objects(authority, &test_gas_objects(), shared_object).await
+}
+
+/// Fixture: create a few test certificates containing a shared object using specified gas objects.
+pub async fn test_certificates_with_gas_objects(
+    authority: &AuthorityState,
+    gas_objects: &[Object],
     shared_object: Object,
 ) -> Vec<CertifiedTransaction> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
@@ -62,7 +64,7 @@ pub async fn test_certificates(
         initial_shared_version: shared_object.version(),
         mutable: true,
     };
-    for gas_object in test_gas_objects() {
+    for gas_object in gas_objects {
         // Object digest may be different in genesis than originally generated.
         let gas_object = authority
             .get_object(&gas_object.id())
@@ -400,46 +402,4 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
         )
         .unwrap();
     waiter.await.unwrap();
-}
-
-pub struct ConsensusMockServer {
-    sender: Sender<TransactionProto>,
-}
-
-impl ConsensusMockServer {
-    pub fn spawn(address: Multiaddr) -> Receiver<TransactionProto> {
-        let (sender, receiver) = channel(1);
-        tokio::spawn(async move {
-            let config = mysten_network::config::Config::new();
-            let mock = Self { sender };
-            config
-                .server_builder()
-                .add_service(TransactionsServer::new(mock))
-                .bind(&address)
-                .await
-                .unwrap()
-                .serve()
-                .await
-        });
-        receiver
-    }
-}
-
-#[tonic::async_trait]
-impl Transactions for ConsensusMockServer {
-    /// Submit a Transactions
-    async fn submit_transaction(
-        &self,
-        request: tonic::Request<TransactionProto>,
-    ) -> Result<tonic::Response<Empty>, tonic::Status> {
-        self.sender.send(request.into_inner()).await.unwrap();
-        Ok(tonic::Response::new(Empty {}))
-    }
-    /// Submit a Transactions
-    async fn submit_transaction_stream(
-        &self,
-        _request: tonic::Request<tonic::Streaming<TransactionProto>>,
-    ) -> Result<tonic::Response<Empty>, tonic::Status> {
-        unimplemented!()
-    }
 }

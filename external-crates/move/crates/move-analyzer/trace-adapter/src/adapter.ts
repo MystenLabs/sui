@@ -1,4 +1,5 @@
 import {
+    Breakpoint,
     Handles,
     Logger,
     logger,
@@ -19,8 +20,11 @@ import {
     RuntimeValueType,
     IRuntimeVariableScope,
     CompoundType,
-    IRuntimeRefValue
+    IRuntimeRefValue,
+    ExecutionResult
 } from './runtime';
+import { log } from 'console';
+
 
 const enum LogLevel {
     Log = 'log',
@@ -103,6 +107,12 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.runtime.on(RuntimeEvents.stopOnStep, () => {
             this.sendEvent(new StoppedEvent('step', MoveDebugSession.THREAD_ID));
         });
+        this.runtime.on(RuntimeEvents.stopOnLineBreakpoint, () => {
+            this.sendEvent(new StoppedEvent('breakpoint', MoveDebugSession.THREAD_ID));
+        });
+        this.runtime.on(RuntimeEvents.stopOnException, (msg) => {
+            this.sendEvent(new StoppedEvent('exception', MoveDebugSession.THREAD_ID, msg));
+        });
         this.runtime.on(RuntimeEvents.end, () => {
             this.sendEvent(new TerminatedEvent());
         });
@@ -116,6 +126,12 @@ export class MoveDebugSession extends LoggingDebugSession {
 
         // the adapter implements the configurationDone request
         response.body.supportsConfigurationDoneRequest = false;
+
+        // the adapter supports conditional breakpoints
+        response.body.supportsConditionalBreakpoints = false;
+
+        // the adapter supports breakpoints that break execution after a specified number of hits
+        response.body.supportsHitConditionalBreakpoints = false;
 
         // make VS Code use 'evaluate' when hovering over source
         response.body.supportsEvaluateForHovers = false;
@@ -176,6 +192,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): Promise<void> {
         logger.setup(convertLoggerLogLevel(args.logLevel ?? LogLevel.None), false);
         logger.log(`Launching trace viewer for file: ${args.source} and trace: ${args.traceInfo}`);
+
         try {
             await this.runtime.start(args.source, args.traceInfo, args.stopOnEntry || false);
         } catch (err) {
@@ -184,13 +201,6 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         this.sendResponse(response);
         this.sendEvent(new StoppedEvent('entry', MoveDebugSession.THREAD_ID));
-    }
-
-    protected configurationDoneRequest(
-        response: DebugProtocol.ConfigurationDoneResponse,
-        _args: DebugProtocol.ConfigurationDoneArguments
-    ): void {
-        this.sendResponse(response);
     }
 
     protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -216,7 +226,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 }).reverse(),
                 totalFrames: stack_height,
                 optimized_lines: stack_height > 0
-                    ? runtimeStack.frames[stack_height - 1].sourceMap.optimizedLines
+                    ? runtimeStack.frames[stack_height - 1].optimizedLines
                     : []
             };
         } catch (err) {
@@ -429,7 +439,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
+            const executionResult = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -446,7 +457,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
+            const executionResult = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -461,14 +473,16 @@ export class MoveDebugSession extends LoggingDebugSession {
         response: DebugProtocol.StepOutResponse,
         _args: DebugProtocol.StepOutArguments
     ): void {
+        let terminate = false;
         try {
-            const steppedOut = this.runtime.stepOut(/* next */ false);
-            if (!steppedOut) {
-                logger.log(`Cannot step out`);
-            }
+            const executionResult = this.runtime.stepOut(/* next */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
+        }
+        if (terminate) {
+            this.sendEvent(new TerminatedEvent());
         }
         this.sendResponse(response);
     }
@@ -479,7 +493,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.continue();
+            const executionResult = this.runtime.continue();
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -489,6 +504,27 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         this.sendResponse(response);
     }
+
+    protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
+        try {
+            const finalBreakpoints = [];
+            if (args.breakpoints && args.source.path) {
+                const breakpointLines = args.breakpoints.map(bp => bp.line);
+                const validatedBreakpoints = this.runtime.setLineBreakpoints(args.source.path, breakpointLines);
+                for (let i = 0; i < breakpointLines.length; i++) {
+                    finalBreakpoints.push(new Breakpoint(validatedBreakpoints[i], breakpointLines[i]));
+                }
+            }
+            response.body = {
+                breakpoints: finalBreakpoints
+            };
+        } catch (err) {
+            response.success = false;
+            response.message = err instanceof Error ? err.message : String(err);
+        }
+        this.sendResponse(response);
+    }
+
 
     protected disconnectRequest(
         response: DebugProtocol.DisconnectResponse,

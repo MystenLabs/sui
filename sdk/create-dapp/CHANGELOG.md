@@ -1,5 +1,35 @@
 # @mysten/create-dapp
 
+## 0.3.31
+
+### Patch Changes
+
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+  - @mysten/dapp-kit@0.14.30
+
+## 0.3.30
+
+### Patch Changes
+
+- 325955b: Fixes issue regarding refetching object data too soon after executing transactions
+
+## 0.3.29
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+  - @mysten/dapp-kit@0.14.29
+
+## 0.3.28
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+  - @mysten/dapp-kit@0.14.28
+
 ## 0.3.27
 
 ### Patch Changes

@@ -10,17 +10,21 @@ use sui_sdk_types::types::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
+use crate::accept::AcceptJsonProtobufBcs;
 use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use crate::proto;
+use crate::proto::ListCheckpointResponse;
 use crate::reader::StateReader;
-use crate::response::Bcs;
-use crate::Page;
-use crate::{accept::AcceptFormat, response::ResponseContent, RestError, Result};
+use crate::response::{JsonProtobufBcs, ProtobufBcs};
+use crate::PageCursor;
 use crate::{Direction, RestService};
+use crate::{RestError, Result};
 use documented::Documented;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct CheckpointResponse {
-    pub checkpoint: CheckpointSummary,
+    pub digest: CheckpointDigest,
+    pub summary: CheckpointSummary,
     pub signature: ValidatorAggregatedSignature,
     pub contents: Option<CheckpointContents>,
 }
@@ -78,9 +82,9 @@ impl ApiEndpoint<RestService> for GetCheckpoint {
 async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     Query(parameters): Query<GetCheckpointQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<CheckpointResponse>> {
+) -> Result<JsonProtobufBcs<CheckpointResponse, proto::GetCheckpointResponse, CheckpointResponse>> {
     let SignedCheckpointSummary {
         checkpoint,
         signature,
@@ -115,14 +119,16 @@ async fn get_checkpoint(
     };
 
     let response = CheckpointResponse {
-        checkpoint,
+        digest: checkpoint.digest(),
+        summary: checkpoint,
         signature,
         contents,
     };
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
     }
     .pipe(Ok)
 }
@@ -247,6 +253,7 @@ impl ApiEndpoint<RestService> for ListCheckpoints {
                 ResponseBuilder::new()
                     .json_content::<Vec<CheckpointResponse>>(generator)
                     .bcs_content()
+                    .protobuf_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
             )
@@ -262,9 +269,12 @@ impl ApiEndpoint<RestService> for ListCheckpoints {
 
 async fn list_checkpoints(
     Query(parameters): Query<ListCheckpointsQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<Page<CheckpointResponse, CheckpointSequenceNumber>> {
+) -> Result<(
+    PageCursor<CheckpointSequenceNumber>,
+    JsonProtobufBcs<Vec<CheckpointResponse>, ListCheckpointResponse, Vec<SignedCheckpointSummary>>,
+)> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
     let limit = parameters.limit();
@@ -295,7 +305,8 @@ async fn list_checkpoints(
                         None
                     };
                     Ok(CheckpointResponse {
-                        checkpoint,
+                        digest: checkpoint.digest(),
+                        summary: checkpoint,
                         signature,
                         contents,
                     })
@@ -304,9 +315,9 @@ async fn list_checkpoints(
         .collect::<Result<Vec<_>>>()?;
 
     let cursor = checkpoints.last().and_then(|checkpoint| match direction {
-        Direction::Ascending => checkpoint.checkpoint.sequence_number.checked_add(1),
+        Direction::Ascending => checkpoint.summary.sequence_number.checked_add(1),
         Direction::Descending => {
-            let cursor = checkpoint.checkpoint.sequence_number.checked_sub(1);
+            let cursor = checkpoint.summary.sequence_number.checked_sub(1);
             // If we've exhausted our available checkpoint range then there are no more pages left
             if cursor < Some(oldest_checkpoint) {
                 None
@@ -317,14 +328,26 @@ async fn list_checkpoints(
     });
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(checkpoints),
-        AcceptFormat::Bcs => ResponseContent::Bcs(checkpoints),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(checkpoints),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(checkpoints.try_into()?),
+        // In order to work around compatibility issues with existing clients, keep the BCS form as
+        // the old format without contents
+        AcceptJsonProtobufBcs::Bcs => {
+            let checkpoints = checkpoints
+                .into_iter()
+                .map(|c| SignedCheckpointSummary {
+                    checkpoint: c.summary,
+                    signature: c.signature,
+                })
+                .collect();
+            JsonProtobufBcs::Bcs(checkpoints)
+        }
     }
-    .pipe(|entries| Page { entries, cursor })
+    .pipe(|entries| (PageCursor(cursor), entries))
     .pipe(Ok)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct ListCheckpointsQueryParameters {
     /// Page size limit for the response.
     ///
@@ -411,15 +434,17 @@ impl ApiEndpoint<RestService> for GetFullCheckpoint {
 
 async fn get_full_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<Bcs<sui_types::full_checkpoint_content::CheckpointData>> {
+) -> Result<ProtobufBcs<proto::FullCheckpoint, sui_types::full_checkpoint_content::CheckpointData>>
+{
     match accept {
-        AcceptFormat::Bcs => {}
+        AcceptJsonProtobufBcs::Protobuf => {}
+        AcceptJsonProtobufBcs::Bcs => {}
         _ => {
             return Err(RestError::new(
                 axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/bcs' is supported",
+                "invalid accept type; only 'application/x-protobuf' is supported",
             ))
         }
     }
@@ -451,157 +476,15 @@ async fn get_full_checkpoint(
         .inner()
         .get_checkpoint_data(verified_summary, checkpoint_contents)?;
 
-    Ok(Bcs(checkpoint_data))
-}
-
-/// List Full Checkpoints
-///
-/// Request a page of checkpoints and all data associated with them including:
-/// - CheckpointSummary
-/// - Validator Signature
-/// - CheckpointContents
-/// - Transactions, Effects, Events, as well as all input and output objects
-///
-/// If the requested page is below the Node's `lowest_available_checkpoint_objects`, a 410 will be
-/// returned.
-#[derive(Documented)]
-pub struct ListFullCheckpoints;
-
-impl ApiEndpoint<RestService> for ListFullCheckpoints {
-    fn method(&self) -> axum::http::Method {
-        axum::http::Method::GET
-    }
-
-    fn path(&self) -> &'static str {
-        "/checkpoints/full"
-    }
-
-    fn stable(&self) -> bool {
-        // TODO transactions are serialized with an intent message, do we want to change this
-        // format to remove it (and remove user signature duplication) prior to stabalizing the
-        // format?
-        false
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Checkpoint")
-            .operation_id("List Full Checkpoints")
-            .description(Self::DOCS)
-            .query_parameters::<ListFullCheckpointsQueryParameters>(generator)
-            .response(200, ResponseBuilder::new().bcs_content().build())
-            .response(410, ResponseBuilder::new().build())
-            .response(500, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> RouteHandler<RestService> {
-        RouteHandler::new(self.method(), list_full_checkpoints)
-    }
-}
-
-async fn list_full_checkpoints(
-    Query(parameters): Query<ListFullCheckpointsQueryParameters>,
-    accept: AcceptFormat,
-    State(state): State<StateReader>,
-) -> Result<Page<sui_types::full_checkpoint_content::CheckpointData, CheckpointSequenceNumber>> {
     match accept {
-        AcceptFormat::Bcs => {}
+        AcceptJsonProtobufBcs::Protobuf => ProtobufBcs::Protobuf(checkpoint_data.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => ProtobufBcs::Bcs(checkpoint_data),
         _ => {
             return Err(RestError::new(
                 axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/bcs' is supported",
+                "invalid accept type; only 'application/x-protobuf' is supported",
             ))
         }
     }
-
-    let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
-    let oldest_checkpoint = state.inner().get_lowest_available_checkpoint_objects()?;
-    let limit = parameters.limit();
-    let start = parameters.start(latest_checkpoint);
-    let direction = parameters.direction();
-
-    if start < oldest_checkpoint {
-        return Err(crate::RestError::new(
-            axum::http::StatusCode::GONE,
-            "Old checkpoints have been pruned",
-        ));
-    }
-
-    let checkpoints = state
-        .checkpoint_iter(direction, start)
-        .take(
-            // only iterate until we've reached the edge of our objects available window
-            if direction.is_descending() {
-                std::cmp::min(limit, start.saturating_sub(oldest_checkpoint) as usize)
-            } else {
-                limit
-            },
-        )
-        .map(|result| {
-            result
-                .map_err(Into::into)
-                .and_then(|(checkpoint, contents)| {
-                    state
-                        .inner()
-                        .get_checkpoint_data(
-                            sui_types::messages_checkpoint::VerifiedCheckpoint::new_from_verified(
-                                checkpoint,
-                            ),
-                            contents,
-                        )
-                        .map_err(Into::into)
-                })
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    let cursor = checkpoints.last().and_then(|checkpoint| match direction {
-        Direction::Ascending => checkpoint.checkpoint_summary.sequence_number.checked_add(1),
-        Direction::Descending => {
-            let cursor = checkpoint.checkpoint_summary.sequence_number.checked_sub(1);
-            // If we've exhausted our available object range then there are no more pages left
-            if cursor < Some(oldest_checkpoint) {
-                None
-            } else {
-                cursor
-            }
-        }
-    });
-
-    ResponseContent::Bcs(checkpoints)
-        .pipe(|entries| Page { entries, cursor })
-        .pipe(Ok)
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct ListFullCheckpointsQueryParameters {
-    /// Page size limit for the response.
-    ///
-    /// Defaults to `5` if not provided with a maximum page size of `10`.
-    pub limit: Option<u32>,
-    /// The checkpoint to start listing from.
-    ///
-    /// Defaults to the latest checkpoint if not provided.
-    pub start: Option<CheckpointSequenceNumber>,
-    /// The direction to paginate in.
-    ///
-    /// Defaults to `descending` if not provided.
-    pub direction: Option<Direction>,
-}
-
-impl ListFullCheckpointsQueryParameters {
-    pub fn limit(&self) -> usize {
-        self.limit.map(|l| (l as usize).clamp(1, 10)).unwrap_or(5)
-    }
-
-    pub fn start(&self, default: CheckpointSequenceNumber) -> CheckpointSequenceNumber {
-        self.start.unwrap_or(default)
-    }
-
-    pub fn direction(&self) -> Direction {
-        self.direction.unwrap_or(Direction::Descending)
-    }
+    .pipe(Ok)
 }

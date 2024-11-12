@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
         FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
@@ -16,7 +16,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::VecDeque, fmt, hash::Hash};
+use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
 
 //**************************************************************************************************
 // Program
@@ -24,6 +24,8 @@ use std::{collections::VecDeque, fmt, hash::Hash};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     // Map of declared named addresses, and their values if specified
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
@@ -397,7 +399,7 @@ pub enum Exp_ {
     Pack(ModuleAccess, Option<Vec<Type>>, Fields<Exp>),
     Vector(Loc, Option<Vec<Type>>, Spanned<Vec<Exp>>),
 
-    IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     While(Option<BlockLabel>, Box<Exp>, Box<Exp>),
     Loop(Option<BlockLabel>, Box<Exp>),
@@ -414,7 +416,7 @@ pub enum Exp_ {
     Assign(LValueList, Box<Exp>),
     FieldMutate(Box<ExpDotted>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
-    Abort(Box<Exp>),
+    Abort(Option<Box<Exp>>),
     Return(Option<BlockLabel>, Box<Exp>),
     Break(Option<BlockLabel>, Box<Exp>),
     Continue(Option<BlockLabel>),
@@ -971,7 +973,10 @@ impl std::fmt::Display for Value_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules } = self;
+        let Program {
+            warning_filters_table: _,
+            modules,
+        } = self;
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
@@ -1571,13 +1576,15 @@ impl AstDebug for Exp_ {
                 w.comma(elems, |w, e| e.ast_debug(w));
                 w.write("]");
             }
-            E::IfElse(b, t, f) => {
+            E::IfElse(b, t, f_opt) => {
                 w.write("if (");
                 b.ast_debug(w);
                 w.write(") ");
                 t.ast_debug(w);
-                w.write(" else ");
-                f.ast_debug(w);
+                if let Some(f) = f_opt {
+                    w.write(" else ");
+                    f.ast_debug(w);
+                }
             }
             E::Match(subject, arms) => {
                 w.write("match (");
@@ -1650,8 +1657,11 @@ impl AstDebug for Exp_ {
             }
 
             E::Abort(e) => {
-                w.write("abort ");
-                e.ast_debug(w);
+                w.write("abort");
+                if let Some(e) = e {
+                    w.write(" ");
+                    e.ast_debug(w);
+                }
             }
             E::Return(name, e) => {
                 w.write("return ");

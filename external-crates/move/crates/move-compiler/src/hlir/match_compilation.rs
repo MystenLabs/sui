@@ -239,7 +239,7 @@ pub(super) fn compile_match(
                 }
             };
         ice_assert!(
-            context.env,
+            context.reporter,
             redefined.is_none(),
             loc,
             "Match work queue went awry"
@@ -295,7 +295,7 @@ fn compile_match_head(
             );
             subject_binders.append(&mut new_binders);
             ice_assert!(
-                context.env,
+                context.reporter,
                 arms.insert(lit, inner_matrix).is_none(),
                 lit_loc,
                 "Specialization failed"
@@ -403,7 +403,7 @@ fn compile_match_head(
                              ("specialized" => inner_matrix));
                 subject_binders.append(&mut new_binders);
                 ice_assert!(
-                    context.env,
+                    context.reporter,
                     arms.insert(ctor, (fringe_binders, inner_fringe, inner_matrix))
                         .is_none(),
                     ploc,
@@ -640,7 +640,7 @@ fn make_leaf(
     if leaf.len() == 1 {
         let last = leaf.pop().unwrap();
         ice_assert!(
-            context.hlir_context.env,
+            context.hlir_context.reporter,
             last.guard.is_none(),
             last.guard.unwrap().exp.loc,
             "Must have a non-guarded leaf"
@@ -650,7 +650,7 @@ fn make_leaf(
 
     let last = leaf.pop().unwrap();
     ice_assert!(
-        context.hlir_context.env,
+        context.hlir_context.reporter,
         last.guard.is_none(),
         last.guard.unwrap().exp.loc,
         "Must have a non-guarded leaf"
@@ -660,7 +660,7 @@ fn make_leaf(
     let out_ty = out_exp.ty.clone();
     while let Some(arm) = leaf.pop() {
         ice_assert!(
-            context.hlir_context.env,
+            context.hlir_context.reporter,
             arm.guard.is_some(),
             arm.loc,
             "Expected a guard"
@@ -724,7 +724,7 @@ fn make_arm_unpack(
                 let Some((queue_entries, unpack)) =
                     arm_variant_unpack(context, None, ploc, m, e, tys, v, fs, entry)
                 else {
-                    context.hlir_context.env.add_diag(ice!((
+                    context.hlir_context.add_diag(ice!((
                         ploc,
                         "Did not build an arm unpack for a value variant"
                     )));
@@ -750,7 +750,7 @@ fn make_arm_unpack(
                 let Some((queue_entries, unpack)) =
                     arm_struct_unpack(context, None, ploc, m, s, tys, fs, entry)
                 else {
-                    context.hlir_context.env.add_diag(ice!((
+                    context.hlir_context.add_diag(ice!((
                         ploc,
                         "Did not build an arm unpack for a value struct"
                     )));
@@ -1277,7 +1277,7 @@ fn make_if_else(test: T::Exp, conseq: T::Exp, alt: T::Exp, result_ty: Type) -> T
         result_ty,
         sp(
             loc,
-            T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Box::new(alt)),
+            T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Some(Box::new(alt))),
         ),
     )
 }

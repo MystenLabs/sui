@@ -5,10 +5,10 @@ current frame stack:
       type: u64
 
       some_struct : (0x0::m::SomeStruct) {
-        simple_field : 0
         struct_field : (0x0::m::SimpleStruct) {
           field : 0
         }
+        simple_field : 0
         vec_simple_field : [
           0 : 0
         ]
@@ -24,10 +24,10 @@ current frame stack:
   function: foo (line 19)
     scope 0 :
       some_struct_ref : (0x0::m::SomeStruct) {
-        simple_field : 0
         struct_field : (0x0::m::SimpleStruct) {
           field : 0
         }
+        simple_field : 0
         vec_simple_field : [
           0 : 0
         ]
@@ -50,10 +50,10 @@ current frame stack:
       type: u64
 
       some_struct : (0x0::m::SomeStruct) {
-        simple_field : 42
         struct_field : (0x0::m::SimpleStruct) {
           field : 42
         }
+        simple_field : 42
         vec_simple_field : [
           0 : 42
         ]
@@ -69,10 +69,10 @@ current frame stack:
   function: foo (line 27)
     scope 0 :
       some_struct_ref : (0x0::m::SomeStruct) {
-        simple_field : 42
         struct_field : (0x0::m::SimpleStruct) {
           field : 42
         }
+        simple_field : 42
         vec_simple_field : [
           0 : 42
         ]

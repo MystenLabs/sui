@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::quorum_driver::reconfig_observer::DummyReconfigObserver;
-use crate::quorum_driver::{AuthorityAggregator, QuorumDriverHandlerBuilder};
+use crate::quorum_driver::{
+    AuthorityAggregator, AuthorityAggregatorUpdatable as _, QuorumDriverHandlerBuilder,
+};
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_authority_clients::LocalAuthorityClientFaultConfig;
 use crate::test_utils::make_transfer_sui_transaction;
@@ -215,9 +217,7 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
     let mut committee = aggregator.clone_inner_committee_test_only();
     committee.epoch = 10;
     aggregator.committee = Arc::new(committee);
-    quorum_driver_clone
-        .update_validators(Arc::new(aggregator))
-        .await;
+    quorum_driver_clone.update_authority_aggregator(Arc::new(aggregator));
     assert_eq!(
         quorum_driver_handler.clone_quorum_driver().current_epoch(),
         10

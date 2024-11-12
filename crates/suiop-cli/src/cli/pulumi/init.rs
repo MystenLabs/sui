@@ -12,6 +12,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 
+use super::PulumiProjectRuntime;
+
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum ProjectType {
     App,
@@ -23,7 +25,12 @@ pub enum ProjectType {
 const KEYRING: &str = "pulumi-kms-automation-f22939d";
 
 impl ProjectType {
-    pub fn create_project(&self, use_kms: &bool, project_name: Option<String>) -> Result<()> {
+    pub fn create_project(
+        &self,
+        use_kms: &bool,
+        project_name: Option<String>,
+        runtime: &PulumiProjectRuntime,
+    ) -> Result<()> {
         // make sure we're in suiops
         let suiops_path = ensure_in_suiops_repo()?;
         info!("suipop path: {}", suiops_path);
@@ -87,11 +94,12 @@ impl ProjectType {
                         &project_dir,
                         Self::App,
                         &project_opts,
+                        runtime,
                     )?;
                 }
                 Self::Basic => {
                     info!("creating basic pulumi project");
-                    create_basic_project(&project_name, &project_dir, &project_opts)?;
+                    create_basic_project(&project_name, &project_dir, &project_opts, runtime)?;
                 }
                 Self::CronJob => {
                     info!("creating k8s cronjob project");
@@ -100,6 +108,7 @@ impl ProjectType {
                         &project_dir,
                         Self::CronJob,
                         &project_opts,
+                        runtime,
                     )?;
                 }
             }
@@ -145,6 +154,7 @@ fn run_pulumi_new(
     project_name: &str,
     project_dir_str: &str,
     project_opts: &[String],
+    runtime: &PulumiProjectRuntime,
 ) -> Result<()> {
     info!(
         "creating new pulumi project in {}",
@@ -152,12 +162,16 @@ fn run_pulumi_new(
     );
     let opts = project_opts.join(" ");
     info!("extra pulumi options added: {}", &opts.bright_purple());
+    let runtime_arg = match runtime {
+        PulumiProjectRuntime::Go => "go",
+        PulumiProjectRuntime::Typescript => "ts",
+    };
     run_cmd(
         vec![
             "bash",
             "-c",
             &format!(
-                r#"pulumi new go --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack mysten/dev --yes {2}"#,
+                r#"pulumi new {runtime_arg} --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack mysten/dev --yes {2}"#,
                 project_dir_str, project_name, opts
             ),
         ],
@@ -171,15 +185,17 @@ fn run_pulumi_new_from_template(
     project_dir_str: &str,
     project_type: ProjectType,
     project_opts: &[String],
+    runtime: &PulumiProjectRuntime,
 ) -> Result<()> {
     info!(
         "creating new pulumi project in {}",
         project_dir_str.bright_purple()
     );
-    let template_dir = match project_type {
-        ProjectType::App | ProjectType::Service => "app-go",
-        ProjectType::CronJob => "cronjob-go",
-        _ => "app-go",
+    let template_dir = match (project_type, runtime) {
+        (ProjectType::App | ProjectType::Service, PulumiProjectRuntime::Go) => "app-go",
+        (ProjectType::CronJob, PulumiProjectRuntime::Go) => "cronjob-go",
+        (ProjectType::App | ProjectType::Service, PulumiProjectRuntime::Typescript) => "app-ts",
+        _ => panic!("unsupported runtime for this project type"),
     };
     let opts = project_opts.join(" ");
     info!("extra pulumi options added: {}", &opts.bright_purple());
@@ -288,6 +304,7 @@ fn create_basic_project(
     project_name: &str,
     project_dir: &PathBuf,
     project_opts: &[String],
+    runtime: &PulumiProjectRuntime,
 ) -> Result<()> {
     let project_dir_str = project_dir.to_str().expect("project dir to str");
     info!(
@@ -296,13 +313,16 @@ fn create_basic_project(
     );
     fs::create_dir_all(project_dir).context("failed to create project directory")?;
     // initialize pulumi project
-    run_pulumi_new(project_name, project_dir_str, project_opts).inspect_err(|_| {
+    run_pulumi_new(project_name, project_dir_str, project_opts, runtime).inspect_err(|_| {
         remove_project_dir(project_dir).unwrap();
         let backend = get_current_backend().unwrap();
         remove_stack(&backend, project_name, "mysten/dev").unwrap();
     })?;
     // run go mod tidy to make sure all dependencies are installed
-    run_go_mod_tidy(project_dir_str)?;
+    if runtime == &PulumiProjectRuntime::Go {
+        debug!("running go mod tidy");
+        run_go_mod_tidy(project_dir_str)?;
+    }
     // set pulumi env
     set_pulumi_env(project_dir_str)?;
     // try a pulumi preview to make sure it's good
@@ -314,6 +334,7 @@ fn create_mysten_k8s_project(
     project_dir: &PathBuf,
     project_type: ProjectType,
     project_opts: &[String],
+    runtime: &PulumiProjectRuntime,
 ) -> Result<()> {
     let project_dir_str = project_dir.to_str().expect("project dir to str");
     info!(
@@ -322,14 +343,23 @@ fn create_mysten_k8s_project(
     );
     fs::create_dir_all(project_dir).context("failed to create project directory")?;
     // initialize pulumi project
-    run_pulumi_new_from_template(project_name, project_dir_str, project_type, project_opts)
-        .inspect_err(|_| {
-            remove_project_dir(project_dir).unwrap();
-            let backend = get_current_backend().unwrap();
-            remove_stack(&backend, project_name, "mysten/dev").unwrap();
-        })?;
+    run_pulumi_new_from_template(
+        project_name,
+        project_dir_str,
+        project_type,
+        project_opts,
+        runtime,
+    )
+    .inspect_err(|_| {
+        remove_project_dir(project_dir).unwrap();
+        let backend = get_current_backend().unwrap();
+        remove_stack(&backend, project_name, "mysten/dev").unwrap();
+    })?;
     // run go mod tidy to make sure all dependencies are installed
-    run_go_mod_tidy(project_dir_str)?;
+    if runtime == &PulumiProjectRuntime::Go {
+        debug!("running go mod tidy");
+        run_go_mod_tidy(project_dir_str)?;
+    }
     // we don't run preview for templated apps because the user
     // has to give the repo dir (improvements to this coming soon)
 

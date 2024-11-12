@@ -79,25 +79,19 @@ impl CheckpointReader {
     /// Represents a single iteration of the reader.
     /// Reads files in a local directory, validates them, and forwards `CheckpointData` to the executor.
     async fn read_local_files(&self) -> Result<Vec<Arc<CheckpointData>>> {
-        let mut files = vec![];
-        for entry in fs::read_dir(self.path.clone())? {
-            let entry = entry?;
-            let filename = entry.file_name();
-            if let Some(sequence_number) = Self::checkpoint_number_from_file_path(&filename) {
-                if sequence_number >= self.current_checkpoint_number {
-                    files.push((sequence_number, entry.path()));
-                }
-            }
-        }
-        files.sort();
-        debug!("unprocessed local files {:?}", files);
         let mut checkpoints = vec![];
-        for (_, filename) in files.iter().take(MAX_CHECKPOINTS_IN_PROGRESS) {
-            let checkpoint = Blob::from_bytes::<Arc<CheckpointData>>(&fs::read(filename)?)?;
-            if self.exceeds_capacity(checkpoint.checkpoint_summary.sequence_number) {
+        for offset in 0..MAX_CHECKPOINTS_IN_PROGRESS {
+            let sequence_number = self.current_checkpoint_number + offset as u64;
+            if self.exceeds_capacity(sequence_number) {
                 break;
             }
-            checkpoints.push(checkpoint);
+            match fs::read(self.path.join(format!("{}.chk", sequence_number))) {
+                Ok(bytes) => checkpoints.push(Blob::from_bytes::<Arc<CheckpointData>>(&bytes)?),
+                Err(err) => match err.kind() {
+                    std::io::ErrorKind::NotFound => break,
+                    _ => Err(err)?,
+                },
+            }
         }
         Ok(checkpoints)
     }

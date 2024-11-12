@@ -7,19 +7,15 @@ use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{db, models::events::StoredEvStructInst, schema::ev_struct_inst};
-
-use super::Handler;
+use crate::{
+    db, models::events::StoredEvStructInst, pipeline::concurrent::Handler, pipeline::Processor,
+    schema::ev_struct_inst,
+};
 
 pub struct EvStructInst;
 
-#[async_trait::async_trait]
-impl Handler for EvStructInst {
+impl Processor for EvStructInst {
     const NAME: &'static str = "ev_struct_inst";
-
-    const BATCH_SIZE: usize = 100;
-    const CHUNK_SIZE: usize = 1000;
-    const MAX_PENDING_SIZE: usize = 10000;
 
     type Value = StoredEvStructInst;
 
@@ -52,6 +48,13 @@ impl Handler for EvStructInst {
 
         Ok(values.into_iter().collect())
     }
+}
+
+#[async_trait::async_trait]
+impl Handler for EvStructInst {
+    const MIN_EAGER_ROWS: usize = 100;
+    const MAX_CHUNK_ROWS: usize = 1000;
+    const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         Ok(diesel::insert_into(ev_struct_inst::table)

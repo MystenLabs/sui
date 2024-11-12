@@ -20,7 +20,7 @@ use crate::ingestion::regulator::regulator;
 use crate::metrics::IndexerMetrics;
 
 mod broadcaster;
-mod client;
+pub mod client;
 pub mod error;
 mod local_client;
 mod regulator;
@@ -31,7 +31,6 @@ mod test_utils;
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
-    metrics: Arc<IndexerMetrics>,
     ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
@@ -42,20 +41,20 @@ pub struct IngestionService {
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
     #[arg(long, required = true, group = "source")]
-    remote_store_url: Option<Url>,
+    pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
     #[arg(long, required = true, group = "source")]
-    local_ingestion_path: Option<PathBuf>,
+    pub local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
-    buffer_size: usize,
+    pub checkpoint_buffer_size: usize,
 
     /// Maximum number of checkpoints to attempt to fetch concurrently.
     #[arg(long, default_value_t = 200)]
-    concurrency: usize,
+    pub ingest_concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
     #[arg(
@@ -64,7 +63,7 @@ pub struct IngestionConfig {
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis)
     )]
-    retry_interval: Duration,
+    pub retry_interval: Duration,
 }
 
 impl IngestionService {
@@ -86,12 +85,16 @@ impl IngestionService {
         Ok(Self {
             config,
             client,
-            metrics,
             ingest_hi_tx,
             ingest_hi_rx,
             subscribers,
             cancel,
         })
+    }
+
+    /// The client this service uses to fetch checkpoints.
+    pub fn client(&self) -> &IngestionClient {
+        &self.client
     }
 
     /// Add a new subscription to the ingestion service. Note that the service is susceptible to
@@ -109,7 +112,7 @@ impl IngestionService {
         mpsc::Receiver<Arc<CheckpointData>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
-        let (sender, receiver) = mpsc::channel(self.config.buffer_size);
+        let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
         self.subscribers.push(sender);
         (receiver, self.ingest_hi_tx.clone())
     }
@@ -136,7 +139,6 @@ impl IngestionService {
         let IngestionService {
             config,
             client,
-            metrics,
             ingest_hi_tx: _,
             ingest_hi_rx,
             subscribers,
@@ -147,24 +149,17 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.concurrency);
+        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
 
         let regulator = regulator(
             checkpoints,
-            config.buffer_size,
+            config.checkpoint_buffer_size,
             ingest_hi_rx,
             checkpoint_tx,
             cancel.clone(),
         );
 
-        let broadcaster = broadcaster(
-            config,
-            client,
-            metrics,
-            checkpoint_rx,
-            subscribers,
-            cancel.clone(),
-        );
+        let broadcaster = broadcaster(config, client, checkpoint_rx, subscribers, cancel.clone());
 
         Ok((regulator, broadcaster))
     }
@@ -186,16 +181,16 @@ mod tests {
 
     async fn test_ingestion(
         uri: String,
-        buffer_size: usize,
-        concurrency: usize,
+        checkpoint_buffer_size: usize,
+        ingest_concurrency: usize,
         cancel: CancellationToken,
     ) -> IngestionService {
         IngestionService::new(
             IngestionConfig {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
                 local_ingestion_path: None,
-                buffer_size,
-                concurrency,
+                checkpoint_buffer_size,
+                ingest_concurrency,
                 retry_interval: Duration::from_millis(200),
             },
             Arc::new(test_metrics()),

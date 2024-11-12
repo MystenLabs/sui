@@ -14,7 +14,7 @@ use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
-use tracing::info;
+use tracing::{info, trace};
 
 const HIGHEST_RATES_CAPACITY: usize = 20;
 
@@ -222,7 +222,7 @@ impl TrafficSketch {
 pub struct TrafficTally {
     pub direct: Option<IpAddr>,
     pub through_fullnode: Option<IpAddr>,
-    pub error_weight: Weight,
+    pub error_info: Option<(Weight, String)>,
     pub spam_weight: Weight,
     pub timestamp: SystemTime,
 }
@@ -231,13 +231,13 @@ impl TrafficTally {
     pub fn new(
         direct: Option<IpAddr>,
         through_fullnode: Option<IpAddr>,
-        error_weight: Weight,
+        error_info: Option<(Weight, String)>,
         spam_weight: Weight,
     ) -> Self {
         Self {
             direct,
             through_fullnode,
-            error_weight,
+            error_info,
             spam_weight,
             timestamp: SystemTime::now(),
         }
@@ -360,7 +360,14 @@ impl FreqThresholdPolicy {
         let block_client = if let Some(source) = tally.direct {
             let key = SketchKey(source, ClientType::Direct);
             self.sketch.increment_count(&key);
-            if self.sketch.get_request_rate(&key) >= self.client_threshold as f64 {
+            let req_rate = self.sketch.get_request_rate(&key);
+            trace!(
+                "FreqThresholdPolicy handling tally -- req_rate: {:?}, client_threshold: {:?}, client: {:?}",
+                req_rate,
+                self.client_threshold,
+                source,
+            );
+            if req_rate >= self.client_threshold as f64 {
                 Some(source)
             } else {
                 None
@@ -515,21 +522,21 @@ mod tests {
         let alice = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
             through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
-            error_weight: Weight::zero(),
+            error_info: None,
             spam_weight: Weight::one(),
             timestamp: SystemTime::now(),
         };
         let bob = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
             through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
-            error_weight: Weight::zero(),
+            error_info: None,
             spam_weight: Weight::one(),
             timestamp: SystemTime::now(),
         };
         let charlie = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
             through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))),
-            error_weight: Weight::zero(),
+            error_info: None,
             spam_weight: Weight::one(),
             timestamp: SystemTime::now(),
         };

@@ -1,46 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, cmp};
+use std::borrow::Cow;
 
-use crate::{db::Connection, schema::watermarks};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use sui_field_count::FieldCount;
 
-#[derive(Insertable, Debug, Clone)]
+use crate::{db::Connection, schema::watermarks};
+
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
 pub struct StoredWatermark {
     pub pipeline: String,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
     pub tx_hi: i64,
+    pub timestamp_ms_hi_inclusive: i64,
     pub epoch_lo: i64,
     pub reader_lo: i64,
-    pub timestamp_ms: i64,
+    pub pruner_timestamp_ms: i64,
     pub pruner_hi: i64,
 }
 
 /// Fields that the committer is responsible for setting.
-#[derive(AsChangeset, Selectable, Queryable, Debug, Clone)]
+#[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
 pub struct CommitterWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
     pub tx_hi: i64,
-}
-
-/// Outcomes from extending one watermark with another.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum Ordering {
-    /// The watermark was in the future, so could not be added.
-    Future,
-
-    /// The added watermark was in the past, so the current watermark didn't change.
-    Past,
-
-    /// The added watermark was the successor to the current watermark, so was used in the update.
-    Next,
+    pub timestamp_ms_hi_inclusive: i64,
 }
 
 impl CommitterWatermark<'static> {
@@ -66,7 +58,13 @@ impl<'p> CommitterWatermark<'p> {
             epoch_hi_inclusive: 0,
             checkpoint_hi_inclusive: 0,
             tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
         }
+    }
+
+    /// The consensus timestamp associated with this checkpoint.
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
     }
 
     /// Upsert the high watermark as long as it raises the watermark stored in the database.
@@ -85,16 +83,6 @@ impl<'p> CommitterWatermark<'p> {
             .await?
             > 0)
     }
-
-    /// Compare `other` with the immediate successor of this watermark.
-    pub fn next_cmp(&self, other: &CommitterWatermark<'_>) -> Ordering {
-        let next = self.checkpoint_hi_inclusive + 1;
-        match other.checkpoint_hi_inclusive.cmp(&next) {
-            cmp::Ordering::Equal => Ordering::Next,
-            cmp::Ordering::Less => Ordering::Past,
-            cmp::Ordering::Greater => Ordering::Future,
-        }
-    }
 }
 
 impl<'p> From<CommitterWatermark<'p>> for StoredWatermark {
@@ -104,33 +92,11 @@ impl<'p> From<CommitterWatermark<'p>> for StoredWatermark {
             epoch_hi_inclusive: watermark.epoch_hi_inclusive,
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
             tx_hi: watermark.tx_hi,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
             epoch_lo: 0,
             reader_lo: 0,
-            timestamp_ms: 0,
+            pruner_timestamp_ms: 0,
             pruner_hi: 0,
         }
-    }
-}
-
-// Ordering for watermarks is driven solely by their checkpoints.
-
-impl PartialEq for CommitterWatermark<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.checkpoint_hi_inclusive == other.checkpoint_hi_inclusive
-    }
-}
-
-impl Eq for CommitterWatermark<'_> {}
-
-impl Ord for CommitterWatermark<'_> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.checkpoint_hi_inclusive
-            .cmp(&other.checkpoint_hi_inclusive)
-    }
-}
-
-impl PartialOrd for CommitterWatermark<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
     }
 }

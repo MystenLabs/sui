@@ -297,13 +297,18 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     register_fail_point_arg("initial_congestion_tracker", move || {
-        Some(
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(
-                &[(shared_object_1.0, 10)],
-                PerObjectCongestionControlMode::TotalGasBudget,
-                Some(1000), // Not used.
+        Some(SharedObjectCongestionTracker::new(
+            [(shared_object_1.0, 10)],
+            PerObjectCongestionControlMode::TotalGasBudget,
+            Some(
+                test_setup
+                    .protocol_config
+                    .max_accumulated_txn_cost_per_object_in_mysticeti_commit(),
             ),
-        )
+            Some(1000), // Not used.
+            None,       // Not used.
+            0,          // Disable overage.
+        ))
     });
 
     // Runs a transaction that touches shared_object_1, shared_object_2 and a owned object.

@@ -50,6 +50,7 @@ use move_binary_format::file_format::SignatureToken;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_value as A;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
@@ -438,6 +439,14 @@ pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
             let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
             // is id or..
             if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is utf8 string
+            if resolved_struct == RESOLVED_UTF8_STR {
+                return true;
+            }
+            // is ascii string
+            if resolved_struct == RESOLVED_ASCII_STR {
                 return true;
             }
             // is option of a primitive
@@ -892,6 +901,36 @@ pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
+
+pub fn move_ascii_str_layout() -> A::MoveStructLayout {
+    A::MoveStructLayout {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.to_owned(),
+            name: STD_ASCII_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        },
+        fields: Box::new(vec![A::MoveFieldLayout::new(
+            ident_str!("bytes").into(),
+            A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
+        )]),
+    }
+}
+
+pub fn move_utf8_str_layout() -> A::MoveStructLayout {
+    A::MoveStructLayout {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_UTF8_MODULE_NAME.to_owned(),
+            name: STD_UTF8_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        },
+        fields: Box::new(vec![A::MoveFieldLayout::new(
+            ident_str!("bytes").into(),
+            A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
+        )]),
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {

@@ -11,8 +11,8 @@ use std::{
 
 use crate::{
     diag,
-    diagnostics::Diagnostic,
-    shared::{string_utils::format_oxford_list, CompilationEnv},
+    diagnostics::{Diagnostic, DiagnosticReporter},
+    shared::string_utils::format_oxford_list,
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -72,13 +72,13 @@ pub const UPGRADE_NOTE: &str =
 /// Returns true if the feature is present in the given edition.
 /// Adds an error to the environment.
 pub fn check_feature_or_error(
-    env: &mut CompilationEnv,
+    reporter: &DiagnosticReporter,
     edition: Edition,
     feature: FeatureGate,
     loc: Loc,
 ) -> bool {
     if !edition.supports(feature) {
-        env.add_diag(create_feature_error(edition, feature, loc));
+        reporter.add_diag(create_feature_error(edition, feature, loc));
         false
     } else {
         true

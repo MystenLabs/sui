@@ -3,10 +3,13 @@
 
 import { useCurrentAccount, useSignTransaction, useSuiClientContext } from '@mysten/dapp-kit';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { messageWithIntent } from '@mysten/sui/cryptography';
 import { Transaction } from '@mysten/sui/transactions';
+import { fromBase64, toHex } from '@mysten/sui/utils';
+import { blake2b } from '@noble/hashes/blake2b';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle, Terminal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ConnectWallet } from '@/components/connect';
 import { DryRunProvider, type Network } from '@/components/preview-effects/DryRunContext';
@@ -69,6 +72,21 @@ export default function OfflineSigner() {
 			});
 		},
 	});
+
+	// Step 3: compute the blake2b hash
+	const ledgerTransactionHash = useMemo(() => {
+		if (!bytes) return null;
+		try {
+			// Decode the base64-encoded transaction bytes
+			const decodedBytes = fromBase64(bytes);
+			const intentMessage = messageWithIntent('TransactionData', decodedBytes);
+			const intentMessageDigest = blake2b(intentMessage, { dkLen: 32 });
+			const intentMessageDigestHex = toHex(intentMessageDigest);
+			return `0x${intentMessageDigestHex}`;
+		} catch (error) {
+			return 'Error computing hash';
+		}
+	}, [bytes]);
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -144,6 +162,15 @@ export default function OfflineSigner() {
 							<DryRunProvider network={dryRunNetwork}>
 								<EffectsPreview output={dryRunData} network={dryRunNetwork} />
 							</DryRunProvider>
+						)}
+
+						{ledgerTransactionHash && (
+							<div>
+								<h4 className="text-lg font-semibold">Ledger Transaction Hash</h4>
+								<div className="border text-mono break-all rounded p-4">
+									{ledgerTransactionHash}
+								</div>
+							</div>
 						)}
 					</div>
 				</TabsContent>
