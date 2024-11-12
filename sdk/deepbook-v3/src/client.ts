@@ -344,10 +344,12 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description Get the order information for a specific order in a pool
-	 * @param {string} poolKey Key of the pool
-	 * @param {string} orderIds Order ID list
-	 * @returns {Promise<Object>} A promise that resolves to an object containing the order information
+	 * @description Retrieves information for multiple specific orders in a pool.
+	 * @param {string} poolKey - The key identifying the pool from which to retrieve order information.
+	 * @param {string[]} orderIds - List of order IDs to retrieve information for.
+	 * @returns {Promise<Object[] | null>} A promise that resolves to an array of order objects, each containing details such as
+	 * balance manager ID, order ID, client order ID, quantity, filled quantity, fee information, order price, epoch, status,
+	 * and expiration timestamp. Returns `null` if the retrieval fails.
 	 */
 	async getOrders(poolKey: string, orderIds: string[]) {
 		const tx = new Transaction();
