@@ -1684,14 +1684,15 @@ importers:
       '@types/node':
         specifier: ^20.14.10
         version: 20.14.10
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.4.5
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
       vitest:
         specifier: ^2.0.1
         version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
-
-  sdk/signers/aws: {}
 
   sdk/suins-toolkit:
     dependencies:
@@ -9183,8 +9184,8 @@ packages:
     peerDependencies:
       webpack: ^4 || ^5
 
-  dotenv@16.4.1:
-    resolution: {integrity: sha512-CjA3y+Dr3FyFDOAMnxZEGtnW9KBR2M0JvvUtXNW+dYJL5ROWxP9DUHCwgFqpMk0OXCc0ljhaNTr2w/kutYIcHQ==}
+  dotenv@16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
     engines: {node: '>=12'}
 
   dotenv@7.0.0:
@@ -17999,7 +18000,7 @@ snapshots:
       '@whatwg-node/fetch': 0.9.16
       chalk: 4.1.2
       debug: 4.3.7(supports-color@8.1.1)
-      dotenv: 16.4.1
+      dotenv: 16.4.5
       graphql: 16.9.0
       graphql-request: 6.1.0(graphql@16.9.0)
       http-proxy-agent: 7.0.0
@@ -24762,7 +24763,7 @@ snapshots:
       dotenv-defaults: 2.0.2
       webpack: 5.92.1(@swc/core@1.6.13(@swc/helpers@0.5.5))(webpack-cli@5.1.4(webpack@5.92.1))
 
-  dotenv@16.4.1: {}
+  dotenv@16.4.5: {}
 
   dotenv@7.0.0: {}
 
@@ -27401,7 +27402,7 @@ snapshots:
   lazy-universal-dotenv@4.0.0:
     dependencies:
       app-root-dir: 1.0.2
-      dotenv: 16.4.1
+      dotenv: 16.4.5
       dotenv-expand: 10.0.0
 
   lcid@3.1.1:
