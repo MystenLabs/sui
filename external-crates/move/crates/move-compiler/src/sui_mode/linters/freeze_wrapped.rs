@@ -207,10 +207,7 @@ impl<'a> Context<'a> {
         mident: &E::ModuleIdent,
         sname: &P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
-        let memoized_info = self
-            .wrapping_fields
-            .get(&mident)
-            .and_then(|m| m.get(&sname));
+        let memoized_info = self.wrapping_fields.get(mident).and_then(|m| m.get(sname));
         if memoized_info.is_none() {
             let info = self.find_wrapping_field_loc_impl(mident, sname);
             self.wrapping_fields
@@ -220,8 +217,8 @@ impl<'a> Context<'a> {
         }
         *self
             .wrapping_fields
-            .get(&mident)
-            .and_then(|m| m.get(&sname))
+            .get(mident)
+            .and_then(|m| m.get(sname))
             .unwrap()
     }
 
