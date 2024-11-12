@@ -16,6 +16,7 @@ pub trait FilterContext {
 
     /// Attribute-based node removal
     fn should_remove_by_attributes(&mut self, _attrs: &[P::Attributes]) -> bool;
+    fn should_remove_sequence_item(&mut self, item: &P::SequenceItem) -> bool;
 
     fn filter_map_address(
         &mut self,
@@ -217,11 +218,58 @@ fn filter_module_member<T: FilterContext>(
     use P::ModuleMember as PM;
 
     match module_member {
-        PM::Function(func_def) => context.filter_map_function(func_def).map(PM::Function),
+        PM::Function(func_def) => context
+            .filter_map_function(func_def)
+            .map(|f| PM::Function(filter_through_function_body(context, f))),
         PM::Struct(struct_def) => context.filter_map_struct(struct_def).map(PM::Struct),
         PM::Enum(enum_def) => context.filter_map_enum(enum_def).map(PM::Enum),
         PM::Use(use_decl) => context.filter_map_use(use_decl).map(PM::Use),
         PM::Friend(friend_decl) => context.filter_map_friend(friend_decl).map(PM::Friend),
         PM::Constant(constant) => context.filter_map_constant(constant).map(PM::Constant),
     }
+}
+
+fn filter_through_function_body<T: FilterContext>(
+    context: &mut T,
+    function_def: P::Function,
+) -> P::Function {
+    let P::Function {
+        attributes,
+        loc,
+        visibility,
+        entry,
+        macro_,
+        signature,
+        name,
+        body,
+    } = function_def;
+
+    let new_body = filter_function_body(context, body);
+
+    P::Function {
+        attributes,
+        loc,
+        visibility,
+        entry,
+        macro_,
+        signature,
+        name,
+        body: new_body,
+    }
+}
+
+fn filter_function_body<T: FilterContext>(
+    context: &mut T,
+    body: P::FunctionBody,
+) -> P::FunctionBody {
+    body.map(|b| match b {
+        P::FunctionBody_::Native => b,
+        P::FunctionBody_::Defined((uses, items, loc, exp)) => {
+            let new_items = items
+                .into_iter()
+                .filter(|item| !context.should_remove_sequence_item(item))
+                .collect();
+            P::FunctionBody_::Defined((uses, new_items, loc, exp))
+        }
+    })
 }

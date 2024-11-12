@@ -54,6 +54,26 @@ impl FilterContext for Context<'_> {
             .next();
         is_verify_only_loc.is_some()
     }
+
+    fn should_remove_sequence_item(&mut self, item: &P::SequenceItem) -> bool {
+        match &item.value {
+            P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
+            P::SequenceItem_::Declare(_, _) => false,
+            P::SequenceItem_::Bind(_, _, exp) => should_remove_exp(exp),
+        }
+    }
+}
+
+fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bool {
+    match &exp.value {
+        P::Exp_::Call(name_access_chain, _) => {
+            // get a string representation of name_access_chain using fmt display
+            let name_access_chain_str = format!("{}", name_access_chain);
+            // return true if name_access_chain_str ends with "verify"
+            name_access_chain_str.ends_with("invariant")
+        }
+        _ => false,
+    }
 }
 
 //***************************************************************************
