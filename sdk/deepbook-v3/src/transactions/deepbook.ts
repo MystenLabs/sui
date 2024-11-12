@@ -287,10 +287,10 @@ export class DeepBookContract {
 	};
 
 	/**
-	 * @description Gets multiple orders
-	 * @param {string} poolKey The key to identify the pool
-	 * @param {string} orderId Order ID to get
-	 * @returns A function that takes a Transaction object
+	 * @description Prepares a transaction to retrieve multiple orders from a specified pool.
+	 * @param {string} poolKey - The identifier key for the pool to retrieve orders from.
+	 * @param {string[]} orderIds - Array of order IDs to retrieve.
+	 * @returns {Function} A function that takes a Transaction object
 	 */
 	getOrders = (poolKey: string, orderIds: string[]) => (tx: Transaction) => {
 		const pool = this.#config.getPool(poolKey);
