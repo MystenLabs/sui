@@ -9,7 +9,7 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 	const env = 'mainnet';
 
 	const balanceManagers = {
-		AMBER: {
+		MANAGER_1: {
 			address: '0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d',
 			tradeCap: '',
 		},
@@ -24,9 +24,12 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
+	const manager = 'MANAGER_1'; // Update the manager accordingly
 	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC']; // Live pools, add more if needed
+	console.log('Manager:', manager);
+
 	for (const pool of pools) {
 		console.log(pool);
-		console.log(await dbClient.accountOpenOrders(pool, 'AMBER'));
+		console.log(await dbClient.accountOpenOrders(pool, manager));
 	}
 })();

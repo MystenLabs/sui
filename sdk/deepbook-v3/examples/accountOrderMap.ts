@@ -25,7 +25,7 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
-	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC'];
+	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC']; // Update pools as needed
 	const manager = 'MANAGER_1'; // Update the manager accordingly
 	console.log('Manager:', manager);
 	for (const pool of pools) {
