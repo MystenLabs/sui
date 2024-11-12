@@ -9,7 +9,6 @@ use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::ConciseableName;
-use sui_types::crypto::KeypairTraits;
 use tap::TapFallible;
 use tracing::{error, info};
 
@@ -107,12 +106,7 @@ impl Node {
 
         if is_validator {
             let network_address = self.config().network_address().clone();
-            let tls_config = sui_tls::create_rustls_client_config(
-                self.config().network_key_pair().public().to_owned(),
-                sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-                None,
-            );
-            let channel = mysten_network::client::connect(&network_address, Some(tls_config))
+            let channel = mysten_network::client::connect(&network_address)
                 .await
                 .map_err(|err| anyhow!(err.to_string()))
                 .map_err(HealthCheckError::Failure)

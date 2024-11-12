@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{
-    random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
-};
+use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
@@ -355,17 +353,18 @@ pub trait CommitteeTrait<K: Ord> {
     fn weight(&self, author: &K) -> StakeUnit;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkMetadata {
     pub network_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
-    pub network_public_key: Option<NetworkPublicKey>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommitteeWithNetworkMetadata {
     epoch_id: EpochId,
     validators: BTreeMap<AuthorityName, (StakeUnit, NetworkMetadata)>,
+
+    #[serde(skip)]
     committee: OnceCell<Committee>,
 }
 
