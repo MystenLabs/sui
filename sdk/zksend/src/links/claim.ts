@@ -66,6 +66,7 @@ export class ZkSendLink {
 	creatorAddress?: string;
 	assets?: LinkAssets;
 	claimed?: boolean;
+	claimedBy?: string;
 	bagObject?: SuiObjectData | null;
 
 	#client: SuiClient;
@@ -532,6 +533,7 @@ export class ZkSendLink {
 				? input.value
 				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
+		this.claimedBy = receiver;
 		this.assets = getAssetsFromTransaction({
 			transaction: tx,
 			address: receiver,
