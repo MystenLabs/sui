@@ -24,7 +24,6 @@ use mysten_network::{
     Multiaddr,
 };
 use parking_lot::RwLock;
-use sui_tls::AllowPublicKeys;
 use tokio::{
     pin,
     task::JoinSet,
@@ -45,6 +44,7 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
+    tonic_tls::create_rustls_client_config,
     BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
@@ -54,7 +54,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     network::{
         tonic_gen::consensus_service_server::ConsensusServiceServer,
-        tonic_tls::certificate_server_name,
+        tonic_tls::create_rustls_server_config,
     },
     CommitIndex, Round,
 };
@@ -381,16 +381,7 @@ impl ChannelPool {
         let address = format!("https://{address}");
         let config = &self.context.parameters.tonic;
         let buffer_size = config.connection_buffer_size;
-        let client_tls_config = sui_tls::create_rustls_client_config(
-            self.context
-                .committee
-                .authority(peer)
-                .network_key
-                .clone()
-                .into_inner(),
-            certificate_server_name(&self.context),
-            Some(network_keypair.private_key().into_inner()),
-        );
+        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
         let endpoint = tonic_rustls::Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
@@ -737,17 +728,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             Arc::new(builder)
         };
 
-        let tls_server_config = sui_tls::create_rustls_server_config(
-            self.network_keypair.clone().private_key().into_inner(),
-            certificate_server_name(&self.context),
-            AllowPublicKeys::new(
-                self.context
-                    .committee
-                    .authorities()
-                    .map(|(_i, a)| a.network_key.clone().into_inner())
-                    .collect(),
-            ),
-        );
+        let tls_server_config =
+            create_rustls_server_config(&self.context, self.network_keypair.clone());
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
         // Create listener to incoming connections.
