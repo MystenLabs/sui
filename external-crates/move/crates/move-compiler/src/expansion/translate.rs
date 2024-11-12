@@ -1190,12 +1190,6 @@ fn unique_attributes(
                 E::AttributeName_::Known(known)
             }
         };
-        if matches!(
-            name_,
-            E::AttributeName_::Known(KnownAttribute::Verification(_))
-        ) {
-            context.spec_deprecated(loc, /* is_error */ false)
-        }
         if let Err((_, old_loc)) = attr_map.add(sp(nloc, name_), sp(loc, attr_)) {
             let msg = format!("Duplicate attribute '{}' attached to the same item", name_);
             context.add_diag(diag!(
