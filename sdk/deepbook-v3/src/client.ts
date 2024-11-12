@@ -279,6 +279,49 @@ export class DeepBookClient {
 	}
 
 	/**
+	 * @description Get the order information for a specific order in a pool
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} orderIds Order ID list
+	 * @returns {Promise<Object>} A promise that resolves to an object containing the order information
+	 */
+	async getOrders(poolKey: string, orderIds: string[]) {
+		const tx = new Transaction();
+
+		tx.add(this.deepBook.getOrders(poolKey, orderIds));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const ID = bcs.struct('ID', {
+			bytes: bcs.Address,
+		});
+		const OrderDeepPrice = bcs.struct('OrderDeepPrice', {
+			asset_is_base: bcs.bool(),
+			deep_per_asset: bcs.u64(),
+		});
+		const Order = bcs.struct('Order', {
+			balance_manager_id: ID,
+			order_id: bcs.u128(),
+			client_order_id: bcs.u64(),
+			quantity: bcs.u64(),
+			filled_quantity: bcs.u64(),
+			fee_is_deep: bcs.bool(),
+			order_deep_price: OrderDeepPrice,
+			epoch: bcs.u64(),
+			status: bcs.u8(),
+			expire_timestamp: bcs.u64(),
+		});
+
+		try {
+			const orderInformation = res.results![0].returnValues![0][0];
+			return bcs.vector(Order).parse(new Uint8Array(orderInformation));
+		} catch (e) {
+			return null;
+		}
+	}
+
+	/**
 	 * @description Get level 2 order book specifying range of price
 	 * @param {string} poolKey Key of the pool
 	 * @param {number} priceLow Lower bound of the price range

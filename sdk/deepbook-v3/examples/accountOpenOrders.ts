@@ -4,6 +4,7 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 import { DeepBookClient } from '../src/index.js'; // Adjust import source accordingly
 
+/// Example to get open orders for a balance manager for all pools
 (async () => {
 	const env = 'mainnet';
 
@@ -24,7 +25,7 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
-	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC'];
+	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC']; // Live pools, add more if needed
 	for (const pool of pools) {
 		console.log(pool);
 		console.log(await dbClient.accountOpenOrders(pool, 'AMBER'));

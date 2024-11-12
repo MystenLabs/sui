@@ -9,7 +9,7 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 
 	// Initialize with balance managers if needed
 	const balanceManagers = {
-		AMBER: {
+		MANAGER_1: {
 			address: '0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d',
 			tradeCap: '',
 		},
@@ -24,10 +24,10 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
-	console.log(await dbClient.checkManagerBalance('AMBER', 'SUI'));
-	console.log(await dbClient.checkManagerBalance('AMBER', 'USDC'));
-	console.log(await dbClient.checkManagerBalance('AMBER', 'WUSDT'));
-	console.log(await dbClient.checkManagerBalance('AMBER', 'WUSDC'));
-	console.log(await dbClient.checkManagerBalance('AMBER', 'BETH'));
-	console.log(await dbClient.checkManagerBalance('AMBER', 'DEEP'));
+	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'SUI'));
+	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'USDC'));
+	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'WUSDT'));
+	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'WUSDC'));
+	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'BETH'));
+	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'DEEP'));
 })();
