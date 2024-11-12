@@ -3021,6 +3021,11 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
                 }
                 70 => {
                     if chain != Chain::Mainnet {
