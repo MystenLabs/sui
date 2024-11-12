@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) mod digest_task;
 pub(crate) mod ingestion_backfill_task;
 pub(crate) mod raw_checkpoints;
 pub(crate) mod tx_affected_objects;
