@@ -22,7 +22,7 @@ uuid.workspace = true
 prometheus.workspace = true
 fastcrypto.workspace = true
 shared-crypto.workspace = true
-derivative.workspace = true
+derive_more = { workspace = true, features = ["debug"] }
 regex.workspace = true
 
 sui-indexer.workspace = true
