@@ -207,7 +207,7 @@ where
     ) -> anyhow::Result<bool> {
         let tx_digest = *tx.digest();
 
-        let tx_finalization_delay = Duration::from_micros(thread_rng().gen_range(0, 10000));
+        let tx_finalization_delay = Duration::from_micros(thread_rng().gen_range(0..10000));
 
         //let Some(tx_finalization_delay) = self.determine_finalization_delay(&tx_digest) else {
         //    return Ok(false);
