@@ -24,10 +24,8 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
-	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'SUI'));
-	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'USDC'));
-	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'WUSDT'));
-	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'WUSDC'));
-	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'BETH'));
-	console.log(await dbClient.checkManagerBalance('MANAGER_1', 'DEEP'));
+	const assets = ['SUI', 'USDC', 'WUSDT', 'WUSDC', 'BETH', 'DEEP'];
+	for (const asset of assets) {
+		console.log(await dbClient.checkManagerBalance('MANAGER_1', asset));
+	}
 })();
