@@ -4,10 +4,10 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 import { DeepBookClient } from '../src/index.js'; // Adjust import source accordingly
 
+/// Example to check balance for a balance manager
 (async () => {
 	const env = 'mainnet';
 
-	// Initialize with balance managers if needed
 	const balanceManagers = {
 		MANAGER_1: {
 			address: '0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d',

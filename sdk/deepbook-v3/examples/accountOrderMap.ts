@@ -5,7 +5,7 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { DeepBookClient } from '../src/index.js'; // Adjust import source accordingly
 
 /// Example to get [price, quantity] for a balance manager
-/// bids sorted in descending order and asks sorted in ascending order
+/// Bids sorted in descending order and asks sorted in ascending order
 (async () => {
 	const env = 'mainnet';
 

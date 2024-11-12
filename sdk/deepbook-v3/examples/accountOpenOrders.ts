@@ -8,7 +8,6 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 (async () => {
 	const env = 'mainnet';
 
-	// Initialize with balance managers if needed
 	const balanceManagers = {
 		AMBER: {
 			address: '0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d',
