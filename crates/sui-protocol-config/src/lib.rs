@@ -585,6 +585,11 @@ struct FeatureFlags {
     // Enable v2 native charging for natives.
     #[serde(skip_serializing_if = "is_false")]
     native_charging_v2: bool,
+
+    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic
+    // does not stop the recursion when comes across a committed block, but it keeps looking for the committed history until gc_round.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_linearizer_collect_subdag_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1723,6 +1728,12 @@ impl ProtocolConfig {
 
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
+    }
+            
+    pub fn consensus_linearizer_collect_subdag_v2(&self) -> bool {
+        let res = self.feature_flags.consensus_linearizer_collect_subdag_v2;
+        assert!(!res || self.gc_depth() > 0, "The consensus linearizer collect sub dag V2 requires GC to be enabled");
+        res
     }
 }
 
@@ -3264,6 +3275,10 @@ impl ProtocolConfig {
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
         self.feature_flags
             .consensus_round_prober_probe_accepted_rounds = val;
+    }
+
+    pub fn set_consensus_linearizer_collect_subdag_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_linearizer_collect_subdag_v2 = val;
     }
 }
 

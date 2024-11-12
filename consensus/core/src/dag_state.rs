@@ -169,7 +169,7 @@ impl DagState {
             recent_blocks: BTreeMap::new(),
             recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
             highest_accepted_round: 0,
-            last_commit,
+            last_commit: last_commit.clone(),
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
             pending_commit_votes: VecDeque::new(),
@@ -178,7 +178,7 @@ impl DagState {
             commit_info_to_write: vec![],
             scoring_subdag,
             unscored_committed_subdags,
-            store,
+            store: store.clone(),
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
         };
@@ -206,6 +206,7 @@ impl DagState {
                     .store
                     .scan_blocks_by_author(authority_index, eviction_round + 1)
                     .expect("Database error");
+
                 (blocks, eviction_round)
             } else {
                 let eviction_round = Self::eviction_round(round, cached_rounds);
@@ -231,6 +232,31 @@ impl DagState {
                     .map(|b| b.reference())
                     .collect::<Vec<BlockRef>>()
             );
+        }
+
+        if state
+            .context
+            .protocol_config
+            .consensus_linearizer_collect_subdag_v2()
+        {
+            // We also need to recover the commit state of blocks based on the commits that happened from the rounds > gc_round until latest commit.
+            if let Some(last_commit) = last_commit {
+                // We take the worst case assuming a commit for every round from the latest index, and we recover the commits that happened between
+                // the gc_round and the last commit.
+                let gc_round = state.gc_round();
+
+                store
+                    .scan_commits((last_commit.index().saturating_sub(gc_round)+1..=last_commit.index()).into())
+                    .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
+                    .iter()
+                    .for_each(|commit|{
+                        for block_ref in commit.blocks() {
+                            if block_ref.round > state.gc_round() {
+                                assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
+                            }
+                        }
+                    });
+            }
         }
 
         state
@@ -374,9 +400,12 @@ impl DagState {
         blocks
     }
 
-    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) {
+    // Sets the block as committed in the cache. If the block has not been already committed it returns true, otherwise false.
+    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
         if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
-            block_info.set_as_committed();
+            let res = block_info.committed;
+            block_info.committed = true;
+            res
         } else {
             panic!(
                 "Block {:?} not found in cache to set as committed.",
@@ -1009,15 +1038,6 @@ impl BlockInfo {
             block,
             committed: false,
         }
-    }
-
-    fn set_as_committed(&mut self) {
-        assert!(
-            !self.committed,
-            "Block has been already committed: {:?}",
-            self.block.reference()
-        );
-        self.committed = true;
     }
 }
 
