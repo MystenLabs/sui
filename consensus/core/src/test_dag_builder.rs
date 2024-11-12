@@ -182,8 +182,9 @@ impl DagBuilder {
                     self.context.protocol_config.gc_depth() > 0
                 }
 
-                fn set_committed(&mut self, block_ref: &BlockRef) {
+                fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
                     // Do nothing
+                    true
                 }
             }
             let mut storage = FooStorage {
@@ -196,6 +197,7 @@ impl DagBuilder {
             };
 
             let (to_commit, rejected_transactions) = Linearizer::linearize_sub_dag(
+                &self.context.clone(),
                 leader_block,
                 self.last_committed_rounds.clone(),
                 &mut storage,
