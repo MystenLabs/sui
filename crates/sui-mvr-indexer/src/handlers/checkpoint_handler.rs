@@ -14,7 +14,6 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::Worker;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
-use sui_synthetic_ingestion::IndexerProgress;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
@@ -25,7 +24,6 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::TransactionDataAPI;
-use tokio::sync::watch;
 
 use crate::errors::IndexerError;
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
@@ -50,20 +48,9 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 pub async fn new_handlers(
     state: PgIndexerStore,
     metrics: IndexerMetrics,
+    next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
-    committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
-    start_checkpoint_opt: Option<CheckpointSequenceNumber>,
-    end_checkpoint_opt: Option<CheckpointSequenceNumber>,
-) -> Result<(CheckpointHandler, u64), IndexerError> {
-    let start_checkpoint = match start_checkpoint_opt {
-        Some(start_checkpoint) => start_checkpoint,
-        None => state
-            .get_latest_checkpoint_sequence_number()
-            .await?
-            .map(|seq| seq.saturating_add(1))
-            .unwrap_or_default(),
-    };
-
+) -> Result<CheckpointHandler, IndexerError> {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
         .parse::<usize>()
@@ -83,14 +70,13 @@ pub async fn new_handlers(
         state_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
-        cancel.clone(),
-        committed_checkpoints_tx,
-        start_checkpoint,
-        end_checkpoint_opt,
+        next_checkpoint_sequence_number,
+        cancel.clone()
     ));
-    Ok((
-        CheckpointHandler::new(state, metrics, indexed_checkpoint_sender),
-        start_checkpoint,
+    Ok(CheckpointHandler::new(
+        state,
+        metrics,
+        indexed_checkpoint_sender,
     ))
 }
 

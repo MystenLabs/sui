@@ -11,81 +11,13 @@ use sui_mvr_indexer::handlers::TransactionObjectChangesToCommit;
 use sui_mvr_indexer::models::{checkpoints::StoredCheckpoint, objects::StoredObjectSnapshot};
 use sui_mvr_indexer::schema::{checkpoints, objects_snapshot};
 use sui_mvr_indexer::store::indexer_store::IndexerStore;
-use sui_mvr_indexer::test_utils::{
-    set_up, set_up_with_start_and_end_checkpoints, wait_for_checkpoint, wait_for_objects_snapshot,
-};
+use sui_mvr_indexer::test_utils::{set_up, wait_for_checkpoint, wait_for_objects_snapshot};
 use sui_mvr_indexer::types::EventIndex;
 use sui_mvr_indexer::types::IndexedDeletedObject;
 use sui_mvr_indexer::types::IndexedObject;
 use sui_mvr_indexer::types::TxIndex;
 use sui_types::base_types::SuiAddress;
 use tempfile::tempdir;
-
-#[tokio::test]
-pub async fn test_checkpoint_range_ingestion() -> Result<(), IndexerError> {
-    let tempdir = tempdir().unwrap();
-    let mut sim = Simulacrum::new();
-    let data_ingestion_path = tempdir.path().to_path_buf();
-    sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-    // Create multiple checkpoints
-    for _ in 0..10 {
-        let transfer_recipient = SuiAddress::random_for_testing_only();
-        let (transaction, _) = sim.transfer_txn(transfer_recipient);
-        let (_, err) = sim.execute_transaction(transaction).unwrap();
-        assert!(err.is_none());
-        sim.create_checkpoint();
-    }
-
-    // Set up indexer with specific start and end checkpoints
-    let start_checkpoint = 2;
-    let end_checkpoint = 4;
-    let (_, pg_store, _, _database) = set_up_with_start_and_end_checkpoints(
-        Arc::new(sim),
-        data_ingestion_path,
-        start_checkpoint,
-        end_checkpoint,
-    )
-    .await;
-
-    // Wait for the indexer to catch up to the end checkpoint
-    wait_for_checkpoint(&pg_store, end_checkpoint).await?;
-
-    // Verify that only checkpoints within the specified range were ingested
-    let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
-    let checkpoint_count: i64 = checkpoints::table
-        .count()
-        .get_result(&mut connection)
-        .await
-        .expect("Failed to count checkpoints");
-    assert_eq!(checkpoint_count, 3, "Expected 3 checkpoints to be ingested");
-
-    // Verify the range of ingested checkpoints
-    let min_checkpoint = checkpoints::table
-        .select(diesel::dsl::min(checkpoints::sequence_number))
-        .first::<Option<i64>>(&mut connection)
-        .await
-        .expect("Failed to get min checkpoint")
-        .expect("Min checkpoint should be Some");
-    let max_checkpoint = checkpoints::table
-        .select(diesel::dsl::max(checkpoints::sequence_number))
-        .first::<Option<i64>>(&mut connection)
-        .await
-        .expect("Failed to get max checkpoint")
-        .expect("Max checkpoint should be Some");
-    assert_eq!(
-        min_checkpoint, start_checkpoint as i64,
-        "Minimum ingested checkpoint should be {}",
-        start_checkpoint
-    );
-    assert_eq!(
-        max_checkpoint, end_checkpoint as i64,
-        "Maximum ingested checkpoint should be {}",
-        end_checkpoint
-    );
-
-    Ok(())
-}
 
 #[tokio::test]
 pub async fn test_objects_snapshot() -> Result<(), IndexerError> {

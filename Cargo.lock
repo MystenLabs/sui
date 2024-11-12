@@ -14461,8 +14461,6 @@ dependencies = [
  "sui-sdk",
  "sui-snapshot",
  "sui-storage",
- "sui-swarm-config",
- "sui-synthetic-ingestion",
  "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
