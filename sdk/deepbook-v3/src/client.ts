@@ -279,6 +279,71 @@ export class DeepBookClient {
 	}
 
 	/**
+	 * @description Get the order information for a specific order in a pool, with normalized price
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} orderId Order ID
+	 * @returns {Promise<Object>} A promise that resolves to an object containing the order information with normalized price
+	 */
+	async getOrderNormalized(poolKey: string, orderId: string) {
+		const tx = new Transaction();
+		tx.add(this.deepBook.getOrder(poolKey, orderId));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const ID = bcs.struct('ID', {
+			bytes: bcs.Address,
+		});
+		const OrderDeepPrice = bcs.struct('OrderDeepPrice', {
+			asset_is_base: bcs.bool(),
+			deep_per_asset: bcs.u64(),
+		});
+		const Order = bcs.struct('Order', {
+			balance_manager_id: ID,
+			order_id: bcs.u128(),
+			client_order_id: bcs.u64(),
+			quantity: bcs.u64(),
+			filled_quantity: bcs.u64(),
+			fee_is_deep: bcs.bool(),
+			order_deep_price: OrderDeepPrice,
+			epoch: bcs.u64(),
+			status: bcs.u8(),
+			expire_timestamp: bcs.u64(),
+		});
+
+		try {
+			const orderInformation = res.results![0].returnValues![0][0];
+			let orderInfo = Order.parse(new Uint8Array(orderInformation));
+
+			if (!orderInfo) {
+				return null;
+			}
+			const baseCoin = this.#config.getCoin(this.#config.getPool(poolKey).baseCoin);
+			const quoteCoin = this.#config.getCoin(this.#config.getPool(poolKey).quoteCoin);
+			const { isBid, price: rawPrice } = this.decodeOrderId(BigInt(orderInfo.order_id));
+			const normalizedPrice = (rawPrice * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
+
+			const normalizedOrderInfo = {
+				...orderInfo,
+				quantity: String((Number(orderInfo.quantity) / baseCoin.scalar).toFixed(9)),
+				filled_quantity: String((Number(orderInfo.filled_quantity) / baseCoin.scalar).toFixed(9)),
+				order_deep_price: {
+					...orderInfo.order_deep_price,
+					deep_per_asset: String(
+						(Number(orderInfo.order_deep_price.deep_per_asset) / DEEP_SCALAR).toFixed(9),
+					),
+				},
+				isBid,
+				normalized_price: normalizedPrice.toFixed(9),
+			};
+			return normalizedOrderInfo;
+		} catch (e) {
+			return null;
+		}
+	}
+
+	/**
 	 * @description Get the order information for a specific order in a pool
 	 * @param {string} poolKey Key of the pool
 	 * @param {string} orderIds Order ID list
@@ -639,5 +704,18 @@ export class DeepBookClient {
 			quote: Number((quoteLocked / quoteScalar).toFixed(9)),
 			deep: Number((deepLocked / DEEP_SCALAR).toFixed(9)),
 		};
+	}
+
+	/**
+	 * @description Decode the order ID to get bid/ask status, price, and orderId
+	 * @param {bigint} encodedOrderId Encoded order ID
+	 * @returns {Object} Object containing isBid, price, and orderId
+	 */
+	decodeOrderId(encodedOrderId: bigint): { isBid: boolean; price: number; orderId: number } {
+		const isBid = encodedOrderId >> 127n === 0n;
+		const price = Number((encodedOrderId >> 64n) & ((1n << 63n) - 1n));
+		const orderId = Number(encodedOrderId & ((1n << 64n) - 1n));
+
+		return { isBid, price, orderId };
 	}
 }

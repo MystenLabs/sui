@@ -24,36 +24,31 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 		balanceManagers: balanceManagers,
 	});
 
-	const pools = ['SUI_USDC']; //, 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC'];
+	const pools = ['SUI_USDC', 'DEEP_SUI', 'DEEP_USDC', 'WUSDT_USDC', 'WUSDC_USDC', 'BETH_USDC'];
+	const manager = 'MANAGER_1'; // Update the manager accordingly
+	console.log('Manager:', manager);
 	for (const pool of pools) {
-		const orders = await dbClient.accountOpenOrders(pool, 'MANAGER_1'); // Update the manager accordingly
+		const orders = await dbClient.accountOpenOrders(pool, manager); // Update the manager accordingly
 		const bidOrdersMap = new Map<number, number>();
 		const askOrdersMap = new Map<number, number>();
 
 		for (const orderId of orders) {
-			const decoded = decodeOrderId(BigInt(orderId));
-			const { isBid, price } = decoded;
-
-			const order = await dbClient.getOrder(pool, orderId);
+			const order = await dbClient.getOrderNormalized(pool, orderId);
+			if (!order) {
+				continue;
+			}
 			let remainingQuantity = 0;
 			if (order) {
 				remainingQuantity = Number(order.quantity) - Number(order.filled_quantity);
 			}
 
-			const orderMap = isBid ? bidOrdersMap : askOrdersMap;
-			const existingQuantity = orderMap.get(price) || 0;
-			orderMap.set(price, existingQuantity + remainingQuantity);
+			const orderMap = order.isBid ? bidOrdersMap : askOrdersMap;
+			const orderPrice = Number(order.normalized_price);
+			const existingQuantity = orderMap.get(orderPrice) || 0;
+			orderMap.set(orderPrice, existingQuantity + remainingQuantity);
 		}
 
-		console.log(`${pool} bid Orders:`, Array.from(bidOrdersMap.entries()));
-		console.log(`${pool} ask Orders:`, Array.from(askOrdersMap.entries()));
+		console.log(`${pool} bid orders:`, Array.from(bidOrdersMap.entries()));
+		console.log(`${pool} ask orders:`, Array.from(askOrdersMap.entries()));
 	}
 })();
-
-function decodeOrderId(encodedOrderId: bigint): { isBid: boolean; price: number; orderId: number } {
-	const isBid = encodedOrderId >> 127n === 0n;
-	const price = Number((encodedOrderId >> 64n) & ((1n << 63n) - 1n));
-	const orderId = Number(encodedOrderId & ((1n << 64n) - 1n));
-
-	return { isBid, price, orderId };
-}
