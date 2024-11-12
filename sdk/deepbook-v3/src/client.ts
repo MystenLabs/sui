@@ -705,8 +705,8 @@ export class DeepBookClient {
 			deep: Number((deepLocked / DEEP_SCALAR).toFixed(9)),
 		};
 	}
-  
-  /**  
+
+	/**
 	 * @description Get the DEEP price conversion for a pool
 	 * @param {string} poolKey Key of the pool
 	 * @returns {Promise<{ asset_is_base: bool, deep_per_quote: number }>} Deep price conversion
@@ -749,8 +749,8 @@ export class DeepBookClient {
 			};
 		}
 	}
-  
-  /**
+
+	/**
 	 * @description Decode the order ID to get bid/ask status, price, and orderId
 	 * @param {bigint} encodedOrderId Encoded order ID
 	 * @returns {Object} Object containing isBid, price, and orderId
@@ -761,5 +761,5 @@ export class DeepBookClient {
 		const orderId = Number(encodedOrderId & ((1n << 64n) - 1n));
 
 		return { isBid, price, orderId };
-  }
+	}
 }

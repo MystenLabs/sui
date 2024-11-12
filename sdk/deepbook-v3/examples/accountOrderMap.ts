@@ -28,7 +28,7 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 	const manager = 'MANAGER_1'; // Update the manager accordingly
 	console.log('Manager:', manager);
 	for (const pool of pools) {
-		const orders = await dbClient.accountOpenOrders(pool, manager); // Update the manager accordingly
+		const orders = await dbClient.accountOpenOrders(pool, manager);
 		const bidOrdersMap = new Map<number, number>();
 		const askOrdersMap = new Map<number, number>();
 
