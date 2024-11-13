@@ -223,6 +223,12 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                                         .watermark_timestamp_in_db_ms
                                         .with_label_values(&[H::NAME])
                                         .set(watermark.timestamp_ms_hi_inclusive);
+
+                                    let lag = chrono::Utc::now().timestamp_millis() - watermark.timestamp_ms_hi_inclusive;
+                                    metrics
+                                        .latest_committed_checkpoint_timestamp_lag_ms
+                                        .with_label_values(&[H::NAME])
+                                        .set(lag);
                                 }
 
                                 if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {

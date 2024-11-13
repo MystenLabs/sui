@@ -96,6 +96,7 @@ pub struct IndexerMetrics {
     pub total_pruner_chunks_attempted: IntCounterVec,
     pub total_pruner_chunks_deleted: IntCounterVec,
     pub total_pruner_rows_deleted: IntCounterVec,
+    pub latest_committed_checkpoint_timestamp_lag_ms: IntGaugeVec,
 
     pub collector_gather_latency: HistogramVec,
     pub collector_batch_size: HistogramVec,
@@ -372,6 +373,14 @@ impl IndexerMetrics {
             total_pruner_rows_deleted: register_int_counter_vec_with_registry!(
                 "indexer_pruner_rows_deleted",
                 "Number of rows this pruner successfully deleted",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_committed_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_committed_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was committed and the \
+                 timestamp in the checkpoint, in milliseconds",
                 &["pipeline"],
                 registry,
             )

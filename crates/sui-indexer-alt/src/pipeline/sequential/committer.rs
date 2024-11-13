@@ -270,6 +270,12 @@ pub(super) fn committer<H: Handler + 'static>(
                         "Wrote batch",
                     );
 
+                    let lag = chrono::Utc::now().timestamp_millis() - watermark.timestamp_ms_hi_inclusive;
+                    metrics
+                        .latest_committed_checkpoint_timestamp_lag_ms
+                        .with_label_values(&[H::NAME])
+                        .set(lag);
+
                     metrics
                         .total_committer_batches_succeeded
                         .with_label_values(&[H::NAME])
