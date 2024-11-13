@@ -24,13 +24,13 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 //**************************************************************************************************
 // This mostly follows the classical Maranget (2008) implementation toward optimal decision trees.
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 enum StructUnpack<T> {
     Default(T),
     Unpack(Vec<(Field, Var, Type)>, T),
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 enum MatchTree {
     Leaf(Vec<ArmResult>),
     Failure,
@@ -69,6 +69,10 @@ pub(super) fn compile_match(
         make_initial_fringe(context, subject, loc);
 
     let match_tree = build_match_tree(context, VecDeque::from([match_subject]), pattern_matrix);
+    debug_print!(
+        context.debug.match_translation,
+        ("match tree" => match_tree; sdbg)
+    );
     let mut resolution_context = ResolutionContext {
         hlir_context: context,
         output_type: result_type,
@@ -152,7 +156,7 @@ fn build_match_tree(
         return MatchTree::Failure;
     }
 
-    if let Some(leaf) = matrix.wild_arm_opt(&fringe) {
+    if let Some(leaf) = matrix.wild_tree_opt(&fringe) {
         debug_print!(context.debug.match_specialization, (msg "wild leaf"), ("matrix" => matrix));
         return MatchTree::Leaf(leaf);
     }
