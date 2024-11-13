@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.14.3
+
+### Patch Changes
+
+- d5a23d7: Add tx.object.option for creatnig object options in transaction builder
+
 ## 1.14.2
 
 ### Patch Changes
