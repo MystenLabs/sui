@@ -197,6 +197,7 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 //             Disallow adding new modules in `deps-only` packages.
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
+//             Enable G1Uncompressed group in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2957,6 +2958,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // Enable smart ancestor selection for devnet
                         cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    }
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
                 }
                 // Use this template when making changes:
