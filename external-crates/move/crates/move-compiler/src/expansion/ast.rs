@@ -338,7 +338,7 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 #[allow(clippy::large_enum_variant)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
-    Dot(Box<ExpDotted>, Name),
+    Dot(Box<ExpDotted>, /* dot location */ Loc, Name),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
     DotUnresolved(Loc, Box<ExpDotted>), // dot where Name could not be parsed
 }
@@ -391,6 +391,7 @@ pub enum Exp_ {
     ),
     MethodCall(
         Box<ExpDotted>,
+        Loc, // location of the dot
         Name,
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
@@ -1543,7 +1544,7 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, _, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", f));
                 if is_macro.is_some() {
@@ -1743,7 +1744,7 @@ impl AstDebug for ExpDotted_ {
         use ExpDotted_ as D;
         match self {
             D::Exp(e) => e.ast_debug(w),
-            D::Dot(e, n) => {
+            D::Dot(e, _, n) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n))
             }

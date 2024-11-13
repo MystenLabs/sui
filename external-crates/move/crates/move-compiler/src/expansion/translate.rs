@@ -2708,7 +2708,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ (PE::Dot(_, _) | PE::DotUnresolved(_, _)) => {
+        pdotted_ @ (PE::Dot(_, _, _) | PE::DotUnresolved(_, _)) => {
             match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
                 Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
                 None => {
@@ -2752,14 +2752,14 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             }
         }
 
-        PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
+        PE::DotCall(pdotted, dot_loc, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
                     let pkg = context.current_package();
                     context.check_feature(pkg, FeatureGate::DotCall, loc);
                     let tys_opt = optional_types(context, ptys_opt);
                     let ers = sp(rloc, exps(context, prs));
-                    EE::MethodCall(edotted, n, is_macro, tys_opt, ers)
+                    EE::MethodCall(edotted, dot_loc, n, is_macro, tys_opt, ers)
                 }
                 None => {
                     assert!(context.env().has_errors());
@@ -2814,8 +2814,8 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
             | PE::Match(_, _)
             | PE::Spec(_) => true,
 
-            PE::DotCall(lhs, _, _, _, _)
-            | PE::Dot(lhs, _)
+            PE::DotCall(lhs, _, _, _, _, _)
+            | PE::Dot(lhs, _, _)
             | PE::DotUnresolved(_, lhs)
             | PE::Index(lhs, _)
             | PE::Borrow(_, lhs)
@@ -2927,7 +2927,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
                 return None;
             }
         }
-        E::ExpDotted_::Dot(_, _)
+        E::ExpDotted_::Dot(_, _, _)
         | E::ExpDotted_::DotUnresolved(_, _)
         | E::ExpDotted_::Index(_, _) => {
             let current_package = context.current_package();
@@ -2946,9 +2946,9 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
     use P::Exp_ as PE;
     let sp!(loc, pdotted_) = *pdotted;
     let edotted_ = match pdotted_ {
-        PE::Dot(plhs, field) => {
+        PE::Dot(plhs, dot_loc, field) => {
             let lhs = exp_dotted(context, plhs)?;
-            EE::Dot(lhs, field)
+            EE::Dot(lhs, dot_loc, field)
         }
         PE::Index(plhs, sp!(argloc, args)) => {
             let cur_pkg = context.current_package();
@@ -3442,7 +3442,7 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
             let er = exp(context, pr);
             L::Mutate(er)
         }
-        pdotted_ @ PE::Dot(_, _) => {
+        pdotted_ @ PE::Dot(_, _, _) => {
             let dotted = exp_dotted(context, Box::new(sp(loc, pdotted_)))?;
             L::FieldMutate(dotted)
         }
