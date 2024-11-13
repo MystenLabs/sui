@@ -41,15 +41,10 @@ use types::{
     PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
-#[cfg(test)]
-#[path = "tests/worker_tests.rs"]
-pub mod worker_tests;
-
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
 use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
-use crate::transactions_server::TxServer;
 
 pub struct Worker {
     /// This authority.
@@ -440,19 +435,20 @@ impl Worker {
     }
 
     /// Spawn all tasks responsible to handle clients transactions.
+    // TODO: finish deleting this. It's partially deleted already and may not work right.
     fn handle_clients_transactions(
         &self,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
-        endpoint_metrics: WorkerEndpointMetrics,
-        validator: impl TransactionValidator,
+        _endpoint_metrics: WorkerEndpointMetrics,
+        _validator: impl TransactionValidator,
         client: NetworkClient,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         info!("Starting handler for transactions");
 
-        let (tx_batch_maker, rx_batch_maker) = channel_with_total(
+        let (_tx_batch_maker, rx_batch_maker) = channel_with_total(
             CHANNEL_CAPACITY,
             &channel_metrics.tx_batch_maker,
             &channel_metrics.tx_batch_maker_total,
@@ -475,14 +471,6 @@ impl Worker {
                 _ => Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)),
             })
             .unwrap_or(address);
-
-        let tx_server_handle = TxServer::spawn(
-            address.clone(),
-            shutdown_receivers.pop().unwrap(),
-            endpoint_metrics,
-            tx_batch_maker,
-            validator,
-        );
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -518,6 +506,6 @@ impl Worker {
             self.id, address
         );
 
-        vec![batch_maker_handle, quorum_waiter_handle, tx_server_handle]
+        vec![batch_maker_handle, quorum_waiter_handle]
     }
 }

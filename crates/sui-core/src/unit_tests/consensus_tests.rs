@@ -11,19 +11,14 @@ use crate::mock_consensus::with_block_status;
 use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_types::Transactions;
-use narwhal_types::TransactionsServer;
-use narwhal_types::{Empty, TransactionProto};
 use parking_lot::Mutex;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_network::tonic;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
 };
-use sui_types::multiaddr::Multiaddr;
 use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
@@ -34,8 +29,6 @@ use sui_types::{
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     },
 };
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
@@ -443,46 +436,4 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
         )
         .unwrap();
     waiter.await.unwrap();
-}
-
-pub struct ConsensusMockServer {
-    sender: Sender<TransactionProto>,
-}
-
-impl ConsensusMockServer {
-    pub fn spawn(address: Multiaddr) -> Receiver<TransactionProto> {
-        let (sender, receiver) = channel(1);
-        tokio::spawn(async move {
-            let config = mysten_network::config::Config::new();
-            let mock = Self { sender };
-            config
-                .server_builder()
-                .add_service(TransactionsServer::new(mock))
-                .bind(&address)
-                .await
-                .unwrap()
-                .serve()
-                .await
-        });
-        receiver
-    }
-}
-
-#[tonic::async_trait]
-impl Transactions for ConsensusMockServer {
-    /// Submit a Transactions
-    async fn submit_transaction(
-        &self,
-        request: tonic::Request<TransactionProto>,
-    ) -> Result<tonic::Response<Empty>, tonic::Status> {
-        self.sender.send(request.into_inner()).await.unwrap();
-        Ok(tonic::Response::new(Empty {}))
-    }
-    /// Submit a Transactions
-    async fn submit_transaction_stream(
-        &self,
-        _request: tonic::Request<tonic::Streaming<TransactionProto>>,
-    ) -> Result<tonic::Response<Empty>, tonic::Status> {
-        unimplemented!()
-    }
 }

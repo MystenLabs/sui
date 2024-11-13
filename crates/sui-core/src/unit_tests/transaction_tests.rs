@@ -442,9 +442,18 @@ async fn do_transaction_test_impl(
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
 
     post_sign_mutations(&mut transfer_transaction);
     post_sign_mutations(&mut move_call_transaction);
@@ -1035,9 +1044,18 @@ async fn setup_zklogin_network(
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
     (
         object_ids,
         gas_object_ids,
@@ -1328,9 +1346,18 @@ async fn execute_transaction_assert_err(
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
     let err = client
         .handle_transaction(txn.clone(), Some(make_socket_addr()))
         .await;
@@ -1380,9 +1407,18 @@ async fn test_oversized_txn() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
 
     let res = client
         .handle_transaction(txn, Some(make_socket_addr()))
@@ -1431,9 +1467,18 @@ async fn test_very_large_certificate() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
     let socket_addr = make_socket_addr();
 
     let auth_sig = client
@@ -1513,9 +1558,18 @@ async fn test_handle_certificate_errors() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
 
     // Test handle certificate from the wrong epoch
     let epoch_store = authority_state.epoch_store_for_testing();
@@ -1688,9 +1742,12 @@ async fn test_handle_soft_bundle_certificates() {
     let server = AuthorityServer::new_for_test_with_consensus_adapter(authority.clone(), adapter);
     let _metrics = server.metrics.clone();
     let server_handle = server.spawn_for_test().await.unwrap();
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(authority.config.network_key_pair().public().to_owned()),
+    )
+    .await
+    .unwrap();
 
     let signed_tx_into_certificate = |transaction: Transaction| async {
         let epoch_store = authority.load_epoch_store_one_call_per_task();
@@ -1843,9 +1900,12 @@ async fn test_handle_soft_bundle_certificates_errors() {
     let authority = server.state.clone();
     let _metrics = server.metrics.clone();
     let server_handle = server.spawn_for_test().await.unwrap();
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(authority.config.network_key_pair().public().to_owned()),
+    )
+    .await
+    .unwrap();
 
     let signed_tx_into_certificate = |transaction: Transaction| async {
         let epoch_store = authority.load_epoch_store_one_call_per_task();
