@@ -3424,10 +3424,8 @@ fn resolve_exp_dotted(
         debug_print!(context.debug.autocomplete_resolution, ("computing unresolved dot autocomplete" => result; dbg));
         ide_report_autocomplete(context, &loc, &edotted_ty);
     }
-    if context.env.ide_mode() {
-        if let Some(mdot_loc) = method_dot_loc {
-            ide_report_autocomplete(context, &mdot_loc, &edotted_ty);
-        }
+    if let Some(mdot_loc) = method_dot_loc {
+        ide_report_autocomplete(context, &mdot_loc, &edotted_ty);
     }
     result
 }
@@ -3793,10 +3791,13 @@ fn method_call(
             ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
         };
     // report autocomplete information for the IDE
-    if context.env.ide_mode() {
+    let method_dot_loc = if context.env.ide_mode() {
         edotted.autocomplete_last = Some(method.loc);
-    }
-    let first_arg = *resolve_exp_dotted(context, usage, call_loc, edotted, Some(dot_loc));
+        Some(dot_loc)
+    } else {
+        None
+    };
+    let first_arg = *resolve_exp_dotted(context, usage, call_loc, edotted, method_dot_loc);
     args.insert(0, first_arg);
     let (mut call, ret_ty) = module_call_impl(context, call_loc, m, f, fty, argloc, args);
     call.method_name = Some(method);
@@ -4313,10 +4314,13 @@ fn macro_method_call(
         ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
     };
     // report autocomplete information for the IDE
-    if context.env.ide_mode() {
+    let method_dot_loc = if context.env.ide_mode() {
         edotted.autocomplete_last = Some(method.loc);
-    }
-    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted, Some(dot_loc));
+        Some(dot_loc)
+    } else {
+        None
+    };
+    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted, method_dot_loc);
     let mut args = vec![macro_expand::EvalStrategy::ByValue(first_arg)];
     args.extend(
         nargs
