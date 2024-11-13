@@ -98,13 +98,13 @@ pub fn feature_edition_error_msg(edition: Edition, feature: FeatureGate) -> Opti
             } else {
                 valid_editions.last().map_or(
                     format!(
-                        "{} not supported by current edition '{edition}', \
-                        no other editions support this feature",
+                        "{} not supported by any current edition '{edition}', \
+                         the feature is still in development",
                         feature.error_prefix()
                     ),
                     |supporting_edition| {
                         format!(
-                            "{} not supported by current edition '{edition}', \
+                            "{} not supported by current edition '{edition}'; \
                              the '{supporting_edition}' edition supports this feature",
                             feature.error_prefix(),
                         )
