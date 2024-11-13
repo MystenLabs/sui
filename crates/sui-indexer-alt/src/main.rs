@@ -6,6 +6,8 @@ use clap::Parser;
 use sui_indexer_alt::args::Command;
 use sui_indexer_alt::bootstrap::bootstrap;
 use sui_indexer_alt::db::reset_database;
+use sui_indexer_alt::handlers::kv_epoch_ends::KvEpochEnds;
+use sui_indexer_alt::handlers::kv_epoch_starts::KvEpochStarts;
 use sui_indexer_alt::handlers::kv_feature_flags::KvFeatureFlags;
 use sui_indexer_alt::handlers::kv_protocol_configs::KvProtocolConfigs;
 use sui_indexer_alt::{
@@ -49,6 +51,8 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline(EvEmitMod).await?;
             indexer.concurrent_pipeline(EvStructInst).await?;
             indexer.concurrent_pipeline(KvCheckpoints).await?;
+            indexer.concurrent_pipeline(KvEpochEnds).await?;
+            indexer.concurrent_pipeline(KvEpochStarts).await?;
             indexer.concurrent_pipeline(kv_feature_flags).await?;
             indexer.concurrent_pipeline(KvObjects).await?;
             indexer.concurrent_pipeline(kv_protocol_configs).await?;
