@@ -55,7 +55,7 @@ impl FilterContext for Context<'_> {
         is_verify_only_loc.is_some()
     }
 
-    fn should_remove_sequence_item(&mut self, item: &P::SequenceItem) -> bool {
+    fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool {
         match &item.value {
             P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
             P::SequenceItem_::Declare(_, _) => false,
@@ -70,9 +70,17 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
             // get a string representation of name_access_chain using fmt display
             let name_access_chain_str = format!("{}", name_access_chain);
             // return true if name_access_chain_str ends with "verify"
-            name_access_chain_str.ends_with("invariant")
+            let should_remove = name_access_chain_str.ends_with("invariant");
+            println!("name_access_chain_str: {}", name_access_chain_str);
+            if should_remove {
+                println!(
+                    "Removing verification function call: {}",
+                    name_access_chain_str
+                );
+            }
+            should_remove
         }
-        _ => false,
+        e => false,
     }
 }
 

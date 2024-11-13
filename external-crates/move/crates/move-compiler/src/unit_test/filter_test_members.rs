@@ -80,7 +80,7 @@ impl FilterContext for Context<'_> {
             || (!self.is_source_def && is_test_or_rand_test)
     }
 
-    fn should_remove_sequence_item(&mut self, item: &P::SequenceItem) -> bool {
+    fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool {
         false
     }
 }

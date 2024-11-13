@@ -5,6 +5,9 @@
 use move_symbol_pool::Symbol;
 
 use crate::parser::ast as P;
+use move_ir_types::location::Spanned;
+
+use super::ast::ExpMap;
 
 // TODO we should really do this after expansion so that its done after attribute resolution. But
 // that can only really be done if we move most of expansion into naming.
@@ -16,7 +19,7 @@ pub trait FilterContext {
 
     /// Attribute-based node removal
     fn should_remove_by_attributes(&mut self, _attrs: &[P::Attributes]) -> bool;
-    fn should_remove_sequence_item(&mut self, item: &P::SequenceItem) -> bool;
+    fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool;
 
     fn filter_map_address(
         &mut self,
@@ -244,7 +247,14 @@ fn filter_through_function_body<T: FilterContext>(
         body,
     } = function_def;
 
-    let new_body = filter_function_body(context, body);
+    // let new_body = filter_function_body(context, body);
+    let new_body = body.map(|b| match b {
+        P::FunctionBody_::Native => b,
+        P::FunctionBody_::Defined((uses, items, loc, exp)) => {
+            let new_items = filter_items(context, items);
+            P::FunctionBody_::Defined((uses, new_items, loc, exp))
+        }
+    });
 
     P::Function {
         attributes,
@@ -258,18 +268,27 @@ fn filter_through_function_body<T: FilterContext>(
     }
 }
 
-fn filter_function_body<T: FilterContext>(
-    context: &mut T,
-    body: P::FunctionBody,
-) -> P::FunctionBody {
-    body.map(|b| match b {
-        P::FunctionBody_::Native => b,
-        P::FunctionBody_::Defined((uses, items, loc, exp)) => {
-            let new_items = items
-                .into_iter()
-                .filter(|item| !context.should_remove_sequence_item(item))
-                .collect();
-            P::FunctionBody_::Defined((uses, new_items, loc, exp))
-        }
-    })
+fn remove_unwanted<T: FilterContext>(context: &T, x: P::Exp_) -> P::Exp_ {
+    match x {
+        P::Exp_::Block((uses, items, loc, exp)) => P::Exp_::Block((
+            uses,
+            filter_items(context, items),
+            loc,
+            Box::new(exp.map(|e| e.map(|e| e.map_exp(&mut |e| remove_unwanted(context, e))))),
+        )),
+        _ => x,
+    }
+}
+
+fn filter_items<T: FilterContext>(
+    context: &T,
+    items: Vec<Spanned<P::SequenceItem_>>,
+) -> Vec<Spanned<P::SequenceItem_>> {
+    let new_items = items
+        .into_iter()
+        .filter(|item| !context.should_remove_sequence_item(item))
+        .map(|item| item.map(|item| item.map_exp(&
+            mut |exp| remove_unwanted(context, exp))))
+        .collect();
+    new_items
 }

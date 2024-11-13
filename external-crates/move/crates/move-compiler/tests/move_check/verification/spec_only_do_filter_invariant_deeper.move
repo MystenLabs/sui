@@ -3,6 +3,8 @@ module a::m {
     // This should cause an unbound function error in non-verify mode as `bar`
     // was filtered out
     public fun foo() {
-        invariant!(something);
+        if(true) {
+            invariant!(something);
+        }
     }
 }

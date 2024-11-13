@@ -2400,14 +2400,14 @@ impl AstDebug for FieldBindings {
 pub trait ExpMap {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
-        F: FnMut(Exp_) -> Exp_;
+        F: Fn(Exp_) -> Exp_;
 }
 
 // Implement the ExpMap trait for MatchPattern_
 impl ExpMap for MatchPattern_ {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
-        F: FnMut(Exp_) -> Exp_,
+        F: Fn(Exp_) -> Exp_,
     {
         match self {
             MatchPattern_::PositionalConstructor(name, fields) => {
@@ -2461,7 +2461,7 @@ impl ExpMap for MatchPattern_ {
 impl ExpMap for Exp_ {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
-        F: FnMut(Exp_) -> Exp_,
+        F: Fn(Exp_) -> Exp_,
     {
         let res: Exp_ = match self {
             Exp_::Value(_) | Exp_::UnresolvedError => self,
@@ -2581,24 +2581,14 @@ impl ExpMap for Exp_ {
 impl ExpMap for FunctionBody_ {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
-        F: FnMut(Exp_) -> Exp_,
+        F: Fn(Exp_) -> Exp_,
     {
         match self {
             FunctionBody_::Defined((uses, items, loc, exp)) => FunctionBody_::Defined((
                 uses,
                 items
                     .into_iter()
-                    .map(|item| {
-                        item.map(|item| match item {
-                            SequenceItem_::Seq(e) => SequenceItem_::Seq(map_through(e, f)),
-                            SequenceItem_::Declare(bs, ty_opt) => {
-                                SequenceItem_::Declare(bs, ty_opt)
-                            }
-                            SequenceItem_::Bind(bs, ty_opt, e) => {
-                                SequenceItem_::Bind(bs, ty_opt, map_through(e, f))
-                            }
-                        })
-                    })
+                    .map(|item| item.map(|exp| exp.map_exp(f)))
                     .collect(),
                 loc,
                 Box::new(exp.map(|exp| exp.map(|exp| exp.map_exp(f)))),
@@ -2608,9 +2598,24 @@ impl ExpMap for FunctionBody_ {
     }
 }
 
-fn map_through<F>(b: Box<Spanned<Exp_>>, f: &mut F) -> Box<Spanned<Exp_>>
+impl ExpMap for SequenceItem_ {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        match self {
+            SequenceItem_::Seq(e) => SequenceItem_::Seq(map_through(e, f)),
+            SequenceItem_::Declare(bs, ty_opt) => SequenceItem_::Declare(bs, ty_opt),
+            SequenceItem_::Bind(bs, ty_opt, e) => {
+                SequenceItem_::Bind(bs, ty_opt, map_through(e, f))
+            }
+        }
+    }
+}
+
+pub fn map_through<F>(b: Box<Spanned<Exp_>>, f: &mut F) -> Box<Spanned<Exp_>>
 where
-    F: FnMut(Exp_) -> Exp_,
+    F: Fn(Exp_) -> Exp_,
 {
     Box::new(b.map(|b| b.map_exp(f)))
 }
