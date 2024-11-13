@@ -4,15 +4,16 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_adapter::SubmitToConsensus;
+use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
+use consensus_core::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::debug;
 
@@ -102,14 +103,36 @@ impl SubmitToConsensus for MockConsensusClient {
     async fn submit_to_consensus(
         &self,
         transactions: &[ConsensusTransaction],
-        _epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        self.submit(transactions, epoch_store)
+            .await
+            .map(|_response| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusClient for MockConsensusClient {
+    async fn submit(
+        &self,
+        transactions: &[ConsensusTransaction],
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<BlockStatusReceiver> {
         // TODO: maybe support multi-transactions and remove this check
         assert!(transactions.len() == 1);
         let transaction = &transactions[0];
         self.tx_sender
             .send(transaction.clone())
             .await
-            .map_err(|e| SuiError::Unknown(e.to_string()))
+            .map_err(|e| SuiError::Unknown(e.to_string()))?;
+        Ok(with_block_status(consensus_core::BlockStatus::Sequenced(
+            BlockRef::MIN,
+        )))
     }
+}
+
+pub(crate) fn with_block_status(status: consensus_core::BlockStatus) -> BlockStatusReceiver {
+    let (tx, rx) = oneshot::channel();
+    tx.send(status).ok();
+    rx
 }
