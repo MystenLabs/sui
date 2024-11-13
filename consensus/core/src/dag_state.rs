@@ -425,7 +425,6 @@ impl DagState {
         }
     }
 
-    #[allow(unused)]
     pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
         self.recent_blocks
             .get(block_ref)
