@@ -121,6 +121,17 @@ impl TestRunner {
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
     ) -> Result<Self> {
+        // If we want to trace the execution, check that the tracing compilation feature is
+        // enabled, otherwise we won't generate a trace.
+        move_vm_profiler::tracing_feature_disabled! {
+            if trace_location.is_some() {
+                return Err(anyhow::anyhow!(
+                    "Tracing is enabled but the binary was not compiled with the `tracing` \
+                     feature flag set. Rebuild binary with `--features tracing`"
+                ));
+            }
+        };
+
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state =
             setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
