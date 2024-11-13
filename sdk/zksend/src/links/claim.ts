@@ -131,7 +131,10 @@ export class ZkSendLink {
 			link = new ZkSendLink({
 				...options,
 				keypair,
-				network: parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet',
+				network:
+					options.network ?? parsed.searchParams.get('network') === 'testnet'
+						? 'testnet'
+						: 'mainnet',
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: true,
@@ -144,7 +147,10 @@ export class ZkSendLink {
 			link = new ZkSendLink({
 				...options,
 				keypair,
-				network: parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet',
+				network:
+					options.network ?? parsed.searchParams.get('network') === 'testnet'
+						? 'testnet'
+						: 'mainnet',
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: false,
