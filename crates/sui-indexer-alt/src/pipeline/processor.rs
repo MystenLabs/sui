@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use futures::TryStreamExt;
@@ -50,6 +51,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
 ) -> JoinHandle<()> {
     spawn_monitored_task!(async move {
         info!(pipeline = P::NAME, "Starting processor");
+        let latest_processed_checkpoint = Arc::new(AtomicU64::new(0));
 
         match ReceiverStream::new(rx)
             .map(Ok)
@@ -57,6 +59,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let cancel = cancel.clone();
+                let latest_processed_checkpoint = latest_processed_checkpoint.clone();
                 let processor = &processor;
 
                 async move {
@@ -88,6 +91,25 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         elapsed_ms = elapsed * 1000.0,
                         "Processed checkpoint",
                     );
+
+                    let lag = chrono::Utc::now().timestamp_millis() - timestamp_ms as i64;
+                    metrics
+                        .processed_checkpoint_timestamp_lag
+                        .with_label_values(&[P::NAME])
+                        .observe((lag as f64) / 1000.0);
+
+                    let prev = latest_processed_checkpoint
+                        .fetch_max(cp_sequence_number, std::sync::atomic::Ordering::Relaxed);
+                    if cp_sequence_number > prev {
+                        metrics
+                            .latest_processed_checkpoint
+                            .with_label_values(&[P::NAME])
+                            .set(cp_sequence_number as i64);
+                        metrics
+                            .latest_processed_checkpoint_timestamp_lag_ms
+                            .with_label_values(&[P::NAME])
+                            .set(lag);
+                    }
 
                     metrics
                         .total_handler_checkpoints_processed

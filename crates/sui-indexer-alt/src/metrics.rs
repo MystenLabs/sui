@@ -25,9 +25,9 @@ const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
 ];
 
-/// Histogram buckets for the distribution of ingestion lag (difference between the system time and
+/// Histogram buckets for the distribution of checkpoint lag (difference between the system time and
 /// the timestamp in the checkpoint).
-const INGESTION_LAG_SEC_BUCKETS: &[f64] = &[
+const LAG_SEC_BUCKETS: &[f64] = &[
     0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
     0.95, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0,
 ];
@@ -78,6 +78,10 @@ pub struct IndexerMetrics {
     pub total_handler_checkpoints_received: IntCounterVec,
     pub total_handler_checkpoints_processed: IntCounterVec,
     pub total_handler_rows_created: IntCounterVec,
+
+    pub latest_processed_checkpoint: IntGaugeVec,
+    pub latest_processed_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub processed_checkpoint_timestamp_lag: HistogramVec,
 
     pub handler_checkpoint_latency: HistogramVec,
 
@@ -238,7 +242,7 @@ impl IndexerMetrics {
                 "indexer_ingested_checkpoint_timestamp_lag",
                 "Difference between the system timestamp when a checkpoint was fetched and the \
                  timestamp in each checkpoint, in seconds",
-                INGESTION_LAG_SEC_BUCKETS.to_vec(),
+                LAG_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -267,6 +271,30 @@ impl IndexerMetrics {
                 "indexer_total_handler_rows_created",
                 "Total number of rows created by this handler",
                 &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_processed_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_latest_processed_checkpoint",
+                "Latest checkpoint sequence number processed by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_processed_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_processed_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was processed and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processed_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_processed_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was processed and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
