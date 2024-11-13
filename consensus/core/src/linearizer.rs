@@ -25,6 +25,8 @@ pub(crate) trait BlockStoreAPI {
     fn gc_enabled(&self) -> bool;
 
     fn set_committed(&mut self, block_ref: &BlockRef) -> bool;
+
+    fn is_committed(&self, block_ref: &BlockRef) -> bool;
 }
 
 impl BlockStoreAPI
@@ -44,6 +46,10 @@ impl BlockStoreAPI
 
     fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
         DagState::set_committed(self, block_ref)
+    }
+
+    fn is_committed(&self, block_ref: &BlockRef) -> bool {
+        DagState::is_committed(self, block_ref)
     }
 }
 
@@ -143,23 +149,22 @@ impl Linearizer {
         let gc_round: Round = dag_state.gc_round();
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
-        let mut committed = HashSet::new();
         let mut to_commit = Vec::new();
-        assert!(committed.insert(leader_block_ref));
 
         // The new logic will perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
-        // continue until gc_round is reached.
+        // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
         if context
             .protocol_config
             .consensus_linearizer_collect_subdag_v2()
         {
+            assert!(
+                dag_state.set_committed(&leader_block_ref),
+                "Leader block with reference {:?} attempted to be committed twice",
+                leader_block_ref
+            );
+
             while let Some(x) = buffer.pop() {
-                // We only consider as "newly" committed the blocks that have not been committed from previous iteration as persisted in storage, and those
-                // are the ones that will make it to the collected sub dag. A block has been already marked as committed will not be re-committed here, but this will
-                // still allow us to parse its history.
-                if dag_state.set_committed(&x.reference()) {
-                    to_commit.push(x.clone());
-                }
+                to_commit.push(x.clone());
 
                 let ancestors: Vec<VerifiedBlock> = dag_state
                     .get_blocks(
@@ -167,7 +172,7 @@ impl Linearizer {
                             .iter()
                             .copied()
                             .filter(|ancestor| {
-                                !committed.contains(ancestor) && ancestor.round > gc_round
+                                ancestor.round > gc_round && !dag_state.is_committed(ancestor)
                             })
                             .collect::<Vec<_>>(),
                     )
@@ -179,10 +184,17 @@ impl Linearizer {
 
                 for ancestor in ancestors {
                     buffer.push(ancestor.clone());
-                    assert!(committed.insert(ancestor.reference()));
+                    assert!(
+                        dag_state.set_committed(&ancestor.reference()),
+                        "Block with reference {:?} attempted to be committed twice",
+                        ancestor.reference()
+                    );
                 }
             }
         } else {
+            let mut committed = HashSet::new();
+            assert!(committed.insert(leader_block_ref));
+
             while let Some(x) = buffer.pop() {
                 to_commit.push(x.clone());
 
