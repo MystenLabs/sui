@@ -1,5 +1,13 @@
 # @mysten/create-dapp
 
+## 0.3.32
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/dapp-kit@0.14.31
+
 ## 0.3.31
 
 ### Patch Changes
