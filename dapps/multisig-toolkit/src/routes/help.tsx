@@ -32,7 +32,7 @@ function collectHeadings(node: any) {
 					const id = createId(title);
 					sections.push({ ...n.attributes, title, id });
 				}
-			};
+			}
 		}
 	}
 	return sections;
