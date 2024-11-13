@@ -35,16 +35,40 @@ Before getting started, make sure you have:
 
 To begin, create a new folder on your system titled `tic-tac-toe` that holds all your files.
 
+In this folder, create the following subfolders: 
+- `move` to hold the Move code for the game board.
+  - `sources` to hold the Move source files.
+
+<details>
+  <summary>
+    Add `Move.toml` to `tic-tac-toe/move/`
+  </summary>
+  ```toml
+  [package]
+  name = "tic_tac_toe"
+  edition = "2024.beta"
+
+  [dependencies]
+  Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+  [addresses]
+  tic_tac_toe = "0x0"
+  ```
+</details>
+
 :::checkpoint
 
 - You have the latest version of Sui installed. If you run `sui --version` in your terminal or console, it responds with the currently installed version.
 - You have a directory to place the files you create in. 
+- You have created a `Move.toml` file in the `tic-tac-toe/move/` directory.
 
 :::
 
 ## owned.move {#owned.move}
 
-In this first example of tic-tac-toe, the game object, including the game board, is controlled by a game admin.
+Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. This file will contain the Move code for the game board in the centralized version of tic-tac-toe.
+
+In this first example of tic-tac-toe, the `Game` object, including the game board, is controlled by a game admin.
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
 
