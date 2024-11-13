@@ -11,6 +11,12 @@ You can view the [complete source code for this app example](https://github.com/
 
 This guide covers three different implementations of the game tic-tac-toe on Sui. The first example utilizes a centralized admin that owns the board object and marks it on the users’ behalf. The second example utilizes a shared object that both users can mutate. And the third example utilizes a multisig, where instead of sharing the game board, it's in a 1-of-2 multisig of both users’ accounts.
 
+The guide is divided into three parts that each cover a different implementation of the tic-tac-toe game board:
+
+1. [Centralized game board](#owned.move): An admin service that tracks player moves and updates the game board.
+1. [Shared game board](#shared.move): A shared object that allows players to directly update the game board.
+1. [Multisig operated game board](#multisig): A multisig account that acts as the game admin, allowing either player to update the game board directly.
+
 ## What the guide teaches
 
 - **Owned objects:** The guide teaches you how to use [owned objects](../../../concepts/object-ownership/address-owned.mdx), in this case to act as the game board in the centralized and multisig version of tic-tac-toe. Owned objects are objects that are owned by a single account and can only be modified by that account. In this case, the game board is owned by a game admin, who is responsible for updating the board with each player's move.
@@ -36,7 +42,7 @@ To begin, create a new folder on your system titled `tic-tac-toe` that holds all
 
 :::
 
-## owned.move
+## owned.move {#owned.move}
 
 In this first example of tic-tac-toe, the game object, including the game board, is controlled by a game admin.
 
@@ -70,7 +76,7 @@ An alternative version of this game, shared tic-tac-toe, uses shared objects for
 {@inject: examples/tic-tac-toe/move/sources/owned.move}
 </details>
 
-## shared.move
+## shared.move {#shared.move}
 
 In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
 
@@ -93,7 +99,7 @@ Instead of the game being sent to the game admin, it is instantiated as a shared
 {@inject: examples/tic-tac-toe/move/sources/shared.move}
 </details>
 
-## Multisig
+## Multisig  {#multisig}
 
 Multisig tic-tac-toe uses the same Move code as the owned version of the game, but interacts with it differently. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the "admin". This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
 
