@@ -19,7 +19,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
   │
 2 │     public(friend) public(package) fun t0() {}
-  │                    ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │                    ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -60,7 +60,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
   │
 4 │     public public(package) fun t2() {}
-  │            ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │            ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -125,7 +125,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
    │
 10 │     public(package) public(package) fun s1() {}
-   │                     ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                     ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
