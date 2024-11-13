@@ -18,7 +18,7 @@ pub mod sum_packages;
 pub mod tx_affected_addresses;
 pub mod tx_affected_objects;
 pub mod tx_balance_changes;
-pub mod tx_calls_fun;
+pub mod tx_calls;
 pub mod tx_digests;
 pub mod tx_kinds;
 pub mod wal_coin_balances;

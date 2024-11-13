@@ -18,7 +18,7 @@ use sui_indexer_alt::{
         sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays, sum_obj_types::SumObjTypes,
         sum_packages::SumPackages, tx_affected_addresses::TxAffectedAddress,
         tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-        tx_calls_fun::TxCallsFun, tx_digests::TxDigests, tx_kinds::TxKinds,
+        tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
         wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
     },
     Indexer,
@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline(TxAffectedAddress).await?;
             indexer.concurrent_pipeline(TxAffectedObjects).await?;
             indexer.concurrent_pipeline(TxBalanceChanges).await?;
-            indexer.concurrent_pipeline(TxCallsFun).await?;
+            indexer.concurrent_pipeline(TxCalls).await?;
             indexer.concurrent_pipeline(TxDigests).await?;
             indexer.concurrent_pipeline(TxKinds).await?;
             indexer.concurrent_pipeline(WalCoinBalances).await?;
