@@ -47,6 +47,7 @@ struct ProgressStoreConfig {
 struct BigTableTaskConfig {
     instance_id: String,
     timeout_secs: usize,
+    credentials: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +160,7 @@ async fn main() -> Result<()> {
                 executor.register(worker_pool).await?;
             }
             Task::BigTableKV(kv_config) => {
+                std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", kv_config.credentials);
                 let client = BigTableClient::new_remote(
                     kv_config.instance_id,
                     false,

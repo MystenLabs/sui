@@ -96,11 +96,19 @@ pub fn feature_edition_error_msg(edition: Edition, feature: FeatureGate) -> Opti
                     feature.error_prefix()
                 )
             } else {
-                format!(
-                    "{} not supported by current edition '{edition}', \
-                    only {} support this feature",
-                    feature.error_prefix(),
-                    format_oxford_list!("and", "'{}'", valid_editions)
+                valid_editions.last().map_or(
+                    format!(
+                        "{} not supported by any current edition '{edition}', \
+                         the feature is still in development",
+                        feature.error_prefix()
+                    ),
+                    |supporting_edition| {
+                        format!(
+                            "{} not supported by current edition '{edition}'; \
+                             the '{supporting_edition}' edition supports this feature",
+                            feature.error_prefix(),
+                        )
+                    },
                 )
             };
         Some(message)
@@ -136,7 +144,13 @@ static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
 
 const E2024_ALPHA_FEATURES: &[FeatureGate] = &[];
 
-const E2024_BETA_FEATURES: &[FeatureGate] = &[
+const E2024_BETA_FEATURES: &[FeatureGate] = &[];
+
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+
+const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
+
+const E2024_FEATURES: &[FeatureGate] = &[
     FeatureGate::NestedUse,
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
@@ -159,10 +173,6 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Enums,
 ];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
-
-const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
-
 impl Edition {
     pub const LEGACY: Self = Self {
         edition: symbol!("legacy"),
@@ -184,6 +194,10 @@ impl Edition {
         edition: symbol!("development"),
         release: None,
     };
+    pub const E2024: Self = Self {
+        edition: symbol!("2024"),
+        release: None,
+    };
 
     const SEP: &'static str = ".";
 
@@ -193,8 +207,16 @@ impl Edition {
         Self::E2024_BETA,
         Self::E2024_MIGRATION,
         Self::DEVELOPMENT,
+        Self::E2024,
     ];
-    pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_BETA];
+    // NB: This is the list of editions that are considered "valid" for the purposes of the Move.
+    // This list should be kept in order from oldest edition to newest.
+    pub const VALID: &'static [Self] = &[
+        Self::LEGACY,
+        Self::E2024_ALPHA,
+        Self::E2024_BETA,
+        Self::E2024,
+    ];
 
     pub fn supports(&self, feature: FeatureGate) -> bool {
         SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
@@ -205,8 +227,9 @@ impl Edition {
         match *self {
             Self::LEGACY => None,
             Self::E2024_ALPHA => Some(Self::E2024_BETA),
-            Self::E2024_BETA => Some(Self::LEGACY),
-            Self::E2024_MIGRATION => Some(Self::E2024_BETA),
+            Self::E2024_BETA => Some(Self::E2024),
+            Self::E2024 => Some(Self::LEGACY),
+            Self::E2024_MIGRATION => Some(Self::E2024),
             Self::DEVELOPMENT => Some(Self::E2024_ALPHA),
             _ => self.unknown_edition_panic(),
         }
@@ -225,6 +248,11 @@ impl Edition {
             Self::E2024_BETA => {
                 let mut features = self.prev().unwrap().features();
                 features.extend(E2024_BETA_FEATURES);
+                features
+            }
+            Self::E2024 => {
+                let mut features = self.prev().unwrap().features();
+                features.extend(E2024_FEATURES);
                 features
             }
             Self::E2024_MIGRATION => {
@@ -397,6 +425,6 @@ impl Serialize for Flavor {
 
 impl Default for Edition {
     fn default() -> Self {
-        Edition::E2024_BETA
+        Edition::E2024
     }
 }

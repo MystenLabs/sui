@@ -18,7 +18,7 @@ impl Processor for KvObjects {
     const NAME: &'static str = "kv_objects";
     type Value = StoredObject;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let deleted_objects = checkpoint
             .eventually_removed_object_refs_post_version()
             .into_iter()

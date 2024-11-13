@@ -2,7 +2,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:6:7
   │
 6 │     #[syntax(index)]
-  │       ^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │       ^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -10,7 +10,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:10:7
    │
 10 │     #[syntax(index)]
-   │       ^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │       ^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -27,7 +27,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:21:7
    │
 21 │     #[syntax(for)]
-   │       ^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │       ^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -35,7 +35,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:25:7
    │
 25 │     #[syntax(assign)]
-   │       ^^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │       ^^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -43,7 +43,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:29:7
    │
 29 │     #[syntax(nonsense)]
-   │       ^^^^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │       ^^^^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

@@ -20,7 +20,7 @@ pub const EDITION_SELECT_PROMPT: &str = "Please select one of the following edit
 
 pub static EDITION_OPTIONS: Lazy<BTreeMap<String, Edition>> = Lazy::new(|| {
     let mut map = BTreeMap::new();
-    map.insert("1".to_string(), Edition::E2024_BETA);
+    map.insert("1".to_string(), Edition::E2024);
     map.insert("2".to_string(), Edition::LEGACY);
     map
 });
@@ -95,7 +95,7 @@ impl<'a, W: Write, R: BufRead> MigrationContext<'a, W, R> {
                 self.terminal.writeln(EDITION_RECORDED_MSG)?;
                 self.terminal.newline()?;
             }
-            Edition::E2024_BETA => {
+            Edition::E2024 => {
                 self.terminal.newline()?;
                 self.terminal.newline()?;
                 self.perform_upgrade()?;

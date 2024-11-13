@@ -30,7 +30,7 @@ export interface ZkSendLinkBuilderOptions {
 }
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
-	host: 'https://zksend.com',
+	host: 'https://getstashed.com',
 	path: '/claim',
 	network: 'mainnet' as const,
 };
@@ -163,6 +163,7 @@ export class ZkSendLinkBuilder {
 
 		return ZkSendLinkBuilder.createLinks({
 			transaction,
+			network: this.network,
 			client: this.#client,
 			contract: this.#contract.ids,
 			links: [this],

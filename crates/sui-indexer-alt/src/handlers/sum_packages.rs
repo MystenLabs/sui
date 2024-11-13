@@ -25,7 +25,7 @@ impl Processor for SumPackages {
 
     type Value = StoredPackage;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             checkpoint_summary,
             transactions,

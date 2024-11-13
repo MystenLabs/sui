@@ -1,5 +1,21 @@
 # @mysten/zksend
 
+## 0.12.0
+
+### Minor Changes
+
+- 60bdb62: Update graphql query and use stashed host for claim api
+- 364a93a: Remove decoding spaces to `+` in zksend wallet url hashes
+- 364a93a: Add claimedBy property that is set when claimedAssets are loaded
+
+## 0.11.12
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/wallet-standard@0.13.12
+
 ## 0.11.11
 
 ### Patch Changes

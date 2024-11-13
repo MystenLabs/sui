@@ -7,7 +7,7 @@ import { decodeSuiPrivateKey, Keypair } from '@mysten/sui/cryptography';
 import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { toBase64 } from '@mysten/sui/utils';
+import { MIST_PER_SUI, toBase64 } from '@mysten/sui/utils';
 import { beforeAll, expect, test } from 'vitest';
 
 import { getSentTransactionsWithLinks, ZkSendLink, ZkSendLinkBuilder } from './index.js';
@@ -17,22 +17,26 @@ export const DEMO_BEAR_CONFIG = {
 	type: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65::demo_bear::DemoBear',
 };
 
-export const ZK_BAG_CONFIG = {
-	packageId: '0x036fee67274d0d85c3532f58296abe0dee86b93864f1b2b9074be6adb388f138',
-	bagStoreId: '0x5c63e71734c82c48a3cb9124c54001d1a09736cfb1668b3b30cd92a96dd4d0ce',
-	bagStoreTableId: '0x4e1bc4085d64005e03eb4eab2510d527aeba9548cda431cb8f149ff37451f870',
-};
-
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
 });
-const keypair = new Ed25519Keypair();
+
+// address:  0x8ab2b2a5cfa538db19062b79622abe28f3171c8b8048c5957b01846d57574630
+const keypair = Ed25519Keypair.fromSecretKey(
+	'suiprivkey1qz3v0pjxalg3z3p9p6lp4x84y74g0qt2y2q36amvkgfh9zzmm4q66y6ccdz',
+);
 
 // Automatically get gas from testnet is not working reliably, manually request gas via discord,
 // or uncomment the beforeAll and gas function below
 beforeAll(async () => {
-	await getSuiFromFaucet(keypair);
-});
+	const balance = await client.getBalance({
+		owner: keypair.toSuiAddress(),
+	});
+
+	if (Number(balance.totalBalance) < Number(MIST_PER_SUI) * 0.02) {
+		await getSuiFromFaucet(keypair);
+	}
+}, 30_000);
 
 async function getSuiFromFaucet(keypair: Keypair) {
 	const faucetHost = getFaucetHost('testnet');
@@ -56,7 +60,7 @@ describe('Contract links', () => {
 		async () => {
 			const link = new ZkSendLinkBuilder({
 				client,
-				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
 				sender: keypair.toSuiAddress(),
 			});
 
@@ -76,9 +80,9 @@ describe('Contract links', () => {
 			});
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
+				client,
 			});
 
 			const claimableAssets = claimLink.assets!;
@@ -111,9 +115,8 @@ describe('Contract links', () => {
 			);
 
 			const link2 = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
 			});
 			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
 			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
@@ -134,7 +137,7 @@ describe('Contract links', () => {
 			const link = new ZkSendLinkBuilder({
 				keypair: linkKp,
 				client,
-				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
 				sender: keypair.toSuiAddress(),
 			});
 
@@ -162,7 +165,6 @@ describe('Contract links', () => {
 			} = await getSentTransactionsWithLinks({
 				address: keypair.toSuiAddress(),
 				network: 'testnet',
-				contract: ZK_BAG_CONFIG,
 			});
 
 			const { url, transaction } = await lostLink.createRegenerateTransaction(
@@ -181,9 +183,8 @@ describe('Contract links', () => {
 			await client.waitForTransaction({ digest: result.digest });
 
 			const claimLink = await ZkSendLink.fromUrl(url, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
 			});
 
 			expect(claimLink.assets?.nfts.length).toEqual(3);
@@ -212,9 +213,8 @@ describe('Contract links', () => {
 					1, // bag
 			);
 			const link2 = await ZkSendLink.fromUrl(url, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
 			});
 			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
 			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
@@ -235,7 +235,7 @@ describe('Contract links', () => {
 			const link = new ZkSendLinkBuilder({
 				keypair: linkKp,
 				client,
-				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
 				sender: keypair.toSuiAddress(),
 			});
 
@@ -263,7 +263,6 @@ describe('Contract links', () => {
 			} = await getSentTransactionsWithLinks({
 				address: keypair.toSuiAddress(),
 				network: 'testnet',
-				contract: ZK_BAG_CONFIG,
 			});
 
 			const { digest: claimDigest } = await lostLink.claimAssets(keypair.toSuiAddress(), {
@@ -297,7 +296,7 @@ describe('Contract links', () => {
 			for (const bear of bears) {
 				const link = new ZkSendLinkBuilder({
 					client,
-					contract: ZK_BAG_CONFIG,
+					network: 'testnet',
 					sender: keypair.toSuiAddress(),
 				});
 
@@ -310,7 +309,7 @@ describe('Contract links', () => {
 			const tx = await ZkSendLinkBuilder.createLinks({
 				links,
 				client,
-				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
 			});
 
 			const result = await client.signAndExecuteTransaction({
@@ -324,9 +323,8 @@ describe('Contract links', () => {
 				const linkUrl = link.getLink();
 
 				const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-					contract: ZK_BAG_CONFIG,
 					network: 'testnet',
-					claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+					claimApi: 'https://getstashed.com/api',
 				});
 
 				const claimableAssets = claimLink.assets!;
@@ -372,6 +370,7 @@ describe('Non contract links', () => {
 			const link = new ZkSendLinkBuilder({
 				client,
 				sender: keypair.toSuiAddress(),
+				network: 'testnet',
 				contract: null,
 			});
 
@@ -394,7 +393,6 @@ describe('Non contract links', () => {
 			await new Promise((resolve) => setTimeout(resolve, 3000));
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
 			});
 
@@ -424,9 +422,8 @@ describe('Non contract links', () => {
 			);
 
 			const link2 = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
 			});
 			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
 			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
@@ -483,9 +480,8 @@ describe('Non contract links', () => {
 			const link2 = await ZkSendLink.fromUrl(
 				`https://zksend.con/claim#${toBase64(decodeSuiPrivateKey(linkKp.getSecretKey()).secretKey)}`,
 				{
-					contract: ZK_BAG_CONFIG,
 					network: 'testnet',
-					claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+					claimApi: 'https://getstashed.com/api',
 				},
 			);
 			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
@@ -505,6 +501,7 @@ describe('Non contract links', () => {
 			const link = new ZkSendLinkBuilder({
 				client,
 				sender: keypair.toSuiAddress(),
+				network: 'testnet',
 				contract: null,
 			});
 
@@ -547,7 +544,7 @@ describe('Non contract links', () => {
 		async () => {
 			const link = new ZkSendLinkBuilder({
 				client,
-				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
 				sender: keypair.toSuiAddress(),
 			});
 
@@ -575,9 +572,8 @@ describe('Non contract links', () => {
 			});
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
 			});
 
 			const claimableAssets = claimLink.assets!;
@@ -610,9 +606,8 @@ describe('Non contract links', () => {
 			);
 
 			const link2 = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+				claimApi: 'https://getstashed.com/api',
 			});
 			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
 			expect(link2.assets?.nfts.map((nft) => nft.objectId).sort()).toEqual(

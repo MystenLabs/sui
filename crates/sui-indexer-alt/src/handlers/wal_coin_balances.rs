@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -23,8 +24,8 @@ impl Processor for WalCoinBalances {
 
     type Value = StoredObjectUpdate<StoredSumCoinBalance>;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        SumCoinBalances::process(checkpoint)
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+        SumCoinBalances.process(checkpoint)
     }
 }
 
@@ -55,5 +56,12 @@ impl Handler for WalCoinBalances {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let filter = wal_coin_balances::table
+            .filter(wal_coin_balances::cp_sequence_number.between(from as i64, to as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }

@@ -7,7 +7,7 @@ use crate::models::watermarks::CommitterWatermark;
 
 pub use processor::Processor;
 
-pub(crate) mod concurrent;
+pub mod concurrent;
 mod processor;
 pub(crate) mod sequential;
 

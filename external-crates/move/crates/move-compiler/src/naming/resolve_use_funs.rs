@@ -401,7 +401,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)
@@ -416,7 +416,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             exp_dotted(context, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
