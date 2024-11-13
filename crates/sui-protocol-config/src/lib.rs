@@ -1699,7 +1699,10 @@ impl ProtocolConfig {
 
     pub fn consensus_linearizer_collect_subdag_v2(&self) -> bool {
         let res = self.feature_flags.consensus_linearizer_collect_subdag_v2;
-        assert!(!res || self.gc_depth() > 0, "The consensus linearizer collect sub dag V2 requires GC to be enabled");
+        assert!(
+            !res || self.gc_depth() > 0,
+            "The consensus linearizer collect sub dag V2 requires GC to be enabled"
+        );
         res
     }
 }
