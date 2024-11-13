@@ -24,13 +24,13 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 //**************************************************************************************************
 // This mostly follows the classical Maranget (2008) implementation toward optimal decision trees.
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum StructUnpack<T> {
     Default(T),
     Unpack(Vec<(Field, Var, Type)>, T),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum MatchTree {
     Leaf(Vec<ArmResult>),
     Failure,
