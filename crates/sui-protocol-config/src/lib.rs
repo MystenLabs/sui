@@ -198,6 +198,7 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
 //             Enable G1Uncompressed group in testnet.
+//             Enable Garbage Collection in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2962,6 +2963,10 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.consensus_gc_depth = Some(60);
                     }
                 }
                 // Use this template when making changes:
