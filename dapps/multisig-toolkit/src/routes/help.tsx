@@ -26,14 +26,13 @@ function collectHeadings(node: any) {
 	if (node && node.name === 'article') {
 		// Match all h1, h2, h3… tags
 		if (node.children.length > 0) {
-			node.children.map((n) => {
+			for (const n of node.children) {
 				if (n.name.match(/h(?!1)\d/)) {
 					const title = n.children[0];
 					const id = createId(title);
 					sections.push({ ...n.attributes, title, id });
 				}
-				return;
-			});
+			};
 		}
 	}
 	return sections;
@@ -75,7 +74,7 @@ export default function Help() {
 						{nav.length > 0 &&
 							nav.map((n) => {
 								if (n.id === 'readme') {
-									return;
+									return <></>;
 								}
 								return (
 									<div
