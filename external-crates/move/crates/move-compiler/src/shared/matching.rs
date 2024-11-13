@@ -534,6 +534,7 @@ impl PatternMatrix {
                     }
                 }
             }
+            // FIXME: This is wrong in a number of situations.
             Some(result)
         } else {
             None
