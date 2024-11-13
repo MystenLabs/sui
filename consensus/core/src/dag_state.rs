@@ -234,28 +234,37 @@ impl DagState {
             );
         }
 
-        if state
-            .context
-            .protocol_config
-            .consensus_linearizer_collect_subdag_v2()
-        {
-            // We also need to recover the commit state of blocks based on the commits that happened from the rounds > gc_round until latest commit.
+        if state.gc_enabled() {
             if let Some(last_commit) = last_commit {
-                // We take the worst case assuming a commit for every round from the latest index, and we recover the commits that happened between
-                // the gc_round and the last commit.
+                let mut index = last_commit.index();
                 let gc_round = state.gc_round();
+                info!("Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}", index, gc_round);
 
-                store
-                    .scan_commits((last_commit.index().saturating_sub(gc_round)+1..=last_commit.index()).into())
-                    .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
-                    .iter()
-                    .for_each(|commit|{
-                        for block_ref in commit.blocks() {
-                            if block_ref.round > state.gc_round() {
-                                assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
-                            }
-                        }
+                loop {
+                    let commits = store
+                        .scan_commits((index..=index).into())
+                        .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+                    let Some(commit) = commits.first() else {
+                        break;
+                    };
+
+                    // Check the commit leader round to see if it is within the gc_round. If it is not then we can stop the recovery process.
+                    if gc_round > 0 && commit.leader().round <= gc_round {
+                        break;
+                    }
+
+                    commit.blocks().iter().filter(|b| b.round > gc_round).for_each(|block_ref|{
+                        debug!(
+                            "Setting block {:?} as committed based on commit {:?}",
+                            block_ref,
+                            commit.index()
+                        );
+                        assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
                     });
+
+                    // When reaching zero will exist anyways as all commits are indexed starting from 1.
+                    index = index.saturating_sub(1);
+                }
             }
         }
 
@@ -403,9 +412,11 @@ impl DagState {
     // Sets the block as committed in the cache. If the block has not been already committed it returns true, otherwise false.
     pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
         if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
-            let res = block_info.committed;
-            block_info.committed = true;
-            res
+            if !block_info.committed {
+                block_info.committed = true;
+                return true;
+            }
+            false
         } else {
             panic!(
                 "Block {:?} not found in cache to set as committed.",
@@ -1838,6 +1849,9 @@ mod test {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context
+            .protocol_config
+            .set_consensus_linearizer_collect_subdag_v2_for_testing(true);
 
         let context = Arc::new(context);
 
@@ -1854,10 +1868,11 @@ mod test {
             .build();
         dag_builder.layers(9..=num_rounds).build();
 
-        let mut commits = vec![];
-        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
-            commits.push(commit);
-        }
+        let mut commits = dag_builder
+            .get_sub_dag_and_commits(1..=num_rounds)
+            .into_iter()
+            .map(|(_subdag, commit)| commit)
+            .collect::<Vec<_>>();
 
         // Add the blocks from first 8 rounds and first 7 commits to the dag state
         // It's 7 commits because we missing the commit of round 8 where authority 0 is the leader, but produced no block
@@ -1865,6 +1880,12 @@ mod test {
         dag_state.accept_blocks(dag_builder.blocks(1..=8));
         for commit in commits.clone() {
             dag_state.add_commit(commit);
+        }
+
+        // Holds all the committed blocks from the commits that ended up being persisted (flushed). Any commits that not flushed will not be considered.
+        let mut all_committed_blocks = BTreeSet::<BlockRef>::new();
+        for commit in commits.iter() {
+            all_committed_blocks.extend(commit.blocks());
         }
 
         // Flush the dag state
@@ -1961,6 +1982,60 @@ mod test {
                     .all(|block| block.round() >= 5 && block.round() <= 8));
             }
         }
+
+        // Ensure that committed blocks from > gc_round have been correctly marked as committed according to committed sub dags
+        let gc_round = dag_state.gc_round();
+        assert_eq!(gc_round, 4);
+        dag_state
+            .recent_blocks
+            .iter()
+            .for_each(|(block_ref, block_info)| {
+                if block_ref.round > gc_round && all_committed_blocks.contains(block_ref) {
+                    assert!(
+                        block_info.committed,
+                        "Block {:?} should be committed",
+                        block_ref
+                    );
+                }
+            });
+    }
+
+    #[tokio::test]
+    async fn test_block_info_as_committed() {
+        let num_authorities: u32 = 4;
+        let (context, _) = Context::new_for_test(num_authorities as usize);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Accept a block
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(1, 0)
+                .set_timestamp_ms(1000)
+                .set_ancestors(vec![])
+                .build(),
+        );
+
+        dag_state.accept_block(block.clone());
+
+        // Query is committed
+        assert!(!dag_state.is_committed(&block.reference()));
+
+        // Set block as committed for first time should return true
+        assert!(
+            dag_state.set_committed(&block.reference()),
+            "Block should be successfully set as committed for first time"
+        );
+
+        // Now it should appear as committed
+        assert!(dag_state.is_committed(&block.reference()));
+
+        // Trying to set the block as committed again, it should return false.
+        assert!(
+            !dag_state.set_committed(&block.reference()),
+            "Block should not be successfully set as committed"
+        );
     }
 
     #[tokio::test]
