@@ -478,7 +478,7 @@ fun Pool_inv<A, B>(self: &Pool<A, B>): bool {
     l.to_int().mul(l.to_int()).lte(a.to_int().mul(b.to_int()))
 }
 
-#[verify_only]
+#[spec_only]
 macro fun ensures_a_and_b_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
     let pool = $pool;
     let old_pool = $old_pool;
@@ -497,7 +497,7 @@ macro fun ensures_a_and_b_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_poo
     ensures(new_L.mul(old_B).lte(new_B.mul(old_L)));
 }
 
-#[verify_only]
+#[spec_only]
 macro fun ensures_product_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
     let pool = $pool;
     let old_pool = $old_pool;
@@ -513,14 +513,14 @@ macro fun ensures_product_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_poo
     ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
 }
 
-#[verify_only]
+#[spec_only]
 macro fun requires_balance_sum_no_overflow<$T>($balance0: &Balance<$T>, $balance1: &Balance<$T>) {
     let balance0 = $balance0;
     let balance1 = $balance1;
     requires(balance0.value().to_int().add(balance1.value().to_int()).lt(u64::max_value!().to_int()));
 }
 
-#[verify_only]
+#[spec_only]
 macro fun requires_balance_leq_supply<$T>($balance: &Balance<$T>, $supply: &Supply<$T>) {
     let balance = $balance;
     let supply = $supply;
@@ -714,7 +714,7 @@ fun calc_swap_result_spec(
     (out_value, admin_fee_in_lp)
 }
 
-#[verify_only]
+#[spec_only]
 // #[ext(no_verify)]
 fun admin_set_fees_spec<A, B>(
     pool: &mut Pool<A, B>,
