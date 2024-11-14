@@ -712,3 +712,18 @@ fun calc_swap_result_spec(
 
     (out_value, admin_fee_in_lp)
 }
+
+#[verify_only]
+// #[ext(no_verify)]
+fun admin_set_fees_spec<A, B>(
+    pool: &mut Pool<A, B>,
+    cap: &AdminCap,
+    lp_fee_bps: u64,
+    admin_fee_pct: u64,
+) {
+    asserts(lp_fee_bps < BPS_IN_100_PCT);
+    asserts(admin_fee_pct <= 100);
+    admin_set_fees(pool, cap, lp_fee_bps, admin_fee_pct);
+    ensures(pool.lp_fee_bps <= BPS_IN_100_PCT);
+    ensures(pool.admin_fee_pct <= 100);
+}
