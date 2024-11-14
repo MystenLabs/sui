@@ -100,15 +100,11 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    pub fn from_module(
-        module: &'a CompiledModule,
-        default_loc: Loc,
-        default_definition_loc: Loc,
-    ) -> Result<Self> {
+    pub fn from_module(module: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
         let mut options = DisassemblerOptions::new();
         options.print_code = true;
         Ok(Self::new(
-            SourceMapping::new_without_source_map(module, default_loc, default_definition_loc)?,
+            SourceMapping::new_without_source_map(module, default_loc)?,
             options,
         ))
     }

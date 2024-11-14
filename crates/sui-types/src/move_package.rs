@@ -601,14 +601,12 @@ where
                 error: error.to_string(),
             }
         })?;
-        let d = Disassembler::from_module(
-            &module,
-            Spanned::unsafe_no_loc(()).loc,
-            Spanned::unsafe_no_loc(()).loc,
-        )
-        .map_err(|e| SuiError::ObjectSerializationError {
-            error: e.to_string(),
-        })?;
+        let d =
+            Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
+                SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                }
+            })?;
         let bytecode_str = d
             .disassemble()
             .map_err(|e| SuiError::ObjectSerializationError {

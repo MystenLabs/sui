@@ -88,7 +88,7 @@ fn main() {
         if let Ok(s) = source_map {
             SourceMapping::new(s, &module)
         } else {
-            SourceMapping::new_without_source_map(&module, no_loc, no_loc)
+            SourceMapping::new_without_source_map(&module, no_loc)
                 .expect("Unable to build dummy source mapping")
         }
     };

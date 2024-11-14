@@ -219,7 +219,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                         None => SourceMapping::new_without_source_map(
                             &module,
                             Spanned::unsafe_no_loc(()).loc,
-                            Spanned::unsafe_no_loc(()).loc,
                         )
                         .expect("Unable to build dummy source mapping"),
                     };
