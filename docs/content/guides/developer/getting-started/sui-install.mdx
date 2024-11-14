@@ -115,6 +115,8 @@ Run the following command to install Sui binaries from the `testnet` branch:
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
+Enabling the `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Without it these two features will not be able to be used.
+
 The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
 
 To update to the latest stable version of Rust:
@@ -132,6 +134,8 @@ If you previously installed the Sui binaries, you can update them to the most re
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
+
+The `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Unless it is enabled you will not be able to use these two features.
 
 ## Build from source
 
