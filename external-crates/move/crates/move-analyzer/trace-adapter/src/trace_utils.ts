@@ -9,7 +9,7 @@ import {
     IRuntimeVariableLoc,
     IRuntimeRefValue
 } from './runtime';
-import { ISourceMap, ILoc, IFileInfo } from './source_map_utils';
+import { ISourceMap, IFileLoc, IFileInfo, ILoc } from './source_map_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -195,6 +195,14 @@ export enum TraceInstructionKind {
  * Kind of a trace event.
  */
 export enum TraceEventKind {
+    /**
+     * Artificial event to replace the content of the current inlined frame
+     * with the content of another frame. This is to make sure that there is
+     * only one inlined frame on the stack at any given time as inlined frames
+     * are not being pushed and popped symmetrically and need to be handled
+     * differently than regular frames.
+     */
+    ReplaceInlinedFrame,
     OpenFrame,
     CloseFrame,
     Instruction,
@@ -205,6 +213,11 @@ export enum TraceEventKind {
  * Trace event types containing relevant data.
  */
 export type TraceEvent =
+    | {
+        type: TraceEventKind.ReplaceInlinedFrame
+        fileHash: string
+        optimizedLines: number[]
+    }
     | {
         type: TraceEventKind.OpenFrame,
         id: number,
@@ -267,30 +280,42 @@ interface ITraceGenFrameInfo {
     /**
      * PC locations traced in the frame
      */
-    pcLocs: ILoc[];
+    pcLocs: IFileLoc[];
     /**
      * Path to a file containing function represented by the frame.
      */
     filePath: string;
+    /**
+     * Hash of a file containing function represented by the frame.
+     */
+    fileHash: string;
 }
+
+/**
+ * An ID of a virtual frame representing an inlined macro.
+ */
+const INLINED_FRAME_ID = -1;
 
 /**
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
+ * @param sourceMapsModMap a map from stringified module info to a source map.
+ * @param sourceMapsHashMap a map from file hash to a source map.
  * @returns execution trace.
  * @throws Error with a descriptive error message if reading trace has failed.
  */
 export function readTrace(
     traceFilePath: string,
-    sourceMapsMap: Map<string, ISourceMap>,
+    sourceMapsModMap: Map<string, ISourceMap>,
+    sourceMapsHashMap: Map<string, ISourceMap>,
     filesMap: Map<string, IFileInfo>
 ): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
     const events: TraceEvent[] = [];
     // We compute the end of lifetime for a local variable as follows.
     // When a given local variable is read or written in an effect, we set the end of its lifetime
-    // to INFINITE_LIFETIME. When a new instruction is executed, we set the end of its lifetime
+    // to FRAME_LIFETIME. When a new instruction is executed, we set the end of its lifetime
     // to be the PC of this instruction. The caveat here is that we must use
     // the largest PC of all encountered instructions for this to avoid incorrectly
     // setting the end of lifetime to a smaller PC in case of a loop.
@@ -338,7 +363,7 @@ export function readTrace(
                 addr: frame.module.address,
                 name: frame.module.name
             };
-            const sourceMap = sourceMapsMap.get(JSON.stringify(modInfo));
+            const sourceMap = sourceMapsModMap.get(JSON.stringify(modInfo));
             if (!sourceMap) {
                 throw new Error('Source map for module '
                     + modInfo.name
@@ -370,50 +395,156 @@ export function readTrace(
             frameInfoStack.push({
                 ID: frame.frame_id,
                 pcLocs: funEntry.pcLocs,
-                filePath: currentFile.path
+                filePath: currentFile.path,
+                fileHash: sourceMap.fileHash
             });
         } else if (event.CloseFrame) {
             events.push({
                 type: TraceEventKind.CloseFrame,
                 id: event.CloseFrame.frame_id
             });
-            frameInfoStack.pop();
+            while (true) {
+                const frameInfo = frameInfoStack.pop();
+                if (!frameInfo) {
+                    throw new Error('CloseFrame with ID '
+                        + event.CloseFrame.frame_id
+                        + ' not found on frame info stack');
+                }
+                if (frameInfo.ID === event.CloseFrame.frame_id) {
+                    break;
+                }
+                // else keep popping as there may be entries on the stack representing
+                // switch frames
+            }
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
-            const frameInfo = frameInfoStack[frameInfoStack.length - 1];
+            let frameInfo = frameInfoStack[frameInfoStack.length - 1];
             const fid = frameInfo.ID;
             const pcLocs = frameInfo.pcLocs;
             // if map does not contain an entry for a PC that can be found in the trace file,
             // it means that the position of the last PC in the source map should be used
-            let loc = event.Instruction.pc >= pcLocs.length
+            let floc = event.Instruction.pc >= pcLocs.length
                 ? pcLocs[pcLocs.length - 1]
                 : pcLocs[event.Instruction.pc];
 
-            if (!loc) {
+            if (!floc) {
                 throw new Error('Cannot find location for PC: '
                     + event.Instruction.pc
                     + ' in frame: '
                     + fid);
             }
 
+            if (floc.fileHash !== frameInfo.fileHash) {
+                // This indicates that we are going to an instruction in the same function
+                // but in a different file, which can happen due to macro inlining.
+                // One could think of "outlining" the inlined code to create separate
+                // frames for each inlined macro but unfortunately this will not quite work.
+                // The reason is that we cannot rely on these the inlined frame pushes and pops
+                // being symmetric. Consider the following example:
+                //```
+                // macro fun baz() {
+                //     ...
+                // }
+                // macro fun bar() {
+                //     baz!();
+                //     ...
+                // }
+                // fun foo() {
+                //     bar!();
+                // }
+                //```
+                // In the example above, according to the trace, there will be only
+                // one inlined frame push as the first instruction of function `foo`
+                // will be an instruction in macro `baz` instead of an instruction
+                // in macro `bar`. Yet, when the control flow exits `baz`, it will go
+                // to `bar`, and then to `foo`.
+                //
+                // The high level idea of how to handle this situation is to always
+                // keep only a single inflined frame on the stack:
+                // - the first time we see different file hashes, we push an inlined
+                //   frame on the stack
+                // - if an inlined frame is already on the stack, and the next file
+                //   hash transition happens, then we do ond of the following:
+                //   - if the next file hash is the same as the file hash of the frame
+                //     before the current one, we pop the current inlined frame
+                //   - otherwise, we replace the current inlined frame with the new one
+                if (frameInfoStack.length > 1 &&
+                    frameInfoStack[frameInfoStack.length - 2].fileHash === floc.fileHash
+                ) {
+                    frameInfoStack.pop();
+                    events.push({
+                        type: TraceEventKind.CloseFrame,
+                        id: fid
+                    });
+                } else {
+                    const sourceMap = sourceMapsHashMap.get(floc.fileHash);
+                    if (!sourceMap) {
+                        throw new Error('Cannot find source map for file with hash: '
+                            + floc.fileHash
+                            + ' when frame switching within frame '
+                            + fid
+                            + ' at PC '
+                            + event.Instruction.pc);
+                    }
+                    if (frameInfo.ID === INLINED_FRAME_ID) {
+                        events.push({
+                            type: TraceEventKind.ReplaceInlinedFrame,
+                            fileHash: floc.fileHash,
+                            optimizedLines: sourceMap.optimizedLines
+                        });
+                        // pop the current inlined frame so that it can
+                        // be replaced on the frame info stack below
+                        frameInfoStack.pop();
+                    } else {
+                        events.push({
+                            type: TraceEventKind.OpenFrame,
+                            id: INLINED_FRAME_ID,
+                            name: '__inlined__',
+                            fileHash: floc.fileHash,
+                            isNative: false,
+                            localsTypes: [],
+                            localsNames: [],
+                            paramValues: [],
+                            optimizedLines: sourceMap.optimizedLines
+                        });
+                    }
+                    frameInfoStack.push({
+                        ID: INLINED_FRAME_ID,
+                        // same pcLocs as before since we technically are in the same function
+                        pcLocs: frameInfo.pcLocs,
+                        filePath: sourceMap.filePath,
+                        fileHash: sourceMap.fileHash
+                    });
+                }
+            }
+            // re-read frame info as it may have changed as a result of processing
+            // and inlined call
+            frameInfo = frameInfoStack[frameInfoStack.length - 1];
             const filePath = frameInfo.filePath;
             const lines = tracedLines.get(filePath) || new Set<number>();
-            lines.add(loc.line);
+            // floc is still good as the pc_locs used for its computation
+            // do not change as a result of processing inlined frames
+            lines.add(floc.loc.line);
             tracedLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
-                loc,
+                loc: floc.loc,
                 kind: name in TraceInstructionKind
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
             });
+
             // Set end of lifetime for all locals to the max instruction PC ever seen
             // for a given local (if they are live after this instructions, they will
-            // be reset to INFINITE_LIFETIME when processing subsequent effects).
-            const currentFrameID = frameInfoStack[frameInfoStack.length - 1].ID;
-            const lifetimeEnds = localLifetimeEnds.get(currentFrameID) || [];
-            const lifetimeEndsMax = locaLifetimeEndsMax.get(currentFrameID) || [];
+            // be reset to FRAME_LIFETIME when processing subsequent effects).
+            // All instructions in a given function, regardless of whether they are
+            // in the inlined portion of the code or not, reset variable lifetimes.
+            const nonInlinedFrameID = frameInfo.ID !== INLINED_FRAME_ID
+                ? frameInfo.ID
+                : frameInfoStack[frameInfoStack.length - 2].ID;
+            const lifetimeEnds = localLifetimeEnds.get(nonInlinedFrameID) || [];
+            const lifetimeEndsMax = locaLifetimeEndsMax.get(nonInlinedFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {
                 if (lifetimeEnds[i] === undefined || lifetimeEnds[i] === FRAME_LIFETIME) {
                     // only set new end of lifetime if it has not been set before
@@ -425,8 +556,8 @@ export function readTrace(
                     }
                 }
             }
-            localLifetimeEnds.set(currentFrameID, lifetimeEnds);
-            locaLifetimeEndsMax.set(currentFrameID, lifetimeEndsMax);
+            localLifetimeEnds.set(nonInlinedFrameID, lifetimeEnds);
+            locaLifetimeEndsMax.set(nonInlinedFrameID, lifetimeEndsMax);
         } else if (event.Effect) {
             const effect = event.Effect;
             if (effect.Write || effect.Read) {
@@ -589,5 +720,77 @@ function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeVal
             variantTag: value.variant_tag
         };
         return compoundValue;
+    }
+}
+
+//
+// Utility functions for testing and debugging.
+//
+
+/**
+ * Converts a trace to a string representation.
+ *
+ * @param trace trace.
+ * @returns string representation of the trace.
+ */
+export function traceEventsToString(trace: ITrace): string[] {
+    return trace.events.map(event => eventToString(event));
+}
+
+/**
+ * Converts a trace event to a string representation.
+ *
+ * @param event trace event.
+ * @returns string representation of the event.
+ */
+function eventToString(event: TraceEvent): string {
+    switch (event.type) {
+        case TraceEventKind.ReplaceInlinedFrame:
+            return 'ReplaceInlinedFrame';
+        case TraceEventKind.OpenFrame:
+            return `OpenFrame ${event.id}`;
+        case TraceEventKind.CloseFrame:
+            return `CloseFrame ${event.id}`;
+        case TraceEventKind.Instruction:
+            return 'Instruction '
+                + instructionKindToString(event.kind)
+                + ' at PC '
+                + event.pc
+                + ', line '
+                + event.loc.line;
+        case TraceEventKind.Effect:
+            return `Effect ${effectToString(event.effect)}`;
+    }
+}
+
+/**
+ * Converts a trace instruction kind to a string representation.
+ *
+ * @param kind instruction kind.
+ * @returns string representation of the instruction kind.
+ */
+function instructionKindToString(kind: TraceInstructionKind): string {
+    switch (kind) {
+        case TraceInstructionKind.CALL:
+            return 'CALL';
+        case TraceInstructionKind.CALL_GENERIC:
+            return 'CALL_GENERIC';
+        case TraceInstructionKind.UNKNOWN:
+            return 'UNKNOWN';
+    }
+}
+
+/**
+ * Converts an effect of an instruction to a string representation.
+ *
+ * @param effect effect.
+ * @returns string representation of the effect.
+ */
+function effectToString(effect: EventEffect): string {
+    switch (effect.type) {
+        case TraceEffectKind.Write:
+            return `Write at idx ${effect.loc.localIndex} in frame ${effect.loc.frameID}`;
+        case TraceEffectKind.ExecutionError:
+            return `ExecutionError ${effect.msg}`;
     }
 }

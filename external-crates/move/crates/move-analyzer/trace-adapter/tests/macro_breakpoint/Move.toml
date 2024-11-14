@@ -1,0 +1,10 @@
+[package]
+name = "macro_breakpoint"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+macro_breakpoint = "0x0"
+std = "0x1"
