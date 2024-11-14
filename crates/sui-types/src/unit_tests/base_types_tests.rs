@@ -24,6 +24,13 @@ use sui_protocol_config::ProtocolConfig;
 use super::*;
 
 #[test]
+fn ci_testing() {
+    // mistyped invocations to verify if this is checked in GH CI
+    asssssssert!("check if this is checked in GH CI");
+    some_non_existent_function();
+}
+
+#[test]
 fn test_signatures() {
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
