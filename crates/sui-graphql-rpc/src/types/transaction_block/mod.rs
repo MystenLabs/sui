@@ -374,10 +374,10 @@ impl TransactionBlock {
         }
 
         if let Some(tx_ids) = &filter.transaction_ids {
-            if tx_ids.len() > limits.max_transaction_ids as usize {
+            if tx_ids.len() > limits.max_multi_get_keys as usize {
                 return Err(Error::Client(format!(
                     "Transaction IDs exceed max limit of '{}'",
-                    limits.max_transaction_ids
+                    limits.max_multi_get_keys
                 )));
             }
         }

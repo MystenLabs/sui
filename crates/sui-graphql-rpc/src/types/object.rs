@@ -128,6 +128,9 @@ pub(crate) struct ObjectFilter {
     pub owner: Option<SuiAddress>,
 
     /// Filter for live objects by their IDs.
+    #[deprecated(
+        note = "Use `multiGetObjects` instead. This field will be removed in a future release."
+    )]
     pub object_ids: Option<Vec<SuiAddress>>,
 
     /// Filter for live or potentially historical objects by their ID and version.
@@ -902,6 +905,39 @@ impl Object {
             version,
             checkpoint_viewed_at,
         }
+    }
+
+    /// Fetch one or more objects by their id and version.
+    pub(crate) async fn query_many(
+        ctx: &Context<'_>,
+        keys: Vec<ObjectKey>,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Vec<Self>, Error> {
+        let DataLoader(loader) = &ctx.data_unchecked();
+
+        let keys: Vec<PointLookupKey> = keys
+            .into_iter()
+            .map(|key| PointLookupKey {
+                id: key.object_id,
+                version: key.version.into(),
+            })
+            .collect();
+
+        let data = loader.load_many(keys).await?;
+        let objects = data
+            .into_iter()
+            .filter_map(|(lookup_key, bcs)| {
+                Object::new_serialized(
+                    lookup_key.id,
+                    lookup_key.version,
+                    bcs,
+                    checkpoint_viewed_at,
+                    lookup_key.version,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        Ok(objects)
     }
 
     pub(crate) async fn query(
