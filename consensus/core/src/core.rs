@@ -691,16 +691,18 @@ impl Core {
         self.subscriber_exists = exists;
     }
 
-    /// Sets the delay by round for propagating blocks to a quorum and the
-    /// quorum round per authority for ancestor state manager.
+    /// Sets the delay by round for propagating blocks to a quorum and the received
+    /// & accepted quorum rounds per authority for ancestor state manager.
     pub(crate) fn set_propagation_delay_and_quorum_rounds(
         &mut self,
         delay: Round,
-        quorum_rounds: Vec<QuorumRound>,
+        received_quorum_rounds: Vec<QuorumRound>,
+        accepted_quorum_rounds: Vec<QuorumRound>,
     ) {
-        info!("Quorum round per authority in ancestor state manager set to: {quorum_rounds:?}");
+        info!("Received quorum round per authority in ancestor state manager set to: {received_quorum_rounds:?}");
+        info!("Accepted quorum round per authority in ancestor state manager set to: {accepted_quorum_rounds:?}");
         self.ancestor_state_manager
-            .set_quorum_round_per_authority(quorum_rounds);
+            .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
         info!("Propagation round delay set to: {delay}");
         self.propagation_delay = delay;
     }
@@ -2332,7 +2334,7 @@ mod test {
         );
 
         // Use a large propagation delay to disable proposing.
-        core.set_propagation_delay_and_quorum_rounds(1000, vec![]);
+        core.set_propagation_delay_and_quorum_rounds(1000, vec![], vec![]);
 
         // Make propagation delay the only reason for not proposing.
         core.set_subscriber_exists(true);
@@ -2341,7 +2343,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Let Core know there is no propagation delay.
-        core.set_propagation_delay_and_quorum_rounds(0, vec![]);
+        core.set_propagation_delay_and_quorum_rounds(0, vec![], vec![]);
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());

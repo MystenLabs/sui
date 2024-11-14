@@ -334,6 +334,21 @@ impl NetworkClient for TonicClient {
         })?;
         Ok(response.into_inner().highest_received)
     }
+
+    async fn get_latest_rounds_v2(
+        &self,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(GetLatestRoundsRequest {});
+        request.set_timeout(timeout);
+        let response = client.get_latest_rounds_v2(request).await.map_err(|e| {
+            ConsensusError::NetworkRequest(format!("get_latest_rounds failed: {e:?}"))
+        })?;
+        let response = response.into_inner();
+        Ok((response.highest_received, response.highest_accepted))
+    }
 }
 
 // Tonic channel wrapped with layers.
@@ -650,6 +665,28 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         Ok(Response::new(GetLatestRoundsResponse { highest_received }))
+    }
+
+    async fn get_latest_rounds_v2(
+        &self,
+        request: Request<GetLatestRoundsRequest>,
+    ) -> Result<Response<GetLatestRoundsResponseV2>, tonic::Status> {
+        let Some(peer_index) = request
+            .extensions()
+            .get::<PeerInfo>()
+            .map(|p| p.authority_index)
+        else {
+            return Err(tonic::Status::internal("PeerInfo not found"));
+        };
+        let (highest_received, highest_accepted) = self
+            .service
+            .handle_get_latest_rounds_v2(peer_index)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        Ok(Response::new(GetLatestRoundsResponseV2 {
+            highest_received,
+            highest_accepted,
+        }))
     }
 }
 
@@ -1199,6 +1236,16 @@ pub(crate) struct GetLatestRoundsResponse {
     // Highest received round per authority.
     #[prost(uint32, repeated, tag = "1")]
     highest_received: Vec<u32>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct GetLatestRoundsResponseV2 {
+    // Highest received round per authority.
+    #[prost(uint32, repeated, tag = "1")]
+    highest_received: Vec<u32>,
+    // Highest accepted round per authority.
+    #[prost(uint32, repeated, tag = "2")]
+    highest_accepted: Vec<u32>,
 }
 
 fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {

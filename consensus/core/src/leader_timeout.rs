@@ -175,7 +175,8 @@ mod tests {
         fn set_propagation_delay_and_quorum_rounds(
             &self,
             _delay: Round,
-            _quorum_rounds: Vec<QuorumRound>,
+            _received_quorum_rounds: Vec<QuorumRound>,
+            _accepted_quorum_rounds: Vec<QuorumRound>,
         ) -> Result<(), CoreError> {
             todo!()
         }
@@ -185,6 +186,10 @@ mod tests {
         }
 
         fn highest_received_rounds(&self) -> Vec<Round> {
+            todo!()
+        }
+
+        fn highest_accepted_rounds(&self) -> Vec<Round> {
             todo!()
         }
     }

@@ -422,6 +422,27 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         Ok(highest_received_rounds)
     }
+
+    async fn handle_get_latest_rounds_v2(
+        &self,
+        _peer: AuthorityIndex,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+        fail_point_async!("consensus-rpc-response");
+
+        let mut highest_received_rounds = self.core_dispatcher.highest_received_rounds();
+        let mut highest_accepted_rounds = self.core_dispatcher.highest_accepted_rounds();
+
+        // Own blocks do not go through the core dispatcher, so they need to be set separately.
+        let last_own_block_round = self
+            .dag_state
+            .read()
+            .get_last_block_for_authority(self.context.own_index)
+            .round();
+        highest_received_rounds[self.context.own_index] = last_own_block_round;
+        highest_accepted_rounds[self.context.own_index] = last_own_block_round;
+
+        Ok((highest_received_rounds, highest_accepted_rounds))
+    }
 }
 
 struct Counter {
@@ -669,7 +690,8 @@ mod tests {
         fn set_propagation_delay_and_quorum_rounds(
             &self,
             _delay: Round,
-            _quorum_rounds: Vec<QuorumRound>,
+            _received_quorum_rounds: Vec<QuorumRound>,
+            _accepted_quorum_rounds: Vec<QuorumRound>,
         ) -> Result<(), CoreError> {
             todo!()
         }
@@ -679,6 +701,10 @@ mod tests {
         }
 
         fn highest_received_rounds(&self) -> Vec<Round> {
+            todo!()
+        }
+
+        fn highest_accepted_rounds(&self) -> Vec<Round> {
             todo!()
         }
     }
@@ -741,6 +767,14 @@ mod tests {
             _peer: AuthorityIndex,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Round>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn get_latest_rounds_v2(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
         }
     }

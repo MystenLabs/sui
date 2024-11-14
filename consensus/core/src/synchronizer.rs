@@ -1223,6 +1223,14 @@ mod tests {
         ) -> ConsensusResult<Vec<Round>> {
             unimplemented!("Unimplemented")
         }
+
+        async fn get_latest_rounds_v2(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[test]
