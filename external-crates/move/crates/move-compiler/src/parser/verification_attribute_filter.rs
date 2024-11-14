@@ -98,7 +98,10 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
             }
             should_remove
         }
-        P::Exp_::Assign(lhs, rhs) => should_remove_exp(lhs) || should_remove_exp(rhs),
+        P::Exp_::Assign(lhs, rhs) => {
+            println!("\n\nlhs: {:?}\n\nrhs: {:?}\n\n", lhs, rhs);
+            should_remove_exp(lhs) || should_remove_exp(rhs)
+        }
         _ => false,
     }
 }

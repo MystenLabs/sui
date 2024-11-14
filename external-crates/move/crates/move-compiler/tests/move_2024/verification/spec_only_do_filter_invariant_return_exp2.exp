@@ -1,11 +1,11 @@
 error[E03005]: unbound unscoped name
-  ┌─ tests/move_check/verification/spec_only_do_filter_invariant_return_exp2.move:9:13
+  ┌─ tests/move_2024/verification/spec_only_do_filter_invariant_return_exp2.move:9:13
   │
 9 │             invariant!(something)
   │             ^^^^^^^^^ Unbound function 'invariant' in current scope
 
 error[E03009]: unbound variable
-  ┌─ tests/move_check/verification/spec_only_do_filter_invariant_return_exp2.move:9:24
+  ┌─ tests/move_2024/verification/spec_only_do_filter_invariant_return_exp2.move:9:24
   │
 9 │             invariant!(something)
   │                        ^^^^^^^^^ Unbound variable 'something'
