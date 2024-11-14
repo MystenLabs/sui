@@ -647,11 +647,7 @@ impl SourceMap {
 
     /// Create a 'dummy' source map for a compiled module or script. This is useful for e.g. disassembling
     /// with generated or real names depending upon if the source map is available or not.
-    pub fn dummy_from_view(
-        module: &CompiledModule,
-        default_loc: Loc,
-        default_definition_loc: Loc,
-    ) -> Result<Self> {
+    pub fn dummy_from_view(module: &CompiledModule, default_loc: Loc) -> Result<Self> {
         let module_ident = {
             let module_handle = module.module_handle_at(ModuleHandleIndex::new(0));
             let module_name = ModuleName(Symbol::from(
@@ -666,7 +662,7 @@ impl SourceMap {
             empty_source_map.add_top_level_function_mapping(
                 FunctionDefinitionIndex(function_idx as TableIndex),
                 default_loc,
-                default_definition_loc,
+                default_loc,
                 false,
             )?;
             let function_handle = module.function_handle_at(function_def.function);
