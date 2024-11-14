@@ -7818,6 +7818,7 @@ dependencies = [
 name = "move-stackless-bytecode"
 version = "0.1.0"
 dependencies = [
+ "bimap",
  "codespan",
  "codespan-reporting",
  "ethnum",
@@ -7829,6 +7830,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-model",
+ "move-symbol-pool",
  "num",
  "paste",
  "petgraph 0.5.1",
@@ -9837,7 +9839,7 @@ dependencies = [
  "pest_meta",
  "proc-macro2 1.0.87",
  "quote 1.0.35",
- "syn 2.0.48",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -9848,7 +9850,7 @@ checksum = "a941429fea7e08bedec25e4f6785b6ffaacc6b755da98df5ef3e7dcf4a124c4f"
 dependencies = [
  "once_cell",
  "pest",
- "sha2 0.10.6",
+ "sha2 0.10.8",
 ]
 
 [[package]]
@@ -9898,7 +9900,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8d39688d359e6b34654d328e262234662d16cc0f60ec8dcbe5e718709342a5a"
 dependencies = [
  "phf_generator",
- "phf_shared",
+ "phf_shared 0.11.1",
 ]
 
 [[package]]
