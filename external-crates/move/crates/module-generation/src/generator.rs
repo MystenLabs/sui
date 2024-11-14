@@ -244,6 +244,7 @@ impl<'a> ModuleGenerator<'a> {
             )
         });
         let fun = Function_ {
+            loc: Spanned::unsafe_no_loc(()).loc,
             visibility: FunctionVisibility::Public,
             is_entry: false,
             signature,

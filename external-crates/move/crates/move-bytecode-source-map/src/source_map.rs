@@ -58,6 +58,10 @@ pub struct FunctionSourceMap {
     /// The source location for the definition of this entire function. Note that in certain
     /// instances this will have no valid source location e.g. the "main" function for modules that
     /// are treated as programs are synthesized and therefore have no valid source location.
+    pub location: Loc,
+    /// The source location for the name under which this functin is defined. Note that in certain
+    /// instances this will have no valid source location e.g. the "main" function for modules that
+    /// are treated as programs are synthesized and therefore have no valid source location.
     pub definition_location: Loc,
 
     /// The names of the type parameters to the function.
@@ -204,8 +208,9 @@ impl EnumSourceMap {
 }
 
 impl FunctionSourceMap {
-    pub fn new(definition_location: Loc, is_native: bool) -> Self {
+    pub fn new(location: Loc, definition_location: Loc, is_native: bool) -> Self {
         Self {
+            location,
             definition_location,
             type_parameters: Vec::new(),
             parameters: Vec::new(),
@@ -361,9 +366,10 @@ impl SourceMap {
         &mut self,
         fdef_idx: FunctionDefinitionIndex,
         location: Loc,
+        definition_location: Loc,
         is_native: bool,
     ) -> Result<()> {
-        self.function_map.insert(fdef_idx.0, FunctionSourceMap::new(location, is_native)).map_or(Ok(()), |_| { Err(format_err!(
+        self.function_map.insert(fdef_idx.0, FunctionSourceMap::new(location, definition_location, is_native)).map_or(Ok(()), |_| { Err(format_err!(
                     "Multiple functions at same function definition index encountered when constructing source map"
                 )) })
     }
@@ -655,6 +661,7 @@ impl SourceMap {
         for (function_idx, function_def) in module.function_defs.iter().enumerate() {
             empty_source_map.add_top_level_function_mapping(
                 FunctionDefinitionIndex(function_idx as TableIndex),
+                default_loc,
                 default_loc,
                 false,
             )?;
