@@ -454,11 +454,19 @@ macro_rules! upgrade_codes {
 }
 
 // Used to generate diagnostics primary labels for upgrade compatibility errors.
+// WARNING: you should add new codes to the END of each category to avoid breaking the existing codes.
+// adding into the middle of a list will change the error code numbers "error[Compatibility EXXXXX]"
+// similarly new categories should be added to the end of the list.
 upgrade_codes!(
     Declarations: [
         PublicMissing: { msg: "missing public declaration" },
         TypeMismatch: { msg: "type mismatch" },
         AbilityMismatch: { msg: "ability mismatch" },
+        FieldMismatch: { msg: "field mismatch" },
+    ],
+    Structs: [],
+    Enums: [
+        VariantMismatch: { msg: "variant mismatch" },
     ],
     Function_: [
         SignatureMismatch: { msg: "function signature mismatch" },
@@ -1023,27 +1031,36 @@ fn struct_field_mismatch_diag(
                     .get(i)
                     .context("Unable to get field location")?;
 
-                let label = match (
+                let (code, label) = match (
                     old_field.name != new_field.name,
                     old_field.type_ != new_field.type_,
                 ) {
-                    (true, true) => format!(
-                        "Mismatched field '{}: {}' expected '{}: {}'.",
-                        new_field.name, new_field.type_, old_field.name, old_field.type_
+                    (true, true) => (
+                        Declarations::FieldMismatch,
+                        format!(
+                            "Mismatched field '{}: {}' expected '{}: {}'.",
+                            new_field.name, new_field.type_, old_field.name, old_field.type_
+                        ),
                     ),
-                    (true, false) => format!(
-                        "Mismatched field name '{}', expected '{}'.",
-                        new_field.name, old_field.name
+                    (true, false) => (
+                        Declarations::FieldMismatch,
+                        format!(
+                            "Mismatched field name '{}', expected '{}'.",
+                            new_field.name, old_field.name
+                        ),
                     ),
-                    (false, true) => format!(
-                        "Mismatched field type '{}', expected '{}'.",
-                        new_field.type_, old_field.type_
+                    (false, true) => (
+                        Declarations::TypeMismatch,
+                        format!(
+                            "Mismatched field type '{}', expected '{}'.",
+                            new_field.type_, old_field.type_
+                        ),
                     ),
                     (false, false) => unreachable!("Fields should no be the same"),
                 };
 
                 diags.add(Diagnostic::new(
-                    Declarations::TypeMismatch,
+                    code,
                     (*field_loc, label),
                     vec![(def_loc, "Struct definition".to_string())],
                     vec![
@@ -1183,17 +1200,23 @@ fn enum_variant_mismatch_diag(
                 .0
                  .1;
 
-            let label = match (
+            let (code, label): (DiagnosticInfo, String) = match (
                 old_variant.name != new_variant.name,
                 old_variant.fields != new_variant.fields,
             ) {
-                (true, true) => format!(
-                    "Mismatched variant '{}', expected '{}'.",
-                    new_variant.name, old_variant.name
+                (true, true) => (
+                    Enums::VariantMismatch.into(),
+                    format!(
+                        "Mismatched variant '{}', expected '{}'.",
+                        new_variant.name, old_variant.name
+                    ),
                 ),
-                (true, false) => format!(
-                    "Mismatched variant name '{}', expected '{}'.",
-                    new_variant.name, old_variant.name
+                (true, false) => (
+                    Enums::VariantMismatch.into(),
+                    format!(
+                        "Mismatched variant name '{}', expected '{}'.",
+                        new_variant.name, old_variant.name
+                    ),
                 ),
                 (false, true) => {
                     let new_variant_fields = new_variant
@@ -1210,16 +1233,19 @@ fn enum_variant_mismatch_diag(
                         .collect::<Vec<_>>()
                         .join(", ");
 
-                    format!(
-                        "Mismatched variant field '{}', expected '{}'.",
-                        new_variant_fields, old_variant_fields
+                    (
+                        Declarations::FieldMismatch.into(),
+                        format!(
+                            "Mismatched variant field '{}', expected '{}'.",
+                            new_variant_fields, old_variant_fields
+                        ),
                     )
                 }
                 (false, false) => unreachable!("Variants should not be the same"),
             };
 
             diags.add(Diagnostic::new(
-                Declarations::TypeMismatch,
+                code,
                 (variant_loc, label),
                 vec![(def_loc, "Enum definition".to_string())],
                 vec![
@@ -1276,7 +1302,7 @@ fn enum_new_variant_diag(
                  .1;
 
             diags.add(Diagnostic::new(
-                Declarations::TypeMismatch,
+                Enums::VariantMismatch,
                 (
                     variant_loc,
                     format!("New unexpected variant '{}'.", new_variant.name),
@@ -1325,7 +1351,7 @@ fn enum_variant_missing_diag(
         .name;
 
     diags.add(Diagnostic::new(
-        Declarations::TypeMismatch,
+        Enums::VariantMismatch,
         (
             enum_sourcemap.definition_location,
             format!("Missing variant '{variant_name}'.",),

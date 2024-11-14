@@ -1,6 +1,6 @@
 ---
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
-expression: err.to_string()
+expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01003]: ability mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:10:19
@@ -65,7 +65,7 @@ error[Compatibility E01002]: type mismatch
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'RemoveField' including the ordering.
 
-error[Compatibility E01002]: type mismatch
+error[Compatibility E01004]: field mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:30:9
    │
 28 │     public struct ChangeFieldName {
