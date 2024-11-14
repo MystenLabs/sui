@@ -28,6 +28,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     mut committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     end_checkpoint_opt: Option<CheckpointSequenceNumber>,
+    mvr_mode: bool,
 ) -> IndexerResult<()>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -70,6 +71,7 @@ where
                     epoch,
                     &metrics,
                     &mut committed_checkpoints_tx,
+                    mvr_mode,
                 )
                 .await;
                 batch = vec![];
@@ -91,7 +93,15 @@ where
             }
         }
         if !batch.is_empty() {
-            commit_checkpoints(&state, batch, None, &metrics, &mut committed_checkpoints_tx).await;
+            commit_checkpoints(
+                &state,
+                batch,
+                None,
+                &metrics,
+                &mut committed_checkpoints_tx,
+                mvr_mode,
+            )
+            .await;
             batch = vec![];
         }
 
@@ -120,6 +130,7 @@ async fn commit_checkpoints<S>(
     epoch: Option<EpochToCommit>,
     metrics: &IndexerMetrics,
     committed_checkpoints_tx: &mut Option<watch::Sender<Option<IndexerProgress>>>,
+    mvr_mode: bool,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -148,15 +159,18 @@ async fn commit_checkpoints<S>(
             packages,
             epoch: _,
         } = indexed_checkpoint;
-        checkpoint_batch.push(checkpoint);
-        tx_batch.push(transactions);
-        events_batch.push(events);
-        tx_indices_batch.push(tx_indices);
-        event_indices_batch.push(event_indices);
-        display_updates_batch.extend(display_updates.into_iter());
-        object_changes_batch.push(object_changes);
+        // In MVR mode, persist only object_history, packages, checkpoints, and epochs
+        if !mvr_mode {
+            tx_batch.push(transactions);
+            events_batch.push(events);
+            tx_indices_batch.push(tx_indices);
+            event_indices_batch.push(event_indices);
+            display_updates_batch.extend(display_updates.into_iter());
+            object_changes_batch.push(object_changes);
+            object_versions_batch.push(object_versions);
+        }
         object_history_changes_batch.push(object_history_changes);
-        object_versions_batch.push(object_versions);
+        checkpoint_batch.push(checkpoint);
         packages_batch.push(packages);
     }
 
@@ -190,23 +204,25 @@ async fn commit_checkpoints<S>(
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
-        let mut persist_tasks = vec![
-            state.persist_transactions(tx_batch),
-            state.persist_tx_indices(tx_indices_batch),
-            state.persist_events(events_batch),
-            state.persist_event_indices(event_indices_batch),
-            state.persist_displays(display_updates_batch),
-            state.persist_packages(packages_batch),
-            // TODO: There are a few ways we could make the following more memory efficient.
-            // 1. persist_objects and persist_object_history both call another function to make the final
-            //    committed object list. We could call it early and share the result.
-            // 2. We could avoid clone by using Arc.
-            state.persist_objects(object_changes_batch.clone()),
-            state.persist_object_history(object_history_changes_batch.clone()),
-            state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_objects_version(object_versions_batch.clone()),
-            state.persist_raw_checkpoints(raw_checkpoints_batch),
-        ];
+        let mut persist_tasks = Vec::new();
+
+        // In MVR mode, persist only packages and object history
+        persist_tasks.push(state.persist_packages(packages_batch));
+        persist_tasks.push(state.persist_object_history(object_history_changes_batch.clone()));
+        if !mvr_mode {
+            // In regular mode, persist all relevant data
+            persist_tasks.push(state.persist_transactions(tx_batch));
+            persist_tasks.push(state.persist_tx_indices(tx_indices_batch));
+            persist_tasks.push(state.persist_events(events_batch));
+            persist_tasks.push(state.persist_event_indices(event_indices_batch));
+            persist_tasks.push(state.persist_displays(display_updates_batch));
+            persist_tasks.push(state.persist_objects(object_changes_batch.clone()));
+            persist_tasks
+                .push(state.persist_full_objects_history(object_history_changes_batch.clone()));
+            persist_tasks.push(state.persist_objects_version(object_versions_batch.clone()));
+            persist_tasks.push(state.persist_raw_checkpoints(raw_checkpoints_batch));
+        }
+
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
         }

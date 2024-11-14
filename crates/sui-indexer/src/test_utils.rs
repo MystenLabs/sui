@@ -135,6 +135,7 @@ pub async fn start_indexer_writer_for_testing(
                 retention_config,
                 token_clone,
                 None,
+                false, /* mvr_mode */
             )
             .await
         })

@@ -41,6 +41,7 @@ impl Indexer {
         retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
         committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
+        mvr_mode: bool,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -93,6 +94,7 @@ impl Indexer {
             committed_checkpoints_tx,
             config.start_checkpoint,
             config.end_checkpoint,
+            mvr_mode,
         )
         .await?;
         // Ingestion task watermarks are snapshotted once on indexer startup based on the
