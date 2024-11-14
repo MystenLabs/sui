@@ -175,7 +175,7 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         &self,
         task_prefix: &str,
     ) -> Result<Option<u64>, Error> {
-        Ok(self
+        let checkpoint = self
             .progress_store
             .lock()
             .await
@@ -183,10 +183,14 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
             .filter(|task| task.task_name.starts_with(task_prefix))
             .filter(|task| task.target_checkpoint.eq(&(i64::MAX as u64)))
             .last()
-            .map(|t| t.start_checkpoint)
-            .or(self
-                .get_largest_backfill_task_target_checkpoint(task_prefix)
-                .await?))
+            .map(|t| t.start_checkpoint);
+
+        if checkpoint.is_some() {
+            Ok(checkpoint)
+        } else {
+            self.get_largest_backfill_task_target_checkpoint(task_prefix)
+                .await
+        }
     }
 
     async fn register_task(
