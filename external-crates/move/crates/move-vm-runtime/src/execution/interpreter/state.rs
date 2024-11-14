@@ -178,7 +178,7 @@ impl MachineState {
     /// Frees the current stack frame and puts the previous one there, or throws an error if there
     /// is not a frame to pop.
     #[inline]
-    pub(super) fn pop_call_frame(&mut self) -> VMResult<()>{
+    pub(super) fn pop_call_frame(&mut self) -> VMResult<()> {
         self.call_stack.pop_frame()
     }
 
@@ -337,13 +337,8 @@ impl MachineState {
             }
             internal_state.push_str(format!("{}* {:?}\n", i, code[pc]).as_str());
         }
-        internal_state.push_str(
-            format!(
-                "Locals:\n{}\n",
-                self.call_stack.current_frame.stack_frame
-            )
-            .as_str(),
-        );
+        internal_state
+            .push_str(format!("Locals:\n{}\n", self.call_stack.current_frame.stack_frame).as_str());
         internal_state.push_str("Operand Stack:\n");
         for value in &self.operand_stack.value {
             internal_state.push_str(format!("{}\n", value).as_str());
@@ -496,16 +491,18 @@ impl CallStack {
     /// frame to pop.
     #[inline]
     fn pop_frame(&mut self) -> VMResult<()> {
-        let Some(return_frame) = self.frames.pop()  else {
+        let Some(return_frame) = self.frames.pop() else {
             let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
             let err = set_err_info!(self.current_frame, err);
-            return Err(err)
+            return Err(err);
         };
         let frame = std::mem::replace(&mut self.current_frame, return_frame);
         let index = frame.function().index();
         let pc = frame.pc;
         let loc = frame.location();
-        self.heap.free_stack_frame(frame.stack_frame).map_err(|e| e.at_code_offset(index, pc).finish(loc))
+        self.heap
+            .free_stack_frame(frame.stack_frame)
+            .map_err(|e| e.at_code_offset(index, pc).finish(loc))
     }
 }
 

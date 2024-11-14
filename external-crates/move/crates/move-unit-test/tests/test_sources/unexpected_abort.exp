@@ -2,7 +2,6 @@ Running Move unit tests
 [ PASS    ] 0x6::M::correct_abort_code
 [ PASS    ] 0x6::M::just_test_failure
 [ FAIL    ] 0x6::M::unexpected_abort
-[ FAIL    ] 0x6::M::unexpected_abort_in_native_function
 [ FAIL    ] 0x6::M::unexpected_abort_in_other_function
 [ FAIL    ] 0x6::M::wrong_abort_code
 
@@ -19,24 +18,6 @@ Failures in 0x6::M:
 │ 4 │         abort 0
 │   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0x6::M rooted here
 │ 
-│ 
-└──────────────────
-
-
-┌── unexpected_abort_in_native_function ──────
-│ error[E11001]: test failure
-│     ┌─ string.move:120:16
-│     │
-│ 120 │     native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
-│     │                ^^^^^^^^^^^^^^^^^^^
-│     │                │
-│     │                Test was not expected to error, but it aborted with code 1 originating in the module std::string rooted here
-│     │                In this function in std::string
-│ 
-│ 
-│ stack trace
-│ 	M::abort_in_native(tests/test_sources/unexpected_abort.move:42)
-│ 	M::unexpected_abort_in_native_function(tests/test_sources/unexpected_abort.move:38)
 │ 
 └──────────────────
 
@@ -69,4 +50,4 @@ Failures in 0x6::M:
 │ 
 └──────────────────
 
-Test result: FAILED. Total tests: 6; passed: 2; failed: 4
+Test result: FAILED. Total tests: 5; passed: 2; failed: 3
