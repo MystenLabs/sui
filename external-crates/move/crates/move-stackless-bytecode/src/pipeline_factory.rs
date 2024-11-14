@@ -45,6 +45,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         MemoryInstrumentationProcessor::new(),
         CleanAndOptimizeProcessor::new(),
         UsageProcessor::new(),
+        TypeInvariantAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
     ];
 
@@ -55,7 +56,6 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
     processors.append(&mut vec![
         // spec instrumentation
         SpecInstrumentationProcessor::new(),
-        TypeInvariantAnalysisProcessor::new(),
         GlobalInvariantAnalysisProcessor::new(),
         GlobalInvariantInstrumentationProcessor::new(),
         WellFormedInstrumentationProcessor::new(),

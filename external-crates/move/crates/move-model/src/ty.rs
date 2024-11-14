@@ -15,7 +15,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 
 use crate::{
     ast::QualifiedSymbol,
-    model::{DatatypeId, GlobalEnv, ModuleId},
+    model::{DatatypeId, GlobalEnv, ModuleId, QualifiedId},
     symbol::{Symbol, SymbolPool},
 };
 
@@ -246,6 +246,14 @@ impl Type {
             (*mid, *sid, targs.as_slice())
         } else {
             panic!("expected `Type::Struct`, found: `{:?}`", self)
+        }
+    }
+
+    pub fn get_datatype(&self) -> Option<(QualifiedId<DatatypeId>, &[Type])> {
+        if let Type::Datatype(mid, sid, targs) = self {
+            Some((mid.qualified(*sid), targs.as_slice()))
+        } else {
+            None
         }
     }
 

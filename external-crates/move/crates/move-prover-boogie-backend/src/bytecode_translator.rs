@@ -1903,6 +1903,39 @@ impl<'env> FunctionTranslator<'env> {
                             processed = true;
                         }
 
+                        if callee_env.get_qualified_id() == self.parent.env.type_inv_qid() {
+                            if self.style == FunctionTranslationStyle::Asserts
+                                || self.style == FunctionTranslationStyle::Aborts
+                            {
+                                emitln!(self.writer(), "{} := true;", dest_str);
+                            } else {
+                                assert_eq!(inst.len(), 1);
+                                if let Some((datatype_qid, datatype_inst)) = &inst[0].get_datatype()
+                                {
+                                    if let Some(inv_qid) =
+                                        self.parent.targets.get_inv_by_datatype(datatype_qid)
+                                    {
+                                        emitln!(
+                                            self.writer(),
+                                            "call {} := {}({});",
+                                            dest_str,
+                                            boogie_function_name(
+                                                &self.parent.env.get_function(*inv_qid),
+                                                datatype_inst,
+                                                FunctionTranslationStyle::Default,
+                                            ),
+                                            args_str,
+                                        );
+                                    } else {
+                                        emitln!(self.writer(), "{} := true;", dest_str);
+                                    }
+                                } else {
+                                    emitln!(self.writer(), "{} := true;", dest_str);
+                                }
+                            }
+                            processed = true;
+                        }
+
                         if self
                             .parent
                             .targets

@@ -1,4 +1,4 @@
-use move_model::{exp_generator::ExpGenerator, model::FunctionEnv};
+use move_model::{exp_generator::ExpGenerator, model::FunctionEnv, ty::Type};
 
 use crate::{
     function_data_builder::FunctionDataBuilder,
@@ -33,8 +33,10 @@ impl FunctionTargetProcessor for TypeInvariantAnalysisProcessor {
 
         builder.set_loc(builder.fun_env.get_loc().at_start());
         for param in 0..builder.fun_env.get_parameter_count() {
-            let type_inv_temp = builder.emit_type_inv(param);
-            builder.emit_requires(type_inv_temp);
+            if has_type_inv(targets, &builder.get_local_type(param)) {
+                let type_inv_temp = builder.emit_type_inv(param);
+                builder.emit_requires(type_inv_temp);
+            }
         }
 
         for bc in code {
@@ -42,11 +44,15 @@ impl FunctionTargetProcessor for TypeInvariantAnalysisProcessor {
                 Bytecode::Ret(_, ref rets) => {
                     builder.set_loc(builder.fun_env.get_loc().at_end());
                     for ret in rets {
-                        let type_inv_temp = builder.emit_type_inv(*ret);
-                        builder.emit_ensures(type_inv_temp);
+                        if has_type_inv(targets, &builder.get_local_type(*ret)) {
+                            let type_inv_temp = builder.emit_type_inv(*ret);
+                            builder.emit_ensures(type_inv_temp);
+                        }
                     }
                     for param in 0..builder.fun_env.get_parameter_count() {
-                        if builder.get_local_type(param).is_mutable_reference() {
+                        if builder.get_local_type(param).is_mutable_reference()
+                            && has_type_inv(targets, &builder.get_local_type(param))
+                        {
                             let type_inv_temp = builder.emit_type_inv(param);
                             builder.emit_ensures(type_inv_temp);
                         }
@@ -63,4 +69,17 @@ impl FunctionTargetProcessor for TypeInvariantAnalysisProcessor {
     fn name(&self) -> String {
         "type_invariant_analysis".to_string()
     }
+}
+
+fn has_type_inv(targets: &FunctionTargetsHolder, ty: &Type) -> bool {
+    let ty = ty.skip_reference();
+    if let Some((datatype_qid, _)) = ty.get_datatype() {
+        if targets.get_inv_by_datatype(&datatype_qid).is_some() {
+            return true;
+        }
+    }
+    if ty.is_type_parameter() {
+        return true;
+    }
+    false
 }
