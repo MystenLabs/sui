@@ -205,12 +205,10 @@ async fn commit_checkpoints<S>(
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
         let mut persist_tasks = Vec::new();
-
         // In MVR mode, persist only packages and object history
         persist_tasks.push(state.persist_packages(packages_batch));
         persist_tasks.push(state.persist_object_history(object_history_changes_batch.clone()));
         if !mvr_mode {
-            // In regular mode, persist all relevant data
             persist_tasks.push(state.persist_transactions(tx_batch));
             persist_tasks.push(state.persist_tx_indices(tx_indices_batch));
             persist_tasks.push(state.persist_events(events_batch));
