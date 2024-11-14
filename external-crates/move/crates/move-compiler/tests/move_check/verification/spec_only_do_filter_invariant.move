@@ -1,7 +1,7 @@
-// #[verify_only] functions should be filtered out in non-verify mode
 module a::m {
-    // This should cause an unbound function error in non-verify mode as `bar`
-    // was filtered out
+    #[verify_only]
+    use prover::prover::{invariant};
+    
     public fun foo() {
         invariant!(something);
     }

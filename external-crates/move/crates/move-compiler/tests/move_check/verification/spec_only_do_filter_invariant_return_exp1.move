@@ -1,7 +1,9 @@
-// #[verify_only] functions should be filtered out in non-verify mode
+// filter out a call to a spec_only function, even if deeper in the body of the function
+
 module a::m {
-    // This should cause an unbound function error in non-verify mode as `bar`
-    // was filtered out
+    #[verify_only]
+    use prover::prover::invariant;
+
     public fun foo() {
         if(true) {
             invariant!(something);

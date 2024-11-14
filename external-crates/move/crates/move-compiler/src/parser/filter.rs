@@ -7,7 +7,7 @@ use move_symbol_pool::Symbol;
 use crate::parser::ast as P;
 use move_ir_types::location::Spanned;
 
-use super::ast::ExpMap;
+use super::ast::{map_through, ExpMap};
 
 // TODO we should really do this after expansion so that its done after attribute resolution. But
 // that can only really be done if we move most of expansion into naming.
@@ -252,7 +252,14 @@ fn filter_through_function_body<T: FilterContext>(
         P::FunctionBody_::Native => b,
         P::FunctionBody_::Defined((uses, items, loc, exp)) => {
             let new_items = filter_items(context, items);
-            P::FunctionBody_::Defined((uses, new_items, loc, exp))
+            P::FunctionBody_::Defined((
+                uses,
+                new_items,
+                loc,
+                Box::new(exp.map(|exp| {
+                    exp.map(|exp| exp.map_exp(&mut |exp| remove_unwanted(context, exp)))
+                })),
+            ))
         }
     });
 

@@ -16,6 +16,7 @@ use crate::{
 struct Context<'env> {
     env: &'env CompilationEnv,
     is_source_def: bool,
+    has_spec_code: bool,
     current_package: Option<Symbol>,
 }
 
@@ -24,6 +25,7 @@ impl<'env> Context<'env> {
         Self {
             env,
             is_source_def: false,
+            has_spec_code: false,
             current_package: None,
         }
     }
@@ -52,25 +54,30 @@ impl FilterContext for Context<'_> {
                 (loc, VerificationAttribute::VerifyOnly) => loc,
             })
             .next();
+        self.has_spec_code = self.has_spec_code || is_verify_only_loc.is_some();
         is_verify_only_loc.is_some()
     }
 
     fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool {
-        match &item.value {
-            P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
-            P::SequenceItem_::Declare(_, _) => false,
-            P::SequenceItem_::Bind(_, _, exp) => should_remove_exp(exp),
-        }
+        self.has_spec_code
+            && match &item.value {
+                P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
+                P::SequenceItem_::Declare(_, _) => false,
+                P::SequenceItem_::Bind(_, _, exp) => should_remove_exp(exp),
+            }
     }
 }
+
+const REMOVED_FUNCTIONS: [&str; 2] = ["invariant", "old"];
+const REMOVED_METHODS: [&str; 2] = ["to_int", "to_real"];
 
 fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bool {
     match &exp.value {
         P::Exp_::Call(name_access_chain, _) => {
-            // get a string representation of name_access_chain using fmt display
             let name_access_chain_str = format!("{}", name_access_chain);
-            // return true if name_access_chain_str ends with "verify"
-            let should_remove = name_access_chain_str.ends_with("invariant");
+            let should_remove = REMOVED_FUNCTIONS
+                .iter()
+                .any(|&keyword| name_access_chain_str.ends_with(keyword));
             println!("name_access_chain_str: {}", name_access_chain_str);
             if should_remove {
                 println!(
@@ -80,7 +87,19 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
             }
             should_remove
         }
-        e => false,
+        P::Exp_::DotCall(_, name, _, _, _) => {
+            let name_str = format!("{}", name);
+            let should_remove = REMOVED_METHODS
+                .iter()
+                .any(|&keyword| name_str.ends_with(keyword));
+            println!("name_str: {}", name_str);
+            if should_remove {
+                println!("Removing verification function call: {}", name_str);
+            }
+            should_remove
+        }
+        P::Exp_::Assign(lhs, rhs) => should_remove_exp(lhs) || should_remove_exp(rhs),
+        _ => false,
     }
 }
 

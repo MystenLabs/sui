@@ -1,6 +1,6 @@
 error[E03005]: unbound unscoped name
-  ┌─ tests/move_check/verification/spec_only_do_filter_function.move:6:9
+  ┌─ tests/move_check/verification/spec_only_do_filter_function.move:5:9
   │
-6 │         bar()
+5 │         bar()
   │         ^^^ Unbound function 'bar' in current scope
 
