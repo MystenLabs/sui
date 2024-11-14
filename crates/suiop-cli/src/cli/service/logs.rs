@@ -35,7 +35,6 @@ pub async fn get_kubeconfig() -> Result<Client> {
 
 pub async fn get_logs(namespace: &str) -> Result<()> {
     // Create kubernetes client
-    // TODO: Use kubeconfig from pulumi env
     let client = get_kubeconfig().await?;
 
     // Get deployments API in the specified namespace

@@ -6,10 +6,12 @@ mod logs;
 
 use anyhow::Result;
 use clap::{builder::OsStr, Parser};
+use colored::Colorize;
 pub use init::bootstrap_service;
 use init::ServiceLanguage;
 use logs::get_logs;
 use std::path::PathBuf;
+use tracing::info;
 
 use crate::{cache_local, command::CommandOptions, get_cached_local, run_cmd};
 
@@ -78,7 +80,8 @@ pub async fn service_cmd(args: &ServiceArgs) -> Result<()> {
     match &args.action {
         ServiceAction::InitService { lang, path } => bootstrap_service(lang, path),
         ServiceAction::ViewLogs { namespace } => {
-            println!("namespace: {}", namespace);
+            println!("namespace: {}", namespace.bright_purple());
+            println!("View logs for the entire namespace at {}", format!("https://metrics.sui.io/explore?schemaVersion=1&panes=%7B%22yo7%22:%7B%22datasource%22:%22CU1v-k2Vk%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22{}%5C%22%7D%20%7C%3D%20%60%60%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22CU1v-k2Vk%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D%7D&orgId=1", namespace).bold());
             get_logs(namespace).await
         }
     }
