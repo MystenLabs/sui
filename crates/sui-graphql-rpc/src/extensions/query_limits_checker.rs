@@ -29,6 +29,7 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
+const MULTI_GET_QUERY: &str = "multiGet";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Clone, Copy, Debug)]
@@ -227,6 +228,15 @@ impl<'a> LimitsTraversal<'a> {
         match &item.node {
             Selection::Field(f) => {
                 let name = &f.node.name.node;
+
+                if name.contains(MULTI_GET_QUERY) {
+                    println!("{}", f.node.arguments.len());
+                    for (_name, value) in &f.node.arguments {
+                        self.check_multiget_arg(name, value)?;
+                    }
+                    info!("multiGet found");
+                }
+
                 if name == DRY_RUN_TX_BLOCK || name == EXECUTE_TX_BLOCK {
                     for (_name, value) in &f.node.arguments {
                         self.check_tx_arg(value)?;
@@ -251,6 +261,32 @@ impl<'a> LimitsTraversal<'a> {
                     self.traverse_selection_for_tx_payload(selection)?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// MultiGet queries can only pass a number of keys that does not exceed the max page size.
+    /// This checks for the number of keys.
+    fn check_multiget_arg(
+        &mut self,
+        name: &Name,
+        value: &'a Positioned<Value>,
+    ) -> ServerResult<()> {
+        let limits = self.reporter.limits;
+
+        match &value.node {
+            GqlValue::List(vs) => {
+                if vs.len() > limits.max_multi_get_keys as usize {
+                    return Err(self.reporter.graphql_error(
+                        code::BAD_USER_INPUT,
+                        format!(
+                            "{name} keys exceed the maximum allowed number of {}",
+                            limits.max_multi_get_keys
+                        ),
+                    ));
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
