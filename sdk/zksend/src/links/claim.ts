@@ -124,6 +124,8 @@ export class ZkSendLink {
 	) {
 		const parsed = new URL(url);
 		const isContractLink = parsed.hash.startsWith('#$');
+		const parsedNetwork = parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet';
+		const network = options.network ?? parsedNetwork;
 
 		let link: ZkSendLink;
 		if (isContractLink) {
@@ -131,9 +133,7 @@ export class ZkSendLink {
 			link = new ZkSendLink({
 				...options,
 				keypair,
-				network:
-					options.network ??
-					(parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet'),
+				network,
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: true,
@@ -142,14 +142,10 @@ export class ZkSendLink {
 			const keypair = Ed25519Keypair.fromSecretKey(
 				fromBase64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
 			);
-
 			link = new ZkSendLink({
 				...options,
 				keypair,
-				network:
-					options.network ?? parsed.searchParams.get('network') === 'testnet'
-						? 'testnet'
-						: 'mainnet',
+				network,
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: false,
