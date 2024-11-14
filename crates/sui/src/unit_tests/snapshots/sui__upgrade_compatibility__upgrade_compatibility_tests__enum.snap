@@ -59,7 +59,7 @@ error[Compatibility E01002]: type mismatch
 33 │         C, // changed from B
    │         ^ Mismatched variant name 'C', expected 'B'.
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade
+   = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeVariant' including the ordering.
 
 error[Compatibility E01002]: type mismatch
@@ -83,7 +83,7 @@ error[Compatibility E01002]: type mismatch
 38 │         C, // to be changed to C
    │         ^ Mismatched variant name 'C', expected 'B'.
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade
+   = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
 
 error[Compatibility E01002]: type mismatch
@@ -116,7 +116,7 @@ error[Compatibility E01002]: type mismatch
 44 │         C, // changed to C
    │         ^ Mismatched variant name 'C', expected 'B'.
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade
+   = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndRemoveVariant' including the ordering.
 
 error[Compatibility E01003]: ability mismatch
@@ -167,7 +167,7 @@ error[Compatibility E01002]: type mismatch
 69 │         C { b: u8 }, // changed to C
    │         ^^^^^^^^^^^ Mismatched variant name 'C', expected 'B'.
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade
+   = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeVariantWithTypes' including the ordering.
 
 error[Compatibility E01002]: type mismatch
@@ -191,7 +191,7 @@ error[Compatibility E01002]: type mismatch
 74 │         C { b: u8 }, // to be changed to C
    │         ^^^^^^^^^^^ Mismatched variant name 'C', expected 'B'.
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade
+   = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariantWithTypes' including the ordering.
 
 error[Compatibility E01002]: type mismatch

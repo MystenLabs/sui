@@ -584,8 +584,14 @@ fn compare_packages(
 
     // use colors but inline
     Err(anyhow!(
-        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.",
-        String::from_utf8(report_diagnostics_to_buffer(&files.into(), diags, use_colors())).context("Unable to convert buffer to string")?
+        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
+        Its upgrade policy is set to 'Compatible'.",
+        String::from_utf8(report_diagnostics_to_buffer(
+            &files.into(),
+            diags,
+            use_colors()
+        ))
+        .context("Unable to convert buffer to string")?
     ))
 }
 
@@ -691,26 +697,32 @@ fn missing_definition_diag(
         .source_map
         .definition_location;
 
-    diags.add(
-        Diagnostic::new(
-            Declarations::PublicMissing,
-            (loc, format!(
+    diags.add(Diagnostic::new(
+        Declarations::PublicMissing,
+        (
+            loc,
+            format!(
                 "{declaration_kind} '{identifier_name}' is missing",
                 declaration_kind = declaration_kind,
                 identifier_name = identifier_name,
-            )),
-            std::iter::empty::<(Loc, String)>(),
-            vec![format!(
-                "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', but found none",
             ),
-                 format!(
-                     "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade",
-                 ),
-                 format!(
-                     "add missing {declaration_kind} '{identifier_name}' back to the module '{module_name}'.",
-                 )],
-        )
-    );
+        ),
+        std::iter::empty::<(Loc, String)>(),
+        vec![
+            format!(
+                "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', \
+                but found none",
+            ),
+            format!(
+                "{declaration_kind}s are part of a module's public interface \
+                     and cannot be removed or changed during an upgrade.",
+            ),
+            format!(
+                "add missing {declaration_kind} '{identifier_name}' \
+                     back to the module '{module_name}'.",
+            ),
+        ],
+    ));
 
     Ok(diags)
 }
@@ -742,17 +754,28 @@ fn function_signature_mismatch_diag(
 
     // handle function arguments
     if old_function.parameters.len() != new_function.parameters.len() {
-        diags.add(
-            Diagnostic::new(
-                Function_::SignatureMismatch,
-                (def_loc, format!("Expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
-                Vec::<(Loc, String)>::new(),
-                vec![
-                    "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                    format!("Restore the original function's parameters for function '{function_name}', expected {} parameters.", old_function.parameters.len())
-                ],
-            )
-        );
+        diags.add(Diagnostic::new(
+            Function_::SignatureMismatch,
+            (
+                def_loc,
+                format!(
+                    "Expected {} parameters, have {}",
+                    old_function.parameters.len(),
+                    new_function.parameters.len()
+                ),
+            ),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Functions are part of a module's public interface and cannot be \
+                    changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original function's parameters for \
+                    function '{function_name}', expected {} parameters.",
+                    old_function.parameters.len()
+                ),
+            ],
+        ));
     } else if old_function.parameters != new_function.parameters {
         for ((i, old_param), new_param) in old_function
             .parameters
@@ -767,33 +790,50 @@ fn function_signature_mismatch_diag(
                     .context("Unable to get parameter location")?
                     .1;
 
-                diags.add(
-                    Diagnostic::new(
-                        Function_::SignatureMismatch,
-                        (param_loc, format!("Unexpected parameter {new_param}, expected {old_param}")),
-                        Vec::<(Loc, String)>::new(),
-                        vec![
-                            "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                            format!("Restore the original function's parameters for function '{function_name}'.")
-                        ],
-                    )
-                );
+                diags.add(Diagnostic::new(
+                    Function_::SignatureMismatch,
+                    (
+                        param_loc,
+                        format!("Unexpected parameter {new_param}, expected {old_param}"),
+                    ),
+                    Vec::<(Loc, String)>::new(),
+                    vec![
+                        "Functions are part of a module's public interface \
+                            and cannot be changed during an upgrade."
+                            .to_string(),
+                        format!(
+                            "Restore the original function's parameters \
+                            for function '{function_name}'."
+                        ),
+                    ],
+                ));
             }
         }
     }
 
     // handle return
     if old_function.return_.len() != new_function.return_.len() {
-        diags.add(
-            Diagnostic::new(
-                Function_::SignatureMismatch,
-                (def_loc, format!("Expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
-                Vec::<(Loc, String)>::new(),
-                vec![
-                    "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                    format!("Restore the original function's return types for function '{function_name}'.")],
-            )
-        );
+        diags.add(Diagnostic::new(
+            Function_::SignatureMismatch,
+            (
+                def_loc,
+                format!(
+                    "Expected to have {} return type(s), have {}",
+                    old_function.return_.len(),
+                    new_function.return_.len()
+                ),
+            ),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Functions are part of a module's public interface \
+                    and cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original function's return types \
+                    for function '{function_name}'."
+                ),
+            ],
+        ));
     } else if old_function.return_ != new_function.return_ {
         for ((i, old_return), new_return) in old_function
             .return_
@@ -807,21 +847,33 @@ fn function_signature_mismatch_diag(
                 .context("Unable to get return location")?;
 
             if old_return != new_return {
-                diags.add(
-                    Diagnostic::new(
-                        Function_::SignatureMismatch,
-                        (*return_, if new_function.return_.len() == 1 {
-                            format!("Unexpected return type {new_return}, expected {old_return}")
+                diags.add(Diagnostic::new(
+                    Function_::SignatureMismatch,
+                    (
+                        *return_,
+                        if new_function.return_.len() == 1 {
+                            format!(
+                                "Unexpected return type {new_return}, \
+                                expected {old_return}"
+                            )
                         } else {
-                            format!("Unexpected return type {new_return} at position {i}, expected {old_return}")
-                        }),
-                        Vec::<(Loc, String)>::new(),
-                        vec![
-                            "Functions are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                            format!("Restore the original function's return types for function '{function_name}'.")
-                        ],
-                    )
-                );
+                            format!(
+                                "Unexpected return type {new_return} at \
+                                position {i}, expected {old_return}"
+                            )
+                        },
+                    ),
+                    Vec::<(Loc, String)>::new(),
+                    vec![
+                        "Functions are part of a module's public interface \
+                            and cannot be changed during an upgrade."
+                            .to_string(),
+                        format!(
+                            "Restore the original function's return \
+                            types for function '{function_name}'."
+                        ),
+                    ],
+                ));
             }
         }
     }
@@ -895,17 +947,20 @@ fn struct_ability_mismatch_diag(
             (false, false) => unreachable!("Abilities should not be the same"),
         };
 
-        diags.add(
-            Diagnostic::new(
-                Declarations::AbilityMismatch,
-                (def_loc, label),
-                Vec::<(Loc, String)>::new(),
-                vec![
-                    "Structs are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                    format!("Restore the original struct's abilities for struct '{struct_name}'."),
-                ],
-            )
-        );
+        diags.add(Diagnostic::new(
+            Declarations::AbilityMismatch,
+            (def_loc, label),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Structs are part of a module's public interface and \
+                    cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original struct's abilities \
+                    for struct '{struct_name}'."
+                ),
+            ],
+        ));
     }
 
     Ok(diags)
@@ -936,11 +991,23 @@ fn struct_field_mismatch_diag(
     if old_struct.fields.len() != new_struct.fields.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeMismatch,
-            (def_loc, format!("Incorrect number of fields: expected {}, found {}", old_struct.fields.len(), new_struct.fields.len())),
+            (
+                def_loc,
+                format!(
+                    "Incorrect number of fields: expected {}, found {}",
+                    old_struct.fields.len(),
+                    new_struct.fields.len()
+                ),
+            ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Structs are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                format!("Restore the original struct's fields for struct '{struct_name}' including the ordering.")
+                "Structs are part of a module's public interface and \
+                cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original struct's fields \
+                for struct '{struct_name}' including the ordering."
+                ),
             ],
         ));
     } else if old_struct.fields != new_struct.fields {
@@ -975,17 +1042,20 @@ fn struct_field_mismatch_diag(
                     (false, false) => unreachable!("Fields should no be the same"),
                 };
 
-                diags.add(
-                    Diagnostic::new(
-                        Declarations::TypeMismatch,
-                        (*field_loc, label),
-                        vec![(def_loc, "Struct definition".to_string())],
-                        vec![
-                            "Structs are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                            format!("Restore the original struct's fields for struct '{struct_name}' including the ordering.")
-                        ],
-                    )
-                );
+                diags.add(Diagnostic::new(
+                    Declarations::TypeMismatch,
+                    (*field_loc, label),
+                    vec![(def_loc, "Struct definition".to_string())],
+                    vec![
+                        "Structs are part of a module's public interface \
+                            and cannot be changed during an upgrade."
+                            .to_string(),
+                        format!(
+                            "Restore the original struct's fields for \
+                            struct '{struct_name}' including the ordering."
+                        ),
+                    ],
+                ));
             }
         }
     }
@@ -1059,17 +1129,20 @@ fn enum_ability_mismatch_diag(
             (false, false) => unreachable!("Abilities should not be the same"),
         };
 
-        diags.add(
-            Diagnostic::new(
-                Declarations::AbilityMismatch,
-                (def_loc, label),
-                Vec::<(Loc, String)>::new(),
-                vec![
-                    "Enums are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                    format!("Restore the original enum's abilities for enum '{enum_name}' including the ordering.")
-                ],
-            )
-        );
+        diags.add(Diagnostic::new(
+            Declarations::AbilityMismatch,
+            (def_loc, label),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Enums are part of a module's public interface \
+                    and cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original enum's abilities \
+                    for enum '{enum_name}' including the ordering."
+                ),
+            ],
+        ));
     }
     Ok(diags)
 }
@@ -1145,17 +1218,20 @@ fn enum_variant_mismatch_diag(
                 (false, false) => unreachable!("Variants should not be the same"),
             };
 
-            diags.add(
-                Diagnostic::new(
-                    Declarations::TypeMismatch,
-                    (variant_loc, label),
-                    vec![(def_loc, "Enum definition".to_string())],
-                    vec![
-                        "Enums are part of a module's public interface and cannot be changed during an upgrade".to_string(),
-                        format!("Restore the original enum's variants for enum '{enum_name}' including the ordering."),
-                    ],
-                )
-            );
+            diags.add(Diagnostic::new(
+                Declarations::TypeMismatch,
+                (variant_loc, label),
+                vec![(def_loc, "Enum definition".to_string())],
+                vec![
+                    "Enums are part of a module's public interface \
+                        and cannot be changed during an upgrade."
+                        .to_string(),
+                    format!(
+                        "Restore the original enum's variants for \
+                        enum '{enum_name}' including the ordering."
+                    ),
+                ],
+            ));
         }
     }
 
@@ -1199,20 +1275,23 @@ fn enum_new_variant_diag(
                 .0
                  .1;
 
-            diags.add(
-                Diagnostic::new(
-                    Declarations::TypeMismatch,
-                    (variant_loc, format!(
-                        "New unexpected variant '{}'.",
-                        new_variant.name
-                    )),
-                    vec![(def_loc, "Enum definition".to_string())],
-                    vec![
-                        "Enums are part of a module's public interface and cannot be changed during an upgrade.".to_string(),
-                        format!("Restore the original enum's variants for enum '{enum_name}' including the ordering."),
-                    ],
-                )
-            )
+            diags.add(Diagnostic::new(
+                Declarations::TypeMismatch,
+                (
+                    variant_loc,
+                    format!("New unexpected variant '{}'.", new_variant.name),
+                ),
+                vec![(def_loc, "Enum definition".to_string())],
+                vec![
+                    "Enums are part of a module's public interface and cannot be \
+                        changed during an upgrade."
+                        .to_string(),
+                    format!(
+                        "Restore the original enum's variants for enum \
+                        '{enum_name}' including the ordering."
+                    ),
+                ],
+            ))
         }
     }
 
@@ -1253,9 +1332,13 @@ fn enum_variant_missing_diag(
         ),
         Vec::<(Loc, String)>::new(),
         vec![
-            "Enums are part of a module's public interface and cannot be changed during an upgrade."
+            "Enums are part of a module's public interface and cannot \
+            be changed during an upgrade."
                 .to_string(),
-            format!("Restore the original enum's variant '{variant_name}' for enum '{enum_name}' including the ordering."),
+            format!(
+                "Restore the original enum's variant '{variant_name}' for enum \
+                '{enum_name}' including the ordering."
+            ),
         ],
     ));
 
