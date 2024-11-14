@@ -10,9 +10,9 @@ public macro fun bar($param1: u64, $f: |u64| -> u64): u64 {
 public fun foo(): u64 {
     let v = bar!(
         1,
-        |x| x
+        |x| x + x
     );
-    bar!(v, |x| x)
+    bar!(v, |x| x + x)
 }
 
 #[test]

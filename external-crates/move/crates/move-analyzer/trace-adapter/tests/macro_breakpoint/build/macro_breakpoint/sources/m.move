@@ -1,4 +1,4 @@
-// Test stepping through macro defined different files.
+// Test setting breakpoint inside a macro.
 module macro_breakpoint::m;
 
 use macro_breakpoint::m_dep::bar;

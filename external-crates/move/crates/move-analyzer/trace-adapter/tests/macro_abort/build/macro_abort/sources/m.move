@@ -1,4 +1,4 @@
-// Test stepping through macro defined different files.
+// Test aborting inside a macro.
 module macro_abort::m;
 
 use macro_abort::m_dep::bar;
