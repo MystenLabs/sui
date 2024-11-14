@@ -1,4 +1,7 @@
-use std::{fs::Metadata, path::Path};
+use std::{
+    fs::{create_dir_all, Metadata},
+    path::Path,
+};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -30,6 +33,7 @@ pub fn cache<T: Serialize + for<'a> Deserialize<'a>>(
 }
 
 pub fn cache_local<T: Serialize + for<'a> Deserialize<'a>>(key: &str, value: T) -> Result<T> {
+    create_dir_all(Path::new(LOCAL_CACHE_DIR))?;
     cache(key, value, Path::new(LOCAL_CACHE_DIR))
 }
 

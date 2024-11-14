@@ -11,7 +11,9 @@ use init::ServiceLanguage;
 use logs::get_logs;
 use std::path::PathBuf;
 
-use crate::{command::CommandOptions, get_cached_local, run_cmd};
+use crate::{cache_local, command::CommandOptions, get_cached_local, run_cmd};
+
+const PULUMI_NAMESPACE_CACHE_KEY: &str = "pulumi_namespace";
 
 #[derive(Parser, Debug, Clone)]
 pub struct ServiceArgs {
@@ -41,33 +43,35 @@ pub enum ServiceAction {
     },
 }
 
+fn get_pulumi_namespace_from_cmd() -> String {
+    run_cmd(vec!["pulumi", "stack", "output", "namespace"], None)
+        .map(|cmd_output| {
+            let ns = String::from_utf8(cmd_output.stdout)
+                .unwrap()
+                .trim()
+                .to_string();
+            cache_local(PULUMI_NAMESPACE_CACHE_KEY, ns.clone())
+                .expect("Failed to cache pulumi namespace");
+            ns
+        })
+        .unwrap_or_else(|_| "default".to_string())
+}
+
 fn get_pulumi_namespace() -> String {
-    let cached_ns = get_cached_local::<String>("pulumi_namespace");
+    let cached_ns = get_cached_local::<String>(PULUMI_NAMESPACE_CACHE_KEY);
 
-    ns = cached_ns.map(|ca|{
-       // check if the cached entry is older than 1 day, if so, refresh it
-    }).unwrap_or_else(|_| {
-        run_cmd(vec!["pulumi", "stack", "output", "namespace"], None).map(|cmd_output| 
-        String::from_utf8(cmd_output.stdout)
-            .unwrap()
-            .trim()
-            .to_string())
-            .unwrap_or_else(|_| "default".to_string())
-    });
+    let ns = cached_ns
+        .map(|ca| {
+            // check if the cached entry is older than 1 day, if so, refresh it
+            if ca.metadata.modified().unwrap().elapsed().unwrap().as_secs() > 86400 {
+                get_pulumi_namespace_from_cmd()
+            } else {
+                ca.value
+            }
+        })
+        .unwrap_or_else(|_| get_pulumi_namespace_from_cmd());
 
-
-    if let Ok(cached_namespace) = cached_ns
-        && cached_namespace
-            .metadata
-            .modified()
-            .unwrap()
-            .elapsed()
-            .unwrap()
-            .as_secs()
-            < 60
-    {
-        cached_namespace.value
-    } else if let Ok(cmd_output) = 
+    ns
 }
 
 pub async fn service_cmd(args: &ServiceArgs) -> Result<()> {

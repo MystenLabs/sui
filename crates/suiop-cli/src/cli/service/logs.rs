@@ -16,11 +16,13 @@ pub async fn get_kubeconfig() -> Result<Client> {
     let kubeconfig_yaml =
         if let Ok(cached_kubeconfig) = get_cached_local::<String>(KUBECONFIG_CACHE_KEY) {
             debug!("Using cached kubeconfig");
-            cached_kubeconfig
+            cached_kubeconfig.value
         } else {
             let cmd_output = run_cmd(vec!["pulumi", "config", "get", "kubeconfig"], None)?;
             let kubeconfig_yaml = String::from_utf8(cmd_output.stdout)?;
-            cache_local(KUBECONFIG_CACHE_KEY, kubeconfig_yaml)?
+            cache_local(KUBECONFIG_CACHE_KEY, kubeconfig_yaml.clone())?;
+
+            kubeconfig_yaml
         };
     // create a new client
     let kubeconfig = Kubeconfig::from_yaml(&kubeconfig_yaml)?;
