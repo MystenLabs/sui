@@ -54,6 +54,23 @@ impl PgDeepbookPersistent {
             save_progress_policy,
         }
     }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        let mut conn = self.pool.get().await?;
+        let cp = dsl::progress_store
+            .select(columns::target_checkpoint)
+            // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
+            .filter(columns::task_name.like(format!("{prefix} - %")))
+            .filter(columns::target_checkpoint.ne(i64::MAX))
+            .order_by(columns::target_checkpoint.desc())
+            .first::<i64>(&mut conn)
+            .await
+            .optional()?;
+        Ok(cp.map(|c| c as u64))
+    }
 }
 
 #[async_trait]
@@ -221,21 +238,24 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         Ok(Tasks::new(tasks)?)
     }
 
-    async fn get_largest_backfill_task_target_checkpoint(
-        &self,
-        prefix: &str,
-    ) -> Result<Option<u64>, Error> {
+    async fn get_largest_indexed_checkpoint(&self, prefix: &str) -> Result<Option<u64>, Error> {
         let mut conn = self.pool.get().await?;
-        let cp: Option<i64> = dsl::progress_store
-            .select(columns::target_checkpoint)
+        let cp = dsl::progress_store
+            .select(columns::checkpoint)
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             .filter(columns::task_name.like(format!("{prefix} - %")))
-            .filter(columns::target_checkpoint.ne(i64::MAX))
-            .order_by(columns::target_checkpoint.desc())
+            .filter(columns::target_checkpoint.eq(i64::MAX))
             .first::<i64>(&mut conn)
             .await
             .optional()?;
-        Ok(cp.map(|c| c as u64))
+
+        if let Some(cp) = cp {
+            Ok(Some(cp as u64))
+        } else {
+            // Use the largest backfill target checkpoint as a fallback
+            self.get_largest_backfill_task_target_checkpoint(prefix)
+                .await
+        }
     }
 
     async fn register_task(
