@@ -97,7 +97,7 @@ fun sqrt(x: u128): u64 {
     u128::sqrt(x) as u64
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_verify)]
 fun sqrt_spec(x: u128): u64 {
     let result = sqrt(x);
@@ -459,13 +459,14 @@ public fun admin_set_fees<A, B>(
 
 /* ================= specs ================= */
 
-#[verify_only]
+#[spec_only]
 use prover::prover::{requires, ensures, asserts, old};
 
 /// Invariant for the pool state.
-#[verify_only]
+#[spec_only]
 public use fun Pool_inv as Pool.inv;
-#[verify_only]
+
+#[spec_only]
 fun Pool_inv<A, B>(self: &Pool<A, B>): bool {
     let l = self.lp_supply.supply_value();
     let a = self.balance_a.value();
@@ -526,7 +527,7 @@ macro fun requires_balance_leq_supply<$T>($balance: &Balance<$T>, $supply: &Supp
     requires(balance.value() <= supply.supply_value());
 }
 
-#[verify_only]
+#[spec_only]
 // #[ext(no_verify)]
 fun create_spec<A, B>(
     init_a: Balance<A>,
@@ -546,7 +547,7 @@ fun create_spec<A, B>(
     result
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_verify)]
 fun deposit_spec<A, B>(
     pool: &mut Pool<A, B>,
@@ -569,7 +570,7 @@ fun deposit_spec<A, B>(
     (result_input_a, result_input_b, result_lp)
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_verify)]
 fun withdraw_spec<A, B>(
     pool: &mut Pool<A, B>,
@@ -592,7 +593,7 @@ fun withdraw_spec<A, B>(
     (result_a, result_b)
 }
 
-#[verify_only]
+#[spec_only]
 // #[ext(no_verify)]
 fun swap_a_spec<A, B>(
     pool: &mut Pool<A, B>,
@@ -627,7 +628,7 @@ fun swap_a_spec<A, B>(
     result
 }
 
-#[verify_only]
+#[spec_only]
 // #[ext(no_verify)]
 fun swap_b_spec<A, B>(
     pool: &mut Pool<A, B>,
@@ -662,7 +663,7 @@ fun swap_b_spec<A, B>(
     result
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_verify)]
 fun calc_swap_result_spec(
     i_value: u64,

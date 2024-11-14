@@ -1,13 +1,13 @@
 #[allow(unused)]
 module prover::loop_invariant_tests;
 
-#[verify_only]
+#[spec_only]
 use std::integer::Integer;
-#[verify_only]
+#[spec_only]
 use prover::prover::{requires, ensures, invariant, old};
 use prover::ghost;
 
-#[verify_only]
+#[spec_only]
 fun test0_spec(n: u64) {
     let mut i = 0;
 
@@ -21,7 +21,7 @@ fun test0_spec(n: u64) {
     ensures(i == n);
 }
 
-#[verify_only]
+#[spec_only]
 fun test1_spec(n: u64): u128 {
     let mut s: u128 = 0;
     let mut i = 0;
@@ -38,7 +38,7 @@ fun test1_spec(n: u64): u128 {
     s
 }
 
-#[verify_only]
+#[spec_only]
 fun test2_spec(n: u64): u128 {
     let mut s: u128 = 0;
     let mut i = 0;
@@ -56,7 +56,7 @@ fun test2_spec(n: u64): u128 {
     s
 }
 
-#[verify_only]
+#[spec_only]
 fun test3_spec(mut n: u64): u128 {
     let mut s: u128 = 0;
 
@@ -74,7 +74,7 @@ fun test3_spec(mut n: u64): u128 {
     s
 }
 
-#[verify_only]
+#[spec_only]
 fun test4_spec(n: u64): u128 {
     requires(0 < n);
 
@@ -97,7 +97,7 @@ fun test4_spec(n: u64): u128 {
     s
 }
 
-#[verify_only]
+#[spec_only]
 fun test5_spec(n: u64) {
     let mut i = 0;
 
@@ -112,7 +112,7 @@ public struct SpecSum {}
 
 fun emit_u64(_x: u64) {}
 
-#[verify_only]
+#[spec_only]
 #[ext(no_verify)]
 fun emit_u64_spec(x: u64) {
     ghost::declare_global_mut<SpecSum, Integer>();
@@ -121,7 +121,7 @@ fun emit_u64_spec(x: u64) {
     ensures(ghost::global<SpecSum, Integer>() == old_sum.add(x.to_int()));
 }
 
-#[verify_only]
+#[spec_only]
 fun test6_spec(n: u64) {
     ghost::declare_global_mut<SpecSum, Integer>();
     requires(ghost::global<SpecSum, Integer>() == 0u64.to_int());
@@ -141,7 +141,7 @@ fun test6_spec(n: u64) {
     ensures(ghost::global<SpecSum, Integer>() == ((n as u128) * ((n as u128) + 1) / 2).to_int());
 }
 
-#[verify_only]
+#[spec_only]
 fun test7_spec(s: &mut u128, n: u64) {
     let old_s = old!(s);
 

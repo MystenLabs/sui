@@ -1,12 +1,12 @@
 module prover::prover;
 
-#[verify_only]
+#[spec_only]
 native public fun requires(p: bool);
-#[verify_only]
+#[spec_only]
 native public fun ensures(p: bool);
-#[verify_only]
+#[spec_only]
 native public fun asserts(p: bool);
-#[verify_only]
+#[spec_only]
 public macro fun invariant($invariants: ||) {
     invariant_begin();
     $invariants();
@@ -17,14 +17,14 @@ public fun implies(p: bool, q: bool): bool {
     !p || q
 }
 
-#[verify_only]
+#[spec_only]
 native public fun invariant_begin();
-#[verify_only]
+#[spec_only]
 native public fun invariant_end();
 
-#[verify_only]
+#[spec_only]
 native public fun val<T>(x: &T): T;
-#[verify_only]
+#[spec_only]
 fun val_spec<T>(x: &T): T {
     let result = val(x);
 
@@ -33,9 +33,9 @@ fun val_spec<T>(x: &T): T {
     result
 }
 
-#[verify_only]
+#[spec_only]
 native public fun ref<T>(x: T): &T;
-#[verify_only]
+#[spec_only]
 fun ref_spec<T>(x: T): &T {
     let old_x = val(&x);
 
@@ -47,21 +47,21 @@ fun ref_spec<T>(x: T): &T {
     result
 }
 
-#[verify_only]
+#[spec_only]
 native public fun drop<T>(x: T);
-#[verify_only]
+#[spec_only]
 fun drop_spec<T>(x: T) {
     drop(x);
 }
 
-#[verify_only]
+#[spec_only]
 public macro fun old<$T>($x: &$T): &$T {
     ref(val($x))
 }
 
-#[verify_only]
+#[spec_only]
 native public fun fresh<T>(): T;
-#[verify_only]
+#[spec_only]
 fun fresh_spec<T>(): T {
     fresh()
 }

@@ -44,8 +44,7 @@ pub enum TestingAttribute {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerificationAttribute {
-    // deprecated spec only annotation
-    VerifyOnly,
+    SpecOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -98,7 +97,7 @@ impl KnownAttribute {
             TestingAttribute::TEST_ONLY => TestingAttribute::TestOnly.into(),
             TestingAttribute::EXPECTED_FAILURE => TestingAttribute::ExpectedFailure.into(),
             TestingAttribute::RAND_TEST => TestingAttribute::RandTest.into(),
-            VerificationAttribute::VERIFY_ONLY => VerificationAttribute::VerifyOnly.into(),
+            VerificationAttribute::SPEC_ONLY => VerificationAttribute::SpecOnly.into(),
             NativeAttribute::BYTECODE_INSTRUCTION => NativeAttribute::BytecodeInstruction.into(),
             DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow.into(),
             DiagnosticAttribute::LINT_ALLOW => DiagnosticAttribute::LintAllow.into(),
@@ -198,11 +197,11 @@ impl TestingAttribute {
 }
 
 impl VerificationAttribute {
-    pub const VERIFY_ONLY: &'static str = "verify_only";
+    pub const SPEC_ONLY: &'static str = "spec_only";
 
     pub const fn name(&self) -> &str {
         match self {
-            Self::VerifyOnly => Self::VERIFY_ONLY,
+            Self::SpecOnly => Self::SPEC_ONLY,
         }
     }
 
@@ -220,7 +219,7 @@ impl VerificationAttribute {
             ])
         });
         match self {
-            Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
+            Self::SpecOnly => &VERIFY_ONLY_POSITIONS,
         }
     }
 }

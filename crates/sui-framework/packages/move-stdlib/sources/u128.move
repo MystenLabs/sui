@@ -115,7 +115,7 @@ public macro fun do_eq($stop: u128, $f: |u128|) {
     std::macros::do_eq!($stop, $f)
 }
 
-#[verify_only]
+#[spec_only]
 public use fun std::integer::from_u128 as u128.to_int;
-#[verify_only]
+#[spec_only]
 public use fun std::real::from_u128 as u128.to_real;

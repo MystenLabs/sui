@@ -1,21 +1,24 @@
 address 0x1 {
 module M {
-    #[verify_only]
+    #[spec_only]
     struct Foo {}
 
     // failure: double annotation
-    #[verify_only]
-    #[verify_only]
+    #[spec_only]
+    #[spec_only]
     struct Bar {}
 
-    public fun foo() { }
+    public fun foo() {
+    }
 
-    #[verify_only]
-    public fun bar() { }
+    #[spec_only]
+    public fun bar() {
+    }
 
     // failure: double annotation
-    #[verify_only]
-    #[verify_only]
-    public fun d(_a: signer, _b: signer) { }
+    #[spec_only]
+    #[spec_only]
+    public fun d(_a: signer, _b: signer) {
+    }
 }
 }

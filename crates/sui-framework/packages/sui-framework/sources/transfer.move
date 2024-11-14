@@ -132,17 +132,17 @@ fun share_object_impl_spec<T: key>(obj: T) {
 
 public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
-#[verify_only]
+#[spec_only]
 use prover::prover::{requires, ensures};
-#[verify_only]
+#[spec_only]
 use prover::ghost;
 
-#[verify_only]
+#[spec_only]
 public struct SpecTransferAddress {}
-#[verify_only]
+#[spec_only]
 public struct SpecTransferAddressExists {}
 
-#[verify_only]
+#[spec_only]
 fun transfer_impl_spec<T: key>(obj: T, recipient: address) {
     ghost::declare_global_mut<SpecTransferAddressExists, bool>();
     ghost::declare_global_mut<SpecTransferAddress, address>();

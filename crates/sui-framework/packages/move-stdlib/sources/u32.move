@@ -105,7 +105,7 @@ public macro fun do_eq($stop: u32, $f: |u32|) {
     std::macros::do_eq!($stop, $f)
 }
 
-#[verify_only]
+#[spec_only]
 public use fun std::integer::from_u32 as u32.to_int;
-#[verify_only]
+#[spec_only]
 public use fun std::real::from_u32 as u32.to_real;

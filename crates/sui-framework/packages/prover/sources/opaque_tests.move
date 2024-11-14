@@ -2,14 +2,14 @@
 module prover::opaque_tests;
 
 use std::u64;
-#[verify_only]
+#[spec_only]
 use prover::prover::{requires, ensures, asserts, old, fresh};
 
 fun inc(x: u64): u64 {
     x + 1
 }
 
-#[verify_only]
+#[spec_only]
 fun inc_spec(x: u64): u64 {
     asserts((x as u128) + 1 <= u64::max_value!() as u128);
 
@@ -24,7 +24,7 @@ fun add(x: u64, y: u64): u64 {
     x + y
 }
 
-#[verify_only]
+#[spec_only]
 fun add_spec(x: u64, y: u64): u64 {
     asserts((x as u128) + (y as u128) <= u64::max_value!() as u128);
 
@@ -39,7 +39,7 @@ fun double(x: u64): u64 {
     add(x, x)
 }
 
-#[verify_only]
+#[spec_only]
 fun double_spec(x: u64): u64 {
     asserts((x as u128) * 2 <= u64::max_value!() as u128);
 
@@ -54,7 +54,7 @@ fun add_wrap(x: u64, y: u64): u64 {
     (((x as u128) + (y as u128)) % 18446744073709551616) as u64
 }
 
-#[verify_only]
+#[spec_only]
 fun add_wrap_spec(x: u64, y: u64): u64 {
     let result = add_wrap(x, y);
     ensures(result == x.to_int().add(y.to_int()).to_u64());
@@ -65,7 +65,7 @@ fun double_wrap(x: u64): u64 {
     add_wrap(x, x)
 }
 
-#[verify_only]
+#[spec_only]
 fun double_wrap_spec(x: u64): u64 {
     let result = double_wrap(x);
     ensures(result == x.to_int().mul((2 as u8).to_int()).to_u64());
@@ -76,7 +76,7 @@ fun add_wrap_buggy(x: u64, y: u64): u64 {
     x + y
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_verify)]
 fun add_wrap_buggy_spec(x: u64, y: u64): u64 {
     let result = add_wrap_buggy(x, y);
@@ -88,7 +88,7 @@ fun double_wrap_buggy(x: u64): u64 {
     add_wrap_buggy(x, x)
 }
 
-#[verify_only]
+#[spec_only]
 fun double_wrap_buggy_spec(x: u64): u64 {
     let result = double_wrap_buggy(x);
     ensures(result == x.to_int().mul((2 as u8).to_int()).to_u64());
@@ -104,7 +104,7 @@ fun size<T>(r: &Range<T>): u64 {
     r.y - r.x
 }
 
-#[verify_only]
+#[spec_only]
 fun size_spec<T>(r: &Range<T>): u64 {
     requires(r.x <= r.y);
 
@@ -119,7 +119,7 @@ fun add_size<T, U>(r1: &Range<T>, r2: &Range<U>): u64 {
     size(r1) + size(r2)
 }
 
-#[verify_only]
+#[spec_only]
 fun add_size_spec<T, U>(r1: &Range<T>, r2: &Range<U>): u64 {
     requires(r1.x <= r1.y);
     requires(r2.x <= r2.y);
@@ -138,7 +138,7 @@ fun scale<T>(r: &mut Range<T>, k: u64) {
     r.y = r.y * k;
 }
 
-#[verify_only]
+#[spec_only]
 fun scale_spec<T>(r: &mut Range<T>, k: u64) {
     let old_r = old!(r);
 
@@ -152,12 +152,12 @@ fun scale_spec<T>(r: &mut Range<T>, k: u64) {
     ensures(r.y == old_r.y * k);
 }
 
-#[verify_only]
+#[spec_only]
 fun fresh_with_type_withness<T, U>(_: &T): U {
     fresh()
 }
 
-#[verify_only]
+#[spec_only]
 fun fresh_with_type_withness_spec<T, U>(x: &T): U {
     fresh_with_type_withness(x)
 }
@@ -166,7 +166,7 @@ fun add_no_asserts(x: u64, y: u64): u64 {
     x + y
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_asserts)]
 fun add_no_asserts_spec(x: u64, y: u64): u64 {
     let result = add_no_asserts(x, y);
@@ -180,7 +180,7 @@ fun double_no_asserts(x: u64): u64 {
     add_no_asserts(x, x)
 }
 
-#[verify_only]
+#[spec_only]
 #[ext(no_asserts)]
 fun double_no_asserts_spec(x: u64): u64 {
     let result = double_no_asserts(x);
@@ -224,7 +224,7 @@ public fun mint_balance<T>(
     cap.total_supply.increase_supply(value)
 }
 
-#[verify_only]
+#[spec_only]
 public fun mint_balance_spec<T>(
     cap: &mut TreasuryCap<T>, value: u64
 ): Balance<T> {

@@ -5,7 +5,7 @@ module a::m {
         bar()
     }
 
-    #[verify_only]
+    #[spec_only]
     public fun bar() {
     }
 }

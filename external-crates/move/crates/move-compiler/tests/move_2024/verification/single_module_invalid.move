@@ -1,6 +1,6 @@
 address 0x1 {
 module M {
-    #[verify_only]
+    #[spec_only]
     struct Foo {}
 
     // This should cause an unbound type error in non-verify mode
@@ -9,11 +9,14 @@ module M {
         Foo {}
     }
 
-    #[verify_only]
-    public fun bar() { }
+    #[spec_only]
+    public fun bar() {
+    }
 
     // This should cause an unbound function error in non-verify mode
     // as `bar` was filtered out
-    public fun baz() { bar() }
+    public fun baz() {
+        bar()
+    }
 }
 }
