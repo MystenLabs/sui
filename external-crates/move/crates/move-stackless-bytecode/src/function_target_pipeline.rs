@@ -32,9 +32,9 @@ use crate::{
 #[derive(Debug)]
 pub struct FunctionTargetsHolder {
     targets: BTreeMap<QualifiedId<FunId>, BTreeMap<FunctionVariant, FunctionData>>,
-    opaque_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
+    function_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
     no_verify_specs: BTreeSet<QualifiedId<FunId>>,
-    no_asserts: BTreeSet<QualifiedId<FunId>>,
+    ignore_aborts: BTreeSet<QualifiedId<FunId>>,
     scenario_specs: BTreeSet<QualifiedId<FunId>>,
     datatype_invs: BiBTreeMap<QualifiedId<DatatypeId>, QualifiedId<FunId>>,
 }
@@ -171,9 +171,9 @@ impl FunctionTargetsHolder {
     pub fn new() -> Self {
         Self {
             targets: BTreeMap::new(),
-            opaque_specs: BiBTreeMap::new(),
+            function_specs: BiBTreeMap::new(),
             no_verify_specs: BTreeSet::new(),
-            no_asserts: BTreeSet::new(),
+            ignore_aborts: BTreeSet::new(),
             scenario_specs: BTreeSet::new(),
             datatype_invs: BiBTreeMap::new(),
         }
@@ -193,24 +193,24 @@ impl FunctionTargetsHolder {
             .flat_map(|(id, vs)| vs.keys().map(move |v| (*id, v.clone())))
     }
 
-    pub fn opaque_specs(&self) -> &BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>> {
-        &self.opaque_specs
+    pub fn function_specs(&self) -> &BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>> {
+        &self.function_specs
     }
 
-    pub fn get_fun_by_opaque_spec(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
-        self.opaque_specs.get_by_left(id)
+    pub fn get_fun_by_spec(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
+        self.function_specs.get_by_left(id)
     }
 
-    pub fn get_opaque_spec_by_fun(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
-        self.opaque_specs.get_by_right(id)
+    pub fn get_spec_by_fun(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
+        self.function_specs.get_by_right(id)
     }
 
     pub fn no_verify_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
         &self.no_verify_specs
     }
 
-    pub fn no_asserts(&self) -> &BTreeSet<QualifiedId<FunId>> {
-        &self.no_asserts
+    pub fn ignore_aborts(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.ignore_aborts
     }
 
     pub fn scenario_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
@@ -218,7 +218,7 @@ impl FunctionTargetsHolder {
     }
 
     pub fn is_spec(&self, id: &QualifiedId<FunId>) -> bool {
-        self.get_fun_by_opaque_spec(id).is_some() || self.scenario_specs.contains(id)
+        self.get_fun_by_spec(id).is_some() || self.scenario_specs.contains(id)
     }
 
     pub fn is_verified_spec(&self, id: &QualifiedId<FunId>) -> bool {
@@ -226,13 +226,13 @@ impl FunctionTargetsHolder {
     }
 
     pub fn specs(&self) -> impl Iterator<Item = &QualifiedId<FunId>> {
-        self.opaque_specs
+        self.function_specs
             .left_values()
             .chain(self.scenario_specs.iter())
     }
 
     pub fn has_no_verify_spec(&self, id: &QualifiedId<FunId>) -> bool {
-        match self.get_opaque_spec_by_fun(id) {
+        match self.get_spec_by_fun(id) {
             Some(spec_id) => self.no_verify_specs.contains(spec_id),
             None => false,
         }
@@ -269,7 +269,7 @@ impl FunctionTargetsHolder {
                         if inner_attrs
                             .contains_key_(&AttributeName_::Unknown(Symbol::from("no_asserts")))
                         {
-                            self.no_asserts.insert(func_env.get_qualified_id());
+                            self.ignore_aborts.insert(func_env.get_qualified_id());
                         }
                     }
                     _ => {}
@@ -281,7 +281,7 @@ impl FunctionTargetsHolder {
                 .find_function(func_env.symbol_pool().make(name))
             {
                 Some(target_func_env) => {
-                    self.opaque_specs.insert(
+                    self.function_specs.insert(
                         func_env.get_qualified_id(),
                         target_func_env.get_qualified_id(),
                     );
@@ -432,7 +432,7 @@ impl FunctionTargetsHolder {
             }
         }
         writeln!(f, "Opaque specs:")?;
-        for (spec, fun) in self.opaque_specs.iter() {
+        for (spec, fun) in self.function_specs.iter() {
             writeln!(
                 f,
                 "  {} -> {}",
@@ -445,7 +445,7 @@ impl FunctionTargetsHolder {
             writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
         }
         writeln!(f, "No asserts specs:")?;
-        for spec in self.no_asserts.iter() {
+        for spec in self.ignore_aborts.iter() {
             writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
         }
         writeln!(f, "Scenario specs:")?;

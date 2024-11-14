@@ -48,14 +48,12 @@ impl FilterContext for Context<'_> {
         }
         use known_attributes::VerificationAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-        let is_verify_only_loc = flattened_attrs
+        //
+        let is_spec_only = flattened_attrs
             .iter()
-            .map(|attr| match attr {
-                (loc, VerificationAttribute::SpecOnly) => loc,
-            })
-            .next();
-        self.has_spec_code = self.has_spec_code || is_verify_only_loc.is_some();
-        is_verify_only_loc.is_some()
+            .find(|(_, attr)| matches!(attr, VerificationAttribute::SpecOnly));
+        self.has_spec_code = self.has_spec_code || is_spec_only.is_some();
+        is_spec_only.is_some()
     }
 
     fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool {

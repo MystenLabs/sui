@@ -463,9 +463,7 @@ impl<'a> Analyzer<'a> {
                     }
                 }
 
-                if let Some(spec_qid) = self
-                    .targets
-                    .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
+                if let Some(spec_qid) = self.targets.get_spec_by_fun(&callee_env.get_qualified_id())
                 {
                     self.push_todo_fun(spec_qid.clone(), actuals.clone());
                     if spec_qid == &target.func_env.get_qualified_id()
@@ -510,7 +508,7 @@ impl<'a> Analyzer<'a> {
                 } else if !callee_env.is_opaque()
                     && self
                         .targets
-                        .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
+                        .get_spec_by_fun(&callee_env.get_qualified_id())
                         .is_none()
                 {
                     // This call needs to be inlined, with targs instantiated by self.inst_opt.

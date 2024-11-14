@@ -111,7 +111,7 @@ pub fn collect_spec_global_variable_info(
                     return Some((vec![type_inst.clone()], vec![]));
                 }
 
-                let fun_id_with_info = match targets.get_opaque_spec_by_fun(&callee_id) {
+                let fun_id_with_info = match targets.get_spec_by_fun(&callee_id) {
                     Some(spec_id) => {
                         if spec_id != &func_env.get_qualified_id() {
                             spec_id

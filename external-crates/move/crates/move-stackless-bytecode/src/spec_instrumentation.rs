@@ -132,7 +132,7 @@ impl FunctionTargetProcessor for SpecInstrumentationProcessor {
         // Instrument baseline variant only if it is inlined.
         if is_inlined
             || targets
-                .get_fun_by_opaque_spec(&fun_env.get_qualified_id())
+                .get_fun_by_spec(&fun_env.get_qualified_id())
                 .is_some()
         {
             Instrumenter::run(&options, targets, fun_env, data, scc_opt)
@@ -373,7 +373,7 @@ impl<'a> Instrumenter<'a> {
                 ))
                 .inlined
                     || targets
-                        .get_fun_by_opaque_spec(&self.builder.fun_env.get_qualified_id())
+                        .get_fun_by_spec(&self.builder.fun_env.get_qualified_id())
                         .is_some()
             );
             for translated_spec in inlined_props.values().map(|(s, _)| s) {

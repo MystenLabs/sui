@@ -349,9 +349,8 @@ impl<'env> BoogieTranslator<'env> {
                         continue;
                     }
 
-                    if let Some(spec_qid) = self
-                        .targets
-                        .get_opaque_spec_by_fun(&fun_env.get_qualified_id())
+                    if let Some(spec_qid) =
+                        self.targets.get_spec_by_fun(&fun_env.get_qualified_id())
                     {
                         if !self.targets.no_verify_specs().contains(spec_qid) {
                             FunctionTranslator {
@@ -476,12 +475,13 @@ impl<'env> BoogieTranslator<'env> {
                 FunctionTranslationStyle::Default => match bc {
                     Call(_, _, op, _, _) if op == asserts_function => {}
                     Call(_, _, Operation::Function(module_id, fun_id, _), _, _)
-                        if self.targets.get_fun_by_opaque_spec(
-                            &spec_fun_target.func_env.get_qualified_id(),
-                        ) == Some(&QualifiedId {
-                            module_id,
-                            id: fun_id,
-                        }) =>
+                        if self
+                            .targets
+                            .get_fun_by_spec(&spec_fun_target.func_env.get_qualified_id())
+                            == Some(&QualifiedId {
+                                module_id,
+                                id: fun_id,
+                            }) =>
                     {
                         builder.emit(bc)
                     }
@@ -490,23 +490,25 @@ impl<'env> BoogieTranslator<'env> {
                 FunctionTranslationStyle::Asserts | FunctionTranslationStyle::Aborts => match bc {
                     Call(_, _, op, _, _) if op == requires_function || op == ensures_function => {}
                     Call(_, _, Operation::Function(module_id, fun_id, _), _, _)
-                        if self.targets.get_fun_by_opaque_spec(
-                            &spec_fun_target.func_env.get_qualified_id(),
-                        ) == Some(&QualifiedId {
-                            module_id,
-                            id: fun_id,
-                        }) => {}
+                        if self
+                            .targets
+                            .get_fun_by_spec(&spec_fun_target.func_env.get_qualified_id())
+                            == Some(&QualifiedId {
+                                module_id,
+                                id: fun_id,
+                            }) => {}
                     Ret(..) => {}
                     _ => builder.emit(bc.update_abort_action(|_| None)),
                 },
                 FunctionTranslationStyle::SpecNoAbortCheck => match bc {
                     Call(_, ref dests, Operation::Function(module_id, fun_id, _), ref srcs, _)
-                        if self.targets.get_fun_by_opaque_spec(
-                            &spec_fun_target.func_env.get_qualified_id(),
-                        ) == Some(&QualifiedId {
-                            module_id,
-                            id: fun_id,
-                        }) =>
+                        if self
+                            .targets
+                            .get_fun_by_spec(&spec_fun_target.func_env.get_qualified_id())
+                            == Some(&QualifiedId {
+                                module_id,
+                                id: fun_id,
+                            }) =>
                     {
                         let dests_clone = dests.clone();
                         let srcs_clone = srcs.clone();
@@ -545,12 +547,13 @@ impl<'env> BoogieTranslator<'env> {
                 FunctionTranslationStyle::Opaque => match bc {
                     Call(_, _, op, _, _) if op == asserts_function => {}
                     Call(_, ref dests, Operation::Function(module_id, fun_id, _), ref srcs, _)
-                        if self.targets.get_fun_by_opaque_spec(
-                            &spec_fun_target.func_env.get_qualified_id(),
-                        ) == Some(&QualifiedId {
-                            module_id,
-                            id: fun_id,
-                        }) =>
+                        if self
+                            .targets
+                            .get_fun_by_spec(&spec_fun_target.func_env.get_qualified_id())
+                            == Some(&QualifiedId {
+                                module_id,
+                                id: fun_id,
+                            }) =>
                     {
                         let dests_clone = dests.clone();
                         let srcs_clone = srcs.clone();
@@ -614,7 +617,7 @@ impl<'env> BoogieTranslator<'env> {
                 .get(&(
                     *self
                         .targets
-                        .get_fun_by_opaque_spec(&fun_target.func_env.get_qualified_id())
+                        .get_fun_by_spec(&fun_target.func_env.get_qualified_id())
                         .unwrap(),
                     FunctionVariant::Baseline,
                 ))
@@ -741,7 +744,7 @@ impl<'env> BoogieTranslator<'env> {
         spec_fun_qid: &QualifiedId<FunId>,
     ) -> Option<FunctionEnv> {
         self.targets
-            .get_fun_by_opaque_spec(spec_fun_qid)
+            .get_fun_by_spec(spec_fun_qid)
             .map(|qid| self.env.get_function(*qid))
     }
 }
@@ -1122,7 +1125,7 @@ impl<'env> FunctionTranslator<'env> {
         if self
             .parent
             .targets
-            .get_opaque_spec_by_fun(&self.fun_target.func_env.get_qualified_id())
+            .get_spec_by_fun(&self.fun_target.func_env.get_qualified_id())
             .is_some()
             && style == FunctionTranslationStyle::Default
         {
@@ -1134,7 +1137,7 @@ impl<'env> FunctionTranslator<'env> {
         let fun_name = self
             .parent
             .targets
-            .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+            .get_fun_by_spec(&self.fun_target.func_env.get_qualified_id())
             .map_or(
                 boogie_function_name(self.fun_target.func_env, self.type_inst, style),
                 |fun_id| {
@@ -1647,12 +1650,12 @@ impl<'env> FunctionTranslator<'env> {
                     && self
                         .parent
                         .targets
-                        .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                        .get_fun_by_spec(&self.fun_target.func_env.get_qualified_id())
                         .is_some()
                     && !self
                         .parent
                         .targets
-                        .no_asserts()
+                        .ignore_aborts()
                         .contains(&self.fun_target.func_env.get_qualified_id())
                 {
                     emitln!(
@@ -1939,14 +1942,14 @@ impl<'env> FunctionTranslator<'env> {
                         if self
                             .parent
                             .targets
-                            .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                            .get_fun_by_spec(&self.fun_target.func_env.get_qualified_id())
                             == Some(&mid.qualified(*fid))
                             && self.style == FunctionTranslationStyle::Opaque
                         {
                             if self
                                 .parent
                                 .targets
-                                .no_asserts()
+                                .ignore_aborts()
                                 .contains(&self.fun_target.func_env.get_qualified_id())
                             {
                                 emitln!(self.writer(), "havoc $abort_flag;");
@@ -1996,12 +1999,15 @@ impl<'env> FunctionTranslator<'env> {
                                 FunctionTranslationStyle::Default,
                             );
 
-                            if self.parent.targets.get_fun_by_opaque_spec(
-                                &self.fun_target.func_env.get_qualified_id(),
-                            ) == Some(&QualifiedId {
-                                module_id: *mid,
-                                id: *fid,
-                            }) {
+                            if self
+                                .parent
+                                .targets
+                                .get_fun_by_spec(&self.fun_target.func_env.get_qualified_id())
+                                == Some(&QualifiedId {
+                                    module_id: *mid,
+                                    id: *fid,
+                                })
+                            {
                                 if self.style == FunctionTranslationStyle::Default
                                     && self.fun_target.data.variant
                                         == FunctionVariant::Verification(
@@ -2148,7 +2154,7 @@ impl<'env> FunctionTranslator<'env> {
                         if self
                             .parent
                             .targets
-                            .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                            .get_fun_by_spec(&self.fun_target.func_env.get_qualified_id())
                             == Some(&mid.qualified(*fid))
                             && (self.style == FunctionTranslationStyle::SpecNoAbortCheck
                                 || self.style == FunctionTranslationStyle::Opaque)
@@ -3001,12 +3007,12 @@ impl<'env> FunctionTranslator<'env> {
                     && self
                         .parent
                         .targets
-                        .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                        .get_fun_by_spec(&self.fun_target.func_env.get_qualified_id())
                         .is_some()
                     && !self
                         .parent
                         .targets
-                        .no_asserts()
+                        .ignore_aborts()
                         .contains(&self.fun_target.func_env.get_qualified_id())
                 {
                     emitln!(self.writer(), "$abort_flag := false;");

@@ -440,7 +440,7 @@ impl VerificationAnalysisProcessor {
         for callee in fun_env.get_called_functions() {
             let callee_env = fun_env.module_env.env.get_function(callee);
             Self::mark_inlined(&callee_env, targets);
-            if let Some(spec_id) = targets.get_opaque_spec_by_fun(&callee) {
+            if let Some(spec_id) = targets.get_spec_by_fun(&callee) {
                 let spec_env = fun_env.module_env.env.get_function(*spec_id);
                 Self::mark_inlined(&spec_env, targets);
             }
