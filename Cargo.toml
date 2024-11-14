@@ -171,6 +171,7 @@ members = [
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
     "crates/sui-verifier-transactional-tests",
+    "crates/sui-exex",
     "crates/suins-indexer",
     "crates/suiop-cli",
     "crates/telemetry-subscribers",
@@ -700,6 +701,7 @@ transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
 typed-store-error = { path = "crates/typed-store-error" }
 x = { path = "crates/x" }
+sui-exex= { path = "crates/sui-exex" }
 
 consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }

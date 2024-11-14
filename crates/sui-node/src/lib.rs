@@ -52,6 +52,8 @@ use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
+use crate::extensions::sui_exexes;
+use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
@@ -100,6 +102,7 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
+use sui_exex::{ExExLauncher,ExExNotification};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
 use sui_json_rpc::indexer_api::IndexerApi;
@@ -137,9 +140,8 @@ use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
-use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
-
 pub mod admin;
+pub mod extensions;
 mod handle;
 pub mod metrics;
 
@@ -504,6 +506,9 @@ impl SuiNode {
             )))
         };
 
+        // Creates an handle for our exex
+        let exex_manager = ExExLauncher::new(sui_exexes()).launch().await?;
+
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -518,6 +523,7 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+            exex_manager,
         );
 
         info!("created epoch store");
@@ -556,12 +562,13 @@ impl SuiNode {
         info!("creating checkpoint store");
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
-
+        
         info!("creating state sync store");
         let state_sync_store = RocksDbStore::new(
             cache_traits.clone(),

@@ -13341,6 +13341,7 @@ dependencies = [
  "sui-authority-aggregation",
  "sui-config",
  "sui-execution",
+ "sui-exex",
  "sui-framework",
  "sui-genesis-builder",
  "sui-json-rpc-types",
@@ -13606,6 +13607,18 @@ dependencies = [
  "thiserror",
  "toml 0.7.4",
  "toml_edit 0.19.10",
+]
+
+[[package]]
+name = "sui-exex"
+version = "1.38.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "serde",
+ "sui-types",
+ "tokio",
+ "tokio-util 0.7.10",
 ]
 
 [[package]]
@@ -14570,6 +14583,7 @@ dependencies = [
  "sui-archival",
  "sui-config",
  "sui-core",
+ "sui-exex",
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-macros",

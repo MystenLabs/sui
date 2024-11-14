@@ -77,6 +77,7 @@ sui-archival.workspace = true
 sui-config.workspace = true
 sui-authority-aggregation.workspace = true
 sui-execution = { path = "../../sui-execution" }
+sui-exex.workspace = true
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true

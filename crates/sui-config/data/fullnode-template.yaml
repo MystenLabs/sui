@@ -1,5 +1,5 @@
 # Update this value to the location you want Sui to store its database
-db-path: "/opt/sui/db"
+db-path: "~/sui/db"
 
 # For ipv4, update this to "/ipv4/X.X.X.X/tcp/8080/http"
 network-address: "/dns/localhost/tcp/8080/http"
@@ -10,7 +10,7 @@ enable-event-processing: true
 
 genesis:
   # Update this to the location of where the genesis file is stored
-  genesis-file-location: "/opt/sui/config/genesis.blob"
+  genesis-file-location: "genesis.blob"
 
 authority-store-pruning-config:
   num-latest-epoch-dbs-to-retain: 3

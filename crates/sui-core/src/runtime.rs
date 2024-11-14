@@ -46,8 +46,8 @@ impl SuiRuntimes {
             .unwrap();
         Self {
             sui_node,
-            metrics,
             json_rpc,
+            metrics,
         }
     }
 }

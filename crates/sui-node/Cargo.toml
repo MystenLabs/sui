@@ -46,6 +46,7 @@ sui-protocol-config.workspace = true
 sui-snapshot.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
+sui-exex.workspace = true
 mysten-metrics.workspace = true
 mysten-service.workspace = true
 mysten-common.workspace = true

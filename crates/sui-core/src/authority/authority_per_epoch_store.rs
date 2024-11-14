@@ -14,6 +14,7 @@ use itertools::{izip, Itertools};
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
+use sui_exex::ExExNotification;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -112,6 +113,7 @@ use tap::TapOptional;
 use tokio::time::Instant;
 use typed_store::DBMapUtils;
 use typed_store::{retry_transaction_forever, Map};
+use sui_exex::manager::ExExManagerHandle;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -384,6 +386,9 @@ pub struct AuthorityPerEpochStore {
     /// State machine managing randomness DKG and generation.
     randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
+
+    /// ExEx manager
+    exex_manager: Option<ExExManagerHandle>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -852,6 +857,7 @@ impl AuthorityPerEpochStore {
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
+        exex_manager: Option<ExExManagerHandle>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -983,6 +989,7 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
+            exex_manager,
         });
 
         s.update_buffer_stake_metric();
@@ -1116,6 +1123,7 @@ impl AuthorityPerEpochStore {
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
+        exex_manager: Option<ExExManagerHandle>,
     ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -1133,6 +1141,7 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             chain_identifier,
+            exex_manager,
         )
     }
 
@@ -1156,6 +1165,7 @@ impl AuthorityPerEpochStore {
             object_store,
             expensive_safety_check_config,
             self.chain_identifier,
+            self.exex_manager.clone(),
         )
     }
 
@@ -2109,6 +2119,14 @@ impl AuthorityPerEpochStore {
         *highest_synced_checkpoint = checkpoint_seq;
         self.synced_checkpoint_notify_read
             .notify(&checkpoint_seq, &());
+
+        let Some(manager) = self.exex_manager.as_ref() else {
+            return;
+        };
+        let notification = ExExNotification::CheckpointSynced {
+            checkpoint: checkpoint_seq      
+        };
+        manager.send(notification).unwrap();
     }
 
     /// Get notified when a synced checkpoint of sequence number `>= checkpoint_seq` is available.

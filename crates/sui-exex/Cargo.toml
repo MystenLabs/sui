@@ -1,0 +1,20 @@
+[package]
+name = "sui-exex"
+version.workspace = true
+authors = ["Astraly Labs <security@pragma.build>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+description = "ExEx"
+
+[lints]
+workspace = true
+
+
+[dependencies]
+tokio.workspace = true
+sui-types.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+tokio-util.workspace = true

@@ -20,6 +20,9 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 
+use sui_exex::ExExLauncher;
+use sui_node::extensions::sui_exexes;
+
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
 
@@ -72,6 +75,7 @@ fn main() {
     };
 
     let runtimes = SuiRuntimes::new(&config);
+
     let metrics_rt = runtimes.metrics.enter();
     let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();

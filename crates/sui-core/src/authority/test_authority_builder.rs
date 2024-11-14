@@ -245,6 +245,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             signature_verifier_metrics,
             &expensive_safety_checks,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+            None,
         );
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),
