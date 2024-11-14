@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.7
+
+### Patch Changes
+
+- 4a42691: NS token pools added
+
 ## 0.12.6
 
 ### Patch Changes
