@@ -9,6 +9,7 @@ use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
+use colored::Colorize;
 use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
 use move_package::BuildConfig;
@@ -419,6 +420,9 @@ impl SuiCommand {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None, None)?;
+                if let Err(e) = context.get_client().await?.check_api_version() {
+                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                }
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client {
@@ -431,6 +435,9 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
                     let mut context = WalletContext::new(&config_path, None, None)?;
+                    if let Err(e) = context.get_client().await?.check_api_version() {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -450,6 +457,9 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
+                    if let Err(e) = context.get_client().await?.check_api_version() {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -475,6 +485,9 @@ impl SuiCommand {
                             client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                         prompt_if_no_config(&config, false).await?;
                         let context = WalletContext::new(&config, None, None)?;
+                        if let Err(e) = context.get_client().await?.check_api_version() {
+                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                        }
                         let client = context.get_client().await?;
                         let chain_id = client.read_api().get_chain_identifier().await.ok();
                         build.chain_id = chain_id.clone();
@@ -510,6 +523,9 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path, None, None)?;
+                if let Err(e) = context.get_client().await?.check_api_version() {
+                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.config.get_active_env()?.rpc;
                 println!("rpc_url: {}", rpc_url);
