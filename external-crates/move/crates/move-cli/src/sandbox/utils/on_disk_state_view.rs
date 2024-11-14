@@ -150,8 +150,11 @@ impl OnDiskStateView {
                 let module = CompiledModule::deserialize_with_defaults(&bytes)
                     .map_err(|e| anyhow!("Failure deserializing module: {:?}", e))?;
                 // TODO: find or create source map and pass it to disassembler
-                let d: Disassembler =
-                    Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
+                let d: Disassembler = Disassembler::from_module(
+                    &module,
+                    Spanned::unsafe_no_loc(()).loc,
+                    Spanned::unsafe_no_loc(()).loc,
+                )?;
                 Some(d.disassemble()?)
             }
             None => None,

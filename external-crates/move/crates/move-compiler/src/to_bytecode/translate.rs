@@ -566,6 +566,7 @@ fn function(
         warning_filter: _warning_filter,
         index: _index,
         attributes,
+        loc,
         compiled_visibility: v,
         // original, declared visibility is ignored. This is primarily for marking entry functions
         // as public in tests
@@ -597,15 +598,16 @@ fn function(
             IR::FunctionBody::Bytecode { locals, code }
         }
     };
-    let loc = f.loc();
+    let name_loc = f.loc();
     let name = context.function_definition_name(m, f);
     let ir_function = IR::Function_ {
+        loc,
         visibility: v,
         is_entry: entry.is_some(),
         signature,
         body,
     };
-    ((name, sp(loc, ir_function)), (parameters, attributes))
+    ((name, sp(name_loc, ir_function)), (parameters, attributes))
 }
 
 fn visibility(_context: &mut Context, v: Visibility) -> IR::FunctionVisibility {

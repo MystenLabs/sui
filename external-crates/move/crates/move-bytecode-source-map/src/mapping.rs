@@ -36,9 +36,13 @@ impl<'a> SourceMapping<'a> {
         }
     }
 
-    pub fn new_without_source_map(bytecode: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
+    pub fn new_without_source_map(
+        bytecode: &'a CompiledModule,
+        default_loc: Loc,
+        default_definition_loc: Loc,
+    ) -> Result<Self> {
         Ok(Self::new(
-            SourceMap::dummy_from_view(bytecode, default_loc)?,
+            SourceMap::dummy_from_view(bytecode, default_loc, default_definition_loc)?,
             bytecode,
         ))
     }
