@@ -263,7 +263,28 @@ impl UncommittedData {
 }
 
 // TODO: set this via the config
-static MAX_CACHE_SIZE: u64 = 10000;
+static MAX_CACHE_SIZE: u64 = 100000;
+
+// Point items (anything without a version number) can be negatively cached as None
+type PointCacheItem<T> = Option<T>;
+
+// PointCacheItem can only be used for insert-only collections, so a Some entry
+// is always newer than a None entry.
+impl<T: Eq + std::fmt::Debug> IsNewer for PointCacheItem<T> {
+    fn is_newer_than(&self, other: &PointCacheItem<T>) -> bool {
+        match (self, other) {
+            (Some(_), None) => true,
+
+            (Some(a), Some(b)) => {
+                // conflicting inserts should never happen
+                debug_assert_eq!(a, b);
+                false
+            }
+
+            _ => false,
+        }
+    }
+}
 
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedCommittedData {
@@ -280,13 +301,16 @@ struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
-    transactions: MokaCache<TransactionDigest, Arc<VerifiedTransaction>>,
+    transactions: MonotonicCache<TransactionDigest, PointCacheItem<Arc<VerifiedTransaction>>>,
 
-    transaction_effects: MokaCache<TransactionEffectsDigest, Arc<TransactionEffects>>,
+    transaction_effects:
+        MonotonicCache<TransactionEffectsDigest, PointCacheItem<Arc<TransactionEffects>>>,
 
-    transaction_events: MokaCache<TransactionEventsDigest, Arc<TransactionEvents>>,
+    transaction_events:
+        MonotonicCache<TransactionEventsDigest, PointCacheItem<Arc<TransactionEvents>>>,
 
-    executed_effects_digests: MokaCache<TransactionDigest, TransactionEffectsDigest>,
+    executed_effects_digests:
+        MonotonicCache<TransactionDigest, PointCacheItem<TransactionEffectsDigest>>,
 
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
@@ -303,22 +327,10 @@ impl CachedCommittedData {
             .max_capacity(MAX_CACHE_SIZE)
             .max_capacity(MAX_CACHE_SIZE)
             .build();
-        let transactions = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
-            .build();
-        let transaction_effects = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
-            .build();
-        let transaction_events = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
-            .build();
-        let executed_effects_digests = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
-            .build();
+        let transactions = MonotonicCache::new(MAX_CACHE_SIZE);
+        let transaction_effects = MonotonicCache::new(MAX_CACHE_SIZE);
+        let transaction_events = MonotonicCache::new(MAX_CACHE_SIZE);
+        let executed_effects_digests = MonotonicCache::new(MAX_CACHE_SIZE);
         let transaction_objects = MokaCache::builder()
             .max_capacity(MAX_CACHE_SIZE)
             .max_capacity(MAX_CACHE_SIZE)
@@ -349,10 +361,10 @@ impl CachedCommittedData {
         assert_empty(&self.object_cache);
         assert!(&self.object_by_id_cache.is_empty());
         assert_empty(&self.marker_cache);
-        assert_empty(&self.transactions);
-        assert_empty(&self.transaction_effects);
-        assert_empty(&self.transaction_events);
-        assert_empty(&self.executed_effects_digests);
+        assert!(self.transactions.is_empty());
+        assert!(self.transaction_effects.is_empty());
+        assert!(self.transaction_events.is_empty());
+        assert!(self.executed_effects_digests.is_empty());
         assert_empty(&self._transaction_objects);
     }
 }
@@ -941,16 +953,17 @@ impl WritebackCache {
         // unnecessary cache misses
         self.cached
             .transactions
-            .insert(tx_digest, transaction.clone());
-        self.cached
-            .transaction_effects
-            .insert(effects_digest, effects.clone().into());
+            .insert(&tx_digest, PointCacheItem::Some(transaction.clone()));
+        self.cached.transaction_effects.insert(
+            &effects_digest,
+            PointCacheItem::Some(effects.clone().into()),
+        );
         self.cached
             .executed_effects_digests
-            .insert(tx_digest, effects_digest);
+            .insert(&tx_digest, PointCacheItem::Some(effects_digest));
         self.cached
             .transaction_events
-            .insert(events_digest, events.clone().into());
+            .insert(&events_digest, PointCacheItem::Some(events.clone().into()));
 
         self.dirty
             .transaction_effects
@@ -1645,20 +1658,38 @@ impl TransactionCacheRead for WritebackCache {
 
                 self.metrics
                     .record_cache_request("transaction_block", "committed");
-                if let Some(tx) = self.cached.transactions.get(digest) {
-                    self.metrics
-                        .record_cache_hit("transaction_block", "committed");
-                    return Ok(CacheResult::Hit(Some(tx.clone())));
-                }
-                self.metrics
-                    .record_cache_miss("transaction_block", "committed");
 
-                Ok(CacheResult::Miss)
+                match self
+                    .cached
+                    .transactions
+                    .get(digest)
+                    .map(|l| l.lock().clone())
+                {
+                    Some(PointCacheItem::Some(tx)) => {
+                        self.metrics
+                            .record_cache_hit("transaction_block", "committed");
+                        Ok(CacheResult::Hit(Some(tx)))
+                    }
+                    Some(PointCacheItem::None) => Ok(CacheResult::NegativeHit),
+                    None => {
+                        self.metrics
+                            .record_cache_miss("transaction_block", "committed");
+
+                        Ok(CacheResult::Miss)
+                    }
+                }
             },
             |remaining| {
-                self.record_db_multi_get("transaction_block", remaining.len())
+                let results: Vec<_> = self
+                    .record_db_multi_get("transaction_block", remaining.len())
                     .multi_get_transaction_blocks(remaining)
-                    .map(|v| v.into_iter().map(|o| o.map(Arc::new)).collect())
+                    .map(|v| v.into_iter().map(|o| o.map(Arc::new)).collect())?;
+                for (digest, result) in remaining.iter().zip(results.iter()) {
+                    if result.is_none() {
+                        self.cached.transactions.insert(digest, None);
+                    }
+                }
+                Ok(results)
             },
         )
     }
@@ -1682,19 +1713,36 @@ impl TransactionCacheRead for WritebackCache {
 
                 self.metrics
                     .record_cache_request("executed_effects_digests", "committed");
-                if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
-                    self.metrics
-                        .record_cache_hit("executed_effects_digests", "committed");
-                    return Ok(CacheResult::Hit(Some(digest)));
-                }
-                self.metrics
-                    .record_cache_miss("executed_effects_digests", "committed");
+                match self
+                    .cached
+                    .executed_effects_digests
+                    .get(digest)
+                    .map(|l| l.lock().clone())
+                {
+                    Some(PointCacheItem::Some(digest)) => {
+                        self.metrics
+                            .record_cache_hit("executed_effects_digests", "committed");
+                        Ok(CacheResult::Hit(Some(digest)))
+                    }
+                    Some(PointCacheItem::None) => Ok(CacheResult::NegativeHit),
+                    None => {
+                        self.metrics
+                            .record_cache_miss("executed_effects_digests", "committed");
 
-                Ok(CacheResult::Miss)
+                        Ok(CacheResult::Miss)
+                    }
+                }
             },
             |remaining| {
-                self.record_db_multi_get("executed_effects_digests", remaining.len())
-                    .multi_get_executed_effects_digests(remaining)
+                let results = self
+                    .record_db_multi_get("executed_effects_digests", remaining.len())
+                    .multi_get_executed_effects_digests(remaining)?;
+                for (digest, result) in remaining.iter().zip(results.iter()) {
+                    if result.is_none() {
+                        self.cached.executed_effects_digests.insert(digest, None);
+                    }
+                }
+                Ok(results)
             },
         )
     }
@@ -1718,19 +1766,36 @@ impl TransactionCacheRead for WritebackCache {
 
                 self.metrics
                     .record_cache_request("transaction_effects", "committed");
-                if let Some(effects) = self.cached.transaction_effects.get(digest) {
-                    self.metrics
-                        .record_cache_hit("transaction_effects", "committed");
-                    return Ok(CacheResult::Hit(Some((*effects).clone())));
-                }
-                self.metrics
-                    .record_cache_miss("transaction_effects", "committed");
+                match self
+                    .cached
+                    .transaction_effects
+                    .get(digest)
+                    .map(|l| l.lock().clone())
+                {
+                    Some(PointCacheItem::Some(effects)) => {
+                        self.metrics
+                            .record_cache_hit("transaction_effects", "committed");
+                        Ok(CacheResult::Hit(Some((*effects).clone())))
+                    }
+                    Some(PointCacheItem::None) => Ok(CacheResult::NegativeHit),
+                    None => {
+                        self.metrics
+                            .record_cache_miss("transaction_effects", "committed");
 
-                Ok(CacheResult::Miss)
+                        Ok(CacheResult::Miss)
+                    }
+                }
             },
             |remaining| {
-                self.record_db_multi_get("transaction_effects", remaining.len())
-                    .multi_get_effects(remaining.iter())
+                let results = self
+                    .record_db_multi_get("transaction_effects", remaining.len())
+                    .multi_get_effects(remaining.iter())?;
+                for (digest, result) in remaining.iter().zip(results.iter()) {
+                    if result.is_none() {
+                        self.cached.transaction_effects.insert(digest, None);
+                    }
+                }
+                Ok(results)
             },
         )
     }
@@ -1779,23 +1844,35 @@ impl TransactionCacheRead for WritebackCache {
 
                 self.metrics
                     .record_cache_request("transaction_events", "committed");
-                if let Some(events) = self
+                match self
                     .cached
                     .transaction_events
                     .get(digest)
-                    .map(|e| (*e).clone())
+                    .map(|l| l.lock().clone())
                 {
-                    self.metrics
-                        .record_cache_hit("transaction_events", "committed");
-                    return Ok(CacheResult::Hit(map_events(events)));
+                    Some(PointCacheItem::Some(events)) => {
+                        self.metrics
+                            .record_cache_hit("transaction_events", "committed");
+                        Ok(CacheResult::Hit(map_events((*events).clone())))
+                    }
+                    Some(PointCacheItem::None) => Ok(CacheResult::NegativeHit),
+                    None => {
+                        self.metrics
+                            .record_cache_miss("transaction_events", "committed");
+
+                        Ok(CacheResult::Miss)
+                    }
                 }
-
-                self.metrics
-                    .record_cache_miss("transaction_events", "committed");
-
-                Ok(CacheResult::Miss)
             },
-            |digests| self.store.multi_get_events(digests),
+            |digests| {
+                let results = self.store.multi_get_events(digests)?;
+                for (digest, result) in digests.iter().zip(results.iter()) {
+                    if result.is_none() {
+                        self.cached.transaction_events.insert(digest, None);
+                    }
+                }
+                Ok(results)
+            },
         )
     }
 }
