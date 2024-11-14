@@ -478,7 +478,7 @@ fun Pool_inv<A, B>(self: &Pool<A, B>): bool {
 }
 
 #[verify_only]
-macro fun ensures_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
+macro fun ensures_a_and_b_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
     let pool = $pool;
     let old_pool = $old_pool;
 
@@ -497,7 +497,7 @@ macro fun ensures_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool
 }
 
 #[verify_only]
-macro fun ensures_price_increases2<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
+macro fun ensures_product_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
     let pool = $pool;
     let old_pool = $old_pool;
 
@@ -564,7 +564,7 @@ fun deposit_spec<A, B>(
     let (result_input_a, result_input_b, result_lp) = deposit(pool, input_a, input_b);
 
     // prove that depositing liquidity always returns LPs of smaller value then what was deposited
-    ensures_price_increases!(pool, old_pool);
+    ensures_a_and_b_price_increases!(pool, old_pool);
 
     (result_input_a, result_input_b, result_lp)
 }
@@ -587,7 +587,7 @@ fun withdraw_spec<A, B>(
     // the invariant `Pool_inv` implies that when all LPs are withdrawn, both A and B go to zero
 
     // prove that withdrawing liquidity always returns A and B of smaller value then what was withdrawn
-    ensures_price_increases!(pool, old_pool);
+    ensures_a_and_b_price_increases!(pool, old_pool);
 
     (result_a, result_b)
 }
@@ -616,7 +616,7 @@ fun swap_a_spec<A, B>(
     let result = swap_a(pool, input);
 
     // L'^2 * A * B <= L^2 * A' * B'
-    ensures_price_increases2!(pool, old_pool);
+    ensures_product_price_increases!(pool, old_pool);
 
     // swapping on a non-empty pool can never cause any pool balance to go to zero
     if (old_pool.lp_supply.supply_value() > 0) {
@@ -651,7 +651,7 @@ fun swap_b_spec<A, B>(
     let result = swap_b(pool, input);
 
     // L'^2 * A * B <= L^2 * A' * B'
-    ensures_price_increases2!(pool, old_pool);
+    ensures_product_price_increases!(pool, old_pool);
 
     // swapping on a non-empty pool can never cause any pool balance to go to zero
     if (old_pool.lp_supply.supply_value() > 0) {
