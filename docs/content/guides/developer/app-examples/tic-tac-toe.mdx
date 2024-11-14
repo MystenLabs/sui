@@ -66,32 +66,34 @@ In this folder, create the following subfolders:
 
 ## owned.move {#owned.move}
 
-Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. This file will contain the Move code for the game board in the centralized version of tic-tac-toe.
+Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. This file will contain the Move code for the game board in the centralized (and multisig) version of tic-tac-toe.
 
 In this first example of tic-tac-toe, the `Game` object, including the game board, is controlled by a game admin.
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
 
-Because the players don’t own the game board, they cannot directly mutate it. Instead, they indicate their move by creating a `Mark` object with their intended placement and send it to the game object using transfer to object:
-
-{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
+Ignore the `admin` field for now, as it is only relevant for the multisig approach.
 
 Games are created with the `new` function:
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
 
-Some things to note:
-- The game is created and returned by this function, it is up to its creator to send it to the game admin to own.
-- There is an `admin` field, we can ignore this for now, as it is only relevant for the multisig approach.
-- The first player is sent a `TurnCap` which gives them permission to take the next turn, they consume it to make their `Mark`, and the admin mints and sends a new `TurnCap` to the next player if the game has not ended.
+Some things to notes: 
+- `MARK__` is a constant that represents an empty cell on the game board. `MARK_X` and `MARK_O` represent the two players' markers.
+- The first player is sent a `TurnCap` which gives them permission to take the next turn.
+- The `Game` object is created and returned by this function, it is up to its creator to send it to the game admin to own.
+
+Because the players don’t own the game board, they cannot directly mutate it. Instead, they indicate their move by creating a `Mark` object with their intended placement and send it to the game object using transfer to object:
+
+{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
 
 When playing the game, the admin operates a service that keeps track of marks using events. When a request is received (`send_mark`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#fun=send_mark,place_mark noComments}
 
-To view the entire source code, see the [owned.move source file](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the gameboard after the game concludes there.
+When a player sends a mark, a `Mark` object is created and is sent to the `Game` object. The admin then receives the mark and places it on the board. This is a use of dynamic object fields, where an object, `Game`, can hold other objects, `Mark`.
 
-An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
+To view the entire source code, see the [owned.move source file](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the gameboard after the game concludes there.
 
 <details>
 <summary>
@@ -99,6 +101,8 @@ An alternative version of this game, shared tic-tac-toe, uses shared objects for
 </summary>
 {@inject: examples/tic-tac-toe/move/sources/owned.move}
 </details>
+
+An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
 
 ## shared.move {#shared.move}
 
