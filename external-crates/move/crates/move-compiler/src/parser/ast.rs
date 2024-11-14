@@ -2493,17 +2493,7 @@ impl ExpMap for Exp_ {
                 uses,
                 items
                     .into_iter()
-                    .map(|item| {
-                        item.map(|item| match item {
-                            SequenceItem_::Seq(e) => SequenceItem_::Seq(map_through(e, f)),
-                            SequenceItem_::Declare(bs, ty_opt) => {
-                                SequenceItem_::Declare(bs, ty_opt)
-                            }
-                            SequenceItem_::Bind(bs, ty_opt, e) => {
-                                SequenceItem_::Bind(bs, ty_opt, map_through(e, f))
-                            }
-                        })
-                    })
+                    .map(|item| item.map(|item| item.map_exp(f)))
                     .collect(),
                 loc,
                 Box::new(exp.map(|e| e.map(|e| e.map_exp(f)))),

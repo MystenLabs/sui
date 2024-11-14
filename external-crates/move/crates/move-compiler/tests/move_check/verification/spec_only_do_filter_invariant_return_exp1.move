@@ -5,6 +5,7 @@ module a::m {
     public fun foo() {
         if(true) {
             invariant!(something);
+            10;
         }
     }
 }

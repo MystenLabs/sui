@@ -270,12 +270,9 @@ fn filter_through_function_body<T: FilterContext>(
 
 fn remove_unwanted<T: FilterContext>(context: &T, x: P::Exp_) -> P::Exp_ {
     match x {
-        P::Exp_::Block((uses, items, loc, exp)) => P::Exp_::Block((
-            uses,
-            filter_items(context, items),
-            loc,
-            Box::new(exp.map(|e| e.map(|e| e.map_exp(&mut |e| remove_unwanted(context, e))))),
-        )),
+        P::Exp_::Block((uses, items, loc, exp)) => {
+            P::Exp_::Block((uses, filter_items(context, items), loc, exp))
+        }
         _ => x,
     }
 }
@@ -287,8 +284,7 @@ fn filter_items<T: FilterContext>(
     let new_items = items
         .into_iter()
         .filter(|item| !context.should_remove_sequence_item(item))
-        .map(|item| item.map(|item| item.map_exp(&
-            mut |exp| remove_unwanted(context, exp))))
+        .map(|item| item.map(|item| item.map_exp(&mut |exp| remove_unwanted(context, exp))))
         .collect();
     new_items
 }
