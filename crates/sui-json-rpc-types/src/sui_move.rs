@@ -128,6 +128,7 @@ pub struct SuiMoveNormalizedModule {
     pub name: String,
     pub friends: Vec<SuiMoveModuleId>,
     pub structs: BTreeMap<String, SuiMoveNormalizedStruct>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub enums: BTreeMap<String, SuiMoveNormalizedEnum>,
     pub exposed_functions: BTreeMap<String, SuiMoveNormalizedFunction>,
 }
