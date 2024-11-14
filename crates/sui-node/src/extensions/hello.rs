@@ -9,9 +9,12 @@ pub async fn exex_hello(mut ctx: ExExContext) -> anyhow::Result<()> {
             ExExNotification::CheckpointSynced { checkpoint } => checkpoint,
         };
 
-        tracing::info!("👋 Hello checkpoint #{} !", checkpoint);
-        ctx.events
-            .send(ExExEvent::FinishedHeight(checkpoint))?;
+        tracing::info!(
+            "[node-{}] 👋 Hello checkpoint #{} !",
+            ctx.identifier,
+            checkpoint,
+        );
+        ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
     }
     Ok(())
 }

@@ -1,23 +1,30 @@
 use std::future::Future;
-use std::sync::Arc;
 
 use futures::{
     future::{self, BoxFuture},
     FutureExt,
 };
+use sui_types::digests::ChainIdentifier;
 
 use crate::{context::ExExContext, ExExHandle, ExExManager, ExExManagerHandle};
 
 const DEFAULT_EXEX_MANAGER_CAPACITY: usize = 16;
 
 pub struct ExExLauncher {
+    identifier: ChainIdentifier,
     extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
 }
 
 impl ExExLauncher {
     /// Create a new `ExExLauncher` with the given extensions.
-    pub const fn new(extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>) -> Self {
-        Self { extensions }
+    pub const fn new(
+        identifier: ChainIdentifier,
+        extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
+    ) -> Self {
+        Self {
+            identifier,
+            extensions,
+        }
     }
 
     /// Launches all execution extensions.
@@ -25,7 +32,10 @@ impl ExExLauncher {
     /// Spawns all extensions and returns the handle to the exex manager if any extensions are
     /// installed.
     pub async fn launch(self) -> anyhow::Result<Option<ExExManagerHandle>> {
-        let Self { extensions } = self;
+        let Self {
+            identifier,
+            extensions,
+        } = self;
 
         if extensions.is_empty() {
             // nothing to launch
@@ -42,6 +52,7 @@ impl ExExLauncher {
 
             // create the launch context for the exex
             let context = ExExContext {
+                identifier,
                 events,
                 notifications,
             };

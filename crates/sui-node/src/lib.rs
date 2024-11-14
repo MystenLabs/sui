@@ -42,6 +42,7 @@ use sui_rest_api::RestMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::digests::CheckpointDigest;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -102,7 +103,7 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
-use sui_exex::{ExExLauncher,ExExNotification};
+use sui_exex::ExExLauncher;
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
 use sui_json_rpc::indexer_api::IndexerApi;
@@ -507,7 +508,8 @@ impl SuiNode {
         };
 
         // Creates an handle for our exex
-        let exex_manager = ExExLauncher::new(sui_exexes()).launch().await?;
+        let identifier = ChainIdentifier::from(CheckpointDigest::random());
+        let exex_manager = ExExLauncher::new(identifier, sui_exexes()).launch().await?;
 
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
@@ -522,7 +524,7 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
-            ChainIdentifier::from(*genesis.checkpoint().digest()),
+            identifier,
             exex_manager,
         );
 
@@ -568,7 +570,7 @@ impl SuiNode {
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
-        
+
         info!("creating state sync store");
         let state_sync_store = RocksDbStore::new(
             cache_traits.clone(),

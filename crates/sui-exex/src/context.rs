@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
+use sui_types::digests::ChainIdentifier;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{notification::ExExNotifications, ExExEvent};
 
 /// Captures the context that an `ExEx` has access to.
 pub struct ExExContext {
-    /// TODO: Add relevant fields needed in the context
-
+    pub identifier: ChainIdentifier,
     /// Channel used to send [`ExExEvent`]s to the rest of the node.
     ///
     /// # Important

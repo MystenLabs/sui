@@ -14,12 +14,12 @@ use itertools::{izip, Itertools};
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
-use sui_exex::ExExNotification;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_exex::ExExNotification;
 use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
@@ -89,6 +89,7 @@ use narwhal_types::{Round, TimestampMs};
 use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
+use sui_exex::manager::ExExManagerHandle;
 use sui_macros::fail_point;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
@@ -113,7 +114,6 @@ use tap::TapOptional;
 use tokio::time::Instant;
 use typed_store::DBMapUtils;
 use typed_store::{retry_transaction_forever, Map};
-use sui_exex::manager::ExExManagerHandle;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -2124,7 +2124,7 @@ impl AuthorityPerEpochStore {
             return;
         };
         let notification = ExExNotification::CheckpointSynced {
-            checkpoint: checkpoint_seq      
+            checkpoint: checkpoint_seq,
         };
         manager.send(notification).unwrap();
     }

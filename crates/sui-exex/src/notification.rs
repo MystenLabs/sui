@@ -1,8 +1,8 @@
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use futures::Stream;
 use tokio::sync::mpsc::Receiver;
@@ -11,7 +11,9 @@ use tokio::sync::mpsc::Receiver;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ExExNotification {
     /// A new checkpoint got synced by the full node.
-    CheckpointSynced { checkpoint: CheckpointSequenceNumber },
+    CheckpointSynced {
+        checkpoint: CheckpointSequenceNumber,
+    },
 }
 
 /// A stream of [`ExExNotification`]s. The stream will emit notifications for all blocks.
@@ -34,4 +36,3 @@ impl Stream for ExExNotifications {
         self.get_mut().notifications.poll_recv(cx)
     }
 }
-
