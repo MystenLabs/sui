@@ -508,8 +508,12 @@ impl SuiNode {
         };
 
         // Creates an handle for our exex
-        let identifier = ChainIdentifier::from(CheckpointDigest::random());
-        let exex_manager = ExExLauncher::new(identifier, sui_exexes()).launch().await?;
+        let exex_manager = ExExLauncher::new(
+            ChainIdentifier::from(CheckpointDigest::random()),
+            sui_exexes(),
+        )
+        .launch()
+        .await?;
 
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
@@ -524,7 +528,7 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
-            identifier,
+            ChainIdentifier::from(*genesis.checkpoint().digest()),
             exex_manager,
         );
 

@@ -2513,6 +2513,14 @@ impl AuthorityPerEpochStore {
         self.epoch_alive_notify
             .notify()
             .expect("epoch_terminated called twice on same epoch store");
+        // Notify ExEx
+        let Some(manager) = self.exex_manager.as_ref() else {
+            return;
+        };
+        let notification = ExExNotification::EpochTerminated {
+            epoch: self.epoch(),
+        };
+        manager.send(notification).unwrap();
         // This `write` acts as a barrier - it waits for futures executing in
         // `within_alive_epoch` to terminate before we can continue here
         debug!("Epoch terminated - waiting for pending tasks to complete");

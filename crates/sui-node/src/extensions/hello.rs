@@ -5,16 +5,23 @@ use sui_exex::{ExExContext, ExExEvent, ExExNotification};
 pub async fn exex_hello(mut ctx: ExExContext) -> anyhow::Result<()> {
     tracing::info!("🧩 Created the Hello ExEx!");
     while let Some(notification) = ctx.notifications.next().await {
-        let checkpoint = match notification {
-            ExExNotification::CheckpointSynced { checkpoint } => checkpoint,
+        let id = match notification {
+            ExExNotification::CheckpointSynced { checkpoint } => {
+                tracing::info!(
+                    "[node-{}] 👋 Hello Checkpoint #{} !",
+                    ctx.identifier,
+                    checkpoint,
+                );
+                checkpoint
+            }
+            ExExNotification::EpochTerminated { epoch } => {
+                tracing::info!("[node-{}] 👋🥳 Hello Epoch #{} !", ctx.identifier, epoch);
+                epoch
+            }
         };
 
-        tracing::info!(
-            "[node-{}] 👋 Hello checkpoint #{} !",
-            ctx.identifier,
-            checkpoint,
-        );
-        ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
+        // TODO: This is bad. We should make the dinstinction between FinishedHeight and FinishedEpoch.
+        ctx.events.send(ExExEvent::FinishedHeight(id))?;
     }
     Ok(())
 }

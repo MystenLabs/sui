@@ -2,7 +2,7 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::{committee::EpochId, messages_checkpoint::CheckpointSequenceNumber};
 
 use futures::Stream;
 use tokio::sync::mpsc::Receiver;
@@ -14,6 +14,8 @@ pub enum ExExNotification {
     CheckpointSynced {
         checkpoint: CheckpointSequenceNumber,
     },
+    /// An epoch is terminated
+    EpochTerminated { epoch: EpochId },
 }
 
 /// A stream of [`ExExNotification`]s. The stream will emit notifications for all blocks.
