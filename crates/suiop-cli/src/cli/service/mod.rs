@@ -5,15 +5,14 @@ pub mod init;
 mod logs;
 
 use anyhow::Result;
-use clap::{builder::OsStr, Parser};
+use clap::Parser;
 use colored::Colorize;
 pub use init::bootstrap_service;
 use init::ServiceLanguage;
 use logs::get_logs;
 use std::path::PathBuf;
-use tracing::info;
 
-use crate::{cache_local, command::CommandOptions, get_cached_local, run_cmd};
+use crate::{cache_local, get_cached_local, run_cmd};
 
 const PULUMI_NAMESPACE_CACHE_KEY: &str = "pulumi_namespace";
 
@@ -62,7 +61,7 @@ fn get_pulumi_namespace_from_cmd() -> String {
 fn get_pulumi_namespace() -> String {
     let cached_ns = get_cached_local::<String>(PULUMI_NAMESPACE_CACHE_KEY);
 
-    let ns = cached_ns
+    cached_ns
         .map(|ca| {
             // check if the cached entry is older than 1 day, if so, refresh it
             if ca.metadata.modified().unwrap().elapsed().unwrap().as_secs() > 86400 {
@@ -71,9 +70,7 @@ fn get_pulumi_namespace() -> String {
                 ca.value
             }
         })
-        .unwrap_or_else(|_| get_pulumi_namespace_from_cmd());
-
-    ns
+        .unwrap_or_else(|_| get_pulumi_namespace_from_cmd())
 }
 
 pub async fn service_cmd(args: &ServiceArgs) -> Result<()> {

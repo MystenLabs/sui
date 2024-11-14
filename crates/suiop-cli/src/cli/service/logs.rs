@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{Context, Result};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
