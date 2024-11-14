@@ -67,7 +67,7 @@ public fun fresh_object_address(ctx: &mut TxContext): address {
 #[verify_only]
 use prover::prover::{ensures, old};
 
-#[ext(no_verify)]
+#[verify_only, ext(no_verify)]
 fun fresh_object_address_spec(ctx: &mut TxContext): address {
     let old_ctx = old!(ctx);
     let result = fresh_object_address(ctx);

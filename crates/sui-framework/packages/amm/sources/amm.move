@@ -463,9 +463,8 @@ public fun admin_set_fees<A, B>(
 use prover::prover::{requires, ensures, asserts, old};
 
 /// Invariant for the pool state.
-/// This could be a struct invariant on `Pool`. Since we use only primitive
-/// types, we add the invariant to the `requires` and `ensures` clauses
-/// for all functions.
+#[verify_only]
+public use fun Pool_inv as Pool.inv;
 #[verify_only]
 fun Pool_inv<A, B>(self: &Pool<A, B>): bool {
     let l = self.lp_supply.supply_value();
@@ -478,6 +477,7 @@ fun Pool_inv<A, B>(self: &Pool<A, B>): bool {
     l.to_int().mul(l.to_int()).lte(a.to_int().mul(b.to_int()))
 }
 
+#[verify_only]
 macro fun ensures_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
     let pool = $pool;
     let old_pool = $old_pool;
@@ -496,12 +496,30 @@ macro fun ensures_price_increases<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool
     ensures(new_L.mul(old_B).lte(new_B.mul(old_L)));
 }
 
+#[verify_only]
+macro fun ensures_price_increases2<$A, $B>($pool: &Pool<$A, $B>, $old_pool: &Pool<$A, $B>) {
+    let pool = $pool;
+    let old_pool = $old_pool;
+
+    let old_L = old_pool.lp_supply.supply_value().to_int();
+    let new_L = pool.lp_supply.supply_value().to_int();
+    let old_A = old_pool.balance_a.value().to_int();
+    let new_A = pool.balance_a.value().to_int();
+    let old_B = old_pool.balance_b.value().to_int();
+    let new_B = pool.balance_b.value().to_int();
+
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
+}
+
+#[verify_only]
 macro fun requires_balance_sum_no_overflow<$T>($balance0: &Balance<$T>, $balance1: &Balance<$T>) {
     let balance0 = $balance0;
     let balance1 = $balance1;
     requires(balance0.value().to_int().add(balance1.value().to_int()).lt(u64::max_value!().to_int()));
 }
 
+#[verify_only]
 macro fun requires_balance_leq_supply<$T>($balance: &Balance<$T>, $supply: &Supply<$T>) {
     let balance = $balance;
     let supply = $supply;
@@ -598,9 +616,7 @@ fun swap_a_spec<A, B>(
     let result = swap_a(pool, input);
 
     // L'^2 * A * B <= L^2 * A' * B'
-    ensures(pool.lp_supply.supply_value().to_int().mul(pool.lp_supply.supply_value().to_int()).mul(old_pool.balance_a.value().to_int()).mul(old_pool.balance_b.value().to_int())
-        .lte(old_pool.lp_supply.supply_value().to_int().mul(old_pool.lp_supply.supply_value().to_int()).mul(pool.balance_a.value().to_int()).mul(pool.balance_b.value().to_int()))
-    );
+    ensures_price_increases2!(pool, old_pool);
 
     // swapping on a non-empty pool can never cause any pool balance to go to zero
     if (old_pool.lp_supply.supply_value() > 0) {
@@ -635,9 +651,7 @@ fun swap_b_spec<A, B>(
     let result = swap_b(pool, input);
 
     // L'^2 * A * B <= L^2 * A' * B'
-    ensures(pool.lp_supply.supply_value().to_int().mul(pool.lp_supply.supply_value().to_int()).mul(old_pool.balance_a.value().to_int()).mul(old_pool.balance_b.value().to_int())
-        .lte(old_pool.lp_supply.supply_value().to_int().mul(old_pool.lp_supply.supply_value().to_int()).mul(pool.balance_a.value().to_int()).mul(pool.balance_b.value().to_int()))
-    );
+    ensures_price_increases2!(pool, old_pool);
 
     // swapping on a non-empty pool can never cause any pool balance to go to zero
     if (old_pool.lp_supply.supply_value() > 0) {
