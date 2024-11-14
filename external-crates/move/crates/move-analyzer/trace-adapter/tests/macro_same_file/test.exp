@@ -21,6 +21,6 @@ current frame stack:
     scope 0 :
   function: foo (m.move:15)
     scope 0 :
-      v : 4
+      v : 6
       type: u64
 

@@ -1,5 +1,5 @@
 current frame stack:
-  function: test (m.move:16)
+  function: test (m.move:17)
     scope 0 :
   function: foo (m.move:0)
     scope 0 :
@@ -11,7 +11,7 @@ current frame stack:
       type: u64
 
 current frame stack:
-  function: test (m.move:16)
+  function: test (m.move:17)
     scope 0 :
   function: foo (m.move:0)
     scope 0 :
@@ -21,9 +21,9 @@ current frame stack:
   function: __inlined__ (m_dep.move:7)
     scope 0 :
 current frame stack:
-  function: test (m.move:16)
+  function: test (m.move:17)
     scope 0 :
-  function: foo (m.move:11)
+  function: foo (m.move:12)
     scope 0 :
       v : 12
       type: u64
