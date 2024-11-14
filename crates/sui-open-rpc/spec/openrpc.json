@@ -8736,6 +8736,34 @@
           }
         }
       },
+      "SuiMoveNormalizedEnum": {
+        "type": "object",
+        "required": [
+          "abilities",
+          "typeParameters",
+          "variants"
+        ],
+        "properties": {
+          "abilities": {
+            "$ref": "#/components/schemas/SuiMoveAbilitySet"
+          },
+          "typeParameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variants": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedField"
+              }
+            }
+          }
+        }
+      },
       "SuiMoveNormalizedField": {
         "type": "object",
         "required": [
@@ -8800,6 +8828,12 @@
         "properties": {
           "address": {
             "type": "string"
+          },
+          "enums": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedEnum"
+            }
           },
           "exposedFunctions": {
             "type": "object",
