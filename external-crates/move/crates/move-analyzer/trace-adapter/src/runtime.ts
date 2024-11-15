@@ -28,7 +28,7 @@ export interface IRuntimeVariableScope {
  * - a vector (converted to an array of values)
  * - a struct/enum (converted to an array of string/field value pairs)
  */
-export type CompoundType = RuntimeValueType[] | IRuntimeCompundValue;
+export type CompoundType = RuntimeValueType[] | IRuntimeCompoundValue;
 
 /**
  * A runtime value can have any of the following types:
@@ -38,7 +38,7 @@ export type CompoundType = RuntimeValueType[] | IRuntimeCompundValue;
 export type RuntimeValueType = string | CompoundType | IRuntimeRefValue;
 
 /**
- * Locaction of a local variable in the runtime.
+ * Location of a local variable in the runtime.
  */
 export interface IRuntimeVariableLoc {
     frameID: number;
@@ -56,7 +56,7 @@ export interface IRuntimeRefValue {
 /**
  * Information about a runtime compound value (struct/enum).
  */
-export interface IRuntimeCompundValue {
+export interface IRuntimeCompoundValue {
     fields: [string, RuntimeValueType][];
     type: string;
     variantName?: string;
@@ -94,7 +94,7 @@ interface IRuntimeStackFrame {
      */
     fileHash: string;
     /**
-     * Current line in the file correponding to currently viewed instruction.
+     * Current line in the file corresponding to currently viewed instruction.
      */
     line: number; // 1-based
     /**
@@ -326,7 +326,7 @@ export class Runtime extends EventEmitter {
                     // step into `bar` rather than having debugger to step
                     // immediately into `baz` as well. At the same time,
                     // if the user intended to step over functions using `next`,
-                    // we shuld skip over all calls on the same line (both `bar`
+                    // we should skip over all calls on the same line (both `bar`
                     // and `baz` in the example above).
                     //
                     // The following explains a bit more formally what needs
@@ -349,7 +349,7 @@ export class Runtime extends EventEmitter {
                     // want to stop on the first instruction of this line,
                     // then after user `step` action enter the call, then
                     // after exiting the call stop on the next call instruction
-                    // and waitl for another `step` action from the user:
+                    // and wait for another `step` action from the user:
                     // 6: instruction
                     // 7: instruction       // stop here
                     // 7: call              // enter call here
@@ -399,7 +399,7 @@ export class Runtime extends EventEmitter {
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
             // if function is native then the next event will be CloseFrame
             if (currentEvent.isNative) {
-                // see if naitve function aborted
+                // see if native function aborted
                 if (this.trace.events.length > this.eventIndex + 1) {
                     const nextEvent = this.trace.events[this.eventIndex + 1];
                     if (nextEvent.type === TraceEventKind.Effect &&
@@ -408,7 +408,7 @@ export class Runtime extends EventEmitter {
                         return ExecutionResult.Exception;
                     }
                 }
-                // if native functino executed successfully, then the next event
+                // if native function executed successfully, then the next event
                 // should be CloseFrame
                 if (this.trace.events.length <= this.eventIndex + 1 ||
                     this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
@@ -444,7 +444,7 @@ export class Runtime extends EventEmitter {
         } else if (currentEvent.type === TraceEventKind.CloseFrame) {
             if (stopAtCloseFrame) {
                 // don't do anything as the caller needs to inspect
-                // the event before proceeing
+                // the event before proceeding
                 return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
@@ -743,7 +743,7 @@ export class Runtime extends EventEmitter {
     private singleTab = '  ';
 
     /**
-     * Returns a string representig the current state of the runtime.
+     * Returns a string representing the current state of the runtime.
      *
      * @returns string representation of the runtime.
      */
@@ -798,7 +798,7 @@ export class Runtime extends EventEmitter {
      * @param compoundValue runtime compound value.
      * @returns string representation of the compound value.
      */
-    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompundValue): string {
+    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompoundValue): string {
         const type = compoundValue.variantName
             ? compoundValue.type + '::' + compoundValue.variantName
             : compoundValue.type;
@@ -921,7 +921,7 @@ function localWrite(
 
     const scopesCount = frame.locals.length;
     if (scopesCount <= 0) {
-        throw new Error("There should be at least one variable scope in functon"
+        throw new Error("There should be at least one variable scope in function"
             + frame.name);
     }
     // If a variable has the same name but a different index (it is shadowed)

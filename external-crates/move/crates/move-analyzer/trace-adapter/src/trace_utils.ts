@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import { FRAME_LIFETIME, ModuleInfo } from './utils';
 import {
-    IRuntimeCompundValue,
+    IRuntimeCompoundValue,
     RuntimeValueType,
     IRuntimeVariableLoc,
     IRuntimeRefValue
@@ -270,7 +270,7 @@ interface ITrace {
 }
 
 /**
- * Information about the frame being currently processsed used during trace generation.
+ * Information about the frame being currently processed used during trace generation.
  */
 interface ITraceGenFrameInfo {
     /**
@@ -350,7 +350,7 @@ export function readTrace(
     // will be `foo` whose PC is lower than PCs of instructions in/beyond
     // the loop
     const localLifetimeEnds = new Map<number, number[]>();
-    const locaLifetimeEndsMax = new Map<number, number[]>();
+    const localLifetimeEndsMax = new Map<number, number[]>();
     const tracedLines = new Map<string, Set<number>>();
     // stack of frame infos OpenFrame and popped on CloseFrame
     const frameInfoStack: ITraceGenFrameInfo[] = [];
@@ -470,7 +470,7 @@ export function readTrace(
                 // to `bar`, and then to `foo`.
                 //
                 // The high level idea of how to handle this situation is to always
-                // keep only a single inflined frame on the stack:
+                // keep only a single inlined frame on the stack:
                 // - the first time we see different file hashes, we push an inlined
                 //   frame on the stack
                 // - if an inlined frame is already on the stack, and the next file
@@ -629,7 +629,7 @@ export function readTrace(
                 ? frameInfo.ID
                 : frameInfoStack[frameInfoStack.length - 2].ID;
             const lifetimeEnds = localLifetimeEnds.get(nonInlinedFrameID) || [];
-            const lifetimeEndsMax = locaLifetimeEndsMax.get(nonInlinedFrameID) || [];
+            const lifetimeEndsMax = localLifetimeEndsMax.get(nonInlinedFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {
                 if (lifetimeEnds[i] === undefined || lifetimeEnds[i] === FRAME_LIFETIME) {
                     // only set new end of lifetime if it has not been set before
@@ -642,7 +642,7 @@ export function readTrace(
                 }
             }
             localLifetimeEnds.set(nonInlinedFrameID, lifetimeEnds);
-            locaLifetimeEndsMax.set(nonInlinedFrameID, lifetimeEndsMax);
+            localLifetimeEndsMax.set(nonInlinedFrameID, lifetimeEndsMax);
         } else if (event.Effect) {
             const effect = event.Effect;
             if (effect.Write || effect.Read) {
@@ -748,8 +748,8 @@ function processJSONLocalLocation(
         // Currently, there is nothing that needs to be done for 'Global' locations,
         // neither with respect to lifetime nor with respect to location itself.
         // This is because `Global` locations currently only represent read-only
-        // refererence values returned from native functions. If there ever was
-        // a native functino that would return a mutable reference, we should
+        // reference values returned from native functions. If there ever was
+        // a native function that would return a mutable reference, we should
         // consider how to handle value changes via such reference, but it's unlikely
         // that such a function would ever be added to either Move stdlib or
         // the Sui framework.
@@ -798,7 +798,7 @@ function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeVal
     } else {
         const fields: [string, RuntimeValueType][] =
             Object.entries(value.fields).map(([key, value]) => [key, traceRuntimeValueFromJSON(value)]);
-        const compoundValue: IRuntimeCompundValue = {
+        const compoundValue: IRuntimeCompoundValue = {
             fields,
             type: value.type,
             variantName: value.variant_name,

@@ -404,7 +404,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             let variables: DebugProtocol.Variable[] = [];
             if (variableHandle) {
                 if ('locals' in variableHandle) {
-                    // we are dealing with a sccope
+                    // we are dealing with a scope
                     variables = this.convertRuntimeVariables(variableHandle);
                 } else {
                     // we are dealing with a compound value
