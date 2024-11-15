@@ -3,7 +3,11 @@
 
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::hash::Hash;
+use std::sync::Arc;
 
+use moka::sync::Cache as MokaCache;
+use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 
 /// CachedVersionMap is a map from version to value, with the additional contraints:
@@ -134,6 +138,74 @@ where
             self.last = Some(next);
         }
         next
+    }
+}
+
+// Could just use the Ord trait but I think it would be confusing to overload it
+// in that way.
+pub trait IsNewer {
+    fn is_newer_than(&self, other: &Self) -> bool;
+}
+
+pub struct MonotonicCache<K, V> {
+    cache: MokaCache<K, Arc<Mutex<V>>>,
+}
+
+impl<K, V> MonotonicCache<K, V>
+where
+    K: Hash + Eq + Send + Sync + Copy + 'static,
+    V: IsNewer + Clone + Send + Sync + 'static,
+{
+    pub fn new(cache_size: u64) -> Self {
+        Self {
+            cache: MokaCache::builder().max_capacity(cache_size).build(),
+        }
+    }
+
+    pub fn get(&self, key: &K) -> Option<Arc<Mutex<V>>> {
+        self.cache.get(key)
+    }
+
+    // Update the cache with guaranteed monotonicity. That is, if there are N
+    // calls to the this function from N threads, the write with the newest value will
+    // win the race regardless of what ordering the writes occur in.
+    //
+    // Caller should log the insert with trace! and increment the appropriate metric.
+    pub fn insert(&self, key: &K, value: V) {
+        // Warning: tricky code!
+        let entry = self
+            .cache
+            .entry(*key)
+            // only one racing insert will call the closure
+            .or_insert_with(|| Arc::new(Mutex::new(value.clone())));
+
+        // We may be racing with another thread that observed an older version of value
+        if !entry.is_fresh() {
+            // !is_fresh means we lost the race, and entry holds the value that was
+            // inserted by the other thread. We need to check if we have a more recent value
+            // than the other reader.
+            let mut entry = entry.value().lock();
+            if value.is_newer_than(&entry) {
+                *entry = value;
+            }
+        }
+    }
+
+    pub fn invalidate(&self, key: &K) {
+        self.cache.invalidate(key);
+    }
+
+    #[cfg(test)]
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.cache.contains_key(key)
+    }
+
+    pub fn invalidate_all(&self) {
+        self.cache.invalidate_all();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cache.iter().next().is_none()
     }
 }
 
