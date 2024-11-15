@@ -162,7 +162,7 @@ export function multiSigPublicKey(keys: PublicKey[]): MultiSigPublicKey {
 
 Note that an address on Sui can be derived from a public key (this fact is used in the previous example to deduplicate public keys based on their accompanying address), but the opposite is not true. This means that to start a game of multisig tic-tac-toe, players must exchange public keys, instead of addresses.
 
-### Building a multisig transaction ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui/src/hooks/useTransactions.ts))
+### Building a multisig transaction
 
 When creating a multisig game, we make use of `owned::Game`'s `admin` field to store the multisig public key for the admin account. Later, it will be used to form the signature for the second transaction in the move. This does not need to be stored on-chain, but we are doing so for convenience so that when we fetch the `Game`'s contents, we get the public key as well:
 
@@ -185,6 +185,8 @@ newMultiSigGame(player: PublicKey, opponent: PublicKey): Transaction {
   return tx;
 }
 ```
+
+`useTransactions.ts` also contains functions to place, send, and receive marks, end the game, and burn ended games. These functions all return a `Transaction` object which is used in the React frontend to execute the transaction with the appropriate signer.
 
 <details>
 <summary>
