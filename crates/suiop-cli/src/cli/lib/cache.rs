@@ -22,6 +22,16 @@ impl<T> CacheResult<T> {
     pub fn new(value: T, metadata: Metadata) -> Self {
         Self { value, metadata }
     }
+
+    pub fn is_expired(&self) -> bool {
+        self.metadata
+            .modified()
+            .unwrap()
+            .elapsed()
+            .unwrap()
+            .as_secs()
+            > 86400
+    }
 }
 
 pub fn cache<T: Serialize + for<'a> Deserialize<'a>>(

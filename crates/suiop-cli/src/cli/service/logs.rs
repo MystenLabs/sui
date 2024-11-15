@@ -12,18 +12,20 @@ use tracing::debug;
 
 use crate::{cache_local, get_cached_local, run_cmd};
 
-const KUBECONFIG_CACHE_KEY: &str = "kubeconfig.yaml";
+fn get_kubeconfig_key(stack: &str) -> String {
+    format!("kubeconfig.{}.yaml", stack)
+}
 
-pub async fn get_kubeconfig() -> Result<Client> {
+pub async fn get_kubeconfig(stack: &str) -> Result<Client> {
     // run pulumi config get config kubeconfig
     let kubeconfig_yaml =
-        if let Ok(cached_kubeconfig) = get_cached_local::<String>(KUBECONFIG_CACHE_KEY) {
+        if let Ok(cached_kubeconfig) = get_cached_local::<String>(&get_kubeconfig_key(stack)) {
             debug!("Using cached kubeconfig");
             cached_kubeconfig.value
         } else {
             let cmd_output = run_cmd(vec!["pulumi", "config", "get", "kubeconfig"], None)?;
             let kubeconfig_yaml = String::from_utf8(cmd_output.stdout)?;
-            cache_local(KUBECONFIG_CACHE_KEY, kubeconfig_yaml.clone())?;
+            cache_local(&get_kubeconfig_key(stack), kubeconfig_yaml.clone())?;
 
             kubeconfig_yaml
         };
@@ -36,9 +38,9 @@ pub async fn get_kubeconfig() -> Result<Client> {
     Ok(client)
 }
 
-pub async fn get_logs(namespace: &str) -> Result<()> {
+pub async fn get_logs(stack: &str, namespace: &str) -> Result<()> {
     // Create kubernetes client
-    let client = get_kubeconfig().await?;
+    let client = get_kubeconfig(stack).await?;
 
     // Get deployments API in the specified namespace
     let pods: Api<Pod> = Api::namespaced(client, namespace);
