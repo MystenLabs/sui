@@ -107,7 +107,7 @@ pub fn construct_test_plan(
         prog.modules
             .key_cloned_iter()
             .flat_map(|(module_ident, module_def)| {
-                context.push_warning_filter_scope(module_def.warning_filter.clone());
+                context.push_warning_filter_scope(module_def.warning_filter);
                 let plan = construct_module_test_plan(
                     &mut context,
                     package_filter,
@@ -134,7 +134,7 @@ fn construct_module_test_plan(
         .functions
         .iter()
         .filter_map(|(loc, fn_name, func)| {
-            context.push_warning_filter_scope(func.warning_filter.clone());
+            context.push_warning_filter_scope(func.warning_filter);
             let info = build_test_info(context, loc, fn_name, func)
                 .map(|test_case| (fn_name.to_string(), test_case));
             context.pop_warning_filter_scope();

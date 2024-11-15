@@ -34,12 +34,72 @@ describe('Transaction inputs', () => {
 				tx.object.clock(),
 				tx.object.random(),
 				tx.object.denyList(),
+				tx.object.option({
+					type: '0x123::example::Thing',
+					value: '0x456',
+				}),
+				tx.object.option({
+					type: '0x123::example::Thing',
+					value: tx.object('0x456'),
+				}),
+				tx.object.option({
+					type: '0x123::example::Thing',
+					value: null,
+				}),
 			],
 		});
 
 		expect(tx.getData()).toMatchInlineSnapshot(`
 			{
 			  "commands": [
+			    {
+			      "$kind": "MoveCall",
+			      "MoveCall": {
+			        "arguments": [
+			          {
+			            "$kind": "Input",
+			            "Input": 9,
+			            "type": "object",
+			          },
+			        ],
+			        "function": "some",
+			        "module": "option",
+			        "package": "0x0000000000000000000000000000000000000000000000000000000000000001",
+			        "typeArguments": [
+			          "0x123::example::Thing",
+			        ],
+			      },
+			    },
+			    {
+			      "$kind": "MoveCall",
+			      "MoveCall": {
+			        "arguments": [
+			          {
+			            "$kind": "Input",
+			            "Input": 9,
+			            "type": "object",
+			          },
+			        ],
+			        "function": "some",
+			        "module": "option",
+			        "package": "0x0000000000000000000000000000000000000000000000000000000000000001",
+			        "typeArguments": [
+			          "0x123::example::Thing",
+			        ],
+			      },
+			    },
+			    {
+			      "$kind": "MoveCall",
+			      "MoveCall": {
+			        "arguments": [],
+			        "function": "none",
+			        "module": "option",
+			        "package": "0x0000000000000000000000000000000000000000000000000000000000000001",
+			        "typeArguments": [
+			          "0x123::example::Thing",
+			        ],
+			      },
+			    },
 			    {
 			      "$kind": "MoveCall",
 			      "MoveCall": {
@@ -88,6 +148,18 @@ describe('Transaction inputs', () => {
 			            "$kind": "Input",
 			            "Input": 8,
 			            "type": "object",
+			          },
+			          {
+			            "$kind": "Result",
+			            "Result": 0,
+			          },
+			          {
+			            "$kind": "Result",
+			            "Result": 1,
+			          },
+			          {
+			            "$kind": "Result",
+			            "Result": 2,
 			          },
 			        ],
 			        "function": "bar",
@@ -172,6 +244,12 @@ describe('Transaction inputs', () => {
 			      "$kind": "UnresolvedObject",
 			      "UnresolvedObject": {
 			        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000403",
+			      },
+			    },
+			    {
+			      "$kind": "UnresolvedObject",
+			      "UnresolvedObject": {
+			        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000456",
 			      },
 			    },
 			  ],

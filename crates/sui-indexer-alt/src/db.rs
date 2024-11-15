@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use const_str::format as const_format;
 use diesel::migration::MigrationVersion;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::{
@@ -38,7 +39,7 @@ pub struct DbConfig {
     /// Time spent waiting for a connection from the pool to become available.
     #[arg(
         long,
-        default_value = stringify!(DEFAULT_CONNECTION_TIMEOUT_SECS),
+        default_value = const_format!("{DEFAULT_CONNECTION_TIMEOUT_SECS}"),
         value_name = "SECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_secs)
     )]

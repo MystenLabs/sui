@@ -19,7 +19,7 @@ impl Processor for TxDigests {
 
     type Value = StoredTxDigest;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

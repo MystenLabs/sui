@@ -249,12 +249,14 @@ impl ExecutionCacheWrite for ProxyCache {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> BoxFuture<'a, SuiResult> {
         delegate_method!(self.acquire_transaction_locks(
             epoch_store,
             owned_input_objects,
-            transaction
+            tx_digest,
+            signed_transaction
         ))
     }
 }

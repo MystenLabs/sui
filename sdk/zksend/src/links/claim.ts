@@ -66,6 +66,7 @@ export class ZkSendLink {
 	creatorAddress?: string;
 	assets?: LinkAssets;
 	claimed?: boolean;
+	claimedBy?: string;
 	bagObject?: SuiObjectData | null;
 
 	#client: SuiClient;
@@ -123,6 +124,8 @@ export class ZkSendLink {
 	) {
 		const parsed = new URL(url);
 		const isContractLink = parsed.hash.startsWith('#$');
+		const parsedNetwork = parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet';
+		const network = options.network ?? parsedNetwork;
 
 		let link: ZkSendLink;
 		if (isContractLink) {
@@ -130,7 +133,7 @@ export class ZkSendLink {
 			link = new ZkSendLink({
 				...options,
 				keypair,
-				network: parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet',
+				network,
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: true,
@@ -139,11 +142,10 @@ export class ZkSendLink {
 			const keypair = Ed25519Keypair.fromSecretKey(
 				fromBase64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
 			);
-
 			link = new ZkSendLink({
 				...options,
 				keypair,
-				network: parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet',
+				network,
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: false,
@@ -532,6 +534,7 @@ export class ZkSendLink {
 				? input.value
 				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
+		this.claimedBy = receiver;
 		this.assets = getAssetsFromTransaction({
 			transaction: tx,
 			address: receiver,

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
+use parking_lot::Mutex;
 use tap::tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -12,6 +12,7 @@ use tracing::{error, warn};
 use crate::{
     block::{BlockRef, Transaction, TransactionIndex},
     context::Context,
+    Round,
 };
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
@@ -26,17 +27,30 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
-    included_in_block_ack: oneshot::Sender<BlockRef>,
+    included_in_block_ack: oneshot::Sender<(BlockRef, oneshot::Receiver<BlockStatus>)>,
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
 /// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
 /// and are pulled every time the `next` method is called.
 pub(crate) struct TransactionConsumer {
+    context: Arc<Context>,
     tx_receiver: Receiver<TransactionsGuard>,
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
     pending_transactions: Option<TransactionsGuard>,
+    block_status_subscribers: Arc<Mutex<BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>>>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[allow(unused)]
+pub enum BlockStatus {
+    /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
+    /// has been committed as well.
+    Sequenced(BlockRef),
+    /// The block has been garbage collected and will never be committed. Any transactions that have been included in the block should also
+    /// be considered as impossible to be committed as part of this block and might need to be retried
+    GarbageCollected(BlockRef),
 }
 
 impl TransactionConsumer {
@@ -49,7 +63,9 @@ impl TransactionConsumer {
             max_consumed_transactions_per_request: context
                 .protocol_config
                 .max_num_transactions_in_block(),
+            context,
             pending_transactions: None,
+            block_status_subscribers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -112,14 +128,76 @@ impl TransactionConsumer {
             }
         }
 
+        let block_status_subscribers = self.block_status_subscribers.clone();
+        let gc_enabled = self.context.protocol_config.gc_depth() > 0;
         (
             transactions,
             Box::new(move |block_ref: BlockRef| {
+                let mut block_status_subscribers = block_status_subscribers.lock();
+
                 for ack in acks {
-                    let _ = ack.send(block_ref);
+                    let (status_tx, status_rx) = oneshot::channel();
+
+                    if gc_enabled {
+                        block_status_subscribers
+                            .entry(block_ref)
+                            .or_default()
+                            .push(status_tx);
+                    } else {
+                        // When gc is not enabled, then report directly the block as sequenced while tx is acknowledged for inclusion.
+                        // As blocks can never get garbage collected it is there is actually no meaning to do otherwise and also is safer for edge cases.
+                        status_tx.send(BlockStatus::Sequenced(block_ref)).ok();
+                    }
+
+                    let _ = ack.send((block_ref, status_rx));
                 }
             }),
         )
+    }
+
+    /// Notifies all the transaction submitters who are waiting to receive an update on the status of the block.
+    /// The `committed_blocks` are the blocks that have been committed and the `gc_round` is the round up to which the blocks have been garbage collected.
+    /// First we'll notify for all the committed blocks, and then for all the blocks that have been garbage collected.
+    pub(crate) fn notify_own_blocks_status(
+        &self,
+        committed_blocks: Vec<BlockRef>,
+        gc_round: Round,
+    ) {
+        // Notify for all the committed blocks first
+        let mut block_status_subscribers = self.block_status_subscribers.lock();
+        for block_ref in committed_blocks {
+            if let Some(subscribers) = block_status_subscribers.remove(&block_ref) {
+                subscribers.into_iter().for_each(|s| {
+                    let _ = s.send(BlockStatus::Sequenced(block_ref));
+                });
+            }
+        }
+
+        // Now notify everyone <= gc_round that their block has been garbage collected and clean up the entries
+        while let Some((block_ref, subscribers)) = block_status_subscribers.pop_first() {
+            if block_ref.round <= gc_round {
+                subscribers.into_iter().for_each(|s| {
+                    let _ = s.send(BlockStatus::GarbageCollected(block_ref));
+                });
+            } else {
+                block_status_subscribers.insert(block_ref, subscribers);
+                break;
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn subscribe_for_block_status_testing(
+        &self,
+        block_ref: BlockRef,
+    ) -> oneshot::Receiver<BlockStatus> {
+        let (tx, rx) = oneshot::channel();
+        let mut block_status_subscribers = self.block_status_subscribers.lock();
+        block_status_subscribers
+            .entry(block_ref)
+            .or_default()
+            .push(tx);
+        rx
     }
 
     #[cfg(test)]
@@ -165,7 +243,10 @@ impl TransactionClient {
 
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
     /// to next proposed blocks.
-    pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<BlockRef, ClientError> {
+    pub async fn submit(
+        &self,
+        transactions: Vec<Vec<u8>>,
+    ) -> Result<(BlockRef, oneshot::Receiver<BlockStatus>), ClientError> {
         // TODO: Support returning the block refs for transactions that span multiple blocks
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
@@ -184,7 +265,7 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<BlockRef>, ClientError> {
+    ) -> Result<oneshot::Receiver<(BlockRef, oneshot::Receiver<BlockStatus>)>, ClientError> {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
         for transaction in &transactions {
             if transaction.len() as u64 > self.max_transaction_size {
@@ -210,16 +291,20 @@ impl TransactionClient {
 
 /// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
 /// before acceptance of the block.
+#[async_trait::async_trait]
 pub trait TransactionVerifier: Send + Sync + 'static {
     /// Determines if this batch of transactions is valid.
     /// Fails if any one of the transactions is invalid.
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 
-    /// Returns indices of transactions to reject.
-    /// Currently only uncertified user transactions can be rejected.
-    /// The rest of transactions are implicitly voted to accept.
-    // TODO: add rejection reasons, add VoteError and wrap the return in Result<>.
-    fn vote_batch(&self, batch: &[&[u8]]) -> Vec<TransactionIndex>;
+    /// Returns indices of transactions to reject, validator error over transactions.
+    /// Currently only uncertified user transactions can be rejected. The rest of transactions
+    /// are implicitly voted to be accepted.
+    /// When the result is an error, the whole block should be rejected from local DAG instead.
+    async fn verify_and_vote_batch(
+        &self,
+        batch: &[&[u8]],
+    ) -> Result<Vec<TransactionIndex>, ValidationError>;
 }
 
 #[derive(Debug, Error)]
@@ -229,16 +314,21 @@ pub enum ValidationError {
 }
 
 /// `NoopTransactionVerifier` accepts all transactions.
-#[allow(unused)]
+#[cfg(test)]
 pub(crate) struct NoopTransactionVerifier;
 
+#[cfg(test)]
+#[async_trait::async_trait]
 impl TransactionVerifier for NoopTransactionVerifier {
     fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
     }
 
-    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
-        vec![]
+    async fn verify_and_vote_batch(
+        &self,
+        _batch: &[&[u8]],
+    ) -> Result<Vec<TransactionIndex>, ValidationError> {
+        Ok(vec![])
     }
 }
 
@@ -246,14 +336,15 @@ impl TransactionVerifier for NoopTransactionVerifier {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
+    use consensus_config::AuthorityIndex;
     use futures::{stream::FuturesUnordered, StreamExt};
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
 
     use crate::{
-        block::BlockRef,
+        block::{BlockDigest, BlockRef},
         context::Context,
-        transaction::{TransactionClient, TransactionConsumer},
+        transaction::{BlockStatus, TransactionClient, TransactionConsumer},
     };
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -306,6 +397,129 @@ mod tests {
 
         // try to pull again transactions, result should be empty
         assert!(consumer.is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn block_status_update_gc_enabled() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
+            config.set_consensus_gc_depth_for_testing(10);
+            config
+        });
+
+        let context = Arc::new(Context::new_for_test(4).0);
+        let (client, tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+
+        // submit the transactions and include 2 of each on a new block
+        let mut included_in_block_waiters = FuturesUnordered::new();
+        for i in 1..=10 {
+            let transaction =
+                bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
+            let w = client
+                .submit_no_wait(vec![transaction])
+                .await
+                .expect("Shouldn't submit successfully transaction");
+            included_in_block_waiters.push(w);
+
+            // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
+            if i % 2 == 0 {
+                let (transactions, ack_transactions) = consumer.next();
+                assert_eq!(transactions.len(), 2);
+                ack_transactions(BlockRef::new(
+                    i,
+                    AuthorityIndex::new_for_test(0),
+                    BlockDigest::MIN,
+                ));
+            }
+        }
+
+        // Now iterate over all the waiters. Everyone should have been acknowledged.
+        let mut block_status_waiters = Vec::new();
+        while let Some(result) = included_in_block_waiters.next().await {
+            let (block_ref, block_status_waiter) =
+                result.expect("Block inclusion waiter shouldn't fail");
+            block_status_waiters.push((block_ref, block_status_waiter));
+        }
+
+        // Now acknowledge the commit of the blocks 6, 8, 10 and set gc_round = 5, which should trigger the garbage collection of blocks 1..=5
+        let gc_round = 5;
+        consumer.notify_own_blocks_status(
+            vec![
+                BlockRef::new(6, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+                BlockRef::new(8, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+                BlockRef::new(10, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            ],
+            gc_round,
+        );
+
+        // Now iterate over all the block status waiters. Everyone should have been notified.
+        for (block_ref, waiter) in block_status_waiters {
+            let block_status = waiter.await.expect("Block status waiter shouldn't fail");
+
+            if block_ref.round <= gc_round {
+                assert!(matches!(block_status, BlockStatus::GarbageCollected(_)))
+            } else {
+                assert!(matches!(block_status, BlockStatus::Sequenced(_)));
+            }
+        }
+
+        // Ensure internal structure is clear
+        assert!(consumer.block_status_subscribers.lock().is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn block_status_update_gc_disabled() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
+            config
+        });
+
+        let context = Arc::new(Context::new_for_test(4).0);
+        let (client, tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+
+        // submit the transactions and include 2 of each on a new block
+        let mut included_in_block_waiters = FuturesUnordered::new();
+        for i in 1..=10 {
+            let transaction =
+                bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
+            let w = client
+                .submit_no_wait(vec![transaction])
+                .await
+                .expect("Shouldn't submit successfully transaction");
+            included_in_block_waiters.push(w);
+
+            // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
+            if i % 2 == 0 {
+                let (transactions, ack_transactions) = consumer.next();
+                assert_eq!(transactions.len(), 2);
+                ack_transactions(BlockRef::new(
+                    i,
+                    AuthorityIndex::new_for_test(0),
+                    BlockDigest::MIN,
+                ));
+            }
+        }
+
+        // Now iterate over all the waiters. Everyone should have been acknowledged.
+        let mut block_status_waiters = Vec::new();
+        while let Some(result) = included_in_block_waiters.next().await {
+            let (block_ref, block_status_waiter) =
+                result.expect("Block inclusion waiter shouldn't fail");
+            block_status_waiters.push((block_ref, block_status_waiter));
+        }
+
+        // Now iterate over all the block status waiters. Everyone should have been notified and everyone should be considered sequenced.
+        for (_block_ref, waiter) in block_status_waiters {
+            let block_status = waiter.await.expect("Block status waiter shouldn't fail");
+            assert!(matches!(block_status, BlockStatus::Sequenced(_)));
+        }
+
+        // Ensure internal structure is clear
+        assert!(consumer.block_status_subscribers.lock().is_empty());
     }
 
     #[tokio::test]
@@ -448,7 +662,8 @@ mod tests {
 
         // expect all receivers to be resolved.
         for w in all_receivers {
-            assert!(w.await.is_ok());
+            let r = w.await;
+            assert!(r.is_ok());
         }
     }
 }

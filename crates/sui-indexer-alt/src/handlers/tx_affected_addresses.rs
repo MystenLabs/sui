@@ -20,7 +20,7 @@ impl Processor for TxAffectedAddress {
 
     type Value = StoredTxAffectedAddress;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

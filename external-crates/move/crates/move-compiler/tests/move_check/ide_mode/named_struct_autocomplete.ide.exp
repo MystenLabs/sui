@@ -97,6 +97,12 @@ note[I15006]: IDE path autocomplete
    = type params: 
 
 note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:23
+   │
+14 │         let _tmp2 = _s.a.;
+   │                       ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:24
    │
 14 │         let _tmp2 = _s.a.;

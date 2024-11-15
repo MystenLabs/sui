@@ -148,7 +148,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -320,7 +320,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -492,7 +492,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -664,7 +664,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -836,7 +836,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1008,7 +1008,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1180,7 +1180,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0

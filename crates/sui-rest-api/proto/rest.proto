@@ -112,6 +112,7 @@ message BalanceChange {
 message EffectsFinality {
     optional ValidatorAggregatedSignature signature = 1;
     optional uint64 checkpoint = 2;
+    optional bool quorum_executed = 3;
 }
 
 message TransactionExecutionResponse {

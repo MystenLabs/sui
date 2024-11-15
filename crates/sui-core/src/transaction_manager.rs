@@ -847,9 +847,9 @@ impl TransactionManager {
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
                 .transaction_data()
-                .input_objects()?
+                .shared_input_objects()
                 .into_iter()
-                .map(|r| r.object_id())
+                .filter_map(|r| r.mutable.then_some(r.id))
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
@@ -867,7 +867,11 @@ impl TransactionManager {
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
                 if age >= overload_config.max_txn_age_in_queue {
-                    info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
+                    info!(
+                        "Overload detected on object {:?} with oldest transaction pending for {}ms",
+                        object_id,
+                        age.as_millis()
+                    );
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),

@@ -208,6 +208,47 @@ describe('Transaction Builders', () => {
 			retry: 10,
 		},
 	);
+
+	it('builds object options', async () => {
+		const tx = new Transaction();
+
+		tx.moveCall({
+			target: `${packageId}::serializer_tests::none`,
+			typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+			arguments: [
+				tx.object.option({
+					type: '0x2::coin::Coin<0x2::sui::SUI>',
+					value: null,
+				}),
+			],
+		});
+		const coin = tx.splitCoins(tx.gas, [1]);
+		const coin2 = tx.moveCall({
+			target: `${packageId}::serializer_tests::some`,
+			typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+			arguments: [
+				tx.object.option({
+					type: '0x2::coin::Coin<0x2::sui::SUI>',
+					value: coin,
+				}),
+			],
+		});
+
+		const coin3 = tx.moveCall({
+			target: `${packageId}::serializer_tests::some`,
+			typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+			arguments: [
+				tx.object.option({
+					type: '0x2::coin::Coin<0x2::sui::SUI>',
+					value: coin2,
+				}),
+			],
+		});
+
+		tx.transferObjects([coin3], toolbox.keypair.toSuiAddress());
+
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
+	});
 });
 
 async function validateTransaction(client: SuiClient, signer: Keypair, tx: Transaction) {

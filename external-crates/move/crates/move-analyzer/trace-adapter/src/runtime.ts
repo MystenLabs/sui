@@ -140,9 +140,22 @@ export enum RuntimeEvents {
     stopOnLineBreakpoint = 'stopOnLineBreakpoint',
 
     /**
+     * Stop after exception has been encountered.
+     */
+    stopOnException = 'stopOnException',
+
+    /**
      *  Finish trace viewing session.
      */
     end = 'end',
+}
+/**
+ * Describes result of the execution.
+ */
+export enum ExecutionResult {
+    Ok,
+    TraceEnd,
+    Exception,
 }
 
 /**
@@ -252,14 +265,15 @@ export class Runtime extends EventEmitter {
      * @param next determines if it's `next` (or otherwise `step`) action.
      * @param stopAtCloseFrame determines if the action should stop at `CloseFrame` event
      * (rather then proceedint to the following instruction).
-     * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the step event cannot be handled.
      */
-    public step(next: boolean, stopAtCloseFrame: boolean): boolean {
+    public step(next: boolean, stopAtCloseFrame: boolean): ExecutionResult {
         this.eventIndex++;
         if (this.eventIndex >= this.trace.events.length) {
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return true;
+            return ExecutionResult.TraceEnd;
         }
         let currentEvent = this.trace.events[this.eventIndex];
         if (currentEvent.type === TraceEventKind.Instruction) {
@@ -340,16 +354,27 @@ export class Runtime extends EventEmitter {
                     // also we need to make `stepOut` aware of whether it is executed
                     // as part of `next` (which is how `next` is implemented) or not.
                     this.sendEvent(RuntimeEvents.stopOnStep);
-                    return false;
+                    return ExecutionResult.Ok;
                 } else {
                     return this.step(next, stopAtCloseFrame);
                 }
             }
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return false;
+            return ExecutionResult.Ok;
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
             // if function is native then the next event will be CloseFrame
             if (currentEvent.isNative) {
+                // see if naitve function aborted
+                if (this.trace.events.length > this.eventIndex + 1) {
+                    const nextEvent = this.trace.events[this.eventIndex + 1];
+                    if (nextEvent.type === TraceEventKind.Effect &&
+                        nextEvent.effect.type === TraceEffectKind.ExecutionError) {
+                        this.sendEvent(RuntimeEvents.stopOnException, nextEvent.effect.msg);
+                        return ExecutionResult.Exception;
+                    }
+                }
+                // if native functino executed successfully, then the next event
+                // should be CloseFrame
                 if (this.trace.events.length <= this.eventIndex + 1 ||
                     this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
                     throw new Error('Expected an CloseFrame event after native OpenFrame event');
@@ -377,8 +402,7 @@ export class Runtime extends EventEmitter {
 
             if (next) {
                 // step out of the frame right away
-                this.stepOut(next);
-                return false;
+                return this.stepOut(next);
             } else {
                 return this.step(next, stopAtCloseFrame);
             }
@@ -386,7 +410,7 @@ export class Runtime extends EventEmitter {
             if (stopAtCloseFrame) {
                 // don't do anything as the caller needs to inspect
                 // the event before proceeing
-                return false;
+                return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
                 if (this.frameStack.frames.length <= 0) {
@@ -398,6 +422,10 @@ export class Runtime extends EventEmitter {
             }
         } else if (currentEvent.type === TraceEventKind.Effect) {
             const effect = currentEvent.effect;
+            if (effect.type === TraceEffectKind.ExecutionError) {
+                this.sendEvent(RuntimeEvents.stopOnException, effect.msg);
+                return ExecutionResult.Exception;
+            }
             if (effect.type === TraceEffectKind.Write) {
                 const traceLocation = effect.loc;
                 const traceValue = effect.value;
@@ -423,15 +451,16 @@ export class Runtime extends EventEmitter {
      * Handles "step out" adapter action.
      *
      * @param next determines if it's  part of `next` (or otherwise `step`) action.
-     * @returns `true` if was able to step out of the frame, `false` otherwise.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
-    public stepOut(next: boolean): boolean {
+    public stepOut(next: boolean): ExecutionResult {
         const stackHeight = this.frameStack.frames.length;
         if (stackHeight <= 1) {
             // do nothing as there is no frame to step out to
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return false;
+            return ExecutionResult.Ok;
         }
         // newest frame is at the top of the stack
         const currentFrame = this.frameStack.frames[stackHeight - 1];
@@ -443,8 +472,11 @@ export class Runtime extends EventEmitter {
             // skipping over calls next-style otherwise we can miss seeing
             // the actual close frame event that we are looking for
             // and have the loop execute too far
-            if (this.step(/* next */ false, /* stopAtCloseFrame */ true)) {
-                // trace viewing session finished
+            const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+            if (executionResult === ExecutionResult.Exception) {
+                return executionResult;
+            }
+            if (executionResult === ExecutionResult.TraceEnd) {
                 throw new Error('Cannot find corresponding CloseFrame event for function: ' +
                     currentFrame.name);
             }
@@ -464,13 +496,16 @@ export class Runtime extends EventEmitter {
 
     /**
      * Handles "continue" adapter action.
-     * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the continue event cannot be handled.
      */
-    public continue(): boolean {
+    public continue(): ExecutionResult {
         while (true) {
-            if (this.step(/* next */ false, /* stopAtCloseFrame */ false)) {
-                return true;
+            const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ false);
+            if (executionResult === ExecutionResult.TraceEnd ||
+                executionResult === ExecutionResult.Exception) {
+                return executionResult;
             }
             let currentEvent = this.trace.events[this.eventIndex];
             if (currentEvent.type === TraceEventKind.Instruction) {
@@ -488,7 +523,7 @@ export class Runtime extends EventEmitter {
                 }
                 if (breakpoints.has(currentEvent.loc.line)) {
                     this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
-                    return false;
+                    return ExecutionResult.Ok;
                 }
             }
         }
@@ -910,4 +945,3 @@ function fileHash(fileContents: string): Uint8Array {
     const hash = crypto.createHash('sha256').update(fileContents).digest();
     return new Uint8Array(hash);
 }
-

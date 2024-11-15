@@ -1,5 +1,25 @@
 # @mysten/deepbook-v3
 
+## 0.12.7
+
+### Patch Changes
+
+- 4a42691: NS token pools added
+
+## 0.12.6
+
+### Patch Changes
+
+- a43ae92: NS Token
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+
+## 0.12.5
+
+### Patch Changes
+
+- a24d43d: getOrders and decodeOrderId support
+
 ## 0.12.4
 
 ### Patch Changes

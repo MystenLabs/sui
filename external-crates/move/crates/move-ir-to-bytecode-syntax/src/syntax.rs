@@ -1644,23 +1644,26 @@ fn parse_function_decl(
         None
     };
 
+    let body = if is_native {
+        consume_token(tokens, Tok::Semicolon)?;
+        FunctionBody::Native
+    } else {
+        let (locals, body) = parse_function_block_(tokens)?;
+        FunctionBody::Move { locals, code: body }
+    };
+
+    let end_loc = tokens.previous_end_loc();
     let func_name = FunctionName(name);
     let func = Function_::new(
+        make_loc(tokens.file_hash(), start_loc, end_loc),
         visibility,
         is_entry,
         args,
         ret.unwrap_or_default(),
         type_parameters,
-        if is_native {
-            consume_token(tokens, Tok::Semicolon)?;
-            FunctionBody::Native
-        } else {
-            let (locals, body) = parse_function_block_(tokens)?;
-            FunctionBody::Move { locals, code: body }
-        },
+        body,
     );
 
-    let end_loc = tokens.previous_end_loc();
     Ok((
         func_name,
         spanned(tokens.file_hash(), start_loc, end_loc, func),

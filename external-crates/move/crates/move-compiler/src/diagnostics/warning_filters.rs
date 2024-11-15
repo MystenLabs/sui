@@ -7,7 +7,8 @@ use crate::{
 };
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::Hash,
     sync::Arc,
 };
 
@@ -67,24 +68,42 @@ pub struct WarningFiltersScope(WarningFiltersScope_);
 enum WarningFiltersScope_ {
     /// Unsafe and should be used only for internal purposes, such as ide annotations
     Empty,
-    Static(&'static WarningFilters),
+    /// The top-level warning filters given to the compiler instance. They are leaked as they will
+    /// be needed for the lifetime of the compiler instance.
+    Static(&'static WarningFiltersBuilder),
+    /// A user-defined warning filter scope, with a reference to the previous scope
     Node(Arc<WarningFiltersScopeNode>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct WarningFiltersScopeNode {
+    /// The warning filters for this scope
     filters: WarningFilters,
+    /// The previous scope
     prev: WarningFiltersScope_,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Debug, Clone)]
+/// An intern table for warning filters. The underlying `Box` is not moved, so the pointer to the
+/// filter is stable.
+/// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+pub struct WarningFiltersTable(HashSet<Box<WarningFiltersBuilder>>);
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+/// An unsafe pointer into the intern table for warning filters.
+/// Safety: The `WarningFiltersTable` must be held as long as any `WarningFilters`s are alive.
+pub struct WarningFilters(*const WarningFiltersBuilder);
+unsafe impl Send for WarningFilters {}
+unsafe impl Sync for WarningFilters {}
+
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Used to filter out diagnostics, specifically used for warning suppression
-pub struct WarningFilters {
+pub struct WarningFiltersBuilder {
     filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
     for_dependency: bool, // if false, the filters are used for source code
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Filters split by category and code
 enum UnprefixedWarningFilters {
     /// Remove all warnings
@@ -127,8 +146,11 @@ pub type WellKnownFilterName = &'static str;
 //**************************************************************************************************
 
 impl WarningFiltersScope {
+    /// Create a new scope with the given top-level warning filter, if any.
+    /// A `&'static WarningFiltersBuilder` is used to avoid cloning the filter table for each
+    /// new top-level scope needed
     pub(crate) const fn root(
-        top_level_warning_filter_opt: Option<&'static WarningFilters>,
+        top_level_warning_filter_opt: Option<&'static WarningFiltersBuilder>,
     ) -> Self {
         match top_level_warning_filter_opt {
             None => WarningFiltersScope(WarningFiltersScope_::Empty),
@@ -187,7 +209,45 @@ impl WarningFiltersScope {
     }
 }
 
+impl WarningFiltersTable {
+    pub fn new() -> Self {
+        Self(HashSet::new())
+    }
+
+    pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFilters {
+        let boxed = Box::new(filters);
+        let wf = {
+            let pinned_ref: &WarningFiltersBuilder = &boxed;
+            WarningFilters(pinned_ref as *const WarningFiltersBuilder)
+        };
+        match self.0.get(&boxed) {
+            Some(existing) => {
+                let existing_ref: &WarningFiltersBuilder = existing;
+                WarningFilters(existing_ref as *const WarningFiltersBuilder)
+            }
+            None => {
+                self.0.insert(boxed);
+                wf
+            }
+        }
+    }
+}
+
 impl WarningFilters {
+    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
+        self.borrow().is_filtered(diag)
+    }
+
+    pub fn for_dependency(&self) -> bool {
+        self.borrow().for_dependency()
+    }
+
+    fn borrow(&self) -> &WarningFiltersBuilder {
+        unsafe { &*self.0 }
+    }
+}
+
+impl WarningFiltersBuilder {
     pub const fn new_for_source() -> Self {
         Self {
             filters: BTreeMap::new(),
@@ -454,6 +514,12 @@ impl WarningFilter {
 }
 
 impl AstDebug for WarningFilters {
+    fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
+        self.borrow().ast_debug(w);
+    }
+}
+
+impl AstDebug for WarningFiltersBuilder {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
         for (prefix, filters) in &self.filters {
             let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);

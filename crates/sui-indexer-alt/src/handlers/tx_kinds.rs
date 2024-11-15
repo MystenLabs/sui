@@ -21,7 +21,7 @@ impl Processor for TxKinds {
 
     type Value = StoredTxKind;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

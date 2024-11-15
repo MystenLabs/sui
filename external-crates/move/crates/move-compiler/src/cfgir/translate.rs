@@ -148,6 +148,7 @@ pub fn program(
 ) -> G::Program {
     let H::Program {
         modules: hmodules,
+        warning_filters_table,
         info,
     } = prog;
 
@@ -157,6 +158,7 @@ pub fn program(
 
     let mut program = G::Program {
         modules,
+        warning_filters_table,
         info: info.clone(),
     };
     visit_program(&mut context, &mut program);
@@ -191,7 +193,7 @@ fn module(
         constants: hconstants,
     } = mdef;
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let constants = constants(context, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.pop_warning_filter_scope();
@@ -423,7 +425,7 @@ fn constant(
         value: (locals, block),
     } = c;
 
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let final_value = constant_(
         context,
         constant_values,
@@ -598,13 +600,14 @@ fn function(
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         compiled_visibility,
         entry,
         signature,
         body,
     } = f;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let body = function_body(
         context,
         module,
@@ -620,6 +623,7 @@ fn function(
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         compiled_visibility,
         entry,
@@ -1062,6 +1066,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             warning_filter: _,
             index: _,
             attributes,
+            loc: _,
             compiled_visibility: _,
             visibility,
             entry,

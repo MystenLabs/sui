@@ -98,15 +98,14 @@ where
         prometheus_registry: &Registry,
         reconfig_observer: OnsiteReconfigObserver,
     ) -> Self {
+        let metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
         let notifier = Arc::new(NotifyRead::new());
+        let reconfig_observer = Arc::new(reconfig_observer);
         let quorum_driver_handler = Arc::new(
-            QuorumDriverHandlerBuilder::new(
-                validators,
-                Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
-            )
-            .with_notifier(notifier.clone())
-            .with_reconfig_observer(Arc::new(reconfig_observer))
-            .start(),
+            QuorumDriverHandlerBuilder::new(validators.clone(), metrics.clone())
+                .with_notifier(notifier.clone())
+                .with_reconfig_observer(reconfig_observer.clone())
+                .start(),
         );
 
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();

@@ -13,14 +13,14 @@ use crate::{
     schema::tx_calls,
 };
 
-pub struct TxCallsFun;
+pub struct TxCalls;
 
-impl Processor for TxCallsFun {
-    const NAME: &'static str = "tx_calls_fun";
+impl Processor for TxCalls {
+    const NAME: &'static str = "tx_calls";
 
     type Value = StoredTxCalls;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -53,7 +53,7 @@ impl Processor for TxCallsFun {
 }
 
 #[async_trait::async_trait]
-impl Handler for TxCallsFun {
+impl Handler for TxCalls {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;

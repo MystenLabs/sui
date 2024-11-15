@@ -117,6 +117,7 @@ impl BenchmarkableIndexer for BenchmarkIndexer {
                 None,
                 cancel,
                 Some(committed_checkpoints_tx),
+                false, /* mvr_mode */
             )
             .await
         });

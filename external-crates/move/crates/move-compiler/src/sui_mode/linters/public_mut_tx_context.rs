@@ -12,7 +12,7 @@ use crate::{
     expansion::ast::{ModuleIdent, Visibility},
     naming::ast::Type_,
     parser::ast::FunctionName,
-    sui_mode::{SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME},
+    sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME},
     typing::{ast as T, visitor::simple_visitor},
 };
 use move_ir_types::location::Loc;
@@ -29,7 +29,7 @@ simple_visitor!(
     PreferMutableTxContext,
     fn visit_module_custom(&mut self, ident: ModuleIdent, _mdef: &T::ModuleDefinition) -> bool {
         // skip if in 'sui::tx_context'
-        ident.value.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME)
+        ident.value.is(&SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME)
     },
     fn visit_function_custom(
         &mut self,
@@ -44,7 +44,7 @@ simple_visitor!(
         for (_, _, sp!(loc, param_ty_)) in &fdef.signature.parameters {
             if matches!(
                 param_ty_,
-                Type_::Ref(false, t) if t.value.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME),
+                Type_::Ref(false, t) if t.value.is(&SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME),
             ) {
                 report_non_mutable_tx_context(self, *loc);
             }

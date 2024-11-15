@@ -4,7 +4,7 @@
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::dkg_v1;
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
@@ -600,7 +600,7 @@ pub struct AuthorityEpochTables {
     pub(crate) dkg_confirmations: DBMap<PartyId, Vec<u8>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
-    pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
+    pub(crate) dkg_output: DBMap<u64, dkg_v1::Output<PkG, EncG>>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
     randomness_rounds_pending: DBMap<RandomnessRound, ()>,
@@ -749,7 +749,7 @@ impl AuthorityEpochTables {
 
     pub fn write_transaction_locks(
         &self,
-        transaction: VerifiedSignedTransaction,
+        signed_transaction: Option<VerifiedSignedTransaction>,
         locks_to_write: impl Iterator<Item = (ObjectRef, LockDetails)>,
     ) -> SuiResult {
         let mut batch = self.owned_object_locked_transactions.batch();
@@ -757,10 +757,15 @@ impl AuthorityEpochTables {
             &self.owned_object_locked_transactions,
             locks_to_write.map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
         )?;
-        batch.insert_batch(
-            &self.signed_transactions,
-            std::iter::once((*transaction.digest(), transaction.serializable_ref())),
-        )?;
+        if let Some(signed_transaction) = signed_transaction {
+            batch.insert_batch(
+                &self.signed_transactions,
+                std::iter::once((
+                    *signed_transaction.digest(),
+                    signed_transaction.serializable_ref(),
+                )),
+            )?;
+        }
         batch.write()?;
         Ok(())
     }
@@ -791,16 +796,24 @@ impl AuthorityEpochTables {
 
         let shared_input_object_ids: BTreeSet<_> = transactions
             .iter()
-            .filter_map(|tx| {
-                if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+            .filter_map(|tx| match &tx.0.transaction {
+                SequencedConsensusTransactionKind::External(ConsensusTransaction {
                     kind: ConsensusTransactionKind::CertifiedTransaction(tx),
                     ..
-                }) = &tx.0.transaction
-                {
-                    Some(tx.shared_input_objects().map(|obj| obj.id))
-                } else {
-                    None
-                }
+                }) => Some(
+                    tx.shared_input_objects()
+                        .map(|obj| obj.id)
+                        .collect::<Vec<_>>(),
+                ),
+                SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                    kind: ConsensusTransactionKind::UserTransaction(tx),
+                    ..
+                }) => Some(
+                    tx.shared_input_objects()
+                        .map(|obj| obj.id)
+                        .collect::<Vec<_>>(),
+                ),
+                _ => None,
             })
             .flatten()
             .collect();
@@ -1971,10 +1984,10 @@ impl AuthorityPerEpochStore {
         self.tables()?
             .pending_consensus_transactions
             .multi_remove(keys)?;
-        // TODO: lock once for all remove() calls.
+        let mut pending_consensus_certificates = self.pending_consensus_certificates.write();
         for key in keys {
-            if let ConsensusTransactionKey::Certificate(cert) = key {
-                self.pending_consensus_certificates.write().remove(cert);
+            if let ConsensusTransactionKey::Certificate(digest) = key {
+                pending_consensus_certificates.remove(digest);
             }
         }
         Ok(())
@@ -2003,17 +2016,6 @@ impl AuthorityPerEpochStore {
             .expect("deferred transactions should not be read past end of epoch")
             .deferred_transactions
             .is_empty()
-    }
-
-    /// Check whether certificate was processed by consensus.
-    /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
-    pub fn is_tx_cert_consensus_message_processed(
-        &self,
-        certificate: &CertifiedTransaction,
-    ) -> SuiResult<bool> {
-        self.is_consensus_message_processed(&SequencedConsensusTransactionKey::External(
-            ConsensusTransactionKey::Certificate(*certificate.digest()),
-        ))
     }
 
     /// Check whether any certificates were processed by consensus.
@@ -4215,7 +4217,7 @@ pub(crate) struct ConsensusCommitOutput {
     dkg_confirmations: BTreeMap<PartyId, VersionedDkgConfirmation>,
     dkg_processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     dkg_used_message: Option<VersionedUsedProcessedMessages>,
-    dkg_output: Option<dkg::Output<PkG, EncG>>,
+    dkg_output: Option<dkg_v1::Output<PkG, EncG>>,
 
     // jwk state
     pending_jwks: BTreeSet<(AuthorityName, JwkId, JWK)>,
@@ -4314,7 +4316,7 @@ impl ConsensusCommitOutput {
         self.dkg_used_message = Some(used_messages);
     }
 
-    pub fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {
+    pub fn set_dkg_output(&mut self, output: dkg_v1::Output<PkG, EncG>) {
         self.dkg_output = Some(output);
     }
 

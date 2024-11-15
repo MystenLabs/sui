@@ -1662,12 +1662,19 @@ pub fn program(
     prog: E::Program,
 ) -> N::Program {
     let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
-    let E::Program { modules: emodules } = prog;
+    let E::Program {
+        warning_filters_table,
+        modules: emodules,
+    } = prog;
     let modules = modules(compilation_env, &outer_context, emodules);
     let mut inner = N::Program_ { modules };
     let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
-    N::Program { info, inner }
+    N::Program {
+        info,
+        warning_filters_table,
+        inner,
+    }
 }
 
 fn modules(
@@ -1698,7 +1705,7 @@ fn module(
         constants: econstants,
     } = mdef;
     let context = &mut Context::new(env, outer, package_name, ident);
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
@@ -2045,7 +2052,7 @@ fn function(
     assert!(context.nominal_block_id == 0);
     assert!(context.used_fun_tparams.is_empty());
     assert!(context.used_locals.is_empty());
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
@@ -2174,7 +2181,7 @@ fn struct_def(
         type_parameters,
         fields,
     } = sdef;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, type_parameters);
     let fields = struct_fields(context, fields);
     context.pop_warning_filter_scope();
@@ -2232,7 +2239,7 @@ fn enum_def(
         type_parameters,
         variants,
     } = edef;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, type_parameters);
     let variants = enum_variants(context, variants);
     context.pop_warning_filter_scope();
@@ -2304,7 +2311,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
     assert!(context.used_locals.is_empty());
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     context.local_scopes = vec![BTreeMap::new()];
     let signature = type_(context, TypeAnnotation::ConstantSignature, esignature);
     let value = *exp(context, Box::new(evalue));
@@ -2901,7 +2908,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             resolve_call(context, eloc, ma, is_macro, tys_opt, rhs)
         }
-        EE::MethodCall(edot, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
+        EE::MethodCall(edot, dot_loc, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
             None => {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
@@ -2912,7 +2919,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 if is_macro.is_some() {
                     context.check_feature(context.current_package, FeatureGate::MacroFuns, eloc);
                 }
-                NE::MethodCall(d, n, is_macro, ty_args, nes)
+                NE::MethodCall(d, dot_loc, n, is_macro, ty_args, nes)
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
@@ -2978,7 +2985,9 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
                 _ => N::ExpDotted_::Exp(ne),
             }
         }
-        E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::Dot(d, loc, f) => {
+            N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), loc, Field(f))
+        }
         E::ExpDotted_::DotUnresolved(loc, d) => {
             N::ExpDotted_::DotAutocomplete(loc, Box::new(dotted(context, *d)?))
         }
@@ -4328,7 +4337,7 @@ fn remove_unused_bindings_exp(
                 remove_unused_bindings_exp(context, used, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
             for e in es {
                 remove_unused_bindings_exp(context, used, e)
@@ -4346,7 +4355,7 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             remove_unused_bindings_exp_dotted(context, used, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
