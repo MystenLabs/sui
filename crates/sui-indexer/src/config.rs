@@ -188,6 +188,7 @@ impl BackFillConfig {
     const DEFAULT_CHUNK_SIZE: usize = 1000;
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     Indexer {
