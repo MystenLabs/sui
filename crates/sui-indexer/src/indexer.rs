@@ -8,7 +8,7 @@ use anyhow::Result;
 use prometheus::Registry;
 use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use async_trait::async_trait;
 use futures::future::try_join_all;
@@ -38,7 +38,7 @@ impl Indexer {
         store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
-        retention_config: Option<RetentionConfig>,
+        mut retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
         committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
         mvr_mode: bool,
@@ -67,6 +67,14 @@ impl Indexer {
             config.end_checkpoint,
         )
         .await?;
+
+        if mvr_mode {
+            warn!("Indexer in MVR mode is configured to prune `objects_history` to 2 epochs. The other tables have a 2000 epoch retention.");
+            retention_config = Some(RetentionConfig {
+                epochs_to_keep: 2000, // epochs, roughly 5+ years. We really just care about pruning `objects_history` per the default 2 epochs.
+                overrides: Default::default(),
+            });
+        }
 
         if let Some(retention_config) = retention_config {
             let pruner = Pruner::new(store.clone(), retention_config, metrics.clone())?;

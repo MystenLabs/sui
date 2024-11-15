@@ -50,18 +50,18 @@ async fn main() -> anyhow::Result<()> {
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
-            let mut retention_config = pruning_options.load_from_file();
+
+            let retention_config = if mvr_mode {
+                warn!("Indexer in MVR mode is configured to prune `objects_history` to 2 epochs. The other tables have a 2000 epoch retention.");
+                Some(RetentionConfig {
+                    epochs_to_keep: 2000, // epochs, roughly 5+ years. We really just care about pruning `objects_history` per the default 2 epochs.
+                    overrides: Default::default(),
+                })
+            } else {
+                pruning_options.load_from_file()
+            };
             if retention_config.is_some() {
                 check_prunable_tables_valid(&mut pool.get().await?).await?;
-            } else {
-                if mvr_mode {
-                    warn!("No pruning options found in the config file, using default pruning options. Default epochs to keep is 2000 epochs, and `objects_history` will be pruned to 2 epochs.");
-                    // mvr-indexer override - enable `objects_history` pruning by default.
-                    retention_config = Some(RetentionConfig {
-                        epochs_to_keep: 2000, // epochs, roughly 4 years. We really just care about pruning `objects_history` per the default 2 epochs.
-                        overrides: Default::default(),
-                    });
-                }
             }
 
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
