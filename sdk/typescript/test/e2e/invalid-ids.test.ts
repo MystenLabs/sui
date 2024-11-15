@@ -37,6 +37,14 @@ describe('Object id/Address/Transaction digest validation', () => {
 		expect(toolbox.client.multiGetObjects({ ids: objectIds })).rejects.toThrowError(
 			/Invalid Sui Object id 0xWRONG/,
 		);
+
+		const pastObjects = objectIds.map((objectId) => ({
+			objectId: objectId,
+			version: '1',
+		}));
+		expect(toolbox.client.tryMultiGetPastObjects({ pastObjects })).rejects.toThrowError(
+			/Invalid Sui Object id 0xWRONG/,
+		);
 	});
 
 	it('Test all functions with invalid Transaction Digest', async () => {
