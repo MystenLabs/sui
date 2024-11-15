@@ -15,7 +15,7 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
-pub mod eq_op;
+pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
@@ -195,17 +195,17 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::None | LintLevel::Default => vec![],
         LintLevel::All => {
             vec![
-                constant_naming::ConstantNamingVisitor.visitor(),
+                constant_naming::ConstantNaming.visitor(),
                 unnecessary_while_loop::WhileTrueToLoop.visitor(),
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
-                unneeded_return::UnneededReturnVisitor.visitor(),
+                unneeded_return::UnneededReturn.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
-                self_assignment::SelfAssignmentVisitor.visitor(),
-                redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
+                self_assignment::SelfAssignment.visitor(),
+                redundant_ref_deref::RedundantRefDeref.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
-                eq_op::EqualOperandsCheck.visitor(),
+                equal_operands::EqualOperands.visitor(),
             ]
         }
     }

@@ -16,7 +16,7 @@ use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
 simple_visitor!(
-    SelfAssignmentVisitor,
+    SelfAssignment,
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         match &e.exp.value {

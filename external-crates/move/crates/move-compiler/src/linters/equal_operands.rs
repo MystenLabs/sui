@@ -15,7 +15,7 @@ use crate::{
 };
 
 simple_visitor!(
-    EqualOperandsCheck,
+    EqualOperands,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let UnannotatedExp_::BinopExp(lhs, sp!(_, op), _, rhs) = &exp.exp.value {
             if should_check_operands(lhs, rhs, op) {
