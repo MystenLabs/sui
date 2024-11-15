@@ -1114,6 +1114,10 @@ impl AuthorityPerEpochStore {
         self.chain_identifier
     }
 
+    pub fn get_exex_manager(&self) -> Option<ExExManagerHandle> {
+        self.exex_manager.clone()
+    }
+
     pub fn new_at_next_epoch(
         &self,
         name: AuthorityName,

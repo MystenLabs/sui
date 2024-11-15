@@ -1441,7 +1441,7 @@ impl AuthorityState {
             if let Some(err) = &execution_error_opt {
                 debug_fatal!("Authenticator state update failed: {:?}", err);
             }
-            epoch_store.update_authenticator_state(auth_state);
+            epoch_store.update_authenticator_state(&auth_state);
 
             // double check that the signature verifier always matches the authenticator state
             if cfg!(debug_assertions) {
@@ -5159,7 +5159,7 @@ impl AuthorityState {
             self.get_object_store().clone(),
             expensive_safety_check_config,
             cur_epoch_store.get_chain_identifier(),
-            None,
+            cur_epoch_store.get_exex_manager(),
         );
         self.epoch_store.store(new_epoch_store.clone());
         Ok(new_epoch_store)
