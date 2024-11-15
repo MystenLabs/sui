@@ -3,20 +3,24 @@ ARG BUILD_DATE
 ARG GIT_REVISION
 # ARG RUST_VERSION=1.76.0
 
-FROM stagex/busybox:sx2024.04.2@sha256:8cb9360041cd17e8df33c5cbc6c223875045c0c249254367ed7e0eb445720757 AS busybox
-FROM stagex/musl:sx2024.04.2@sha256:f888fcf45fabaaae3d0268bcec902ceb94edba7bf8d09ef6966ebb20e00b7127 AS musl
-FROM stagex/rust:sx2024.04.2@sha256:e7882823078d49da4302578526dc35d6b2afad7507740c2f9bcd406a79befbc9 AS rust
-FROM stagex/gcc:sx2024.04.2@sha256:c67989de74d82eddeaf0d458edb1ca35b88064d3a66d5631c3530d5f10975f5e AS gcc
-FROM stagex/llvm:sx2024.04.2@sha256:ae430dbdd1a6d546bb8aef817d09d3fb4e0145f81c071647666b7a9f7b69f8a1 AS llvm
-FROM stagex/libunwind:sx2024.04.2@sha256:622bbc0bcd502d349624fe90bd3cfc63595a71d450702d4e746abf8918351e2b AS libunwind
-FROM stagex/openssl:sx2024.04.2@sha256:e719432f169a5ff606f52004a554e58780335f9635b1cf271d002ca7b1d1a206 AS openssl
-FROM stagex/zlib:sx2024.04.2@sha256:d5b923b8f1b0382b8bdde96f36c0b8b9f694c97b14a9071bd96f2ffc46124e03 AS zlib
-FROM stagex/ca-certificates:sx2024.04.2@sha256:f9fe6e67df91083fee3d88cf221f84ef77f0b67480fb5b0689e890509a712533 AS ca-certificates
+FROM stagex/busybox:sx2024.11.0@sha256:3d128909dbc8e7b6c4b8c3c31f4583f01a307907ea179934bb42c4ef056c7efd AS busybox
+FROM stagex/musl:sx2024.11.0@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
+FROM stagex/rust:sx2024.11.0@sha256:f23fa04c29ab0250b39c38ee1cc4394a1ea3ec91b865070716a585d2b96389ed AS rust
+FROM stagex/gcc:sx2024.11.0@sha256:49ea63c81c65f8be25c242b7e64f2758b23effdaafb458b5862d0f23ec803075 AS gcc
+FROM stagex/llvm:sx2024.11.0@sha256:27da8a38ec621317dbafbf1dbdefb07a5b007d1d28ae86393480209652ed3770 AS llvm
+FROM stagex/libunwind:sx2024.11.0@sha256:290b8d183a467edc55e338471632f2e40859aef92a4eecf12415ca29b9c16e9f AS libunwind
+FROM stagex/openssl:sx2024.11.0@sha256:8e3eb24b4d21639f7ea204b89211d8bc03a2e1b729fb1123f8d0b3752b4beaa1 AS openssl
+FROM stagex/zlib:sx2024.11.0@sha256:09d63654e27decb6147f1b23005d539e30db8e53eb2d284e824bcf4d4e7c3c11 AS zlib
+FROM stagex/ca-certificates:sx2024.11.0@sha256:a84695f983a448a82acfe78af11f33c6a66b27124266e1fdc3ecfb8dc5852573 AS ca-certificates
 
-FROM stagex/binutils:sx2024.04.2@sha256:311f8c2bd2b586bf7210c40dde43d0e0d5e76af4e1e688ad129f945691e3e105 AS binutils
-FROM stagex/make:sx2024.04.2@sha256:8357ff7a8afa260ae3cc8e8993d80bce524d9802b2033020f7ea7f8f85133634 AS make
-FROM stagex/clang:sx2024.04.2@sha256:489d7f0b8694ecb4f21af80f4fee4908a4fabd92740af3648ee3715212da409e AS clang
-FROM stagex/linux-headers:sx2024.04.2@sha256:fe366787ecaf36393b17ede6108161af4136bf5b7521e49f0a005a6ef68ef8db AS linux-headers
+FROM stagex/binutils:sx2024.11.0@sha256:eff721a796fdfba8c34e21a487b0e376fb55ca2633524926998f1660fbb810de AS binutils
+FROM stagex/make:sx2024.11.0@sha256:ad81793d21d9778421925085c52734fdcca443957ade4f9bb80e4032b88252db AS make
+FROM stagex/clang:sx2024.11.0@sha256:c26069d378f36c06b5d91e3aba907521ec79eb0864d65a4c28a2db17947ec25f AS clang
+FROM stagex/linux-headers:sx2024.11.0@sha256:bafd40b92b6333575aface5aa48820c18c14b0bce02c8ef91f1814b6234652a7 AS linux-headers
+
+FROM stagex/cross-x86_64-gnu-gcc:sx2024.11.0@sha256:cca4ab2ea51adb4797bf50aa03cc855ba992e9ae37840d1873fffbd773fea5d7 AS cross-x86_64-gnu-gcc
+FROM stagex/cross-x86_64-gnu-rust:sx2024.11.0@sha256:2dbfbd1cf7d034450c197582aeb90dd12a68cf6dfdd10e2abfda1ff202a75de4 AS cross-x86_64-gnu-rust
+FROM stagex/glibc:sx2024.11.0@sha256:5e4f3c0b0b811dac9bfa96c43215856de4a7ec4a7866bc019608b0889f78633a AS glibc
 
 FROM scratch AS base
 
@@ -56,15 +60,19 @@ COPY --from=musl . /
 COPY --from=clang . /
 COPY --from=linux-headers . /
 
+COPY --from=cross-x86_64-gnu-gcc . /
+COPY --from=cross-x86_64-gnu-rust . /
+COPY --from=glibc . /
+
 ARG PROFILE
 ARG GIT_REVISION
 
 ENV RUST_BACKTRACE=1
-ENV RUSTFLAGS='-C target-feature=+crt-static -C codegen-units=1'
+ENV RUSTFLAGS="-C codegen-units=1 -C target-feature=+crt-static -C linker=/usr/bin/x86_64-linux-gnu-gcc"
 ENV GIT_REVISION=${GIT_REVISION}
 ENV PROFILE=${PROFILE}
 
-RUN --network=none cargo build --target x86_64-unknown-linux-musl --frozen --profile ${PROFILE} --bin sui-node
+RUN --network=none cargo build --target x86_64-unknown-linux-gnu --frozen --profile ${PROFILE} --bin sui-node
 
 FROM scratch AS install
 
@@ -73,12 +81,11 @@ COPY --from=busybox . /
 COPY --from=busybox . /rootfs
 COPY --from=libunwind . /rootfs
 COPY --from=gcc . /rootfs
-COPY --from=musl . /rootfs
 
 # support current + legacy paths
 RUN mkdir -p /rootfs/opt/sui/bin
 RUN mkdir -p /rootfs/usr/local/bin
-COPY --from=build sui/target/x86_64-unknown-linux-musl/release/sui-node /rootfs/opt/sui/bin/sui-node
+COPY --from=build sui/target/x86_64-unknown-linux-gnu/release/sui-node /rootfs/opt/sui/bin/sui-node
 
 
 RUN --network=none find /rootfs -exec touch -hcd "@0" "{}" +
