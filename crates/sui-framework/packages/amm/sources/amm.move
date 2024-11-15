@@ -695,21 +695,20 @@ fun calc_swap_result_spec(
         admin_fee_pct,
     );
 
-    let result_pool_lp_value = pool_lp_value.to_int().add(admin_fee_in_lp.to_int());
+    let old_L = pool_lp_value.to_int();
+    let new_L = pool_lp_value.to_int().add(admin_fee_in_lp.to_int());
     ensures(out_value <= o_pool_value);
-    ensures(result_pool_lp_value.lte(u64::max_value!().to_int()));
-    let result_i_pool_value = i_pool_value + i_value;
-    let result_o_pool_value = o_pool_value - out_value;
+    ensures(new_L.lte(u64::max_value!().to_int()));
+    let old_A = i_pool_value.to_int();
+    let old_B = o_pool_value.to_int();
+    let new_A = (i_pool_value + i_value).to_int();
+    let new_B = (o_pool_value - out_value).to_int();
 
     // L'^2 * A * B <= L^2 * A' * B'
-    ensures(result_pool_lp_value.mul(result_pool_lp_value).mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
-        .lte(pool_lp_value.to_int().mul(pool_lp_value.to_int()).mul(result_i_pool_value.to_int()).mul(result_o_pool_value.to_int()))
-    );
-    ensures(result_pool_lp_value.mul(result_pool_lp_value).mul(o_pool_value.to_int()).mul(i_pool_value.to_int())
-        .lte(pool_lp_value.to_int().mul(pool_lp_value.to_int()).mul(result_o_pool_value.to_int()).mul(result_i_pool_value.to_int()))
-    );
+    ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
+    ensures(new_L.mul(new_L).mul(old_B).mul(old_A).lte(old_L.mul(old_L).mul(new_B).mul(new_A)));
 
-    ensures(result_pool_lp_value.mul(result_pool_lp_value).lte(result_i_pool_value.to_int().mul(result_o_pool_value.to_int())));
+    ensures(new_L.mul(new_L).lte(new_A.mul(new_B)));
 
     (out_value, admin_fee_in_lp)
 }
