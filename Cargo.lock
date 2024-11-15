@@ -3672,6 +3672,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2 1.0.87",
+ "quote 1.0.35",
+ "syn 2.0.79",
+ "unicode-xid 0.2.4",
+]
+
+[[package]]
 name = "determinator"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4707,7 +4728,7 @@ dependencies = [
  "cbc",
  "ctr",
  "curve25519-dalek-ng",
- "derive_more",
+ "derive_more 0.99.17",
  "digest 0.10.7",
  "ecdsa 0.16.9",
  "ed25519-consensus",
@@ -4799,7 +4820,7 @@ dependencies = [
  "ark-snark",
  "bcs",
  "byte-slice-cast",
- "derive_more",
+ "derive_more 0.99.17",
  "fastcrypto",
  "ff 0.13.0",
  "im",
@@ -9096,22 +9117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry_api"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a81f725323db1b1206ca3da8bb19874bbd3f57c3bcd59471bfb04525b265b9b"
-dependencies = [
- "futures-channel",
- "futures-util",
- "indexmap 1.9.3",
- "js-sys",
- "once_cell",
- "pin-project-lite",
- "thiserror",
- "urlencoding",
-]
-
-[[package]]
 name = "opentelemetry_sdk"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11455,7 +11460,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f7d66a1128282b7ef025a8ead62a4a9fcf017382ec53b8ffbf4d7bf77bd3c60"
 dependencies = [
  "cfg-if",
- "derive_more",
+ "derive_more 0.99.17",
  "parity-scale-codec 3.6.5",
  "scale-info-derive",
 ]
@@ -13067,7 +13072,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
- "derivative",
+ "derive_more 1.0.0",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -15209,8 +15214,7 @@ dependencies = [
  "consensus-config",
  "coset",
  "criterion",
- "derivative",
- "derive_more",
+ "derive_more 1.0.0",
  "enum_dispatch",
  "expect-test",
  "eyre",
@@ -15664,7 +15668,6 @@ dependencies = [
  "opentelemetry 0.25.0",
  "opentelemetry-otlp",
  "opentelemetry-proto",
- "opentelemetry_api",
  "opentelemetry_sdk",
  "prometheus",
  "prost 0.13.1",

@@ -10,7 +10,6 @@ use crate::{
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
-use derive_more::Display;
 use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
@@ -114,13 +113,13 @@ pub struct MovePackage {
 // associated constants before storing in any serialization setting.
 /// Rust representation of upgrade policy constants in `sui::package`.
 #[repr(u8)]
-#[derive(Display, Debug, Clone, Copy)]
+#[derive(derive_more::Display, Debug, Clone, Copy)]
 pub enum UpgradePolicy {
-    #[display(fmt = "COMPATIBLE")]
+    #[display("COMPATIBLE")]
     Compatible = 0,
-    #[display(fmt = "ADDITIVE")]
+    #[display("ADDITIVE")]
     Additive = 128,
-    #[display(fmt = "DEP_ONLY")]
+    #[display("DEP_ONLY")]
     DepOnly = 192,
 }
 
