@@ -201,7 +201,13 @@ async fn get_24hr_volume_by_balance_manager_id(
 }
 
 async fn get_historical_volume_by_balance_manager_id_with_interval(
-    Path((pool_ids, balance_manager_id, start_time, end_time, interval)): Path<(String, String, i64, i64, i64)>,
+    Path((pool_ids, balance_manager_id, start_time, end_time, interval)): Path<(
+        String,
+        String,
+        i64,
+        i64,
+        i64,
+    )>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, HashMap<String, Vec<i64>>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
@@ -238,7 +244,9 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
         let mut volume_by_pool: HashMap<String, Vec<i64>> = HashMap::new();
         for order_fill in results {
-            let entry = volume_by_pool.entry(order_fill.pool_id.clone()).or_insert(vec![0, 0]);
+            let entry = volume_by_pool
+                .entry(order_fill.pool_id.clone())
+                .or_insert(vec![0, 0]);
             if order_fill.maker_balance_manager_id == balance_manager_id {
                 entry[0] += order_fill.base_quantity;
             }
@@ -247,8 +255,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
             }
         }
 
-        metrics_by_interval
-            .insert(current_start.to_string(), volume_by_pool);
+        metrics_by_interval.insert(current_start.to_string(), volume_by_pool);
 
         current_start = current_end;
     }
@@ -282,7 +289,9 @@ async fn get_historical_volume_by_balance_manager_id(
 
     let mut volume_by_pool: HashMap<String, Vec<i64>> = HashMap::new();
     for order_fill in results {
-        let entry = volume_by_pool.entry(order_fill.pool_id.clone()).or_insert(vec![0, 0]);
+        let entry = volume_by_pool
+            .entry(order_fill.pool_id.clone())
+            .or_insert(vec![0, 0]);
         if order_fill.maker_balance_manager_id == balance_manager_id {
             entry[0] += order_fill.base_quantity;
         }
@@ -291,7 +300,10 @@ async fn get_historical_volume_by_balance_manager_id(
         }
     }
 
-    Ok(Json(HashMap::from([(String::from("total"), volume_by_pool)])))
+    Ok(Json(HashMap::from([(
+        String::from("total"),
+        volume_by_pool,
+    )])))
 }
 
 #[debug_handler]
