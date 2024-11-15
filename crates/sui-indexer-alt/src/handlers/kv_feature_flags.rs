@@ -18,7 +18,7 @@ use crate::{
 pub struct KvFeatureFlags(pub StoredGenesis);
 
 impl Processor for KvFeatureFlags {
-    const NAME: &'static str = "kv_protocol_configs";
+    const NAME: &'static str = "kv_feature_flags";
     type Value = StoredFeatureFlag;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
