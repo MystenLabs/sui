@@ -12,7 +12,7 @@ use axum::{
 };
 use bytes::Bytes;
 use std::time::Instant;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -38,27 +38,11 @@ impl AppState {
     }
 }
 
-pub async fn health_check_handler() -> Response {
-    // TODO: Add more comprehensive health check which checks that the peers are reachable and healthy
-    Response::new("up".into())
-}
-
 pub async fn proxy_handler(
     State(state): State<AppState>,
     request: Request<Body>,
 ) -> Result<Response, (StatusCode, String)> {
     let (parts, body) = request.into_parts();
-    if parts.headers.get("content-type")
-        != Some(&reqwest::header::HeaderValue::from_static(
-            "application/json",
-        ))
-    {
-        info!("Content type is not application/json");
-        return Ok(Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from("Content type must be application/json"))
-            .unwrap());
-    }
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
         Ok(bytes) => bytes,
         Err(e) => {
@@ -84,10 +68,8 @@ pub async fn proxy_handler(
             let json_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
                 Ok(json_body) => json_body,
                 Err(_) => {
-                    return Ok(Response::builder()
-                        .status(StatusCode::BAD_REQUEST)
-                        .body(Body::from("Request body is not valid JSON"))
-                        .unwrap());
+                    debug!("Failed to parse request body as JSON");
+                    return proxy_request(state, parts, body_bytes, false).await;
                 }
             };
             if let Some("sui_executeTransactionBlock") =
@@ -107,6 +89,15 @@ async fn proxy_request(
     body_bytes: Bytes,
     use_execution_peer: bool,
 ) -> Result<Response, (StatusCode, String)> {
+    debug!(
+        "Proxying request: method={:?}, uri={:?}, headers={:?}, body_len={}, use_execution_peer={}",
+        parts.method,
+        parts.uri,
+        parts.headers,
+        body_bytes.len(),
+        use_execution_peer
+    );
+
     let metrics = &state.metrics;
     let peer_type = if use_execution_peer {
         "execution"
@@ -128,16 +119,21 @@ async fn proxy_request(
         &state.read_peer
     };
 
-    let target_url = peer_config.address.clone();
+    let mut target_url = peer_config.address.clone();
+    target_url.set_path(parts.uri.path());
+    if let Some(query) = parts.uri.query() {
+        target_url.set_query(Some(query));
+    }
+
     // remove host header to avoid interfering with reqwest auto-host header
     let mut headers = parts.headers.clone();
     headers.remove("host");
-
     let request_builder = state
         .client
-        .request(parts.method.clone(), target_url.clone())
+        .request(parts.method.clone(), target_url)
         .headers(headers)
         .body(body_bytes);
+    debug!("Request builder: {:?}", request_builder);
 
     let upstream_start = Instant::now();
     let response = match request_builder.send().await {
@@ -151,6 +147,7 @@ async fn proxy_request(
                 .requests_total
                 .with_label_values(&[peer_type, &status])
                 .inc();
+            debug!("Response: {:?}", response);
             response
         }
         Err(e) => {
