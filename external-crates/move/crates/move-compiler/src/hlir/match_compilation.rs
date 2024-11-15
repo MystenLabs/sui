@@ -245,31 +245,28 @@ fn compile_match_struct(
     mident: ModuleIdent,
     datatype_name: DatatypeName,
 ) -> MatchTree {
-    let mut subject_binders = vec![];
     let decl_fields = context.info.struct_fields(&mident, &datatype_name).unwrap();
-    let unpack = if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
+    let (subject_binders, unpack) = if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
         let fringe_binders = context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
         let fringe_exps = make_fringe_entries(&fringe_binders);
-        let mut inner_fringe = fringe.clone();
-        for fringe_exp in fringe_exps.into_iter().rev() {
-            inner_fringe.push_front(fringe_exp);
-        }
+        let inner_fringe = fringe_exps.into_iter().chain(fringe.clone()).collect();
 
         let bind_tys = fringe_binders
             .iter()
             .map(|(_, _, ty)| ty)
             .collect::<Vec<_>>();
-        let (mut new_binders, inner_matrix) = matrix.specialize_struct(context, bind_tys);
-        subject_binders.append(&mut new_binders);
+        let (subject_binders, inner_matrix) = matrix.specialize_struct(context, bind_tys);
 
-        StructUnpack::Unpack(
+        let unpack = StructUnpack::Unpack(
             fringe_binders,
             Box::new(build_match_tree(context, inner_fringe, inner_matrix)),
-        )
+        );
+        (subject_binders, unpack)
     } else {
-        let (mut new_binders, default_matrix) = matrix.specialize_default();
-        subject_binders.append(&mut new_binders);
-        StructUnpack::Default(Box::new(build_match_tree(context, fringe, default_matrix)))
+        let (subject_binders, default_matrix) = matrix.specialize_default();
+        let unpack =
+            StructUnpack::Default(Box::new(build_match_tree(context, fringe, default_matrix)));
+        (subject_binders, unpack)
     };
 
     MatchTree::StructUnpack {
@@ -308,10 +305,7 @@ fn compile_variant_switch(
             .unwrap();
         let fringe_binders = context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
         let fringe_exps = make_fringe_entries(&fringe_binders);
-        let mut inner_fringe = fringe.clone();
-        for fringe_exp in fringe_exps.into_iter().rev() {
-            inner_fringe.push_front(fringe_exp);
-        }
+        let inner_fringe = fringe_exps.into_iter().chain(fringe.clone()).collect();
 
         let bind_tys = fringe_binders
             .iter()
