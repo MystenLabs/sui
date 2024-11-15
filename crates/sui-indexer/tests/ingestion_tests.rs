@@ -367,7 +367,8 @@ pub async fn test_mvr_mode() -> Result<(), IndexerError> {
 
     sim.create_checkpoint(); // advance to checkpoint 4 to stabilize indexer
 
-    let (_, pg_store, _, _database) = set_up_on_mvr_mode(Arc::new(sim), data_ingestion_path).await;
+    let (_, pg_store, _, _database) =
+        set_up_on_mvr_mode(Arc::new(sim), data_ingestion_path, true).await;
     wait_for_checkpoint(&pg_store, 4).await?;
     let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
     let db_checkpoint: StoredCheckpoint = checkpoints::table

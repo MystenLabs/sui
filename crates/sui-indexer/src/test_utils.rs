@@ -270,28 +270,7 @@ pub async fn set_up(
     JoinHandle<Result<(), IndexerError>>,
     TempDb,
 ) {
-    let database = TempDb::new().unwrap();
-    let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
-        .parse()
-        .unwrap();
-
-    let server_handle = tokio::spawn(async move {
-        sui_rest_api::RestService::new_without_version(sim)
-            .start_service(server_url)
-            .await;
-    });
-    // Starts indexer
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
-        database.database().url().as_str().to_owned(),
-        None,
-        None,
-        Some(data_ingestion_path),
-        None, /* cancel */
-        None, /* start_checkpoint */
-        None, /* end_checkpoint */
-    )
-    .await;
-    (server_handle, pg_store, pg_handle, database)
+    set_up_on_mvr_mode(sim, data_ingestion_path, false).await
 }
 
 /// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum. With MVR
@@ -300,6 +279,7 @@ pub async fn set_up(
 pub async fn set_up_on_mvr_mode(
     sim: Arc<Simulacrum>,
     data_ingestion_path: PathBuf,
+    mvr_mode: bool,
 ) -> (
     JoinHandle<()>,
     PgIndexerStore,
@@ -322,10 +302,10 @@ pub async fn set_up_on_mvr_mode(
         None,
         None,
         Some(data_ingestion_path),
-        None, /* cancel */
-        None, /* start_checkpoint */
-        None, /* end_checkpoint */
-        true, /* mvr_mode */
+        None,     /* cancel */
+        None,     /* start_checkpoint */
+        None,     /* end_checkpoint */
+        mvr_mode, /* mvr_mode */
     )
     .await;
     (server_handle, pg_store, pg_handle, database)
