@@ -277,75 +277,51 @@ fun calc_swap_result(
 ): (u64, u64) {
     // calc out value
     let lp_fee_value = ceil_muldiv(i_value, lp_fee_bps, BPS_IN_100_PCT);
-    ensures(lp_fee_value <= i_value);
     let in_after_lp_fee = i_value - lp_fee_value;
     let out_value = muldiv(
         in_after_lp_fee,
         o_pool_value,
         i_pool_value + in_after_lp_fee,
     );
-    ensures(out_value <= o_pool_value);
-    ensures(i_pool_value.to_int().mul(o_pool_value.to_int())
-        .lte((i_pool_value + in_after_lp_fee).to_int().mul((o_pool_value - out_value).to_int()))
-    );
 
     // calc admin fee
     let admin_fee_value = muldiv(lp_fee_value, admin_fee_pct, 100);
-    ensures(admin_fee_value <= i_value);
     // dL = L * sqrt((A + dA) / A) - L = sqrt(L^2(A + dA) / A) - L
-    let pool_lp_value_sq = (pool_lp_value as u128) * (pool_lp_value as u128);
     let result_pool_lp_value_sq = muldiv_u128(
-        pool_lp_value_sq,
+        (pool_lp_value as u128) * (pool_lp_value as u128),
         ((i_pool_value + i_value) as u128),
         ((i_pool_value + i_value - admin_fee_value) as u128),
     );
-    ensures(pool_lp_value_sq <= result_pool_lp_value_sq);
-    let admin_fee_in_lp = (
-        sqrt(
-            muldiv_u128(
-                (pool_lp_value as u128) * (pool_lp_value as u128),
-                ((i_pool_value + i_value) as u128),
-                ((i_pool_value + i_value - admin_fee_value) as u128),
-            ),
-        ),
-    ) -
-    pool_lp_value;
+    // help the prover verify that computing admin_fee_in_lp doesn't underflow
+    ensures((pool_lp_value as u128) * (pool_lp_value as u128) <= result_pool_lp_value_sq);
+    let admin_fee_in_lp = sqrt(result_pool_lp_value_sq) - pool_lp_value;
 
-    let result_pool_lp_value = pool_lp_value + admin_fee_in_lp;
-    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).lte(result_pool_lp_value_sq.to_int()));
-    ensures(i_pool_value + in_after_lp_fee <= i_pool_value + i_value - admin_fee_value);
-    ensures(pool_lp_value_sq.to_int()
-        .lte((i_pool_value + i_value - admin_fee_value).to_int().mul((o_pool_value - out_value).to_int()))
-    );
-    ensures(result_pool_lp_value_sq.to_int().mul((i_pool_value + i_value - admin_fee_value).to_int())
-        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()))
-    );
-    ensures(result_pool_lp_value_sq.to_int().mul((i_pool_value + in_after_lp_fee).to_int())
-        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()))
-    );
-    ensures(result_pool_lp_value_sq.to_int().mul((i_pool_value + in_after_lp_fee).to_int()).mul((o_pool_value - out_value).to_int())
-        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()))
-    );
-    ensures(result_pool_lp_value_sq.to_int().mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
-        .lte(result_pool_lp_value_sq.to_int().mul((i_pool_value + in_after_lp_fee).to_int()).mul((o_pool_value - out_value).to_int()))
-    );
-    ensures(result_pool_lp_value_sq.to_int().mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
-        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()))
-    );
-    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
-        .lte(result_pool_lp_value_sq.to_int().mul(i_pool_value.to_int()).mul(o_pool_value.to_int()))
-    );
-    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(i_pool_value.to_int()).mul(o_pool_value.to_int())
-        .lte(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()))
-    );
-    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(i_pool_value.to_int()).mul(o_pool_value.to_int()) == result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(o_pool_value.to_int()).mul(i_pool_value.to_int()));
-    ensures(pool_lp_value_sq.to_int().mul((i_pool_value + i_value).to_int()).mul((o_pool_value - out_value).to_int()) == pool_lp_value_sq.to_int().mul((o_pool_value - out_value).to_int()).mul((i_pool_value + i_value).to_int()));
-    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int()).mul(o_pool_value.to_int()).mul(i_pool_value.to_int())
-        .lte(pool_lp_value_sq.to_int().mul((o_pool_value - out_value).to_int()).mul((i_pool_value + i_value).to_int()))
-    );
-    ensures(result_pool_lp_value.to_int().mul(result_pool_lp_value.to_int())
-        .lte((i_pool_value + i_value).to_int().mul((o_pool_value - out_value).to_int()))
-    );
+    // help the prover verify that L'^2 * A * B <= L^2 * A' * B' by making a step by step proof
+    let old_L = pool_lp_value.to_int();
+    let new_L = old_L.add(admin_fee_in_lp.to_int());
+    let old_A = i_pool_value.to_int();
+    let new_A = old_A.add(i_value.to_int());
+    let old_B = o_pool_value.to_int();
+    let new_B = old_B.sub(out_value.to_int());
+    let new_A_minus_lp_fee = old_A.add(in_after_lp_fee.to_int());
+    let new_A_minus_admin_fee = old_A.add(i_value.to_int()).sub(admin_fee_value.to_int());
+    ensures(lp_fee_value <= i_value);
+    ensures(admin_fee_value <= lp_fee_value);
+    ensures(out_value <= o_pool_value);
+    ensures(old_A.mul(old_B).lte(new_A_minus_lp_fee.mul(new_B)));
+    ensures(old_L.mul(old_L).lte(new_A_minus_admin_fee.mul(new_B)));
+    ensures(new_A_minus_lp_fee.lte(new_A_minus_admin_fee));
+    ensures(new_L.mul(new_L).lte(result_pool_lp_value_sq.to_int()));
+    ensures(result_pool_lp_value_sq.to_int().mul(new_A_minus_admin_fee).lte(old_L.mul(old_L).mul(new_A)));
+    ensures(new_L.mul(new_L).mul(new_A_minus_admin_fee).lte(old_L.mul(old_L).mul(new_A)));
+    ensures(new_L.mul(new_L).mul(new_A_minus_lp_fee).lte(old_L.mul(old_L).mul(new_A)));
+    ensures(new_L.mul(new_L).mul(new_A_minus_lp_fee).mul(new_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
+    ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(new_L.mul(new_L).mul(new_A_minus_lp_fee).mul(new_B)));
+    ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
+    ensures(new_L.mul(new_L).mul(old_A).mul(old_B) == new_L.mul(new_L).mul(old_B).mul(old_A));
+    ensures(old_L.mul(old_L).mul(new_A).mul(new_B) == old_L.mul(old_L).mul(new_B).mul(new_A));
+    ensures(new_L.mul(new_L).mul(old_B).mul(old_A).lte(old_L.mul(old_L).mul(new_B).mul(new_A)));
+    ensures(new_L.mul(new_L).lte(new_A.mul(new_B)));
 
     (out_value, admin_fee_in_lp)
 }
@@ -557,8 +533,9 @@ fun deposit_spec<A, B>(
     requires_balance_sum_no_overflow!(&pool.balance_a, &input_a);
     requires_balance_sum_no_overflow!(&pool.balance_b, &input_b);
 
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any asserts
+    // (the list of assert conditions is exhaustive)
 
     let old_pool = old!(pool);
 
@@ -578,8 +555,9 @@ fun withdraw_spec<A, B>(
 ): (Balance<A>, Balance<B>) {
     requires_balance_leq_supply!(&lp_in, &pool.lp_supply);
 
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any asserts
+    // (the list of assert conditions is exhaustive)
 
     let old_pool = old!(pool);
 
@@ -609,8 +587,10 @@ fun swap_a_spec<A, B>(
     if (input.value() > 0) {
         asserts(pool.lp_supply.supply_value() > 0);
     };
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
+
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any other asserts
+    // (the list of asserts conditions is exhaustive)
 
     let old_pool = old!(pool);
 
@@ -644,8 +624,10 @@ fun swap_b_spec<A, B>(
     if (input.value() > 0) {
         asserts(pool.lp_supply.supply_value() > 0);
     };
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
+
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any other asserts
+    // (the list of asserts conditions is exhaustive)
 
     let old_pool = old!(pool);
 
@@ -683,8 +665,9 @@ fun calc_swap_result_spec(
     requires(lp_fee_bps <= BPS_IN_100_PCT);
     requires(admin_fee_pct <= 100);
 
-    // there aren't any overflows or divisions by zero, because there aren't any other aborts
-    // (the list of abort conditions and codes is exhaustive)
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any asserts
+    // (the list of assert conditions is exhaustive)
 
     let (out_value, admin_fee_in_lp) = calc_swap_result(
         i_value,
@@ -696,18 +679,21 @@ fun calc_swap_result_spec(
     );
 
     let old_L = pool_lp_value.to_int();
-    let new_L = pool_lp_value.to_int().add(admin_fee_in_lp.to_int());
+    let new_L = old_L.add(admin_fee_in_lp.to_int());
     ensures(out_value <= o_pool_value);
     ensures(new_L.lte(u64::max_value!().to_int()));
     let old_A = i_pool_value.to_int();
     let old_B = o_pool_value.to_int();
-    let new_A = (i_pool_value + i_value).to_int();
-    let new_B = (o_pool_value - out_value).to_int();
+    let new_A = old_A.add(i_value.to_int());
+    let new_B = old_B.sub(out_value.to_int());
 
     // L'^2 * A * B <= L^2 * A' * B'
     ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
+    // help the prover with `swap_b`
+    // L'^2 * B * A <= L^2 * B' * A'
     ensures(new_L.mul(new_L).mul(old_B).mul(old_A).lte(old_L.mul(old_L).mul(new_B).mul(new_A)));
 
+    // L'^2 <= A' * B'
     ensures(new_L.mul(new_L).lte(new_A.mul(new_B)));
 
     (out_value, admin_fee_in_lp)
