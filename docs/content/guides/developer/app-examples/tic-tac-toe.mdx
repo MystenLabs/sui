@@ -71,7 +71,7 @@ Games are created with the `new` function:
 Some things to note: 
 - `MARK__` is a constant that represents an empty cell on the game board. `MARK_X` and `MARK_O` represent the two players' markers.
 - The first player is sent a `TurnCap`, which gives them permission to take the next turn.
-- The `Game` object is created and returned by this function, it is up to its creator to send it to the game admin to own.
+- This function creates and returns the `Game` object, it is up to its creator to send it to the game admin to own.
 
 Because the players don’t own the game board, they cannot directly mutate it. Instead, they indicate their move by creating a `Mark` object with their intended placement and send it to the game object using transfer to object:
 
