@@ -266,7 +266,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 async fn get_historical_volume_by_balance_manager_id(
     Path((pool_ids, balance_manager_id, start_time, end_time)): Path<(String, String, i64, i64)>,
     State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, HashMap<String, Vec<i64>>>>, DeepBookError> {
+) -> Result<Json<HashMap<String, Vec<i64>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
 
@@ -300,10 +300,7 @@ async fn get_historical_volume_by_balance_manager_id(
         }
     }
 
-    Ok(Json(HashMap::from([(
-        String::from("total"),
-        volume_by_pool,
-    )])))
+    Ok(Json(volume_by_pool))
 }
 
 #[debug_handler]
