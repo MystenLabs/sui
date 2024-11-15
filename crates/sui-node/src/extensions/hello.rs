@@ -3,24 +3,24 @@ use futures::StreamExt;
 use sui_exex::{ExExContext, ExExEvent, ExExNotification};
 
 pub async fn exex_hello(mut ctx: ExExContext) -> anyhow::Result<()> {
-    tracing::info!("🧩 Created the Hello ExEx!");
+    tracing::info!("[node-{}] 🧩 Hello ExEx initiated!", ctx.identifier);
     while let Some(notification) = ctx.notifications.next().await {
         let id = match notification {
-            ExExNotification::CheckpointSynced { checkpoint } => {
+            ExExNotification::CheckpointSynced { checkpoint_number } => {
                 tracing::info!(
                     "[node-{}] 👋 Hello Checkpoint #{} !",
                     ctx.identifier,
-                    checkpoint,
+                    checkpoint_number,
                 );
-                checkpoint
+                checkpoint_number
             }
-            ExExNotification::EpochTerminated { epoch } => {
-                tracing::info!("[node-{}] 👋🥳 Hello Epoch #{} !", ctx.identifier, epoch);
-                epoch
+            ExExNotification::EpochTerminated { epoch_id } => {
+                tracing::info!("[node-{}] 👋🥳 Hello Epoch #{} !", ctx.identifier, epoch_id);
+                epoch_id
             }
         };
 
-        // TODO: This is bad. We should make the dinstinction between FinishedHeight and FinishedEpoch.
+        // TODO: We should make the dinstinction between FinishedHeight and FinishedEpoch?
         ctx.events.send(ExExEvent::FinishedHeight(id))?;
     }
     Ok(())

@@ -12,10 +12,10 @@ use tokio::sync::mpsc::Receiver;
 pub enum ExExNotification {
     /// A new checkpoint got synced by the full node.
     CheckpointSynced {
-        checkpoint: CheckpointSequenceNumber,
+        checkpoint_number: CheckpointSequenceNumber,
     },
     /// An epoch is terminated
-    EpochTerminated { epoch: EpochId },
+    EpochTerminated { epoch_id: EpochId },
 }
 
 /// A stream of [`ExExNotification`]s. The stream will emit notifications for all blocks.

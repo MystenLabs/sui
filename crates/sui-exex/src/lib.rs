@@ -7,7 +7,6 @@
 //! https://github.com/paradigmxyz/reth/tree/ea1d04aa75cbd8fcf680c79671290b108642de1a/crates/exex
 pub mod context;
 pub mod event;
-pub mod finished_height;
 pub mod head;
 pub mod launcher;
 pub mod manager;

@@ -2128,7 +2128,7 @@ impl AuthorityPerEpochStore {
             return;
         };
         let notification = ExExNotification::CheckpointSynced {
-            checkpoint: checkpoint_seq,
+            checkpoint_number: checkpoint_seq,
         };
         manager.send(notification).unwrap();
     }
@@ -2517,17 +2517,16 @@ impl AuthorityPerEpochStore {
         self.epoch_alive_notify
             .notify()
             .expect("epoch_terminated called twice on same epoch store");
+        debug!("Epoch terminated - waiting for pending tasks to complete");
         // Notify ExEx
-        let Some(manager) = self.exex_manager.as_ref() else {
-            return;
+        if let Some(manager) = self.exex_manager.as_ref() {
+            let notification = ExExNotification::EpochTerminated {
+                epoch_id: self.epoch(),
+            };
+            manager.send(notification).unwrap();
         };
-        let notification = ExExNotification::EpochTerminated {
-            epoch: self.epoch(),
-        };
-        manager.send(notification).unwrap();
         // This `write` acts as a barrier - it waits for futures executing in
         // `within_alive_epoch` to terminate before we can continue here
-        debug!("Epoch terminated - waiting for pending tasks to complete");
         *self.epoch_alive.write().await = false;
         debug!("All pending epoch tasks completed");
     }
