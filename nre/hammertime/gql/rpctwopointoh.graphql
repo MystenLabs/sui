@@ -1,0 +1,70 @@
+query active_validators {
+  epoch {
+    validatorSet {
+      activeValidators {
+        address {
+          address
+        }
+        commissionRate
+        name
+      }
+    }
+  }
+}
+
+query epoch_checkpoints_tx_blocks {
+  epoch(id: 100) {
+    epochId
+    totalStakeRewards
+    referenceGasPrice
+    totalCheckpoints
+    totalGasFees
+    totalStakeSubsidies
+    storageFund {
+      totalObjectStorageRebates
+      nonRefundableBalance
+    }
+    checkpoints {
+      nodes {
+        sequenceNumber
+        timestamp
+        networkTotalTransactions
+        rollingGasSummary{
+          computationCost
+          storageCost
+          nonRefundableStorageFee
+          storageRebate
+        }
+        validatorSignatures
+        liveObjectSetDigest
+      }
+    }
+    transactionBlocks {
+      nodes {
+        gasInput {
+          gasSponsor {
+            address
+          }
+          gasPayment {
+            nodes {
+              address
+            }
+          }
+          gasPrice
+          gasBudget
+        }
+        effects {
+          dependencies {
+            nodes {
+              sender {
+                address
+              }
+              digest
+              bcs
+            }
+          }
+        }
+      }
+    }
+  }
+}
