@@ -750,7 +750,7 @@ impl Reference {
 // an element from a vector.
 
 impl Value {
-    fn into_ref(&self) -> PartialVMResult<Reference> {
+    fn to_ref(&self) -> PartialVMResult<Reference> {
         // TODO: auto-gen part of this?
         match self {
             // Primitive types are converted to corresponding primitive references.
@@ -783,7 +783,7 @@ impl Value {
     /// Converts a reference to a `ValueImpl` into a `ReferenceImpl`.
     /// This function inspects the value and constructs the corresponding `ReferenceImpl`.
     pub fn take_ref(&self) -> PartialVMResult<Value> {
-        self.into_ref().map(Box::new).map(Value::Reference)
+        self.to_ref().map(Box::new).map(Value::Reference)
     }
 }
 
@@ -1041,7 +1041,7 @@ impl Value {
     // REVIEW: This API can break
     pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
         Value::Container(Box::new(Container::Vec(
-            it.into_iter().map(|v| Box::new(v)).collect(),
+            it.into_iter().map(Box::new).collect(),
         )))
     }
 }
@@ -1194,7 +1194,7 @@ impl VMValueCast<StructRef> for Value {
         if matches!(container.to_ref(), Container::Struct(_)) {
             Ok(StructRef(container.ptr_clone()))
         } else {
-            return make_value_cast_ref_error!("StructRef", container.to_ref());
+            make_value_cast_ref_error!("StructRef", container.to_ref())
         }
     }
 }
@@ -1210,7 +1210,7 @@ impl VMValueCast<VariantRef> for Value {
         if matches!(container.to_ref(), Container::Variant(_)) {
             Ok(VariantRef(container.ptr_clone()))
         } else {
-            return make_value_cast_ref_error!("VariantRef", container.to_ref());
+            make_value_cast_ref_error!("VariantRef", container.to_ref())
         }
     }
 }
@@ -1274,7 +1274,7 @@ impl VMValueCast<SignerRef> for Value {
         if matches!(container.to_ref(), Container::Struct(_)) {
             Ok(SignerRef(container.ptr_clone()))
         } else {
-            return make_value_cast_ref_error!("SignerRef", container.to_ref());
+            make_value_cast_ref_error!("SignerRef", container.to_ref())
         }
     }
 }
@@ -1301,7 +1301,7 @@ impl VMValueCast<VectorRef> for Value {
         ) {
             Ok(VectorRef(container.ptr_clone()))
         } else {
-            return make_value_cast_ref_error!("VectorRef", container.to_ref());
+            make_value_cast_ref_error!("VectorRef", container.to_ref())
         }
     }
 }
@@ -1811,7 +1811,7 @@ impl Vector {
 
             Type::Signer | Type::Vector(_) | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
                 Value::Container(Box::new(Container::Vec(
-                    elements.into_iter().map(|v| Box::new(v)).collect(),
+                    elements.into_iter().map(Box::new).collect(),
                 )))
             }
 
@@ -1889,6 +1889,7 @@ pub(crate) const LEGACY_REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize:
 pub(crate) const LEGACY_STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
 
 impl Container {
+    #[allow(dead_code)]
     pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
         match self {
             Self::Vec(r) => Vector::legacy_size_impl(r.as_ref()),
@@ -1921,6 +1922,7 @@ impl Container {
 }
 
 impl Value {
+    #[allow(dead_code)]
     pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
         use Value::*;
 
@@ -1937,8 +1939,10 @@ impl Value {
 }
 
 impl Variant {
+    #[allow(dead_code)]
     const TAG_SIZE: AbstractMemorySize = AbstractMemorySize::new(std::mem::size_of::<u16>() as u64);
 
+    #[allow(dead_code)]
     fn legacy_size_impl(fields: &[Value]) -> AbstractMemorySize {
         fields
             .iter()
@@ -1949,6 +1953,7 @@ impl Variant {
 }
 
 impl Vector {
+    #[allow(dead_code)]
     fn legacy_size_impl(fields: &[Box<Value>]) -> AbstractMemorySize {
         fields
             .iter()
@@ -1963,6 +1968,7 @@ impl Vector {
 }
 
 impl Struct {
+    #[allow(dead_code)]
     fn legacy_size_impl(fields: &[Value]) -> AbstractMemorySize {
         fields
             .iter()
@@ -1970,6 +1976,7 @@ impl Struct {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
         Self::legacy_size_impl(&self.fields)
     }
@@ -1977,6 +1984,7 @@ impl Struct {
 
 #[cfg(test)]
 impl Reference {
+    #[allow(dead_code)]
     pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
         LEGACY_REFERENCE_SIZE
     }
@@ -1990,7 +1998,7 @@ impl Reference {
 impl Struct {
     pub fn pack<I: IntoIterator<Item = Value>>(vals: I) -> Self {
         Self {
-            fields: vals.into_iter().map(|v| v).collect(),
+            fields: vals.into_iter().collect(),
         }
     }
 
@@ -2113,7 +2121,9 @@ impl GlobalValueImpl {
             Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
             GlobalValueImpl::Fresh { container } => {
                 let container_ref = ArenaPointer::from_ref(container.as_ref());
-                Ok(Value::Reference(Box::new(Reference::Container(container_ref))))
+                Ok(Value::Reference(Box::new(Reference::Container(
+                    container_ref,
+                ))))
             }
             GlobalValueImpl::Cached { container, status } => {
                 let global_ref = GlobalRef {
@@ -2172,15 +2182,15 @@ impl GlobalValue {
     }
 
     pub fn move_from(&mut self) -> PartialVMResult<Value> {
-        Ok(self.0.move_from()?)
+        self.0.move_from()
     }
 
     pub fn move_to(&mut self, val: Value) -> Result<(), (PartialVMError, Value)> {
-        self.0.move_to(val).map_err(|(err, val)| (err, val))
+        self.0.move_to(val)
     }
 
     pub fn borrow_global(&self) -> PartialVMResult<Value> {
-        Ok(self.0.borrow_global()?)
+        self.0.borrow_global()
     }
 
     pub fn exists(&self) -> PartialVMResult<bool> {
@@ -2188,7 +2198,7 @@ impl GlobalValue {
     }
 
     pub fn into_effect(self) -> Option<Op<Value>> {
-        self.0.into_effect().map(|op| op)
+        self.0.into_effect()
     }
 
     pub fn is_mutated(&self) -> bool {
@@ -2451,14 +2461,14 @@ pub mod debug {
         // REVIEW: The number of spaces in the indent is currently hard coded.
         for (idx, val) in stack_frame.iter().enumerate() {
             debug_write!(buf, "            [{}] ", idx)?;
-            print_value_impl(buf, &val)?;
+            print_value_impl(buf, val)?;
             debug_writeln!(buf)?;
         }
         Ok(())
     }
 
     pub fn print_value<B: Write>(buf: &mut B, val: &Value) -> PartialVMResult<()> {
-        print_value_impl(buf, &val)
+        print_value_impl(buf, val)
     }
 }
 
@@ -3136,7 +3146,7 @@ impl Reference {
             }
         }
 
-        ValueBehindRef(&self)
+        ValueBehindRef(self)
     }
 }
 

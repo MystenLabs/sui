@@ -3,11 +3,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::{
-    cache::arena,
-    execution::values::values_impl::Value,
-    shared::constants::{CALL_STACK_SIZE_LIMIT, LOCALS_PER_FRAME_LIMIT},
-};
+use crate::execution::values::values_impl::Value;
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
