@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -12,11 +13,11 @@ use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    Coin, StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::rpc_types::SuiExecutionStatus;
-use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
@@ -351,28 +352,38 @@ pub async fn metadata(
     };
 
     // Try select gas coins for required amounts
-    let coins = if let Some(amount) = total_required_amount {
+    let maybe_coins = if let Some(amount) = total_required_amount {
         let total_amount = amount + budget;
         context
             .client
             .coin_read_api()
-            .select_coins(sender, None, total_amount.into(), vec![])
+            .select_coins(
+                sender,
+                None,
+                total_amount as u128,
+                objects.iter().map(|obj| obj.0).collect(),
+            )
             .await
             .ok()
     } else {
         None
     };
 
-    // If required amount is None (all SUI) or failed to select coin (might not have enough SUI), select all coins.
-    let coins = if let Some(coins) = coins {
-        coins
-    } else {
-        context
-            .client
-            .coin_read_api()
-            .get_coins_stream(sender, None)
-            .collect::<Vec<_>>()
-            .await
+    let exclude_ids: Vec<ObjectID> = objects.iter().map(|obj| obj.0).collect();
+    let coins = match maybe_coins {
+        Some(gas_coins) if gas_coins.len() <= 256 => gas_coins,
+        _ => {
+            let mut all_coins = context
+                .client
+                .coin_read_api()
+                .get_coins_stream(sender, None)
+                .filter(|coin: &Coin| future::ready(!exclude_ids.contains(&coin.coin_object_id)))
+                .collect::<Vec<_>>()
+                .await;
+            all_coins.sort_by(|lhs, rhs| rhs.balance.cmp(&lhs.balance));
+            all_coins.truncate(256);
+            all_coins
+        }
     };
 
     let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
