@@ -1,5 +1,6 @@
-use sui_types::digests::ChainIdentifier;
 use tokio::sync::mpsc::UnboundedSender;
+
+use sui_types::digests::ChainIdentifier;
 
 use crate::{notification::ExExNotifications, ExExEvent};
 

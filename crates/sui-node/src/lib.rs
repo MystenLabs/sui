@@ -507,13 +507,16 @@ impl SuiNode {
             )))
         };
 
-        // Creates an handle for our exex
-        let exex_manager = ExExLauncher::new(
-            ChainIdentifier::from(CheckpointDigest::random()),
-            sui_exexes(),
-        )
-        .launch()
-        .await?;
+        let exex_manager = if is_full_node {
+            ExExLauncher::new(
+                ChainIdentifier::from(CheckpointDigest::random()),
+                sui_exexes(),
+            )
+            .launch()
+            .await?
+        } else {
+            None
+        };
 
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
