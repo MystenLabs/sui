@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::mem;
 
 use tap::tap::TapFallible;
 use tokio_util::sync::CancellationToken;
@@ -48,10 +49,33 @@ where
             break;
         }
 
+        metrics.unprocessed_length.set(unprocessed.len() as i64);
+        metrics
+            .unprocessed_capacity
+            .set(unprocessed.capacity() as i64);
+        metrics
+            .unprocessed_memory_size
+            .set(mem::size_of_val(&unprocessed) as i64);
+
         // split the batch into smaller batches per epoch to handle partitioning
         for checkpoint in indexed_checkpoint_batch {
             unprocessed.insert(checkpoint.checkpoint.sequence_number, checkpoint);
         }
+
+        metrics.unprocessed_length.set(unprocessed.len() as i64);
+        metrics
+            .unprocessed_capacity
+            .set(unprocessed.capacity() as i64);
+        metrics
+            .unprocessed_memory_size
+            .set(mem::size_of_val(&unprocessed) as i64);
+
+        metrics.batch_length.set(batch.len() as i64);
+        metrics.batch_capacity.set(batch.capacity() as i64);
+        metrics
+            .batch_memory_size
+            .set(mem::size_of_val(&batch) as i64);
+
         while let Some(checkpoint) = unprocessed.remove(&next_checkpoint_sequence_number) {
             let epoch = checkpoint.epoch.clone();
             batch.push(checkpoint);
@@ -60,8 +84,35 @@ where
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
+                metrics.unprocessed_length.set(unprocessed.len() as i64);
+                metrics
+                    .unprocessed_capacity
+                    .set(unprocessed.capacity() as i64);
+                metrics
+                    .unprocessed_memory_size
+                    .set(mem::size_of_val(&unprocessed) as i64);
+
+                metrics.batch_length.set(batch.len() as i64);
+                metrics.batch_capacity.set(batch.capacity() as i64);
+                metrics
+                    .batch_memory_size
+                    .set(mem::size_of_val(&batch) as i64);
+
                 commit_checkpoints(&state, batch, epoch, &metrics).await;
                 batch = vec![];
+                metrics.unprocessed_length.set(unprocessed.len() as i64);
+                metrics
+                    .unprocessed_capacity
+                    .set(unprocessed.capacity() as i64);
+                metrics
+                    .unprocessed_memory_size
+                    .set(mem::size_of_val(&unprocessed) as i64);
+
+                metrics.batch_length.set(batch.len() as i64);
+                metrics.batch_capacity.set(batch.capacity() as i64);
+                metrics
+                    .batch_memory_size
+                    .set(mem::size_of_val(&batch) as i64);
             }
             if let Some(epoch_number) = epoch_number_option {
                 state.upload_display(epoch_number).await.tap_err(|e| {
@@ -73,9 +124,35 @@ where
                 })?;
             }
         }
+        metrics.unprocessed_length.set(unprocessed.len() as i64);
+        metrics
+            .unprocessed_capacity
+            .set(unprocessed.capacity() as i64);
+        metrics
+            .unprocessed_memory_size
+            .set(mem::size_of_val(&unprocessed) as i64);
+
+        metrics.batch_length.set(batch.len() as i64);
+        metrics.batch_capacity.set(batch.capacity() as i64);
+        metrics
+            .batch_memory_size
+            .set(mem::size_of_val(&batch) as i64);
         if !batch.is_empty() {
             commit_checkpoints(&state, batch, None, &metrics).await;
             batch = vec![];
+            metrics.unprocessed_length.set(unprocessed.len() as i64);
+            metrics
+                .unprocessed_capacity
+                .set(unprocessed.capacity() as i64);
+            metrics
+                .unprocessed_memory_size
+                .set(mem::size_of_val(&unprocessed) as i64);
+
+            metrics.batch_length.set(batch.len() as i64);
+            metrics.batch_capacity.set(batch.capacity() as i64);
+            metrics
+                .batch_memory_size
+                .set(mem::size_of_val(&batch) as i64);
         }
     }
     Ok(())
@@ -140,42 +217,42 @@ async fn commit_checkpoints<S>(
 
     let guard = metrics.checkpoint_db_commit_latency.start_timer();
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
-    let tx_indices_batch = tx_indices_batch.into_iter().flatten().collect::<Vec<_>>();
-    let events_batch = events_batch.into_iter().flatten().collect::<Vec<_>>();
-    let event_indices_batch = event_indices_batch
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-    let object_versions_batch = object_versions_batch
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    // let tx_indices_batch = tx_indices_batch.into_iter().flatten().collect::<Vec<_>>();
+    // let events_batch = events_batch.into_iter().flatten().collect::<Vec<_>>();
+    // let event_indices_batch = event_indices_batch
+    // .into_iter()
+    // .flatten()
+    // .collect::<Vec<_>>();
+    // let object_versions_batch = object_versions_batch
+    // .into_iter()
+    // .flatten()
+    // .collect::<Vec<_>>();
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
-    let raw_checkpoints_batch = checkpoint_batch
-        .iter()
-        .map(|c| c.into())
-        .collect::<Vec<_>>();
+    // let raw_checkpoints_batch = checkpoint_batch
+    // .iter()
+    // .map(|c| c.into())
+    // .collect::<Vec<StoredRawCheckpoint>>();
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
         let mut persist_tasks = vec![
-            state.persist_transactions(tx_batch),
-            state.persist_tx_indices(tx_indices_batch),
-            state.persist_events(events_batch),
-            state.persist_event_indices(event_indices_batch),
-            state.persist_displays(display_updates_batch),
+            // state.persist_transactions(tx_batch),
+            // state.persist_tx_indices(tx_indices_batch),
+            // state.persist_events(events_batch),
+            // state.persist_event_indices(event_indices_batch),
+            // state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
             // TODO: There are a few ways we could make the following more memory efficient.
             // 1. persist_objects and persist_object_history both call another function to make the final
             //    committed object list. We could call it early and share the result.
             // 2. We could avoid clone by using Arc.
-            state.persist_objects(object_changes_batch.clone()),
+            // state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
-            state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_objects_version(object_versions_batch.clone()),
-            state.persist_raw_checkpoints(raw_checkpoints_batch),
+            // state.persist_full_objects_history(object_history_changes_batch.clone()),
+            // state.persist_objects_version(object_versions_batch.clone()),
+            // state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));

@@ -168,6 +168,12 @@ pub struct IndexerMetrics {
     pub last_pruned_checkpoint: IntGauge,
     pub last_pruned_transaction: IntGauge,
     pub epoch_pruning_latency: Histogram,
+    pub unprocessed_length: IntGauge,
+    pub unprocessed_capacity: IntGauge,
+    pub unprocessed_memory_size: IntGauge,
+    pub batch_length: IntGauge,
+    pub batch_capacity: IntGauge,
+    pub batch_memory_size: IntGauge,
 }
 
 impl IndexerMetrics {
@@ -789,6 +795,36 @@ impl IndexerMetrics {
                 "Time spent in pruning one epoch",
                 DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
                 registry
+            ).unwrap(),
+            unprocessed_length: register_int_gauge_with_registry!(
+                "unprocessed_length",
+                "Number of elements in the unprocessed hashmap",
+                registry,
+            ).unwrap(),
+            unprocessed_capacity: register_int_gauge_with_registry!(
+                "unprocessed_capacity",
+                "Capacity of the unprocessed hashmap",
+                registry,
+            ).unwrap(),
+            unprocessed_memory_size: register_int_gauge_with_registry!(
+                "unprocessed_memory_size",
+                "Memory size of the unprocessed hashmap",
+                registry,
+            ).unwrap(),
+            batch_length: register_int_gauge_with_registry!(
+                "batch_length",
+                "Number of elements in the batch vec",
+                registry,
+            ).unwrap(),
+            batch_capacity: register_int_gauge_with_registry!(
+                "batch_capacity",
+                "Capacity of the batch vec",
+                registry,
+            ).unwrap(),
+            batch_memory_size: register_int_gauge_with_registry!(
+                "batch_memory_size",
+                "Memory size of the batch vec",
+                registry,
             ).unwrap(),
         }
     }
