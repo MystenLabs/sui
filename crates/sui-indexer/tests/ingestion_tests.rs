@@ -388,7 +388,7 @@ pub async fn test_mvr_mode() -> Result<(), IndexerError> {
 
     // Check that other tables have not been written to
     assert_eq!(
-        0 as i64,
+        0_i64,
         transactions::table
             .select(count_star())
             .first::<i64>(&mut connection)
@@ -396,7 +396,7 @@ pub async fn test_mvr_mode() -> Result<(), IndexerError> {
             .expect("Failed to count * transactions")
     );
     assert_eq!(
-        0 as i64,
+        0_i64,
         events::table
             .select(count_star())
             .first::<i64>(&mut connection)
@@ -404,7 +404,7 @@ pub async fn test_mvr_mode() -> Result<(), IndexerError> {
             .expect("Failed to count * transactions")
     );
     assert_eq!(
-        0 as i64,
+        0_i64,
         full_objects_history::table
             .select(count_star())
             .first::<i64>(&mut connection)
