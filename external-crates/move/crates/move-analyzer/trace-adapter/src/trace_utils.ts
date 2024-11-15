@@ -9,7 +9,7 @@ import {
     IRuntimeVariableLoc,
     IRuntimeRefValue
 } from './runtime';
-import { ISourceMap, IFileLoc, IFileInfo, ILoc } from './source_map_utils';
+import { ISourceMap, IFileLoc, IFileInfo, ILoc, ISourceMapFunction } from './source_map_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -289,12 +289,30 @@ interface ITraceGenFrameInfo {
      * Hash of a file containing function represented by the frame.
      */
     fileHash: string;
+    /**
+     * Code ines in a given file that have been optimized away.
+     */
+    optimizedLines: number[];
+    /**
+     * Name of the function represented by the frame.
+     */
+    funName: string;
+    /**
+     * Source map information for a given function.
+     */
+    funEntry: ISourceMapFunction;
 }
 
 /**
- * An ID of a virtual frame representing an inlined macro.
+ * An ID of a virtual frame representing a macro defined in the same file
+ * where it is inlined.
  */
-const INLINED_FRAME_ID = -1;
+const INLINED_FRAME_ID_SAME_FILE = -1;
+/**
+ * An ID of a virtual frame representing a macro defined in a different file
+ * than file where it is inlined.
+ */
+const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
 
 /**
  * Reads a Move VM execution trace from a JSON file.
@@ -373,8 +391,9 @@ export function readTrace(
             }
             const funEntry = sourceMap.functions.get(frame.function_name);
             if (!funEntry) {
-                throw new Error('Cannot find function entry in source map for function: '
-                    + frame.function_name);
+                throw new Error('Cannot find function entry in source map for function '
+                    + frame.function_name
+                    + ' when processing OpenFrame event');
             }
             events.push({
                 type: TraceEventKind.OpenFrame,
@@ -396,26 +415,17 @@ export function readTrace(
                 ID: frame.frame_id,
                 pcLocs: funEntry.pcLocs,
                 filePath: currentFile.path,
-                fileHash: sourceMap.fileHash
+                fileHash: sourceMap.fileHash,
+                optimizedLines: sourceMap.optimizedLines,
+                funName: frame.function_name,
+                funEntry
             });
         } else if (event.CloseFrame) {
             events.push({
                 type: TraceEventKind.CloseFrame,
                 id: event.CloseFrame.frame_id
             });
-            while (true) {
-                const frameInfo = frameInfoStack.pop();
-                if (!frameInfo) {
-                    throw new Error('CloseFrame with ID '
-                        + event.CloseFrame.frame_id
-                        + ' not found on frame info stack');
-                }
-                if (frameInfo.ID === event.CloseFrame.frame_id) {
-                    break;
-                }
-                // else keep popping as there may be entries on the stack representing
-                // switch frames
-            }
+            frameInfoStack.pop();
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
             let frameInfo = frameInfoStack[frameInfoStack.length - 1];
@@ -486,7 +496,7 @@ export function readTrace(
                             + ' at PC '
                             + event.Instruction.pc);
                     }
-                    if (frameInfo.ID === INLINED_FRAME_ID) {
+                    if (frameInfo.ID === INLINED_FRAME_ID_DIFFERENT_FILE) {
                         events.push({
                             type: TraceEventKind.ReplaceInlinedFrame,
                             fileHash: floc.fileHash,
@@ -498,7 +508,7 @@ export function readTrace(
                     } else {
                         events.push({
                             type: TraceEventKind.OpenFrame,
-                            id: INLINED_FRAME_ID,
+                            id: INLINED_FRAME_ID_DIFFERENT_FILE,
                             name: '__inlined__',
                             fileHash: floc.fileHash,
                             isNative: false,
@@ -509,14 +519,88 @@ export function readTrace(
                         });
                     }
                     frameInfoStack.push({
-                        ID: INLINED_FRAME_ID,
-                        // same pcLocs as before since we technically are in the same function
+                        ID: INLINED_FRAME_ID_DIFFERENT_FILE,
+                        // same pcLocs as before since we are in the same function
                         pcLocs: frameInfo.pcLocs,
                         filePath: sourceMap.filePath,
-                        fileHash: sourceMap.fileHash
+                        fileHash: sourceMap.fileHash,
+                        optimizedLines: sourceMap.optimizedLines,
+                        // same function name and source map as before since we are in the same function
+                        funName: frameInfo.funName,
+                        funEntry: frameInfo.funEntry
                     });
                 }
+            } else if (frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE) {
+                // We are in the same file here, though perhaps this instruction
+                // belongs to an inlined macro. If we are already in an inlined
+                // frame for a macro defined in a different file, we don't do
+                // anything do avoid pushing a new inlined frame for a macro.
+                //
+                // Otherwise, below we check if instruction belongs to an inlined macro
+                // when this macro is defined in the same file to provide similar
+                // behavior as when the macro is defined in a different file
+                // (push/pop virtual inlined frames). The implementation here is
+                // a bit different, though, as we don't have explicit boundaries
+                // for when the code transitions from/to inlined code. Instead,
+                // we need to inspect each instruction and act as follows:
+                // - if the instruction is outside of the function (belongs to inlined macro):
+                //   - if we are not in an inlined frame, we need to push one
+                //   - if we are in an inlined frame, we don't need to do anything
+                // - if the instruction is in the function:
+                //   - if we are in an inlined frame, we need to pop it
+                //   - if we are not in an inlined frame, we don't need to do anything
+                if (floc.loc.line < frameInfo.funEntry.startLoc.line ||
+                    floc.loc.line > frameInfo.funEntry.endLoc.line ||
+                    (floc.loc.line === frameInfo.funEntry.startLoc.line &&
+                        (floc.loc.column < frameInfo.funEntry.startLoc.column ||
+                            floc.loc.column > frameInfo.funEntry.endLoc.column))) {
+                    // the instruction is outside of the function
+                    // (belongs to inlined macro)
+                    if (frameInfo.ID !== INLINED_FRAME_ID_SAME_FILE) {
+                        // if we are not in an inlined frame, we need to push one
+                        events.push({
+                            type: TraceEventKind.OpenFrame,
+                            id: INLINED_FRAME_ID_SAME_FILE,
+                            name: '__inlined__',
+                            fileHash: floc.fileHash,
+                            isNative: false,
+                            localsTypes: [],
+                            localsNames: [],
+                            paramValues: [],
+                            optimizedLines: frameInfo.optimizedLines
+                        });
+                        // we get a lot of data for the new frame info from the current on
+                        // since we are still in the same function
+                        frameInfoStack.push({
+                            ID: INLINED_FRAME_ID_SAME_FILE,
+                            pcLocs: frameInfo.pcLocs,
+                            filePath: frameInfo.filePath,
+                            fileHash: floc.fileHash,
+                            optimizedLines: frameInfo.optimizedLines,
+                            funName: frameInfo.funName,
+                            funEntry: frameInfo.funEntry
+                        });
+                    } // else we are already in an inlined frame, so we don't need to do anything
+                } else {
+                    // the instruction is in the function
+                    if (frameInfo.ID === INLINED_FRAME_ID_SAME_FILE) {
+                        // If we are in an inlined frame, we need to pop it.
+                        // This the place where we need different inlined frame id
+                        // for macros defined in the same or different file than
+                        // the file where they are inlined. Since this check is executed
+                        // for each instruction that is within the function, we could
+                        // accidentally (and incorrectly) at this point pop virtual inlined
+                        // frame for a macro defined in a different file, if we did could not
+                        // distinguish between the two cases.
+                        events.push({
+                            type: TraceEventKind.CloseFrame,
+                            id: INLINED_FRAME_ID_SAME_FILE
+                        });
+                        frameInfoStack.pop();
+                    } // else we are not in an inlined frame, so we don't need to do anything
+                }
             }
+
             // re-read frame info as it may have changed as a result of processing
             // and inlined call
             frameInfo = frameInfoStack[frameInfoStack.length - 1];
@@ -540,7 +624,8 @@ export function readTrace(
             // be reset to FRAME_LIFETIME when processing subsequent effects).
             // All instructions in a given function, regardless of whether they are
             // in the inlined portion of the code or not, reset variable lifetimes.
-            const nonInlinedFrameID = frameInfo.ID !== INLINED_FRAME_ID
+            const nonInlinedFrameID = frameInfo.ID !== INLINED_FRAME_ID_SAME_FILE &&
+                frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE
                 ? frameInfo.ID
                 : frameInfoStack[frameInfoStack.length - 2].ID;
             const lifetimeEnds = localLifetimeEnds.get(nonInlinedFrameID) || [];
@@ -728,10 +813,11 @@ function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeVal
 //
 
 /**
- * Converts a trace to a string representation.
+ * Converts trace events to an array of strings
+ * representing these events.
  *
  * @param trace trace.
- * @returns string representation of the trace.
+ * @returns array of strings representing trace events.
  */
 export function traceEventsToString(trace: ITrace): string[] {
     return trace.events.map(event => eventToString(event));
@@ -748,7 +834,7 @@ function eventToString(event: TraceEvent): string {
         case TraceEventKind.ReplaceInlinedFrame:
             return 'ReplaceInlinedFrame';
         case TraceEventKind.OpenFrame:
-            return `OpenFrame ${event.id}`;
+            return `OpenFrame ${event.id} for ${event.name}`;
         case TraceEventKind.CloseFrame:
             return `CloseFrame ${event.id}`;
         case TraceEventKind.Instruction:

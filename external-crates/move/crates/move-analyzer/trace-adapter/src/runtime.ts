@@ -13,7 +13,6 @@ import {
     TraceEventKind,
     TraceInstructionKind,
     readTrace,
-    traceEventsToString
 } from './trace_utils';
 
 /**

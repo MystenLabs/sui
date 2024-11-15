@@ -26,6 +26,7 @@ interface JSONSrcEnumSourceMapEntry {
 }
 
 interface JSONSrcFunctionMapEntry {
+    location: JSONSrcDefinitionLocation;
     definition_location: JSONSrcDefinitionLocation;
     type_parameters: [string, JSONSrcDefinitionLocation][];
     parameters: [string, JSONSrcDefinitionLocation][];
@@ -65,7 +66,7 @@ export interface IFileLoc {
 /**
  * Describes a function in the source map.
  */
-interface ISourceMapFunction {
+export interface ISourceMapFunction {
     /**
      * Locations indexed with PC values.
      */
@@ -74,7 +75,15 @@ interface ISourceMapFunction {
      * Names of local variables by their index in the frame
      * (parameters first, then actual locals).
      */
-    localsNames: string[]
+    localsNames: string[],
+    /**
+     * Location of function definition start.
+     */
+    startLoc: ILoc,
+    /**
+     * Location of function definition start.
+     */
+    endLoc: ILoc
 }
 
 /**
@@ -240,8 +249,10 @@ function readSourceMap(
                 localsNames.push(localsName);
             }
         }
-
-        functions.set(funName, { pcLocs, localsNames });
+        // compute start and end of function definition
+        const startLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.start);
+        const endLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.end);
+        functions.set(funName, { pcLocs, localsNames, startLoc, endLoc });
     }
     return { filePath: fileInfo.path, fileHash, modInfo, functions, optimizedLines: [] };
 }
