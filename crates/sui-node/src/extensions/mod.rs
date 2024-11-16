@@ -1,9 +1,9 @@
-pub mod hello;
+pub mod oracle;
 
 use futures::future::BoxFuture;
 use sui_exex::{BoxExEx, BoxedLaunchExEx, ExExContext};
 
-use hello::exex_hello;
+use oracle::exex_oracle;
 
 // Helper function to create a boxed ExEx
 fn box_exex<F, Fut>(f: F) -> Box<dyn BoxedLaunchExEx>
@@ -17,7 +17,7 @@ where
     })
 }
 
-/// List of all ExEx that will be ran.
+/// List of all ExEx that will be ran along with the full node.
 pub fn sui_exexes() -> Vec<(String, Box<dyn BoxedLaunchExEx>)> {
-    vec![(String::from("Hello"), box_exex(exex_hello))]
+    vec![(String::from("Oracle"), box_exex(exex_oracle))]
 }

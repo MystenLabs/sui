@@ -10,11 +10,12 @@ use std::{
     },
 };
 use tokio::sync::{
-    mpsc::{self, error::SendError, UnboundedReceiver, UnboundedSender},
+    mpsc::{self, error::SendError},
     watch,
 };
 use tokio_util::sync::{PollSendError, PollSender, ReusableBoxFuture};
 
+use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::ExExNotifications;
@@ -75,7 +76,7 @@ impl ExExManager {
     pub fn new(handles: Vec<ExExHandle>, max_capacity: usize) -> Self {
         let num_exexs = handles.len();
 
-        let (handle_tx, handle_rx) = mpsc::unbounded_channel();
+        let (handle_tx, handle_rx) = unbounded_channel("exexes");
         let (is_ready_tx, is_ready_rx) = watch::channel(true);
         let (finished_height_tx, finished_height_rx) = watch::channel(if num_exexs == 0 {
             FinishedExExHeight::NoExExs
@@ -331,7 +332,7 @@ pub struct ExExHandle {
 impl ExExHandle {
     pub fn new(id: String) -> (Self, UnboundedSender<ExExEvent>, ExExNotifications) {
         let (notification_tx, notification_rx) = mpsc::channel(1);
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, event_rx) = unbounded_channel("exex_channel");
         let notifications = ExExNotifications::new(notification_rx);
 
         (

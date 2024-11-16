@@ -510,6 +510,7 @@ impl SuiNode {
         let exex_manager = if is_full_node {
             ExExLauncher::new(
                 ChainIdentifier::from(CheckpointDigest::random()),
+                Arc::new(cache_traits.object_store.clone()),
                 sui_exexes(),
             )
             .launch()
