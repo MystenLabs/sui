@@ -20,8 +20,9 @@ use sui_types::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PublisherStorage {
     id: UID,
-    price: u128,
-    name: String,
+    publisher_name: String,
+    price: Option<u128>,
+    timestamp: Option<u64>,
 }
 
 /// Main Oracle function
@@ -54,7 +55,7 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
             .object_store
             .get_object(&ObjectID::from_address(
                 AccountAddress::from_hex(
-                    "1d71061f46e99efecd8d7ee1a77f331cff3afa892aa48b2ab85938dfc6d12b33",
+                    "be8ff73ec47b158a5ce884cada70912ca4b28a7cdf013f4d180c1298137f487a",
                 )
                 .unwrap(),
             ))
