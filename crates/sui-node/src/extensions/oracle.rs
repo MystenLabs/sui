@@ -12,9 +12,11 @@ use move_core_types::account_address::AccountAddress;
 
 use sui_exex::{ExExContext, ExExEvent, ExExNotification};
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SuiAddress},
+    collection_types::{Table, TableVec},
     id::UID,
-    object::{Data, Object},
+    object::Data,
+    storage::ObjectStore,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -23,6 +25,21 @@ pub struct PublisherStorage {
     publisher_name: String,
     price: Option<u128>,
     timestamp: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Publisher {
+    id: UID,
+    name: String,
+    address: SuiAddress,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Registry {
+    id: UID,
+    owner: SuiAddress,
+    publishers: TableVec,
+    publishers_storages: Table,
 }
 
 /// Main Oracle function
@@ -38,6 +55,20 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
         api.start().await;
     });
 
+    let _registry: Registry = deserialize_object(
+        &ctx.object_store,
+        "397c1042ea417d457357e5d61047e72e741133bd99c88ba775a4be35895d138e",
+    )?;
+    dbg!(&_registry);
+
+    // Call dynamic_fields on all publishers_storages->fields->id
+
+    // Gives an object_id, read it, gives object with name;value.
+    // name = key / value = value.
+    // key = wallet of the publisher // value = storage id.
+
+    // store all storage id that will get checked at each checkpoints.
+
     // Main loop to process notifications
     while let Some(notification) = ctx.notifications.next().await {
         let checkpoint_number = match notification {
@@ -51,21 +82,12 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
             }
         };
 
-        let object = ctx
-            .object_store
-            .get_object(&ObjectID::from_address(
-                AccountAddress::from_hex(
-                    "be8ff73ec47b158a5ce884cada70912ca4b28a7cdf013f4d180c1298137f487a",
-                )
-                .unwrap(),
-            ))
-            .unwrap()
-            .unwrap();
-
-        let storage: PublisherStorage = deserialize_object(&object)?;
+        let storage: PublisherStorage = deserialize_object(
+            &ctx.object_store,
+            "be8ff73ec47b158a5ce884cada70912ca4b28a7cdf013f4d180c1298137f487a",
+        )?;
 
         {
-            // Update shared state with the latest price and name
             let mut latest_price = app_state.latest_price.lock().unwrap();
             *latest_price = Some(storage.clone());
         }
@@ -77,9 +99,22 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn deserialize_object<'a, T: Deserialize<'a>>(object: &'a Object) -> anyhow::Result<T> {
-    match &object.as_inner().data {
-        Data::Move(o) => Ok(bcs::from_bytes(o.contents())?),
+fn deserialize_object<'a, T: Deserialize<'a>>(
+    object_store: &Arc<dyn ObjectStore + Send + Sync>,
+    address: &str,
+) -> anyhow::Result<T> {
+    let object = object_store
+        .get_object(&ObjectID::from_address(
+            AccountAddress::from_hex(address).unwrap(),
+        ))
+        .unwrap()
+        .unwrap();
+
+    match object.as_inner().data.clone() {
+        Data::Move(o) => {
+            let boxed_contents = Box::leak(o.contents().to_vec().into_boxed_slice());
+            Ok(bcs::from_bytes(boxed_contents)?)
+        }
         Data::Package(_) => bail!("Object should not be a Package"),
     }
 }
