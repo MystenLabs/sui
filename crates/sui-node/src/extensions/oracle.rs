@@ -124,9 +124,9 @@ fn calculate_aggregated_price(storages: &[PuiPriceStorage]) -> AggregatedPrice {
     };
 
     AggregatedPrice {
+        pair: "BTC/USD".to_string(),
         median_price,
-        latest_timestamp,
-        storage_count: storages.len(),
+        timestamp: latest_timestamp,
     }
 }
 
@@ -149,9 +149,9 @@ fn deserialize_object<'a, T: Deserialize<'a>>(
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct AggregatedPrice {
+    pair: String,
     median_price: Option<u128>,
-    latest_timestamp: Option<u64>,
-    storage_count: usize,
+    timestamp: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default)]
