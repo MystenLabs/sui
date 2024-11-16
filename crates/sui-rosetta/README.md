@@ -36,7 +36,7 @@ default.
 #### 5. Generate configuration with prefunded accounts for rosetta-cli
 
 `./sui-rosetta generate-rosetta-cli-config`
-This will generate the `rosetta-cli.json` and `sui.ros` file to be used by the [Mesh-CLI](https://github.com/coinbase/mesh-cli)
+This will generate the `rosetta-cli.json` and `sui.ros` file to be used by the [Rosetta-CLI](https://github.com/coinbase/rosetta-cli)
 
 ### Build local test network using Docker Compose
 
