@@ -603,6 +603,11 @@ function processInstructionIfMacro(
         //   - if the next file hash is the same as the file hash of the frame
         //     before the current one, we pop the current inlined frame
         //   - otherwise, we replace the current inlined frame with the new one
+        //
+        // The exception to this single-inlined-frame rule is when we are already
+        // in an inlined frame for a macro defined in the same file, and go to
+        // a macro in a different file. In this case, we will have two inlined
+        // frames on the stack.
         if (frameInfoStack.length > 1 &&
             frameInfoStack[frameInfoStack.length - 2].fileHash === instLoc.fileHash
         ) {
