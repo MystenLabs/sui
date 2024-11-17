@@ -23,7 +23,6 @@ import {
     IRuntimeRefValue,
     ExecutionResult
 } from './runtime';
-import { log } from 'console';
 
 
 const enum LogLevel {
