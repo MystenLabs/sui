@@ -58,9 +58,22 @@ fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 move-vm-profiler.workspace = true
 move-core-types.workspace = true
+serde_json.workspace = true
 
 # Specifics for the Oracle ExEx
 tower-http = { version = "0.6.1", features = ["cors"] }
+libp2p = { version = "0.54.1", features = [
+    "tokio",
+    "kad",
+    "gossipsub",
+    "noise",
+    "tcp",
+    "mdns",
+    "yamux",
+    "identify",
+    "macros",
+    "quic"
+]}
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

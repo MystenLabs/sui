@@ -1,6 +1,6 @@
-use super::{AggregatedPrice, PuiPriceStorage};
+use super::{MedianPrice, PuiPriceStorage};
 
-pub fn calculate_aggregated_price(storages: &[PuiPriceStorage]) -> AggregatedPrice {
+pub fn aggregate_to_median(storages: &[PuiPriceStorage]) -> MedianPrice {
     let mut prices: Vec<u128> = storages
         .iter()
         .filter_map(|storage| storage.price)
@@ -23,7 +23,7 @@ pub fn calculate_aggregated_price(storages: &[PuiPriceStorage]) -> AggregatedPri
         None
     };
 
-    AggregatedPrice {
+    MedianPrice {
         pair: "BTC/USD".to_string(),
         median_price,
         timestamp: latest_timestamp,
