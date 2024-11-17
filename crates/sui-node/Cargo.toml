@@ -58,8 +58,9 @@ fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 move-vm-profiler.workspace = true
 move-core-types.workspace = true
-tower-http = { version = "0.6.1", features = ["cors"] }
 
+# Specifics for the Oracle ExEx
+tower-http = { version = "0.6.1", features = ["cors"] }
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

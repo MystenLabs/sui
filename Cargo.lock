@@ -1796,7 +1796,7 @@ checksum = "b10cf871f3ff2ce56432fddc2615ac7acc3aa22ca321f8fea800846fbb32f188"
 dependencies = [
  "async-trait",
  "futures-util",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "tokio",
 ]
 
@@ -2774,7 +2774,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "nom",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "prost 0.13.3",
  "quinn-proto",
@@ -3178,7 +3178,7 @@ dependencies = [
  "futures-core",
  "libc",
  "mio",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -3544,9 +3544,9 @@ dependencies = [
 
 [[package]]
 name = "data-encoding"
-version = "2.3.3"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
+checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
 
 [[package]]
 name = "data-encoding-macro"
@@ -4160,23 +4160,24 @@ dependencies = [
 
 [[package]]
 name = "ed25519-dalek"
-version = "2.0.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7277392b266383ef8396db7fdeb1e77b6c52fed775f5df15bb24f35b72156980"
+checksum = "4a3daa8e81a3963a60642bcc1f90a670680bd4a77535faa384e9d1c79d620871"
 dependencies = [
  "curve25519-dalek",
  "ed25519 2.2.2",
  "rand_core 0.6.4",
  "serde",
  "sha2 0.10.8",
+ "subtle",
  "zeroize",
 ]
 
 [[package]]
 name = "either"
-version = "1.8.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90e5c1c8368803113bf0c9584fc495a58b86dc8a29edbf8fe877d21d9507e797"
+checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
 name = "elliptic-curve"
@@ -5142,9 +5143,9 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures"
-version = "0.3.29"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da0290714b38af9b4a7b094b8a37086d1b4e61f2df9122c3cad2577669145335"
+checksum = "645c6916888f6cb6350d2550b80fb63e734897a8498abe35cfb732b6487804b0"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -5173,9 +5174,9 @@ checksum = "dfc6580bb841c5a68e9ef15c77ccc837b40a7504914d52e47b8b0e9bbda25a1d"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.29"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f4fb8693db0cf099eadcca0efe2a5a22e4550f98ed16aba6c48700da29597bc"
+checksum = "a576fc72ae164fca6b9db127eaa9a9dda0d61316034f33a0a0d4eda41f02b01d"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -5440,7 +5441,7 @@ dependencies = [
  "futures-timer",
  "no-std-compat",
  "nonzero_ext",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "quanta",
  "rand 0.8.5",
  "smallvec",
@@ -5735,9 +5736,9 @@ checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hkdf"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "791a029f6b9fc27657f6f188ec6e5e43f6911f6f878e0dc5501396e09809d437"
+checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
 dependencies = [
  "hmac 0.12.1",
 ]
@@ -6522,7 +6523,7 @@ dependencies = [
  "globset",
  "hyper 0.14.26",
  "jsonrpsee-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rand 0.8.5",
  "rustc-hash 1.1.0",
  "serde",
@@ -7243,7 +7244,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rustc_version",
  "skeptic",
  "smallvec",
@@ -8165,7 +8166,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "mysten-metrics",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "reqwest 0.12.5",
  "snap",
@@ -8184,7 +8185,7 @@ dependencies = [
  "dashmap",
  "futures",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "prometheus-closure-metric",
  "scopeguard",
@@ -8253,7 +8254,7 @@ dependencies = [
  "indexmap 2.2.6",
  "mysten-util-mem-derive",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "roaring",
  "smallvec",
 ]
@@ -8281,7 +8282,7 @@ checksum = "40a3eb6b7c682b65d1f631ec3176829d72ab450b3aacdd3f719bf220822e59ac"
 dependencies = [
  "libc",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "thiserror",
  "widestring",
  "winapi",
@@ -8375,7 +8376,7 @@ dependencies = [
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "quinn-proto",
  "rand 0.8.5",
@@ -8463,7 +8464,7 @@ dependencies = [
  "narwhal-types",
  "narwhal-worker",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "proptest",
  "rand 0.8.5",
@@ -8494,7 +8495,7 @@ dependencies = [
  "narwhal-config",
  "narwhal-test-utils",
  "narwhal-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "sui-macros",
  "tap",
@@ -9080,7 +9081,7 @@ dependencies = [
  "hyper 1.4.1",
  "itertools 0.13.0",
  "md-5 0.10.6",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "percent-encoding",
  "quick-xml",
  "rand 0.8.5",
@@ -9470,9 +9471,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.1"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
+checksum = "f1bf18183cf54e8d6059647fc3063646a1801cf30896933ec2311622cc4b9a27"
 dependencies = [
  "lock_api",
  "parking_lot_core 0.9.9",
@@ -10021,7 +10022,7 @@ dependencies = [
  "log",
  "nix 0.26.4",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "smallvec",
  "symbolic-demangle",
  "tempfile",
@@ -10222,7 +10223,7 @@ dependencies = [
  "fnv",
  "lazy_static",
  "memchr",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "protobuf",
  "thiserror",
 ]
@@ -10700,7 +10701,7 @@ dependencies = [
  "libc",
  "mio",
  "num_cpus",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
@@ -12550,7 +12551,7 @@ checksum = "f91138e76242f575eb1d3b38b4f1362f10d3a43f47d182a5b359af488a02293b"
 dependencies = [
  "new_debug_unreachable",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "phf_shared 0.10.0",
  "precomputed-hash",
 ]
@@ -12793,7 +12794,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "mysten-metrics",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-latest",
@@ -12829,7 +12830,7 @@ dependencies = [
  "move-vm-runtime-v0",
  "move-vm-types",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-v0",
@@ -12856,7 +12857,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime-v1",
  "move-vm-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-v1",
@@ -12883,7 +12884,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime-v2",
  "move-vm-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-v2",
@@ -13318,7 +13319,7 @@ dependencies = [
  "num_cpus",
  "object_store",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pprof",
  "pretty_assertions",
  "prometheus",
@@ -13637,7 +13638,7 @@ dependencies = [
  "http 1.1.0",
  "mysten-metrics",
  "mysten-network",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "scopeguard",
  "serde",
@@ -14578,7 +14579,7 @@ dependencies = [
  "mysten-network",
  "mysten-service",
  "narwhal-network",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "reqwest 0.12.5",
  "serde",
@@ -14840,7 +14841,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-config",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "rand 0.8.5",
  "regex",
@@ -15249,7 +15250,7 @@ dependencies = [
  "num_enum 0.6.1",
  "object_store",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "percent-encoding",
  "pretty_assertions",
  "prometheus",
@@ -15585,7 +15586,7 @@ dependencies = [
  "num_enum 0.6.1",
  "once_cell",
  "p256",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "passkey-authenticator",
  "passkey-client",
  "passkey-types",
@@ -16321,7 +16322,7 @@ dependencies = [
  "libc",
  "mio",
  "num_cpus",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
@@ -16389,7 +16390,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "log",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "percent-encoding",
  "phf",
  "pin-project-lite",
@@ -18193,9 +18194,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.7.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "525b4ec142c6b68a2d10f01f7bbf6755599ca3f81ea53b8431b7dd348f5fdb2d"
+checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
 dependencies = [
  "zeroize_derive",
 ]
