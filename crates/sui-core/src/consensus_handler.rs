@@ -1304,7 +1304,7 @@ mod tests {
             }
             let digest = t.digest();
             assert!(
-                !state.is_tx_already_executed(digest).unwrap(),
+                !state.is_tx_already_executed(digest),
                 "Rejected transaction {} {} should not have been executed",
                 i,
                 digest

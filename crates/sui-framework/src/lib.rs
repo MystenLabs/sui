@@ -178,9 +178,9 @@ pub async fn compare_system_package<S: ObjectStore>(
     binary_config: &BinaryConfig,
 ) -> Option<ObjectRef> {
     let cur_object = match object_store.get_object(id) {
-        Ok(Some(cur_object)) => cur_object,
+        Some(cur_object) => cur_object,
 
-        Ok(None) => {
+        None => {
             // creating a new framework package--nothing to check
             return Some(
                 Object::new_system_package(
@@ -195,11 +195,6 @@ pub async fn compare_system_package<S: ObjectStore>(
                 )
                 .compute_object_reference(),
             );
-        }
-
-        Err(e) => {
-            error!("Error loading framework object at {id}: {e:?}");
-            return None;
         }
     };
 

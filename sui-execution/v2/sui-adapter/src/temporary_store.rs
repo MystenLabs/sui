@@ -733,7 +733,7 @@ impl<'backing> TemporaryStore<'backing> {
                 // For example, the ID is for a wrapped table or bag.
                 *container_id
             } else {
-                let Some(old_obj) = self.store.get_object(&to_authenticate)? else {
+                let Some(old_obj) = self.store.get_object(&to_authenticate) else {
                     panic!(
                         "
                         Failed to load object {to_authenticate:?}. \n\
@@ -908,7 +908,7 @@ impl<'backing> TemporaryStore<'backing> {
             })
         } else {
             // not in input objects, must be a dynamic field
-            let Ok(Some(obj)) = self.store.get_object_by_key(id, expected_version) else {
+            let Some(obj) = self.store.get_object_by_key(id, expected_version) else {
                 invariant_violation!(
                     "Failed looking up dynamic field {id} in SUI conservation checking"
                 );
@@ -1246,10 +1246,7 @@ impl<'backing> ResourceResolver for TemporaryStore<'backing> {
 }
 
 impl<'backing> ParentSync for TemporaryStore<'backing> {
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        _object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         unreachable!("Never called in newer protocol versions")
     }
 }

@@ -225,7 +225,7 @@ pub fn get_sui_system_state_wrapper(
     object_store: &dyn ObjectStore,
 ) -> Result<SuiSystemStateWrapper, SuiError> {
     let wrapper = object_store
-        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         // Don't panic here on None because object_store is a generic store.
         .ok_or_else(|| {
             SuiError::SuiSystemStateReadError("SuiSystemStateWrapper object not found".to_owned())

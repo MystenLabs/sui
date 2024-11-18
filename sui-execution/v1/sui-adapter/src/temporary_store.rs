@@ -598,7 +598,7 @@ impl<'backing> TemporaryStore<'backing> {
                     .or_else(|| self.loaded_runtime_objects.get(object_id).cloned())
                     .unwrap_or_else(|| {
                         debug_assert!(is_system_package(*object_id));
-                        let obj = self.store.get_object(object_id).unwrap().unwrap();
+                        let obj = self.store.get_object(object_id).unwrap();
                         DynamicallyLoadedObjectMetadata {
                             version: obj.version(),
                             digest: obj.digest(),
@@ -663,7 +663,7 @@ impl<'backing> TemporaryStore<'backing> {
             if authenticated_objs.contains(id) || gas_objs.contains(id) {
                 continue;
             }
-            let old_obj = self.store.get_object(id)?.unwrap_or_else(|| {
+            let old_obj = self.store.get_object(id).unwrap_or_else(|| {
                 panic!("Modified object must exist in the store: ID = {:?}", id)
             });
             match &old_obj.owner {
@@ -702,7 +702,7 @@ impl<'backing> TemporaryStore<'backing> {
         // Map from an ObjectID to the ObjectID that covers it.
         let mut covered = BTreeMap::new();
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            let Some(old_obj) = self.store.get_object(&to_authenticate)? else {
+            let Some(old_obj) = self.store.get_object(&to_authenticate) else {
                 // lookup failure is expected when the parent is an "object-less" UID (e.g., the ID of a table or bag)
                 // we cannot distinguish this case from an actual authentication failure, so continue
                 continue;
@@ -856,7 +856,7 @@ impl<'backing> TemporaryStore<'backing> {
             })
         } else {
             // not in input objects, must be a dynamic field
-            let Ok(Some(obj)) = self.store.get_object_by_key(id, expected_version) else {
+            let Some(obj) = self.store.get_object_by_key(id, expected_version) else {
                 invariant_violation!(
                     "Failed looking up dynamic field {id} in SUI conservation checking"
                 );
@@ -1192,10 +1192,7 @@ impl<'backing> ResourceResolver for TemporaryStore<'backing> {
 }
 
 impl<'backing> ParentSync for TemporaryStore<'backing> {
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        _object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         unreachable!("Never called in newer protocol versions")
     }
 }

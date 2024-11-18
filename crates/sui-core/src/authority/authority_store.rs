@@ -593,7 +593,7 @@ impl AuthorityStore {
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
         for id in objects {
-            result.push(self.get_object(id)?);
+            result.push(self.get_object(id));
         }
         Ok(result)
     }
@@ -1920,18 +1920,11 @@ impl AccumulatorStore for AuthorityStore {
 
 impl ObjectStore for AuthorityStore {
     /// Read an object and return it, or Ok(None) if the object was not found.
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.perpetual_tables.as_ref().get_object(object_id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         self.perpetual_tables.get_object_by_key(object_id, version)
     }
 }
