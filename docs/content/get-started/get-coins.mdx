@@ -11,7 +11,7 @@ To request tokens from the faucet, you must own a wallet address that can receiv
 
 ## Request test tokens via the CLI
 
-If you are using the Devnet or Testnet networks, or you spun up a local network, you can use the [Sui CLI](../../../references/cli/client.mdx) to request tokens for your address. The `sui client faucet` uses the active network and active address that is currently set in the Sui CLI by default, but you can specify custom data through the following two arguments:
+If you are using the Devnet or Testnet networks, or you spun up a local network, you can use the [Sui CLI](../references/cli/client.mdx) to request tokens for your address. The `sui client faucet` uses the active network and active address that is currently set in the Sui CLI by default, but you can specify custom data through the following two arguments:
 
 - `--address` argument to provide a specific address (or its alias),
 - `--url` argument to provide a custom faucet endpoint.
@@ -63,4 +63,4 @@ await requestSuiFromFaucetV0({
 
 ## Test tokens on a local network
 
-If you are running a local Sui network, you can get tokens from your local faucet. See the [Connect to a Local Network](./local-network.mdx#use-the-local-faucet) topic for details.
+If you are running a local Sui network, you can get tokens from your local faucet. See the [Connect to a Local Network](./connect.mdx#use-the-local-faucet) topic for details.
