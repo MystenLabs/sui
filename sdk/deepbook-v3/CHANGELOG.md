@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.9
+
+### Patch Changes
+
+- 2a532bc: Governance function update
+
 ## 0.12.8
 
 ### Patch Changes
