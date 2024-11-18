@@ -21,9 +21,12 @@ use crate::{cache_local, get_cached_local, run_cmd};
 const PULUMI_WORKSPACE_FILE_CACHE_KEY: &str = "pulumi_workspace_file";
 
 #[derive(Parser, Debug, Clone)]
+pub struct LogsArgs {}
+
+#[derive(Parser, Debug, Clone)]
 pub struct ServiceArgs {
     #[command(subcommand)]
-    action: ServiceAction,
+    pub action: ServiceAction,
 }
 
 #[derive(clap::Subcommand, Debug, Clone)]
