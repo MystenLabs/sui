@@ -75,11 +75,11 @@ This guide uses a single React frontend to interact with both the shared and mul
 
 ### Contract
 
-In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
+In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the multisig version.
 
 Create a new file in `tic-tac-toe/move/sources` titled `shared.move`.
 
-As the following code demonstrates, the `Game` object in this example is almost identical to the one before it. The only differences are that it does not include an `admin` field, which is only relevant for the multisig version of the game, and it does not have `store`, because it only ever exists as a shared object (so it cannot be transferred or wrapped).
+In this first version of tic-tac-toe, the `Game` object, including the game board, is shared between the two players.
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
 
@@ -87,7 +87,7 @@ Take a look at the `new` function:
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
 
-Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint a `TurnCap` because the only two addresses that can play this game are `x` and `o`, and this is checked in the next function, `place_mark`:
+Once a `Game` object is shared, players can place their markers on the board using the `place_mark` function:
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
 
