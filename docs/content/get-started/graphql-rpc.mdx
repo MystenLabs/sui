@@ -12,7 +12,7 @@ The online IDE is available for [Mainnet](https://sui-mainnet.mystenlabs.com/gra
 - Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
 :::
 
-For more details about some concepts used in the examples below, please see the [GraphQL concepts](../../../concepts/graphql-rpc.mdx) page, and consult the [reference](../../../references/sui-graphql.mdx) for full documentation on the supported schema.
+For more details about some concepts used in the examples below, please see the [GraphQL concepts](../concepts/graphql-rpc.mdx) page, and consult the [reference](../references/sui-graphql.mdx) for full documentation on the supported schema.
 
 
 ## Discovering the schema
@@ -102,7 +102,7 @@ query {
 This example finds all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a Coin/StakeSui/NFT.
 
 :::info
-This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
+This example uses GraphQL [variables](../concepts/graphql-rpc.mdx#variables) and [pagination](../concepts/graphql-rpc.mdx#pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
 :::
 
 ```graphql
@@ -190,7 +190,7 @@ query ($address: SuiAddress!) {
 ## Fetching a dynamic field on an object
 
 :::info
-This example uses aliases and [fragments](../../../concepts/graphql-rpc.mdx#fragments).
+This example uses aliases and [fragments](../concepts/graphql-rpc.mdx#fragments).
 :::
 
 ```graphql
@@ -242,10 +242,10 @@ fragment MoveValueFields on MoveValue {
 
 ## Fetching all dynamic fields on an object
 
-This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the <a href="/references/sui-api/sui-graphql/reference/queries/owner" data-noBrokenLinkCheck='true'>owner</a> query, so can be used for iterating over the elements of on-chain data structures, like [Tables and Bags](../../../concepts/dynamic-fields/tables-bags.mdx).
+This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../concepts/object-ownership/wrapped.mdx), by using the <a href="/references/sui-api/sui-graphql/reference/queries/owner" data-noBrokenLinkCheck='true'>owner</a> query, so can be used for iterating over the elements of on-chain data structures, like [Tables and Bags](../concepts/dynamic-fields/tables-bags.mdx).
 
 :::info
-This example uses [fragments](../../../concepts/graphql-rpc.mdx#fragments) and [variables](../../../concepts/graphql-rpc.mdx#variables).
+This example uses [fragments](../concepts/graphql-rpc.mdx#fragments) and [variables](../concepts/graphql-rpc.mdx#variables).
 :::
 
 ```graphql
@@ -299,7 +299,7 @@ Sets up a paginated query, starting at the genesis checkpoint, reading five chec
 
 :::info
 
-This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
+This example uses GraphQL [variables](../concepts/graphql-rpc.mdx#variables) and [pagination](../concepts/graphql-rpc.mdx#pagination).
 
 :::
 
@@ -323,12 +323,12 @@ query ($before: String) {
 Sets up a paginated query, starting at the latest indexed checkpoint, reading five checkpoints at a time, in decreasing order of sequence number. The value of `pageInfo.hasPreviousPage` determines whether there is another page to be read, and the value of `pageInfo.startCursor` is fed back in as the cursor to read `$before`.
 
 :::info
-This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
+This example uses GraphQL [variables](../concepts/graphql-rpc.mdx#variables) and [pagination](../concepts/graphql-rpc.mdx#pagination).
 :::
 
 ## Executing a transaction
 
-Transaction execution takes in two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which can be generated when using the Sui CLI's `client call` [command](../../../references/cli/client.mdx), to call a Move function by passing the `--serialize-unsigned-transaction` flag. The `signatures` can be generated using Sui CLI's [keytool](../../../references/cli/keytool.mdx) command `sui keytool sign`. More information on Sui CLI can be found [here](/references/cli).
+Transaction execution takes in two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which can be generated when using the Sui CLI's `client call` [command](../references/cli/client.mdx), to call a Move function by passing the `--serialize-unsigned-transaction` flag. The `signatures` can be generated using Sui CLI's [keytool](../references/cli/keytool.mdx) command `sui keytool sign`. More information on Sui CLI can be found [here](../references/cli.mdx).
 
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {
@@ -369,8 +369,8 @@ Examples in the repository are designed to work with the version of GraphQL buil
 
 ## Related links
 
-- [GraphQL migration](../advanced/graphql-migration.mdx): Migrating to GraphQL guides you through migrating Sui RPC projects from JSON-RPC to GraphQL.
-- [GraphQL concepts](../../../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.
-- [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
+- [GraphQL migration](../guides/developer/advanced/graphql-migration.mdx): Migrating to GraphQL guides you through migrating Sui RPC projects from JSON-RPC to GraphQL.
+- [GraphQL concepts](../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.
+- [GraphQL reference](../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
 - [Sui Testnet GraphiQL](https://sui-testnet.mystenlabs.com/graphql): Sui GraphiQL IDE for the Testnet network.
 - [Sui Mainnet GraphiQL](https://sui-mainnet.mystenlabs.com/graphql): Sui GraphiQL IDE for the Mainnet network.
