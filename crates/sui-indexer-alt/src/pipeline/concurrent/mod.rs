@@ -62,6 +62,11 @@ pub trait Handler: Processor {
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 1000;
 
+    /// Provides a way for individual pipeline to override the write_concurrency parameter
+    /// from the PipelineConfig. This is used to determine the number of concurrent tasks
+    /// to commit data to the database.
+    const WRITE_CONCURRENCY_OVERRIDE: Option<usize> = None;
+
     /// Take a chunk of values and commit them to the database, returning the number of rows
     /// affected.
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
@@ -157,7 +162,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     // The pruner is not connected to the rest of the tasks by channels, so it needs to be
     // explicitly signalled to shutdown when the other tasks shutdown, in addition to listening to
     // the global cancel signal. We achieve this by creating a child cancel token that we call
-    // cancle on once the committer tasks have shutdown.
+    // cancel on once the committer tasks have shutdown.
     let pruner_cancel = cancel.child_token();
 
     let processor = processor(
