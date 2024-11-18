@@ -1,0 +1,310 @@
+---
+title: Connect to a Sui Network
+description: Besides Mainnet, Sui offers Testnet, Devnet, and local networks that you can connect to for development. You can also configure a custom RPC endpoint. 
+---
+
+Sui has Mainnet, Devnet, and Testnet networks available. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](./local-network.mdx) for local development. 
+
+The Sui Testnet and Devnet networks consist of several validator nodes to validate each network's transactions. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](/references/sui-api.mdx).
+
+You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you use. If connected to Localnet, use cURL to request tokens from your [local faucet](./local-network.mdx#use-the-local-faucet). The coins on these networks have no financial value. There is no faucet service for Mainnet.
+
+See announcements about Sui in the [#announcements](https://discord.com/channels/916379725201563759/925109817834631189) Discord channel.
+
+See the [terms of service](https://sui.io/terms/) for using Sui networks.
+
+{@include: ./snippets/data-wipe.mdx}
+
+## Sui CLI
+
+Sui provides [Sui command line interface (CLI)](/references/cli/client.mdx) to interact with Sui networks:
+
+- Create and manage your private keys
+- Create example NFTs
+- Call and publish Move modules
+
+
+## Environment set up
+
+First, [Install Sui](./sui-install.mdx#install-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through Discord for the network you are using: [Devnet](https://discordapp.com/channels/916379725201563759/971488439931392130) or [Testnet](https://discord.com/channels/916379725201563759/1037811694564560966). If connected to Localnet, use cURL to request tokens from your [local faucet](./local-network.mdx#use-the-local-faucet).
+
+To check whether Sui is already installed, run the following command:
+
+```shell
+which sui
+```
+
+If Sui is installed, the command returns the path to the Sui binary. If Sui is not installed, it returns `sui not found`.
+
+See the [Sui Releases](https://github.com/MystenLabs/sui/releases) page to view the changes in each Sui release.
+
+## Configure Sui client
+
+If you previously ran `sui genesis` to create a local network, it created a Sui client configuration file (client.yaml) that connects to `localhost` at `http://0.0.0.0:9000`. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to update the client.yaml file.
+
+To connect the Sui client to a network, run the following command:
+
+```shell
+sui client
+```
+
+If you receive the `sui-client` help output in the console, you already have a client.yaml file. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to add a new environment alias or to switch the currently active network.
+
+The first time you start Sui client without having a client.yaml file, the console displays the following message:
+
+```
+Config file ["<PATH-TO-FILE>/client.yaml"] doesn't exist, do you want to connect to a Sui Full node server [y/N]?
+```
+
+Press **y** and then press **Enter**. The process then requests the RPC server URL: 
+
+```
+Sui Full node server URL (Defaults to Sui Testnet if not specified) :
+```
+
+Press **Enter** to connect to Sui Testnet. To use a custom RPC server, Sui Devnet, or Sui Mainnet, enter the URL to the correct RPC endpoint and then press **Enter**.
+
+If you enter a URL, the process prompts for an alias for the environment:
+
+```
+Environment alias for [<URL-ENTERED>] :
+```
+Type an alias name and press **Enter**.
+
+```
+Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
+```
+
+Press **0**, **1**, or **2** to select a key scheme and the press **Enter**.
+
+Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and 12-word recovery phrase for the address:
+
+```
+Generated new keypair for address with scheme "ed25519" [0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442]
+Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud speed grocery]
+```
+
+### Connect to a custom RPC endpoint
+
+If you previously used `sui genesis` with the force option (`-f` or `--force`), your client.yaml file already includes two RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
+
+If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing client.yaml file to change the configured RPC endpoint. The `sui client` commands that relate to environments read from and write to the client.yaml file.
+
+To check currently available environment aliases, run the following command: 
+
+```sh
+sui client envs
+```
+
+The command outputs the available environment aliases, with `(active)` denoting the currently active network.
+```sh
+localnet => http://0.0.0.0:9000 (active)
+devnet => https://fullnode.devnet.sui.io:443
+```
+
+To add a new alias for a custom RPC endpoint, run the following command. Replace values in `<` `>` with values for your installation:
+
+```shell
+sui client new-env --alias <ALIAS> --rpc <RPC-SERVER-URL>
+```
+
+To switch the active network, run the following command:
+
+```shell
+sui client switch --env <ALIAS>
+```
+
+If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](./sui-install.mdx#install-sui-binaries).
+
+## Local network
+
+Use a Sui local network to test your dApps against the latest changes to Sui, and to prepare for the next Sui release to the Devnet or Testnet network. Sui CLI provides the `sui start` command to start a local network. There are several services that can be started when using `sui start`, such as an indexer, a faucet, or a local instance of the GraphQL service (including the web-based GraphiQL IDE). You can use the included faucet to get test SUI to use on the local network.
+
+If you haven't already, you need to [install Sui CLI](./sui-install.mdx) on your system.
+
+## Start the local network
+
+To start the local network, run the following command after you install Sui CLI.
+
+```bash
+RUST_LOG="off,sui_node=info" sui start --with-faucet --force-regenesis
+```
+
+This command:
+* Calls the Sui CLI binary with two flags:
+ * `--with-faucet` to start a faucet service.
+ * `--force-regenesis` to generate a new genesis and not persist the local network state.
+* Instructs Rust to set specific logging through the `RUST_LOG`=`off,sui_node=info` flags, which turns off logging for all components except `sui-node`. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
+
+:::info
+Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network-state) section.
+:::
+
+To customize your local Sui network, such as starting other services or changing default ports and hosts, include additional flags or options in the `sui start` command.
+
+:::info
+Options and flags like `with-indexer`,  `with-graphql`, and related require you to have Postgresq/libpq installed. Check out the list of possible options below to find which is the default expected DB, or how to pass a different DB.
+:::
+
+The following is a list of possible options and flags to pass to `sui start`:
+```
+    --network.config <CONFIG_DIR>            Config directory that will be used to store network config, node db, keystore sui genesis -f --with-faucet generates a genesis config that can be used to start this process. Use with caution as the `-f` flag
+                                             will overwrite the existing config directory. We can use any config dir that is generated by the `sui genesis`
+    --force-regenesis                        A new genesis is created each time this flag is set, and state is not persisted between runs. Only use this flag when you want to start the network from scratch every time you run this command
+    --with-graphql[=<WITH_GRAPHQL>]          Start a GraphQL server on localhost and port: 127.0.0.1:9125, or on the port provided. When providing a specific value, please use the = sign between the flag and value: `--with-graphql=6125`. Note that
+                                             GraphQL requires a running indexer
+    --with-faucet[=<WITH_FAUCET>]            Start a faucet with default host and port: 127.0.0.1:9123, or on the port provided. When providing a specific value, please use the = sign between the flag and value: `--with-faucet=6123`
+    --with-indexer[=<WITH_INDEXER>]          Start an indexer with default host and port: 0.0.0.0:9124, or on the port provided. When providing a specific value, please use the = sign between the flag and value: `--with-faucet=6124`.                                          The indexer be started in writer mode and reader mode
+    --fullnode-rpc-port <FULLNODE_RPC_PORT>  Port to start the Fullnode RPC server on. Default port is 9000 [default: 9000]
+    --pg-port <PG_PORT>                      Port for the Indexer Postgres DB. Default port is 5432 [default: 5432]
+    --pg-host <PG_HOST>                      Hostname for the Indexer Postgres DB. Default host is localhost [default: localhost]
+    --pg-db-name <PG_DB_NAME>                DB name for the Indexer Postgres DB. Default DB name is sui_indexer [default: sui_indexer]
+    --pg-user <PG_USER>                      DB username for the Indexer Postgres DB. Default username is postgres [default: postgres]
+    --pg-password <PG_PASSWORD>              DB password for the Indexer Postgres DB. Default password is postgrespw [default: postgrespw]
+    --epoch-duration-ms <EPOCH_DURATION_MS>  Set the epoch duration. Can only be used when `--force-regenesis` flag is passed or if there's no genesis config and one will be auto-generated. When this flag is not set but `--force-regenesis` is set, the
+                                             epoch duration will be set to 60 seconds
+    --no-full-node                           Start the network without a fullnode
+-h, --help                                   Print help (see more with '--help')
+```
+
+Use `sui start --help` to see these options in your console.
+
+### Persist local network state
+
+By default, when using `sui start` the command uses an existing genesis and network configuration if the `~/.sui/sui_config` folder exists and includes a `genesis.blob` file. If the folder doesn't exist, it creates the folder and generates a new genesis configuration. If you pass `--network.config`, the command checks for the network config file and tries to load the genesis blob as per the network config file.
+
+Whenever you stop and start the network without passing the `--force-regenesis` flag, all history is preserved and accessible.
+
+:::info
+To generate a custom genesis, use the `sui genesis` command and pass the desired custom values. For more information about possible flags and options, run `sui genesis --help`.
+:::
+
+
+### Access your local Full node
+
+Use the following command to retrieve the total transaction count from your local network:
+
+```bash
+curl --location --request POST 'http://127.0.0.1:9000' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTotalTransactionBlocks",
+  "params": []
+}'
+```
+
+If successful, the response resembles the following:
+
+```json
+{
+	"jsonrpc": "2.0",
+	"result": 168,
+	"id": 1
+}
+```
+
+## Connect the Sui CLI to your local network
+
+You can use the Sui CLI with any Sui network. By default it connects to Sui Devnet. To connect to your local network, create a new environment alias named `local` that sets the RPC URL the client uses to your local network.
+
+```shell
+sui client new-env --alias local --rpc http://127.0.0.1:9000
+```
+
+Next, use the following command to set the active environment to the new `local` environment you created.
+
+```
+sui client switch --env local
+```
+
+The command returns:
+
+`Active environment switched to [local]`
+
+You can check the current active environment with the following command:
+
+```bash
+sui client active-env
+```
+
+The command returns:
+
+`local`
+
+## Show the current active address
+
+The Sui Client CLI uses the active address for command if you don't specify one. Use the following command to show the active address on your local network.
+
+```
+sui client active-address
+```
+
+The command returns an address, for example:
+
+`0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de`
+
+Use the active address to get test SUI to use on your local network. Use the `sui client addresses` command to see all of the addresses on your local network.
+
+:::info
+
+The address returned when you run the command is unique and does not match the one used in this example.
+
+:::
+
+## Use the local faucet {#use-the-local-faucet}
+
+Transactions on your local network require SUI coins to pay for gas fees just like other networks. You can use the active address with the faucet.
+
+Sui CLI provides the `sui client faucet` command to get coins from the faucet. In the most basic case, run `sui client faucet` and wait up to 60 seconds for the coins to reach your address. Use `sui client gas` to check for the new coins.
+
+:::info
+
+The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, check the `help` menu. If you're using a different network than a local network or the public ones (`fullnode.network.sui.io`), pass the URL to the faucet server.
+
+:::
+
+### Check the gas coin objects for the active address
+
+After you get coins from the faucet, use the following command to view the coin objects for the address:
+
+```shell
+sui client gas
+```
+
+The response resembles the following, but with different IDs:
+
+```shell
+╭────────────────────────────────────────────────────────────────────┬────────────╮
+│ gasCoinId                                                          │ gasBalance │
+├────────────────────────────────────────────────────────────────────┼────────────┤
+│ 0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45 │ 200000000  │
+│ 0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d │ 200000000  │
+│ 0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2 │ 200000000  │
+│ 0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088 │ 200000000  │
+│ 0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4 │ 200000000  │
+╰────────────────────────────────────────────────────────────────────┴────────────╯
+```
+
+## Generate example data
+
+Use the TypeScript SDK to add example data to your network. Run the following command from the `sui` root folder:
+
+```bash
+pnpm --filter @mysten/sui test:e2e
+```
+
+For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
+
+## Troubleshooting
+
+If you do not use [Node.js 18](https://nodejs.org/de/blog/announcements/v18-release-announce), you might see the following message:
+
+`Retrying requesting from faucet: Retry failed: fetch is not defined`
+
+To resolve this, switch or update to Node.js 18 and then try again.
+
+## Test with the Sui TypeScript SDK
+
+The published version of the Sui TypeScript SDK might be an earlier version than the version of Sui you installed for your local network. To make sure you're using the latest version of the SDK, use the `experimental`-tagged version (for example, `0.0.0-experimental-20230317184920`) in the [Current Tags](https://www.npmjs.com/package/@mysten/sui?activeTab=versions) section of the Sui NPM registry.

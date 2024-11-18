@@ -18,23 +18,6 @@ const guides = [
 		items: [
 			{
 				type: 'category',
-				label: 'Getting Started',
-				collapsed: false,
-				link: {
-					type: 'doc',
-					id: 'guides/developer/getting-started',
-				},
-				items: [
-					'guides/developer/getting-started/sui-install',
-					'guides/developer/getting-started/connect',
-					'guides/developer/getting-started/local-network',
-					'guides/developer/getting-started/get-address',
-					'guides/developer/getting-started/get-coins',
-					'guides/developer/getting-started/graphql-rpc',
-				],
-			},
-			{
-				type: 'category',
 				label: 'Your First Sui dApp',
 				link: {
 					type: 'doc',
