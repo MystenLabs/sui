@@ -1,12 +1,12 @@
 pub mod aggregation;
 pub mod api;
 pub mod p2p;
-pub mod sui;
+pub mod sui_objects;
 
 use aggregation::*;
 use api::*;
 use p2p::*;
-use sui::*;
+use sui_objects::*;
 
 use anyhow::Context;
 use futures::StreamExt;
@@ -20,8 +20,6 @@ const REGISTRY_ID: &str = "9862bbb25c7e28708b08a6107633e34258c842f480117538fdfac
 
 /// Main loop of the Oracle.
 pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
-    let storage_ids = setup_storage(&ctx)?;
-
     let (p2p_node, consensus_rx) = setup_p2p().await?;
     Api::new([127, 0, 0, 1], consensus_rx).start().await;
 
@@ -35,6 +33,7 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
             ctx.identifier,
             checkpoint,
         );
+        let storage_ids = setup_storage(&ctx)?;
         fetch_and_broadcast_median(&ctx, &p2p_node, &storage_ids, checkpoint).await?;
         ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
     }

@@ -15554,6 +15554,7 @@ dependencies = [
  "anemo-tower",
  "anyhow",
  "arc-swap",
+ "async-trait",
  "axum 0.7.8",
  "base64 0.21.7",
  "bcs",

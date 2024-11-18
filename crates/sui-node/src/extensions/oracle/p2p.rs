@@ -1,7 +1,7 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    time::Duration,
-};
+use std::collections::{BTreeMap, HashMap};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::time::Duration;
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -88,19 +88,24 @@ impl P2PNode {
     ) -> Result<(Self, mpsc::UnboundedSender<NodeCommand>)> {
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
-        tracing::info!("🫣 Local peer id: {}", peer_id);
 
         let mut swarm = SwarmBuilder::with_existing_identity(keypair.clone())
             .with_tokio()
             .with_quic()
             .with_behaviour(|_| {
-                // Set up Gossipsub with more aggressive parameters for better local networking
                 let gossipsub_config = gossipsub::ConfigBuilder::default()
                     .validation_mode(ValidationMode::Strict)
                     .message_id_fn(|message: &GossipsubMessage| {
-                        MessageId::from(message.data.clone())
+                        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                        message.data.hash(&mut hasher);
+                        message.sequence_number.hash(&mut hasher);
+                        MessageId::from(hasher.finish().to_be_bytes())
                     })
-                    .history_gossip(3)
+                    .flood_publish(false)
+                    .history_length(1)
+                    .history_gossip(1)
+                    .heartbeat_interval(Duration::from_secs(60))
+                    .validate_messages()
                     .build()
                     .expect("Invalid GossipSub Config");
 
@@ -110,7 +115,6 @@ impl P2PNode {
                 )
                 .unwrap();
 
-                // Set up mDNS
                 let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)
                     .expect("Failed to create mDNS behaviour");
 
@@ -177,14 +181,6 @@ impl P2PNode {
             SwarmEvent::NewListenAddr { address, .. } => {
                 tracing::info!(address = %address, "New listen address");
             }
-            SwarmEvent::ConnectionEstablished {
-                peer_id, endpoint, ..
-            } => {
-                tracing::info!(%peer_id, ?endpoint, "Connected to peer");
-            }
-            SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                tracing::info!(%peer_id, "Connection closed with peer");
-            }
             _ => {}
         }
 
@@ -194,11 +190,12 @@ impl P2PNode {
     async fn handle_swarm_behaviour(&mut self, behaviour: OracleBehaviourEvent) -> Result<()> {
         match behaviour {
             OracleBehaviourEvent::Gossipsub(GossipsubEvent::Message { message, .. }) => {
-                self.handle_gossip_message(message).await?;
+                if let Err(e) = self.handle_gossip_message(message).await {
+                    tracing::error!(%e, "Failed to handle gossip message");
+                }
             }
             OracleBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
-                for (peer_id, addr) in peers {
-                    tracing::info!("🔍 mDNS discovered peer: {} at {}", peer_id, addr);
+                for (peer_id, _) in peers {
                     self.swarm
                         .behaviour_mut()
                         .gossipsub
@@ -206,8 +203,7 @@ impl P2PNode {
                 }
             }
             OracleBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
-                for (peer_id, addr) in peers {
-                    tracing::info!("❌ mDNS peer expired: {} at {}", peer_id, addr);
+                for (peer_id, _) in peers {
                     self.swarm
                         .behaviour_mut()
                         .gossipsub
@@ -215,11 +211,6 @@ impl P2PNode {
                 }
             }
             OracleBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. }) => {
-                tracing::info!(
-                    "👋 Identified peer {} with {} protocols",
-                    peer_id,
-                    info.protocols.len()
-                );
                 if info
                     .protocols
                     .iter()

@@ -74,6 +74,7 @@ libp2p = { version = "0.54.1", features = [
     "macros",
     "quic"
 ]}
+async-trait = "0.1.83"
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true
