@@ -83,11 +83,11 @@ impl TransactionConsumer {
         // The method will return `None` if all the transactions can be included in the block. Otherwise none of the transactions will be
         // included in the block and the method will return the TransactionGuard.
         let mut handle_txs = |t: TransactionsGuard| -> Option<TransactionsGuard> {
-            let transactions_size: u64 =
+            let transactions_size =
                 t.transactions.iter().map(|t| t.data().len()).sum::<usize>() as u64;
 
             if total_size + transactions_size > self.max_consumed_bytes_per_request
-                || transactions.len() as u64 >= self.max_consumed_transactions_per_request
+                || transactions.len() as u64 > self.max_consumed_transactions_per_request
             {
                 return Some(t);
             }
@@ -204,7 +204,7 @@ pub struct TransactionClient {
     sender: Sender<TransactionsGuard>,
     max_transaction_size: u64,
     max_transactions_in_block_bytes: u64,
-    max_transactions_in_block_size: u64,
+    max_transactions_in_block_count: u64,
 }
 
 #[derive(Debug, Error)]
@@ -218,8 +218,8 @@ pub enum ClientError {
     #[error("Transaction bundle size ({0}B) is over limit ({1}B)")]
     OversizedTransactionBundleBytes(u64, u64),
 
-    #[error("Transaction bundle size ({0}) is over limit ({1})")]
-    OversizedTransactionBundleSize(u64, u64),
+    #[error("Transaction bundle count ({0}) is over limit ({1})")]
+    OversizedTransactionBundleCount(u64, u64),
 }
 
 impl TransactionClient {
@@ -233,7 +233,7 @@ impl TransactionClient {
                 max_transactions_in_block_bytes: context
                     .protocol_config
                     .max_transactions_in_block_bytes(),
-                max_transactions_in_block_size: context
+                max_transactions_in_block_count: context
                     .protocol_config
                     .max_num_transactions_in_block(),
             },
@@ -263,7 +263,7 @@ impl TransactionClient {
     /// has not been included to any block.
     /// If multiple transactions are submitted, the method will attempt to bundle them together in a single block. If the total size of
     /// the transactions exceeds `max_transactions_in_block_bytes`, no transaction will be submitted and an error will be returned instead.
-    /// Similar if transactions exceed `max_transactions_in_block_size` an error will be returned.
+    /// Similar if transactions exceed `max_transactions_in_block_count` an error will be returned.
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
@@ -272,10 +272,10 @@ impl TransactionClient {
 
         let mut bundle_size = 0;
 
-        if transactions.len() as u64 > self.max_transactions_in_block_size {
-            return Err(ClientError::OversizedTransactionBundleSize(
+        if transactions.len() as u64 > self.max_transactions_in_block_count {
+            return Err(ClientError::OversizedTransactionBundleCount(
                 transactions.len() as u64,
-                self.max_transactions_in_block_size,
+                self.max_transactions_in_block_count,
             ));
         }
 

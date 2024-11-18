@@ -103,7 +103,7 @@ impl ConsensusClient for LazyMysticetiClient {
                     }
                     ClientError::OversizedTransaction(_, _)
                     | ClientError::OversizedTransactionBundleBytes(_, _)
-                    | ClientError::OversizedTransactionBundleSize(_, _) => {
+                    | ClientError::OversizedTransactionBundleCount(_, _) => {
                         if cfg!(debug_assertions) {
                             panic!("{}", msg);
                         } else {
