@@ -87,6 +87,8 @@ Take a look at the `new` function:
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
 
+`MARK__` is a constant that represents an empty cell on the game board. `MARK_X` and `MARK_O` represent the two players' markers.
+
 Once a `Game` object is shared, players can place their markers on the board using the `place_mark` function:
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
@@ -104,20 +106,19 @@ Once a `Game` object is shared, players can place their markers on the board usi
 
 ### Contract
 
-Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. Later, you will update this file to contain the Move code for the game board in the centralized (and multisig) version of tic-tac-toe.
+Create a new file in `tic-tac-toe/move/sources` titled `owned.move`.
 
-In this first example of tic-tac-toe, the `Game` object, including the game board, is controlled by a game admin.
+In this second version of tic-tac-toe, the `Game` object, including the game board, is controlled by a single account. 
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
 
-Ignore the `admin` field for now, as it is only relevant for the multisig approach.
+In this case, the game board is owned by a 1-of-2 multisig account generated from the two players' public keys. The `admin` field in the `Game` object stores the public key of the multisig account that controls the game board.
 
 Games are created with the `new` function:
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
 
-Some things to note: 
-- `MARK__` is a constant that represents an empty cell on the game board. `MARK_X` and `MARK_O` represent the two players' markers.
+Some things to note:
 - The first player is sent a `TurnCap`, which gives them permission to take the next turn.
 - This function creates and returns the `Game` object, it is up to its creator to send it to the game admin to own.
 
@@ -125,13 +126,11 @@ Because the players don’t own the game board object, they cannot directly muta
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
 
-When playing the game, the admin operates a service that keeps track of marks using events. When a request is received (`send_mark`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
+When a mark is sent by a player (`send_mark`), the admin (the same player via the multisig) places the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin.
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#fun=send_mark,place_mark noComments}
 
 When a player sends a mark, a `Mark` object is created and is sent to the `Game` object. The admin then receives the mark and places it on the board. This is a use of dynamic object fields, where an object, `Game`, can hold other objects, `Mark`.
-
-To view the entire source code, see the [owned.move source file](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the game board after the game concludes there.
 
 <details>
 <summary>
@@ -140,15 +139,11 @@ To view the entire source code, see the [owned.move source file](https://github.
 {@inject: examples/tic-tac-toe/move/sources/owned.move}
 </details>
 
-An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
+### Creating a multisig account
 
-### Frontend
-
-Multisig tic-tac-toe uses the same Move code as the owned version of the game, but interacts with it differently. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the "admin". This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
+Multisig tic-tac-toe uses the owned version of the `Game` object. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the "admin". This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
 
 In this implementation of the game, the game is in a 1-of-2 multisig account that acts as the game admin. In this particular case, because there are only two players, the previous example is a more convenient use case. However, this example illustrates that in some cases, a multisig can replace shared objects, thus allowing transactions to bypass consensus when using such an implementation.
-
-### Creating a multisig account
 
 A multisig account is defined by the public keys of its constituent keypairs, their relative weights, and the threshold -- a signature is valid if the sum of weights of constituent keys having signed the signature exceeds the threshold. In our case, there are at most two constituent keypairs, they each have a weight of 1 and the threshold is also 1. A multisig cannot mention the same public key twice, so keys are deduplicated before the multisig is formed to deal with the case where a player is playing themselves:
 
