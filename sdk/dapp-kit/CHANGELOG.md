@@ -1,5 +1,11 @@
 # @mysten/dapp-kit
 
+## 0.14.35
+
+### Patch Changes
+
+- 6f44f4b: Mark vanilla-extract libraries as dev dependencies
+
 ## 0.14.34
 
 ### Patch Changes
