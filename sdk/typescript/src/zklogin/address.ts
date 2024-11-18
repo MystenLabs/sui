@@ -6,10 +6,16 @@ import { bytesToHex } from '@noble/hashes/utils';
 
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/index.js';
-import { toBigEndianBytes } from './utils.js';
+import { toBigEndianBytes, toPaddedBigEndianBytes } from './utils.js';
 
-export function computeZkLoginAddressFromSeed(addressSeed: bigint, iss: string) {
-	const addressSeedBytesBigEndian = toBigEndianBytes(addressSeed, 32);
+export function computeZkLoginAddressFromSeed(
+	addressSeed: bigint,
+	iss: string,
+	legacyAddress = true,
+) {
+	const addressSeedBytesBigEndian = legacyAddress
+		? toBigEndianBytes(addressSeed, 32)
+		: toPaddedBigEndianBytes(addressSeed, 32);
 	if (iss === 'accounts.google.com') {
 		iss = 'https://accounts.google.com';
 	}

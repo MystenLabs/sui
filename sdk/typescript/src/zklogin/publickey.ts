@@ -10,7 +10,7 @@ import { SuiGraphQLClient } from '../graphql/client.js';
 import { graphql } from '../graphql/schemas/2024.4/index.js';
 import { extractClaimValue } from './jwt-utils.js';
 import { parseZkLoginSignature } from './signature.js';
-import { toPaddedBigEndianBytes } from './utils.js';
+import { toBigEndianBytes, toPaddedBigEndianBytes } from './utils.js';
 
 /**
  * A zkLogin public identifier
@@ -101,10 +101,12 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 export function toZkLoginPublicIdentifier(
 	addressSeed: bigint,
 	iss: string,
-	options?: { client?: SuiGraphQLClient },
+	options?: { client?: SuiGraphQLClient; legacyAddress?: boolean },
 ): ZkLoginPublicIdentifier {
 	// Consists of iss_bytes_len || iss_bytes || padded_32_byte_address_seed.
-	const addressSeedBytesBigEndian = toPaddedBigEndianBytes(addressSeed, 32);
+	const addressSeedBytesBigEndian = options?.legacyAddress
+		? toBigEndianBytes(addressSeed, 32)
+		: toPaddedBigEndianBytes(addressSeed, 32);
 	const issBytes = new TextEncoder().encode(iss);
 	const tmp = new Uint8Array(1 + issBytes.length + addressSeedBytesBigEndian.length);
 	tmp.set([issBytes.length], 0);
