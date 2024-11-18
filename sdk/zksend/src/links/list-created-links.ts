@@ -85,10 +85,9 @@ export async function listCreatedLinks({
 					return null;
 				}
 
-				const kind = bcs.SenderSignedData.parse(fromBase64(node.bcs))?.[0]?.intentMessage.value.V1
-					.kind;
+				const kind = bcs.TransactionData.parse(fromBase64(node.bcs)).V1.kind;
 
-				if (!kind.ProgrammableTransaction) {
+				if (!kind?.ProgrammableTransaction) {
 					return null;
 				}
 
