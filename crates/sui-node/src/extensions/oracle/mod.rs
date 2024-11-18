@@ -73,9 +73,7 @@ async fn fetch_and_broadcast_median(
 
     let price_storages: Vec<PuiPriceStorage> = deserialize_objects(&ctx.object_store, storage_ids)?;
     let median_price = aggregate_to_median(&price_storages);
-
     let _ = p2p_node.broadcast_price(median_price, checkpoint).await;
-
     tracing::info!(
         "[node-{}] ✅ Executed {} in {:?}",
         ctx.identifier,

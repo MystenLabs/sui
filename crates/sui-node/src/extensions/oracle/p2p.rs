@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    time::Duration,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -17,7 +14,7 @@ use libp2p::{
     Multiaddr, PeerId, SwarmBuilder,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, error::TrySendError};
 
 use super::MedianPrice;
 
@@ -27,7 +24,7 @@ const PRICE_TOPIC: &str = "v1/oracle/price";
 /// or stop the P2P node) along with the receiver of the consensus prices, mainly used
 /// in the API so we can update the price of the asset.
 pub async fn setup_p2p() -> Result<(P2PNodeHandle, mpsc::Receiver<MedianPrice>)> {
-    let (consensus_tx, consensus_rx) = mpsc::channel(32);
+    let (consensus_tx, consensus_rx) = mpsc::channel(1024);
 
     let (mut node, command_tx) = P2PNode::new(consensus_tx).await?;
     let handle = P2PNodeHandle { command_tx };
@@ -100,7 +97,6 @@ impl P2PNode {
                     .message_id_fn(|message: &GossipsubMessage| {
                         MessageId::from(message.data.clone())
                     })
-                    .heartbeat_interval(Duration::from_secs(5))
                     .history_gossip(3)
                     .build()
                     .expect("Invalid GossipSub Config");
@@ -252,11 +248,17 @@ impl P2PNode {
 
         // Process the price and check for consensus
         if let Some((checkpoint, consensus_price)) = self.price_consensus.add_price(price) {
-            tracing::info!(checkpoint, "Reached consensus!");
-            self.consensus_sender
-                .send(consensus_price)
-                .await
-                .map_err(|_| anyhow::anyhow!("Failed to send consensus price"))?;
+            tracing::info!(checkpoint, "Reached consensus");
+
+            match self.consensus_sender.try_send(consensus_price) {
+                Ok(_) => (),
+                Err(TrySendError::Full(_)) => {
+                    tracing::warn!(checkpoint, "Consensus channel full, dropping price update");
+                }
+                Err(TrySendError::Closed(_)) => {
+                    return Err(anyhow::anyhow!("Consensus channel closed"));
+                }
+            }
         }
 
         Ok(())
