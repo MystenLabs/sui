@@ -174,49 +174,7 @@ impl P2PNode {
 
     async fn handle_swarm_event(&mut self, event: SwarmEvent<OracleBehaviourEvent>) -> Result<()> {
         match event {
-            SwarmEvent::Behaviour(behaviour) => match behaviour {
-                OracleBehaviourEvent::Gossipsub(GossipsubEvent::Message { message, .. }) => {
-                    self.handle_gossip_message(message).await?;
-                }
-                OracleBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
-                    for (peer_id, addr) in peers {
-                        tracing::info!("🔍 mDNS discovered peer: {} at {}", peer_id, addr);
-                        self.swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .add_explicit_peer(&peer_id);
-                    }
-                }
-                OracleBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
-                    for (peer_id, addr) in peers {
-                        tracing::info!("❌ mDNS peer expired: {} at {}", peer_id, addr);
-                        self.swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .remove_explicit_peer(&peer_id);
-                    }
-                }
-                OracleBehaviourEvent::Identify(identify::Event::Received {
-                    peer_id, info, ..
-                }) => {
-                    tracing::info!(
-                        "👋 Identified peer {} with {} protocols",
-                        peer_id,
-                        info.protocols.len()
-                    );
-                    if info
-                        .protocols
-                        .iter()
-                        .any(|p| p.to_string().contains("gossipsub"))
-                    {
-                        self.swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .add_explicit_peer(&peer_id);
-                    }
-                }
-                _ => {}
-            },
+            SwarmEvent::Behaviour(behaviour) => self.handle_swarm_behaviour(behaviour).await?,
             SwarmEvent::NewListenAddr { address, .. } => {
                 tracing::info!(address = %address, "New listen address");
             }
@@ -231,6 +189,51 @@ impl P2PNode {
             _ => {}
         }
 
+        Ok(())
+    }
+
+    async fn handle_swarm_behaviour(&mut self, behaviour: OracleBehaviourEvent) -> Result<()> {
+        match behaviour {
+            OracleBehaviourEvent::Gossipsub(GossipsubEvent::Message { message, .. }) => {
+                self.handle_gossip_message(message).await?;
+            }
+            OracleBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
+                for (peer_id, addr) in peers {
+                    tracing::info!("🔍 mDNS discovered peer: {} at {}", peer_id, addr);
+                    self.swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .add_explicit_peer(&peer_id);
+                }
+            }
+            OracleBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
+                for (peer_id, addr) in peers {
+                    tracing::info!("❌ mDNS peer expired: {} at {}", peer_id, addr);
+                    self.swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .remove_explicit_peer(&peer_id);
+                }
+            }
+            OracleBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. }) => {
+                tracing::info!(
+                    "👋 Identified peer {} with {} protocols",
+                    peer_id,
+                    info.protocols.len()
+                );
+                if info
+                    .protocols
+                    .iter()
+                    .any(|p| p.to_string().contains("gossipsub"))
+                {
+                    self.swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .add_explicit_peer(&peer_id);
+                }
+            }
+            _ => {}
+        }
         Ok(())
     }
 
