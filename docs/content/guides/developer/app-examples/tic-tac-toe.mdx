@@ -13,8 +13,9 @@ This guide covers two different implementations of the game tic-tac-toe on Sui. 
 
 Shared objects don't required a third party for management of the game board and only require one transaction per move. However, these transactions require consensus since the game board is not owned by a single account. Owned objects require a third party to manage the game board and require two transactions per move. However, these transactions don't require consensus and utilize the fast path for transactions. 
 
-1. [Centralized game board](#owned.move): An admin service that tracks player moves and updates the game board.
-1. [Shared game board](#shared.move): A shared object that allows players to directly update the game board.
+The guide is divided into two parts that each cover a different implementation of the tic-tac-toe game board:
+
+1. [Shared game board](#shared): A shared object that allows players to directly update the game board.
 1. [Multisig operated game board](#multisig): A multisig account that acts as the game admin, allowing either player to update the game board directly.
 
 ## What the guide teaches
@@ -38,6 +39,7 @@ To begin, create a new folder on your system titled `tic-tac-toe` that holds all
 In this folder, create the following subfolders: 
 - `move` to hold the Move code for the game board.
   - `sources` to hold the Move source files.
+- `scripts` to hold the scripts that publish packages and update configs used while building the front-end and CLI.
 
 <details>
   <summary>
@@ -46,15 +48,60 @@ In this folder, create the following subfolders:
   {@inject: examples/tic-tac-toe/move/Move.toml}
 </details>
 
+<details>
+  <summary>
+    Add `publish.sh` to `tic-tac-toe/scripts/`
+  </summary>
+  {@inject: examples/tic-tac-toe/scripts/publish.sh}
+</details>
+
 :::checkpoint
 
 - You have the latest version of Sui installed. If you run `sui --version` in your terminal or console, it responds with the currently installed version.
 - You have a directory to place the files you create in. 
 - You have created a `Move.toml` file in the `tic-tac-toe/move/` directory.
+- You have created a `publish.sh` file in the `tic-tac-toe/scripts/` directory.
 
 :::
 
-## owned.move {#owned.move}
+## Frontend setup
+
+This guide uses a single React frontend to interact with both the shared and multisig versions of the game. The frontend is built on top of `create-react-dapp`, using the TS SDK and `dapp-kit`. 
+
+
+
+## Shared game board {#shared}
+
+### Contract
+
+In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
+
+Create a new file in `tic-tac-toe/move/sources` titled `shared.move`.
+
+As the following code demonstrates, the `Game` object in this example is almost identical to the one before it. The only differences are that it does not include an `admin` field, which is only relevant for the multisig version of the game, and it does not have `store`, because it only ever exists as a shared object (so it cannot be transferred or wrapped).
+
+{@inject: examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
+
+Take a look at the `new` function:
+
+{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
+
+Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint a `TurnCap` because the only two addresses that can play this game are `x` and `o`, and this is checked in the next function, `place_mark`:
+
+{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
+
+<details>
+<summary>
+`shared.move`
+</summary>
+{@inject: examples/tic-tac-toe/move/sources/shared.move}
+</details>
+
+### Frontend
+
+## Multisig operated game board {#multisig}
+
+### Contract
 
 Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. Later, you will update this file to contain the Move code for the game board in the centralized (and multisig) version of tic-tac-toe.
 
@@ -94,30 +141,7 @@ To view the entire source code, see the [owned.move source file](https://github.
 
 An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
 
-## shared.move {#shared.move}
-
-In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
-
-As the following code demonstrates, the `Game` object in this example is almost identical to the one before it. The only differences are that it does not include an `admin` field, which is only relevant for the multisig version of the game, and it does not have `store`, because it only ever exists as a shared object (so it cannot be transferred or wrapped).
-
-{@inject: examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
-
-Take a look at the `new` function:
-
-{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
-
-Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint a `TurnCap` because the only two addresses that can play this game are `x` and `o`, and this is checked in the next function, `place_mark`:
-
-{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
-
-<details>
-<summary>
-`shared.move`
-</summary>
-{@inject: examples/tic-tac-toe/move/sources/shared.move}
-</details>
-
-## Multisig  {#multisig}
+### Frontend
 
 Multisig tic-tac-toe uses the same Move code as the owned version of the game, but interacts with it differently. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the "admin". This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
 
