@@ -127,9 +127,6 @@ pub(crate) struct ObjectFilter {
     pub owner: Option<SuiAddress>,
 
     /// Filter for live objects by their IDs.
-    #[deprecated(
-        note = "Use `multiGetObjects` instead. This field will be removed in a future release."
-    )]
     pub object_ids: Option<Vec<SuiAddress>>,
 
     /// Filter for live or potentially historical objects by their ID and version.

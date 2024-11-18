@@ -122,7 +122,6 @@ pub struct Limits {
     /// Maximum depth of a move value.
     pub max_move_value_depth: u32,
     /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
-    #[deprecated(note = "Use `max_multi_get_keys` instead.")]
     pub max_transaction_ids: u32,
     /// Maximum number of keys that can be passed to a `multiGet` query or to a
     /// `TransactionBlockFilter`.
