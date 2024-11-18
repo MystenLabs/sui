@@ -586,8 +586,8 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     native_charging_v2: bool,
 
-    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic
-    // does not stop the recursion when comes across a committed block, but it keeps looking for the committed history until gc_round.
+    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic does not stop the recursion at the highest 
+    // committed round for each authority, but allows to commit uncommitted blocks up to gc round (excluded) for that authority.
     #[serde(skip_serializing_if = "is_false")]
     consensus_linearizer_collect_subdag_v2: bool,
 }
