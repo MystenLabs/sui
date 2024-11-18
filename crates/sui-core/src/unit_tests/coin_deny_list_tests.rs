@@ -30,7 +30,7 @@ async fn test_regulated_coin_v1_creation() {
     let mut metadata_object = None;
     let mut regulated_metadata_object = None;
     for (oref, _owner) in env.publish_effects.created() {
-        let object = env.authority.get_object(&oref.0).await.unwrap().unwrap();
+        let object = env.authority.get_object(&oref.0).await.unwrap();
         if object.is_package() {
             continue;
         }
@@ -82,7 +82,7 @@ async fn test_regulated_coin_v2_types() {
     let mut regulated_metadata_object = None;
     let mut package_id = None;
     for (oref, _owner) in env.publish_effects.created() {
-        let object = env.authority.get_object(&oref.0).await.unwrap().unwrap();
+        let object = env.authority.get_object(&oref.0).await.unwrap();
         if object.is_package() {
             package_id = Some(object.id());
             continue;
@@ -266,7 +266,6 @@ impl TestEnv {
         self.authority
             .get_object(id)
             .await
-            .unwrap()
             .unwrap()
             .compute_object_reference()
     }

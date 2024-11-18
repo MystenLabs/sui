@@ -1028,7 +1028,7 @@ impl ValidatorService {
                 .into()
             );
             fp_ensure!(
-                !self.state.is_tx_already_executed(&tx_digest)?,
+                !self.state.is_tx_already_executed(&tx_digest),
                 SuiError::UserInputError {
                     error: UserInputError::AlreadyExecutedError { digest: tx_digest }
                 }

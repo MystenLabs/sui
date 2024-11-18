@@ -406,7 +406,6 @@ async fn test_upgrade_introduces_type_then_uses_it() {
         .authority_state
         .get_object_store()
         .get_object_by_key(&created.0, created.1)
-        .unwrap()
         .unwrap();
 
     assert_eq!(

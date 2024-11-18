@@ -243,7 +243,7 @@ fn called_packages(
     {
         let package = reader
             .inner()
-            .get_object(&(move_call.package.into()))?
+            .get_object(&(move_call.package.into()))
             .ok_or_else(|| ObjectNotFoundError::new(move_call.package))?
             .data
             .try_as_package()
@@ -332,7 +332,7 @@ fn resolve_object_reference(
     let object_id = unresolved_object_reference.object_id;
     let object = reader
         .inner()
-        .get_object(&object_id.into())?
+        .get_object(&object_id.into())
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
     resolve_object_reference_with_object(&object, unresolved_object_reference)
 }
@@ -541,7 +541,7 @@ fn resolve_object(
     let id = object_id.into();
     let object = reader
         .inner()
-        .get_object(&id)?
+        .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
 
     match object.owner() {
@@ -592,7 +592,7 @@ fn resolve_shared_input(
     let id = object_id.into();
     let object = reader
         .inner()
-        .get_object(&id)?
+        .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
     resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
 }
@@ -818,7 +818,7 @@ fn select_gas(
         .account_owned_objects_info_iter(owner, None)?
         .filter(|info| info.type_.is_gas_coin())
         .filter(|info| !input_objects.contains(&info.object_id))
-        .filter_map(|info| reader.inner().get_object(&info.object_id).ok().flatten())
+        .filter_map(|info| reader.inner().get_object(&info.object_id))
         .filter_map(|object| {
             GasCoin::try_from(&object)
                 .ok()
