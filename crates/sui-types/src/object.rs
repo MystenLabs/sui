@@ -486,7 +486,9 @@ pub enum Owner {
     ///
     /// Note: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.
     ConsensusV2 {
-        /// The version at which the object most recently became a consensus object
+        /// The version at which the object most recently became a consensus object.
+        /// This serves the same function as `initial_shared_version`, except it may change
+        /// if the object's Owner type changes.
         start_version: SequenceNumber,
         /// The authentication mode of the object
         authenticator: Authenticator,
