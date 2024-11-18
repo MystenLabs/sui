@@ -8,9 +8,6 @@ use api::*;
 use p2p::*;
 use sui::*;
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-
 use anyhow::Context;
 use futures::StreamExt;
 
@@ -21,57 +18,32 @@ use sui_types::base_types::ObjectID;
 
 const REGISTRY_ID: &str = "9862bbb25c7e28708b08a6107633e34258c842f480117538fdfac177b69088af";
 
-/// Main Oracle function
+/// Main loop of the Oracle.
 pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
     let storage_ids = setup_storage(&ctx)?;
-    let (p2p_node, mut consensus_rx) = setup_p2p().await?;
-    let app_state = Api::new(SocketAddr::from(([127, 0, 0, 1], 8080)))
-        .start_and_get_state()
-        .await;
+
+    let (p2p_node, consensus_rx) = setup_p2p().await?;
+    Api::new([127, 0, 0, 1], consensus_rx).start().await;
 
     tracing::info!("[node-{}] 🧩 Oracle ExEx initiated!", ctx.identifier);
-
-    tokio::spawn(async move {
-        while let Some(consensus_price) = consensus_rx.recv().await {
-            update_consensus_price(&app_state, consensus_price).await;
-        }
-    });
-
-    // Handle notifications in the main task
-    loop {
-        tokio::select! {
-            Some(notification) = ctx.notifications.next() => {
-                let checkpoint_number = match notification {
-                    ExExNotification::CheckpointSynced { checkpoint_number } => {
-                        tracing::info!(
-                            "[node-{}] 🤖 Oracle updating at checkpoint #{} !",
-                            ctx.identifier,
-                            checkpoint_number,
-                        );
-                        checkpoint_number
-                    }
-                };
-
-                if let Err(e) = handle_new_checkpoint(&ctx, &p2p_node, &storage_ids, checkpoint_number).await {
-                    tracing::error!("Error handling checkpoint: {}", e);
-                    break;
-                }
-
-                if let Err(e) = ctx.events.send(ExExEvent::FinishedHeight(checkpoint_number)) {
-                    tracing::error!("Error sending finished height event: {}", e);
-                    break;
-                }
-            }
-
-            else => break,
-        }
+    while let Some(notification) = ctx.notifications.next().await {
+        let checkpoint = match notification {
+            ExExNotification::CheckpointSynced { checkpoint_number } => checkpoint_number,
+        };
+        tracing::info!(
+            "[node-{}] 🤖 Oracle updating at checkpoint #{} !",
+            ctx.identifier,
+            checkpoint,
+        );
+        fetch_and_broadcast_median(&ctx, &p2p_node, &storage_ids, checkpoint).await?;
+        ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
     }
 
-    // Clean shutdown
     p2p_node.shutdown().await?;
     Ok(())
 }
 
+/// Retrieves all the registered Price Storages from the Oracle Registry.
 fn setup_storage(ctx: &ExExContext) -> anyhow::Result<Vec<ObjectID>> {
     let registry_id =
         AccountAddress::from_hex(REGISTRY_ID).context("Serializing the Account Address")?;
@@ -89,40 +61,27 @@ fn setup_storage(ctx: &ExExContext) -> anyhow::Result<Vec<ObjectID>> {
     Ok(storage_ids)
 }
 
-async fn handle_new_checkpoint(
+/// Fetch from the storages the published prices, computes the median & sends
+/// it to the P2P channel.
+async fn fetch_and_broadcast_median(
     ctx: &ExExContext,
     p2p_node: &P2PNodeHandle,
     storage_ids: &[ObjectID],
-    checkpoint_number: u64,
+    checkpoint: u64,
 ) -> anyhow::Result<()> {
     let started_at = std::time::Instant::now();
 
     let price_storages: Vec<PuiPriceStorage> = deserialize_objects(&ctx.object_store, storage_ids)?;
     let median_price = aggregate_to_median(&price_storages);
 
-    if let Err(e) = p2p_node
-        .broadcast_price(median_price, checkpoint_number)
-        .await
-    {
-        tracing::error!("Failed to broadcast price: {}", e);
-    } else {
-        tracing::info!(
-            "Price broadcasted to P2P network for checkpoint {}",
-            checkpoint_number
-        );
-    }
+    let _ = p2p_node.broadcast_price(median_price, checkpoint).await;
 
     tracing::info!(
         "[node-{}] ✅ Executed {} in {:?}",
         ctx.identifier,
-        checkpoint_number,
+        checkpoint,
         started_at.elapsed()
     );
 
     Ok(())
-}
-
-async fn update_consensus_price(app_state: &Arc<AppState>, consensus_price: MedianPrice) {
-    let mut price_data = app_state.price_data.lock().expect("Poisoned lock");
-    *price_data = consensus_price;
 }

@@ -42,7 +42,6 @@ impl ExExLauncher {
         } = self;
 
         if extensions.is_empty() {
-            // nothing to launch
             return Ok(None);
         }
 
@@ -50,11 +49,9 @@ impl ExExLauncher {
         let mut exexes = Vec::with_capacity(extensions.len());
 
         for (id, exex) in extensions {
-            // create a new exex handle
             let (handle, events, notifications) = ExExHandle::new(id.clone());
             exex_handles.push(handle);
 
-            // create the launch context for the exex
             let context = ExExContext {
                 identifier,
                 object_store: object_store.clone(),
@@ -63,7 +60,6 @@ impl ExExLauncher {
             };
 
             exexes.push(async move {
-                // init the exex
                 let exex = exex.launch(context).await.unwrap();
                 tokio::spawn(async move {
                     match exex.await {

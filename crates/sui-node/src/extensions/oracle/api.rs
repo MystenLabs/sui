@@ -1,10 +1,11 @@
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{Arc, Mutex},
 };
 
 use axum::{extract::State, routing::get, Json, Router};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Receiver;
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
@@ -14,53 +15,67 @@ pub struct MedianPrice {
     pub timestamp: Option<u64>,
 }
 
+const DEFAULT_API_PORT: u16 = 3000;
+
 #[derive(Debug, Clone, Default)]
 pub struct AppState {
     pub price_data: Arc<Mutex<MedianPrice>>,
 }
 
-#[derive(Clone)]
 pub struct Api {
     state: Arc<AppState>,
     address: SocketAddr,
+    consensus_price_rx: Receiver<MedianPrice>,
 }
 
 impl Api {
-    pub fn new(address: SocketAddr) -> Self {
+    pub fn new(host: [u8; 4], consensus_price_rx: Receiver<MedianPrice>) -> Self {
+        let api_port = std::env::var("API_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(DEFAULT_API_PORT);
         Self {
             state: Arc::new(AppState::default()),
-            address,
+            address: SocketAddr::new(IpAddr::V4(Ipv4Addr::from(host)), api_port),
+            consensus_price_rx,
         }
     }
 
-    pub async fn start_and_get_state(&self) -> Arc<AppState> {
-        let s = self.clone();
+    pub async fn start(self) {
+        let address = self.address;
         let state = self.state.clone();
         tokio::spawn(async move {
-            s.run_forever().await;
+            Self::expose_api(state.clone(), address).await;
         });
-        state
+
+        let mut consensus_price_rx = self.consensus_price_rx;
+        let state = self.state.clone();
+        tokio::spawn(async move {
+            while let Some(consensus_price) = consensus_price_rx.recv().await {
+                Self::update_exposed_price(state.clone(), consensus_price).await;
+            }
+        });
     }
 
-    async fn run_forever(&self) {
+    async fn expose_api(state: Arc<AppState>, address: SocketAddr) {
         let app = Router::new()
             .route("/price", get(Self::get_price))
             .layer(CorsLayer::new().allow_origin(Any))
-            .with_state(self.state.clone());
+            .with_state(state.clone());
 
-        tracing::info!("🌐 HTTP API starting at {}", self.address);
-        let port = std::env::var("API_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(3000);
-        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
-            .await
-            .unwrap();
+        tracing::info!("🌐 HTTP API starting at {}", address);
+        let listener = tokio::net::TcpListener::bind(address).await.unwrap();
         axum::serve(listener, app).await.unwrap();
     }
 
     async fn get_price(State(state): State<Arc<AppState>>) -> Json<MedianPrice> {
         let price_data = state.price_data.lock().unwrap();
         Json(price_data.clone())
+    }
+
+    /// Updates the exposed price in the API.
+    async fn update_exposed_price(state: Arc<AppState>, consensus_price: MedianPrice) {
+        let mut price_data = state.price_data.lock().expect("Poisoned lock");
+        *price_data = consensus_price;
     }
 }
