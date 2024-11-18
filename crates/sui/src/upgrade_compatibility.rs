@@ -11,7 +11,8 @@ use std::fs;
 use std::sync::Arc;
 
 use move_binary_format::file_format::{
-    AbilitySet, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex, TableIndex,
+    AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
+    StructDefinitionIndex, TableIndex,
 };
 use move_binary_format::{
     compatibility::Compatibility,
@@ -463,6 +464,7 @@ upgrade_codes!(
         TypeMismatch: { msg: "type mismatch" },
         AbilityMismatch: { msg: "ability mismatch" },
         FieldMismatch: { msg: "field mismatch" },
+        TypeParamMismatch: { msg: "type parameter mismatch" },
     ],
     Structs: [],
     Enums: [
@@ -635,6 +637,19 @@ fn diag_from_error(
             compiled_unit_with_source,
             lookup,
         ),
+
+        UpgradeCompatibilityModeError::StructTypeParamMismatch {
+            name,
+            old_struct,
+            new_struct,
+        } => struct_type_param_mismatch_diag(
+            name,
+            old_struct,
+            new_struct,
+            compiled_unit_with_source,
+            lookup,
+        ),
+
         UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
             missing_definition_diag("enum", name, compiled_unit_with_source)
         }
@@ -670,11 +685,19 @@ fn diag_from_error(
         } => {
             enum_variant_mismatch_diag(name, old_enum, new_enum, compiled_unit_with_source, lookup)
         }
+        UpgradeCompatibilityModeError::EnumTypeParamMismatch {
+            name,
+            old_enum,
+            new_enum,
+        } => enum_type_param_mismatch(name, old_enum, new_enum, compiled_unit_with_source, lookup),
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
             missing_definition_diag("public function", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
             missing_definition_diag("entry function", name, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::FunctionLostPublicVisibility { name, .. } => {
+            missing_definition_diag("public function", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionSignatureMismatch {
             name,
@@ -687,7 +710,13 @@ fn diag_from_error(
             compiled_unit_with_source,
             lookup,
         ),
-        _ => todo!("Implement diag_from_error for {:?}", error),
+
+        UpgradeCompatibilityModeError::FunctionEntryCompatibility { .. } => {
+            unimplemented!("entry functions can be changed during upgrade")
+        }
+        UpgradeCompatibilityModeError::ModuleMissing { .. } => {
+            unreachable!("Module Missing should be handled by outer function")
+        }
     }
 }
 
@@ -723,11 +752,11 @@ fn missing_definition_diag(
             ),
             format!(
                 "{declaration_kind}s are part of a module's public interface \
-                     and cannot be removed or changed during an upgrade.",
+                and cannot be removed or changed during an upgrade.",
             ),
             format!(
                 "add missing {declaration_kind} '{identifier_name}' \
-                     back to the module '{module_name}'.",
+                back to the module '{module_name}'.",
             ),
         ],
     ));
@@ -775,7 +804,7 @@ fn function_signature_mismatch_diag(
             Vec::<(Loc, String)>::new(),
             vec![
                 "Functions are part of a module's public interface and cannot be \
-                    changed during an upgrade."
+                changed during an upgrade."
                     .to_string(),
                 format!(
                     "Restore the original function's parameters for \
@@ -807,10 +836,71 @@ fn function_signature_mismatch_diag(
                     Vec::<(Loc, String)>::new(),
                     vec![
                         "Functions are part of a module's public interface \
-                            and cannot be changed during an upgrade."
+                        and cannot be changed during an upgrade."
                             .to_string(),
                         format!(
                             "Restore the original function's parameters \
+                            for function '{function_name}'."
+                        ),
+                    ],
+                ));
+            }
+        }
+    }
+    if old_function.type_parameters.len() != new_function.type_parameters.len() {
+        diags.add(Diagnostic::new(
+            Declarations::TypeParamMismatch,
+            (
+                def_loc,
+                format!(
+                    "Expected {} type parameters, have {}",
+                    old_function.type_parameters.len(),
+                    new_function.type_parameters.len()
+                ),
+            ),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Functions are part of a module's public interface \
+                and cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original function's type parameters for \
+                    function '{function_name}', expected {} type parameters.",
+                    old_function.type_parameters.len()
+                ),
+            ],
+        ));
+    } else if old_function.type_parameters != new_function.type_parameters {
+        for ((i, old_type_param), new_type_param) in old_function
+            .type_parameters
+            .iter()
+            .enumerate()
+            .zip(new_function.type_parameters.iter())
+        {
+            if old_type_param != new_type_param {
+                let type_param_loc = new_func_sourcemap
+                    .type_parameters
+                    .get(i)
+                    .context("Unable to get type parameter location")?
+                    .1;
+
+                diags.add(Diagnostic::new(
+                    Declarations::TypeParamMismatch,
+                    (
+                        type_param_loc,
+                        format!(
+                            "Unexpected type parameter {}, expected {}",
+                            format_list(new_type_param.into_iter().map(|t| format!("'{:?}'", t))),
+                            format_list(old_type_param.into_iter().map(|t| format!("'{:?}'", t))),
+                        ),
+                    ),
+                    Vec::<(Loc, String)>::new(),
+                    vec![
+                        "Functions are part of a module's public interface \
+                        and cannot be changed during an upgrade."
+                            .to_string(),
+                        format!(
+                            "Restore the original function's type parameters \
                             for function '{function_name}'."
                         ),
                     ],
@@ -834,7 +924,7 @@ fn function_signature_mismatch_diag(
             Vec::<(Loc, String)>::new(),
             vec![
                 "Functions are part of a module's public interface \
-                    and cannot be changed during an upgrade."
+                and cannot be changed during an upgrade."
                     .to_string(),
                 format!(
                     "Restore the original function's return types \
@@ -874,7 +964,7 @@ fn function_signature_mismatch_diag(
                     Vec::<(Loc, String)>::new(),
                     vec![
                         "Functions are part of a module's public interface \
-                            and cannot be changed during an upgrade."
+                        and cannot be changed during an upgrade."
                             .to_string(),
                         format!(
                             "Restore the original function's return \
@@ -961,7 +1051,7 @@ fn struct_ability_mismatch_diag(
             Vec::<(Loc, String)>::new(),
             vec![
                 "Structs are part of a module's public interface and \
-                    cannot be changed during an upgrade."
+                cannot be changed during an upgrade."
                     .to_string(),
                 format!(
                     "Restore the original struct's abilities \
@@ -1014,7 +1104,7 @@ fn struct_field_mismatch_diag(
                     .to_string(),
                 format!(
                     "Restore the original struct's fields \
-                for struct '{struct_name}' including the ordering."
+                    for struct '{struct_name}' including the ordering."
                 ),
             ],
         ));
@@ -1065,11 +1155,91 @@ fn struct_field_mismatch_diag(
                     vec![(def_loc, "Struct definition".to_string())],
                     vec![
                         "Structs are part of a module's public interface \
-                            and cannot be changed during an upgrade."
+                        and cannot be changed during an upgrade."
                             .to_string(),
                         format!(
                             "Restore the original struct's fields for \
                             struct '{struct_name}' including the ordering."
+                        ),
+                    ],
+                ));
+            }
+        }
+    }
+
+    Ok(diags)
+}
+
+fn struct_type_param_mismatch_diag(
+    name: &Identifier,
+    old_struct: &Struct,
+    new_struct: &Struct,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let old_struct_index = lookup
+        .struct_identifier_to_index
+        .get(name)
+        .context("Unable to get struct index")?;
+
+    let struct_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_struct_source_map(StructDefinitionIndex::new(*old_struct_index))
+        .context("Unable to get struct source map")?;
+
+    let def_loc = struct_sourcemap.definition_location;
+
+    if old_struct.type_parameters.len() != new_struct.type_parameters.len() {
+        diags.add(Diagnostic::new(
+            Declarations::TypeParamMismatch,
+            (
+                def_loc,
+                format!(
+                    "Incorrect number of type parameters: expected {}, found {}",
+                    old_struct.type_parameters.len(),
+                    new_struct.type_parameters.len()
+                ),
+            ),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Structs are part of a module's public interface and \
+                cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original struct's type parameters \
+                    for struct '{name}' including the ordering."
+                ),
+            ],
+        ));
+    } else if old_struct.type_parameters != new_struct.type_parameters {
+        for (i, (old_type_param, new_type_param)) in old_struct
+            .type_parameters
+            .iter()
+            .zip(new_struct.type_parameters.iter())
+            .enumerate()
+        {
+            if old_type_param != new_type_param {
+                let type_param_loc = struct_sourcemap
+                    .type_parameters
+                    .get(i)
+                    .context("Unable to get type parameter location")?;
+
+                let (code, label) = type_parameter_code_and_error(old_type_param, new_type_param);
+
+                diags.add(Diagnostic::new(
+                    code,
+                    (type_param_loc.1, label),
+                    vec![(def_loc, "Struct definition".to_string())],
+                    vec![
+                        "Structs are part of a module's public interface \
+                        and cannot be changed during an upgrade."
+                            .to_string(),
+                        format!(
+                            "Restore the original struct's type parameters \
+                            for struct '{name}' including the ordering."
                         ),
                     ],
                 ));
@@ -1152,7 +1322,7 @@ fn enum_ability_mismatch_diag(
             Vec::<(Loc, String)>::new(),
             vec![
                 "Enums are part of a module's public interface \
-                    and cannot be changed during an upgrade."
+                and cannot be changed during an upgrade."
                     .to_string(),
                 format!(
                     "Restore the original enum's abilities \
@@ -1250,7 +1420,7 @@ fn enum_variant_mismatch_diag(
                 vec![(def_loc, "Enum definition".to_string())],
                 vec![
                     "Enums are part of a module's public interface \
-                        and cannot be changed during an upgrade."
+                    and cannot be changed during an upgrade."
                         .to_string(),
                     format!(
                         "Restore the original enum's variants for \
@@ -1310,7 +1480,7 @@ fn enum_new_variant_diag(
                 vec![(def_loc, "Enum definition".to_string())],
                 vec![
                     "Enums are part of a module's public interface and cannot be \
-                        changed during an upgrade."
+                    changed during an upgrade."
                         .to_string(),
                     format!(
                         "Restore the original enum's variants for enum \
@@ -1371,11 +1541,148 @@ fn enum_variant_missing_diag(
     Ok(diags)
 }
 
+fn enum_type_param_mismatch(
+    enum_name: &Identifier,
+    old_enum: &Enum,
+    new_enum: &Enum,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let old_enum_index = lookup
+        .enum_identifier_to_index
+        .get(enum_name)
+        .context("Unable to get enum index")?;
+
+    let enum_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_enum_source_map(EnumDefinitionIndex::new(*old_enum_index))
+        .context("Unable to get enum source map")?;
+
+    let def_loc = enum_sourcemap.definition_location;
+
+    if old_enum.type_parameters.len() != new_enum.type_parameters.len() {
+        diags.add(Diagnostic::new(
+            Declarations::TypeParamMismatch,
+            (
+                def_loc,
+                format!(
+                    "Incorrect number of type parameters: expected {}, found {}",
+                    old_enum.type_parameters.len(),
+                    new_enum.type_parameters.len()
+                ),
+            ),
+            Vec::<(Loc, String)>::new(),
+            vec![
+                "Enums are part of a module's public interface \
+                and cannot be changed during an upgrade."
+                    .to_string(),
+                format!(
+                    "Restore the original enum's type parameters for \
+                    enum '{enum_name}' including the ordering."
+                ),
+            ],
+        ))
+    } else {
+        for (i, (old_type_param, new_type_param)) in old_enum
+            .type_parameters
+            .iter()
+            .zip(new_enum.type_parameters.iter())
+            .enumerate()
+        {
+            if old_type_param != new_type_param {
+                let type_param_loc = enum_sourcemap
+                    .type_parameters
+                    .get(i)
+                    .context("Unable to get type parameter location")?;
+
+                let (code, label) = type_parameter_code_and_error(old_type_param, new_type_param);
+
+                diags.add(Diagnostic::new(
+                    code,
+                    (type_param_loc.1, label),
+                    vec![(def_loc, "Enum definition".to_string())],
+                    vec![
+                        "Enums are part of a module's public interface \
+                        and cannot be changed during an upgrade."
+                            .to_string(),
+                        format!(
+                            "Restore the original enum's type parameters \
+                            for enum '{enum_name}' including the ordering."
+                        ),
+                    ],
+                ));
+            }
+        }
+    }
+    Ok(diags)
+}
+
+fn type_parameter_code_and_error(
+    old_type_param: &DatatypeTyParameter,
+    new_type_param: &DatatypeTyParameter,
+) -> (DiagnosticInfo, String) {
+    // check the constraints
+    match (
+        old_type_param.constraints != new_type_param.constraints,
+        old_type_param.is_phantom != new_type_param.is_phantom,
+    ) {
+        (true, true) | (true, false) => (
+            Declarations::TypeParamMismatch.into(),
+            format!(
+                "Unexpected {}type parameter constraints: {}, expected {}parameter with {}.",
+                if old_type_param.is_phantom {
+                    "phantom "
+                } else {
+                    ""
+                },
+                format_list(
+                    new_type_param
+                        .constraints
+                        .into_iter()
+                        .map(|c| format!("'{:?}'", c))
+                ),
+                if new_type_param.is_phantom {
+                    "phantom "
+                } else {
+                    ""
+                },
+                format_list(
+                    old_type_param
+                        .constraints
+                        .into_iter()
+                        .map(|c| format!("'{:?}'", c))
+                ),
+            ),
+        ),
+        // phantom is different
+        (false, true) => (
+            Declarations::TypeParamMismatch.into(),
+            format!(
+                "Type parameter is {}, expected {}.",
+                if new_type_param.is_phantom {
+                    "phantom"
+                } else {
+                    "non-phantom"
+                },
+                if old_type_param.is_phantom {
+                    "phantom"
+                } else {
+                    "non-phantom"
+                },
+            ),
+        ),
+        (false, false) => unreachable!("Type parameters should not be the same"),
+    }
+}
+
 // TODO does this exist somewhere?
 fn format_list(items: impl IntoIterator<Item = impl std::fmt::Display>) -> String {
     let items: Vec<_> = items.into_iter().map(|i| i.to_string()).collect();
     match items.len() {
-        0 => String::new(),
+        0 => "none".to_string(),
         1 => items[0].to_string(),
         2 => format!("{} and {}", items[0], items[1]),
         _ => {
