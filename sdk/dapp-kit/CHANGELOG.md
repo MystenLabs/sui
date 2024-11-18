@@ -1,5 +1,11 @@
 # @mysten/dapp-kit
 
+## 0.14.36
+
+### Patch Changes
+
+- 67d4620: Revert dev dependency change from v0.14.35 due to breakage
+
 ## 0.14.35
 
 ### Patch Changes
