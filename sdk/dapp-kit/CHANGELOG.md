@@ -1,5 +1,17 @@
 # @mysten/dapp-kit
 
+## 0.14.34
+
+### Patch Changes
+
+- ec919a0: Ensure wallet-icon is a non-empty string before rendering
+- Updated dependencies [4bac808]
+- Updated dependencies [4bac808]
+- Updated dependencies [938fb6e]
+  - @mysten/zksend@0.12.2
+  - @mysten/sui@1.14.4
+  - @mysten/wallet-standard@0.13.13
+
 ## 0.14.33
 
 ### Patch Changes

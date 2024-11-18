@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.14.4
+
+### Patch Changes
+
+- 938fb6e: fix bug in object cache's applyEffects method that doesn't correctly await cache deletes
+
 ## 1.14.3
 
 ### Patch Changes
