@@ -2886,7 +2886,7 @@ input ObjectFilter {
 	"""
 	Filter for live or potentially historical objects by their ID and version.
 	"""
-	objectKeys: [ObjectKey!]
+	objectKeys: [ObjectKey!] @deprecated(reason: "Use multiGetObjects instead. This field will be removed in a future release.")
 }
 
 input ObjectKey {
