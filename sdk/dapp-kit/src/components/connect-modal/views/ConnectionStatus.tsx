@@ -21,11 +21,13 @@ export function ConnectionStatus({
 }: ConnectionStatusProps) {
 	return (
 		<div className={styles.container}>
-			<img
-				className={styles.walletIcon}
-				src={selectedWallet.icon}
-				alt={`${selectedWallet.name} logo`}
-			/>
+			{selectedWallet.icon && (
+				<img
+					className={styles.walletIcon}
+					src={selectedWallet.icon}
+					alt={`${selectedWallet.name} logo`}
+				/>
+			)}
 			<div className={styles.title}>
 				<Heading as="h2" size="xl">
 					Opening {selectedWallet.name}
