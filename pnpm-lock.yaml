@@ -1247,15 +1247,6 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.1.0
         version: 1.1.0(@types/react@18.3.3)(react@18.3.1)
-      '@vanilla-extract/css':
-        specifier: ^1.15.3
-        version: 1.15.3(babel-plugin-macros@3.1.0)
-      '@vanilla-extract/dynamic':
-        specifier: ^2.1.1
-        version: 2.1.1
-      '@vanilla-extract/recipes':
-        specifier: ^0.5.3
-        version: 0.5.3(@vanilla-extract/css@1.15.3(babel-plugin-macros@3.1.0))
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1287,9 +1278,18 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.3
+      '@vanilla-extract/css':
+        specifier: ^1.15.3
+        version: 1.15.3(babel-plugin-macros@3.1.0)
+      '@vanilla-extract/dynamic':
+        specifier: ^2.1.1
+        version: 2.1.1
       '@vanilla-extract/esbuild-plugin':
         specifier: ^2.3.8
         version: 2.3.8(@types/node@20.14.10)(babel-plugin-macros@3.1.0)(esbuild@0.23.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
+      '@vanilla-extract/recipes':
+        specifier: ^0.5.3
+        version: 0.5.3(@vanilla-extract/css@1.15.3(babel-plugin-macros@3.1.0))
       '@vanilla-extract/vite-plugin':
         specifier: ^4.0.13
         version: 4.0.13(@types/node@20.14.10)(babel-plugin-macros@3.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)(vite@5.3.3(@types/node@20.14.10)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1))
@@ -18812,13 +18812,15 @@ snapshots:
     transitivePeerDependencies:
       - '@parcel/core'
 
-  '@parcel/cache@2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))':
+  '@parcel/cache@2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)':
     dependencies:
       '@parcel/core': 2.12.0(@swc/helpers@0.5.5)
       '@parcel/fs': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/logger': 2.12.0
       '@parcel/utils': 2.12.0
       lmdb: 2.8.5
+    transitivePeerDependencies:
+      - '@swc/helpers'
 
   '@parcel/codeframe@2.12.0':
     dependencies:
@@ -18878,7 +18880,7 @@ snapshots:
   '@parcel/core@2.12.0(@swc/helpers@0.5.5)':
     dependencies:
       '@mischnic/json-sourcemap': 0.1.1
-      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))
+      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/diagnostic': 2.12.0
       '@parcel/events': 2.12.0
       '@parcel/fs': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
@@ -19293,7 +19295,7 @@ snapshots:
 
   '@parcel/types@2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)':
     dependencies:
-      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))
+      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/diagnostic': 2.12.0
       '@parcel/fs': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/package-manager': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
