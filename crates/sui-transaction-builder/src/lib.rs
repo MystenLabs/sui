@@ -636,7 +636,8 @@ impl TransactionBuilder {
                 }
                 Owner::Shared {
                     initial_shared_version,
-                } | Owner::ConsensusV2 {
+                }
+                | Owner::ConsensusV2 {
                     start_version: initial_shared_version,
                     authenticator: _,
                 } => ObjectArg::SharedObject {

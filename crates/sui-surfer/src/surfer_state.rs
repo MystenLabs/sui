@@ -245,7 +245,7 @@ impl SurferState {
                 Owner::ObjectOwner(_) => (),
                 Owner::Shared {
                     initial_shared_version,
-                } 
+                }
                 // TODO: Implement full support for ConsensusV2 objects in sui-surfer.
                 | Owner::ConsensusV2 {
                     start_version: initial_shared_version,
