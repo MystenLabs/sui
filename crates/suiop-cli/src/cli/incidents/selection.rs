@@ -66,6 +66,7 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
         })
         .collect::<Vec<_>>();
     let filtered_incidents = filter_incidents_for_review(incidents, "P2");
+    println!("Reviewing {} recent incidents", filtered_incidents.len());
     let mut group_map = group_by_similar_title(filtered_incidents, 0.9);
     let mut to_review = vec![];
     let mut excluded = vec![];
