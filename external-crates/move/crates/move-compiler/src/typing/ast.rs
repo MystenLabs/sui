@@ -17,6 +17,7 @@ use crate::{
     },
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
 };
+use move_core_types::parsing::address::NumericalAddress;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
@@ -364,12 +365,15 @@ pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
 }
 
 impl ModuleCall {
-    pub fn is(
+    pub fn is<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         function: impl AsRef<str>,
-    ) -> bool {
+    ) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         let Self {
             module: sp!(_, mident),
             name: f,

@@ -25,7 +25,7 @@ impl Processor for SumDisplays {
 
     type Value = StoredDisplay;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData { transactions, .. } = checkpoint.as_ref();
 
         let mut values = vec![];

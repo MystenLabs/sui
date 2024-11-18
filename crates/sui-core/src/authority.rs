@@ -1210,7 +1210,7 @@ impl AuthorityState {
         // the effects have already been written.
         if let Some(effects) = self
             .get_transaction_cache_reader()
-            .get_executed_effects(tx_digest)?
+            .get_executed_effects(tx_digest)
         {
             tx_guard.release();
             return Ok((effects, None));
@@ -1281,10 +1281,12 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
-        self.get_transaction_cache_reader()
+        Ok(self
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[digest])
             .await
-            .map(|mut r| r.pop().expect("must return correct number of effects"))
+            .pop()
+            .expect("must return correct number of effects"))
     }
 
     fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
@@ -1541,7 +1543,7 @@ impl AuthorityState {
         );
         self.get_cache_writer()
             .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.into())
-            .await?;
+            .await;
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
@@ -2257,7 +2259,7 @@ impl AuthorityState {
         Ok(epoch_store.reference_gas_price())
     }
 
-    pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
+    pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> bool {
         self.get_transaction_cache_reader()
             .is_tx_already_executed(digest)
     }
@@ -2391,9 +2393,7 @@ impl AuthorityState {
                 };
                 // When we process the index, the latest object hasn't been written yet so
                 // the old object must be present.
-                let Some(old_object) = self
-                    .get_object_store()
-                    .get_object_by_key(id, *old_version)?
+                let Some(old_object) = self.get_object_store().get_object_by_key(id, *old_version)
                 else {
                     panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}", tx_digest, id, old_version);
                 };
@@ -2541,7 +2541,7 @@ impl AuthorityState {
                     // If not found, try to find it in the database.
                     let object = self
                         .get_object_store()
-                        .get_object_by_key(&object_id, o.version())?
+                        .get_object_by_key(&object_id, o.version())
                         .ok_or_else(|| UserInputError::ObjectNotFound {
                             object_id,
                             version: Some(o.version()),
@@ -2693,7 +2693,7 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo => {
                 let (_, seq, _) = self
                     .get_object_or_tombstone(request.object_id)
-                    .await?
+                    .await
                     .ok_or_else(|| {
                         SuiError::from(UserInputError::ObjectNotFound {
                             object_id: request.object_id,
@@ -2707,7 +2707,7 @@ impl AuthorityState {
 
         let object = self
             .get_object_store()
-            .get_object_by_key(&request.object_id, requested_object_seq)?
+            .get_object_by_key(&request.object_id, requested_object_seq)
             .ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
                     object_id: request.object_id,
@@ -3140,7 +3140,7 @@ impl AuthorityState {
                 .protocol_version(),
         );
         self.get_reconfig_api()
-            .set_epoch_start_configuration(&epoch_start_configuration)?;
+            .set_epoch_start_configuration(&epoch_start_configuration);
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -3390,16 +3390,14 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.get_object_store()
-            .get_object(object_id)
-            .map_err(Into::into)
+    pub async fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.get_object_store().get_object(object_id)
     }
 
     pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
             .get_object(&SUI_SYSTEM_ADDRESS.into())
-            .await?
+            .await
             .expect("framework object should always exist")
             .compute_object_reference())
     }
@@ -3450,7 +3448,7 @@ impl AuthorityState {
         Ok(
             match self
                 .get_object_cache_reader()
-                .get_latest_object_or_tombstone(*object_id)?
+                .get_latest_object_or_tombstone(*object_id)
             {
                 Some((_, ObjectOrTombstone::Object(object))) => {
                     let layout = self.get_object_layout(&object)?;
@@ -3511,7 +3509,7 @@ impl AuthorityState {
         // Firstly we see if the object ever existed by getting its latest data
         let Some(obj_ref) = self
             .get_object_cache_reader()
-            .get_latest_object_ref_or_tombstone(*object_id)?
+            .get_latest_object_ref_or_tombstone(*object_id)
         else {
             return Ok(PastObjectRead::ObjectNotExists(*object_id));
         };
@@ -3564,7 +3562,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<(Object, Option<MoveStructLayout>)>> {
         let Some(object) = self
             .get_object_cache_reader()
-            .get_object_by_key(object_id, version)?
+            .get_object_by_key(object_id, version)
         else {
             return Ok(None);
         };
@@ -3596,7 +3594,7 @@ impl AuthorityState {
         version: SequenceNumber,
     ) -> SuiResult<Owner> {
         self.get_object_store()
-            .get_object_by_key(object_id, version)?
+            .get_object_by_key(object_id, version)
             .ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
                     object_id: *object_id,
@@ -3675,7 +3673,7 @@ impl AuthorityState {
 
         let objects = self
             .get_object_store()
-            .multi_get_objects_by_key(&object_ids)?;
+            .multi_get_objects_by_key(&object_ids);
 
         for (o, id) in objects.into_iter().zip(object_ids) {
             let object = o.ok_or_else(|| {
@@ -3770,7 +3768,7 @@ impl AuthorityState {
         digest: &TransactionEventsDigest,
     ) -> SuiResult<TransactionEvents> {
         self.get_transaction_cache_reader()
-            .get_events(digest)?
+            .get_events(digest)
             .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
     }
 
@@ -3786,7 +3784,7 @@ impl AuthorityState {
 
         let input_objects = self
             .get_object_store()
-            .multi_get_objects_by_key(&input_object_keys)?
+            .multi_get_objects_by_key(&input_object_keys)
             .into_iter()
             .enumerate()
             .map(|(idx, maybe_object)| {
@@ -3814,7 +3812,7 @@ impl AuthorityState {
 
         let output_objects = self
             .get_object_store()
-            .multi_get_objects_by_key(&output_object_keys)?
+            .multi_get_objects_by_key(&output_object_keys)
             .into_iter()
             .enumerate()
             .map(|(idx, maybe_object)| {
@@ -4156,9 +4154,7 @@ impl AuthorityState {
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {
-        self.get_reconfig_api()
-            .insert_genesis_object(object)
-            .expect("Cannot insert genesis object")
+        self.get_reconfig_api().insert_genesis_object(object);
     }
 
     pub async fn insert_genesis_objects(&self, objects: &[Object]) {
@@ -4178,7 +4174,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
         let effects = self
             .get_transaction_cache_reader()
-            .get_executed_effects(transaction_digest)?;
+            .get_executed_effects(transaction_digest);
         if let Some(effects) = effects {
             let events = if let Some(digest) = effects.events_digest() {
                 self.get_transaction_events(digest)?
@@ -4204,7 +4200,7 @@ impl AuthorityState {
         {
             if let Some(transaction) = self
                 .get_transaction_cache_reader()
-                .get_transaction_block(transaction_digest)?
+                .get_transaction_block(transaction_digest)
             {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
                 let events = if let Some(digest) = effects.events_digest() {
@@ -4243,7 +4239,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<VerifiedSignedTransactionEffects>> {
         let effects = self
             .get_transaction_cache_reader()
-            .get_executed_effects(transaction_digest)?;
+            .get_executed_effects(transaction_digest);
         match effects {
             Some(effects) => Ok(Some(self.sign_effects(effects, epoch_store)?)),
             None => Ok(None),
@@ -4381,14 +4377,11 @@ impl AuthorityState {
         epoch_store.get_signed_transaction(&lock_info.tx_digest)
     }
 
-    pub async fn get_objects(&self, objects: &[ObjectID]) -> SuiResult<Vec<Option<Object>>> {
+    pub async fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {
         self.get_object_cache_reader().get_objects(objects)
     }
 
-    pub async fn get_object_or_tombstone(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    pub async fn get_object_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
         self.get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
     }
@@ -4493,7 +4486,7 @@ impl AuthorityState {
         binary_config: &BinaryConfig,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
-        let objects = self.get_objects(&ids).await.expect("read cannot fail");
+        let objects = self.get_objects(&ids).await;
 
         let mut res = Vec::with_capacity(system_packages.len());
         for (system_package_ref, object) in system_packages.into_iter().zip(objects.iter()) {
@@ -5048,7 +5041,6 @@ impl AuthorityState {
         if self
             .get_transaction_cache_reader()
             .is_tx_already_executed(tx_digest)
-            .expect("read cannot fail")
         {
             warn!("change epoch tx has already been executed via state sync");
             return Err(anyhow::anyhow!(
@@ -5081,11 +5073,7 @@ impl AuthorityState {
         // deliver to the transaction to CheckpointExecutor after it is included in a certified
         // checkpoint.
         self.get_state_sync_store()
-            .insert_transaction_and_effects(&tx, &effects)
-            .map_err(|err| {
-                let err: anyhow::Error = err.into();
-                err
-            })?;
+            .insert_transaction_and_effects(&tx, &effects);
 
         info!(
             "Effects summary of the change epoch transaction: {:?}",
@@ -5130,7 +5118,7 @@ impl AuthorityState {
             }
             info!("Reverting {:?} at the end of epoch", digest);
             epoch_store.revert_executed_transaction(&digest)?;
-            self.get_reconfig_api().revert_state_update(&digest)?;
+            self.get_reconfig_api().revert_state_update(&digest);
         }
         info!("All uncommitted local transactions reverted");
         Ok(())
@@ -5188,8 +5176,7 @@ impl AuthorityState {
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
     pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.get_reconfig_api()
-            .bulk_insert_genesis_objects(objects)?;
+        self.get_reconfig_api().bulk_insert_genesis_objects(objects);
         self.get_object_cache_reader()
             .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         self.get_reconfig_api()
@@ -5280,7 +5267,7 @@ impl RandomnessRoundReceiver {
                     .notify_read_executed_effects(&[digest]),
             )
             .await;
-            let result = match result {
+            let mut effects = match result {
                 Ok(result) => result,
                 Err(_) => {
                     if cfg!(debug_assertions) {
@@ -5296,7 +5283,6 @@ impl RandomnessRoundReceiver {
                 }
             };
 
-            let mut effects = result.unwrap_or_else(|_| panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}"));
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
                 panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
@@ -5321,7 +5307,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
     )> {
         let txns = if !transactions.is_empty() {
             self.get_transaction_cache_reader()
-                .multi_get_transaction_blocks(transactions)?
+                .multi_get_transaction_blocks(transactions)
                 .into_iter()
                 .map(|t| t.map(|t| (*t).clone().into_inner()))
                 .collect()
@@ -5331,14 +5317,13 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 
         let fx = if !effects.is_empty() {
             self.get_transaction_cache_reader()
-                .multi_get_executed_effects(effects)?
+                .multi_get_executed_effects(effects)
         } else {
             vec![]
         };
 
         let evts = if !events.is_empty() {
-            self.get_transaction_cache_reader()
-                .multi_get_events(events)?
+            self.get_transaction_cache_reader().multi_get_events(events)
         } else {
             vec![]
         };
@@ -5404,9 +5389,10 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        self.get_checkpoint_cache()
+        Ok(self
+            .get_checkpoint_cache()
             .deprecated_get_transaction_checkpoint(&digest)
-            .map(|res| res.map(|(_epoch, checkpoint)| checkpoint))
+            .map(|(_epoch, checkpoint)| checkpoint))
     }
 
     #[instrument(skip(self))]
@@ -5415,9 +5401,9 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         object_id: ObjectID,
         version: VersionNumber,
     ) -> SuiResult<Option<Object>> {
-        self.get_object_cache_reader()
-            .get_object_by_key(&object_id, version)
-            .map_err(Into::into)
+        Ok(self
+            .get_object_cache_reader()
+            .get_object_by_key(&object_id, version))
     }
 
     #[instrument(skip(self))]
@@ -5427,7 +5413,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
     ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
         let res = self
             .get_checkpoint_cache()
-            .deprecated_multi_get_transaction_checkpoint(digests)?;
+            .deprecated_multi_get_transaction_checkpoint(digests);
 
         Ok(res
             .into_iter()
@@ -5610,7 +5596,7 @@ impl NodeStateDump {
         // Record all system packages at this version
         let mut relevant_system_packages = Vec::new();
         for sys_package_id in BuiltInFramework::all_package_ids() {
-            if let Some(w) = object_store.get_object(&sys_package_id)? {
+            if let Some(w) = object_store.get_object(&sys_package_id) {
                 relevant_system_packages.push(ObjDumpFormat::new(w))
             }
         }
@@ -5620,7 +5606,7 @@ impl NodeStateDump {
         for kind in effects.input_shared_objects() {
             match kind {
                 InputSharedObject::Mutate(obj_ref) | InputSharedObject::ReadOnly(obj_ref) => {
-                    if let Some(w) = object_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
+                    if let Some(w) = object_store.get_object_by_key(&obj_ref.0, obj_ref.1) {
                         shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
@@ -5634,7 +5620,7 @@ impl NodeStateDump {
         // Child objects which are read but not mutated are not tracked anywhere else
         let mut loaded_child_objects = Vec::new();
         for (id, meta) in &inner_temporary_store.loaded_runtime_objects {
-            if let Some(w) = object_store.get_object_by_key(id, meta.version)? {
+            if let Some(w) = object_store.get_object_by_key(id, meta.version) {
                 loaded_child_objects.push(ObjDumpFormat::new(w))
             }
         }
@@ -5642,7 +5628,7 @@ impl NodeStateDump {
         // Record all modified objects
         let mut modified_at_versions = Vec::new();
         for (id, ver) in effects.modified_at_versions() {
-            if let Some(w) = object_store.get_object_by_key(&id, ver)? {
+            if let Some(w) = object_store.get_object_by_key(&id, ver) {
                 modified_at_versions.push(ObjDumpFormat::new(w))
             }
         }

@@ -14,6 +14,12 @@ error[E01002]: unexpected token
    │                        Expected an identifier or a decimal number
 
 note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:23
+   │
+15 │         let _tmp2 = _s.a.;
+   │                       ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:24
    │
 15 │         let _tmp2 = _s.a.;

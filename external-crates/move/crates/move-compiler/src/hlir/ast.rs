@@ -149,6 +149,7 @@ pub struct Function {
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    pub loc: Loc,
     /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
     /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
@@ -582,12 +583,10 @@ impl UnannotatedExp_ {
 }
 
 impl TypeName_ {
-    pub fn is(
-        &self,
-        address: impl AsRef<str>,
-        module: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> bool {
+    pub fn is<Addr>(&self, address: &Addr, module: impl AsRef<str>, name: impl AsRef<str>) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             TypeName_::Builtin(_) => false,
             TypeName_::ModuleType(mident, n) => {
@@ -677,12 +676,15 @@ impl BaseType_ {
         }
     }
 
-    pub fn is_apply(
+    pub fn is_apply<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])>
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             Self::Apply(abs, n, tys) if n.value.is(address, module, name) => Some((abs, n, tys)),
             _ => None,
@@ -734,12 +736,15 @@ impl SingleType_ {
         }
     }
 
-    pub fn is_apply(
+    pub fn is_apply<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])>
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             Self::Ref(_, b) | Self::Base(b) => b.value.is_apply(address, module, name),
         }
@@ -810,12 +815,15 @@ impl Type_ {
         sp(loc, t_)
     }
 
-    pub fn is_apply(
+    pub fn is_apply<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])>
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             Type_::Unit => None,
             Type_::Single(t) => t.value.is_apply(address, module, name),
@@ -859,12 +867,15 @@ impl TName for BlockLabel {
 }
 
 impl ModuleCall {
-    pub fn is(
+    pub fn is<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         function: impl AsRef<str>,
-    ) -> bool {
+    ) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         let Self {
             module: sp!(_, mident),
             name: f,
@@ -1067,6 +1078,7 @@ impl AstDebug for (FunctionName, &Function) {
                 warning_filter,
                 index,
                 attributes,
+                loc: _,
                 visibility,
                 compiled_visibility,
                 entry,

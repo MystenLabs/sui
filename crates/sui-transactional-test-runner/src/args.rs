@@ -438,8 +438,8 @@ impl SuiValue {
             sui_types::storage::ObjectStore::get_object(&*test_adapter.executor, &id)
         };
         let obj = match obj_res {
-            Ok(Some(obj)) => obj,
-            Err(_) | Ok(None) => bail!("INVALID TEST. Could not load object argument {}", id),
+            Some(obj) => obj,
+            None => bail!("INVALID TEST. Could not load object argument {}", id),
         };
         Ok(obj)
     }

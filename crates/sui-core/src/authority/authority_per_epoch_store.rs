@@ -4,7 +4,7 @@
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::dkg_v1;
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
@@ -600,7 +600,7 @@ pub struct AuthorityEpochTables {
     pub(crate) dkg_confirmations: DBMap<PartyId, Vec<u8>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
-    pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
+    pub(crate) dkg_output: DBMap<u64, dkg_v1::Output<PkG, EncG>>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
     randomness_rounds_pending: DBMap<RandomnessRound, ()>,
@@ -1493,14 +1493,16 @@ impl AuthorityPerEpochStore {
         &self,
         checkpoints: Vec<CheckpointSequenceNumber>,
     ) -> SuiResult<Vec<Accumulator>> {
-        self.checkpoint_state_notify_read
-            .read(&checkpoints, |checkpoints| -> SuiResult<_> {
-                Ok(self
-                    .tables()?
+        let tables = self.tables()?;
+        Ok(self
+            .checkpoint_state_notify_read
+            .read(&checkpoints, |checkpoints| {
+                tables
                     .state_hash_by_checkpoint
-                    .multi_get(checkpoints)?)
+                    .multi_get(checkpoints)
+                    .expect("db error")
             })
-            .await
+            .await)
     }
 
     pub async fn notify_read_running_root(
@@ -1711,7 +1713,7 @@ impl AuthorityPerEpochStore {
                     // Note: we don't actually need to read from the transaction here, as no writer
                     // can update object_store until after get_or_init_next_object_versions
                     // completes.
-                    match cache_reader.get_object(id).expect("read cannot fail") {
+                    match cache_reader.get_object(id) {
                         Some(obj) => (*id, obj.version()),
                         None => (*id, *initial_version),
                     }
@@ -4217,7 +4219,7 @@ pub(crate) struct ConsensusCommitOutput {
     dkg_confirmations: BTreeMap<PartyId, VersionedDkgConfirmation>,
     dkg_processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     dkg_used_message: Option<VersionedUsedProcessedMessages>,
-    dkg_output: Option<dkg::Output<PkG, EncG>>,
+    dkg_output: Option<dkg_v1::Output<PkG, EncG>>,
 
     // jwk state
     pending_jwks: BTreeSet<(AuthorityName, JwkId, JWK)>,
@@ -4316,7 +4318,7 @@ impl ConsensusCommitOutput {
         self.dkg_used_message = Some(used_messages);
     }
 
-    pub fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {
+    pub fn set_dkg_output(&mut self, output: dkg_v1::Output<PkG, EncG>) {
         self.dkg_output = Some(output);
     }
 

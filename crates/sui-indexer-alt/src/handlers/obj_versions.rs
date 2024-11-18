@@ -20,7 +20,7 @@ impl Processor for ObjVersions {
     const NAME: &'static str = "obj_versions";
     type Value = StoredObjVersion;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

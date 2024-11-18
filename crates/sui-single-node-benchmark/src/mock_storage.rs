@@ -54,7 +54,7 @@ impl InMemoryObjectStore {
             let obj: Option<Object> = match kind {
                 InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
+                    self.get_object_by_key(&objref.0, objref.1)
                 }
 
                 InputObjectKind::SharedMoveObject { id, .. } => {
@@ -73,7 +73,7 @@ impl InMemoryObjectStore {
                         panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });
 
-                    self.get_object_by_key(id, *version)?
+                    self.get_object_by_key(id, *version)
                 }
             };
 
@@ -100,26 +100,19 @@ impl InMemoryObjectStore {
 }
 
 impl ObjectStore for InMemoryObjectStore {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.num_object_reads.inc_by(1);
-        Ok(self.objects.read().unwrap().get(object_id).cloned())
+        self.objects.read().unwrap().get(object_id).cloned()
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        Ok(self.get_object(object_id).unwrap().and_then(|o| {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
+        self.get_object(object_id).and_then(|o| {
             if o.version() == version {
                 Some(o.clone())
             } else {
                 None
             }
-        }))
+        })
     }
 }
 
@@ -136,7 +129,7 @@ impl ChildObjectResolver for InMemoryObjectStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        Ok(self.get_object(child).unwrap().and_then(|o| {
+        Ok(self.get_object(child).and_then(|o| {
             if o.version() <= child_version_upper_bound
                 && o.owner == Owner::ObjectOwner((*parent).into())
             {
@@ -168,10 +161,7 @@ impl GetModule for InMemoryObjectStore {
 }
 
 impl ParentSync for InMemoryObjectStore {
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        _object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         unreachable!()
     }
 }

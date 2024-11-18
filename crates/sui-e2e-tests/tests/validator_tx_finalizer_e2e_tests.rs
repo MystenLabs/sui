@@ -37,8 +37,7 @@ async fn test_validator_tx_finalizer_fastpath_tx() {
                 n.state()
                     .get_transaction_cache_reader()
                     .notify_read_executed_effects_digests(&tx_digests)
-                    .await
-                    .unwrap();
+                    .await;
             })
             .await;
         }
@@ -76,8 +75,7 @@ async fn test_validator_tx_finalizer_consensus_tx() {
                 n.state()
                     .get_transaction_cache_reader()
                     .notify_read_executed_effects_digests(&tx_digests)
-                    .await
-                    .unwrap();
+                    .await;
             })
             .await;
         }
@@ -124,8 +122,8 @@ async fn test_validator_tx_finalizer_equivocation() {
     for node in cluster.swarm.validator_node_handles() {
         node.with(|n| {
             let state = n.state();
-            assert!(!state.is_tx_already_executed(&tx_digest1).unwrap());
-            assert!(!state.is_tx_already_executed(&tx_digest2).unwrap());
+            assert!(!state.is_tx_already_executed(&tx_digest1));
+            assert!(!state.is_tx_already_executed(&tx_digest2));
             assert_eq!(
                 state
                     .validator_tx_finalizer

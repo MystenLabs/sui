@@ -2908,7 +2908,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             resolve_call(context, eloc, ma, is_macro, tys_opt, rhs)
         }
-        EE::MethodCall(edot, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
+        EE::MethodCall(edot, dot_loc, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
             None => {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
@@ -2919,7 +2919,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 if is_macro.is_some() {
                     context.check_feature(context.current_package, FeatureGate::MacroFuns, eloc);
                 }
-                NE::MethodCall(d, n, is_macro, ty_args, nes)
+                NE::MethodCall(d, dot_loc, n, is_macro, ty_args, nes)
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
@@ -2985,7 +2985,9 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
                 _ => N::ExpDotted_::Exp(ne),
             }
         }
-        E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::Dot(d, loc, f) => {
+            N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), loc, Field(f))
+        }
         E::ExpDotted_::DotUnresolved(loc, d) => {
             N::ExpDotted_::DotAutocomplete(loc, Box::new(dotted(context, *d)?))
         }
@@ -4335,7 +4337,7 @@ fn remove_unused_bindings_exp(
                 remove_unused_bindings_exp(context, used, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
             for e in es {
                 remove_unused_bindings_exp(context, used, e)
@@ -4353,7 +4355,7 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             remove_unused_bindings_exp_dotted(context, used, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {

@@ -517,9 +517,10 @@ impl PatternMatrix {
             .any(|pat| pat.is_wild_arm() && pat.guard.is_none())
     }
 
-    pub fn wild_arm_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
+    pub fn wild_tree_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
         // NB: If the first row is all wild, we need to collect _all_ wild rows that have guards
-        // until we find one that does not.
+        // until we find one that does not. If we do not find one without a guard, then this isn't
+        // a wild tree.
         if let Some(arm) = self.patterns[0].all_wild_arm(fringe) {
             if arm.guard.is_none() {
                 return Some(vec![arm]);
@@ -534,7 +535,7 @@ impl PatternMatrix {
                     }
                 }
             }
-            Some(result)
+            None
         } else {
             None
         }

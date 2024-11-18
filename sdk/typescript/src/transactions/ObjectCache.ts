@@ -272,9 +272,9 @@ export class ObjectCache {
 		const deletedIds: string[] = [];
 		const addedObjects: ObjectCacheEntry[] = [];
 
-		changedObjects.map(async ([id, change]) => {
+		changedObjects.forEach(([id, change]) => {
 			if (change.outputState.NotExist) {
-				await this.#cache.deleteObject(id);
+				deletedIds.push(id);
 			} else if (change.outputState.ObjectWrite) {
 				const [digest, owner] = change.outputState.ObjectWrite;
 

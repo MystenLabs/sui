@@ -3,7 +3,7 @@
 
 [package]
 name = "migration"
-edition = "2024.beta"
+edition = "2024"
 
 # this is a comment
 [addresses]

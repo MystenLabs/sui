@@ -6,6 +6,7 @@ use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_data_ingestion::{
     ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker,
     DynamoDBProgressStore, KVStoreTaskConfig, KVStoreWorker,
@@ -45,6 +46,8 @@ struct ProgressStoreConfig {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct BigTableTaskConfig {
     instance_id: String,
+    timeout_secs: usize,
+    credentials: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +65,8 @@ struct IndexerConfig {
     metrics_host: String,
     #[serde(default = "default_metrics_port")]
     metrics_port: u16,
+    #[serde(default)]
+    is_backfill: bool,
 }
 
 fn default_metrics_host() -> String {
@@ -119,6 +124,7 @@ async fn main() -> Result<()> {
         &config.progress_store.aws_secret_access_key,
         config.progress_store.aws_region,
         config.progress_store.table_name,
+        config.is_backfill,
     )
     .await;
     let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);
@@ -154,7 +160,13 @@ async fn main() -> Result<()> {
                 executor.register(worker_pool).await?;
             }
             Task::BigTableKV(kv_config) => {
-                let client = BigTableClient::new_remote(kv_config.instance_id, false, None).await?;
+                std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", kv_config.credentials);
+                let client = BigTableClient::new_remote(
+                    kv_config.instance_id,
+                    false,
+                    Some(Duration::from_secs(kv_config.timeout_secs as u64)),
+                )
+                .await?;
                 let worker_pool = WorkerPool::new(
                     KvWorker { client },
                     task_config.name,

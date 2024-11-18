@@ -134,7 +134,7 @@ pub async fn execution_process(
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _guard = permit;
-            if let Ok(true) = authority.is_tx_already_executed(&digest) {
+            if authority.is_tx_already_executed(&digest) {
                 return;
             }
             let mut attempts = 0;

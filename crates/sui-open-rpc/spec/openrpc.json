@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.38.0"
+    "version": "1.39.0"
   },
   "methods": [
     {
@@ -1307,6 +1307,7 @@
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
+                "consensus_smart_ancestor_selection": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
@@ -8787,6 +8788,34 @@
           }
         }
       },
+      "SuiMoveNormalizedEnum": {
+        "type": "object",
+        "required": [
+          "abilities",
+          "typeParameters",
+          "variants"
+        ],
+        "properties": {
+          "abilities": {
+            "$ref": "#/components/schemas/SuiMoveAbilitySet"
+          },
+          "typeParameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variants": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedField"
+              }
+            }
+          }
+        }
+      },
       "SuiMoveNormalizedField": {
         "type": "object",
         "required": [
@@ -8851,6 +8880,12 @@
         "properties": {
           "address": {
             "type": "string"
+          },
+          "enums": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedEnum"
+            }
           },
           "exposedFunctions": {
             "type": "object",

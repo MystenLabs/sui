@@ -118,8 +118,7 @@ impl BenchmarkContext {
                     effects.executed_epoch(),
                     &[*effects.transaction_digest()],
                 )
-                .await
-                .unwrap();
+                .await;
             let (owner, root_object) = effects
                 .created()
                 .into_iter()
@@ -189,8 +188,7 @@ impl BenchmarkContext {
             // of objects are already committed.
             cache_commit
                 .commit_transaction_outputs(epoch_id, &[*effects.transaction_digest()])
-                .await
-                .unwrap();
+                .await;
         }
         self.refresh_gas_objects(new_gas_objects);
         info!("Finished preparing shared objects");
@@ -408,8 +406,7 @@ impl BenchmarkContext {
                 .unwrap();
             state
                 .get_state_sync_store()
-                .multi_insert_transaction_and_effects(contents.transactions())
-                .unwrap();
+                .multi_insert_transaction_and_effects(contents.transactions());
             state
                 .get_checkpoint_store()
                 .insert_verified_checkpoint_contents(&checkpoint, contents)

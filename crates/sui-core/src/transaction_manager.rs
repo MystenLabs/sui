@@ -411,13 +411,7 @@ impl TransactionManager {
             .filter(|(cert, _)| {
                 let digest = *cert.digest();
                 // skip already executed txes
-                if self
-                    .transaction_cache_read
-                    .is_tx_already_executed(&digest)
-                    .unwrap_or_else(|err| {
-                        fatal!("Failed to check if tx is already executed: {:?}", err)
-                    })
-                {
+                if self.transaction_cache_read.is_tx_already_executed(&digest) {
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -452,7 +446,6 @@ impl TransactionManager {
                             if self
                                 .transaction_cache_read
                                 .is_tx_already_executed(cert.digest())
-                                .expect("is_tx_already_executed cannot fail")
                             {
                                 return None;
                             }
@@ -518,7 +511,6 @@ impl TransactionManager {
                 receiving_objects,
                 epoch_store.epoch(),
             )
-            .unwrap_or_else(|err| panic!("Checking object existence cannot fail: {:?}", err))
             .into_iter()
             .zip(input_object_cache_misses);
 
@@ -605,10 +597,8 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            let is_tx_already_executed = self
-                .transaction_cache_read
-                .is_tx_already_executed(&digest)
-                .expect("Check if tx is already executed should not fail");
+            let is_tx_already_executed =
+                self.transaction_cache_read.is_tx_already_executed(&digest);
             if is_tx_already_executed {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
@@ -847,9 +837,9 @@ impl TransactionManager {
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
                 .transaction_data()
-                .input_objects()?
+                .shared_input_objects()
                 .into_iter()
-                .map(|r| r.object_id())
+                .filter_map(|r| r.mutable.then_some(r.id))
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
@@ -867,7 +857,11 @@ impl TransactionManager {
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
                 if age >= overload_config.max_txn_age_in_queue {
-                    info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
+                    info!(
+                        "Overload detected on object {:?} with oldest transaction pending for {}ms",
+                        object_id,
+                        age.as_millis()
+                    );
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),

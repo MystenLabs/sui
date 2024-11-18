@@ -11,7 +11,7 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
+    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
@@ -816,15 +816,13 @@ mod checked {
                         if protocol_config.simplified_unwrap_then_delete() {
                             DeleteKindWithOldVersion::UnwrapThenDelete
                         } else {
-                            let old_version = match state_view
-                                .get_latest_parent_entry_ref_deprecated(id)
-                            {
-                                Ok(Some((_, previous_version, _))) => previous_version,
-                                // This object was not created this transaction but has never existed in
-                                // storage, skip it.
-                                Ok(None) => continue,
-                                Err(_) => invariant_violation!("{}", missing_unwrapped_msg(&id)),
-                            };
+                            let old_version =
+                                match state_view.get_latest_parent_entry_ref_deprecated(id) {
+                                    Some((_, previous_version, _)) => previous_version,
+                                    // This object was not created this transaction but has never existed in
+                                    // storage, skip it.
+                                    None => continue,
+                                };
                             DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(old_version)
                         }
                     }

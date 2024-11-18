@@ -642,7 +642,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                 recolor_exp(ctx, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             recolor_exp_dotted(ctx, ed);
             for e in es {
                 recolor_exp(ctx, e)
@@ -680,7 +680,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => recolor_exp(ctx, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             recolor_exp_dotted(ctx, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
@@ -941,7 +941,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             }
             exps(context, es)
         }
-        N::Exp_::MethodCall(ed, _, _, tys_opt, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, tys_opt, sp!(_, es)) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
@@ -1158,7 +1158,7 @@ fn builtin_function(context: &mut Context, sp!(_, bf_): &mut N::BuiltinFunction)
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             exp_dotted(context, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {

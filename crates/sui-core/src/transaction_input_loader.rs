@@ -61,14 +61,14 @@ impl TransactionInputLoader {
                         object: ObjectReadResultKind::Object(package),
                     });
                 }
-                InputObjectKind::SharedMoveObject { id, .. } => match self.cache.get_object(id)? {
+                InputObjectKind::SharedMoveObject { id, .. } => match self.cache.get_object(id) {
                     Some(object) => {
                         input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
                     }
                     None => {
                         if let Some((version, digest)) = self
                             .cache
-                            .get_last_shared_object_deletion_info(id, epoch_id)?
+                            .get_last_shared_object_deletion_info(id, epoch_id)
                         {
                             input_results[i] = Some(ObjectReadResult {
                                 input_object_kind: *kind,
@@ -192,7 +192,7 @@ impl TransactionInputLoader {
             }
         }
 
-        let objects = self.cache.multi_get_objects_by_key(&object_keys)?;
+        let objects = self.cache.multi_get_objects_by_key(&object_keys);
 
         assert!(objects.len() == object_keys.len() && objects.len() == fetches.len());
 
@@ -210,7 +210,7 @@ impl TransactionInputLoader {
                     assert!(key.1.is_valid());
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
-                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
+                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id) {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
@@ -245,7 +245,7 @@ impl TransactionInputLoader {
 
             if self
                 .cache
-                .have_received_object_at_version(object_id, *version, epoch_id)?
+                .have_received_object_at_version(object_id, *version, epoch_id)
             {
                 receiving_results.push(ReceivingObjectReadResult::new(
                     *objref,
@@ -254,7 +254,7 @@ impl TransactionInputLoader {
                 continue;
             }
 
-            let Some(object) = self.cache.get_object(object_id)? else {
+            let Some(object) = self.cache.get_object(object_id) else {
                 return Err(UserInputError::ObjectNotFound {
                     object_id: *object_id,
                     version: Some(*version),
