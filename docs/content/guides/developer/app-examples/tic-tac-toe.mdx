@@ -11,7 +11,7 @@ You can view the [complete source code for this app example](https://github.com/
 
 This guide covers two different implementations of the game tic-tac-toe on Sui. The first example utilizes a shared object that both users can mutate. The second example utilizes a owned object that is controlled by a 1-of-2 [multisig](https://docs.sui.io/guides/developer/cryptography/multisig) account generated from the two players' public keys.
 
-The guide is divided into three parts that each cover a different implementation of the tic-tac-toe game board:
+Shared objects don't required a third party for management of the game board and only require one transaction per move. However, these transactions require consensus since the game board is not owned by a single account. Owned objects require a third party to manage the game board and require two transactions per move. However, these transactions don't require consensus and utilize the fast path for transactions. 
 
 1. [Centralized game board](#owned.move): An admin service that tracks player moves and updates the game board.
 1. [Shared game board](#shared.move): A shared object that allows players to directly update the game board.
