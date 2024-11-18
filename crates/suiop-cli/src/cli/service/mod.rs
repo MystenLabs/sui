@@ -10,7 +10,10 @@ use colored::Colorize;
 pub use init::bootstrap_service;
 use init::ServiceLanguage;
 use logs::get_logs;
-use std::path::{Path, PathBuf};
+use std::{
+    env::current_dir,
+    path::{Path, PathBuf},
+};
 use tracing::debug;
 
 use crate::{cache_local, get_cached_local, run_cmd};
@@ -38,11 +41,7 @@ pub enum ServiceAction {
     },
     /// View service logs
     #[command(name = "logs", aliases=["l"])]
-    ViewLogs {
-        /// service namespace to view logs for
-        #[arg(short, long, default_value_t=get_pulumi_namespace())]
-        namespace: String,
-    },
+    ViewLogs,
 }
 
 fn get_ns_cache_key(stack: &str) -> String {
@@ -63,8 +62,8 @@ fn get_pulumi_namespace_from_cmd(stack: &str) -> String {
         .unwrap_or_else(|_| "default".to_string())
 }
 
-fn get_pulumi_namespace() -> String {
-    let stack = get_pulumi_stack();
+fn get_pulumi_namespace(project_name: &str) -> String {
+    let stack = get_pulumi_stack(project_name);
     let cached_ns = get_cached_local::<String>(&get_ns_cache_key(&stack));
 
     cached_ns
@@ -109,9 +108,7 @@ fn find_workspace_file(project_name: &str) -> PathBuf {
     workspace_file.path()
 }
 
-fn get_pulumi_stack() -> String {
-    let project_name = "enoki-api"; // TODO: make an arg
-
+fn get_pulumi_stack(project_name: &str) -> String {
     let workspace_file = get_cached_local::<String>(PULUMI_WORKSPACE_FILE_CACHE_KEY)
         .map(|cached_workspace_file| {
             if cached_workspace_file.is_expired() {
@@ -135,11 +132,28 @@ fn get_pulumi_stack() -> String {
 pub async fn service_cmd(args: &ServiceArgs) -> Result<()> {
     match &args.action {
         ServiceAction::InitService { lang, path } => bootstrap_service(lang, path),
-        ServiceAction::ViewLogs { namespace } => {
+        ServiceAction::ViewLogs => {
+            // get the project name if not provided by the user
+            // the current top-level dir is the project name
+            let project_name = current_dir()
+                .expect("Failed to get current dir")
+                .file_name()
+                .expect("Failed to get current dir")
+                .to_string_lossy()
+                .to_string();
+
+            let namespace = get_pulumi_namespace(&project_name);
             println!("namespace: {}", namespace.bright_purple());
-            println!("View logs for the entire namespace at {}", format!("https://metrics.sui.io/explore?schemaVersion=1&panes=%7B%22yo7%22:%7B%22datasource%22:%22CU1v-k2Vk%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22{}%5C%22%7D%20%7C%3D%20%60%60%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22CU1v-k2Vk%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D%7D&orgId=1", namespace).bold());
-            let stack = get_pulumi_stack();
-            get_logs(&stack, namespace).await
+            println!(
+                "View logs for the entire namespace at {}",
+                format!(
+                    "https://metrics.sui.io/explore?schemaVersion=1&panes=%7B%22yo7%22:%7B%22datasource%22:%22CU1v-k2Vk%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22{}%5C%22%7D%20%7C%3D%20%60%60%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22CU1v-k2Vk%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D%7D&orgId=1",
+                    namespace
+                )
+                .bold()
+            );
+            let stack = get_pulumi_stack(&project_name);
+            get_logs(&stack, &namespace).await
         }
     }
 }
