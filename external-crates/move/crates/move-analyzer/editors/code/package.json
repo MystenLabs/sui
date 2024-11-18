@@ -49,7 +49,7 @@
       },
       {
         "command": "move.trace",
-        "title": "Trace Move package execution",
+        "title": "Trace Move test execution",
         "category": "Move"
       }
     ],

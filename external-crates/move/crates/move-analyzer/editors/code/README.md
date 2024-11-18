@@ -29,8 +29,9 @@ Preferences > Settings*). Search for the `move.sui.path` user setting, set it to
 the `sui` binary, and restart VSCode.
 
 In order to trace Move code execution, the `sui` binary must be built with the `tracing` feature flag.
-If your version of the `sui` binary was not built with this feature flag, you may have to build it from
-source following these [instructions](https://docs.sui.io/guides/developer/getting-started/sui-install#install-sui-binaries-from-source).
+If your version of the `sui` binary was not built with this feature flag, an attempt to trace test
+execution will fail. In this case you may have to build the `sui` binary from source following these
+[instructions](https://docs.sui.io/guides/developer/getting-started/sui-install#install-sui-binaries-from-source).
 
 # Troubleshooting
 
