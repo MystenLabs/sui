@@ -245,11 +245,17 @@ impl DagState {
                         .scan_commits((index..=index).into())
                         .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
                     let Some(commit) = commits.first() else {
+                        info!("Recovering finished, no more commits to recover");
                         break;
                     };
 
                     // Check the commit leader round to see if it is within the gc_round. If it is not then we can stop the recovery process.
                     if gc_round > 0 && commit.leader().round <= gc_round {
+                        info!(
+                            "Recovering finished, reached commit leader round {} <= gc_round {}",
+                            commit.leader().round,
+                            gc_round
+                        );
                         break;
                     }
 
@@ -409,7 +415,8 @@ impl DagState {
         blocks
     }
 
-    // Sets the block as committed in the cache. If the block has not been already committed it returns true, otherwise false.
+    // Sets the block as committed in the cache. If the block is set as committed for first time, then true is returned, otherwise false is returned instead.
+    // Method will panic if the block is not found in the cache.
     pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
         if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
             if !block_info.committed {

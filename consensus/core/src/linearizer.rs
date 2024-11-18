@@ -727,7 +727,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_handle_commit_with_gc_orphaned_blocks(#[values(3)] gc_depth: u32) {
+    async fn test_handle_commit_below_highest_committed_round(#[values(3)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
 
         let num_authorities = 4;
