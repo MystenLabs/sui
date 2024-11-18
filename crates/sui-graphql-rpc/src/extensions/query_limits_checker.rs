@@ -4,7 +4,6 @@
 use crate::config::{Limits, ServiceConfig};
 use crate::error::{code, graphql_error, graphql_error_at_pos};
 use crate::metrics::Metrics;
-use crate::types::move_package::PackageLookup;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::extensions::{Extension, ExtensionContext, ExtensionFactory};
@@ -128,8 +127,7 @@ impl<'a> LimitsTraversal<'a> {
             self.check_input_limits(op)?;
         }
 
-        /// Next, check the size of the multiget queries. This is done using a non-recursive
-        /// algorithm.
+        // Next, check the size of the multiget queries inputs.
         for (_name, op) in doc.operations.iter() {
             self.check_multiget_queries(op)?;
         }
