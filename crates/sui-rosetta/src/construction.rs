@@ -371,7 +371,7 @@ pub async fn metadata(
 
     let exclude_ids: Vec<ObjectID> = objects.iter().map(|obj| obj.0).collect();
     let coins = match maybe_coins {
-        Some(gas_coins) if gas_coins.len() <= 256 => gas_coins,
+        Some(gas_coins) /* if gas_coins.len() <= 256 */ => gas_coins,
         _ => {
             let mut all_coins = context
                 .client
