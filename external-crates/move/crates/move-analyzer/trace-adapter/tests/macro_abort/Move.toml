@@ -1,0 +1,10 @@
+[package]
+name = "macro_abort"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+macro_abort = "0x0"
+std = "0x1"
