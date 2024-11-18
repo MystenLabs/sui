@@ -246,7 +246,7 @@ impl SurferState {
                 Owner::Shared {
                     initial_shared_version,
                 } 
-                // TODO-DNS is this right or do we need special handling in sui surfer?
+                // TODO: Implement full support for ConsensusV2 objects in sui-surfer.
                 | Owner::ConsensusV2 {
                     start_version: initial_shared_version,
                     ..
