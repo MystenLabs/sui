@@ -606,7 +606,10 @@ fn check_circular_ownership(
     for (id, recipient) in transfers {
         object_owner_map.remove(&id);
         match recipient {
-            Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => (),
+            Owner::AddressOwner(_)
+            | Owner::Shared { .. }
+            | Owner::Immutable
+            | Owner::ConsensusV2 { .. } => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
                 let mut cur = new_owner;

@@ -112,6 +112,10 @@ impl TestCallArg {
             }
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: *initial_shared_version,
@@ -1986,7 +1990,10 @@ async fn test_handle_move_transaction() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(created_obj.owner, sender);
+    assert_eq!(
+        created_obj.owner.get_address_owner_address().unwrap(),
+        sender
+    );
     assert_eq!(created_obj.id(), created_object_id);
 }
 
@@ -2408,7 +2415,10 @@ async fn test_handle_confirmation_transaction_ok() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(new_account.owner, recipient);
+    assert_eq!(
+        new_account.owner.get_address_owner_address().unwrap(),
+        recipient
+    );
     assert_eq!(next_sequence_number, new_account.version());
 
     // Check locks are set and archived correctly
@@ -2663,7 +2673,7 @@ async fn test_move_call_insufficient_gas() {
         .unwrap();
     assert_eq!(obj.previous_transaction, tx_digest);
     assert_eq!(obj.version(), next_object_version);
-    assert_eq!(obj.owner, recipient);
+    assert_eq!(obj.owner.get_address_owner_address().unwrap(), recipient);
 }
 
 #[tokio::test]
@@ -2940,7 +2950,7 @@ async fn test_authority_persist() {
 
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
-    assert_eq!(obj2.owner, recipient);
+    assert_eq!(obj2.owner.get_address_owner_address().unwrap(), recipient);
 }
 
 #[tokio::test]

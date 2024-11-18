@@ -683,7 +683,7 @@ impl<'backing> TemporaryStore<'backing> {
                 }
                 match &obj.owner {
                     Owner::AddressOwner(a) => {
-                        assert!(sender == a, "Input object not owned by sender");
+                        assert!(sender == a, "Input object must be owned by sender");
                         Some(id)
                     }
                     Owner::Shared { .. } => Some(id),
@@ -701,7 +701,16 @@ impl<'backing> TemporaryStore<'backing> {
                         None
                     }
                     Owner::ObjectOwner(_parent) => {
-                        unreachable!("Input objects must be address owned, shared, or immutable")
+                        unreachable!(
+                            "Input objects must be address owned, shared, consensus, or immutable"
+                        )
+                    }
+                    Owner::ConsensusV2 { authenticator, .. } => {
+                        assert!(
+                            sender == authenticator.as_single_owner(),
+                            "Sender must have permission to use input object"
+                        );
+                        Some(id)
                     }
                 }
             })
@@ -750,7 +759,7 @@ impl<'backing> TemporaryStore<'backing> {
                         // it would already have been in authenticated_for_mutation
                         ObjectID::from(*parent)
                     }
-                    owner @ Owner::Shared { .. } => panic!(
+                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusV2 { .. } => panic!(
                         "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                         Potentially covering objects in: {authenticated_for_mutation:#?}",
                     ),

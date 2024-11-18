@@ -106,9 +106,9 @@ impl CallArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum ObjectArg {
-    // A Move object, either immutable, or owned mutable.
+    // A Move object from fastpath.
     ImmOrOwnedObject(ObjectRef),
-    // A Move object that's shared.
+    // A Move object from consensus (historically consensus objects were always shared).
     // SharedObject::mutable controls whether caller asks for a mutable reference to shared object.
     SharedObject {
         id: ObjectID,
@@ -1838,6 +1838,10 @@ impl TransactionData {
                 Owner::AddressOwner(_) => ObjectArg::ImmOrOwnedObject(upgrade_capability),
                 Owner::Shared {
                     initial_shared_version,
+                }
+                | Owner::ConsensusV2 {
+                    start_version: initial_shared_version,
+                    authenticator: _,
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,

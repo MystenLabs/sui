@@ -131,7 +131,10 @@ impl ExecutionEffects {
     pub fn sender(&self) -> SuiAddress {
         match self.gas_object().1 {
             Owner::AddressOwner(a) => a,
-            Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => unreachable!(), // owner of gas object is always an address
+            Owner::ObjectOwner(_)
+            | Owner::Shared { .. }
+            | Owner::Immutable
+            | Owner::ConsensusV2 { .. } => unreachable!(), // owner of gas object is always an address
         }
     }
 

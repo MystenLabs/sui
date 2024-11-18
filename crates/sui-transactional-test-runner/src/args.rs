@@ -484,6 +484,10 @@ impl SuiValue {
         match obj.owner {
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                ..
             } => Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,

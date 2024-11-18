@@ -26,6 +26,12 @@ Argument:
         TUPLE:
           - U16
           - U16
+Authenticator:
+  ENUM:
+    0:
+      SingleOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
 AuthenticatorStateExpire:
   STRUCT:
     - min_epoch: U64
@@ -768,6 +774,13 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
+    4:
+      ConsensusV2:
+        STRUCT:
+          - start_version:
+              TYPENAME: SequenceNumber
+          - authenticator:
+              TYPENAME: Authenticator
 PackageUpgradeError:
   ENUM:
     0:

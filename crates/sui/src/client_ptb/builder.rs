@@ -128,6 +128,10 @@ impl<'a> Resolver<'a> for ToObject {
             Owner::Immutable | Owner::AddressOwner(_) => ObjectArg::ImmOrOwnedObject(object_ref),
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id: object_ref.0,
                 initial_shared_version,

@@ -207,7 +207,10 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     // make sure the first object still belongs to the sender,
     // the value is equal to all residual values after amounts transferred and gas payment.
     assert_eq!(effects.mutated()[0].0 .0, object_id);
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
     let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
     let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
     assert_eq!(
@@ -273,7 +276,10 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     // make sure the first input coin still belongs to the sender,
     // the value is equal to all residual values after amounts transferred and gas payment.
     assert_eq!(effects.mutated()[0].0 .0, object_id1);
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
     let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
     let gas_object = res.authority_state.get_object(&object_id1).await?.unwrap();
     assert_eq!(
@@ -338,7 +344,10 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
     // the value is equal to all residual values after gas payment.
     let obj_ref = &effects.mutated()[0].0;
     assert_eq!(obj_ref.0, object_id);
-    assert_eq!(effects.mutated()[0].1, recipient);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        recipient
+    );
 
     let gas_used = effects.gas_cost_summary().gas_used();
     let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
@@ -370,7 +379,10 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     // the value is equal to all residual values after gas payment.
     let obj_ref = &effects.mutated()[0].0;
     assert_eq!(obj_ref.0, object_id1);
-    assert_eq!(effects.mutated()[0].1, recipient);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        recipient
+    );
 
     let gas_used = effects.gas_cost_summary().gas_used();
     let gas_object = res.authority_state.get_object(&object_id1).await?.unwrap();

@@ -513,7 +513,7 @@ impl<'backing> TemporaryStore<'backing> {
             }
             match &obj.owner {
                 Owner::AddressOwner(a) => {
-                    assert!(sender == a, "Input object not owned by sender");
+                    assert!(sender == a, "Input object must be owned by sender");
                     authenticated_objs.insert(*id);
                 }
                 Owner::Shared { .. } => {
@@ -532,7 +532,16 @@ impl<'backing> TemporaryStore<'backing> {
                     // us from catching this.
                 }
                 Owner::ObjectOwner(_parent) => {
-                    unreachable!("Input objects must be address owned, shared, or immutable")
+                    unreachable!(
+                        "Input objects must be address owned, shared, consensus, or immutable"
+                    )
+                }
+                Owner::ConsensusV2 { authenticator, .. } => {
+                    assert!(
+                        sender == authenticator.as_single_owner(),
+                        "Sender must have permission to use input object"
+                    );
+                    authenticated_objs.insert(*id);
                 }
             }
         }
@@ -552,7 +561,9 @@ impl<'backing> TemporaryStore<'backing> {
                         Owner::ObjectOwner(_parent) => {
                             objs_to_authenticate.push(*id);
                         }
-                        Owner::AddressOwner(_) | Owner::Shared { .. } => {
+                        Owner::AddressOwner(_)
+                        | Owner::Shared { .. }
+                        | Owner::ConsensusV2 { .. } => {
                             unreachable!("Should already be in authenticated_objs")
                         }
                         Owner::Immutable => {
@@ -585,7 +596,9 @@ impl<'backing> TemporaryStore<'backing> {
                         Owner::ObjectOwner(_) => {
                             objs_to_authenticate.push(*id);
                         }
-                        Owner::AddressOwner(_) | Owner::Shared { .. } => {
+                        Owner::AddressOwner(_)
+                        | Owner::Shared { .. }
+                        | Owner::ConsensusV2 { .. } => {
                             unreachable!("Should already be in authenticated_objs")
                         }
                         Owner::Immutable => unreachable!("Immutable objects cannot be deleted"),

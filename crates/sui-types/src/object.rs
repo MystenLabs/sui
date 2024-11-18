@@ -482,6 +482,32 @@ pub enum Owner {
     },
     /// Object is immutable, and hence ownership doesn't matter.
     Immutable,
+    /// Object is sequenced via consensus. Ownership is managed by the configured authenticator.
+    ///
+    /// Note: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.
+    ConsensusV2 {
+        /// The version at which the object most recently became a consensus object
+        start_version: SequenceNumber,
+        /// The authentication mode of the object
+        authenticator: Authenticator,
+    },
+}
+
+#[derive(
+    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
+pub enum Authenticator {
+    /// The contained SuiAddress exclusively has all permissions: read, write, delete, transfer
+    SingleOwner(SuiAddress),
+}
+
+impl Authenticator {
+    pub fn as_single_owner(&self) -> &SuiAddress {
+        match self {
+            Self::SingleOwner(address) => address,
+        }
+    }
 }
 
 impl Owner {
@@ -490,9 +516,10 @@ impl Owner {
     pub fn get_address_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) => Ok(*address),
-            Self::Shared { .. } | Self::Immutable | Self::ObjectOwner(_) => {
-                Err(SuiError::UnexpectedOwnerType)
-            }
+            Self::Shared { .. }
+            | Self::Immutable
+            | Self::ObjectOwner(_)
+            | Self::ConsensusV2 { .. } => Err(SuiError::UnexpectedOwnerType),
         }
     }
 
@@ -501,7 +528,9 @@ impl Owner {
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable | Self::ConsensusV2 { .. } => {
+                Err(SuiError::UnexpectedOwnerType)
+            }
         }
     }
 
@@ -522,21 +551,15 @@ impl Owner {
     }
 }
 
-impl PartialEq<SuiAddress> for Owner {
-    fn eq(&self, other: &SuiAddress) -> bool {
-        match self {
-            Self::AddressOwner(address) => address == other,
-            Self::ObjectOwner(_) | Self::Shared { .. } | Self::Immutable => false,
-        }
-    }
-}
-
 impl PartialEq<ObjectID> for Owner {
     fn eq(&self, other: &ObjectID) -> bool {
         let other_id: SuiAddress = (*other).into();
         match self {
             Self::ObjectOwner(id) => id == &other_id,
-            Self::AddressOwner(_) | Self::Shared { .. } | Self::Immutable => false,
+            Self::AddressOwner(_)
+            | Self::Shared { .. }
+            | Self::Immutable
+            | Self::ConsensusV2 { .. } => false,
         }
     }
 }
@@ -557,6 +580,27 @@ impl Display for Owner {
                 initial_shared_version,
             } => {
                 write!(f, "Shared( {} )", initial_shared_version.value())
+            }
+            Self::ConsensusV2 {
+                start_version,
+                authenticator,
+            } => {
+                write!(
+                    f,
+                    "ConsensusV2( {}, {} )",
+                    start_version.value(),
+                    authenticator
+                )
+            }
+        }
+    }
+}
+
+impl Display for Authenticator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SingleOwner(address) => {
+                write!(f, "SingleOwner({})", address)
             }
         }
     }

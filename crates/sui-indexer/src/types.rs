@@ -206,6 +206,7 @@ pub enum OwnerType {
     Address = 1,
     Object = 2,
     Shared = 3,
+    ConsensusV2 = 4,
 }
 
 pub enum ObjectStatus {
@@ -254,6 +255,10 @@ pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<SuiAddress>) {
         Owner::ObjectOwner(address) => (OwnerType::Object, Some(*address)),
         Owner::Shared { .. } => (OwnerType::Shared, None),
         Owner::Immutable => (OwnerType::Immutable, None),
+        Owner::ConsensusV2 { authenticator, .. } => (
+            OwnerType::ConsensusV2,
+            Some(*authenticator.as_single_owner()),
+        ),
     }
 }
 

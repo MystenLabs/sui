@@ -313,6 +313,13 @@ impl IndexStoreTables {
                             )?;
                         }
                         Owner::Shared { .. } | Owner::Immutable => {}
+                        Owner::ConsensusV2 { authenticator, .. } => {
+                            let owner_key = OwnerIndexKey::new(
+                                *authenticator.as_single_owner(),
+                                removed_object.id(),
+                            );
+                            batch.delete_batch(&self.owner, [owner_key])?;
+                        }
                     }
                 }
 
@@ -334,6 +341,13 @@ impl IndexStoreTables {
                                 }
 
                                 Owner::Shared { .. } | Owner::Immutable => {}
+                                Owner::ConsensusV2 { authenticator, .. } => {
+                                    let owner_key = OwnerIndexKey::new(
+                                        *authenticator.as_single_owner(),
+                                        old_object.id(),
+                                    );
+                                    batch.delete_batch(&self.owner, [owner_key])?;
+                                }
                             }
                         }
                     }
@@ -357,6 +371,12 @@ impl IndexStoreTables {
                             }
                         }
                         Owner::Shared { .. } | Owner::Immutable => {}
+                        Owner::ConsensusV2 { authenticator, .. } => {
+                            let owner_key =
+                                OwnerIndexKey::new(*authenticator.as_single_owner(), object.id());
+                            let owner_info = OwnerIndexInfo::new(object);
+                            batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
+                        }
                     }
                 }
 
@@ -676,6 +696,12 @@ impl<'a> LiveObjectIndexer for RestLiveObjectIndexer<'a> {
             }
 
             Owner::Shared { .. } | Owner::Immutable => {}
+            Owner::ConsensusV2 { authenticator, .. } => {
+                let owner_key = OwnerIndexKey::new(*authenticator.as_single_owner(), object.id());
+                let owner_info = OwnerIndexInfo::new(&object);
+                self.batch
+                    .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
+            }
         }
 
         // Look for CoinMetadata<T> and TreasuryCap<T> objects
