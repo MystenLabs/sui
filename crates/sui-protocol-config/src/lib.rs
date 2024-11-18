@@ -572,7 +572,7 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     consensus_smart_ancestor_selection: bool,
 
-    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic does not stop the recursion at the highest 
+    // Enables the new logic for collecting the subdag in the consensus linearizer. The new logic does not stop the recursion at the highest
     // committed round for each authority, but allows to commit uncommitted blocks up to gc round (excluded) for that authority.
     #[serde(skip_serializing_if = "is_false")]
     consensus_linearizer_collect_subdag_v2: bool,
