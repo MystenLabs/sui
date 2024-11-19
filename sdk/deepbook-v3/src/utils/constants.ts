@@ -92,6 +92,11 @@ export const mainnetCoins: CoinMap = {
 		type: `0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS`,
 		scalar: 1000000,
 	},
+	TYPUS: {
+		address: `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385`,
+		type: `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS`,
+		scalar: 1000000000,
+	},
 };
 
 export const testnetPools: PoolMap = {
