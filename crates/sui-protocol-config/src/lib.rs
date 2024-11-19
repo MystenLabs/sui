@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 69;
+const MAX_PROTOCOL_VERSION: u64 = 70;
 
 // Record history of protocol version allocations here:
 //
@@ -198,6 +198,8 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
 //             Enable G1Uncompressed group in testnet.
+// Version 70: Enable the atomic inclusion of a soft bundle in a consensus block.
+//             Increase consensus block size to match the max soft bundle size.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -571,6 +573,10 @@ struct FeatureFlags {
     // Use smart ancestor selection in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_smart_ancestor_selection: bool,
+
+    // Enable the atomic inclusion of a soft bundle in a consensus block
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_soft_bundle_atomic_inclusion: bool
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1684,6 +1690,10 @@ impl ProtocolConfig {
 
     pub fn consensus_smart_ancestor_selection(&self) -> bool {
         self.feature_flags.consensus_smart_ancestor_selection
+    }
+
+    pub fn consensus_soft_bundle_atomic_inclusion(&self) -> bool {
+        self.feature_flags.consensus_soft_bundle_atomic_inclusion
     }
 }
 
@@ -2963,6 +2973,14 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
+                }
+                70 => {
+                    // Enable the atomic inclusion of a soft bundle in consensus block
+                    cfg.feature_flags.consensus_soft_bundle_atomic_inclusion = true;
+
+                    // Increase the consensus block size to match at least the max soft bundle size to guarantee correctness.
+                    // Currently 5 * 128KB = 640KB
+                    cfg.consensus_max_transactions_in_block_bytes = Some(5 * 128 * 1024);
                 }
                 // Use this template when making changes:
                 //
