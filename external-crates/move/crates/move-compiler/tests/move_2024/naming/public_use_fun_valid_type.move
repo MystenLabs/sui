@@ -2,12 +2,15 @@ module std::utilities {
     public struct X {}
 
     public use fun x_ex as X.ex;
+
     fun x_ex(_: &X) {
         abort 0
     }
+
     public fun vec_ex<T>(_: &vector<T>) {
         abort 0
     }
+
     public fun u64_ex(_: u64) {
         abort 0
     }

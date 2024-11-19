@@ -1,5 +1,4 @@
 module a::m {
-
     use std::vector;
     use sui::table;
 
@@ -25,9 +24,7 @@ module a::m {
         table::destroy<ID, User>(table)
     }
 
-    public fun user_delete(_user: User) {
-
-    }
+    public fun user_delete(_user: User) {}
 
     public fun user_id(user: &User): ID {
         let User { id } = user;
@@ -52,13 +49,12 @@ module a::m {
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
     native fun delete_impl(id: address);
-
 }
 
 #[defines_primitive(vector)]
 module std::vector {
     #[bytecode_instruction]
-    native public fun pop_back<Element>(v: &mut vector<Element>): Element;
+    public native fun pop_back<Element>(v: &mut vector<Element>): Element;
 }
 
 module sui::table {
@@ -81,5 +77,4 @@ module sui::table {
     public fun is_empty<K: copy + drop + store, V: store>(_table: &Table<K, V>): bool {
         false
     }
-
 }

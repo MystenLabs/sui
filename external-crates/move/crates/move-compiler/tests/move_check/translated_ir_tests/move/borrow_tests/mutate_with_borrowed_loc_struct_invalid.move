@@ -1,6 +1,7 @@
 module 0x8675309::M {
     struct X has key { b: bool }
     struct S has copy, drop { z: u64 }
+
     fun t1() {
         let x = X { b: true };
         let y = &x;
@@ -17,7 +18,6 @@ module 0x8675309::M {
         z;
         s;
     }
-
 }
 
 // check: STLOC_UNSAFE_TO_DESTROY_ERROR

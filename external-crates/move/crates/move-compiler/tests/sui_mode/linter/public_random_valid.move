@@ -3,6 +3,7 @@
 
 module a::test {
     use sui::random::{Random, RandomGenerator};
+
     friend a::test2;
 
     entry fun basic_random(_r: &Random) {}

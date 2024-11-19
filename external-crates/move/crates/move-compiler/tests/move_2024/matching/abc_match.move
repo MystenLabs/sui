@@ -1,9 +1,8 @@
 module 0x42::m {
-
     public enum ABC<T> has drop {
         A(T),
         B,
-        C(T)
+        C(T),
     }
 
     fun t0(): u64 {
@@ -14,5 +13,4 @@ module 0x42::m {
             ABC::B => 1,
         }
     }
-
 }

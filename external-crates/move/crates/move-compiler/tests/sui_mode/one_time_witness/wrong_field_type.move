@@ -5,8 +5,7 @@ module a::m {
 
     struct M has store, drop { value: u64 }
 
-    fun init(_ctx: &mut tx_context::TxContext) {
-    }
+    fun init(_ctx: &mut tx_context::TxContext) {}
 
     fun foo() {
         _ = M { value: 7 };
@@ -15,7 +14,7 @@ module a::m {
 }
 
 module 0::beep {
-  struct BEEP has store { boop: sui::table::Table<u8, bool> }
+    struct BEEP has store { boop: sui::table::Table<u8, bool> }
 }
 
 module sui::tx_context {

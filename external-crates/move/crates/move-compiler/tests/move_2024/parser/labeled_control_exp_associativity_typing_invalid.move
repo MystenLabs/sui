@@ -4,6 +4,7 @@
 
 module 0x42::M {
     fun foo() {}
+
     fun bar(): u64 { 0 }
 
     fun t(cond: bool) {
@@ -26,7 +27,6 @@ module 0x42::M {
         // so error about invalid loop body type
         'a: loop bar() + 2;
         // 'a: loop { foo() } + 2; would type check
-
 
         // does not type check since this return should be a break
         let _: u64 = loop 'a: { return 'a 0 } + 1;

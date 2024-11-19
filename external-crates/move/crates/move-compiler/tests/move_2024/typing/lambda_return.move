@@ -16,7 +16,9 @@ module a::m {
         call!<&u64>(|| { if (cond) return &0; &1 });
         call!<&u64>(|| { if (cond) &1 else return &0 });
         call!<(vector<u64>, bool)>(|| { if (cond) return (vector[], false); (vector[0], true) });
-        call!<(vector<u64>, bool)>(|| { if (cond) (vector[], false) else return (vector[0], true) });
+        call!<(vector<u64>, bool)>(
+            || { if (cond) (vector[], false) else return (vector[0], true) },
+        );
     }
 
     #[allow(dead_code)]

@@ -5,8 +5,13 @@ module 0x8675309::M {
     }
 
     fun t1() {
-        if ({ let x = true; x }) () else ();
-        if ({ let x = false; x }) () else ()
+        if ({
+            let x = true;
+            x
+        }) () else ();
+        if ({
+            let x = false;
+            x
+        }) () else ()
     }
-
 }

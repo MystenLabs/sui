@@ -1,7 +1,6 @@
 module 0x42::m {
-
     public enum Option<T> {
-        Some(T)
+        Some(T),
     }
 
     fun test<T>(opt: &Option<T>) {
@@ -9,5 +8,4 @@ module 0x42::m {
             Option::Some(Hello) => (),
         }
     }
-
 }

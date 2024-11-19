@@ -12,5 +12,4 @@ module 0x8675309::M {
     fun t2<T: key>(r: &mut T, x: T) {
         *r = x;
     }
-
 }

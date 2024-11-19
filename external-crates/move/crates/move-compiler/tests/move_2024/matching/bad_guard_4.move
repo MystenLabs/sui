@@ -1,8 +1,7 @@
 module 0x42::m {
-
     public enum Option<T> has drop {
         None,
-        Some(T)
+        Some(T),
     }
 
     fun foo(): bool {
@@ -13,7 +12,7 @@ module 0x42::m {
         let o = &mut Option::Some(0);
         match (o) {
             Option::Some(_) => 0,
-            x if ({*x = Option::Some(1); false}) => 1,
+            x if ({ *x = Option::Some(1); false }) => 1,
             Option::None => 2,
             x => 10,
         }

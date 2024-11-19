@@ -1,6 +1,6 @@
 module a::m {
-
     fun private() {}
+
     public(package) fun package() {}
 
     // these should be errors if we checked macros bodies before expanding

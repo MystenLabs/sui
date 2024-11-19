@@ -11,7 +11,6 @@ module 0x42::m {
         let index: u64 = 0;
         let sum = 0;
         while (index < 10) {
-
             if (index % 2 == 0) {
                 sum = sum + index
             } else {

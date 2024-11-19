@@ -1,5 +1,4 @@
 module a::m {
-
     public struct T<Q> has drop { q: Q }
 
     fun any<T>(): T { abort 0 }
@@ -23,7 +22,7 @@ module a::m {
         let y = &any();
         let z = &mut any();
         x == y && x == z;
-        (x : u64)
+        (x: u64)
     }
 
     fun globals03(): u64 {
@@ -31,7 +30,7 @@ module a::m {
         let y = &any();
         let z = &mut any();
         x == y && x == z;
-        (x : u64)
+        (x: u64)
     }
 
     fun locals00(): bool {
@@ -53,7 +52,7 @@ module a::m {
         let y = &(abort 0);
         let z = &mut (abort 0);
         x == y && x == z;
-        let _ = (x : u64);
+        let _ = (x: u64);
         x == y && x == z
     }
 
@@ -94,5 +93,4 @@ module a::m {
     public fun option_fill<Element>(_t: &mut Option<Element>, _e: Element) { abort 0 }
 
     public fun option_take<Element>(_t: &mut Option<Element>): Element { abort 0 }
-
 }

@@ -26,8 +26,17 @@ module a::m {
 
     fun t() {
         foo!(0);
-        arg!({ let x = 0; x });
-        arg_eta!({ let x = 0; x });
-        arg_apply!({ let x = 0; x });
+        arg!({
+            let x = 0;
+            x
+        });
+        arg_eta!({
+            let x = 0;
+            x
+        });
+        arg_apply!({
+            let x = 0;
+            x
+        });
     }
 }

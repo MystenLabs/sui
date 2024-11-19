@@ -3,6 +3,7 @@ module a::m {
     public fun foo(): &mut u64 {
         abort 0
     }
+
     public fun allowed() {
         foo();
     }

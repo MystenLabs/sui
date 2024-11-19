@@ -25,16 +25,16 @@ module a::m {
 
     fun fields(m: &mut S, s: S) {
         *&mut m.f1 = m.f1;
-        m.f1 =  *&mut m.f1;
-        m.f1 =  *&m.f1;
-        *&mut m.f1 =  *&m.f1;
-        *&mut m.f1 =  *&mut m.f1;
+        m.f1 = *&mut m.f1;
+        m.f1 = *&m.f1;
+        *&mut m.f1 = *&m.f1;
+        *&mut m.f1 = *&mut m.f1;
 
         *&mut s.f1 = s.f1;
-        s.f1 =  *&mut s.f1;
-        s.f1 =  *&s.f1;
-        *&mut s.f1 =  *&s.f1;
-        *&mut s.f1 =  *&mut s.f1;
+        s.f1 = *&mut s.f1;
+        s.f1 = *&s.f1;
+        *&mut s.f1 = *&s.f1;
+        *&mut s.f1 = *&mut s.f1;
     }
 
     struct P has copy, drop { s1: S, s2: S }

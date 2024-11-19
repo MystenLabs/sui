@@ -6,10 +6,6 @@ module a::m {
     }
 
     fun t() {
-        foo!<u64, vector<u8>>(
-            |_| vector[],
-            |a, b| vector[(a as u8), (b as u8)],
-            || b"hello",
-        )
+        foo!<u64, vector<u8>>(|_| vector[], |a, b| vector[(a as u8), (b as u8)], || b"hello")
     }
 }

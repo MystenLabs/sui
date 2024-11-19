@@ -10,15 +10,17 @@ module 0x8675309::M {
     fun t1() {
         let (x, y): (&mut u64, &u64);
         (x, y) = (&mut 0, &mut 0);
-        x; y;
+        x;
+        y;
 
         let (x, y): (&u64, &mut u64);
         (x, y) = (&mut 0, &mut 0);
-        x; y;
+        x;
+        y;
 
         let (x, y): (&u64, &u64);
         (x, y) = (&mut 0, &mut 0);
-        x; y;
+        x;
+        y;
     }
-
 }

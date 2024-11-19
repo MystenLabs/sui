@@ -1,13 +1,24 @@
 module a::m {
-
     #[allow(dead_code)]
     fun simple(cond: bool, x: u32) {
-        (if (cond) x else { x }) as u32;
-        (if (cond) x else { x } as u32);
-        (loop { break 0 }) as u32;
-        (loop { break 0 } as u32);
-        ('l: { 0 }) as u32;
-        ('l: { 0 } as u32);
+        (if (cond) x else {
+                x
+            }) as u32;
+        (if (cond) x else {
+                x
+            } as u32);
+        (loop {
+                break 0
+            }) as u32;
+        (loop {
+                break 0
+            } as u32);
+        ('l: {
+                0
+            }) as u32;
+        ('l: {
+                0
+            } as u32);
         (return) as u32;
         (return as u32);
         loop {
@@ -27,11 +38,23 @@ module a::m {
         (1 + s.f as u32);
         (1 + S { f: 0 }.f) as u32;
         (1 + S { f: 0 }.f as u32);
-        (*if (cond) { &0 } else { &mut 0 }) as u32;
+        (*if (cond) {
+                &0
+            } else {
+                &mut 0
+            }) as u32;
         // this case still does not work
         // (*if (cond) { &0 } else { &mut 0 } as u32);
-        (*if (cond) { &s } else {&mut s}.f_imm()) as u32;
-        (*if (cond) { &s } else {&mut s}.f_imm() as u32);
+        (*if (cond) {
+                &s
+            } else {
+                &mut s
+            }.f_imm()) as u32;
+        (*if (cond) {
+                &s
+            } else {
+                &mut s
+            }.f_imm() as u32);
     }
 
     public fun f_imm(s: &S): &u64 { &s.f }

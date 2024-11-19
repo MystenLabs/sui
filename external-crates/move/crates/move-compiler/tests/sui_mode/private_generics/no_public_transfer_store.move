@@ -2,9 +2,8 @@
 // even if it has store
 
 module a::m {
-    use sui::transfer::{Self, Receiving};
     use a::other;
-    use sui::object::UID;
+    use sui::{object::UID, transfer::{Self, Receiving}};
 
     public fun t1(s: other::S) {
         transfer::transfer(s, @0x100);
@@ -38,7 +37,7 @@ module sui::object {
 module sui::transfer {
     use sui::object::UID;
 
-    struct Receiving<phantom T: key> { }
+    struct Receiving<phantom T: key> {}
 
     public fun transfer<T: key>(_: T, _: address) {
         abort 0

@@ -6,8 +6,11 @@ module a::m {
     public struct X() has drop;
 
     fun a(_: u64): A { A() }
+
     fun b(_: u64): B { B() }
+
     fun c(_: u64): C { C() }
+
     fun d(_: u64): D { D() }
 
     macro fun apply($x: u64, $f: |u64| -> u64): u64 {
@@ -25,31 +28,23 @@ module a::m {
     // we overload foo in each context
     // the type annotation tests that the correct foo is used
     use fun a as u64.foo;
+
     fun test() {
-        apply!(
-            {
-                use fun b as u64.foo;
-                (1u64.foo(): B);
-                1
-            },
-            |x| {
-                use fun c as u64.foo;
-                (x.foo(): C);
-                x
-            }
-        );
-        apply!(
-            {
-                (1u64.foo(): A);
-                1
-            },
-            |x| {
-                (x.foo(): A);
-                x
-            }
-        );
+        apply!({
+            use fun b as u64.foo;
+            (1u64.foo(): B);
+            1
+        }, |x| {
+            use fun c as u64.foo;
+            (x.foo(): C);
+            x
+        });
+        apply!({
+            (1u64.foo(): A);
+            1
+        }, |x| {
+            (x.foo(): A);
+            x
+        });
     }
-
-
-
 }

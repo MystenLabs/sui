@@ -1,5 +1,4 @@
 module 0x42::a {
-
     public struct S has copy {}
 
     public fun test_4(a: &S, b: &S): bool {
@@ -49,5 +48,4 @@ module 0x42::a {
     public fun test_35(a: &mut S, b: &mut S, c: &mut S): bool {
         a == b && b == c && a == c
     }
-
 }

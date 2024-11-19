@@ -13,24 +13,28 @@ module 0x42::M {
 
     struct S3<T1: drop, T2: copy, T3: store, T4: key> { a: T1, b: T2, c: T3, d: T4 }
     struct S4 {
-        a: S3< HasDrop<NoAbilities, u64>,
-               HasCopy<NoAbilities, u64>,
-               HasStore<NoAbilities, u64>,
-               HasKey<NoAbilities, u64>
-             >
+        a: S3<
+            HasDrop<NoAbilities, u64>,
+            HasCopy<NoAbilities, u64>,
+            HasStore<NoAbilities, u64>,
+            HasKey<NoAbilities, u64>,
+        >,
     }
 
-    fun f1<T: drop + copy + store + key>() { }
+    fun f1<T: drop + copy + store + key>() {}
+
     fun f2() {
         f1<HasAbilities<NoAbilities, u64>>();
     }
 
-    fun f3<T1: drop, T2: copy, T3: store, T4: key>() { }
+    fun f3<T1: drop, T2: copy, T3: store, T4: key>() {}
+
     fun f4() {
-        f3< HasDrop<NoAbilities, u64>,
+        f3<
+            HasDrop<NoAbilities, u64>,
             HasCopy<NoAbilities, u64>,
             HasStore<NoAbilities, u64>,
-            HasKey<NoAbilities, u64>
-          >();
+            HasKey<NoAbilities, u64>,
+        >();
     }
 }

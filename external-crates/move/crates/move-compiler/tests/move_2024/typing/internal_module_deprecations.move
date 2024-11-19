@@ -9,10 +9,10 @@ module 0x42::m {
     public struct A() has drop;
 
     #[deprecated]
-    public fun foo() { }
+    public fun foo() {}
 
     #[deprecated(note = b"Use the baz function instead.")]
-    public fun bar_dep() { }
+    public fun bar_dep() {}
 
     #[deprecated(note = b"Use the L constant instead.")]
     const H: u8 = 0x42;
@@ -22,19 +22,19 @@ module 0x42::m {
 
     const NewError: vector<u8> = b"new error";
 
-    public fun baz() { 
+    public fun baz() {
         foo();
         foo();
         bar_dep();
     }
 
-    public fun qux(_: A) { }
+    public fun qux(_: A) {}
 
     public fun return_dep(): A {
         A()
     }
 
-    public fun use_const(): u8 { 
+    public fun use_const(): u8 {
         H
     }
 

@@ -1,0 +1,52 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/module_call_wrong_argument_in_list.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x2 {
+[error] 
+[error] module X {
+[error]     struct S {}
+[error]     public fun s(): S {
+[error]         S{}
+[error]     }
+[error]     public fun foo(_: address, _: u64, _: S) {
+[error]     }
+[error] }
+[error] 
+[error] module M {
+[error]     use 0x2::X;
+[error]     struct S {}
+[error] 
+[error]     public fun foo(_: address, _: u64, _: S) {
+[error]     }
+[error] 
+[error]     fun t0() {
+[error]         foo(false, 0, S{});
+[error]         foo(@0x0, false, S{});
+[error]         foo(@0x0, 0, false);
+[error]         foo(@0x0, false, false);
+[error]         foo(false, 0, false);
+[error]         foo(false, false, S{});
+[error]     }
+[error] 
+[error]     fun t1() {
+[error]         X::foo(false, 0, X::s());
+[error]         X::foo(@0x0, false, X::s());
+[error]         X::foo(@0x0, 0, S{});
+[error]         X::foo(@0x0, false, S{});
+[error]         X::foo(false, 0, S{});
+[error]         X::foo(false, false, X::s());
+[error]     }
+[error] 
+[error] }
+[error] 
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

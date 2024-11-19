@@ -1,12 +1,11 @@
 module 0x42::m {
-
-    public enum ABC<Q,R> has drop {
-        A(Q,R),
+    public enum ABC<Q, R> has drop {
+        A(Q, R),
         B,
-        C(Q,R),
+        C(Q, R),
     }
 
-    public enum QEither<L,R> has drop {
+    public enum QEither<L, R> has drop {
         Left(L),
         Right(R),
     }
@@ -20,5 +19,4 @@ module 0x42::m {
             ABC::B => 1,
         }
     }
-
 }

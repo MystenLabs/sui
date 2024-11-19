@@ -8,16 +8,16 @@ module 0x42::a {
 
     public enum Y {
         A(X),
-        B(S)
+        B(S),
     }
 
-    public struct S { }
+    public struct S {}
 
     public struct T { x: X, y: Y }
 
-    public struct Mixed { s: S, t: T, x: X , y: Y }
+    public struct Mixed { s: S, t: T, x: X, y: Y }
 
-    public struct PS<phantom T> { s: S , x: X }
+    public struct PS<phantom T> { s: S, x: X }
 
     public enum PE<phantom T> {
         One { s: S, x: X },
@@ -28,7 +28,7 @@ module 0x42::a {
     public struct NPS<phantom T> { s: PS<T>, e: PE<T>, x: X }
 
     public enum NPE<phantom T> {
-        One { s: PS<T>, q: PE<T>, x: X},
+        One { s: PS<T>, q: PE<T>, x: X },
         Two(PS<T>, PE<T>, X),
         Three,
     }

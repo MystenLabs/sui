@@ -1,6 +1,6 @@
 module 0x8675309::M {
     struct R {
-        f: bool
+        f: bool,
     }
 
     fun t0(r: R) {

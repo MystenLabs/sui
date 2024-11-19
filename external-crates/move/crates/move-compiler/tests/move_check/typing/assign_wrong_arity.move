@@ -1,5 +1,5 @@
 module 0x8675309::M {
-    struct R {f: u64}
+    struct R { f: u64 }
 
     fun t0() {
         let x;
@@ -8,7 +8,7 @@ module 0x8675309::M {
         () = 0;
         let b;
         let f;
-        (x, b, R{f}) = (0, false, R{f: 0}, R{f: 0});
-        (x, b, R{f}) = (0, false);
+        (x, b, R { f }) = (0, false, R { f: 0 }, R { f: 0 });
+        (x, b, R { f }) = (0, false);
     }
 }

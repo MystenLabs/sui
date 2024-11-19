@@ -2,7 +2,6 @@
 
 //# publish
 module 0x42::m {
-
     const Z: u64 = 0;
     const SZ: u64 = 1;
 
@@ -14,14 +13,11 @@ module 0x42::m {
             _n => 20,
         }
     }
-
 }
 
 //# run
 module 0x42::main {
-
     fun main() {
         assert!(0x42::m::test() == 1, 1);
     }
-
 }

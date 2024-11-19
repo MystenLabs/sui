@@ -5,6 +5,6 @@ module a::m {
 
     fun t() {
         // cannot annotate a lambda this way
-        call!((|| 1 : || -> u64))
+        call!((|| 1: || -> u64))
     }
 }

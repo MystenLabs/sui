@@ -3,17 +3,19 @@ module a::m {
     const VEC: vector<u64> = vector[0];
 
     public struct X has copy, drop {
-        y: Y
+        y: Y,
     }
     public struct Y has copy, drop {
-        z: Z
+        z: Z,
     }
     public struct Z has copy, drop {
-        f: u64
+        f: u64,
     }
 
     fun id(x: X): X { x }
-    fun ref_unused(_x: &X) { }
+
+    fun ref_unused(_x: &X) {}
+
     fun deref(x: &X): X { *x }
 
     fun all_copy(x: X) {

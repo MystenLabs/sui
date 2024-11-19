@@ -11,7 +11,7 @@ module 0x8675309::M {
 
         (0 as bool);
         (0 as address);
-        R{} = (0 as R);
+        R {} = (0 as R);
         (0 as Cup<u8>);
         (0 as ());
         (0 as (u64, u8));
@@ -28,7 +28,7 @@ module 0x8675309::M {
 
         0 as bool;
         0 as address;
-        R{} = 0 as R;
+        R {} = 0 as R;
         0 as Cup<u8>;
         0 as ();
         0 as (u64, u8);

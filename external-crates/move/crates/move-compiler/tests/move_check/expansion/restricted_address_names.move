@@ -1,2 +1,6 @@
-module Self::A {}
-module vector::A {}
+module Self::A {
+
+}
+module vector::A {
+
+}

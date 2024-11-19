@@ -4,4 +4,6 @@ module a::m {
 }
 
 #[defines_primitive(Y)]
-module a::n {}
+module a::n {
+
+}

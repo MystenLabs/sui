@@ -1,1 +1,3 @@
-module a::enum {}
+module a::enum {
+
+}

@@ -1,20 +1,17 @@
 #[defines_primitive(vector)]
 module std::vector {
     #[bytecode_instruction]
-    native public fun empty<Element>(): vector<Element>;
+    public native fun empty<Element>(): vector<Element>;
 
     #[bytecode_instruction]
-    native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    public native fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
 
     #[bytecode_instruction]
-    native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    public native fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 }
 
 // Correct usage
 module a::m {
-
-
-
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
@@ -30,6 +27,7 @@ module a::m {
     }
 
     public fun deref(x: &u64): u64 { *x }
+
     public fun mut_deref(x: &mut u64): u64 { *x }
 
     public fun main() {

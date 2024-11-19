@@ -14,7 +14,6 @@ module a::m {
         let Foo { id } = f;
         transfer(Foo { id });
     }
-
 }
 
 // allowed since no packing occurs
@@ -33,9 +32,7 @@ module k::m {
         let Foo { id } = f;
         transfer(id);
     }
-
 }
-
 
 module sui::object {
     struct UID has store {

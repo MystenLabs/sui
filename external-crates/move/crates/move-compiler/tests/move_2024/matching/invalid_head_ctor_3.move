@@ -1,14 +1,12 @@
 module 0x42::l {
-
     public fun a(x: u64): u64 { x + 1 }
-
 }
 
 module 0x42::m {
-    use 0x42::l::Self;
+    use 0x42::l;
 
     public enum Option<T> {
-        Some(T)
+        Some(T),
     }
 
     fun test(opt: &Option<u8>) {
@@ -16,5 +14,4 @@ module 0x42::m {
             l::a(_) => (),
         }
     }
-
 }

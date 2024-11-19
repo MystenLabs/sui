@@ -14,11 +14,11 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         loop {
-           _ = x_ref;
-           loop {
-               _ = x;
-               break
-           }
+            _ = x_ref;
+            loop {
+                _ = x;
+                break
+            }
         }
     }
 
@@ -26,7 +26,14 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         loop {
-            if (cond) { _ = x_ref; break } else { while (!cond) { _ = x } }
+            if (cond) {
+                _ = x_ref;
+                break
+            } else {
+                while (!cond) {
+                    _ = x
+                }
+            }
         }
     }
 }

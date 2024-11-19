@@ -1,6 +1,7 @@
 #[allow(duplicate_alias)]
 module a::m {
     use a::m;
+    use std::vector;
 
     // unbound name, but bound address
     #[ext(attr = a)]
@@ -14,7 +15,6 @@ module a::m {
     #[ext(attr = x)]
     fun t3() {}
 
-    use std::vector;
     // Bit strange but we currently always resolve to the builtin
     #[ext(attr = vector)]
     fun t4() {}

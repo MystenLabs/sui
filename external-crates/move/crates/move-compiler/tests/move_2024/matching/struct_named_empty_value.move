@@ -1,10 +1,9 @@
 module 0x42::m {
-    public struct A { }
+    public struct A {}
 
     fun t00(s: A): u64 {
         match (s) {
-            A { } => 0,
+            A {} => 0,
         }
     }
-
 }

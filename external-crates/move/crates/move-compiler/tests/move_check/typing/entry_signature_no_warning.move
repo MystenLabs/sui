@@ -1,5 +1,4 @@
 module 0x42::M {
-
     struct CoolStruct has drop {}
 
     // entry functions no longer have any built in checks outside of visibility rules
@@ -17,5 +16,4 @@ module 0x42::M {
     public entry fun struct_ret(): CoolStruct {
         CoolStruct {}
     }
-
 }

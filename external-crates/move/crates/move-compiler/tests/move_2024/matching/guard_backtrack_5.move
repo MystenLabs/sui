@@ -1,15 +1,13 @@
 module 0x42::m {
-
     public enum Pair<T> has drop {
-        Both(T,T)
+        Both(T, T),
     }
 
     fun default<T: drop>(_o: Pair<T>): u64 {
         0
     }
 
-    fun drop_ref<T>(_o: &Pair<T>) {
-    }
+    fun drop_ref<T>(_o: &Pair<T>) {}
 
     fun t0(): u64 {
         use 0x42::m::Pair as P;
@@ -20,5 +18,4 @@ module 0x42::m {
             z => default(z),
         }
     }
-
 }

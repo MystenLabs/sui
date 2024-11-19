@@ -9,5 +9,4 @@ module 0x8675309::M {
         let x_ref: &u64 = x_ref;
         *x_ref = 0;
     }
-
 }

@@ -10,7 +10,7 @@ module 0x1::Q {
     use 0x1::P::{Self, Foo};
 
     #[test_only]
-    fun x(_: Foo) { }
+    fun x(_: Foo) {}
 
     #[test]
     fun tester() {

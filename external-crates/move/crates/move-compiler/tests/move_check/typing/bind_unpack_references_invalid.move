@@ -3,20 +3,19 @@ module 0x8675309::M {
     struct R { s1: S, s2: S }
 
     fun t0() {
-        let R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
+        let R { s1: S { f }, s2 } = &R { s1: S { f: 0 }, s2: S { f: 1 } };
         f = 0;
         s2 = S { f: 0 }
     }
 
     fun t1() {
-        let R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+        let R { s1: S { f }, s2 } = &mut R { s1: S { f: 0 }, s2: S { f: 1 } };
         f = 0;
         s2 = S { f: 0 }
     }
 
-
     fun t2() {
-        let R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+        let R { s1: S { f }, s2 } = &mut R { s1: S { f: 0 }, s2: S { f: 1 } };
         f = &0;
         s2 = &S { f: 0 }
     }

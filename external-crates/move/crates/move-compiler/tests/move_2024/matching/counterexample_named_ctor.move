@@ -1,8 +1,7 @@
 module 0x42::m {
-
     public enum Option<T> has drop {
         Some { value: T },
-        None
+        None,
     }
 
     fun t0(): u64 {
@@ -25,7 +24,7 @@ module 0x42::m {
     }
 
     public enum Pair<T> has drop {
-        P { one: T , two: T },
+        P { one: T, two: T },
     }
 
     fun t3(pair: Pair<u64>): u64 {
@@ -39,5 +38,4 @@ module 0x42::m {
             Pair::P { two: 0, one } => one,
         }
     }
-
 }

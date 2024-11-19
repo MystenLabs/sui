@@ -1,6 +1,6 @@
 module 0x42::m {
     public enum X {
-        A(u64)
+        A(u64),
     }
 
     public fun invalid(x: &mut X): u64 {
@@ -9,7 +9,7 @@ module 0x42::m {
             X::A(mut a) => {
                 *a = *a + 1;
                 *a
-            }
+            },
         }
     }
 
@@ -18,7 +18,7 @@ module 0x42::m {
             X::A(a) => {
                 *a = *a + 1;
                 *a
-            }
+            },
         }
     }
 }

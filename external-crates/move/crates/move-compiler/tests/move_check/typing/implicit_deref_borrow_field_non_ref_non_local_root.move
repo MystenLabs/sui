@@ -4,8 +4,8 @@ module 0x8675309::M {
     fun t0(cond: bool, _s: S) {
         (foo().f: u64);
         (bar().f: u64);
-        ((if (cond) foo() else &bar()).f : u64);
-        ((if (cond) *foo() else bar()).f : u64);
+        ((if (cond) foo() else &bar()).f: u64);
+        ((if (cond) *foo() else bar()).f: u64);
     }
 
     fun foo(): &S {

@@ -7,21 +7,21 @@ module 0x42::m {
     }
 
     public fun f0(x: Y) {
-        let Y{..} = x;
+        let Y { .. } = x;
     }
 
     public fun f1(x: Y): u64 {
-        let Y{x, ..} = x;
+        let Y { x, .. } = x;
         x
     }
 
     public fun f2(x: Y): u64 {
-        let Y{x, z, .. } = x;
+        let Y { x, z, .. } = x;
         if (z) x else 0
     }
 
     public fun f3(x: Y): u64 {
-        let Y{x, z, y, .. } = x;
+        let Y { x, z, y, .. } = x;
         if (z) x + y else 0
     }
 

@@ -4,10 +4,10 @@ module 0x8675309::M {
 
     fun t() {
         let u = 0;
-        let s = S{};
-        let r = R{};
+        let s = S {};
+        let r = R {};
         (u: u64);
         (s: S);
-        R{} = (r: R);
+        R {} = (r: R);
     }
 }

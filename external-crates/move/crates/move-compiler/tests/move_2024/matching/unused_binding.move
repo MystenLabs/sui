@@ -1,8 +1,7 @@
 module 0x42::m {
-
     public enum Option<T> {
         Some(T),
-        None
+        None,
     }
 
     fun t0(): u64 {

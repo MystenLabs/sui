@@ -1,12 +1,10 @@
 module 0x42::m {
-
     public enum Option<T> has drop {
         None,
-        Some(T)
+        Some(T),
     }
 
-    fun foo<T: drop>(_x: T): () {
-    }
+    fun foo<T: drop>(_x: T): () {}
 
     fun t0(): u64 {
         let o = Option::None;

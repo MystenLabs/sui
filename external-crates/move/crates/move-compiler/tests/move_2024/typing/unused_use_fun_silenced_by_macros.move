@@ -16,6 +16,7 @@ module a::m {
 // implicit unused method alias, silenced by a public macro
 module a::x {
     public struct X() has drop;
+
     public fun drop(_: X) {}
 }
 

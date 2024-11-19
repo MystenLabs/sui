@@ -7,9 +7,9 @@ module 0x7::l {
 
     public struct Z(Y) has drop;
 
-    public fun foo() { }
+    public fun foo() {}
 
-    public fun bar(_: &X) { }
+    public fun bar(_: &X) {}
 
     #[deprecated(note = b"Use the other function instead.")]
     public fun other(y: &Y): &Y { y }
@@ -27,5 +27,5 @@ module 0x7::l {
     }
 
     #[deprecated(note = b"This is a deprecated function within a deprecated module.")]
-    fun internal() { }
+    fun internal() {}
 }

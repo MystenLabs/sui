@@ -1,6 +1,7 @@
 // module member aliases do not shadow leading access names
 module a::S {
     public struct S() has copy, drop;
+
     public fun foo() {}
 }
 

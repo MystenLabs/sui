@@ -1,16 +1,29 @@
 module 0x8675309::M {
-    struct S {f: u64, b: bool}
+    struct S { f: u64, b: bool }
 
     fun t0() {
         let x = 0;
 
-        { let x = false; x; };
+        {
+            let x = false;
+            x;
+        };
         (x: u64);
 
-        { let x = false; (x: bool); };
+        {
+            let x = false;
+            (x: bool);
+        };
         (x: u64);
 
-        { let x = false; { let x = @0x0; (x: address); }; (x: bool); };
+        {
+            let x = false;
+            {
+                let x = @0x0;
+                (x: address);
+            };
+            (x: bool);
+        };
         (x: u64);
     }
 
@@ -29,11 +42,10 @@ module 0x8675309::M {
     fun t2() {
         let x = 0;
         loop {
-            let S { f: _, b: x } = S { f: 0, b: false};
+            let S { f: _, b: x } = S { f: 0, b: false };
             (x: bool);
             break
         };
         (x: u64);
     }
-
 }

@@ -1,6 +1,7 @@
 module 0x42::m {
-
-    public enum Box<T> { B { x: T } }
+    public enum Box<T> {
+        B { x: T },
+    }
 
     fun test(b: &Box<u8>): &u8 {
         match (b) {
@@ -8,6 +9,4 @@ module 0x42::m {
             Box::B { x: y } => y,
         }
     }
-
-
 }

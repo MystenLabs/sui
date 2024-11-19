@@ -1,8 +1,7 @@
 module 0x42::m {
-
     public enum Option<T> has drop {
         None,
-        Some(T)
+        Some(T),
     }
 
     fun default<T: drop>(_o: Option<T>): u64 {

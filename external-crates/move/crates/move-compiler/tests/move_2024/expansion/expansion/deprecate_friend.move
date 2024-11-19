@@ -3,4 +3,6 @@ module a::m {
     friend a::x;
 }
 
-module a::n {}
+module a::n {
+
+}

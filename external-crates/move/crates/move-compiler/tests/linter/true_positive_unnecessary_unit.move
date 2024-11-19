@@ -3,30 +3,46 @@ module a::unnecessary_unit {
     public fun t_if(b: bool) {
         let x = 0;
         x;
-        if (b) () else { x = 1 };
+        if (b) () else {
+            x = 1
+        };
         x;
-        if (b) {} else { x = 1 };
-        x;
-        if (b) { () } else { x = 1 };
+        if (b) {} else {
+            x = 1
+        };
         x;
         if (b) {
-            // new line and comment does not suppress it
-        } else { x = 1 };
+            ()
+        } else {
+            x = 1
+        };
+        x;
+        if (b) {} else {
+            x = 1
+        };
         x;
     }
 
     public fun t_else(b: bool) {
         let x = 0;
         x;
-        if (b) { x = 1 } else ();
+        if (b) {
+            x = 1
+        } else ();
         x;
-        if (b) { x = 1 } else {};
+        if (b) {
+            x = 1
+        } else {};
         x;
-        if (b) { x = 1 } else { () };
-        x;
-        if (b) { x = 1 } else {
-            // new line and comment does not suppress it
+        if (b) {
+            x = 1
+        } else {
+            ()
         };
+        x;
+        if (b) {
+            x = 1
+        } else {};
         x;
     }
 
@@ -34,13 +50,28 @@ module a::unnecessary_unit {
         ();
         let x = 0;
         x;
-        if (b) { (); () } else { x = 1 }; // doesn't trigger if/else case
+        if (b) {
+            ();
+            ()
+        } else {
+            x = 1
+        }; // doesn't trigger if/else case
         x;
-        if (b) { x = 1 } else { (); (); () }; // doesn't trigger if/else case
+        if (b) {
+            x = 1
+        } else {
+            ();
+            ();
+            ()
+        }; // doesn't trigger if/else case
         x;
         {};
-        { () }; // inner isn't an error but the outer is
-        { (); }; // inner is an error but outer isn't
+        {
+            ()
+        }; // inner isn't an error but the outer is
+        {
+            ();
+        }; // inner is an error but outer isn't
         ()
     }
 

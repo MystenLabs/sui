@@ -1,0 +1,14 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/expansion/hexstring_bad_value.move: Error: tree-sitter failure on 
+[error] ```
+[error] x"
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at mainPrintInternal (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20405:18)
+[error]     at mainPrint (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20388:14)
+[error]     at file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19598:23
+[error]     at AstPath.each (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19585:9)
+[error]     at AstPath.map (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19597:10)
+[error]     at block (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/utilities.js:116:32)
+[error]     at printBreakableBlock (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/expression/block.js:42:34)

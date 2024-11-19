@@ -4,16 +4,16 @@ module 0x8675309::M {
 
     fun t0() {
         *&mut 0 = false;
-        *&mut S{f:0}.f = &1;
+        *&mut S { f: 0 }.f = &1;
         *foo(&mut 0) = (1, 0);
-        bar(&mut S{f:0}).f = ();
-        *&mut bar(&mut S{f:0}).f = &0;
+        bar(&mut S { f: 0 }).f = ();
+        *&mut bar(&mut S { f: 0 }).f = &0;
         baz().f = false;
         *&mut baz().f = false;
     }
 
     fun t1() {
-        let r = &mut S{ f: 0 };
+        let r = &mut S { f: 0 };
         *r = X { f: 1 };
 
         r.f = &0;

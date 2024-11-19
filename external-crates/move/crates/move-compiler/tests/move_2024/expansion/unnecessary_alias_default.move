@@ -1,4 +1,3 @@
 module a::m {
-    use std::vector;
-    use std::option::{Self, Option};
+    use std::{option::{Self, Option}, vector};
 }

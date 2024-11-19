@@ -2,7 +2,7 @@
 module a::object {
     struct UID has store { flag: bool }
     struct S has key {
-        id: UID
+        id: UID,
     }
 }
 
@@ -10,6 +10,6 @@ module a::object {
 module 0x2::object {
     struct UID has store { flag: bool }
     struct S has key {
-        id: UID
+        id: UID,
     }
 }

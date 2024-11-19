@@ -1,5 +1,7 @@
 module 0x42::M {
     fun t() {
-        loop { break 0 };
+        loop {
+            break 0
+        };
     }
 }

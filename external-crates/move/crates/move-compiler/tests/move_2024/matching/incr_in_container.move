@@ -2,10 +2,9 @@
 
 //# publish
 module 0x42::m {
-
     public enum AB<T> has drop {
         A(T, bool),
-        B { x: T }
+        B { x: T },
     }
 
     fun incr_container(x: AB<u64>): u64 {

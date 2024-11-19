@@ -5,12 +5,12 @@ module a::l {
 }
 
 module a::m {
-    public struct S { }
+    public struct S {}
 
     public macro fun test() {
         a::l::test!(|| {
-            let s = S { };
-            let S { } = s;
+            let s = S {};
+            let S {} = s;
         })
     }
 }

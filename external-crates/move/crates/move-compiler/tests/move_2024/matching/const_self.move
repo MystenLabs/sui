@@ -1,5 +1,4 @@
 module 0x42::m {
-
     const A: u64 = 10;
     const B: u64 = 20;
 
@@ -28,5 +27,4 @@ module 0x42::m {
             _ => 2,
         }
     }
-
 }

@@ -2,19 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module a::test_suppression {
-    use sui::object::UID;
-    use sui::transfer;
+    use sui::{object::UID, transfer};
 
     struct SuperAdminCap has key {
-       id: UID
+        id: UID,
     }
 
     struct MasterCapability has key {
-       id: UID
+        id: UID,
     }
 
     struct RootCapV3 has key {
-       id: UID
+        id: UID,
     }
 
     #[allow(lint(freezing_capability))]
@@ -41,6 +40,7 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun public_freeze_object<T: key>(_: T) {
         abort ZERO
     }

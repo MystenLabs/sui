@@ -12,16 +12,19 @@ module 2::m {
 
 module 3::m {
     fun main() {
-        { return };
+        {
+            return
+        };
     }
 }
 
 module 4::m {
     fun main() {
-        { abort 0 };
+        {
+            abort 0
+        };
     }
 }
-
 
 module 5::m {
     fun main(cond: bool) {
@@ -56,4 +59,3 @@ module 7::m {
         }
     }
 }
-

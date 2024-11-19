@@ -1,5 +1,4 @@
 module 0x42::m {
-
     public struct S {}
 
     #[syntax(index)]
@@ -13,6 +12,4 @@ module 0x42::m {
 
     #[syntax(index)]
     public fun index_mut_s2(s: &mut S): &mut S { s }
-
-
 }

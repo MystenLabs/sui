@@ -1,12 +1,12 @@
-module 0x42::m;
+module 0x42::m {
+    public enum E {
+        X { x: u64 },
+        Y { y: u64 },
+    }
 
-public enum E {
-    X { x: u64 },
-    Y { y: u64 }
-}
-
-public fun test(e: &E): u64 {
-    match (e) {
-        E::X { x } | E::Y { y: _, x } => *x
+    public fun test(e: &E): u64 {
+        match (e) {
+            E::X { x } | E::Y { y: _, x } => *x,
+        }
     }
 }

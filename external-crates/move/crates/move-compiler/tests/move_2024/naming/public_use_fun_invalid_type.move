@@ -5,13 +5,14 @@ module std::utilities {
     public fun x_ex(_: &X) {
         abort 0
     }
+
     public fun vec_ex<T>(_: &vector<T>) {
         abort 0
     }
+
     public fun u64_ex(_: u64) {
         abort 0
     }
-
 }
 
 // these modules should not be able to declare public use funs on these types since they did

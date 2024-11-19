@@ -1,12 +1,14 @@
 module 0x42::m {
     fun main1() {
         loop {
-           &break;
+            &break;
         }
     }
 
     fun main2() {
-        &{ return };
+        &{
+            return
+        };
     }
 
     fun main3(cond: bool) {

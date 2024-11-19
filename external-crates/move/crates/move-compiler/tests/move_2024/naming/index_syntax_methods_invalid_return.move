@@ -1,5 +1,4 @@
 module 0x42::a {
-
     public struct S has drop {}
 
     #[syntax(index)]
@@ -15,5 +14,4 @@ module 0x42::a {
 
     #[syntax(index)]
     public fun index_t_mut(_t: &mut T): &mut () { abort 0 }
-
 }

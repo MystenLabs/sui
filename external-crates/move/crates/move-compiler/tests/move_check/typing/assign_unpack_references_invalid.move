@@ -5,7 +5,7 @@ module 0x8675309::M {
     fun t0() {
         let f;
         let s2;
-        R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
+        R { s1: S { f }, s2 } = &R { s1: S { f: 0 }, s2: S { f: 1 } };
         f = 0;
         s2 = S { f: 0 }
     }
@@ -13,16 +13,15 @@ module 0x8675309::M {
     fun t1() {
         let f;
         let s2;
-        R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+        R { s1: S { f }, s2 } = &mut R { s1: S { f: 0 }, s2: S { f: 1 } };
         f = 0;
         s2 = S { f: 0 }
     }
 
-
     fun t2() {
         let f;
         let s2;
-        R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+        R { s1: S { f }, s2 } = &mut R { s1: S { f: 0 }, s2: S { f: 1 } };
         f = &0;
         s2 = &S { f: 0 }
     }

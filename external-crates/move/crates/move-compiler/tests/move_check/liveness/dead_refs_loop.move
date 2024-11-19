@@ -13,8 +13,8 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         loop {
-           _ = x_ref;
-           break
+            _ = x_ref;
+            break
         };
         _ = x;
         _ = move x;
@@ -24,7 +24,9 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         loop {
-            if (cond) break else  { _ = x_ref; }
+            if (cond) break else {
+                _ = x_ref;
+            }
         };
         _ = x;
         _ = move x;
@@ -33,11 +35,8 @@ module 0x8675309::M {
     fun t4(cond: bool) {
         let x = cond;
         let x_ref = &x;
-        while (*x_ref) {
-
-        };
+        while (*x_ref) {};
         _ = x;
         _ = move x;
     }
-
 }

@@ -1,6 +1,7 @@
 module 0x42::M {
     fun foo() {
-        0 {} = 0;
+        ERROR
+        {} = 0;
 
         foo() = 0;
 

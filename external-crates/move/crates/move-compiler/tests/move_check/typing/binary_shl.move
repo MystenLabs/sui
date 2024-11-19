@@ -15,6 +15,6 @@ module 0x8675309::M {
         copy x << copy b;
         r.f << r.b;
         1 << r.b << r.b << 0;
-        R {f: _, b: _} = r
+        R { f: _, b: _ } = r
     }
 }

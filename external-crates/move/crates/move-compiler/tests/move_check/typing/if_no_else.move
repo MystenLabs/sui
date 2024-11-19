@@ -1,4 +1,3 @@
-
 module a::m {
     fun t(cond: bool) {
         if (cond) 0;

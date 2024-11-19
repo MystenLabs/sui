@@ -1,5 +1,9 @@
 #[defines_primitive(signer)]
-module a::m {}
+module a::m {
+
+}
 
 #[defines_primitive(signer)]
-module a::n {}
+module a::n {
+
+}

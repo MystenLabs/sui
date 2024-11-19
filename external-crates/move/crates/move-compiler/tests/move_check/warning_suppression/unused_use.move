@@ -1,4 +1,6 @@
-module 0x42::x {}
+module 0x42::x {
+
+}
 
 #[allow(unused_use)]
 module 0x42::m {

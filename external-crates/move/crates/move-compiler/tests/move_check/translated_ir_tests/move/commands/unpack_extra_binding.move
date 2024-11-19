@@ -11,6 +11,5 @@ module 0x8675309::Test {
         let T { i, x, b: flag } = t;
         (i, x, flag)
     }
-
 }
 // check: NEGATIVE_STACK_SIZE_WITHIN_BLOCK

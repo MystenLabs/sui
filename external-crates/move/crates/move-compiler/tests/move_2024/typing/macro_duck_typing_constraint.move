@@ -14,6 +14,6 @@ module a::m {
     }
 
     fun t() {
-        needs_copy!(X<u64>(), 0u64, @0);
+        needs_copy!(X<u64>(), 0u64, ERROR, 0);
     }
 }

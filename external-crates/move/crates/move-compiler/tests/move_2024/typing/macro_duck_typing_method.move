@@ -4,12 +4,15 @@ module a::m {
     public struct ByMut() has copy, drop;
 
     use fun bv_foo as ByValue.foo;
+
     fun bv_foo(_: ByValue) {}
 
     use fun bi_foo as ByImm.foo;
+
     fun bi_foo(_: &ByImm) {}
 
     use fun bm_foo as ByMut.foo;
+
     fun bm_foo(_: &mut ByMut) {}
 
     // this is "duck typing" in the sense that this macro can be called only by those

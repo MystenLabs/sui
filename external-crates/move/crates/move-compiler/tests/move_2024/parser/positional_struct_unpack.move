@@ -23,7 +23,7 @@ module 0x42::M {
     }
 
     fun zz(y: Bar<Foo<Bar<u64>>>): u64 {
-        let Bar{f: Foo(Foo(Bar{f: Foo(x, y)}, z), t)} = y;
+        let Bar { f: Foo(Foo(Bar { f: Foo(x, y) }, z), t) } = y;
         x + y + z + t
     }
 }

@@ -1,5 +1,4 @@
 module a::m {
-
     fun f(x: u8) {
         match (x) {
             0 => (),
@@ -9,5 +8,4 @@ module a::m {
             20 => (),
         }
     }
-
 }

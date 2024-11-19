@@ -6,12 +6,12 @@ module 0x42::SuppressCases {
     #[allow(lint(redundant_ref_deref))]
     public fun case_1() {
         let resource = MyResource { value: 10 };
-        let _ref = &*(&resource);  // Suppressed warning
+        let _ref = &*(&resource); // Suppressed warning
     }
 
     #[allow(lint(redundant_ref_deref))]
     public fun case_2() {
         let resource = MyResource { value: 10 };
-        let _value = *(&resource.value);  // Suppressed warning
+        let _value = *(&resource.value); // Suppressed warning
     }
 }

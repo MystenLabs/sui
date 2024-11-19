@@ -9,6 +9,7 @@ module a::m {
 #[allow(deprecated_usage)]
 module b::m1 {
     fun t<T>() {}
+
     public fun foo() {
         a::m::foo();
     }

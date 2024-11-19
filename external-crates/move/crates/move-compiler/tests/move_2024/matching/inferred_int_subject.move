@@ -1,5 +1,7 @@
-module a::m;
-
-fun t() {
-    match (10) { _ => {} }
+module a::m {
+    fun t() {
+        match (10) {
+            _ => {},
+        }
+    }
 }

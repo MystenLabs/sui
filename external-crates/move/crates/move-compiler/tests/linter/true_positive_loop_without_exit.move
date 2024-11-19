@@ -6,8 +6,11 @@ module a::m {
     }
 
     const ZERO: u64 = 0;
+
     public fun t2() {
-        loop { abort ZERO }
+        loop {
+            abort ZERO
+        }
     }
 
     public fun t3() {

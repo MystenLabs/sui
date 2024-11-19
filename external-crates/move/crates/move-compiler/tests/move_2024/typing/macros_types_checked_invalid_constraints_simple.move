@@ -6,7 +6,9 @@ module a::m {
 
     macro fun bar<$T>(_: NeedsCopy<$T>) {}
 
-    macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
+    macro fun baz<$T>(): NeedsCopy<$T> {
+        abort 0
+    }
 
     #[allow(dead_code)]
     fun t() {
@@ -17,5 +19,4 @@ module a::m {
     fun t2() {
         baz!<None>()
     }
-
 }

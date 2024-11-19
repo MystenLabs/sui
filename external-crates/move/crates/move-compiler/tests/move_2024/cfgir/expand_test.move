@@ -1,5 +1,4 @@
 module a::m {
-
     public macro fun for_each<$T>($v: vector<$T>, $f: |$T|) {
         let mut v = $v;
         v.reverse();

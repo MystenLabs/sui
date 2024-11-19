@@ -1,5 +1,4 @@
 module a::m {
-
     public struct S {}
 
     fun t0(s: &mut S): &S {
@@ -35,7 +34,10 @@ module a::m {
     }
 
     fun t5(s: &mut S): &S {
-        if (true) { s } else { s }
+        if (true) {
+            s
+        } else {
+            s
+        }
     }
-
 }

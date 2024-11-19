@@ -1,5 +1,5 @@
 module 0x8675309::M {
-    struct S has drop {f: u64}
+    struct S has drop { f: u64 }
     struct R has key {}
 
     public fun borrow_local(x: u64): u64 {
@@ -20,5 +20,4 @@ module 0x8675309::M {
         let (f, u): (&u64, u64) = (&mut s.f, s.f);
         *f + u
     }
-
 }

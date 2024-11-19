@@ -3,6 +3,6 @@ module 0x8675309::M {
 
     fun t0() {
         let _b = Box { f1: false, f2: 1 };
-        let _b2 = Box { f1: Box { f1: 0, f2: 0 }, f2:  Box { f1: false, f2: false } };
+        let _b2 = Box { f1: Box { f1: 0, f2: 0 }, f2: Box { f1: false, f2: false } };
     }
 }

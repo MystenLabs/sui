@@ -1,6 +1,5 @@
 module 0x42::m {
-
-    public enum Tuple2<T,U> has drop {
+    public enum Tuple2<T, U> has drop {
         Ctor(T, U),
     }
 
@@ -12,7 +11,7 @@ module 0x42::m {
 
     fun t1(): u64 {
         match (Tuple2::Ctor(0, 1)) {
-            Tuple2::Ctor(x, _) => x
+            Tuple2::Ctor(x, _) => x,
         }
     }
 
@@ -47,7 +46,7 @@ module 0x42::m {
     fun t6(): u64 {
         match (Tuple2::Ctor(0, 1)) {
             Tuple2::Ctor(0, _) => 0,
-            Tuple2::Ctor(3, _) => 3
+            Tuple2::Ctor(3, _) => 3,
         }
     }
 
@@ -56,8 +55,7 @@ module 0x42::m {
             Tuple2::Ctor(0, _) => 0,
             Tuple2::Ctor(3, _) => 3,
             Tuple2::Ctor(7, _) => 7,
-            Tuple2::Ctor(4, _) => 4
+            Tuple2::Ctor(4, _) => 4,
         }
     }
-
 }

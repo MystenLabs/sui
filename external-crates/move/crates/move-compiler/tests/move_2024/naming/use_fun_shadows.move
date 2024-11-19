@@ -1,6 +1,8 @@
 module a::m {
     public struct X() has copy, drop;
+
     public fun u(_: &X): u64 { 0 }
+
     public fun b(_: &X): bool { false }
 }
 

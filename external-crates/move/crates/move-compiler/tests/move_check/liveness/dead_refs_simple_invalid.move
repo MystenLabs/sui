@@ -14,5 +14,4 @@ module 0x8675309::M {
         _ = move x;
         _ = *x_ref;
     }
-
 }

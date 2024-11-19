@@ -1,12 +1,11 @@
 // valid, Receiving type by mut ref with object type param
 
 module a::m {
-    use sui::object;
-    use sui::transfer::Receiving;
+    use sui::{object, transfer::Receiving};
 
     struct S has key { id: object::UID }
 
-    public entry fun yes(_: &mut Receiving<S>) { }
+    public entry fun yes(_: &mut Receiving<S>) {}
 }
 
 module sui::object {
@@ -17,6 +16,6 @@ module sui::object {
 
 module sui::transfer {
     struct Receiving<phantom T: key> has drop {
-        id: address
+        id: address,
     }
 }

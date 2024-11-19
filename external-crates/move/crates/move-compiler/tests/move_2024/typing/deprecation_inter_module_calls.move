@@ -2,14 +2,14 @@
 module 0x7::l {
     public struct X() has drop;
 
-    public fun foo() { }
+    public fun foo() {}
 
-    public fun bar(_: &X) { }
+    public fun bar(_: &X) {}
 
     #[deprecated(note = b"More specific deprecations override less specific ones.")]
-    public fun other_dep(_: &X) { }
+    public fun other_dep(_: &X) {}
 
-    public fun other(_: &X) { }
+    public fun other(_: &X) {}
 
     public fun make_x(): X {
         X()
@@ -35,19 +35,19 @@ module 0x42::m {
 
     use fun 0x7::l::other as X.rofl;
 
-    public fun lol(_: &X) { }
+    public fun lol(_: &X) {}
 
     public fun quux(x: 0x7::l::X) {
         0x7::l::foo();
         x.bar();
     }
 
-    public fun quux_use() { 
+    public fun quux_use() {
         use 0x7::l;
-        l::foo(); 
+        l::foo();
     }
 
-    public fun bar(_: &B) { }
+    public fun bar(_: &B) {}
 
     public fun dep_meth_call(x: &X) {
         x.bar();
@@ -64,7 +64,7 @@ module 0x42::m {
 
     public fun dep_enum() {
         let _ = T::Some(0x7::l::make_x());
-        let _ = T::Other { y: 0x7::l::make_x()};
+        let _ = T::Other { y: 0x7::l::make_x() };
         let _ = T::Fine;
     }
 }

@@ -1,5 +1,4 @@
 module a::m {
-
     struct FBox {
         f: F,
     }

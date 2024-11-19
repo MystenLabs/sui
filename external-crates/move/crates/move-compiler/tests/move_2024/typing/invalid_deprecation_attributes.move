@@ -1,22 +1,22 @@
 module 0x42::m {
     #[deprecated = b"This is a deprecated function"]
-    fun f() { }
+    fun f() {}
 
     #[deprecated(msg = b"This is a deprecated function")]
-    fun g() { }
+    fun g() {}
 
     #[deprecated(b"This is a deprecated function")]
-    fun h() { }
+    fun h() {}
 
     #[deprecated(note = b"This is a deprecated function", other = b"other")]
-    fun i() { }
+    fun i() {}
 
     #[deprecated(note = 123)]
-    fun j() { }
+    fun j() {}
 
     #[deprication]
-    fun k() { }
+    fun k() {}
 
     #[deprecated(foo)]
-    fun l() { }
+    fun l() {}
 }

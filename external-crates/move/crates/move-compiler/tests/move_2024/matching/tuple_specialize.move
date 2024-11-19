@@ -1,7 +1,6 @@
 module 0x42::m {
-
-    public enum Tup<A,B,C> {
-        Triple(A, B, C)
+    public enum Tup<A, B, C> {
+        Triple(A, B, C),
     }
 
     public fun match_tup(t: &Tup<u64, u64, u64>): u64 {
@@ -14,5 +13,4 @@ module 0x42::m {
             Tup::Triple(x, y, z) => *x + *y + *z,
         }
     }
-
 }

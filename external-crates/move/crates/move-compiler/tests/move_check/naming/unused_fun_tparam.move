@@ -1,5 +1,4 @@
 module 0x42::unused_fun_tparam {
-
     public fun unused<T>(): u64 {
         42
     }
@@ -11,5 +10,4 @@ module 0x42::unused_fun_tparam {
     public fun all_unused<T1, T2>(): u64 {
         42
     }
-
 }

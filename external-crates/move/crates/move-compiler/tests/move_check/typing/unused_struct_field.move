@@ -1,16 +1,15 @@
 module 0x42::unused_fields {
-
     // there should be unused field warning (no fields)
     native struct NativeStruct;
 
     // there should be unused field warning (no fields)
-    struct EmptyStruct { }
+    struct EmptyStruct {}
 
     struct OneUnusedFieldStruct {
         field_used_borrow: u8,
         field_used_borrow_mut: u8,
         field_used_borrow_var: u8,
-        field_unused: u8
+        field_unused: u8,
     }
 
     struct AllFieldsUsedPackStruct {
@@ -60,5 +59,6 @@ module 0x42::private_struct {
 }
 module 0x42::m {
     struct S has drop { f: u64 }
+
     public fun flaky(x: 0x42::private_struct::S): u64 { x.f }
 }

@@ -1,7 +1,7 @@
 module 0x8675309::M {
     struct X1 { x2: X2 }
     struct X2 { x3: X3 }
-    struct X3 { f: u64, }
+    struct X3 { f: u64 }
 
     fun t0(x1: &X1, x1_mut: &mut X1) {
         &x1.f;

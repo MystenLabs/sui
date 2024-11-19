@@ -1,5 +1,7 @@
 module a::m {
-    macro fun call($f: || -> u32) { $f(); }
+    macro fun call($f: || -> u32) {
+        $f();
+    }
 
     #[allow(dead_code)]
     fun weird(cond: bool, x: u64): u64 {
@@ -29,12 +31,12 @@ module a::m {
         s.chain().f_val() as u32;
         *s.chain().f_imm() as u32;
         *s.chain().f_mut() as u32;
-        S{f:0}.f_val() as u32;
-        *S{f:0}.f_imm() as u32;
-        *S{f:0}.f_mut() as u32;
-        S{f:0}.chain().f_val() as u32;
-        *S{f:0}.chain().f_imm() as u32;
-        *S{f:0}.chain().f_mut() as u32;
+        S { f: 0 }.f_val() as u32;
+        *S { f: 0 }.f_imm() as u32;
+        *S { f: 0 }.f_mut() as u32;
+        S { f: 0 }.chain().f_val() as u32;
+        *S { f: 0 }.chain().f_imm() as u32;
+        *S { f: 0 }.chain().f_mut() as u32;
     }
 
     public fun chain(s: &mut S): &mut S { s }

@@ -1,5 +1,4 @@
 module 0x42::a {
-
     public struct X { x: u64 }
 
     public struct Y<phantom T> { y: u64 }
@@ -7,43 +6,42 @@ module 0x42::a {
     public enum P<phantom X> {
         A,
         B(Y<X>),
-        C
+        C,
     }
 
     public enum Q<phantom X> {
         A,
         B { x: Y<X> },
-        C
+        C,
     }
 
     public enum R<phantom X> {
         A(Y<X>),
         B { x: Y<X> },
-        C
+        C,
     }
 
     public enum S<phantom X> {
         A,
         B,
-        C
+        C,
     }
 
     public enum T<phantom X> {
         A(S<X>),
         B { x: S<X> },
-        C
+        C,
     }
 
     public enum U<phantom X> {
         A(Y<X>),
         B { x: Y<X> },
-        C
+        C,
     }
 
     public enum V<phantom X> {
         A(U<X>),
         B { x: U<X> },
-        C
+        C,
     }
-
 }

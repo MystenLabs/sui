@@ -24,9 +24,9 @@ module 0x42::m {
 
     /// This is a doc comment above a function with an annotation. Above the annotation.
     #[allow(dead_code)]
-    fun test() { }
+    fun test() {}
 
     #[allow(dead_code)]
     /// This is a doc comment above a function with an annotation. Below the annotation.
-    fun test1() { }
+    fun test1() {}
 }

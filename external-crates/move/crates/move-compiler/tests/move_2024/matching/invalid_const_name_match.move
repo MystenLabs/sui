@@ -1,5 +1,4 @@
 module 0x042::m {
-
     const Z8: u8 = 0;
 
     public struct S has drop { n: u64 }
@@ -10,5 +9,4 @@ module 0x042::m {
             _ => 10,
         }
     }
-
 }

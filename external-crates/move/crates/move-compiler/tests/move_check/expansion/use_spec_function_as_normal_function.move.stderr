@@ -1,0 +1,30 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/expansion/use_spec_function_as_normal_function.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x2 {
+[error] module X {
+[error]     spec module {
+[error]         define foo(): bool { true }
+[error]         define bar(): bool { true }
+[error]     }
+[error] }
+[error] 
+[error] module M {
+[error]     use 0x2::X::{foo, bar as baz};
+[error]     fun t() {
+[error]         foo();
+[error]         baz();
+[error]     }
+[error] }
+[error] 
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

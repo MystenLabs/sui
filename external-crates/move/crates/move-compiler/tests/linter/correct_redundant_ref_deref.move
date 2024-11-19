@@ -1,5 +1,5 @@
 module 0x42::M {
-    struct MyResource has copy, drop{
+    struct MyResource has copy, drop {
         value: u64,
     }
 

@@ -22,5 +22,4 @@ module a::m {
         applyvu64!(|_: vector<_>| -> vector<_> { b"hello" });
         applyt!(0u64, |_: vector<_>| -> vector<_> { b"hello" });
     }
-
 }

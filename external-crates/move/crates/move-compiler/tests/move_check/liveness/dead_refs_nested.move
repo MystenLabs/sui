@@ -15,12 +15,12 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         loop {
-           _ = x_ref;
-           loop {
-               _ = x_ref;
-               break
-           };
-           break
+            _ = x_ref;
+            loop {
+                _ = x_ref;
+                break
+            };
+            break
         };
         _ = x;
         _ = move x;
@@ -30,7 +30,14 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         loop {
-            if (cond) { _ = x; break } else { while (!cond) { _ = x_ref } }
+            if (cond) {
+                _ = x;
+                break
+            } else {
+                while (!cond) {
+                    _ = x_ref
+                }
+            }
         }
     }
 }

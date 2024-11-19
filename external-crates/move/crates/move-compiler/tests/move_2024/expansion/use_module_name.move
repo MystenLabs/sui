@@ -1,13 +1,15 @@
 module a::vector {
     public fun borrow<T>(_v: &vector<T>, _n: u64): &T { abort 0 }
+
     public fun length<T>(_v: &vector<T>): u64 { abort 0 }
+
     public fun singleton<T>(_t: T): vector<T> { abort 0 }
 }
 
 module a::vector_tests {
     use a::vector as V;
 
-    public struct R has store { }
+    public struct R has store {}
     public struct Droppable has drop {}
     public struct NotDroppable {}
 

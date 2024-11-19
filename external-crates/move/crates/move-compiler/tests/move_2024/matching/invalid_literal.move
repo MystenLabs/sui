@@ -1,7 +1,6 @@
 module 0x42::m {
-
     public enum Option<T> {
-        Some(T)
+        Some(T),
     }
 
     fun test(opt: &Option<u8>) {
@@ -9,5 +8,4 @@ module 0x42::m {
             Option::Some(256u8) => (),
         }
     }
-
 }

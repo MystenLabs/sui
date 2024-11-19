@@ -1,6 +1,5 @@
 module 0x42::m {
-
-    const V: vector<u64> = vector[1,2,3];
+    const V: vector<u64> = vector[1, 2, 3];
 
     public struct Pair<T>(T, T)
 
@@ -10,5 +9,4 @@ module 0x42::m {
             _ => false,
         }
     }
-
 }

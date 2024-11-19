@@ -1,5 +1,4 @@
 module 0x42::loop_test {
-
     public fun true_negative_while_with_condition() {
         let b = false;
         while (false) {};

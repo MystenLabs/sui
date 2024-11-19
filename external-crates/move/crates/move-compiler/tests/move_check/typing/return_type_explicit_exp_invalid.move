@@ -10,17 +10,17 @@ module 0x8675309::M {
     }
 
     fun t2(): (u64, bool) {
-        loop return (0, false, R{});
+        loop return (0, false, R {});
         abort 0
     }
 
     fun t3(): (u64, bool, R, bool) {
-        while (true) return (0, false, R{});
+        while (true) return (0, false, R {});
         abort 0
     }
 
     fun t4(): (bool, u64, R) {
-        while (false) return (0, false, R{});
+        while (false) return (0, false, R {});
         abort 0
     }
 }

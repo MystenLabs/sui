@@ -1,5 +1,4 @@
 module 0x42::a {
-
     public enum Maybe<T> {
         Just(T),
         Nothing,
@@ -12,5 +11,4 @@ module 0x42::a {
             Maybe::Just<u64>(_) => (),
         }
     }
-
 }

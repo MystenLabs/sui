@@ -1,11 +1,9 @@
 // allowed, even though a bit pointless
 module a::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::transfer;
+    use sui::{object::{Self, UID}, transfer::transfer, tx_context::{Self, TxContext}};
 
     struct Obj has key {
-        id: UID
+        id: UID,
     }
 
     public entry fun transmute(ctx: &mut TxContext) {
@@ -19,16 +17,17 @@ module a::m {
         let obj = Obj { id };
         transfer(obj, tx_context::sender(ctx))
     }
-
 }
 
 module sui::object {
     struct UID has store {
         id: address,
     }
+
     public fun new(_: &mut sui::tx_context::TxContext): UID {
         abort 0
     }
+
     public fun delete(_: UID) {
         abort 0
     }
@@ -36,8 +35,10 @@ module sui::object {
 
 module sui::tx_context {
     struct TxContext has drop {}
+
     public fun sender(_: &TxContext): address {
-        @0
+        ERROR
+        0
     }
 }
 

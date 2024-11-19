@@ -1,0 +1,62 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/type_variable_join_threaded_unpack_assign.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x2 {
+[error] 
+[error] module Container {
+[error]     struct T<V> has drop { f: V }
+[error] 
+[error]     public fun new<V>(): T<V> {
+[error]         abort 0
+[error]     }
+[error] 
+[error]     public fun get<V: drop>(_self: &T<V>): V {
+[error]         abort 0
+[error]     }
+[error] 
+[error]     public fun put<V>(_self: &mut T<V>, _item: V) {
+[error]         abort 0
+[error]     }
+[error] }
+[error] 
+[error] 
+[error] module M {
+[error]     use 0x2::Container;
+[error] 
+[error]     struct Box<T> has drop { f1: T, f2: T }
+[error] 
+[error]     fun new<T>(): Box<T> {
+[error]         abort 0
+[error]     }
+[error] 
+[error]     fun t0(): u64 {
+[error]         let v = Container::new();
+[error]         let f1;
+[error]         let f2;
+[error]         Box { f1, f2 }  = Container::get(&v);
+[error]         f2;
+[error]         Container::put(&mut v, Box { f1: 0, f2: 0});
+[error]         f1
+[error]     }
+[error] 
+[error]     fun t1(): Box<Box<u64>> {
+[error]         let v = Container::new();
+[error]         let f1;
+[error]         let f2;
+[error]         Box { f1, f2 }  = Container::get(&v);
+[error]         Container::put(&mut v, Box { f1: *&f1, f2 });
+[error]         f1
+[error]     }
+[error] }
+[error] 
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

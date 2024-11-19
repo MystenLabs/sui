@@ -2,7 +2,6 @@
 
 //# publish
 module 0x42::m {
-
     public enum Op has drop {
         LoopOpen,
         BreakIfEven(u64), // encodes jump PC
@@ -46,7 +45,7 @@ module 0x42::m {
                     Op::LoopClose => {
                         cur_pc = loop_pcs[loop_pcs.length() - 1];
                         continue 'interp
-                    }
+                    },
                 };
                 cur_pc = cur_pc + 1;
             }
@@ -56,30 +55,21 @@ module 0x42::m {
     }
 
     fun test() {
-
-        let push = vector[
-            Op::Push(1),
-            Op::Return,
-        ];
+        let push = vector[Op::Push(1), Op::Return];
 
         assert!(interp!(push) == 1);
 
-        let add = vector[
-            Op::Push(1),
-            Op::Push(1),
-            Op::Add,
-            Op::Return,
-        ];
+        let add = vector[Op::Push(1), Op::Push(1), Op::Add, Op::Return];
 
         assert!(interp!(add) == 2);
 
         let early_break = vector[
             Op::Push(1),
             Op::LoopOpen,
-                Op::Push(1),
-                Op::Add,
-                Op::BreakIfEven(7),
-                Op::Return,
+            Op::Push(1),
+            Op::Add,
+            Op::BreakIfEven(7),
+            Op::Return,
             Op::LoopClose,
             Op::Push(100),
             Op::Return,
@@ -90,10 +80,10 @@ module 0x42::m {
         let exiting = vector[
             Op::Push(0),
             Op::LoopOpen,
-                Op::Push(1),
-                Op::Add,
-                Op::BreakIfEven(7),
-                Op::Return,
+            Op::Push(1),
+            Op::Add,
+            Op::BreakIfEven(7),
+            Op::Return,
             Op::LoopClose,
             Op::Push(100),
             Op::Return,
@@ -104,9 +94,9 @@ module 0x42::m {
         let loop_and_break = vector[
             Op::Push(0),
             Op::LoopOpen,
-                Op::Push(1),
-                Op::Add,
-                Op::BreakIfEven(6),
+            Op::Push(1),
+            Op::Add,
+            Op::BreakIfEven(6),
             Op::LoopClose,
             Op::Return,
         ];

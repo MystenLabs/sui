@@ -1,6 +1,5 @@
 module 0x8675309::M {
-    fun foo<T, U>(_x: T, _y: U) {
-    }
+    fun foo<T, U>(_x: T, _y: U) {}
 
     fun t1() {
         foo<bool, bool>(false, false);
@@ -13,5 +12,4 @@ module 0x8675309::M {
         foo<T, u64>(t, 0);
         foo<U, V>(u, v);
     }
-
 }

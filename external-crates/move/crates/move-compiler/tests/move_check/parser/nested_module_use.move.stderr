@@ -1,0 +1,11 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/parser/nested_module_use.move: Error: Expected `module_identity` or `module_identifier`
+[error]     at collectImports (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/imports-grouping.js:167:27)
+[error]     at printModuleBody (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/module.js:105:59)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:57:57)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at mainPrintInternal (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20405:18)
+[error]     at mainPrint (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20388:14)
+[error]     at AstPath.call (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19547:14)
+[error]     at printModuleDefinition (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/module.js:71:21)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:57:57)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)

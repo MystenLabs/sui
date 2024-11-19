@@ -1,5 +1,6 @@
 module a::m {
     public struct X {}
+
     public fun foo(_: &X) {}
 
     #[test_only]

@@ -1,12 +1,11 @@
 module 0x42::m {
-
-    public enum Tuple<A,B> {
-        Two(A,B),
+    public enum Tuple<A, B> {
+        Two(A, B),
     }
 
     public enum Maybe<A> {
         Just(A),
-        Nothing
+        Nothing,
     }
 
     fun match_invalid(x: &Tuple<Maybe<bool>, Maybe<u64>>): u64 {
@@ -14,7 +13,4 @@ module 0x42::m {
             Tuple::Two(Maybe::Just(true), Maybe::Just(5)) => 10,
         }
     }
-
 }
-
-

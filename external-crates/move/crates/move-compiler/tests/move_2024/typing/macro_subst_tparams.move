@@ -1,5 +1,6 @@
 module a::m {
     public struct X<phantom T>() has copy, drop, store;
+
     public fun f<T>(_: X<T>) {}
 
     macro fun apply<$T>($x: $T, $l: |$T|) {
@@ -24,6 +25,4 @@ module a::m {
     fun t() {
         useless!<u64>(X());
     }
-
-
 }

@@ -15,14 +15,13 @@ module a::space {
     }
 
     public fun vec(p: &Point): Line {
-        Line { a: zero(),  b: *p, }
+        Line { a: zero(), b: *p }
     }
 
     public fun len(_: &Line): u64 {
         abort 0
     }
 }
-
 
 module a::example {
     use a::space::Point;
