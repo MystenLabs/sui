@@ -367,6 +367,7 @@ struct IdentifierTableLookup {
     function_identifier_to_index: BTreeMap<Identifier, TableIndex>,
 }
 
+/// creates an index to allow looking up the table index of a struct, enum, or function by its identifier
 fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
     // for each in compiled module
     let struct_identifier_to_index: BTreeMap<Identifier, TableIndex> = compiled_module
@@ -1039,6 +1040,7 @@ fn function_signature_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for an ability mismatch.
 fn struct_ability_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
@@ -1124,6 +1126,9 @@ fn struct_ability_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a field mismatch
+/// start by checking the lengths of the fields and return a diagnostic if they are different
+/// if the lengths are the same check each field piece wise and return a diagnostic for each mismatch
 fn struct_field_mismatch_diag(
     struct_name: &Identifier,
     old_struct: &Struct,
@@ -1230,6 +1235,9 @@ fn struct_field_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a type parameter mismatch
+/// start by checking the lengths of the type parameters and return a diagnostic if they are different
+/// if the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch
 fn struct_type_param_mismatch_diag(
     name: &Identifier,
     old_struct: &Struct,
@@ -1310,6 +1318,7 @@ fn struct_type_param_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a new variant in an enum
 fn enum_ability_mismatch_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -1394,6 +1403,9 @@ fn enum_ability_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a type parameter mismatch
+/// start by checking the lengths of the type parameters and return a diagnostic if they are different
+/// if the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch
 fn enum_variant_mismatch_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -1494,6 +1506,7 @@ fn enum_variant_mismatch_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a new variant in an enum
 fn enum_new_variant_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -1554,6 +1567,7 @@ fn enum_new_variant_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a missing variant in an enum
 fn enum_variant_missing_diag(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -1601,6 +1615,7 @@ fn enum_variant_missing_diag(
     Ok(diags)
 }
 
+/// Return a diagnostic for a type parameter mismatch
 fn enum_type_param_mismatch(
     enum_name: &Identifier,
     old_enum: &Enum,
@@ -1680,6 +1695,7 @@ fn enum_type_param_mismatch(
     Ok(diags)
 }
 
+/// Generic type parameter mismatch error message, used for structs and enums
 fn type_parameter_code_and_error(
     old_type_param: &DatatypeTyParameter,
     new_type_param: &DatatypeTyParameter,
