@@ -346,6 +346,14 @@ pub(super) fn committer<H: Handler + 'static>(
                 }
 
                 Some(indexed) = rx.recv() => {
+                    // Although there isn't an explicit collector in the sequential pipeline,
+                    // keeping this metric consistent with concurrent pipeline is useful
+                    // to monitor the backpressure from committer to processor.
+                    metrics
+                        .total_collector_rows_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(indexed.len() as u64);
+
                     pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed);
 
