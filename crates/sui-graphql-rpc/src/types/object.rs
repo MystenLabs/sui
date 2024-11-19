@@ -30,6 +30,7 @@ use crate::data::package_resolver::PackageResolver;
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
+use crate::types::address::Address;
 use crate::types::base64::Base64;
 use crate::types::intersect;
 use crate::{filter, or_filter};
@@ -630,10 +631,9 @@ impl ObjectImpl<'_> {
                 authenticator,
             } => Some(ObjectOwner::ConsensusV2(ConsensusV2 {
                 start_version: start_version.value().into(),
-                authenticator: Some(Authenticator::SingleOwner(Owner {
+                authenticator: Some(Authenticator::SingleOwner(Address {
                     address: SuiAddress::from(*authenticator.as_single_owner()),
                     checkpoint_viewed_at: self.0.checkpoint_viewed_at,
-                    root_version: None,
                 })),
             })),
         }

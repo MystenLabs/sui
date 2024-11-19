@@ -99,7 +99,8 @@ impl Processor for SumObjTypes {
                                     Owner::ObjectOwner(_) => StoredOwnerKind::Object,
                                     Owner::Shared { .. } => StoredOwnerKind::Shared,
                                     Owner::Immutable => StoredOwnerKind::Immutable,
-                                    Owner::ConsensusV2 { .. } => StoredOwnerKind::ConsensusV2,
+                                    // TODO: Implement support for ConsensusV2 objects.
+                                    Owner::ConsensusV2 { .. } => todo!(),
                                 },
 
                                 owner_id: match object.owner() {

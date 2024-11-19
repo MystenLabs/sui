@@ -178,7 +178,7 @@ enum AddressTransactionBlockRelationship {
 	AFFECTED
 }
 
-union Authenticator = Owner
+union Authenticator = Address
 
 """
 System transaction for creating the on-chain state used by zkLogin.

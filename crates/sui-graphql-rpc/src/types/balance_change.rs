@@ -27,13 +27,10 @@ impl BalanceChange {
                 checkpoint_viewed_at: self.checkpoint_viewed_at,
                 root_version: None,
             }),
-            O::ConsensusV2 { authenticator, .. } => Some(Owner {
-                address: SuiAddress::from(*authenticator.as_single_owner()),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
-                root_version: None,
-            }),
 
             O::Shared { .. } | O::Immutable => None,
+            // TODO: Implement support for ConsensusV2 objects.
+            O::ConsensusV2 { .. } => todo!(),
         }
     }
 

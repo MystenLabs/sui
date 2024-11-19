@@ -559,13 +559,8 @@ impl<'backing> TemporaryStore<'backing> {
                             "Input objects must be address owned, shared, consensus, or immutable"
                         )
                     }
-                    Owner::ConsensusV2 { authenticator, .. } => {
-                        assert!(
-                            sender == authenticator.as_single_owner(),
-                            "Sender must have permission to use input object"
-                        );
-                        Some(id)
-                    }
+                    // TODO: Implement support for ConsensusV2 objects.
+                    Owner::ConsensusV2 { .. } => todo!(),
                 }
             })
             .filter(|id| {

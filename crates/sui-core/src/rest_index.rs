@@ -313,13 +313,8 @@ impl IndexStoreTables {
                             )?;
                         }
                         Owner::Shared { .. } | Owner::Immutable => {}
-                        Owner::ConsensusV2 { authenticator, .. } => {
-                            let owner_key = OwnerIndexKey::new(
-                                *authenticator.as_single_owner(),
-                                removed_object.id(),
-                            );
-                            batch.delete_batch(&self.owner, [owner_key])?;
-                        }
+                        // TODO: Implement support for ConsensusV2 objects.
+                        Owner::ConsensusV2 { .. } => todo!(),
                     }
                 }
 
@@ -341,13 +336,8 @@ impl IndexStoreTables {
                                 }
 
                                 Owner::Shared { .. } | Owner::Immutable => {}
-                                Owner::ConsensusV2 { authenticator, .. } => {
-                                    let owner_key = OwnerIndexKey::new(
-                                        *authenticator.as_single_owner(),
-                                        old_object.id(),
-                                    );
-                                    batch.delete_batch(&self.owner, [owner_key])?;
-                                }
+                                // TODO: Implement support for ConsensusV2 objects.
+                                Owner::ConsensusV2 { .. } => todo!(),
                             }
                         }
                     }
@@ -371,12 +361,8 @@ impl IndexStoreTables {
                             }
                         }
                         Owner::Shared { .. } | Owner::Immutable => {}
-                        Owner::ConsensusV2 { authenticator, .. } => {
-                            let owner_key =
-                                OwnerIndexKey::new(*authenticator.as_single_owner(), object.id());
-                            let owner_info = OwnerIndexInfo::new(object);
-                            batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
-                        }
+                        // TODO: Implement support for ConsensusV2 objects.
+                        Owner::ConsensusV2 { .. } => todo!(),
                     }
                 }
 
@@ -696,12 +682,8 @@ impl<'a> LiveObjectIndexer for RestLiveObjectIndexer<'a> {
             }
 
             Owner::Shared { .. } | Owner::Immutable => {}
-            Owner::ConsensusV2 { authenticator, .. } => {
-                let owner_key = OwnerIndexKey::new(*authenticator.as_single_owner(), object.id());
-                let owner_info = OwnerIndexInfo::new(&object);
-                self.batch
-                    .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
-            }
+            // TODO: Implement support for ConsensusV2 objects.
+            Owner::ConsensusV2 { .. } => todo!(),
         }
 
         // Look for CoinMetadata<T> and TreasuryCap<T> objects

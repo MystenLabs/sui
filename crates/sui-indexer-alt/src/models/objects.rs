@@ -48,7 +48,6 @@ pub enum StoredOwnerKind {
     Address = 1,
     Object = 2,
     Shared = 3,
-    ConsensusV2 = 4,
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
@@ -109,7 +108,6 @@ where
             StoredOwnerKind::Address => 1.to_sql(out),
             StoredOwnerKind::Object => 2.to_sql(out),
             StoredOwnerKind::Shared => 3.to_sql(out),
-            StoredOwnerKind::ConsensusV2 => 4.to_sql(out),
         }
     }
 }
@@ -124,7 +122,6 @@ where
             1 => StoredOwnerKind::Address,
             2 => StoredOwnerKind::Object,
             3 => StoredOwnerKind::Shared,
-            4 => StoredOwnerKind::ConsensusV2,
             o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
         })
     }

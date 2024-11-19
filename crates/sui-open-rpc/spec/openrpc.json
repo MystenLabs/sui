@@ -7654,7 +7654,7 @@
                     ]
                   },
                   "start_version": {
-                    "description": "The version at which the object most recently became a consensus object",
+                    "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
                     "allOf": [
                       {
                         "$ref": "#/components/schemas/SequenceNumber2"

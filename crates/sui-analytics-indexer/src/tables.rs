@@ -148,7 +148,6 @@ pub enum OwnerType {
     ObjectOwner,
     Shared,
     Immutable,
-    ConsensusV2,
 }
 
 // Object information.

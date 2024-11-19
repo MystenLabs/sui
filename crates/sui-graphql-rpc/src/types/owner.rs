@@ -526,5 +526,5 @@ impl From<&Owner> for OwnerImpl {
 
 #[derive(Clone, Debug, Union)]
 pub(crate) enum Authenticator {
-    SingleOwner(Owner),
+    SingleOwner(Address),
 }
