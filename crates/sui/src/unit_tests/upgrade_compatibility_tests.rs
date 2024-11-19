@@ -105,10 +105,10 @@ fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage) {
 /// Snapshots will differ on each machine, normalize to prevent test failures
 fn normalize_path(err_string: String) -> String {
     //test
-    let re = regex::Regex::new(r"^  ┌─ .*(\/fixtures\/.*\.move:\d+:\d+)$").unwrap();
+    let re = regex::Regex::new(r"^(.*)┌─ .*(\/fixtures\/.*\.move:\d+:\d+)$").unwrap();
     err_string
         .lines()
-        .map(|line| re.replace(line, "  ┌─ $1").into_owned())
+        .map(|line| re.replace(line, "$1┌─ $2").into_owned())
         .collect::<Vec<String>>()
         .join("\n")
 }
