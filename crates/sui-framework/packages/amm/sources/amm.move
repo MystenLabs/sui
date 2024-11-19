@@ -97,8 +97,7 @@ fun sqrt(x: u128): u64 {
     u128::sqrt(x) as u64
 }
 
-#[spec_only]
-#[ext(no_verify)]
+#[spec]
 fun sqrt_spec(x: u128): u64 {
     let result = sqrt(x);
     ensures((result as u128) * (result as u128) <= x);
@@ -503,8 +502,7 @@ macro fun requires_balance_leq_supply<$T>($balance: &Balance<$T>, $supply: &Supp
     requires(balance.value() <= supply.supply_value());
 }
 
-#[spec_only]
-// #[ext(no_verify)]
+#[spec]
 fun create_spec<A, B>(
     init_a: Balance<A>,
     init_b: Balance<B>,
@@ -523,8 +521,7 @@ fun create_spec<A, B>(
     result
 }
 
-#[spec_only]
-#[ext(no_verify)]
+#[spec]
 fun deposit_spec<A, B>(
     pool: &mut Pool<A, B>,
     input_a: Balance<A>,
@@ -547,8 +544,7 @@ fun deposit_spec<A, B>(
     (result_input_a, result_input_b, result_lp)
 }
 
-#[spec_only]
-#[ext(no_verify)]
+#[spec]
 fun withdraw_spec<A, B>(
     pool: &mut Pool<A, B>,
     lp_in: Balance<LP<A, B>>,
@@ -571,8 +567,7 @@ fun withdraw_spec<A, B>(
     (result_a, result_b)
 }
 
-#[spec_only]
-// #[ext(no_verify)]
+#[spec]
 fun swap_a_spec<A, B>(
     pool: &mut Pool<A, B>,
     input: Balance<A>,
@@ -608,8 +603,7 @@ fun swap_a_spec<A, B>(
     result
 }
 
-#[spec_only]
-// #[ext(no_verify)]
+#[spec]
 fun swap_b_spec<A, B>(
     pool: &mut Pool<A, B>,
     input: Balance<B>,
@@ -645,8 +639,7 @@ fun swap_b_spec<A, B>(
     result
 }
 
-#[spec_only]
-#[ext(no_verify)]
+#[spec]
 fun calc_swap_result_spec(
     i_value: u64,
     i_pool_value: u64,
@@ -699,8 +692,7 @@ fun calc_swap_result_spec(
     (out_value, admin_fee_in_lp)
 }
 
-#[spec_only]
-// #[ext(no_verify)]
+#[spec]
 fun admin_set_fees_spec<A, B>(
     pool: &mut Pool<A, B>,
     cap: &AdminCap,

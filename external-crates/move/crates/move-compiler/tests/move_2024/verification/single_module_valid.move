@@ -2,7 +2,7 @@
 module 0x1::M {
     // verify-only struct
     #[spec_only]
-    struct Foo {}
+    public struct Foo {}
 
     public fun foo() {
     }

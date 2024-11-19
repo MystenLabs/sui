@@ -15,7 +15,9 @@ use log::{debug, info};
 use petgraph::graph::{DiGraph, NodeIndex};
 
 use move_compiler::expansion::ast::{AttributeName_, Attribute_};
-use move_compiler::shared::known_attributes::{ExternalAttribute, KnownAttribute::External};
+use move_compiler::shared::known_attributes::{
+    KnownAttribute::Verification, VerificationAttribute,
+};
 use move_symbol_pool::Symbol;
 
 use move_model::model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId};
@@ -257,17 +259,17 @@ impl FunctionTargetsHolder {
         func_env.get_name_str().strip_suffix("_spec").map(|name| {
             if let Some(ext_attr) = func_env
                 .get_toplevel_attributes()
-                .get_(&External(ExternalAttribute))
+                .get_(&Verification(VerificationAttribute::Spec))
             {
                 match &ext_attr.value {
                     Attribute_::Parameterized(_, inner_attrs) => {
-                        if inner_attrs
-                            .contains_key_(&AttributeName_::Unknown(Symbol::from("no_verify")))
+                        if !inner_attrs
+                            .contains_key_(&AttributeName_::Unknown(Symbol::from("verify")))
                         {
                             self.no_verify_specs.insert(func_env.get_qualified_id());
                         }
                         if inner_attrs
-                            .contains_key_(&AttributeName_::Unknown(Symbol::from("no_asserts")))
+                            .contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort")))
                         {
                             self.ignore_aborts.insert(func_env.get_qualified_id());
                         }

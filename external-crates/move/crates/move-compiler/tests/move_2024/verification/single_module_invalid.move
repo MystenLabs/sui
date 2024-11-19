@@ -1,7 +1,6 @@
-address 0x1 {
-module M {
+module 0x1::M {
     #[spec_only]
-    struct Foo {}
+    public struct Foo {}
 
     // This should cause an unbound type error in non-verify mode
     // as the Foo struct declaration was filtered out
@@ -18,5 +17,4 @@ module M {
     public fun baz() {
         bar()
     }
-}
 }

@@ -49,9 +49,10 @@ impl FilterContext for Context<'_> {
         use known_attributes::VerificationAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
         //
-        let is_spec_only = flattened_attrs
-            .iter()
-            .find(|(_, attr)| matches!(attr, VerificationAttribute::SpecOnly));
+        let is_spec_only = flattened_attrs.iter().find(|(_, attr)| {
+            matches!(attr, VerificationAttribute::SpecOnly)
+                || matches!(attr, VerificationAttribute::Spec)
+        });
         self.has_spec_code = self.has_spec_code || is_spec_only.is_some();
         is_spec_only.is_some()
     }

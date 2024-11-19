@@ -1,12 +1,11 @@
-address 0x1 {
-module M {
+module 0x1::M {
     #[spec_only]
-    struct Foo {}
+    public struct Foo {}
 
     // failure: double annotation
     #[spec_only]
     #[spec_only]
-    struct Bar {}
+    public struct Bar {}
 
     public fun foo() {
     }
@@ -20,5 +19,4 @@ module M {
     #[spec_only]
     public fun d(_a: signer, _b: signer) {
     }
-}
 }

@@ -44,8 +44,12 @@ pub enum TestingAttribute {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerificationAttribute {
-    SpecOnly,
+    // Denotes a function is a spec
+    Spec,
+    // Focus on this function, deactivates verification for all other functions
     Focus,
+    // Denotes a function is only used by specs, only included in compilation in verify mode
+    SpecOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -199,11 +203,13 @@ impl TestingAttribute {
 }
 
 impl VerificationAttribute {
+    pub const SPEC: &'static str = "spec";
     pub const SPEC_ONLY: &'static str = "spec_only";
     pub const FOCUS: &'static str = "focus";
 
     pub const fn name(&self) -> &str {
         match self {
+            Self::Spec => Self::SPEC,
             Self::SpecOnly => Self::SPEC_ONLY,
             Self::Focus => Self::FOCUS,
         }
@@ -222,11 +228,13 @@ impl VerificationAttribute {
                 AttributePosition::Function,
             ])
         });
-        static FOCUS_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
+        static FUNCTION_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
             Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
+
         match self {
+            Self::Spec => &FUNCTION_POSITIONS,
             Self::SpecOnly => &VERIFY_ONLY_POSITIONS,
-            Self::Focus => &FOCUS_POSITIONS,
+            Self::Focus => &FUNCTION_POSITIONS,
         }
     }
 }
