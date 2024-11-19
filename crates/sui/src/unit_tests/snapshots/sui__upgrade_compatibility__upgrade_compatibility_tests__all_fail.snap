@@ -1,6 +1,5 @@
 ---
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
-assertion_line: 20
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01001]: missing public declaration
@@ -12,16 +11,6 @@ error[Compatibility E01001]: missing public declaration
   = enum is missing expected enum 'EnumToBeRemoved', but found none
   = enums are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing enum 'EnumToBeRemoved' back to the module 'upgrades'.
-
-error[Compatibility E01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:18
-  │
-6 │ module upgrades::upgrades {
-  │                  ^^^^^^^^ public function 'function_to_have_public_removed' is missing
-  │
-  = public function is missing expected public function 'function_to_have_public_removed', but found none
-  = public functions are part of a module's public interface and cannot be removed or changed during an upgrade.
-  = add missing public function 'function_to_have_public_removed' back to the module 'upgrades'.
 
 error[Compatibility E01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:18
@@ -146,6 +135,15 @@ error[Compatibility E03001]: variant mismatch
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'B' for enum 'EnumVariantMissing' including the ordering.
+
+error[Compatibility E01001]: missing public declaration
+   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:74:9
+   │
+74 │     fun function_to_have_public_removed() {}
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function 'function_to_have_public_removed' has lost its public visibility
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's 'public' visibility for function 'function_to_have_public_removed'.
 
 error[Compatibility E04001]: function signature mismatch
    ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:82:16

@@ -715,7 +715,7 @@ fn diag_from_error(
             missing_definition_diag("entry function", name, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FunctionLostPublicVisibility { name, .. } => {
-            missing_definition_diag("public function", name, compiled_unit_with_source)
+            function_lost_public(name, compiled_unit_with_source, lookup)
         }
         UpgradeCompatibilityModeError::FunctionSignatureMismatch {
             name,
@@ -775,6 +775,48 @@ fn missing_definition_diag(
             format!(
                 "add missing {declaration_kind} '{identifier_name}' \
                 back to the module '{module_name}'.",
+            ),
+        ],
+    ));
+
+    Ok(diags)
+}
+
+/// Return a diagnostic for a function which has lost its public visibility
+fn function_lost_public(
+    function_name: &Identifier,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let func_index = lookup
+        .function_identifier_to_index
+        .get(function_name)
+        .context("Unable to get function index")?;
+
+    let func_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_function_source_map(FunctionDefinitionIndex::new(*func_index))
+        .context("Unable to get function source map")?;
+
+    let def_loc = func_sourcemap.definition_location;
+
+    diags.add(Diagnostic::new(
+        Declarations::PublicMissing,
+        (
+            def_loc,
+            format!("Function '{function_name}' has lost its public visibility",),
+        ),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Functions are part of a module's public interface \
+            and cannot be changed during an upgrade."
+                .to_string(),
+            format!(
+                "Restore the original function's 'public' visibility for \
+                function '{function_name}'.",
             ),
         ],
     ));
