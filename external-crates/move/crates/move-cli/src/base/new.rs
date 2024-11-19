@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{self, bail};
 use clap::*;
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
@@ -36,17 +36,34 @@ impl New {
         addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
         custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
     ) -> anyhow::Result<()> {
+        let path = path.unwrap_or_else(|| Path::new(&self.name));
+        self.write_move_toml(path, deps, addrs, custom)?;
+        self.write_gitignore(path)?;
+        Ok(())
+    }
+
+    fn write_gitignore(&self, _path: &Path) -> anyhow::Result<()> {
+        // TODO
+        bail!("Not implemented")
+    }
+
+    fn write_move_toml(
+        &self,
+        path: &Path,
+        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
+        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
+        custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
+    ) -> anyhow::Result<()> {
         // TODO warn on build config flags
         let Self { name } = self;
 
         if !Identifier::is_valid(&name) {
-            return Err(anyhow!(
+            bail!(
                 "Invalid package name. Package name must start with a lowercase letter \
                  and consist only of lowercase letters, numbers, and underscores."
-            ));
+            );
         }
 
-        let path = path.unwrap_or_else(|| Path::new(&name));
         create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
         let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         writeln!(
