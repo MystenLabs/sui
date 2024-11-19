@@ -625,10 +625,10 @@ impl Query {
         object_keys: Vec<ObjectKey>,
     ) -> Result<Vec<Object>> {
         let cfg: &ServiceConfig = ctx.data_unchecked();
-        if object_keys.len() > cfg.limits.max_multi_get_keys as usize {
+        if object_keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
             return Err(Error::Client(format!(
                 "Number of keys exceeds max limit of '{}'",
-                cfg.limits.max_multi_get_keys
+                cfg.limits.max_multi_get_objects_keys
             ))
             .into());
         }

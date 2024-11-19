@@ -3589,10 +3589,9 @@ type ServiceConfig {
 	"""
 	maxTransactionIds: Int!
 	"""
-	Maximum number of keys that can be passed to a `multiGet` query or to a
-	`TransactionBlockFilter`.
+	Maximum number of keys that can be passed to a `multiGetObjects` query.
 	"""
-	maxMultiGetKeys: Int!
+	maxMultiGetObjectsKeys: Int!
 	"""
 	Maximum number of candidates to scan when gathering a page of results.
 	"""

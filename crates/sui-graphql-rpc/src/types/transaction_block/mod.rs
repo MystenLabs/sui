@@ -370,7 +370,7 @@ impl TransactionBlock {
             if tx_ids.len() > limits.max_transaction_ids as usize {
                 return Err(Error::Client(format!(
                     "Transaction IDs exceed max limit of '{}'",
-                    limits.max_multi_get_keys
+                    limits.max_transaction_ids
                 )));
             }
         }

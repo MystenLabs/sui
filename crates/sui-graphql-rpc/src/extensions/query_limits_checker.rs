@@ -323,12 +323,12 @@ impl<'a> LimitsTraversal<'a> {
         while let Some(value) = stack.pop() {
             match value {
                 V::List(vs) => {
-                    if vs.len() > limits.max_multi_get_keys as usize {
+                    if vs.len() > limits.max_multi_get_objects_keys as usize {
                         return Err(self.reporter.graphql_error(
                             code::BAD_USER_INPUT,
                             format!(
                                 "{name} keys exceed the maximum allowed number of {}",
-                                limits.max_multi_get_keys
+                                limits.max_multi_get_objects_keys
                             ),
                         ));
                     }

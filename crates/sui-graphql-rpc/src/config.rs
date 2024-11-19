@@ -603,7 +603,7 @@ mod tests {
                 max-type-nodes = 128
                 max-move-value-depth = 256
                 max-transaction-ids = 11
-                max-multi-get-keys = 11
+                max-multi-get-objects-keys = 11
                 max-scan-limit = 50
             "#,
         )
@@ -693,7 +693,7 @@ mod tests {
                 max-type-nodes = 128
                 max-move-value-depth = 256
                 max-transaction-ids = 42
-                max-multi-get-keys = 42
+                max-multi-get-objects-keys = 42
                 max-scan-limit = 420
 
                 [experiments]
