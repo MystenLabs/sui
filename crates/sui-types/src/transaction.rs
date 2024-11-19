@@ -2361,7 +2361,11 @@ impl SenderSignedData {
 
     /// Validate untrusted user transaction, including its size, input count, command count, etc.
     /// Returns the certificate serialised bytes size.
-    pub fn validity_check(&self, config: &ProtocolConfig, epoch: EpochId) -> Result<usize, SuiError> {
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        epoch: EpochId,
+    ) -> Result<usize, SuiError> {
         // Check that the features used by the user signatures are enabled on the network.
         self.check_user_signature_protocol_compatibility(config)?;
 
