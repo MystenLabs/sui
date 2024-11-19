@@ -51,7 +51,6 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     StructMissing {
         name: Identifier,
-        _old_struct: Struct,
     },
     StructAbilityMismatch {
         name: Identifier,
@@ -70,7 +69,6 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     EnumMissing {
         name: Identifier,
-        _old_enum: Enum,
     },
     EnumAbilityMismatch {
         name: Identifier,
@@ -96,15 +94,12 @@ pub(crate) enum UpgradeCompatibilityModeError {
         name: Identifier,
         old_enum: Enum,
         new_enum: Enum,
-        _tag: usize,
     },
     FunctionMissingPublic {
         name: Identifier,
-        _old_function: Function,
     },
     FunctionMissingEntry {
         name: Identifier,
-        _old_function: Function,
     },
     FunctionSignatureMismatch {
         name: Identifier,
@@ -113,12 +108,10 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     FunctionLostPublicVisibility {
         name: Identifier,
-        _old_function: Function,
     },
     FunctionEntryCompatibility {
-        _name: Identifier,
-        _old_function: Function,
-        _new_function: Function,
+        name: Identifier,
+        old_function: Function,
     },
 }
 
@@ -184,12 +177,9 @@ impl CompatibilityMode for CliCompatibilityMode {
     ) {
     }
 
-    fn struct_missing(&mut self, name: &Identifier, old_struct: &Struct) {
+    fn struct_missing(&mut self, name: &Identifier, _old_struct: &Struct) {
         self.errors
-            .push(UpgradeCompatibilityModeError::StructMissing {
-                name: name.clone(),
-                _old_struct: old_struct.clone(),
-            });
+            .push(UpgradeCompatibilityModeError::StructMissing { name: name.clone() });
     }
 
     fn struct_ability_mismatch(
@@ -234,12 +224,9 @@ impl CompatibilityMode for CliCompatibilityMode {
             });
     }
 
-    fn enum_missing(&mut self, name: &Identifier, old_enum: &Enum) {
+    fn enum_missing(&mut self, name: &Identifier, _old_enum: &Enum) {
         self.errors
-            .push(UpgradeCompatibilityModeError::EnumMissing {
-                name: name.clone(),
-                _old_enum: old_enum.clone(),
-            });
+            .push(UpgradeCompatibilityModeError::EnumMissing { name: name.clone() });
     }
 
     fn enum_ability_mismatch(&mut self, name: &Identifier, old_enum: &Enum, new_enum: &Enum) {
@@ -283,31 +270,24 @@ impl CompatibilityMode for CliCompatibilityMode {
         name: &Identifier,
         old_enum: &Enum,
         new_enum: &Enum,
-        variant_idx: usize,
+        _variant_idx: usize,
     ) {
         self.errors
             .push(UpgradeCompatibilityModeError::EnumVariantMismatch {
                 name: name.clone(),
                 old_enum: old_enum.clone(),
                 new_enum: new_enum.clone(),
-                _tag: variant_idx,
             });
     }
 
-    fn function_missing_public(&mut self, name: &Identifier, old_function: &Function) {
+    fn function_missing_public(&mut self, name: &Identifier, _old_function: &Function) {
         self.errors
-            .push(UpgradeCompatibilityModeError::FunctionMissingPublic {
-                name: name.clone(),
-                _old_function: old_function.clone(),
-            });
+            .push(UpgradeCompatibilityModeError::FunctionMissingPublic { name: name.clone() });
     }
 
-    fn function_missing_entry(&mut self, name: &Identifier, old_function: &Function) {
+    fn function_missing_entry(&mut self, name: &Identifier, _old_function: &Function) {
         self.errors
-            .push(UpgradeCompatibilityModeError::FunctionMissingEntry {
-                name: name.clone(),
-                _old_function: old_function.clone(),
-            });
+            .push(UpgradeCompatibilityModeError::FunctionMissingEntry { name: name.clone() });
     }
 
     fn function_signature_mismatch(
@@ -324,12 +304,9 @@ impl CompatibilityMode for CliCompatibilityMode {
             });
     }
 
-    fn function_lost_public_visibility(&mut self, name: &Identifier, old_function: &Function) {
+    fn function_lost_public_visibility(&mut self, name: &Identifier, _old_function: &Function) {
         self.errors.push(
-            UpgradeCompatibilityModeError::FunctionLostPublicVisibility {
-                name: name.clone(),
-                _old_function: old_function.clone(),
-            },
+            UpgradeCompatibilityModeError::FunctionLostPublicVisibility { name: name.clone() },
         );
     }
 
@@ -337,13 +314,12 @@ impl CompatibilityMode for CliCompatibilityMode {
         &mut self,
         name: &Identifier,
         old_function: &Function,
-        new_function: &Function,
+        _new_function: &Function,
     ) {
         self.errors
             .push(UpgradeCompatibilityModeError::FunctionEntryCompatibility {
-                _name: name.clone(),
-                _old_function: old_function.clone(),
-                _new_function: new_function.clone(),
+                name: name.clone(),
+                old_function: old_function.clone(),
             });
     }
 
@@ -420,8 +396,8 @@ macro_rules! upgrade_codes {
     ]),* $(,)?) => {
         #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
         #[repr(u8)]
-        #[allow(dead_code)]
         pub enum Category {
+            #[allow(dead_code)]
             ZeroPlaceholder,
             $($cat,)*
         }
@@ -467,12 +443,12 @@ upgrade_codes!(
         FieldMismatch: { msg: "field mismatch" },
         TypeParamMismatch: { msg: "type parameter mismatch" },
     ],
-    Structs: [],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
     ],
     Function_: [
         SignatureMismatch: { msg: "function signature mismatch" },
+        EntryMismatch: { msg: "function entry mismatch" },
     ],
 );
 
@@ -730,9 +706,9 @@ fn diag_from_error(
             lookup,
         ),
 
-        UpgradeCompatibilityModeError::FunctionEntryCompatibility { .. } => {
-            unimplemented!("entry functions can be changed during upgrade")
-        }
+        UpgradeCompatibilityModeError::FunctionEntryCompatibility {
+            name, old_function, ..
+        } => function_entry_mismatch(name, old_function, compiled_unit_with_source, lookup),
         UpgradeCompatibilityModeError::ModuleMissing { .. } => {
             unreachable!("Module Missing should be handled by outer function")
         }
@@ -1036,6 +1012,50 @@ fn function_signature_mismatch_diag(
             }
         }
     }
+
+    Ok(diags)
+}
+
+fn function_entry_mismatch(
+    function_name: &Identifier,
+    old_function: &Function,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let func_index = lookup
+        .function_identifier_to_index
+        .get(function_name)
+        .context("Unable to get function index")?;
+
+    let func_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_function_source_map(FunctionDefinitionIndex::new(*func_index))
+        .context("Unable to get function source map")?;
+
+    let def_loc = func_sourcemap.definition_location;
+
+    diags.add(Diagnostic::new(
+        Function_::EntryMismatch,
+        (
+            def_loc,
+            if old_function.is_entry {
+                format!("Function '{function_name}' has lost its entry visibility",)
+            } else {
+                format!("Function '{function_name}' has gained entry visibility",)
+            },
+        ),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Entry functions cannot be changed during an upgrade.".to_string(),
+            format!(
+                "Restore the original function's 'entry' visibility for \
+                function '{function_name}'.",
+            ),
+        ],
+    ));
 
     Ok(diags)
 }

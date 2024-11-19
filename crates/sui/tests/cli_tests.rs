@@ -1804,6 +1804,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         build_config,
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_compatibility: false,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -1922,6 +1923,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_compatibility: false,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -2069,6 +2071,7 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
         build_config: build_config_upgrade.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
+        verify_compatibility: false,
         with_unpublished_dependencies: false,
     }
     .execute(context)
