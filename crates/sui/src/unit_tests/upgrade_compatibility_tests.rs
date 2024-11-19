@@ -13,8 +13,11 @@ use sui_move_build::CompiledPackage;
 fn test_all_fail() {
     let (mods_v1, pkg_v2) = get_packages("all");
 
-    // panics: Not all errors are implemented yet
-    compare_packages(mods_v1, pkg_v2).unwrap();
+    let result = compare_packages(mods_v1, pkg_v2);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(normalize_path(err.to_string()));
 }
 
 #[test]

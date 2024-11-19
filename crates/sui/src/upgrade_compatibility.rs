@@ -51,7 +51,7 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     StructMissing {
         name: Identifier,
-        old_struct: Struct,
+        _old_struct: Struct,
     },
     StructAbilityMismatch {
         name: Identifier,
@@ -70,7 +70,7 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     EnumMissing {
         name: Identifier,
-        old_enum: Enum,
+        _old_enum: Enum,
     },
     EnumAbilityMismatch {
         name: Identifier,
@@ -96,15 +96,15 @@ pub(crate) enum UpgradeCompatibilityModeError {
         name: Identifier,
         old_enum: Enum,
         new_enum: Enum,
-        tag: usize,
+        _tag: usize,
     },
     FunctionMissingPublic {
         name: Identifier,
-        old_function: Function,
+        _old_function: Function,
     },
     FunctionMissingEntry {
         name: Identifier,
-        old_function: Function,
+        _old_function: Function,
     },
     FunctionSignatureMismatch {
         name: Identifier,
@@ -113,12 +113,12 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
     FunctionLostPublicVisibility {
         name: Identifier,
-        old_function: Function,
+        _old_function: Function,
     },
     FunctionEntryCompatibility {
-        name: Identifier,
-        old_function: Function,
-        new_function: Function,
+        _name: Identifier,
+        _old_function: Function,
+        _new_function: Function,
     },
 }
 
@@ -188,7 +188,7 @@ impl CompatibilityMode for CliCompatibilityMode {
         self.errors
             .push(UpgradeCompatibilityModeError::StructMissing {
                 name: name.clone(),
-                old_struct: old_struct.clone(),
+                _old_struct: old_struct.clone(),
             });
     }
 
@@ -238,7 +238,7 @@ impl CompatibilityMode for CliCompatibilityMode {
         self.errors
             .push(UpgradeCompatibilityModeError::EnumMissing {
                 name: name.clone(),
-                old_enum: old_enum.clone(),
+                _old_enum: old_enum.clone(),
             });
     }
 
@@ -290,7 +290,7 @@ impl CompatibilityMode for CliCompatibilityMode {
                 name: name.clone(),
                 old_enum: old_enum.clone(),
                 new_enum: new_enum.clone(),
-                tag: variant_idx,
+                _tag: variant_idx,
             });
     }
 
@@ -298,7 +298,7 @@ impl CompatibilityMode for CliCompatibilityMode {
         self.errors
             .push(UpgradeCompatibilityModeError::FunctionMissingPublic {
                 name: name.clone(),
-                old_function: old_function.clone(),
+                _old_function: old_function.clone(),
             });
     }
 
@@ -306,7 +306,7 @@ impl CompatibilityMode for CliCompatibilityMode {
         self.errors
             .push(UpgradeCompatibilityModeError::FunctionMissingEntry {
                 name: name.clone(),
-                old_function: old_function.clone(),
+                _old_function: old_function.clone(),
             });
     }
 
@@ -328,7 +328,7 @@ impl CompatibilityMode for CliCompatibilityMode {
         self.errors.push(
             UpgradeCompatibilityModeError::FunctionLostPublicVisibility {
                 name: name.clone(),
-                old_function: old_function.clone(),
+                _old_function: old_function.clone(),
             },
         );
     }
@@ -341,9 +341,9 @@ impl CompatibilityMode for CliCompatibilityMode {
     ) {
         self.errors
             .push(UpgradeCompatibilityModeError::FunctionEntryCompatibility {
-                name: name.clone(),
-                old_function: old_function.clone(),
-                new_function: new_function.clone(),
+                _name: name.clone(),
+                _old_function: old_function.clone(),
+                _new_function: new_function.clone(),
             });
     }
 
@@ -419,8 +419,8 @@ macro_rules! upgrade_codes {
     ]),* $(,)?) => {
         #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
         #[repr(u8)]
+        #[allow(dead_code)]
         pub enum Category {
-            #[allow(dead_code)]
             ZeroPlaceholder,
             $($cat,)*
         }
@@ -520,8 +520,8 @@ fn compare_packages(
         .map(|m| (m.self_id().name().to_owned(), m.clone()))
         .collect();
 
-    let lookup: HashMap<Identifier, IdentifierTableLookup> = existing_modules
-        .iter()
+    let lookup: HashMap<Identifier, IdentifierTableLookup> = new_package
+        .get_modules()
         .map(|m| (m.self_id().name().to_owned(), table_index(m)))
         .collect();
 
@@ -560,8 +560,14 @@ fn compare_packages(
     let mut file_set = HashSet::new();
 
     let mut diags = Diagnostics::new();
+    let mut missing_modules: Vec<String> = vec![];
 
     for (name, err) in errors {
+        if let UpgradeCompatibilityModeError::ModuleMissing { name } = &err {
+            missing_modules.push(name.to_string());
+            continue;
+        }
+
         let compiled_unit_with_source = new_package
             .package
             .get_module_by_name_from_root(name.as_str())
@@ -594,14 +600,26 @@ fn compare_packages(
 
     // use colors but inline
     Err(anyhow!(
-        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
+        "{}{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
         Its upgrade policy is set to 'Compatible'.",
-        String::from_utf8(report_diagnostics_to_buffer(
-            &files.into(),
-            diags,
-            use_colors()
-        ))
-        .context("Unable to convert buffer to string")?
+        if !diags.is_empty() {
+            String::from_utf8(report_diagnostics_to_buffer(
+                &files.into(),
+                diags,
+                use_colors()
+            ))
+            .context("Unable to convert buffer to string")?
+        } else {
+            "".to_string()
+        },
+        if !missing_modules.is_empty() {
+            format!(
+                "The following modules are missing from the new package: {}\n",
+                format_list(missing_modules.iter().map(|m| format!("'{}'", m)))
+            )
+        } else {
+            "".to_string()
+        }
     ))
 }
 
@@ -776,18 +794,18 @@ fn function_signature_mismatch_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let old_func_index = lookup
+    let func_index = lookup
         .function_identifier_to_index
         .get(function_name)
         .context("Unable to get function index")?;
 
-    let new_func_sourcemap = compiled_unit_with_source
+    let func_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .get_function_source_map(FunctionDefinitionIndex::new(*old_func_index))
+        .get_function_source_map(FunctionDefinitionIndex::new(*func_index))
         .context("Unable to get function source map")?;
 
-    let def_loc = new_func_sourcemap.definition_location;
+    let def_loc = func_sourcemap.definition_location;
 
     // handle function arguments
     if old_function.parameters.len() != new_function.parameters.len() {
@@ -821,7 +839,7 @@ fn function_signature_mismatch_diag(
             .zip(new_function.parameters.iter())
         {
             if old_param != new_param {
-                let param_loc = new_func_sourcemap
+                let param_loc = func_sourcemap
                     .parameters
                     .get(i)
                     .context("Unable to get parameter location")?
@@ -878,7 +896,7 @@ fn function_signature_mismatch_diag(
             .zip(new_function.type_parameters.iter())
         {
             if old_type_param != new_type_param {
-                let type_param_loc = new_func_sourcemap
+                let type_param_loc = func_sourcemap
                     .type_parameters
                     .get(i)
                     .context("Unable to get type parameter location")?
@@ -939,7 +957,7 @@ fn function_signature_mismatch_diag(
             .enumerate()
             .zip(new_function.return_.iter())
         {
-            let return_ = new_func_sourcemap
+            let return_ = func_sourcemap
                 .returns
                 .get(i)
                 .context("Unable to get return location")?;
@@ -988,7 +1006,7 @@ fn struct_ability_mismatch_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let old_struct_index = lookup
+    let struct_index = lookup
         .struct_identifier_to_index
         .get(struct_name)
         .context("Unable to get struct index")?;
@@ -996,7 +1014,7 @@ fn struct_ability_mismatch_diag(
     let struct_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .get_struct_source_map(StructDefinitionIndex::new(*old_struct_index))
+        .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
         .context("Unable to get struct source map")?;
 
     let def_loc = struct_sourcemap.definition_location;
@@ -1073,7 +1091,7 @@ fn struct_field_mismatch_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let old_struct_index = lookup
+    let struct_index = lookup
         .struct_identifier_to_index
         .get(struct_name)
         .context("Unable to get struct index")?;
@@ -1081,8 +1099,8 @@ fn struct_field_mismatch_diag(
     let struct_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .get_struct_source_map(StructDefinitionIndex::new(*old_struct_index))
-        .context("Unable to get struct source map")?;
+        .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
+        .context(format!("Unable to get struct source map {}", struct_name))?;
 
     let def_loc = struct_sourcemap.definition_location;
 
@@ -1179,7 +1197,7 @@ fn struct_type_param_mismatch_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let old_struct_index = lookup
+    let struct_index = lookup
         .struct_identifier_to_index
         .get(name)
         .context("Unable to get struct index")?;
@@ -1187,7 +1205,7 @@ fn struct_type_param_mismatch_diag(
     let struct_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .get_struct_source_map(StructDefinitionIndex::new(*old_struct_index))
+        .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
         .context("Unable to get struct source map")?;
 
     let def_loc = struct_sourcemap.definition_location;
@@ -1259,7 +1277,7 @@ fn enum_ability_mismatch_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let old_enum_index = lookup
+    let enum_index = lookup
         .enum_identifier_to_index
         .get(enum_name)
         .context("Unable to get enum index")?;
@@ -1267,7 +1285,7 @@ fn enum_ability_mismatch_diag(
     let enum_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .get_enum_source_map(EnumDefinitionIndex::new(*old_enum_index))
+        .get_enum_source_map(EnumDefinitionIndex::new(*enum_index))
         .context("Unable to get enum source map")?;
 
     let def_loc = enum_sourcemap.definition_location;
@@ -1550,7 +1568,7 @@ fn enum_type_param_mismatch(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    let old_enum_index = lookup
+    let enum_index = lookup
         .enum_identifier_to_index
         .get(enum_name)
         .context("Unable to get enum index")?;
@@ -1558,7 +1576,7 @@ fn enum_type_param_mismatch(
     let enum_sourcemap = compiled_unit_with_source
         .unit
         .source_map
-        .get_enum_source_map(EnumDefinitionIndex::new(*old_enum_index))
+        .get_enum_source_map(EnumDefinitionIndex::new(*enum_index))
         .context("Unable to get enum source map")?;
 
     let def_loc = enum_sourcemap.definition_location;
