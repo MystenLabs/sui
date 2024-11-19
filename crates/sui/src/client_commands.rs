@@ -460,6 +460,10 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         opts: OptsWithGas,
 
+        /// Publish the package without checking compatibility locally
+        #[clap(long)]
+        skip_compatibility_verification: bool,
+
         /// Publish the package without checking whether compiling dependencies from source results
         /// in bytecode matching the dependencies found on-chain.
         #[clap(long)]
@@ -867,6 +871,7 @@ impl SuiClientCommands {
                 upgrade_capability,
                 build_config,
                 skip_dependency_verification,
+                skip_compatibility_verification,
                 with_unpublished_dependencies,
                 opts,
             } => {
@@ -935,7 +940,10 @@ impl SuiClientCommands {
                     compiled_module,
                 ) = upgrade_result?;
 
-                check_compatibility(&client, package_id, compiled_module, protocol_config).await?;
+                if !skip_compatibility_verification {
+                    check_compatibility(&client, package_id, compiled_module, protocol_config)
+                        .await?;
+                }
 
                 let tx_kind = client
                     .transaction_builder()
