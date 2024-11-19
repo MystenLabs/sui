@@ -9,7 +9,6 @@ use sui_move_build::BuildConfig;
 use sui_move_build::CompiledPackage;
 
 #[test]
-#[should_panic]
 fn test_all_fail() {
     let (mods_v1, pkg_v2) = get_packages("all");
 
