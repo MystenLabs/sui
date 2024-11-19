@@ -1264,12 +1264,12 @@ impl CheckpointBuilder {
 
             self.epoch_store
                 .consensus_messages_processed_notify_for_checkpoint(transaction_keys)
-                .await?;
+                .await;
         }
 
         let signatures = self
             .epoch_store
-            .user_signatures_for_checkpoint(&transactions, &all_digests)?;
+            .take_user_signatures_for_checkpoint(&transactions, &all_digests);
         debug!(
             ?last_checkpoint_seq,
             "Received {} checkpoint user signatures from consensus",

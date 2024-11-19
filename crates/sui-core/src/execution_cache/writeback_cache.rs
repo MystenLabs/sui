@@ -735,6 +735,7 @@ impl WritebackCache {
             CacheResult::NegativeHit => None,
             CacheResult::Miss => {
                 let obj = self.store.get_object(id);
+
                 if let Some(obj) = &obj {
                     self.cache_latest_object_by_id(
                         id,

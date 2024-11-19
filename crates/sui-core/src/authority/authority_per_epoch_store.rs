@@ -12,6 +12,7 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::{izip, Itertools};
+use mysten_common::fatal;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
@@ -1987,42 +1988,41 @@ impl AuthorityPerEpochStore {
             .consensus_message_processed
             .multi_contains_keys(&keys)?;
 
+        let consensus_quarantine = self.consensus_quarantine.read();
         for (key, result) in keys.iter().zip(&mut results) {
             if !*result {
-                *result = self
-                    .consensus_quarantine
-                    .read()
-                    .is_consensus_message_processed(key);
+                *result = consensus_quarantine.is_consensus_message_processed(key);
             }
         }
 
         Ok(results)
     }
 
-    /// Like consensus_message_processed_notify, but only checks the in-memory data.
-    /// This is correct because in-memory data contains only transactions that have
-    /// arrived after the last certified checkpoint, and checkpoints cannot contain
-    /// already-checkpointed transactions.
+    // Like consensus_message_processed_notify, but only checks the in-memory data.
+    // in-memory data contains all (and only) transactions that have arrived after
+    // the last certified checkpoint, and checkpoints cannot contain
+    // already-checkpointed transactions, so reading from the db is unnecessary.
     pub(crate) async fn consensus_messages_processed_notify_for_checkpoint(
         &self,
         keys: Vec<SequencedConsensusTransactionKey>,
-    ) -> Result<(), SuiError> {
+    ) {
         let registrations = self.consensus_notify_read.register_all(&keys);
 
-        let results = keys.iter().map(|key| {
-            self.consensus_quarantine
-                .read()
-                .is_consensus_message_processed(key)
-        });
+        let unprocessed_keys_registrations: Vec<_> = {
+            let consensus_quarantine = self.consensus_quarantine.read();
+            let results = keys
+                .iter()
+                .map(|key| consensus_quarantine.is_consensus_message_processed(key));
 
-        let unprocessed_keys_registrations = registrations
-            .into_iter()
-            .zip(results)
-            .filter(|(_, processed)| !processed)
-            .map(|(registration, _)| registration);
+            registrations
+                .into_iter()
+                .zip(results)
+                .filter(|(_, processed)| !processed)
+                .map(|(registration, _)| registration)
+                .collect()
+        };
 
         join_all(unprocessed_keys_registrations).await;
-        Ok(())
     }
 
     pub async fn consensus_messages_processed_notify(
@@ -2143,12 +2143,15 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Note: caller usually need to call consensus_message_processed_notify before this call
-    pub fn user_signatures_for_checkpoint(
+    /// Remove the checkpoint signatures from in-memory storage for the given transactions,
+    /// and return them.
+    ///
+    /// Note: Caller must call consensus_message_processed_notify before this call
+    pub fn take_user_signatures_for_checkpoint(
         &self,
         transactions: &[VerifiedTransaction],
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Vec<GenericSignature>>> {
+    ) -> Vec<Vec<GenericSignature>> {
         assert_eq!(transactions.len(), digests.len());
 
         let signatures: Vec<_> = {
@@ -2169,17 +2172,16 @@ impl AuthorityPerEpochStore {
                 // so we can just pull it from the transaction.
                 transaction.tx_signatures().to_vec()
             } else {
-                return Err(SuiError::from(
-                    format!(
-                        "Can not find user signature for checkpoint for transaction {:?}",
-                        transaction.key()
-                    )
-                    .as_str(),
-                ));
+                // Caller must always call consensus_message_processed_notify_for_checkpoint before
+                // calling this function.
+                fatal!(
+                    "Can not find user signature for checkpoint for transaction {:?}",
+                    transaction.key()
+                );
             };
             result.push(signatures);
         }
-        Ok(result)
+        result
     }
 
     pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
@@ -2397,8 +2399,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult {
         let mut user_sigs = self.user_signatures_for_checkpoints.write();
         for certificate in certificates {
-            // User signatures are written in the same batch as consensus certificate processed flag,
-            // which means we won't attempt to insert this twice for the same tx digest
+            // We only insert sigs for user certificates once.
             assert!(user_sigs
                 .insert(*certificate.digest(), certificate.tx_signatures().to_vec())
                 .is_none());
@@ -4692,10 +4693,10 @@ use quarantine::ConsensusOutputQuarantine;
 pub(crate) struct ConsensusCommitOutput {
     // Consensus and reconfig state
     consensus_round: Round,
-    consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>, // done
-    end_of_publish: BTreeSet<AuthorityName>,                                  // done
-    reconfig_state: Option<ReconfigState>,                                    // done
-    consensus_commit_stats: Option<ExecutionIndicesWithStats>,                // done
+    consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
+    end_of_publish: BTreeSet<AuthorityName>,
+    reconfig_state: Option<ReconfigState>,
+    consensus_commit_stats: Option<ExecutionIndicesWithStats>,
 
     // transaction scheduling state
     next_shared_object_versions: Option<HashMap<ObjectID, SequenceNumber>>,
@@ -4705,7 +4706,6 @@ pub(crate) struct ConsensusCommitOutput {
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
-    //user_signatures_for_checkpoints: Vec<(TransactionDigest, Vec<GenericSignature>)>,
     pending_checkpoints: Vec<PendingCheckpointV2>,
 
     // random beacon state
