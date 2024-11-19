@@ -7,12 +7,6 @@ use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
 use std::{fmt::Display, fs::create_dir_all, io::Write, path::Path};
 
-// TODO get a stable path to this stdlib
-// pub const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
-// pub const MOVE_STDLIB_PACKAGE_PATH: &str = "{ \
-//     git = \"https://github.com/move-language/move.git\", \
-//     subdir = \"language/move-stdlib\", rev = \"main\" \
-// }";
 pub const MOVE_STDLIB_ADDR_NAME: &str = "std";
 pub const MOVE_STDLIB_ADDR_VALUE: &str = "0x1";
 
