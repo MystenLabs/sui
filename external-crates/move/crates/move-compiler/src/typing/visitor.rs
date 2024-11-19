@@ -3,9 +3,10 @@
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::{warning_filters::WarningFilters, DiagnosticReporter},
     expansion::ast::ModuleIdent,
-    naming::ast as N,
+    ice,
+    naming::ast::{self as N, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
     shared::CompilationEnv,
     typing::ast as T,
@@ -1269,4 +1270,149 @@ where
     list.iter().any(|item| match item {
         T::ExpListItem::Single(e, _) | T::ExpListItem::Splat(_, e, _) => exp_satisfies_(e, p),
     })
+}
+
+// /// Assumes equal types and as such will not check type arguments for equality.
+// /// Assumes function calls, assignments, and similar expressions are effectful and thus not equal.
+// pub fn equal_exp(diags: &DiagnosticReporter, e1: &T::Exp, e2: &T::Exp) -> bool {
+//     equal_exp_(diags, &e1.exp.value, &e2.exp.value)
+// }
+
+// #[growing_stack]
+// pub fn equal_exp_(
+//     diags: &DiagnosticReporter,
+//     e1: &T::UnannotatedExp_,
+//     e2: &T::UnannotatedExp_,
+// ) -> bool {
+//     use T::UnannotatedExp_ as E;
+//     match (e1, e2) {
+//         (E::Value(v1), E::Value(v2)) => v1 == v2,
+//         (E::Unit { .. }, other) | (other, E::Unit { .. }) => is_unit_(diags, other),
+//         (E::Constant(m1, c1), E::Constant(m2, c2)) => m1 == m2 && c1 == c2,
+//         (
+//             E::Move { var, .. } | E::Copy { var, .. } | E::Use(var) | E::BorrowLocal(_, var),
+//             other,
+//         )
+//         | (
+//             other,
+//             E::Move { var, .. } | E::Copy { var, .. } | E::Use(var) | E::BorrowLocal(_, var),
+//         ) => same_local_(var, other),
+
+//         (E::Builtin(b, arg), other) | (other, E::Builtin(b, arg)) => match &b.value {
+//             T::BuiltinFunction_::Freeze(_) => equal_exp_(diags, &arg.exp.value, other),
+//             T::BuiltinFunction_::Assert(_) => false,
+//         },
+//         (E::Vector(_, _, _, e1), E::Vector(_, _, _, e2)) => equal_exp(diags, e1, e2),
+//         (E::IfElse(c1, t1, Some(f1)), E::IfElse(c2, t2, Some(f2))) => {
+//             equal_exp(diags, c1, c2) && equal_exp(diags, t1, t2) && equal_exp(diags, f1, f2)
+//         }
+//         (E::IfElse(c1, t1, f1_opt), E::IfElse(c2, t2, f2_opt)) => {
+//             equal_exp(diags, c1, c2) && equal_exp(diags, t1, t2) && {
+//                 let f1_is_unit = f1_opt.as_deref().map_or(true, |f| is_unit(diags, f));
+//                 let f2_is_unit = f1_opt.as_deref().map_or(true, |f| is_unit(diags, f));
+//                 f1_is_unit && f2_is_unit
+//             }
+//         }
+//         ((E::NamedBlock(_, (_, seq)) | E::Block((_, seq))), other)
+//         | (other, (E::NamedBlock(_, (_, seq)) | E::Block((_, seq)))) => {
+//             if seq.is_empty() {
+//                 // TODO no loc for ice
+//                 debug_assert!(false, "Unexpected empty block without a value");
+//                 is_unit_(diags, other)
+//             } else if seq.len() == 1 {
+//                 match &seq[0].value {
+//                     T::SequenceItem_::Seq(e) => equal_exp_(diags, &e.exp.value, other),
+//                     T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => false,
+//                 }
+//             } else {
+//                 false
+//             }
+//         }
+//         (E::Dereference(e) | E::TempBorrow(_, e) | E::Annotate(e, _), other)
+//         | (other, E::Dereference(e) | E::TempBorrow(_, e) | E::Annotate(e, _)) => {
+//             equal_exp_(diags, &e.exp.value, other)
+//         }
+//         (E::UnaryExp(op1, e1), E::UnaryExp(op2, e2)) => op1 == op2 && equal_exp(diags, e1, e2),
+//         (E::BinopExp(l1, op1, _, r1), E::BinopExp(l2, op2, _, r2)) => {
+//             op1 == op2 && equal_exp(diags, l1, l2) && equal_exp(diags, r1, r2)
+//         }
+
+//         (E::Pack(m1, n1, _, fields1), E::Pack(m2, n2, _, fields2)) => {
+//             m1 == m2 && n1 == n2 && equal_fields(diags, fields1, fields2)
+//         }
+//         (E::PackVariant(m1, n1, v1, _, fields1), E::PackVariant(m2, n2, v2, _, fields2)) => {
+//             m1 == m2 && n1 == n2 && v1 == v2 && equal_fields(diags, fields1, fields2)
+//         }
+//         (E::ExpList(list1), E::ExpList(list2)) => {
+//             list1.len() == list2.len()
+//                 && list1
+//                     .iter()
+//                     .zip(list2)
+//                     .all(|(l1, l2)| equal_exp_list_item(diags, l1, l2))
+//         }
+
+//         (E::Borrow(_, e1, f1), E::Borrow(_, e2, f2)) => f1 == f2 && equal_exp(diags, e1, e2),
+
+//         // false for anything effectful
+//         (E::ModuleCall(_), _)
+//         | (E::Assign(_, _, _), _)
+//         | (E::Mutate(_, _), _)
+//         | (E::Return(_), _)
+//         | (E::Abort(_), _)
+//         | (E::Give(_, _), _)
+//         | (E::Continue(_), _) => false,
+
+//         // TODO there is some potential for equality here, but a bit too brittle now
+//         (E::While(_, _, _), _)
+//         | (E::Loop { .. }, _)
+//         | (E::Match(_, _), _)
+//         | (E::VariantMatch(_, _, _), _)
+//         | (E::Cast(_, _), _)
+//         | (E::ErrorConstant { .. }, _) => false,
+
+//         // catch all
+//         _ => false,
+//     }
+// }
+
+pub fn same_local(lhs: &Var, rhs: &T::Exp) -> Option<(Loc, Loc)> {
+    if same_local_(lhs, &rhs.exp.value) {
+        Some((lhs.loc, rhs.exp.loc))
+    } else {
+        None
+    }
+}
+
+fn same_local_(lhs: &Var, rhs: &T::UnannotatedExp_) -> bool {
+    use T::UnannotatedExp_ as E;
+    match &rhs {
+        E::Copy { var: r, .. } | E::Move { var: r, .. } | E::BorrowLocal(_, r) => lhs == r,
+        _ => false,
+    }
+}
+
+#[growing_stack]
+pub fn is_unit(diags: &DiagnosticReporter, e: &T::Exp) -> bool {
+    is_unit_(diags, e.exp.loc, &e.exp.value)
+}
+
+fn is_unit_(diags: &DiagnosticReporter, loc: Loc, e: &T::UnannotatedExp_) -> bool {
+    use T::UnannotatedExp_ as E;
+    match &e {
+        E::Unit { .. } => true,
+        E::Annotate(inner, _) => is_unit(diags, inner),
+        E::Block((_, seq)) if seq.is_empty() => {
+            diags.add_diag(ice!((loc, "Unexpected empty block without a value")));
+            false
+        }
+        E::Block((_, seq)) if seq.len() == 1 => is_unit_seq(diags, &seq[0]),
+        _ => false,
+    }
+}
+
+pub fn is_unit_seq(diags: &DiagnosticReporter, s: &T::SequenceItem) -> bool {
+    match &s.value {
+        T::SequenceItem_::Seq(e) => is_unit(diags, e),
+        T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => false,
+    }
 }
