@@ -2400,7 +2400,7 @@ impl<'env> FunctionTranslator<'env> {
                     CastU8 | CastU16 | CastU32 | CastU64 | CastU128 | CastU256 => {
                         let src = srcs[0];
                         let dest = dests[0];
-                        let make_cast = |target_base: &str, src: TempIndex, dest: TempIndex| {
+                        let make_cast = |target_base: usize, src: TempIndex, dest: TempIndex| {
                             let num_oper = global_state
                                 .get_temp_index_oper(mid, fid, src, baseline_flag)
                                 .unwrap();
@@ -2417,22 +2417,40 @@ impl<'env> FunctionTranslator<'env> {
                                     str_local(src)
                                 );
                             } else {
-                                emitln!(
-                                    self.writer(),
-                                    "call {} := $CastU{}({});",
-                                    str_local(dest),
-                                    target_base,
-                                    str_local(src)
-                                );
+                                // skip casting to higher bit width
+                                if target_base
+                                    < self.fun_target.get_local_type(src).get_bit_width().unwrap()
+                                {
+                                    emitln!(
+                                        self.writer(),
+                                        "call {} := $CastU{}({});",
+                                        str_local(dest),
+                                        target_base,
+                                        str_local(src)
+                                    );
+                                } else {
+                                    emitln!(
+                                        self.writer(),
+                                        "{} := {};",
+                                        str_local(dest),
+                                        str_local(src),
+                                    );
+                                    emit!(
+                                        self.writer(),
+                                        "assume {} <= $MAX_U{};",
+                                        str_local(dest),
+                                        target_base,
+                                    );
+                                }
                             }
                         };
                         let target_base = match oper {
-                            CastU8 => "8",
-                            CastU16 => "16",
-                            CastU32 => "32",
-                            CastU64 => "64",
-                            CastU128 => "128",
-                            CastU256 => "256",
+                            CastU8 => 8,
+                            CastU16 => 16,
+                            CastU32 => 32,
+                            CastU64 => 64,
+                            CastU128 => 128,
+                            CastU256 => 256,
                             _ => unreachable!(),
                         };
                         make_cast(target_base, src, dest);

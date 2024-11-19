@@ -636,7 +636,6 @@ procedure {:inline 1} $CastU8(src: int) returns (dst: int)
 {
     if (src > $MAX_U8) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src;
 }
@@ -645,7 +644,6 @@ procedure {:inline 1} $CastU16(src: int) returns (dst: int)
 {
     if (src > $MAX_U16) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src;
 }
@@ -654,7 +652,6 @@ procedure {:inline 1} $CastU32(src: int) returns (dst: int)
 {
     if (src > $MAX_U32) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src;
 }
@@ -663,7 +660,6 @@ procedure {:inline 1} $CastU64(src: int) returns (dst: int)
 {
     if (src > $MAX_U64) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src;
 }
@@ -672,7 +668,6 @@ procedure {:inline 1} $CastU128(src: int) returns (dst: int)
 {
     if (src > $MAX_U128) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src;
 }
@@ -681,7 +676,6 @@ procedure {:inline 1} $CastU256(src: int) returns (dst: int)
 {
     if (src > $MAX_U256) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src;
 }
@@ -690,7 +684,6 @@ procedure {:inline 1} $AddU8(src1: int, src2: int) returns (dst: int)
 {
     if (src1 + src2 > $MAX_U8) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 + src2;
 }
@@ -699,7 +692,6 @@ procedure {:inline 1} $AddU16(src1: int, src2: int) returns (dst: int)
 {
     if (src1 + src2 > $MAX_U16) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 + src2;
 }
@@ -713,7 +705,6 @@ procedure {:inline 1} $AddU32(src1: int, src2: int) returns (dst: int)
 {
     if (src1 + src2 > $MAX_U32) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 + src2;
 }
@@ -727,7 +718,6 @@ procedure {:inline 1} $AddU64(src1: int, src2: int) returns (dst: int)
 {
     if (src1 + src2 > $MAX_U64) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 + src2;
 }
@@ -741,7 +731,6 @@ procedure {:inline 1} $AddU128(src1: int, src2: int) returns (dst: int)
 {
     if (src1 + src2 > $MAX_U128) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 + src2;
 }
@@ -755,7 +744,6 @@ procedure {:inline 1} $AddU256(src1: int, src2: int) returns (dst: int)
 {
     if (src1 + src2 > $MAX_U256) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 + src2;
 }
@@ -769,7 +757,6 @@ procedure {:inline 1} $Sub(src1: int, src2: int) returns (dst: int)
 {
     if (src1 < src2) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 - src2;
 }
@@ -1046,7 +1033,6 @@ procedure {:inline 1} $MulU8(src1: int, src2: int) returns (dst: int)
 {
     if (src1 * src2 > $MAX_U8) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 * src2;
 }
@@ -1055,7 +1041,6 @@ procedure {:inline 1} $MulU16(src1: int, src2: int) returns (dst: int)
 {
     if (src1 * src2 > $MAX_U16) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 * src2;
 }
@@ -1064,7 +1049,6 @@ procedure {:inline 1} $MulU32(src1: int, src2: int) returns (dst: int)
 {
     if (src1 * src2 > $MAX_U32) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 * src2;
 }
@@ -1073,7 +1057,6 @@ procedure {:inline 1} $MulU64(src1: int, src2: int) returns (dst: int)
 {
     if (src1 * src2 > $MAX_U64) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 * src2;
 }
@@ -1082,7 +1065,6 @@ procedure {:inline 1} $MulU128(src1: int, src2: int) returns (dst: int)
 {
     if (src1 * src2 > $MAX_U128) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 * src2;
 }
@@ -1091,7 +1073,6 @@ procedure {:inline 1} $MulU256(src1: int, src2: int) returns (dst: int)
 {
     if (src1 * src2 > $MAX_U256) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 * src2;
 }
@@ -1100,7 +1081,6 @@ procedure {:inline 1} $Div(src1: int, src2: int) returns (dst: int)
 {
     if (src2 == 0) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 div src2;
 }
@@ -1109,7 +1089,6 @@ procedure {:inline 1} $Mod(src1: int, src2: int) returns (dst: int)
 {
     if (src2 == 0) {
         call $ExecFailureAbort();
-        return;
     }
     dst := src1 mod src2;
 }
