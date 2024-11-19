@@ -49,7 +49,7 @@ async function deriveAccountsFromLedger(
 			type: 'ledger',
 			address: suiAddress,
 			derivationPath,
-			publicKey: publicKey.toBase64(),
+			publicKey: publicKey.toSuiPublicKey(),
 		});
 	}
 

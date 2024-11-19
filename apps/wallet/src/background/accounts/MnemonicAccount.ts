@@ -62,7 +62,7 @@ export class MnemonicAccount
 			sourceID,
 			address: keyPair.getPublicKey().toSuiAddress(),
 			derivationPath,
-			publicKey: keyPair.getPublicKey().toBase64(),
+			publicKey: keyPair.getPublicKey().toSuiPublicKey(),
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: null,

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { computeZkLoginAddressFromSeed } from '@mysten/sui/zklogin';
+import { computeZkLoginAddressFromSeed, toZkLoginPublicIdentifier } from '@mysten/sui/zklogin';
 import { decodeJwt } from 'jose';
 
 import { genAddressSeed } from './utils.js';
@@ -49,6 +49,23 @@ export function jwtToAddress(jwt: string, userSalt: string | bigint) {
 		aud: decodedJWT.aud,
 		iss: decodedJWT.iss,
 	});
+}
+
+export function jwtToPublicKey(jwt: string, userSalt: string | bigint) {
+	lengthChecks(jwt);
+
+	const decodedJWT = decodeJwt(jwt);
+	if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
+		throw new Error('Missing jwt data');
+	}
+
+	if (Array.isArray(decodedJWT.aud)) {
+		throw new Error('Not supported aud. Aud is an array, string was expected.');
+	}
+
+	const { aud, sub, iss } = decodedJWT;
+
+	return toZkLoginPublicIdentifier(genAddressSeed(userSalt, 'sub', sub, aud), iss);
 }
 
 export interface ComputeZkLoginAddressOptions {

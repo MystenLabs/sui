@@ -8,6 +8,7 @@ import type { PublicKeyInitData } from '../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
 import { SuiGraphQLClient } from '../graphql/client.js';
 import { graphql } from '../graphql/schemas/2024.4/index.js';
+import type { ZkLoginSignatureInputs } from './bcs.js';
 import { extractClaimValue } from './jwt-utils.js';
 import { parseZkLoginSignature } from './signature.js';
 import { toPaddedBigEndianBytes } from './utils.js';
@@ -35,6 +36,12 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 		} else {
 			this.#data = Uint8Array.from(value);
 		}
+	}
+
+	static fromSignatureInputs(proof: ZkLoginSignatureInputs) {
+		const { issBase64Details, addressSeed } = proof;
+		const iss = extractClaimValue<string>(issBase64Details, 'iss');
+		return toZkLoginPublicIdentifier(BigInt(addressSeed), iss);
 	}
 
 	/**
