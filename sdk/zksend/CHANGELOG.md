@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.12.3
+
+### Patch Changes
+
+- f03e60f: Fix getSentTransactionsWithLinks defaulting to the public fullnode URL
+
 ## 0.12.2
 
 ### Patch Changes
