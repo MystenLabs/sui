@@ -7,6 +7,7 @@ use std::str::FromStr;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use fastcrypto::encoding::Hex;
+use futures::StreamExt;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
@@ -14,7 +15,9 @@ use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockKind};
+use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
@@ -28,6 +31,10 @@ use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
 use crate::SUI;
+
+const MAX_GAS_COINS: usize = 255;
+const MAX_GAS_BUDGET: u64 = 50_000_000_000;
+const START_BUDGET: u64 = 5_000_000;
 
 #[cfg(test)]
 #[path = "unit_tests/types_tests.rs"]
@@ -959,6 +966,13 @@ impl InternalOperation {
                 ..
             } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
+                if metadata.objects.len() != 0 {
+                    let to_merge: Vec<Argument> = metadata.objects
+                        .into_iter()
+                        .map(|o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
+                        .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+                    builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
+                }
                 builder.pay_sui(recipients, amounts)?;
                 builder.finish()
             }
@@ -1049,4 +1063,115 @@ impl InternalOperation {
             metadata.gas_price,
         ))
     }
+}
+
+pub async fn pay_sui_to_metadata(
+    client: &SuiClient,
+    gas_price: Option<u64>,
+    sender: SuiAddress,
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
+    budget: Option<u64>,
+) -> Result<ConstructionMetadata, Error> {
+    let gas_price = match gas_price {
+        Some(p) => p,
+        None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
+    };
+    let total_amount = amounts.iter().sum::<u64>();
+    if let Some(budget) = budget {
+        let coins = client
+            .coin_read_api()
+            .select_coins(sender, None, (total_amount + budget) as u128, vec![])
+            .await?;
+
+        let total_coin_value = coins.iter().map(|c| c.balance).sum::<u64>() as i128;
+
+        let mut coins: Vec<ObjectRef> = coins.into_iter().map(|c| c.object_ref()).collect();
+        let objects = coins.split_off(MAX_GAS_COINS);
+
+        println!("coins.len() = {}", coins.len());
+        return Ok(ConstructionMetadata {
+            sender,
+            coins,
+            budget,
+            objects,
+            total_coin_value,
+            gas_price,
+            currency: None,
+        });
+    };
+
+    let mut coins_stream = Box::pin(client.coin_read_api().get_coins_stream(sender, None));
+
+    let mut all_coins = vec![];
+    let total_amount = amounts.iter().sum::<u64>();
+    let mut gathered = 0;
+    let mut budget = START_BUDGET;
+    loop {
+        while let Some(coin) = coins_stream.next().await {
+            gathered += coin.balance;
+            all_coins.push(coin);
+            if gathered >= total_amount + budget {
+                break;
+            }
+        }
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        if all_coins.len() > MAX_GAS_COINS {
+            let to_merge: Vec<Argument> = all_coins
+                .iter()
+                .skip(MAX_GAS_COINS)
+                .map(|c| builder.obj(ObjectArg::ImmOrOwnedObject(c.object_ref())))
+                .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+            builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
+        }
+        builder.pay_sui(recipients.clone(), amounts.clone())?;
+        let pt = builder.finish();
+        let tx_data = TransactionData::new_programmable(
+            sender,
+            all_coins[..MAX_GAS_COINS]
+                .iter()
+                .map(|c| c.object_ref())
+                .collect(),
+            pt,
+            // We don't want dry run to fail due to budget, because
+            // it will display the fail-budget
+            MAX_GAS_BUDGET,
+            gas_price,
+        );
+
+        let dry_run = client.read_api().dry_run_transaction_block(tx_data).await?;
+        let effects = dry_run.effects;
+
+        if let SuiExecutionStatus::Failure { error } = effects.status() {
+            return Err(Error::TransactionDryRunError(error.to_string()));
+        }
+        let new_budget =
+            effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
+        if new_budget == budget {
+            break;
+        }
+        budget = new_budget;
+    }
+    let coins: Vec<ObjectRef> = all_coins[..MAX_GAS_COINS]
+        .iter()
+        .map(|c| c.object_ref())
+        .collect();
+    let objects = all_coins
+        .iter()
+        .skip(MAX_GAS_COINS)
+        .map(|c| c.object_ref())
+        .collect();
+    let total_coin_value = all_coins.into_iter().map(|c| c.balance).sum::<u64>() as i128;
+
+    println!("coins.len() = {}", coins.len());
+    Ok(ConstructionMetadata {
+        sender,
+        coins,
+        budget,
+        objects,
+        total_coin_value,
+        gas_price,
+        currency: None,
+    })
 }

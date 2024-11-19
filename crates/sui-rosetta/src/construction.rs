@@ -28,13 +28,13 @@ use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
 use crate::types::{
-    Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
-    ConstructionDeriveResponse, ConstructionHashRequest, ConstructionMetadata,
-    ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
-    ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
-    ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    InternalOperation, MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
-    TransactionIdentifierResponse,
+    pay_sui_to_metadata, Amount, ConstructionCombineRequest, ConstructionCombineResponse,
+    ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
+    ConstructionMetadata, ConstructionMetadataRequest, ConstructionMetadataResponse,
+    ConstructionParseRequest, ConstructionParseResponse, ConstructionPayloadsRequest,
+    ConstructionPayloadsResponse, ConstructionPreprocessRequest, ConstructionPreprocessResponse,
+    ConstructionSubmitRequest, InternalOperation, MetadataOptions, SignatureType, SigningPayload,
+    TransactionIdentifier, TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
 
@@ -254,11 +254,31 @@ pub async fn metadata(
     // make sure it works over epoch changes
     gas_price += 100;
 
+    if let InternalOperation::PaySui {
+        sender,
+        recipients,
+        amounts,
+    } = option.internal_operation
+    {
+        let metadata = pay_sui_to_metadata(
+            &context.client,
+            Some(gas_price),
+            sender,
+            recipients.clone(),
+            amounts,
+            budget,
+        )
+        .await?;
+        let budget = metadata.budget;
+        return Ok(ConstructionMetadataResponse {
+            metadata,
+            suggested_fee: vec![Amount::new(budget as i128, None)],
+        });
+    };
     // Get amount, objects, for the operation
     let (total_required_amount, objects) = match &option.internal_operation {
-        InternalOperation::PaySui { amounts, .. } => {
-            let amount = amounts.iter().sum::<u64>();
-            (Some(amount), vec![])
+        InternalOperation::PaySui { .. } => {
+            unreachable!("PaySui is already handled explicitly")
         }
         InternalOperation::PayCoin { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
@@ -370,20 +390,16 @@ pub async fn metadata(
     };
 
     let exclude_ids: Vec<ObjectID> = objects.iter().map(|obj| obj.0).collect();
-    let coins = match maybe_coins {
-        Some(gas_coins) /* if gas_coins.len() <= 256 */ => gas_coins,
-        _ => {
-            let mut all_coins = context
-                .client
-                .coin_read_api()
-                .get_coins_stream(sender, None)
-                .filter(|coin: &Coin| future::ready(!exclude_ids.contains(&coin.coin_object_id)))
-                .collect::<Vec<_>>()
-                .await;
-            all_coins.sort_by(|lhs, rhs| rhs.balance.cmp(&lhs.balance));
-            all_coins.truncate(256);
-            all_coins
-        }
+    let coins = if let Some(coins) = maybe_coins {
+        coins
+    } else {
+        context
+            .client
+            .coin_read_api()
+            .get_coins_stream(sender, None)
+            .filter(|coin: &Coin| future::ready(!exclude_ids.contains(&coin.coin_object_id)))
+            .collect::<Vec<_>>()
+            .await
     };
 
     let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
