@@ -16,8 +16,6 @@ use crate::{
     schema::sum_displays,
 };
 
-const CHUNK_ROWS: usize = i16::MAX as usize / 4;
-
 pub struct SumDisplays;
 
 impl Processor for SumDisplays {
@@ -71,18 +69,22 @@ impl Handler for SumDisplays {
 
     async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
-        let updates = values.chunks(CHUNK_ROWS).map(|chunk| {
-            diesel::insert_into(sum_displays::table)
-                .values(chunk)
-                .on_conflict(sum_displays::object_type)
-                .do_update()
-                .set((
-                    sum_displays::display_id.eq(excluded(sum_displays::display_id)),
-                    sum_displays::display_version.eq(excluded(sum_displays::display_version)),
-                    sum_displays::display.eq(excluded(sum_displays::display)),
-                ))
-                .execute(conn)
-        });
+        let updates =
+            values
+                .chunks(Self::MAX_INSERT_CHUNK_ROWS)
+                .map(|chunk: &[StoredDisplay]| {
+                    diesel::insert_into(sum_displays::table)
+                        .values(chunk)
+                        .on_conflict(sum_displays::object_type)
+                        .do_update()
+                        .set((
+                            sum_displays::display_id.eq(excluded(sum_displays::display_id)),
+                            sum_displays::display_version
+                                .eq(excluded(sum_displays::display_version)),
+                            sum_displays::display.eq(excluded(sum_displays::display)),
+                        ))
+                        .execute(conn)
+                });
 
         Ok(try_join_all(updates).await?.into_iter().sum())
     }

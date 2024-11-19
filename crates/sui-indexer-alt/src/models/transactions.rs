@@ -70,7 +70,7 @@ pub struct StoredTxBalanceChange {
     pub balance_changes: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = tx_calls)]
 pub struct StoredTxCalls {
     pub tx_sequence_number: i64,
@@ -80,7 +80,7 @@ pub struct StoredTxCalls {
     pub sender: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = tx_digests)]
 pub struct StoredTxDigest {
     pub tx_sequence_number: i64,
@@ -95,7 +95,7 @@ pub enum StoredKind {
     ProgrammableTransaction = 1,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = tx_kinds)]
 pub struct StoredTxKind {
     pub tx_sequence_number: i64,

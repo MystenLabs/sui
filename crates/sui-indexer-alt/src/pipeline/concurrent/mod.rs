@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -57,8 +58,8 @@ pub trait Handler: Processor {
     const MIN_EAGER_ROWS: usize = 50;
 
     /// If there are more than this many rows pending, the committer will only commit this many in
-    /// one operation.
-    const MAX_CHUNK_ROWS: usize = 1000;
+    /// one operation. The size is chosen to maximize the rows without hitting the limit on bind parameters.
+    const MAX_CHUNK_ROWS: usize = i16::MAX as usize / Self::Value::FIELD_COUNT;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;

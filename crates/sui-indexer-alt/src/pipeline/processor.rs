@@ -26,13 +26,6 @@ pub trait Processor {
     /// How much concurrency to use when processing checkpoint data.
     const FANOUT: usize = 10;
 
-    /// Each insert or update will include at most this many rows -- the size is chosen to maximize the
-    /// rows without hitting the limit on bind parameters.
-    const INSERT_CHUNK_ROWS: usize = i16::MAX as usize / Self::Value::FIELD_COUNT;
-
-    /// Each deletion will include at most this many rows without hitting the limit on bind parameters.
-    const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-
     /// The type of value being inserted by the handler.
     type Value: Send + Sync + 'static + FieldCount;
 

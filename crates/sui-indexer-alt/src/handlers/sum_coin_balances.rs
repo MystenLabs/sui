@@ -151,7 +151,6 @@ impl Handler for SumCoinBalances {
                 deletes.push(update.object_id.to_vec());
             }
         }
-
         let update_chunks = updates.chunks(Self::INSERT_CHUNK_ROWS).map(Either::Left);
         let delete_chunks = deletes.chunks(Self::DELETE_CHUNK_ROWS).map(Either::Right);
 

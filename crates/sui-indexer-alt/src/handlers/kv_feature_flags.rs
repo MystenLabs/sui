@@ -55,7 +55,6 @@ impl Processor for KvFeatureFlags {
 #[async_trait::async_trait]
 impl Handler for KvFeatureFlags {
     const MIN_EAGER_ROWS: usize = 1;
-    const MAX_CHUNK_ROWS: usize = i16::MAX as usize / 3;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

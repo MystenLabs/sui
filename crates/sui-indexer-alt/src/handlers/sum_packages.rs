@@ -16,8 +16,6 @@ use crate::{
     schema::sum_packages,
 };
 
-const CHUNK_ROWS: usize = i16::MAX as usize / 5;
-
 pub struct SumPackages;
 
 impl Processor for SumPackages {
@@ -67,7 +65,7 @@ impl Handler for SumPackages {
 
     async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
-        let updates = values.chunks(CHUNK_ROWS).map(|chunk| {
+        let updates = values.chunks(Self::MAX_INSERT_CHUNK_ROWS).map(|chunk| {
             diesel::insert_into(sum_packages::table)
                 .values(chunk)
                 .on_conflict(sum_packages::package_id)
