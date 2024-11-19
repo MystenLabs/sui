@@ -14,7 +14,6 @@ export async function getSentTransactionsWithLinks({
 	limit = 10,
 	network = 'mainnet',
 	contract = getContractIds(network),
-	client = new SuiClient({ url: getFullnodeUrl(network) }),
 	loadClaimedAssets = false,
 	...linkOptions
 }: {
@@ -31,9 +30,10 @@ export async function getSentTransactionsWithLinks({
 	claimApi?: string;
 	client?: SuiClient;
 }) {
+	const suiClient = linkOptions.client ?? new SuiClient({ url: getFullnodeUrl(network) });
 	const packageId = normalizeSuiAddress(contract.packageId);
 
-	const page = await client.queryTransactionBlocks({
+	const page = await suiClient.queryTransactionBlocks({
 		filter: {
 			FromAddress: address,
 		},
