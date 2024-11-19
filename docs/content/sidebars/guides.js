@@ -168,8 +168,8 @@ const guides = [
 							id: 'guides/developer/app-examples/oracle',
 						},
 						items: [
+							'guides/developer/app-examples/price-oracle',
 							'guides/developer/app-examples/weather-oracle',
-							'guides/developer/app-examples/meta-pricing-oracle',
 						],
 					},
 					// 'guides/developer/app-examples/recaptcha',
