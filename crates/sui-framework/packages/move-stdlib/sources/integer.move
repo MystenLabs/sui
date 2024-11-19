@@ -66,3 +66,24 @@ native public fun gt(x: Integer, y: Integer): bool;
 native public fun lte(x: Integer, y: Integer): bool;
 #[spec_only]
 native public fun gte(x: Integer, y: Integer): bool;
+
+#[spec_only]
+public macro fun zero(): Integer {
+    0u64.to_int()
+}
+
+#[spec_only]
+public macro fun one(): Integer {
+    1u64.to_int()
+}
+
+#[spec_only]
+public macro fun two(): Integer {
+    2u64.to_int()
+}
+
+#[spec_only]
+public macro fun is_zero($x: Integer): bool {
+    let x = $x;
+    x == zero!()
+}
