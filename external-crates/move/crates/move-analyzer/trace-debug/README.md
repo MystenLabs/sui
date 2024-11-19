@@ -14,15 +14,16 @@ Note that support for trace-debugging macros and enums is limited at this point 
 # How to Install
 
 1. Open a new window in any Visual Studio Code application version 1.61.0 or greater.
-2. Open the command palette (`⇧` + `⌘` + `P` on macOS, or use the menu item *View > Command Palette...*) and
+2. Open the command palette (`⇧` + `⌘` + `P` on macOS, `^` + `⇧` + `P` on Windows and GNU/Linux,
+   or use the menu item *View > Command Palette...*) and
    type **Extensions: Install Extensions**. This will open a panel named *Extensions* in the
    sidebar of your Visual Studio Code window.
-3. In the search bar labeled *Search Extensions in Marketplace*, type **Move Trace**. The Move Trace debugger extension
+3. In the search bar labeled *Search Extensions in Marketplace*, type **Move Trace Debugger**. The Move Trace debugger extension
    should appear as one of the option in the list below the search bar. Click **Install**.
 
 # How to trace-debug a Move unit test
 
-Debugging a Move unit tests consists of two steps: generating a Move trace and actually trace-debugging it
+Debugging a Move unit tests consists of two steps: generating a Move trace and actually trace-debugging it.
 
 ## Generating a Move trace
 
@@ -32,11 +33,14 @@ If you plan to use the the Trace Debugging Extension by itself, you need to gene
 
 Once the `sui` binary is installed, you generate traces for all test files in a given package by running the following command in the package's root directory:
 ```shell
-sui move test OPTIONAL_FILTER --trace-execution
+sui move test --trace-execution
 ```
 
-The `OPTIONAL_FILTER` of the command provides a way to limit trace generation to the tests whose name contains the `OPTIONAL_FILTER` string.
+You can limit trace generation to the tests whose name contains a filter string by passing this string as an additional argument to the trace generation command:
+```shell
+sui move test FILTER_STRING --trace-execution
+```
 
 ## Trace-debugging a test
 
-Once traces are generated, open a file containing the test you want to trace-debug and execute `Run->Start Debug` command. The first time you execute this command, you will have to choose the debugging configuration for Move files, of which there should be only one available. Then you will have to choose a test to trace-debug if there is more than one test in a file (otherwise a trace-debugging sessio for a single test will start automatically).
+Once traces are generated, open a Move file containing the test you want to trace-debug and execute `Run->Start Debug` command. The first time you execute this command, you will have to choose the debugging configuration for Move files, of which there should be only one available. Then you will have to choose a test to trace-debug if there is more than one test in a file (otherwise a trace-debugging session for a single test will start automatically).
