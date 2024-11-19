@@ -1,44 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module reviews_rating::moderator {
-    use sui::tx_context::{sender};
+module reviews_rating::moderator;
 
-    /// Represents a moderator that can be used to delete reviews
-    public struct Moderator has key {
-        id: UID,
-    }
+use sui::tx_context::sender;
 
-    /// A capability that can be used to setup moderators
-    public struct ModCap has key, store {
-        id: UID
-    }
+/// Represents a moderator that can be used to delete reviews
+public struct Moderator has key {
+    id: UID,
+}
 
-    fun init(ctx: &mut TxContext) {
-        let mod_cap = ModCap {
-            id: object::new(ctx)
-        };
-        transfer::transfer(mod_cap, sender(ctx));
-    }
+/// A capability that can be used to setup moderators
+public struct ModCap has key, store {
+    id: UID,
+}
 
-    /// Adds a moderator
-    public fun add_moderator(
-        _: &ModCap,
-        recipient: address,
-        ctx: &mut TxContext
-    ) {
-        // generate an NFT and transfer it to moderator who may use it to delete reviews
-        let mod = Moderator {
-            id: object::new(ctx)
-        };
-        transfer::transfer(mod, recipient);
-    }
+fun init(ctx: &mut TxContext) {
+    let mod_cap = ModCap {
+        id: object::new(ctx),
+    };
+    transfer::transfer(mod_cap, sender(ctx));
+}
 
-    /// Deletes a moderator
-    public fun delete_moderator(
-        mod: Moderator
-    ) {
-        let Moderator { id } = mod;
-        object::delete(id);
-    }
+/// Adds a moderator
+public fun add_moderator(_: &ModCap, recipient: address, ctx: &mut TxContext) {
+    // generate an NFT and transfer it to moderator who may use it to delete reviews
+    let mod = Moderator {
+        id: object::new(ctx),
+    };
+    transfer::transfer(mod, recipient);
+}
+
+/// Deletes a moderator
+public fun delete_moderator(mod: Moderator) {
+    let Moderator { id } = mod;
+    object::delete(id);
 }
