@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zksend",
-	"version": "0.12.2",
+	"version": "0.12.3",
 	"description": "TODO: Write Description",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
