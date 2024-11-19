@@ -373,9 +373,8 @@ fn compute_quorum_round(
     let mut total_stake = 0;
     let mut low = 0;
     for (round, stake) in rounds_with_stake.iter().rev() {
-        let reached_quorum_before = total_stake >= committee.quorum_threshold();
         total_stake += stake;
-        if !reached_quorum_before && total_stake >= committee.quorum_threshold() {
+        if total_stake >= committee.quorum_threshold() {
             low = *round;
             break;
         }
@@ -384,9 +383,8 @@ fn compute_quorum_round(
     let mut total_stake = 0;
     let mut high = 0;
     for (round, stake) in rounds_with_stake.iter() {
-        let reached_quorum_before = total_stake >= committee.quorum_threshold();
         total_stake += stake;
-        if !reached_quorum_before && total_stake >= committee.quorum_threshold() {
+        if total_stake >= committee.quorum_threshold() {
             high = *round;
             break;
         }

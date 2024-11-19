@@ -79,9 +79,6 @@ impl AncestorStateManager {
     // Exclusion threshold is based on propagation (reputation) scores
     const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 10;
 
-    // Inclusion threshold is based on network quorum round
-    const INCLUSION_THRESHOLD_PERCENTAGE: u64 = 90;
-
     pub(crate) fn new(context: Arc<Context>) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];
 
@@ -137,15 +134,15 @@ impl AncestorStateManager {
             .collect::<Vec<_>>();
 
         // If round prober has not run yet and we don't have network quorum round,
-        // it is okay because network_low_quorum_round will be zero and we will
+        // it is okay because network_high_quorum_round will be zero and we will
         // include all ancestors until we get more information.
-        let network_low_quorum_round = self.calculate_network_low_quorum_round();
+        let network_high_quorum_round = self.calculate_network_high_quorum_round();
 
         // If propagation scores are not ready because the first 300 commits have not
         // happened, this is okay as we will only start excluding ancestors after that
         // point in time.
         for (authority_id, score) in propagation_scores_by_authority {
-            let (authority_low_quorum_round, _high) = if self
+            let (_low, authority_high_quorum_round) = if self
                 .context
                 .protocol_config
                 .consensus_round_prober_probe_accepted_rounds()
@@ -158,8 +155,8 @@ impl AncestorStateManager {
             self.update_state(
                 authority_id,
                 score,
-                authority_low_quorum_round,
-                network_low_quorum_round,
+                authority_high_quorum_round,
+                network_high_quorum_round,
             );
         }
     }
@@ -169,8 +166,8 @@ impl AncestorStateManager {
         &mut self,
         authority_id: AuthorityIndex,
         propagation_score: u64,
-        authority_low_quorum_round: u32,
-        network_low_quorum_round: u32,
+        authority_high_quorum_round: u32,
+        network_high_quorum_round: u32,
     ) {
         let block_hostname = &self.context.committee.authority(authority_id).hostname;
         let mut ancestor_info = self.state_map[authority_id].clone();
@@ -212,14 +209,14 @@ impl AncestorStateManager {
                 // It should not be possible for the scores to get over the threshold
                 // until the node is back in the INCLUDE state, but adding just in case.
                 if propagation_score > low_score_threshold
-                    || authority_low_quorum_round >= network_low_quorum_round
+                    || authority_high_quorum_round >= network_high_quorum_round
                 {
                     ancestor_info.state = AncestorState::Include;
                     ancestor_info.set_lock(
                         self.propagation_score_update_count + Self::STATE_LOCK_SCORE_UPDATES,
                     );
                     info!(
-                        "Authority {authority_id} moved to INCLUDE state with {propagation_score} > threshold of {low_score_threshold} or {authority_low_quorum_round} >= {network_low_quorum_round} and locked for {:?} score updates.",
+                        "Authority {authority_id} moved to INCLUDE state with {propagation_score} > threshold of {low_score_threshold} or {authority_high_quorum_round} >= {network_high_quorum_round} and locked for {:?} score updates.",
                         Self::STATE_LOCK_SCORE_UPDATES
                     );
                     self.context
@@ -240,81 +237,67 @@ impl AncestorStateManager {
     /// via RoundProber.
     /// When consensus_round_prober_probe_accepted_rounds is true, uses accepted rounds.
     /// Otherwise falls back to received rounds.
-    /// TODO: experiment with using high quorum round
-    fn calculate_network_low_quorum_round(&self) -> u32 {
+    fn calculate_network_high_quorum_round(&self) -> u32 {
         if self
             .context
             .protocol_config
             .consensus_round_prober_probe_accepted_rounds()
         {
-            self.calculate_network_low_accepted_quorum_round()
+            self.calculate_network_high_accepted_quorum_round()
         } else {
-            self.calculate_network_low_received_quorum_round()
+            self.calculate_network_high_received_quorum_round()
         }
     }
 
-    fn calculate_network_low_accepted_quorum_round(&self) -> u32 {
+    fn calculate_network_high_accepted_quorum_round(&self) -> u32 {
         let committee = &self.context.committee;
-        let inclusion_stake_threshold = self.get_inclusion_stake_threshold();
 
-        let low_quorum_rounds_with_stake = self
+        let high_quorum_rounds_with_stake = self
             .accepted_quorum_round_per_authority
             .iter()
             .zip(committee.authorities())
-            .map(|((low, _high), (_, authority))| (*low, authority.stake))
+            .map(|((_low, high), (_, authority))| (*high, authority.stake))
             .collect::<Vec<_>>();
 
-        self.calculate_network_low_quorum_round_internal(
-            low_quorum_rounds_with_stake,
-            inclusion_stake_threshold,
-        )
+        self.calculate_network_high_quorum_round_internal(high_quorum_rounds_with_stake)
     }
 
-    fn calculate_network_low_received_quorum_round(&self) -> u32 {
+    fn calculate_network_high_received_quorum_round(&self) -> u32 {
         let committee = &self.context.committee;
-        let inclusion_stake_threshold = self.get_inclusion_stake_threshold();
 
-        let low_quorum_rounds_with_stake = self
+        let high_quorum_rounds_with_stake = self
             .received_quorum_round_per_authority
             .iter()
             .zip(committee.authorities())
-            .map(|((low, _high), (_, authority))| (*low, authority.stake))
+            .map(|((_low, high), (_, authority))| (*high, authority.stake))
             .collect::<Vec<_>>();
 
-        self.calculate_network_low_quorum_round_internal(
-            low_quorum_rounds_with_stake,
-            inclusion_stake_threshold,
-        )
+        self.calculate_network_high_quorum_round_internal(high_quorum_rounds_with_stake)
     }
 
-    /// Calculate the network's quorum round from authorities by inclusion stake
-    /// threshold, where quorum round is the highest round a block has been accepted
-    /// or received by a percentage (inclusion threshold) of authorities.
-    fn calculate_network_low_quorum_round_internal(
+    /// Calculate the network's high quorum round.
+    /// The authority high quorum round is the lowest round higher or equal to rounds  
+    /// from a quorum of authorities. The network high quorum round is using the high
+    /// quorum round of each authority as reported by the [`RoundProber`] and then
+    /// finding the high quroum round of those high quorum rounds.
+    fn calculate_network_high_quorum_round_internal(
         &self,
-        mut low_quorum_rounds_with_stake: Vec<(u32, u64)>,
-        inclusion_stake_threshold: u64,
+        mut high_quorum_rounds_with_stake: Vec<(u32, u64)>,
     ) -> u32 {
-        low_quorum_rounds_with_stake.sort();
+        high_quorum_rounds_with_stake.sort();
 
         let mut total_stake = 0;
-        let mut network_low_quorum_round = 0;
+        let mut network_high_quorum_round = 0;
 
-        for (round, stake) in low_quorum_rounds_with_stake.iter().rev() {
+        for (round, stake) in high_quorum_rounds_with_stake.iter() {
             total_stake += stake;
-            if total_stake >= inclusion_stake_threshold {
-                network_low_quorum_round = *round;
+            if total_stake >= self.context.committee.quorum_threshold() {
+                network_high_quorum_round = *round;
                 break;
             }
         }
 
-        network_low_quorum_round
-    }
-
-    fn get_inclusion_stake_threshold(&self) -> u64 {
-        self.context
-            .committee
-            .n_percent_stake_threshold(Self::INCLUSION_THRESHOLD_PERCENTAGE)
+        network_high_quorum_round
     }
 }
 
@@ -324,7 +307,7 @@ mod test {
     use crate::leader_scoring::ReputationScores;
 
     #[tokio::test]
-    async fn test_calculate_network_low_accepted_quorum_round() {
+    async fn test_calculate_network_high_accepted_quorum_round() {
         telemetry_subscribers::init_for_testing();
 
         let (mut context, _key_pairs) = Context::new_for_test(4);
@@ -339,23 +322,25 @@ mod test {
 
         // Quorum rounds are not set yet, so we should calculate a network
         // quorum round of 0 to start.
-        let network_low_quorum_round = ancestor_state_manager.calculate_network_low_quorum_round();
-        assert_eq!(network_low_quorum_round, 0);
+        let network_high_quorum_round =
+            ancestor_state_manager.calculate_network_high_quorum_round();
+        assert_eq!(network_high_quorum_round, 0);
 
-        let received_quorum_rounds = vec![(100, 229), (225, 300), (229, 300), (229, 300)];
-        let accepted_quorum_rounds = vec![(50, 229), (175, 300), (179, 300), (179, 300)];
+        let received_quorum_rounds = vec![(100, 229), (225, 229), (229, 300), (229, 300)];
+        let accepted_quorum_rounds = vec![(50, 229), (175, 229), (179, 229), (179, 300)];
         ancestor_state_manager.set_quorum_rounds_per_authority(
             received_quorum_rounds.clone(),
             accepted_quorum_rounds.clone(),
         );
 
         // When probe_accepted_rounds is false, should use received rounds
-        let network_low_quorum_round = ancestor_state_manager.calculate_network_low_quorum_round();
-        assert_eq!(network_low_quorum_round, 225);
+        let network_high_quorum_round =
+            ancestor_state_manager.calculate_network_high_quorum_round();
+        assert_eq!(network_high_quorum_round, 300);
     }
 
     #[tokio::test]
-    async fn test_calculate_network_low_received_quorum_round() {
+    async fn test_calculate_network_high_received_quorum_round() {
         telemetry_subscribers::init_for_testing();
 
         let (mut context, _key_pairs) = Context::new_for_test(4);
@@ -370,19 +355,21 @@ mod test {
 
         // Quorum rounds are not set yet, so we should calculate a network
         // quorum round of 0 to start.
-        let network_low_quorum_round = ancestor_state_manager.calculate_network_low_quorum_round();
-        assert_eq!(network_low_quorum_round, 0);
+        let network_high_quorum_round =
+            ancestor_state_manager.calculate_network_high_quorum_round();
+        assert_eq!(network_high_quorum_round, 0);
 
         let received_quorum_rounds = vec![(100, 229), (225, 300), (229, 300), (229, 300)];
-        let accepted_quorum_rounds = vec![(50, 229), (175, 300), (179, 300), (179, 300)];
+        let accepted_quorum_rounds = vec![(50, 229), (175, 229), (179, 229), (179, 300)];
         ancestor_state_manager.set_quorum_rounds_per_authority(
             received_quorum_rounds.clone(),
             accepted_quorum_rounds.clone(),
         );
 
         // When probe_accepted_rounds is true, should use accepted rounds
-        let network_low_quorum_round = ancestor_state_manager.calculate_network_low_quorum_round();
-        assert_eq!(network_low_quorum_round, 175);
+        let network_high_quorum_round =
+            ancestor_state_manager.calculate_network_high_quorum_round();
+        assert_eq!(network_high_quorum_round, 229);
     }
 
     // Test all state transitions with probe_accepted_rounds = true
@@ -405,7 +392,7 @@ mod test {
         ancestor_state_manager.set_propagation_scores(scores);
 
         let received_quorum_rounds = vec![(300, 400), (300, 400), (300, 400), (300, 400)];
-        let accepted_quorum_rounds = vec![(225, 229), (225, 300), (229, 300), (229, 300)];
+        let accepted_quorum_rounds = vec![(225, 229), (225, 229), (229, 300), (229, 300)];
         ancestor_state_manager
             .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
         ancestor_state_manager.update_all_ancestors_state();
@@ -448,13 +435,13 @@ mod test {
         // Updating the quorum rounds will expire the lock as we only need 1
         // quorum round update for tests.
         let received_quorum_rounds = vec![(400, 500), (400, 500), (400, 500), (400, 500)];
-        let accepted_quorum_rounds = vec![(229, 300), (225, 300), (229, 300), (229, 300)];
+        let accepted_quorum_rounds = vec![(229, 300), (225, 229), (229, 300), (229, 300)];
         ancestor_state_manager
             .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
         ancestor_state_manager.update_all_ancestors_state();
 
-        // Authority 0 should now be included again because low quorum round is
-        // at the network low quorum round of 229. Authority 1's quorum round is
+        // Authority 0 should now be included again because high quorum round is
+        // at the network high quorum round of 300. Authority 1's quorum round is
         // too low and will remain excluded.
         let state_map = ancestor_state_manager.get_ancestor_states();
         for (authority, state) in state_map.iter().enumerate() {
@@ -559,14 +546,14 @@ mod test {
 
         // Updating the quorum rounds will expire the lock as we only need 1
         // quorum round update for tests.
-        let received_quorum_rounds = vec![(229, 300), (225, 300), (229, 300), (229, 300)];
+        let received_quorum_rounds = vec![(229, 300), (225, 229), (229, 300), (229, 300)];
         let accepted_quorum_rounds = vec![(100, 150), (100, 150), (100, 150), (100, 150)];
         ancestor_state_manager
             .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
         ancestor_state_manager.update_all_ancestors_state();
 
-        // Authority 0 should now be included again because low quorum round is
-        // at the network low quorum round of 229. Authority 1's quorum round is
+        // Authority 0 should now be included again because high quorum round is
+        // at the network high quorum round of 300. Authority 1's quorum round is
         // too low and will remain excluded.
         let state_map = ancestor_state_manager.get_ancestor_states();
         for (authority, state) in state_map.iter().enumerate() {
