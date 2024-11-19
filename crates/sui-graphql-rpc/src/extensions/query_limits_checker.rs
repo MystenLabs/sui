@@ -29,7 +29,7 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
-const MULTI_GET_QUERY: &str = "multiGet";
+const MULTI_GET_OBJECTS: &str = "multiGetObjects";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Clone, Copy, Debug)]
@@ -69,8 +69,8 @@ struct LimitsTraversal<'a> {
     output_budget: u32,
     depth_seen: u32,
 
-    // The total number of keys seen across all multiGet queries.
-    num_keys_seen: u32,
+    // The total number of object keys  in multiGetObjects query
+    num_obj_keys_seen: u32,
 }
 
 /// Builds error messages and reports them to tracing.
@@ -114,7 +114,7 @@ impl<'a> LimitsTraversal<'a> {
             input_budget: reporter.limits.max_query_nodes,
             output_budget: reporter.limits.max_output_nodes,
             depth_seen: 0,
-            num_keys_seen: 0,
+            num_obj_keys_seen: 0,
         }
     }
 
@@ -171,9 +171,9 @@ impl<'a> LimitsTraversal<'a> {
         match &item.node {
             Selection::Field(f) => {
                 let name = &f.node.name.node;
-                if name.starts_with(MULTI_GET_QUERY) {
+                if name.starts_with(MULTI_GET_OBJECTS) {
                     for (name, value) in &f.node.arguments {
-                        self.check_multiget_arg(&name.node, value)?;
+                        self.check_multiget_objs_arg(&name.node, value)?;
                     }
                 }
             }
@@ -308,10 +308,10 @@ impl<'a> LimitsTraversal<'a> {
         Ok(())
     }
 
-    /// multiGet queries can only pass a number of keys that does not exceed the max page size.
-    /// This checks for the number of keys and deducts the raw size of the keys from the payload
-    /// size.
-    fn check_multiget_arg(
+    /// multiGetObject query can only pass a number of object keys that does not exceed the max
+    /// page size. This checks for the number of keys and deducts the raw size of the keys from
+    /// the payload size.
+    fn check_multiget_objs_arg(
         &mut self,
         name: &Name,
         value: &'a Positioned<Value>,
@@ -332,7 +332,7 @@ impl<'a> LimitsTraversal<'a> {
                             ),
                         ));
                     }
-                    self.num_keys_seen += vs.len() as u32;
+                    self.num_obj_keys_seen += vs.len() as u32;
                     stack.extend(vs);
                 }
                 // account for the quotes around the string
@@ -512,8 +512,8 @@ impl<'a> LimitsTraversal<'a> {
                 //
                 let name = &f.node.name.node;
                 let multiplicity = 'm: {
-                    if name.starts_with(MULTI_GET_QUERY) {
-                        break 'm self.num_keys_seen;
+                    if name.starts_with(MULTI_GET_OBJECTS) {
+                        break 'm self.num_obj_keys_seen;
                     }
 
                     if !CONNECTION_FIELDS.contains(&name.as_str()) {

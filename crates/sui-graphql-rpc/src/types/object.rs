@@ -129,7 +129,8 @@ pub(crate) struct ObjectFilter {
     /// Filter for live objects by their IDs.
     pub object_ids: Option<Vec<SuiAddress>>,
 
-    /// Filter for live or potentially historical objects by their ID and version.
+    /// Filter for live objects by their ID and version.
+    /// For historical versions, use multiGetObjects query instead.
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
@@ -883,7 +884,8 @@ impl Object {
         }
     }
 
-    /// Fetch one or more objects by their id and version.
+    /// Fetch objects by their id and version. If you need to query for live objects, use the
+    /// `objects` query together with the `ObjectFilter`.
     pub(crate) async fn query_many(
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,

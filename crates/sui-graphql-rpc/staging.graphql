@@ -2884,9 +2884,10 @@ input ObjectFilter {
 	"""
 	objectIds: [SuiAddress!]
 	"""
-	Filter for live or potentially historical objects by their ID and version.
+	Filter for live objects by their ID and version.
+	For historical versions, use multiGetObjects query instead.
 	"""
-	objectKeys: [ObjectKey!] @deprecated(reason: "Use multiGetObjects instead. This field will be removed in a future release.")
+	objectKeys: [ObjectKey!]
 }
 
 input ObjectKey {
