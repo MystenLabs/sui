@@ -18,7 +18,7 @@ pub use sui_indexer::config::RetentionConfig;
 pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::PgIndexerStore;
-use sui_indexer::test_utils::start_indexer_writer_for_testing;
+use sui_indexer::test_utils::start_indexer_writer_for_testing_with_mvr_mode;
 use sui_pg_temp_db::{get_available_port, TempDb};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::RestStateReader;
@@ -125,7 +125,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
     let val_fn = start_validator_with_fullnode(data_ingestion_path.path().to_path_buf()).await;
 
     // Starts indexer
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing_with_mvr_mode(
         db_url,
         None,
         None,
@@ -133,6 +133,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
         Some(cancellation_token.clone()),
         None, /* start_checkpoint */
         None, /* end_checkpoint */
+        true,
     )
     .await;
 
@@ -182,7 +183,7 @@ pub async fn serve_executor(
 
     let snapshot_config = snapshot_config.unwrap_or_default();
 
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing_with_mvr_mode(
         db_url,
         Some(snapshot_config.clone()),
         retention_config,
@@ -190,6 +191,7 @@ pub async fn serve_executor(
         Some(cancellation_token.clone()),
         None,
         None,
+        true,
     )
     .await;
 
