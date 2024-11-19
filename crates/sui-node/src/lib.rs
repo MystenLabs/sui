@@ -35,6 +35,7 @@ use sui_core::execution_cache::build_execution_cache;
 use sui_core::state_accumulator::StateAccumulatorMetrics;
 use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
+use sui_exex::ExExManagerHandle;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
@@ -42,7 +43,6 @@ use sui_rest_api::RestMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
-use sui_types::digests::CheckpointDigest;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -267,6 +267,8 @@ pub struct SuiNode {
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
+
+    exex_manager: Option<ExExManagerHandle>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -507,18 +509,6 @@ impl SuiNode {
             )))
         };
 
-        let exex_manager = if is_full_node {
-            ExExLauncher::new(
-                ChainIdentifier::from(CheckpointDigest::random()),
-                Arc::new(cache_traits.object_store.clone()),
-                sui_exexes(),
-            )
-            .launch()
-            .await?
-        } else {
-            None
-        };
-
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -533,7 +523,6 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
-            exex_manager,
         );
 
         info!("created epoch store");
@@ -817,6 +806,14 @@ impl SuiNode {
         let connection_monitor_status = Arc::new(connection_monitor_status);
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
+        let exex_manager = if is_full_node {
+            ExExLauncher::new(Arc::new(cache_traits.object_store.clone()), sui_exexes())
+                .launch()
+                .await?
+        } else {
+            None
+        };
+
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
                 config.clone(),
@@ -872,6 +869,7 @@ impl SuiNode {
             shutdown_channel_tx: shutdown_channel,
 
             auth_agg,
+            exex_manager,
         };
 
         info!("SuiNode started!");
@@ -1571,6 +1569,7 @@ impl SuiNode {
                 accumulator.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
+                self.exex_manager.clone(),
             );
 
             let run_with_range = self.config.run_with_range;

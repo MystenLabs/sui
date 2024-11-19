@@ -23,16 +23,12 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
     let (p2p_node, consensus_rx) = setup_p2p().await?;
     Api::new([127, 0, 0, 1], consensus_rx).start().await;
 
-    tracing::info!("[node-{}] 🧩 Oracle ExEx initiated!", ctx.identifier);
+    tracing::info!("🧩 Oracle ExEx initiated!");
     while let Some(notification) = ctx.notifications.next().await {
         let checkpoint = match notification {
             ExExNotification::CheckpointSynced { checkpoint_number } => checkpoint_number,
         };
-        tracing::info!(
-            "[node-{}] 🤖 Oracle updating at checkpoint #{} !",
-            ctx.identifier,
-            checkpoint,
-        );
+        tracing::info!("🤖 Oracle updating at checkpoint #{} !", checkpoint,);
         let storage_ids = setup_storage(&ctx)?;
         fetch_and_broadcast_median(&ctx, &p2p_node, &storage_ids, checkpoint).await?;
         ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
@@ -73,12 +69,7 @@ async fn fetch_and_broadcast_median(
     let price_storages: Vec<PuiPriceStorage> = deserialize_objects(&ctx.object_store, storage_ids)?;
     let median_price = aggregate_to_median(&price_storages);
     let _ = p2p_node.broadcast_price(median_price, checkpoint).await;
-    tracing::info!(
-        "[node-{}] ✅ Executed {} in {:?}",
-        ctx.identifier,
-        checkpoint,
-        started_at.elapsed()
-    );
+    tracing::info!("✅ Executed {} in {:?}", checkpoint, started_at.elapsed());
 
     Ok(())
 }

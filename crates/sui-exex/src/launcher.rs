@@ -4,14 +4,13 @@ use futures::{
     future::{self, BoxFuture},
     FutureExt,
 };
-use sui_types::{digests::ChainIdentifier, storage::ObjectStore};
+use sui_types::storage::ObjectStore;
 
 use crate::{context::ExExContext, ExExHandle, ExExManager, ExExManagerHandle};
 
 const DEFAULT_EXEX_MANAGER_CAPACITY: usize = 16;
 
 pub struct ExExLauncher {
-    identifier: ChainIdentifier,
     object_store: Arc<dyn ObjectStore + Send + Sync>,
     extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
 }
@@ -19,12 +18,10 @@ pub struct ExExLauncher {
 impl ExExLauncher {
     /// Create a new `ExExLauncher` with the given extensions.
     pub const fn new(
-        identifier: ChainIdentifier,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
     ) -> Self {
         Self {
-            identifier,
             object_store,
             extensions,
         }
@@ -36,7 +33,6 @@ impl ExExLauncher {
     /// installed.
     pub async fn launch(self) -> anyhow::Result<Option<ExExManagerHandle>> {
         let Self {
-            identifier,
             object_store,
             extensions,
         } = self;
@@ -53,7 +49,6 @@ impl ExExLauncher {
             exex_handles.push(handle);
 
             let context = ExExContext {
-                identifier,
                 object_store: object_store.clone(),
                 events,
                 notifications,

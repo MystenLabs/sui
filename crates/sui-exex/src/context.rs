@@ -1,19 +1,12 @@
 use std::sync::Arc;
 
 use mysten_metrics::monitored_mpsc::UnboundedSender;
-use sui_types::{digests::ChainIdentifier, storage::ObjectStore};
+use sui_types::storage::ObjectStore;
 
 use crate::{notification::ExExNotifications, ExExEvent};
 
 /// Captures the context that an `ExEx` has access to.
 pub struct ExExContext {
-    /// Full-node unique identifier
-    pub identifier: ChainIdentifier,
-
-    /// TODO: "head" equivalent? In reth, points to the head of the chain:
-    /// https://github.com/paradigmxyz/reth/blob/main/crates/ethereum-forks/src/head.rs#L14
-
-    /// TODO: "config" -> the full node configuration used
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
 
     /// Channel used to send [`ExExEvent`]s to the rest of the node.

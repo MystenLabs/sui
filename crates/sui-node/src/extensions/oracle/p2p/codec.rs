@@ -1,7 +1,7 @@
-use std::io;
+use super::SignedPrice;
 use futures::prelude::*;
 use libp2p::request_response::Codec as RequestResponseCodec;
-use super::SignedPrice;
+use std::io;
 
 #[derive(Debug, Clone)]
 pub struct SignedPriceExchangeProtocol();

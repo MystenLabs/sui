@@ -139,12 +139,6 @@ impl P2PNode {
     pub async fn run(&mut self) -> Result<()> {
         loop {
             tokio::select! {
-                event = self.swarm.select_next_some() => {
-                    if let Err(e) = self.handle_swarm_event(event).await {
-                        tracing::error!("Failed to handle swarm event: {}", e);
-                    }
-                    tokio::task::yield_now().await;
-                }
                 Some(cmd) = self.command_rx.recv() => {
                     match cmd {
                         NodeCommand::BroadcastPrice(price, checkpoint) => {
@@ -153,6 +147,11 @@ impl P2PNode {
                             }
                         }
                         NodeCommand::Shutdown => break,
+                    }
+                }
+                event = self.swarm.select_next_some() => {
+                    if let Err(e) = self.handle_swarm_event(event).await {
+                        tracing::error!("Failed to handle swarm event: {}", e);
                     }
                 }
             }
@@ -208,7 +207,7 @@ impl P2PNode {
                     let _ = self.swarm.disconnect_peer_id(peer_id);
                     self.peers.remove(&peer_id);
                 }
-            },
+            }
             _ => {}
         }
         Ok(())
@@ -218,7 +217,6 @@ impl P2PNode {
         &mut self,
         message: RequestResponseMessage<SignedPrice, ()>,
     ) -> Result<()> {
-        let started_at = std::time::Instant::now();
         let price: SignedPrice = match message {
             RequestResponseMessage::Request { request, .. } => request,
             _ => return Ok(()),
@@ -230,9 +228,6 @@ impl P2PNode {
             return Ok(());
         }
 
-        tracing::info!("⛓️‍💥 Adding signed price from peer!");
-
-        // Process the price and check for consensus
         if let Some((checkpoint, consensus_price)) = self.price_consensus.add_price(price) {
             tracing::info!(checkpoint, "Reached consensus");
 
@@ -246,16 +241,17 @@ impl P2PNode {
                 }
             }
         }
-        tracing::info!("Processed p2p in {:?}", started_at.elapsed());
         Ok(())
     }
 
     async fn broadcast_price(&mut self, price: MedianPrice, checkpoint: u64) -> Result<()> {
-        let signature = self.keypair.sign(&bcs::to_bytes(&price)?)?;
+        if self.peers.is_empty() {
+            return Ok(());
+        }
 
         let signed_price = SignedPrice {
+            signature: self.keypair.sign(&bcs::to_bytes(&price)?)?,
             price,
-            signature,
             peer_id: self.swarm.local_peer_id().to_string(),
             checkpoint,
         };
