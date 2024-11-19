@@ -6,8 +6,8 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use sui_graphql_rpc::config::Limits;
-use sui_graphql_rpc::test_infra::cluster::{prep_executor_cluster, ExecutorCluster};
+use sui_mvr_graphql_rpc::config::Limits;
+use sui_mvr_graphql_rpc::test_infra::cluster::{prep_executor_cluster, ExecutorCluster};
 
 struct Example {
     contents: String,

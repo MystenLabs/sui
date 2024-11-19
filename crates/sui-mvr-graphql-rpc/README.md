@@ -1,4 +1,4 @@
-# sui-graphql-rpc
+# sui-mvr-graphql-rpc
 
 ## Dev setup
 Note that we use compilation flags to determine the backend for Diesel. If you're using VS Code, make sure to update settings.json with the appropriate features - there should at least be a "pg_backend" (or other backend.)
@@ -6,11 +6,11 @@ Note that we use compilation flags to determine the backend for Diesel. If you'r
 "rust-analyzer.cargo.features": ["pg_backend"]
 ```
 Consequently, you'll also need to specify the backend when running cargo commands:
-```cargo run --features "pg_backend" --bin sui-graphql-rpc start-server --db-url <DB_URL>```
+```cargo run --features "pg_backend" --bin sui-mvr-graphql-rpc start-server --db-url <DB_URL>```
 
 The order is important:
 1. --features "pg_backend": This part tells Cargo to enable the pg_backend feature.
-2. --bin sui-graphql-rpc: This specifies which binary to run.
+2. --bin sui-mvr-graphql-rpc: This specifies which binary to run.
 3. start-server --db-url: These are arguments to the binary.
 
 ## Spinning up locally
@@ -58,9 +58,9 @@ max-move-value-depth = 128
 watermark-update-ms=500
 ```
 
-This will build sui-graphql-rpc and start an IDE:
+This will build sui-mvr-graphql-rpc and start an IDE:
 ```
-cargo run --bin sui-graphql-rpc start-server [--rpc-url] [--db-url] [--port] [--host] [--config]
+cargo run --bin sui-mvr-graphql-rpc start-server [--rpc-url] [--db-url] [--port] [--host] [--config]
 ```
 
 ### Launching the server w/ indexer
@@ -75,4 +75,4 @@ For local dev, it might be useful to spin up an indexer as well. Instructions ar
 ## Testing
 The full gamut of graphql-specific tests are listed in the [rust.yml](../../.github/workflows/rust.yml).
 
-To run the tests in `sui-graphql-rpc`, you will need to have postgres running locally.
+To run the tests in `sui-mvr-graphql-rpc`, you will need to have postgres running locally.

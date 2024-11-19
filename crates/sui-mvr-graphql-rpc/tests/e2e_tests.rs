@@ -8,12 +8,12 @@ use serde_json::json;
 use simulacrum::Simulacrum;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
-use sui_graphql_rpc::client::ClientError;
-use sui_graphql_rpc::config::Limits;
-use sui_graphql_rpc::config::ServiceConfig;
-use sui_graphql_rpc::test_infra::cluster::prep_executor_cluster;
-use sui_graphql_rpc::test_infra::cluster::start_cluster;
+use sui_mvr_graphql_rpc::client::simple_client::GraphqlQueryVariable;
+use sui_mvr_graphql_rpc::client::ClientError;
+use sui_mvr_graphql_rpc::config::Limits;
+use sui_mvr_graphql_rpc::config::ServiceConfig;
+use sui_mvr_graphql_rpc::test_infra::cluster::prep_executor_cluster;
+use sui_mvr_graphql_rpc::test_infra::cluster::start_cluster;
 use sui_types::digests::ChainIdentifier;
 use sui_types::gas_coin::GAS;
 use sui_types::transaction::CallArg;
@@ -83,16 +83,12 @@ async fn test_simple_client_simulator_cluster() {
         "{{\"data\":{{\"chainIdentifier\":\"{}\"}}}}",
         chain_id_actual
     );
-    let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+    let cluster = sui_mvr_graphql_rpc::test_infra::cluster::serve_executor(
         Arc::new(sim),
         None,
         None,
         data_ingestion_path.path().to_path_buf(),
-    )
-    .await;
-    cluster
         .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
-        .await;
 
     let query = r#"
             {
@@ -789,7 +785,7 @@ async fn test_epoch_live_object_set_digest() {
 #[tokio::test]
 async fn test_payload_using_vars_mutation_passes() {
     telemetry_subscribers::init_for_testing();
-    let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(ServiceConfig {
+    let cluster = sui_mvr_graphql_rpc::test_infra::cluster::start_cluster(ServiceConfig {
         limits: Limits {
             max_query_payload_size: 5000,
             max_tx_payload_size: 6000,

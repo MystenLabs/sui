@@ -4,7 +4,7 @@
 use insta::assert_snapshot;
 use std::fs;
 use std::path::PathBuf;
-use sui_graphql_rpc::server::builder::export_schema;
+use sui_mvr_graphql_rpc::server::builder::export_schema;
 
 #[test]
 fn test_schema_sdl_export() {

@@ -8,8 +8,8 @@ use crate::config::{ConnectionConfig, Ide, TxExecFullNodeConfig};
 
 #[derive(Parser)]
 #[clap(
-    name = "sui-graphql-rpc",
-    about = "Sui GraphQL RPC",
+    name = "sui-mvr-graphql-rpc",
+    about = "Sui MVR GraphQL RPC",
     rename_all = "kebab-case",
     author,
     version

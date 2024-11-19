@@ -1,5 +1,5 @@
 [package]
-name = "sui-graphql-rpc"
+name = "sui-mvr-graphql-rpc"
 version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
