@@ -41,7 +41,11 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
+use crate::models::objects::StoredHistoryObject;
+use crate::models::objects::StoredObjectSnapshot;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
+use crate::schema::objects_history;
+use crate::schema::objects_snapshot;
 use crate::schema::pruner_cp_watermark;
 use crate::schema::tx_digests;
 use crate::{
@@ -117,17 +121,40 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
-        let mut query = objects::table
-            .filter(objects::object_id.eq(object_id.to_vec()))
+        let mut history_query = objects_history::table
+            .filter(objects_history::dsl::object_id.eq(object_id.to_vec()))
             .into_boxed();
+
         if let Some(version) = version {
-            query = query.filter(objects::object_version.eq(version.value() as i64))
+            history_query = history_query
+                .filter(objects_history::dsl::object_version.eq(version.value() as i64));
         }
 
-        query
-            .first::<StoredObject>(&mut connection)
+        let history_latest = history_query
+            .order_by(objects_history::dsl::object_version.desc())
+            .first::<StoredHistoryObject>(&mut connection)
             .await
-            .optional()
+            .optional()?;
+
+        if let Some(history_record) = history_latest {
+            return Ok(Some(history_record.try_into()?));
+        }
+
+        let mut snapshot_query = objects_snapshot::table
+            .filter(objects_snapshot::dsl::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+
+        if let Some(version) = version {
+            snapshot_query = snapshot_query
+                .filter(objects_snapshot::dsl::object_version.eq(version.value() as i64));
+        }
+
+        snapshot_query
+            .first::<StoredObjectSnapshot>(&mut connection)
+            .await
+            .optional()?
+            .map(|o| o.try_into())
+            .transpose()
             .map_err(Into::into)
     }
 
@@ -1464,16 +1491,38 @@ impl ConnectionAsObjectStore {
         let connection: &mut diesel_async::async_connection_wrapper::AsyncConnectionWrapper<_> =
             &mut guard;
 
-        let mut query = objects::table
-            .filter(objects::object_id.eq(object_id.to_vec()))
+        let mut history_query = objects_history::table
+            .filter(objects_history::dsl::object_id.eq(object_id.to_vec()))
             .into_boxed();
+
         if let Some(version) = version {
-            query = query.filter(objects::object_version.eq(version.value() as i64))
+            history_query = history_query
+                .filter(objects_history::dsl::object_version.eq(version.value() as i64));
         }
 
-        query
-            .first::<StoredObject>(connection)
-            .optional()
+        let history_latest = history_query
+            .order_by(objects_history::dsl::object_version.desc())
+            .first::<StoredHistoryObject>(connection)
+            .optional()?;
+
+        if let Some(history_record) = history_latest {
+            return Ok(Some(history_record.try_into()?));
+        }
+
+        let mut snapshot_query = objects_snapshot::table
+            .filter(objects_snapshot::dsl::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+
+        if let Some(version) = version {
+            snapshot_query = snapshot_query
+                .filter(objects_snapshot::dsl::object_version.eq(version.value() as i64));
+        }
+
+        snapshot_query
+            .first::<StoredObjectSnapshot>(connection)
+            .optional()?
+            .map(|o| o.try_into())
+            .transpose()
             .map_err(Into::into)
     }
 

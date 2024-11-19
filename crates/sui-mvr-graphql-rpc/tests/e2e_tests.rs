@@ -23,7 +23,6 @@ use sui_types::DEEPBOOK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use tempfile::tempdir;
-use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_simple_client_validator_cluster() {
@@ -676,10 +675,7 @@ async fn test_epoch_live_object_set_digest() {
         .await
         .unwrap();
 
-    println!("res: {:?}", res);
-
     let binding = res.response_body().data.clone().into_json().unwrap();
-    println!("binding: {:?}", binding);
 
     // Check that liveObjectSetDigest is not null
     assert!(!binding
