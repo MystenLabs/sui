@@ -2899,9 +2899,10 @@ input ObjectFilter {
 	"""
 	objectIds: [SuiAddress!]
 	"""
-	Filter for live or potentially historical objects by their ID and version.
+	Filter for live objects by their ID and version.
+	For historical versions, use multiGetObjects query instead.
 	"""
-	objectKeys: [ObjectKey!] @deprecated(reason: "Use multiGetObjects instead. This field will be removed in a future release.")
+	objectKeys: [ObjectKey!]
 }
 
 input ObjectKey {
@@ -3419,10 +3420,10 @@ type Query {
 	- `author` is the address of the signer of the transaction or personal msg.
 	"""
 	verifyZkloginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
-  """
-  Fetch a list of objects by their IDs and versions.
-  """
-  multiGetObjects(keys: [ObjectKey!]!): [Object!]!
+	"""
+	Fetch a list of objects by their IDs and versions.
+	"""
+	multiGetObjects(objectKeys: [ObjectKey!]!): [Object!]!
 }
 
 type RandomnessStateCreateTransaction {
@@ -3602,6 +3603,11 @@ type ServiceConfig {
 	Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
 	"""
 	maxTransactionIds: Int!
+	"""
+	Maximum number of keys that can be passed to a `multiGet` query or to a
+	`TransactionBlockFilter`.
+	"""
+	maxMultiGetKeys: Int!
 	"""
 	Maximum number of candidates to scan when gathering a page of results.
 	"""
