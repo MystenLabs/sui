@@ -64,17 +64,18 @@ serde_json.workspace = true
 tower-http = { version = "0.6.1", features = ["cors"] }
 libp2p = { version = "0.54.1", features = [
     "tokio",
-    "kad",
-    "gossipsub",
+    "request-response",
     "noise",
     "tcp",
     "mdns",
     "yamux",
     "identify",
     "macros",
-    "quic"
+    "quic",
+    "cbor",
 ]}
 async-trait = "0.1.83"
+dashmap = "6.1.0"
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

@@ -1,27 +1,30 @@
+pub mod codec;
+
+use codec::*;
+use dashmap::DashMap;
+use libp2p::request_response::ProtocolSupport;
+use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
+
 use std::collections::{BTreeMap, HashMap};
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::time::Duration;
 
 use anyhow::Result;
 use futures::StreamExt;
 use libp2p::{
-    gossipsub::{
-        self, Behaviour as Gossipsub, Event as GossipsubEvent, IdentTopic,
-        Message as GossipsubMessage, MessageAuthenticity, MessageId, ValidationMode,
-    },
     identify,
     identity::Keypair,
     mdns,
+    request_response::{
+        self, Behaviour as RequestResponse, Event as RequestResponseEvent,
+        Message as RequestResponseMessage,
+    },
     swarm::{NetworkBehaviour, SwarmEvent},
     Multiaddr, PeerId, SwarmBuilder,
 };
 use serde::{Deserialize, Serialize};
+
 use tokio::sync::mpsc::{self, error::TrySendError};
 
 use super::MedianPrice;
-
-const PRICE_TOPIC: &str = "v1/oracle/price";
 
 /// Runs the P2P node and returns the handle (used to broadcast price to the network
 /// or stop the P2P node) along with the receiver of the consensus prices, mainly used
@@ -42,7 +45,7 @@ pub async fn setup_p2p() -> Result<(P2PNodeHandle, mpsc::Receiver<MedianPrice>)>
 
 #[derive(NetworkBehaviour)]
 struct OracleBehaviour {
-    gossipsub: Gossipsub,
+    request_response: RequestResponse<SignedPriceExchangeCodec>,
     mdns: mdns::tokio::Behaviour,
     identify: identify::Behaviour,
 }
@@ -79,7 +82,7 @@ pub struct P2PNode {
     consensus_sender: mpsc::Sender<MedianPrice>,
     keypair: Keypair,
     command_rx: mpsc::UnboundedReceiver<NodeCommand>,
-    price_topic: IdentTopic,
+    peers: DashMap<PeerId, Multiaddr>,
 }
 
 impl P2PNode {
@@ -93,38 +96,21 @@ impl P2PNode {
             .with_tokio()
             .with_quic()
             .with_behaviour(|_| {
-                let gossipsub_config = gossipsub::ConfigBuilder::default()
-                    .validation_mode(ValidationMode::Strict)
-                    .message_id_fn(|message: &GossipsubMessage| {
-                        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                        message.data.hash(&mut hasher);
-                        message.sequence_number.hash(&mut hasher);
-                        MessageId::from(hasher.finish().to_be_bytes())
-                    })
-                    .flood_publish(false)
-                    .history_length(1)
-                    .history_gossip(1)
-                    .heartbeat_interval(Duration::from_secs(60))
-                    .validate_messages()
-                    .build()
-                    .expect("Invalid GossipSub Config");
-
-                let gossipsub = Gossipsub::new(
-                    MessageAuthenticity::Signed(keypair.clone()),
-                    gossipsub_config,
-                )
-                .unwrap();
+                let request_response = RequestResponse::new(
+                    std::iter::once((SignedPriceExchangeProtocol(), ProtocolSupport::Full)),
+                    request_response::Config::default(),
+                );
 
                 let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)
                     .expect("Failed to create mDNS behaviour");
 
                 let identify = identify::Behaviour::new(identify::Config::new(
-                    "/oracle/1.0.0".into(),
+                    "/pragma/oracle/1.0.0".into(),
                     keypair.public(),
                 ));
 
                 Ok(OracleBehaviour {
-                    gossipsub,
+                    request_response,
                     mdns,
                     identify,
                 })
@@ -136,9 +122,6 @@ impl P2PNode {
         let local_addr: Multiaddr = "/ip4/127.0.0.1/udp/0/quic-v1".parse()?;
         swarm.listen_on(local_addr)?;
 
-        let topic = gossipsub::IdentTopic::new(PRICE_TOPIC);
-        swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
-
         let (command_tx, command_rx) = mpsc::unbounded_channel();
 
         let node = Self {
@@ -147,7 +130,7 @@ impl P2PNode {
             consensus_sender,
             keypair,
             command_rx,
-            price_topic: topic,
+            peers: DashMap::new(),
         };
 
         Ok((node, command_tx))
@@ -156,22 +139,24 @@ impl P2PNode {
     pub async fn run(&mut self) -> Result<()> {
         loop {
             tokio::select! {
+                event = self.swarm.select_next_some() => {
+                    if let Err(e) = self.handle_swarm_event(event).await {
+                        tracing::error!("Failed to handle swarm event: {}", e);
+                    }
+                    tokio::task::yield_now().await;
+                }
                 Some(cmd) = self.command_rx.recv() => {
                     match cmd {
                         NodeCommand::BroadcastPrice(price, checkpoint) => {
-                            let _ = self.broadcast_price(price, checkpoint).await;
+                            if let Err(e) = self.broadcast_price(price, checkpoint).await {
+                                tracing::error!("Failed to broadcast price: {}", e);
+                            }
                         }
                         NodeCommand::Shutdown => break,
                     }
                 }
-                event = self.swarm.select_next_some() => {
-                    if let Err(e) = self.handle_swarm_event(event).await {
-                        tracing::error!(%e, "Failed to handle swarm event");
-                    }
-                }
             }
         }
-
         Ok(())
     }
 
@@ -189,56 +174,63 @@ impl P2PNode {
 
     async fn handle_swarm_behaviour(&mut self, behaviour: OracleBehaviourEvent) -> Result<()> {
         match behaviour {
-            OracleBehaviourEvent::Gossipsub(GossipsubEvent::Message { message, .. }) => {
-                if let Err(e) = self.handle_gossip_message(message).await {
+            OracleBehaviourEvent::RequestResponse(RequestResponseEvent::Message {
+                message,
+                ..
+            }) => {
+                if let Err(e) = self.handle_p2p_message(message).await {
                     tracing::error!(%e, "Failed to handle gossip message");
                 }
             }
             OracleBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
-                for (peer_id, _) in peers {
-                    self.swarm
-                        .behaviour_mut()
-                        .gossipsub
-                        .add_explicit_peer(&peer_id);
+                for (peer_id, addr) in peers {
+                    let dial_opts = DialOpts::peer_id(peer_id)
+                        .condition(PeerCondition::DisconnectedAndNotDialing)
+                        .addresses(vec![addr.clone()])
+                        .build();
+                    let _ = self.swarm.dial(dial_opts);
+                    self.peers.insert(peer_id, addr);
                 }
             }
             OracleBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
-                for (peer_id, _) in peers {
-                    self.swarm
-                        .behaviour_mut()
-                        .gossipsub
-                        .remove_explicit_peer(&peer_id);
+                for peer in peers {
+                    let _ = self.swarm.disconnect_peer_id(peer.0);
+                    self.peers.remove(&peer.0);
                 }
             }
             OracleBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. }) => {
-                if info
-                    .protocols
-                    .iter()
-                    .any(|p| p.to_string().contains("gossipsub"))
-                {
-                    self.swarm
-                        .behaviour_mut()
-                        .gossipsub
-                        .add_explicit_peer(&peer_id);
+                if &peer_id == self.swarm.local_peer_id() {
+                    return Ok(());
                 }
-            }
+                // Ignore peers that are not using the Signed Price Protocol
+                if &info.protocol_version != SignedPriceExchangeProtocol().as_ref() {
+                    tracing::info!("DELETING PEER");
+                    let _ = self.swarm.disconnect_peer_id(peer_id);
+                    self.peers.remove(&peer_id);
+                }
+            },
             _ => {}
         }
         Ok(())
     }
 
-    async fn handle_gossip_message(&mut self, message: gossipsub::Message) -> Result<()> {
-        let price: SignedPrice = serde_json::from_slice(&message.data)?;
+    async fn handle_p2p_message(
+        &mut self,
+        message: RequestResponseMessage<SignedPrice, ()>,
+    ) -> Result<()> {
+        let started_at = std::time::Instant::now();
+        let price: SignedPrice = match message {
+            RequestResponseMessage::Request { request, .. } => request,
+            _ => return Ok(()),
+        };
 
-        // Ignore our own messages
-        if price.peer_id == self.swarm.local_peer_id().to_string() {
-            return Ok(());
-        }
-
-        // Ignore old messages
+        // TODO: Verify signature
+        // TODO: Ask other node that they really have the price
         if price.checkpoint < self.price_consensus.earliest_checkpoint() {
             return Ok(());
         }
+
+        tracing::info!("⛓️‍💥 Adding signed price from peer!");
 
         // Process the price and check for consensus
         if let Some((checkpoint, consensus_price)) = self.price_consensus.add_price(price) {
@@ -254,7 +246,7 @@ impl P2PNode {
                 }
             }
         }
-
+        tracing::info!("Processed p2p in {:?}", started_at.elapsed());
         Ok(())
     }
 
@@ -267,12 +259,13 @@ impl P2PNode {
             peer_id: self.swarm.local_peer_id().to_string(),
             checkpoint,
         };
-        let message = serde_json::to_vec(&signed_price)?;
 
-        self.swarm
-            .behaviour_mut()
-            .gossipsub
-            .publish(self.price_topic.clone(), message)?;
+        for peer in self.peers.iter() {
+            self.swarm
+                .behaviour_mut()
+                .request_response
+                .send_request(&peer.key(), signed_price.clone());
+        }
         self.price_consensus.add_price(signed_price);
 
         Ok(())
