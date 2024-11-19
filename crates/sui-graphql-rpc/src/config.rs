@@ -122,9 +122,8 @@ pub struct Limits {
     pub max_move_value_depth: u32,
     /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
     pub max_transaction_ids: u32,
-    /// Maximum number of keys that can be passed to a `multiGet` query or to a
-    /// `TransactionBlockFilter`.
-    pub max_multi_get_keys: u32,
+    /// Maximum number of keys that can be passed to a `multiGetObjects` query.
+    pub max_multi_get_objects_keys: u32,
     /// Maximum number of candidates to scan when gathering a page of results.
     pub max_scan_limit: u32,
 }
@@ -346,10 +345,9 @@ impl ServiceConfig {
         self.limits.max_transaction_ids
     }
 
-    /// Maximum number of keys that can be passed to a `multiGet` query or to a
-    /// `TransactionBlockFilter`.
-    async fn max_multi_get_keys(&self) -> u32 {
-        self.limits.max_multi_get_keys
+    /// Maximum number of keys that can be passed to a `multiGetObjects` query.
+    async fn max_multi_get_objects_keys(&self) -> u32 {
+        self.limits.max_multi_get_objects_keys
     }
 
     /// Maximum number of candidates to scan when gathering a page of results.
@@ -502,7 +500,7 @@ impl Default for Limits {
             max_db_query_cost: 20_000,
             default_page_size: 20,
             max_page_size,
-            max_multi_get_keys: max_page_size, // keep the same as max_page_size
+            max_multi_get_objects_keys: max_page_size, // keep the same as max_page_size
             // This default was picked as the sum of pre- and post- quorum timeouts from
             // [`sui_core::authority_aggregator::TimeoutConfig`], with a 10% buffer.
             //
@@ -628,7 +626,7 @@ mod tests {
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
                 max_transaction_ids: 11,
-                max_multi_get_keys: 11,
+                max_multi_get_objects_keys: 11,
                 max_scan_limit: 50,
             },
             ..Default::default()
@@ -721,7 +719,7 @@ mod tests {
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
                 max_transaction_ids: 42,
-                max_multi_get_keys: 42,
+                max_multi_get_objects_keys: 42,
                 max_scan_limit: 420,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
