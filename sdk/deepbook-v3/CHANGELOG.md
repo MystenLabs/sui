@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.10
+
+### Patch Changes
+
+- 46bdaf9: Typus coin type
+
 ## 0.12.9
 
 ### Patch Changes
