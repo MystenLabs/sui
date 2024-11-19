@@ -4,6 +4,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 
 use move_core_types::account_address::AccountAddress;
+use sui_exex::context::ExExStore;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     collection_types::{VecMap, VecSet},
@@ -35,10 +36,10 @@ pub struct PuiRegistry {
 }
 
 pub fn deserialize_object<'a, T: Deserialize<'a>>(
-    object_store: &Arc<dyn ObjectStore + Send + Sync>,
+    store: &Arc<dyn ExExStore>,
     address: AccountAddress,
 ) -> anyhow::Result<T> {
-    let object = object_store
+    let object = store
         .get_object(&ObjectID::from_address(address))?
         .context("Fetching the object")?;
 
@@ -52,10 +53,10 @@ pub fn deserialize_object<'a, T: Deserialize<'a>>(
 }
 
 pub fn deserialize_objects<'a, T: Deserialize<'a>>(
-    object_store: &Arc<dyn ObjectStore + Send + Sync>,
+    store: &Arc<dyn ExExStore>,
     ids: &[ObjectID],
 ) -> anyhow::Result<Vec<T>> {
-    let objects = object_store
+    let objects = store
         .multi_get_objects(&ids)
         .context("Fetching the objects")?;
 

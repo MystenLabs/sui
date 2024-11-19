@@ -4,27 +4,26 @@ use futures::{
     future::{self, BoxFuture},
     FutureExt,
 };
-use sui_types::storage::ObjectStore;
 
-use crate::{context::ExExContext, ExExHandle, ExExManager, ExExManagerHandle};
+use crate::{
+    context::{ExExContext, ExExStore},
+    ExExHandle, ExExManager, ExExManagerHandle,
+};
 
 const DEFAULT_EXEX_MANAGER_CAPACITY: usize = 16;
 
 pub struct ExExLauncher {
-    object_store: Arc<dyn ObjectStore + Send + Sync>,
+    store: Arc<dyn ExExStore>,
     extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
 }
 
 impl ExExLauncher {
     /// Create a new `ExExLauncher` with the given extensions.
     pub const fn new(
-        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        store: Arc<dyn ExExStore>,
         extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
     ) -> Self {
-        Self {
-            object_store,
-            extensions,
-        }
+        Self { store, extensions }
     }
 
     /// Launches all execution extensions.
@@ -32,10 +31,7 @@ impl ExExLauncher {
     /// Spawns all extensions and returns the handle to the exex manager if any extensions are
     /// installed.
     pub async fn launch(self) -> anyhow::Result<Option<ExExManagerHandle>> {
-        let Self {
-            object_store,
-            extensions,
-        } = self;
+        let Self { store, extensions } = self;
 
         if extensions.is_empty() {
             return Ok(None);
@@ -49,7 +45,7 @@ impl ExExLauncher {
             exex_handles.push(handle);
 
             let context = ExExContext {
-                object_store: object_store.clone(),
+                store: store.clone(),
                 events,
                 notifications,
             };

@@ -43,8 +43,8 @@ fn setup_storage(ctx: &ExExContext) -> anyhow::Result<Vec<ObjectID>> {
     let registry_id =
         AccountAddress::from_hex(REGISTRY_ID).context("Serializing the Account Address")?;
 
-    let oracle_registry: PuiRegistry = deserialize_object(&ctx.object_store, registry_id)
-        .context("Fetching the Oracle PuiRegistry")?;
+    let oracle_registry: PuiRegistry =
+        deserialize_object(&ctx.store, registry_id).context("Fetching the Oracle PuiRegistry")?;
 
     let storage_ids = oracle_registry
         .publishers_storages
@@ -66,7 +66,7 @@ async fn fetch_and_broadcast_median(
 ) -> anyhow::Result<()> {
     let started_at = std::time::Instant::now();
 
-    let price_storages: Vec<PuiPriceStorage> = deserialize_objects(&ctx.object_store, storage_ids)?;
+    let price_storages: Vec<PuiPriceStorage> = deserialize_objects(&ctx.store, storage_ids)?;
     let median_price = aggregate_to_median(&price_storages);
     let _ = p2p_node.broadcast_price(median_price, checkpoint).await;
     tracing::info!("✅ Executed {} in {:?}", checkpoint, started_at.elapsed());

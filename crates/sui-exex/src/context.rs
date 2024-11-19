@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use mysten_metrics::monitored_mpsc::UnboundedSender;
-use sui_types::storage::ObjectStore;
+use sui_types::storage::{ObjectStore, ReadStore, WriteStore};
 
 use crate::{notification::ExExNotifications, ExExEvent};
 
+pub trait ExExStore: ObjectStore + WriteStore + ReadStore + Send + Sync {}
+
 /// Captures the context that an `ExEx` has access to.
 pub struct ExExContext {
-    pub object_store: Arc<dyn ObjectStore + Send + Sync>,
-
+    pub store: Arc<dyn ExExStore>,
     /// Channel used to send [`ExExEvent`]s to the rest of the node.
     ///
     /// # Important

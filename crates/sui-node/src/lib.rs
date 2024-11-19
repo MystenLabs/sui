@@ -766,7 +766,7 @@ impl SuiNode {
 
         let http_server = build_http_server(
             state.clone(),
-            state_sync_store,
+            state_sync_store.clone(),
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
@@ -807,7 +807,7 @@ impl SuiNode {
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         let exex_manager = if is_full_node {
-            ExExLauncher::new(Arc::new(cache_traits.object_store.clone()), sui_exexes())
+            ExExLauncher::new(Arc::new(state_sync_store), sui_exexes())
                 .launch()
                 .await?
         } else {
