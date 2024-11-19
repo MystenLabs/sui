@@ -263,8 +263,7 @@ impl UncommittedData {
 }
 
 // TODO: set this via the config
-static MAX_CACHE_SIZE: u64 = 10000;
-
+static MAX_CACHE_SIZE: u64 = 50;
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
