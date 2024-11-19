@@ -16,7 +16,10 @@ module a::m {
     fun valid() {
         // no errors!
         // a new s is made for each usage of the arg
-        foo!({ let mut s = S { f: 0 }; &mut s });
+        foo!({
+            let mut s = S { f: 0 };
+            &mut s
+        });
     }
 
     fun invalid() {
@@ -24,6 +27,4 @@ module a::m {
         let mut s = S { f: 0 };
         foo!(&mut s);
     }
-
-
 }

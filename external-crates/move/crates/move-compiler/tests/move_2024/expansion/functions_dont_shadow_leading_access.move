@@ -5,6 +5,7 @@ module a::f {
 
 module a::with_module {
     fun f() {}
+
     fun x() {}
 
     fun t() {

@@ -4,6 +4,7 @@ module a::m {
     public struct X() has drop;
 
     public fun a(_: u64): A { A() }
+
     public fun b(_: u64): B { B() }
 
     use fun a as u64.foo;
@@ -25,7 +26,6 @@ module a::m {
             res
         }
     }
-
 }
 
 module b::other {

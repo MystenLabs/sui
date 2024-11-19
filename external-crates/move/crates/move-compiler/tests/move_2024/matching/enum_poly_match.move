@@ -1,10 +1,9 @@
 module 0x42::m {
-
     public enum Threes<T> has drop {
         Zero,
         One(T),
         Two(T, T),
-        Three(T, T, T)
+        Three(T, T, T),
     }
 
     fun t0(): u64 {
@@ -15,5 +14,4 @@ module 0x42::m {
             Threes::Zero => 64,
         }
     }
-
 }

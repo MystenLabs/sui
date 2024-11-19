@@ -1,6 +1,6 @@
 module 0x8675309::M {
     struct R {
-        f: bool
+        f: bool,
     }
 
     fun t0(x: bool, r: R) {
@@ -10,6 +10,6 @@ module 0x8675309::M {
         !copy x;
         !move x;
         !r.f;
-        let R {f: _} = r;
+        let R { f: _ } = r;
     }
 }

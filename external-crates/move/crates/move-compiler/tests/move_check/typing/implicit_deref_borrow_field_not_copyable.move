@@ -5,10 +5,9 @@ module 0x8675309::M {
 
     fun t1(b: B, bref: &B) {
         (b.s: S);
-        R{} = b.r;
+        R {} = b.r;
 
         (bref.s: S);
-        R{} = bref.r;
+        R {} = bref.r;
     }
-
 }

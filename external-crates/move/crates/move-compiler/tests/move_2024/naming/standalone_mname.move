@@ -1,5 +1,6 @@
 module 0x8675309::M {
     fun foo() {
-        let m = M; m;
+        let m = M;
+        m;
     }
 }

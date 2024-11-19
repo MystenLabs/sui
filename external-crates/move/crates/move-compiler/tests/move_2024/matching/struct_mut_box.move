@@ -1,5 +1,4 @@
 module 0x42::m {
-
     public struct Box { value: u64 }
 
     public fun test(b: &mut Box) {
@@ -10,5 +9,4 @@ module 0x42::m {
             _ => (),
         }
     }
-
 }

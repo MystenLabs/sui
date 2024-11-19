@@ -6,7 +6,6 @@ module 0x8675309::M {
         y;
         x;
     }
-
 }
 
 // check: STLOC_UNSAFE_TO_DESTROY_ERROR

@@ -1,5 +1,4 @@
 module a::invalid0 {
-
     struct S has drop { t: vector<u64> }
 
     #[allow(unused_variable)]
@@ -9,11 +8,9 @@ module a::invalid0 {
     #[allow(unused_variable)]
     #[syntax(index)]
     public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 { abort 0 }
-
 }
 
 module a::invalid1 {
-
     #[syntax(index)]
     struct S has drop { t: vector<u64> }
 
@@ -28,7 +25,4 @@ module a::invalid1 {
     #[allow(unused_variable)]
     #[syntax(nonsense)]
     public fun nonsense_t(s: &mut S, i: u64): &mut u64 { abort 0 }
-
 }
-
-

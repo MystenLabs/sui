@@ -7,5 +7,4 @@ module a::m {
     }
 
     struct Positional(u64, u64, u64)
-
 }

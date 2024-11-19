@@ -1,4 +1,4 @@
-module 0x42::m { 
+module 0x42::m {
     fun f() {
         assert(false);
     }

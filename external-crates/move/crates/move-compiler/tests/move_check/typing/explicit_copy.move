@@ -4,7 +4,7 @@ module 0x8675309::M {
 
     fun t() {
         let u = 0;
-        let s = S{};
+        let s = S {};
         (copy u: u64);
         (copy s: S);
         s;

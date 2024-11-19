@@ -38,13 +38,16 @@ module a::m {
 
         let x5 = 0;
         x5;
-        x5 = { let x5 = 0; x5 }; // different x's
+        x5 = {
+                let x5 = 0;
+                x5
+            }; // different x's
         x5;
     }
 
-
     struct S has copy, drop { f1: u64, f2: u64 }
     struct P has copy, drop { s1: S, s2: S }
+
     fun fields(m1: &mut S, m2: &mut S, s1: S, s2: S) {
         s1.f1 = s1.f2; // different fields
         m1.f1 = m1.f2; // different fields

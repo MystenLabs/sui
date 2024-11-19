@@ -1,20 +1,20 @@
-
 #[defines_primitive(vector)]
 module std::vector {
     #[syntax(index)]
-    native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+    public native fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
     #[syntax(index)]
-    native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    public native fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 }
 
 module a::m {
-
     fun id_w(w: W): W { w }
+
     fun id(x: X): X { x }
 
-    fun ref_unused(_x: &X) { }
+    fun ref_unused(_x: &X) {}
 
     fun deref_w(w: &W): W { *w }
+
     fun deref(x: &X): X { *x }
 
     public struct T has copy, drop {
@@ -31,13 +31,13 @@ module a::m {
     }
 
     public struct X has copy, drop {
-        y: Y
+        y: Y,
     }
     public struct Y has copy, drop {
-        z: Z
+        z: Z,
     }
     public struct Z has copy, drop {
-        f: u64
+        f: u64,
     }
 
     fun all_index_copy(t: T, n: u64, m: u64) {
@@ -108,24 +108,20 @@ module a::m {
         (move t2).u;
     }
 
-
     fun all_index_move_01(t: T, t2: T) {
         (move t).u.vs[2];
         (move t2).u.vs[2];
     }
-
 
     fun all_index_move_02(t: T, t2: T, n: u64) {
         (move t).u.vs[n].w;
         (move t2).u.vs[2];
     }
 
-
     fun all_index_move_03(t: T, t2: T, n: u64) {
         (move t).u.vs[n].w;
         (move t2).u.vs[2].w;
     }
-
 
     fun all_index_move_04(t: T, t2: T, n: u64, m: u64) {
         ((move t).u.vs[n]).w.xs[m+1];
@@ -137,16 +133,13 @@ module a::m {
         (move t2).u.vs[2].w.xs[m+1].id();
     }
 
-
     fun all_index_move_06(t: T, t2: T, n: u64, m: u64) {
         ((move t).u.vs[n]).w.xs[m+1].y;
         (move t2).u.vs[2].w.xs[m+1].y;
     }
 
-
     fun all_index_move_07(t: T, t2: T, n: u64, m: u64) {
         ((move t).u.vs[n]).w.xs[m+1].y.z;
         (move t2).u.vs[2].w.xs[m+1].y.z;
     }
-
 }

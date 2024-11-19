@@ -1,0 +1,29 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/parser/decimal_address.move: Error: tree-sitter failure on 
+[error] ```
+[error] // Addresses can be decimal numbers
+[error] address 123 {
+[error] module M {
+[error]     struct S {}
+[error]     public fun nop() {}
+[error]     public fun bar(): S { S{} }
+[error] }
+[error] }
+[error] module 123::N {
+[error]     use 123::M;
+[error]     use 123::M::S;
+[error]     fun foo(): 123::M::S {
+[error]         M::nop();
+[error]         (123::M::bar(): S)
+[error]     }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

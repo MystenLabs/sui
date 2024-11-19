@@ -1,5 +1,4 @@
 module 0x42::m {
-
     public enum ABC<T> has drop {
         A(T),
         B(T, T),
@@ -14,5 +13,4 @@ module 0x42::m {
             ABC::B(x, 5) | ABC::A(x) | ABC::D(5, _, x, _) => x,
         }
     }
-
 }

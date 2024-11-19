@@ -1,7 +1,7 @@
 // entry functions are public if called from test or test_only
 
 module a::m {
-    entry fun internal(_ :u64) {}
+    entry fun internal(_: u64) {}
 }
 
 #[test_only]

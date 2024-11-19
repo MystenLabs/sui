@@ -1,5 +1,4 @@
 module 0x42::m {
-
     public enum E has drop {
         A(u64),
         B(u8),
@@ -13,8 +12,8 @@ module 0x42::m {
     fun t0(): u64 {
         let o = &mut E::C(0);
         match (o) {
-            E::A(u)  => *u,
-            _ if ({*o = E::A(0); false}) => 1,
+            E::A(u) => *u,
+            _ if ({ *o = E::A(0); false }) => 1,
             E::B(x) => (*x as u64),
             E::C(x) => (*x as u64),
         }

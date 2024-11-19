@@ -10,10 +10,10 @@ module 0x8675309::M {
     }
 
     fun t2() {
-        (0, false, S{});
+        (0, false, S {});
     }
 
     fun t3() {
-        if (true) (0, false, S{}) else (0, false, S{});
+        if (true) (0, false, S {}) else (0, false, S {});
     }
 }

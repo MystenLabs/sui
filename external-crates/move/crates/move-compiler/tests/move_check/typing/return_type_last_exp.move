@@ -10,7 +10,6 @@ module 0x8675309::M {
     }
 
     fun t2(): (u64, bool, R) {
-        (0, false, R{})
+        (0, false, R {})
     }
-
 }

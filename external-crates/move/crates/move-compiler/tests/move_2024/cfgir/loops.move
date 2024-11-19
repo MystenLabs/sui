@@ -1,4 +1,3 @@
-
 module 0x42::m {
     fun t0() {
         let mut count = 0;
@@ -14,16 +13,16 @@ module 0x42::m {
 
     fun t1() {
         let mut count = 0u64;
-            {
+        {
             let (start, stop) = (0, 10);
-            'macro:  {
-                'lambdabreak:  {
-                        {
+            'macro: {
+                'lambdabreak: {
+                    {
                         let mut i = start;
                         while (i < stop) 'loop: {
-                                {
+                            {
                                 let x = i;
-                                'lambdareturn:  {
+                                'lambdareturn: {
                                     count = count + x * x;
                                 }
                             };

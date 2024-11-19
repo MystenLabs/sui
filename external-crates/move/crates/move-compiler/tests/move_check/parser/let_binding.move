@@ -1,16 +1,17 @@
 module 0x8675309::M {
     struct R has copy, drop {
-        f: u64
+        f: u64,
     }
     struct Generic<T> has copy, drop {
-        g: T
+        g: T,
     }
+
     fun f() {
         let () = ();
         let (): () = ();
         // Test with whitespace between parenthesis.
-        let ( ) = ( );
-        let ( ): ( ) = ( );
+        let () = ();
+        let (): () = ();
         let v1 = 1;
         let v2: u64 = 2;
         let (v3) = 3; // for consistency, check a single variable inside parens
@@ -24,6 +25,7 @@ module 0x8675309::M {
         x3;
         x4;
     }
+
     fun g(r: R, g: Generic<R>) {
         let R { f } = copy r;
         let (R { f: f1 }, R { f: f2 }) = (copy r, move r);

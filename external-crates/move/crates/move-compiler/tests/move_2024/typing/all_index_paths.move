@@ -1,23 +1,24 @@
-
 #[defines_primitive(vector)]
 module std::vector {
     #[syntax(index)]
-    native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+    public native fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
     #[syntax(index)]
-    native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    public native fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 }
 
 module a::m {
-
-
     fun id_w(w: W): W { w }
+
     fun id(x: X): X { x }
+
     fun vec_id<T>(v: vector<T>): vector<T> { v }
+
     use fun vec_id as vector.id;
 
-    fun ref_unused(_x: &X) { }
+    fun ref_unused(_x: &X) {}
 
     fun deref_w(w: &W): W { *w }
+
     fun deref(x: &X): X { *x }
 
     public struct T has copy, drop {
@@ -34,13 +35,13 @@ module a::m {
     }
 
     public struct X has copy, drop {
-        y: Y
+        y: Y,
     }
     public struct Y has copy, drop {
-        z: Z
+        z: Z,
     }
     public struct Z has copy, drop {
-        f: u64
+        f: u64,
     }
 
     const VEC: vector<X> = vector[];

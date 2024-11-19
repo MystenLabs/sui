@@ -4,8 +4,14 @@
 module 0x42::m {
     public fun test(value: bool): u64 {
         match (value) {
-            true => match (value) { true => abort 0, false => abort 0 },
-            false => match (value) { true => abort 0, false => 1 },
+            true => match (value) {
+                true => abort 0,
+                false => abort 0,
+            },
+            false => match (value) {
+                true => abort 0,
+                false => 1,
+            },
         }
     }
 

@@ -6,6 +6,9 @@ module 0x8675309::M {
         ((if (cond) s_mut else s).f: u64);
         ((if (cond) s else s_mut).f: u64);
         ((if (cond) s_mut else s_mut).f: u64);
-        ({ let s = S{f: 0}; &s }.f: u64);
+        ({
+                let s = S { f: 0 };
+                &s
+            }.f: u64);
     }
 }

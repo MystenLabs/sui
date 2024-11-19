@@ -8,6 +8,4 @@ module a::m {
     macro fun callf($f: |u64|) {
         $f(0)
     }
-
-
 }

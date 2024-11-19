@@ -10,6 +10,6 @@ module 0x8675309::M {
         addr.R;
         addr.f;
         ().R;
-        (S{f: 0}, S{f:0}).f;
+        (S { f: 0 }, S { f: 0 }).f;
     }
 }

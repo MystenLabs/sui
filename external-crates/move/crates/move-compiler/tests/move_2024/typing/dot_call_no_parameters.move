@@ -1,16 +1,14 @@
 module 0x42::t {
+    public struct X has drop {}
+    public struct Y has drop { x: X }
 
-public struct X has drop {}
-public struct Y has drop { x: X }
+    fun h() {}
 
-fun h() {}
+    public fun foo(x: &X) {
+        x.h();
+    }
 
-public fun foo(x: &X) {
-    x.h();
-}
-
-public fun bar(y: &Y) {
-    y.x.h();
-}
-
+    public fun bar(y: &Y) {
+        y.x.h();
+    }
 }

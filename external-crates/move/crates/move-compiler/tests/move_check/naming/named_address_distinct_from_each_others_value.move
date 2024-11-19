@@ -4,8 +4,10 @@
 
 module K::M {
     const C: u64 = 0;
+
     struct S {}
-    public fun s(): S { S{} }
+
+    public fun s(): S { S {} }
 }
 
 module K::Ex0 {
@@ -14,6 +16,7 @@ module K::Ex0 {
 
 module K::Ex1 {
     use k::M;
+
     public fun ex(): K::M::S {
         k::M::C;
         k::M::s()

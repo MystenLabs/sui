@@ -12,8 +12,7 @@ module 0x8675309::M {
     fun t1(cond: bool) {
         let x = 0;
         let x_ref = &mut x;
-        if (cond) {
-        } else {
+        if (cond) {} else {
             *x_ref = 0;
         };
         _ = x;
@@ -45,9 +44,7 @@ module 0x8675309::M {
     fun t4(cond: bool) {
         let x = cond;
         let x_ref = &x;
-        if (*x_ref) {
-        } else {
-        };
+        if (*x_ref) {} else {};
         _ = x;
         _ = move x;
     }

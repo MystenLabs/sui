@@ -1,5 +1,4 @@
 module a::m {
-
     public enum SomeEnum {
         SomeVariant,
     }
@@ -19,9 +18,9 @@ module a::m {
     }
 
     public fun variant_incomplete() {
-        a::m::SomeEnum::
+        a::m::SomeEnum
+        ERROR
     }
-
 }
 
 module a::m2 {

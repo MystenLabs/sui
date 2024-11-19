@@ -1,5 +1,6 @@
 module a::m {
     public struct S has copy, drop { f: u64 }
+
     fun test(x: u64, s: S) {
         copy x + 1;
         copy s.f + 1;

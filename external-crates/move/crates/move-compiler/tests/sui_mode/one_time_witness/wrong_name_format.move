@@ -5,8 +5,7 @@ module a::mod {
 
     struct Mod has drop { dummy: bool }
 
-    fun init(_mod: Mod, _ctx: &mut tx_context::TxContext) {
-    }
+    fun init(_mod: Mod, _ctx: &mut tx_context::TxContext) {}
 }
 
 module sui::tx_context {

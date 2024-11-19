@@ -1,13 +1,11 @@
 module 0x42::m {
-
     public enum Empty {
-        None
+        None,
     }
 
     fun main(e: &Empty) {
         match (e) {
-            Empty::None => ()
+            Empty::None => (),
         }
     }
-
 }

@@ -13,6 +13,5 @@ module 0x8675309::M {
         foo(g, h);
     }
 
-    fun foo(_a: &mut u64, _b: &mut u64) {
-    }
+    fun foo(_a: &mut u64, _b: &mut u64) {}
 }

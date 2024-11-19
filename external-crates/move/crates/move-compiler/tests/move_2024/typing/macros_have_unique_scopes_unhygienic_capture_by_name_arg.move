@@ -17,7 +17,11 @@ module a::m {
         foo!(x);
         bar!(x);
         let x = vector<u64>[];
-        foo!({ x });
-        bar!({ x });
+        foo!({
+            x
+        });
+        bar!({
+            x
+        });
     }
 }

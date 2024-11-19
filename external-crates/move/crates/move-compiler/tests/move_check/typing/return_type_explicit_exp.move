@@ -10,7 +10,7 @@ module 0x8675309::M {
     }
 
     fun t2(): (u64, bool, R) {
-        while (true) return (0, false, R{});
+        while (true) return (0, false, R {});
         abort 0
     }
 }

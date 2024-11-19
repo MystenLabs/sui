@@ -22,9 +22,7 @@ module 0x8675309::M {
         bar(f, f_g);
     }
 
-    fun foo(_a: &mut u64, _b: &mut Y) {
-    }
+    fun foo(_a: &mut u64, _b: &mut Y) {}
 
-    fun bar(_a: &mut Y, _b: &mut u64) {
-    }
+    fun bar(_a: &mut Y, _b: &mut u64) {}
 }

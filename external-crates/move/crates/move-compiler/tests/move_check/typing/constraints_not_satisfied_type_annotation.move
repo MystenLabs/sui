@@ -10,5 +10,4 @@ module 0x8675309::M {
     fun ignore<T>(_x: T) {
         abort 0
     }
-
 }

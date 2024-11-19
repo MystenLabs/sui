@@ -1,5 +1,7 @@
 module a::m {
-    macro fun do<$T>($f: || -> $T): $T { $f() }
+    macro fun do<$T>($f: || -> $T): $T {
+        $f()
+    }
 
     // simple test of break/return in a lambda
     fun t() {

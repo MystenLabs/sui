@@ -1,19 +1,18 @@
 #[defines_primitive(vector)]
 module std::vector {
     #[bytecode_instruction]
-    native public fun empty<Element>(): vector<Element>;
+    public native fun empty<Element>(): vector<Element>;
 
     #[bytecode_instruction]
     #[syntax(index)]
-    native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    public native fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
 
     #[bytecode_instruction]
     #[syntax(index)]
-    native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    public native fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 }
 
 module a::s {
-
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
@@ -38,11 +37,9 @@ module a::s {
         &s.t[i]
     }
 
-
     public fun miscall3<T>(s: &mut S, i: T): &mut u64 {
         &mut s.t[i]
     }
-
 }
 
 module a::invalid {
@@ -63,11 +60,9 @@ module a::invalid {
     fun miscall3<T>(s: &mut s::S, i: T): &mut u64 {
         &mut s[i]
     }
-
 }
 
 module a::mirror {
-
     public struct Q has drop {}
 
     #[syntax(index)]
@@ -91,11 +86,9 @@ module a::mirror {
     fun miscall3<T>(q: &mut Q, i: T): &mut u64 {
         &mut q[i]
     }
-
 }
 
 module a::ambiguous {
-
     public fun miscall1<T>(v: &vector<T>, i: u32): &T {
         &v[i]
     }
@@ -104,18 +97,16 @@ module a::ambiguous {
         &mut v[i]
     }
 
-    public fun miscall3<T,U>(v: &vector<T>, i: U): &T {
+    public fun miscall3<T, U>(v: &vector<T>, i: U): &T {
         &v[i]
     }
 
-    public fun miscall4<T,U>(v: &mut vector<T>, i: U): &mut T {
+    public fun miscall4<T, U>(v: &mut vector<T>, i: U): &mut T {
         &mut v[i]
     }
-
 }
 
 module a::too_many_args {
-
     public fun miscall1<T>(v: &vector<T>, i: u64, j: u64): &T {
         &v[i, j]
     }
@@ -124,18 +115,16 @@ module a::too_many_args {
         &mut v[i, j]
     }
 
-    public fun miscall3<T,U,V>(v: &vector<T>, i: U, j: V): &T {
+    public fun miscall3<T, U, V>(v: &vector<T>, i: U, j: V): &T {
         &v[i, j]
     }
 
-    public fun miscall4<T,U>(v: &mut vector<T>, i: U, j : V): &mut T {
+    public fun miscall4<T, U>(v: &mut vector<T>, i: U, j: V): &mut T {
         &mut v[i, j]
     }
-
 }
 
 module a::too_few_args {
-
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
@@ -155,7 +144,4 @@ module a::too_few_args {
     fun miscall1(s: &mut S, i: u64): &mut u64 {
         &mut s[i]
     }
-
 }
-
-

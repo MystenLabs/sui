@@ -1,7 +1,6 @@
 module a::m {
-
     public enum E {
-        V()
+        V(),
     }
 
     public macro fun test() {

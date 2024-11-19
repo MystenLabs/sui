@@ -7,7 +7,6 @@ module a::m {
         C.next();
         BYTES.length();
         BYTES.push_back(0);
-
     }
 }
 
@@ -17,7 +16,7 @@ module std::vector {
     public native fun length<T>(v: &vector<T>): u64;
 
     #[bytecode_instruction]
-    native public fun push_back<Element>(v: &mut vector<Element>, e: Element);
+    public native fun push_back<Element>(v: &mut vector<Element>, e: Element);
 }
 
 #[defines_primitive(u64)]

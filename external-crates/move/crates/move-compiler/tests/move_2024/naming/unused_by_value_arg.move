@@ -6,5 +6,4 @@ module a::m {
     fun t() {
         X().foo!()
     }
-
 }

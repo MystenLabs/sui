@@ -13,6 +13,7 @@ module b::other {
     use a::m::apply;
 
     public fun into(x: u8): u64 { (x as u64) }
+
     use fun into as u8.into;
 
     public macro fun myapply($f: |u8| -> u64, $x: u8): u64 {

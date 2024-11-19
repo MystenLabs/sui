@@ -7,7 +7,6 @@ module a::m {
         $f + $f
     }
 
-
     fun t() {
         // macros can call themselves, as long as the number of calls is finite/explicit
         apply1!(apply1!(0));

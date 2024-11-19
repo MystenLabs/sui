@@ -2,4 +2,5 @@
 
 #[allow(all(), unused = true, unused_(assignment, variable))]
 module 0x42::m {
+
 }

@@ -1,7 +1,7 @@
 module 0x8675309::M {
     struct S has drop { u: u64 }
     struct R {
-        f: u64
+        f: u64,
     }
     struct G<T> has drop { f: T }
 

@@ -2,9 +2,7 @@ module 0x42::used_fun_tparam {
     // no warnings related to unused function type params should be generated for functions in this
     // module
 
-
-    struct S<phantom T: key + drop> has key, drop {
-    }
+    struct S<phantom T: key + drop> has key, drop {}
 
     public fun foo<T>(): T {
         abort 0
@@ -13,7 +11,6 @@ module 0x42::used_fun_tparam {
     public fun bar<T>(_: T) {
         abort 0
     }
-
 
     public fun no_warn_sig_direct<T>(v: T): T {
         v
@@ -44,8 +41,4 @@ module 0x42::used_fun_tparam {
         let x = foo();
         bar((x: T));
     }
-
-
-
-
 }

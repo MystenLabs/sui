@@ -1,6 +1,6 @@
 module a::m {
-
     fun private() {}
+
     public(package) fun package() {}
 
     // these will give errors after expanding

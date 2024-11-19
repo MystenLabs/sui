@@ -1,5 +1,4 @@
 module 0x42::m {
-
     const TRUE: bool = true;
     const FALSE: bool = false;
 

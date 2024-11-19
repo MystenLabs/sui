@@ -1,0 +1,14 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/parser/let_binding_missing_type.move: Error: tree-sitter failure on 
+[error] ```
+[error] let x : = 0
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at mainPrintInternal (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20405:18)
+[error]     at mainPrint (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20388:14)
+[error]     at AstPath.call (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19547:14)
+[error]     at printBlockItem (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/expression/block_item.js:23:25)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:57:57)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at mainPrintInternal (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20405:18)

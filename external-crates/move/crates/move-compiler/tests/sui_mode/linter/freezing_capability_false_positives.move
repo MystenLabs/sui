@@ -2,23 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module a::test_false_positives {
-    use sui::object::UID;
-    use sui::transfer;
+    use sui::{object::UID, transfer};
 
     struct NoCap has key {
-       id: UID
+        id: UID,
     }
 
     struct CapAndHat has key {
-       id: UID
+        id: UID,
     }
 
     struct Recap has key {
-       id: UID
+        id: UID,
     }
 
     struct MyCapybara has key {
-       id: UID
+        id: UID,
     }
 
     public fun freeze_capture(w: NoCap) {
@@ -46,6 +45,7 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun public_freeze_object<T: key>(_: T) {
         abort ZERO
     }

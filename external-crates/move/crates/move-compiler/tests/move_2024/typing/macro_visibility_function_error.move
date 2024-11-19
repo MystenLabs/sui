@@ -1,9 +1,8 @@
 module a::m {
-
     fun zero(): u64 { 0 }
 
     public macro fun test() {
-    	zero()
+        zero()
     }
 }
 

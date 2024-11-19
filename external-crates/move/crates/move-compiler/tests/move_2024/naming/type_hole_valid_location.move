@@ -32,6 +32,8 @@ module a::m {
     }
 
     public struct X() has copy, drop;
+
     fun id<T>(t: T): T { t }
+
     fun xid<T>(_: X, t: T): T { t }
 }

@@ -1,0 +1,154 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/ability_constraints.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x42 {
+[error] module M {
+[error]     struct S has copy, drop, store, key {}
+[error]     struct R has key, store {}
+[error]     struct Box<T> has copy, drop, store, key { f: T }
+[error]     struct Pair<T1, T2> has copy, drop, store, key { f1: T1, f2: T2 }
+[error] 
+[error]     fun c<T: copy>() {}
+[error]     fun d<T: drop>() {}
+[error]     fun s<T: store>() {}
+[error]     fun k<T: key>() {}
+[error]     fun sk<T: store + key>() {}
+[error]     fun cds<T: copy + drop + store>() {}
+[error] 
+[error]     struct Sc<phantom T: copy> {}
+[error]     struct Sd<phantom T: drop> {}
+[error]     struct Ss<phantom T: store> {}
+[error]     struct Sk<phantom T: key> {}
+[error]     struct Ssk<phantom T: store + key> {}
+[error]     struct Scds<phantom T: copy + drop + store> {}
+[error] 
+[error]     // tests that a variety of constraint instantiations are all valid
+[error]     fun t1<
+[error]         Tc: copy,
+[error]         Td: drop,
+[error]         Ts: store,
+[error]         Tk: key,
+[error]         Tcd: copy + drop,
+[error]         Tcs: copy + store,
+[error]         Tds: drop + store,
+[error]         Tsk: store + key,
+[error]         Tcds: copy + drop + store
+[error]     >() {
+[error]         // functions with prims
+[error]         c<u64>();
+[error]         d<signer>();
+[error]         s<bool>();
+[error]         cds<address>();
+[error]         c<vector<u64>>();
+[error]         d<vector<signer>>();
+[error]         s<vector<bool>>();
+[error]         cds<vector<address>>();
+[error]         // structs with prims
+[error]         let Sc {} = Sc<u64> {};
+[error]         let Sd {} = Sd<signer> {};
+[error]         let Ss {} = Ss<bool> {};
+[error]         let Scds {} = Scds<address> {};
+[error]         let Sc {} = Sc<vector<u64>> {};
+[error]         let Sd {} = Sd<vector<signer>> {};
+[error]         let Ss {} = Ss<vector<bool>> {};
+[error]         let Scds {} = Scds<vector<address>> {};
+[error] 
+[error]         // functions with tparams
+[error]         c<Tc>();
+[error]         c<Tcd>();
+[error]         c<Tcs>();
+[error]         c<Tcds>();
+[error]         d<Td>();
+[error]         d<Tcd>();
+[error]         d<Tds>();
+[error]         d<Tcds>();
+[error]         s<Ts>();
+[error]         s<Tcs>();
+[error]         s<Tds>();
+[error]         s<Tsk>();
+[error]         s<Tcds>();
+[error]         k<Tk>();
+[error]         k<Tsk>();
+[error]         sk<Tsk>();
+[error]         cds<Tcds>();
+[error]         // structs with tparams
+[error]         let Sc {} = Sc<Tc> {};
+[error]         let Sc {} = Sc<Tcd> {};
+[error]         let Sc {} = Sc<Tcs> {};
+[error]         let Sc {} = Sc<Tcds> {};
+[error]         let Sd {} = Sd<Td> {};
+[error]         let Sd {} = Sd<Tcd> {};
+[error]         let Sd {} = Sd<Tds> {};
+[error]         let Sd {} = Sd<Tcds> {};
+[error]         let Ss {} = Ss<Ts> {};
+[error]         let Ss {} = Ss<Tcs> {};
+[error]         let Ss {} = Ss<Tds> {};
+[error]         let Ss {} = Ss<Tsk> {};
+[error]         let Ss {} = Ss<Tcds> {};
+[error]         let Sk {} = Sk<Tk> {};
+[error]         let Sk {} = Sk<Tsk> {};
+[error]         let Ssk {} = Ssk<Tsk> {};
+[error]         let Scds {} = Scds<Tcds> {};
+[error] 
+[error]         // functions with structs
+[error]         c<S>();
+[error]         c<Box<S>>();
+[error]         c<Pair<Box<S>, S>>();
+[error]         d<S>();
+[error]         d<Box<S>>();
+[error]         d<Pair<Box<S>, S>>();
+[error]         s<S>();
+[error]         s<R>();
+[error]         s<Box<S>>();
+[error]         s<Box<R>>();
+[error]         s<Pair<Box<S>, S>>();
+[error]         s<Pair<R, Box<Pair<R, S>>>>();
+[error]         k<R>();
+[error]         k<Box<R>>();
+[error]         k<Pair<R, Box<R>>>();
+[error]         k<Pair<R, Box<Pair<R, S>>>>();
+[error]         sk<R>();
+[error]         sk<Box<R>>();
+[error]         sk<Pair<R, Box<R>>>();
+[error]         sk<Pair<R, Box<Pair<R, S>>>>();
+[error]         cds<S>();
+[error]         cds<Box<S>>();
+[error]         cds<Pair<Box<S>, S>>();
+[error]         // structs with structs
+[error]         let Sc {} = Sc<S> {};
+[error]         let Sc {} = Sc<Box<S>> {};
+[error]         let Sc {} = Sc<Pair<Box<S>, S>> {};
+[error]         let Sd {} = Sd<S> {};
+[error]         let Sd {} = Sd<Box<S>> {};
+[error]         let Sd {} = Sd<Pair<Box<S>, S>> {};
+[error]         let Ss {} = Ss<S> {};
+[error]         let Ss {} = Ss<R> {};
+[error]         let Ss {} = Ss<Box<S>> {};
+[error]         let Ss {} = Ss<Box<R>> {};
+[error]         let Ss {} = Ss<Pair<Box<S>, S>> {};
+[error]         let Ss {} = Ss<Pair<R, Box<Pair<R, S>>>> {};
+[error]         let Sk {} = Sk<R> {};
+[error]         let Sk {} = Sk<Box<R>> {};
+[error]         let Sk {} = Sk<Pair<R, Box<R>>> {};
+[error]         let Sk {} = Sk<Pair<R, Box<Pair<R, S>>>> {};
+[error]         let Ssk {} = Ssk<R> {};
+[error]         let Ssk {} = Ssk<Box<R>> {};
+[error]         let Ssk {} = Ssk<Pair<R, Box<R>>> {};
+[error]         let Ssk {} = Ssk<Pair<R, Box<Pair<R, S>>>> {};
+[error]         let Scds {} = Scds<S> {};
+[error]         let Scds {} = Scds<Box<S>> {};
+[error]         let Scds {} = Scds<Pair<Box<S>, S>> {};
+[error] 
+[error]     }
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

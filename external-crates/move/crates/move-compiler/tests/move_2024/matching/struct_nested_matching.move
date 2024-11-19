@@ -23,20 +23,19 @@ module 0x42::m {
 
     fun t03(s: B<A<C>>): u64 {
         match (s) {
-            B(A { x: C()}) => 0,
+            B(A { x: C() }) => 0,
         }
     }
 
     fun t04(s: &B<A<C>>): u64 {
         match (s) {
-            B(A { x: C()}) => 0,
+            B(A { x: C() }) => 0,
         }
     }
 
     fun t05(s: &mut B<A<C>>): u64 {
         match (s) {
-            B(A { x: C()}) => 0,
+            B(A { x: C() }) => 0,
         }
     }
-
 }

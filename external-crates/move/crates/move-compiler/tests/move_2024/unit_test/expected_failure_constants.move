@@ -16,26 +16,26 @@ module 0x1::A {
     const C1: u64 = 0;
 
     #[test]
-    #[expected_failure(abort_code=C0)]
-    fun use_c0() { }
+    #[expected_failure(abort_code = C0)]
+    fun use_c0() {}
 
     #[test]
-    #[expected_failure(abort_code=C1)]
-    fun use_c1() { }
+    #[expected_failure(abort_code = C1)]
+    fun use_c1() {}
 
     #[test]
-    #[expected_failure(abort_code=x::C)]
-    fun use_through_alias() { }
+    #[expected_failure(abort_code = x::C)]
+    fun use_through_alias() {}
 
     #[test]
-    #[expected_failure(abort_code=0x1::A::C0)]
-    fun use_explicit_internal() { }
+    #[expected_failure(abort_code = 0x1::A::C0)]
+    fun use_explicit_internal() {}
 
     #[test]
-    #[expected_failure(abort_code=0x2::m::C)]
-    fun use_explicit_external() { }
+    #[expected_failure(abort_code = 0x2::m::C)]
+    fun use_explicit_external() {}
 
     #[test]
-    #[expected_failure(abort_code=a::m::C)]
-    fun use_explicit_external_named() { }
+    #[expected_failure(abort_code = a::m::C)]
+    fun use_explicit_external_named() {}
 }

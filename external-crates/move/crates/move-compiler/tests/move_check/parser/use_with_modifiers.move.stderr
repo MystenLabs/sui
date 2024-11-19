@@ -1,0 +1,20 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/parser/use_with_modifiers.move: Error: tree-sitter failure on 
+[error] ```
+[error] module a::m {
+[error]     public use a::m as m1;
+[error]     public(friend) use a::m as m2;
+[error]     entry use a::m as m3;
+[error]     native use a::m as m4;
+[error]     public native entry use a::m as m5;
+[error] }
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at mainPrintInternal (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20405:18)
+[error]     at mainPrint (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20388:14)
+[error]     at file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19598:23
+[error]     at AstPath.each (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19585:9)
+[error]     at AstPath.map (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19597:10)
+[error]     at printSourceFile (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/source_file.js:36:33)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:57:57)

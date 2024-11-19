@@ -1,5 +1,4 @@
 module a::m {
-
     struct S {}
 
     #[allow(unused_assignment)]

@@ -1,0 +1,21 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/unit_test/test_and_test_only_annotation.move: Error: tree-sitter failure on 
+[error] ```
+[error] // functions cannot be annotated as both #[test] and #[test_only]
+[error] address 0x1 {
+[error] module M {
+[error]     #[test(_a=@0x1, _b=@0x2)]
+[error]     #[test_only]
+[error]     public fun boo(_a: signer, _b: signer) { }
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

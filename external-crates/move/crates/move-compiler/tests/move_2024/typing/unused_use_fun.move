@@ -12,6 +12,7 @@ module a::m {
 // implicit unused method alias
 module a::x {
     public struct X() has drop;
+
     public fun drop(_: X) {}
 }
 

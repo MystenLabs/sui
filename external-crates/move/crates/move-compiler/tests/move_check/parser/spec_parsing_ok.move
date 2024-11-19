@@ -8,132 +8,65 @@
 // For parse failures, see the `spec_*_fail.move` test cases.
 
 module 0x8675309::M {
-    spec module {
-        global expected_coin_sum: u64;
-        global other: bool;
+    spec_block
 
-        native fun all<T>(x: SomeCollection<T>, predicate: |T| bool): bool;
-
-        fun spec_fun_using_spec_constructs(x: u64, y: u64) : u64 {
-            // This function would crash in phases after expansion if we would pass it on as a regular function. Testing
-            // here that we don't pass it on.
-            let _ = |z| z + 1;
-            let _ = x .. y;
-            x
-        }
-    }
-
-    struct T has key {x: u64}
-    struct R has key {x: u64}
+    struct T has key { x: u64 }
+    struct R has key { x: u64 }
 
     struct SomeCoin {
-        x : u64,
+        x: u64,
         y: u64,
     }
 
-    spec SomeCoin {
-        // Data invariants
-        invariant x > 0;
-        invariant x == y;
-    }
+    spec_block
 
-    spec with_aborts_if {
-      aborts_if x == 0;
-    }
+    spec_block
     fun with_aborts_if(x: u64): u64 {
         x
     }
 
-    spec with_ensures {
-        ensures RET == x + 1;
-    }
+    spec_block
     fun with_ensures(x: u64): u64 {
         x + 1
     }
 
-    spec using_block {
-        ensures RET = {let y = x; y + 1};
-    }
+    spec_block
     fun using_block(x: u64): u64 {
         x + 1
     }
 
-    spec using_lambda
-    {
-        ensures all(x, |y, z| x + y + z);
-    }
+    spec_block
     fun using_lambda(x: u64): u64 {
         x
     }
 
-    spec using_index_and_range {
-        ensures RET = x[1] && x[0..3];
-    }
+    spec_block
     fun using_index_and_range(x: u64): u64 {
         x
     }
 
-    spec using_implies {
-        ensures x > 0 ==> RET == x - 1;
-        ensures x == 0 ==> RET == x;
-    }
+    spec_block
     fun using_implies(x: u64): u64 {
         x
     }
 
-    spec with_emits {
-        emits _msg to _guid;
-        emits _msg to _guid if true;
-        emits _msg to _guid if x > 7;
-    }
+    spec_block
     fun with_emits<T: drop>(_guid: vector<u8>, _msg: T, x: u64): u64 {
         x
     }
 
-    spec module {
-        global x: u64;
-        local y: u64;
-        z: u64;
-        global generic<T>: u64;
-        invariant update generic<u64> = 23;
-        invariant update Self::generic<u64> = 24;
-    }
+    spec_block
 
-    fun some_generic<T>() {
-    }
-    spec some_generic {
-        ensures generic<T> == 1;
-        ensures Self::generic<T> == 1;
-    }
+    fun some_generic<T>() {}
+    spec_block
 
-    spec schema ModuleInvariant<X, Y> {
-        requires global<X>(0x0).f == global<X>(0x1).f;
-        ensures global<X>(0x0).f == global<X>(0x1).f;
-    }
+    spec_block
 
-    spec some_generic {
-        include ModuleInvariant<T, T>{foo:bar, x:y};
-    }
+    spec_block
 
-    spec module {
-        apply ModuleInvariant<X, Y> to *foo*<Y, X>;
-        apply ModuleInvariant<X, Y> to *foo*<Y, X>, bar except public *, internal baz<X>;
-        pragma do_not_verify, timeout = 60;
-    }
+    spec_block
 
-    spec module {
-        invariant forall x: num, y: num, z: num : x == y && y == z ==> x == z;
-        invariant forall x: num : exists y: num : y >= x;
-        invariant exists x in 1..10, y in 8..12 : x == y;
-        invariant<X: key> exists<X>(0x0) <==> exists<X>(0x0);
-        invariant<X: key, Y: key> exists<X>(0x0) && exists<Y>(0x1) <==> exists<Y>(0x1) && exists<X>(0x0);
-    }
+    spec_block
 
-    spec module {
-        fun spec_fun_non_zero(): num;
-        axiom spec_fun_non_zero() > 0;
-
-        fun spec_fun_identity<T>(x: T): T;
-        axiom<T> forall x: T: spec_fun_identity(x) == x;
-    }
+    spec_block
 }

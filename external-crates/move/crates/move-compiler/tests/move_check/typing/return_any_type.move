@@ -9,7 +9,6 @@ module 0x8675309::M {
         foo(return ());
     }
 
-
     fun foo(c: Coin) {
         Coin {} = c;
     }

@@ -5,5 +5,4 @@ module a::m {
     fun t() {
         0 as S<_>;
     }
-
 }

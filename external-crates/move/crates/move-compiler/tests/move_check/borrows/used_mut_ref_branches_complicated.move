@@ -29,5 +29,4 @@ module a::m {
     }
 
     public fun id_mut<T>(x: &mut T): &mut T { x }
-
 }

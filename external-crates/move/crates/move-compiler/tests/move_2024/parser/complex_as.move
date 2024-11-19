@@ -1,5 +1,4 @@
 module 0x42::m {
-
     public struct Cup<T>(T)
 
     fun main(x: u64): bool {

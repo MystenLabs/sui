@@ -19,5 +19,4 @@ module 0x8675309::M {
         if (cond) (0, false, 0) else (0, false);
         if (cond) (0, false) else (0, false, 0);
     }
-
 }

@@ -8,6 +8,10 @@ module 0x42::m {
     friend 0x42::a;
 }
 
-module 0x42::x {}
+module 0x42::x {
 
-module 0x42::a {}
+}
+
+module 0x42::a {
+
+}

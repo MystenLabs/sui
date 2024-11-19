@@ -1,6 +1,6 @@
 module 0x1::f {
     #[random_test]
-    public fun f(_: u64) { }
+    public fun f(_: u64) {}
 }
 
 module 0x1::g {

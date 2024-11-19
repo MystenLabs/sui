@@ -1,5 +1,6 @@
 module a::m {
     public struct S { f: u64 }
+
     public fun t(x: u64, s: S) {
         let y = 0;
         let S { f } = s;
@@ -8,5 +9,6 @@ module a::m {
         foo(&mut y);
         foo(&mut f);
     }
+
     public fun foo<T>(_: &mut T) {}
 }

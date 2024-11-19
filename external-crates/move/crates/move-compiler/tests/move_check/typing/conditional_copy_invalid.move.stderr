@@ -1,0 +1,53 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/conditional_copy_invalid.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x42 {
+[error] module M {
+[error]     struct S has copy, drop, store {}
+[error]     struct R {}
+[error]     struct Box<T> has copy { f: T }
+[error]     struct Pair<T1, T2> has copy { f1: T1, f2: T2}
+[error] 
+[error]     fun ignore<T>(_x: T) {
+[error]         abort 0
+[error]     }
+[error] 
+[error]     // types that can have copy but the specific instantiation does not
+[error]     fun ex<T>(t1: T, t2: T, t3: T, t4: T) {
+[error]         let x = Box<R> { f: R{} };
+[error]         ignore(copy x);
+[error]         let x = Box<Box<R>> { f: Box { f: R{} } };
+[error]         ignore(copy x);
+[error]         let x = Box<T> { f: t1 };
+[error]         ignore(copy x);
+[error]         let x = Box<Box<T>> { f: Box { f: t2 } };
+[error]         ignore(copy x);
+[error]         let x = Pair<S, R> { f1: S{}, f2: R{} };
+[error]         ignore(copy x);
+[error] 
+[error] 
+[error]         let x = &Box<R> { f: R{} };
+[error]         ignore(*x);
+[error]         let x = &Box<Box<R>> { f: Box { f: R{} } };
+[error]         ignore(*x);
+[error]         let x = &Box<T> { f: t3 };
+[error]         ignore(*x);
+[error]         let x = &Box<Box<T>> { f: Box { f: t4 } };
+[error]         ignore(*x);
+[error]         let x = &Pair<R, S> { f1: R{}, f2: S{} };
+[error]         ignore(*x);
+[error] 
+[error]         abort 0
+[error]     }
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

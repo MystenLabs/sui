@@ -4,8 +4,10 @@
 
 module A::M {
     const C: u64 = 0;
+
     struct S {}
-    public fun s(): S { S{} }
+
+    public fun s(): S { S {} }
 }
 
 module A::Ex0 {
@@ -14,6 +16,7 @@ module A::Ex0 {
 
 module A::Ex1 {
     use 0x41::M;
+
     public fun ex(): 0x41::M::S {
         0x41::M::C;
         0x41::M::s()

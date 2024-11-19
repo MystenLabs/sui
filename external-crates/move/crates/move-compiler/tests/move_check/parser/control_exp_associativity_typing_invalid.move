@@ -4,6 +4,7 @@
 
 module 0x42::M {
     fun foo() {}
+
     fun bar(): u64 { 0 }
 
     fun t(cond: bool) {

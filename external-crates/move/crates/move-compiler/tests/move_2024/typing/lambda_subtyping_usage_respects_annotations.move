@@ -10,7 +10,6 @@ module a::m {
         $f(&mut x)
     }
 
-
     macro fun return_imm($f: || -> &u64) {
         *$f() = 0;
     }

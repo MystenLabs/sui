@@ -1,14 +1,13 @@
 module 0x42::maybe {
-
     public enum Maybe<T> {
         Just(T),
-        Nothing
+        Nothing,
     }
 
-    macro fun maybe<$A,$B: drop>($b: $B, $f: |$A| -> $B, $ma: Maybe<$A>): $B {
+    macro fun maybe<$A, $B: drop>($b: $B, $f: |$A| -> $B, $ma: Maybe<$A>): $B {
         match ($ma) {
             Maybe::Just(a) => $f(a),
-            Maybe::Nothing => $b
+            Maybe::Nothing => $b,
         }
     }
 
@@ -18,5 +17,4 @@ module 0x42::maybe {
         let n = maybe!(10, |x| { x }, Maybe::Nothing);
         assert!(n == 10, 2);
     }
-
 }

@@ -1,0 +1,11 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/naming/vector_literal_type_arity.move: Error: Expected only one type parameter in the `vector_expression`
+[error]     at printVectorExpression (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/expression/vector_expression.js:37:15)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:57:57)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at mainPrintInternal (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20405:18)
+[error]     at mainPrint (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20388:14)
+[error]     at file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19598:23
+[error]     at AstPath.each (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19585:9)
+[error]     at AstPath.map (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:19597:10)
+[error]     at printLetStatement (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/cst/expression/let_statement.js:24:26)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:57:57)

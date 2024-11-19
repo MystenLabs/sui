@@ -6,7 +6,7 @@ module 0x8675309::M {
         move x;
         let _ = move x + 1;
 
-        let s = S{};
+        let s = S {};
         let _s2 = s;
         let _s3 = s;
     }
@@ -16,7 +16,7 @@ module 0x8675309::M {
         move x;
         let _ = x + 1;
 
-        let s = S{};
+        let s = S {};
         let _s2 = s;
         let _s3 = copy s;
     }
@@ -26,9 +26,8 @@ module 0x8675309::M {
         move x;
         let _ = &x;
 
-        let s = S{};
+        let s = S {};
         let _s2 = s;
         let _s3 = &s;
     }
-
 }

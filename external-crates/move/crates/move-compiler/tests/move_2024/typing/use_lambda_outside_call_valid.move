@@ -1,5 +1,4 @@
 module a::m {
-
     // chain of calls
     macro fun apply1($f: || -> u64): u64 {
         $f()
@@ -14,7 +13,7 @@ module a::m {
     }
 
     macro fun apply_all($f: || -> u64): u64 {
-       apply3!(|| apply2!(|| apply1!($f)))
+        apply3!(|| apply2!(|| apply1!($f)))
     }
 
     // double lambdas

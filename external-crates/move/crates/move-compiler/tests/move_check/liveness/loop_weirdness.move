@@ -6,7 +6,9 @@ module 0x8675309::M {
         if (x >= 0) {
             loop {
                 let my_local = 0;
-                if (my_local >= 0) { break; };
+                if (my_local >= 0) {
+                    break;
+                };
             };
             x = 1
         };

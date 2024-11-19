@@ -1,0 +1,39 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/module_call_visibility_friend_invalid.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x2 {
+[error] 
+[error] module X {
+[error]     fun f_private() {}
+[error]     public(friend) fun f_friend() {}
+[error] }
+[error] 
+[error] module Y {
+[error]     friend 0x2::M;
+[error]     fun f_private() {}
+[error] }
+[error] 
+[error] module M {
+[error]     use 0x2::X;
+[error]     use 0x2::Y;
+[error] 
+[error]     // a public(friend) fun cannot call friend funs in other modules if not being in the friend list
+[error]     public(friend) fun f_friend_call_friend() { X::f_friend() }
+[error] 
+[error]     // a public(friend) fun cannot call private funs in other modules, regardless of whether being
+[error]     // in the friend list of not.
+[error]     public(friend) fun f_friend_call_private_1() { X::f_private() }
+[error]     public(friend) fun f_friend_call_private_2() { Y::f_private() }
+[error] }
+[error] 
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

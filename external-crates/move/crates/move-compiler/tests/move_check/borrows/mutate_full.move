@@ -1,8 +1,10 @@
 module 0x8675309::M {
     struct S { f: u64, g: u64 }
+
     fun id<T>(r: &T): &T {
         r
     }
+
     fun id_mut<T>(r: &mut T): &mut T {
         r
     }
@@ -12,7 +14,6 @@ module 0x8675309::M {
         let f = x;
         *f;
         *x = 0;
-
 
         let x = &mut 0;
         let f = freeze(x);
@@ -29,5 +30,4 @@ module 0x8675309::M {
         *f;
         *x = 0;
     }
-
 }

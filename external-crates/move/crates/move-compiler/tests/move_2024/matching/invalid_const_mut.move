@@ -1,5 +1,4 @@
 module 0x42::m {
-
     const ZERO: u64 = 0;
 
     public struct Box { value: u64 }
@@ -24,5 +23,4 @@ module 0x42::m {
             _ => 10,
         }
     }
-
 }

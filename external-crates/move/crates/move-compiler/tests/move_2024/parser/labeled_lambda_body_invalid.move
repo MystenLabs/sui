@@ -8,7 +8,9 @@ module a::m {
     }
 
     fun t2() {
-        call!(|x| -> u64 'a: loop { break 'a 0 }); // parsing error needs a block
+        call!(|x| -> u64 'a: loop {
+            break 'a 0
+        }); // parsing error needs a block
     }
 
     fun t3() {

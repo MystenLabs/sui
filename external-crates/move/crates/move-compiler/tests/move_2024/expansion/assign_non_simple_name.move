@@ -2,12 +2,10 @@ module 0x42::X {
     struct S {}
 }
 module 0x42::M {
-    use 0x42::X;
-    use 0x42::X::S as X;
+    use 0x42::X::{Self, S as X};
 
     struct R {}
     struct S<T> { f: T }
-
 
     fun t() {
         // Assign to qualified name

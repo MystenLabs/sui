@@ -1,7 +1,8 @@
 module 0x42::a {
-
     fun t0(): u64 {
-        if ('block: { true }) {
+        if ('block: {
+                true
+            }) {
             10
         } else {
             20
@@ -9,27 +10,43 @@ module 0x42::a {
     }
 
     fun t1(): u64 {
-        if ('block: { true }) {
-            'block: { 10 }
+        if ('block: {
+                true
+            }) {
+            'block: {
+                10
+            }
         } else {
             20
         }
     }
 
     fun t2(): u64 {
-        if ('block: { false }) {
+        if ('block: {
+                false
+            }) {
             20
         } else {
-            'block: { 10 }
+            'block: {
+                10
+            }
         }
     }
 
     fun t3(): u64 {
-        if ('block: { false }) {
+        if ('block: {
+                false
+            }) {
             20
         } else {
-            while (false) { 'block: { 20 }; };
-            'block: { 10 }
+            while (false) {
+                'block: {
+                    20
+                };
+            };
+            'block: {
+                10
+            }
         }
     }
 
@@ -44,5 +61,4 @@ module 0x42::a {
         };
         count
     }
-
 }

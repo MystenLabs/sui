@@ -1,5 +1,4 @@
 module 0x42::m {
-
     public struct S has drop { x: u64 }
 
     macro fun bad_paths($s: S, $y: vector<u64>, $n: u64): (S, vector<u64>, u64) {

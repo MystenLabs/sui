@@ -1,9 +1,9 @@
-module 0x42::m;
-
-fun test() {
-    'l: loop {
+module 0x42::m {
+    fun test() {
         'l: loop {
-            break 'l
+            'l: loop {
+                break 'l
+            }
         }
     }
 }

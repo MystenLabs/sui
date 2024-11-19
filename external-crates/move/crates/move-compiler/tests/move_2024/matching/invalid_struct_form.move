@@ -1,5 +1,4 @@
 module a::m {
-
     public struct P(u64) has drop;
 
     public struct N { x: u64 } has drop;

@@ -1,7 +1,8 @@
 module a::m {
     public struct Cup<T> {
-        value: T
+        value: T,
     }
+
     public fun uncup<T>(c: Cup<T>): T {
         let Cup { value } = c;
         value
@@ -9,6 +10,6 @@ module a::m {
 
     fun t() {
         let c = Cup { value: 0 };
-        c.uncup <u64> ();
+        c.uncup<u64>();
     }
 }

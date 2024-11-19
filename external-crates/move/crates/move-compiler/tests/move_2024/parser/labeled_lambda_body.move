@@ -4,6 +4,8 @@ module a::m {
     }
 
     fun t() {
-        call!(|x| -> u64 'a: { return 'a x });
+        call!(|x| -> u64 'a: {
+            return 'a x
+        });
     }
 }

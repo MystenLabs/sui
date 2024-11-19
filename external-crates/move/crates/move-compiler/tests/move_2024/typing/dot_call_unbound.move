@@ -1,22 +1,18 @@
 module 0x42::t {
+    public struct X has drop {}
 
-public struct X has drop {}
-
-fun call(x: &X) {
-    x.f();
-}
-
+    fun call(x: &X) {
+        x.f();
+    }
 }
 
 module 0x42::m {
+    use 0x42::t::X;
 
-use 0x42::t::X;
+    public struct Y has drop { x: X }
 
-public struct Y has drop { x: X }
-
-public fun call(x: &X, y: Y) {
-    x.f();
-    y.x.f();
-}
-
+    public fun call(x: &X, y: Y) {
+        x.f();
+        y.x.f();
+    }
 }

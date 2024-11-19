@@ -5,11 +5,11 @@ module a::S {
 
 #[allow(unused)]
 module a::m {
-    use a::S;
-    use a::S::S; // ERROR
+    use a::S::{Self, S};
 }
 
 module a::n {
     use a::S;
+
     public struct S() has copy, drop; // ERROR
 }

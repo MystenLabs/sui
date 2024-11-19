@@ -1,0 +1,60 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/constant_unsupported_exps.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x42 {
+[error] module X {
+[error]     public fun f_public() {}
+[error]     public(friend) fun f_friend() {}
+[error]     fun f_private() {}
+[error] }
+[error] 
+[error] module M {
+[error]     struct R has key {}
+[error]     struct B has drop { f: u64 }
+[error] 
+[error]     const FLAG: bool = false;
+[error]     const C: u64 = {
+[error]         let x = 0;
+[error]         let s: signer = abort 0;
+[error]         let b = B { f: 0 };
+[error]         &x;
+[error]         &mut x;
+[error]         f_public();
+[error]         f_script();
+[error]         f_friend();
+[error]         f_private();
+[error]         0x42::X::f_public();
+[error]         0x42::X::f_script();
+[error]         0x42::X::f_friend();
+[error]         0x42::X::f_private();
+[error]         freeze(&mut x);
+[error]         assert!(true, 42);
+[error]         if (true) 0 else 1;
+[error]         loop ();
+[error]         loop { break; continue; };
+[error]         while (true) ();
+[error]         x = 1;
+[error]         return 0;
+[error]         abort 0;
+[error]         *(&mut 0) = 0;
+[error]         b.f = 0;
+[error]         b.f;
+[error]         *&b.f;
+[error]         FLAG;
+[error]         0
+[error]     };
+[error]     public fun f_public() {}
+[error]     public(friend) fun f_friend() {}
+[error]     fun f_private() {}
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

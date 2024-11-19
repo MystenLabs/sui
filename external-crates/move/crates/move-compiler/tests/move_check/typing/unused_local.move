@@ -10,7 +10,7 @@ module 0x8675309::M {
     }
 
     fun t2() {
-        let S{ f, g }: S;
+        let S { f, g }: S;
     }
 
     fun unused_local_suppressed1() {
@@ -21,12 +21,9 @@ module 0x8675309::M {
         let _: u64;
     }
 
+    fun unused_param(x: u64) {}
 
-    fun unused_param(x: u64) {
-    }
-
-    fun two_unused(x: u64, y: bool) {
-    }
+    fun two_unused(x: u64, y: bool) {}
 
     fun unused_param1_used_param2(x: u64, y: bool): bool {
         y
@@ -36,11 +33,9 @@ module 0x8675309::M {
         x
     }
 
-    fun unused_param_suppressed1(_: u64) {
-    }
+    fun unused_param_suppressed1(_: u64) {}
 
-    fun unused_param_suppressed2(_x: u64) {
-    }
+    fun unused_param_suppressed2(_x: u64) {}
 
     native fun unused_native_ok(x: u64, y: bool);
 }

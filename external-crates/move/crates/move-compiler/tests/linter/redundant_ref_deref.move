@@ -5,7 +5,7 @@ module 0x42::TruePositiveCases {
 
     public fun case_1() {
         let resource = MyResource { value: 10 };
-        let _ref = &*(&resource);  // Redundant borrow-dereference
+        let _ref = &*(&resource); // Redundant borrow-dereference
     }
 
     public fun case_2() {

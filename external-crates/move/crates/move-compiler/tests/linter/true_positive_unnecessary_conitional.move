@@ -2,7 +2,13 @@
 module a::m {
     public fun t0(condition: bool) {
         if (!condition) true else false;
-        if (condition) { { false } } else { (true: bool) };
+        if (condition) {
+            {
+                false
+            }
+        } else {
+            (true: bool)
+        };
     }
 
     public fun t1() {

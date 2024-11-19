@@ -1,12 +1,11 @@
 #[allow(ide_path_autocomplete)]
 module a::m {
-
     public struct A has copy, drop {
-        x: u64
+        x: u64,
     }
 
     public struct B has copy, drop {
-        a: A
+        a: A,
     }
 
     public fun foo() {

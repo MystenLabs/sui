@@ -5,5 +5,4 @@ module a::m {
     }
 
     fun any<T>(): T { abort 0 }
-
 }

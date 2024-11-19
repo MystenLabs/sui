@@ -6,7 +6,6 @@ module 0x42::m1 {
 
     public fun bar(_s: S) {}
 
-
     public fun test1(s: S) {
         use fun bar as S.bak;
         s.bak(); // autocompletion to `bak` and `foo`
@@ -16,5 +15,4 @@ module 0x42::m1 {
         use fun foo as S.bar;
         s.bar(); // auto-completion to only one (shadowed) `bar`
     }
-
 }

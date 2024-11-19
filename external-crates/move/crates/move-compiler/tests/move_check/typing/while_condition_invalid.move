@@ -15,5 +15,4 @@ module 0x8675309::M {
         while ((false, true)) ();
         while ((0, false)) ()
     }
-
 }

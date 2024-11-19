@@ -1,0 +1,85 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/expansion/restricted_names_valid.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x2 {
+[error] module N {
+[error]     public fun t(): u64 { 0 }
+[error] }
+[error] 
+[error] module M {
+[error]     use 0x2::N::{
+[error]         Self as address,
+[error]         Self as signer,
+[error]         Self as u8,
+[error]         Self as u64,
+[error]         Self as u128,
+[error]         // vector now keyworded in expressions, so this would be unusable
+[error]         // Self as vector,
+[error]         Self as move_to,
+[error]         Self as move_from,
+[error]         Self as borrow_global,
+[error]         Self as borrow_global_mut,
+[error]         Self as exists,
+[error]         Self as freeze,
+[error]         Self as assert,
+[error]     };
+[error] 
+[error]     fun t(): u64 {
+[error] 
+[error]         let address = 0;
+[error]         let signer = 0;
+[error]         let u8 = 0;
+[error]         let u64 = 0;
+[error]         let u128 = 0;
+[error]         // vector now keyworded in expressions, so this would be unusable
+[error]         // let vector = 0;
+[error]         let move_to = 0;
+[error]         let move_from = 0;
+[error]         let borrow_global = 0;
+[error]         let borrow_global_mut = 0;
+[error]         let exists = 0;
+[error]         let freeze = 0;
+[error]         let assert = 0;
+[error] 
+[error]         address::t() +
+[error]         signer::t() +
+[error]         u8::t() +
+[error]         u64::t() +
+[error]         u128::t() +
+[error]         // vector now keyworded in expressions, so this would fail in parsing
+[error]         // vector::t() +
+[error]         move_to::t() +
+[error]         move_from::t() +
+[error]         borrow_global::t() +
+[error]         borrow_global_mut::t() +
+[error]         exists::t() +
+[error]         freeze::t() +
+[error]         assert::t();
+[error] 
+[error]         address +
+[error]         signer +
+[error]         u8 +
+[error]         u64 +
+[error]         u128 +
+[error]         // vector now keyworded in expressions, so this would fail in parsing
+[error]         // vector +
+[error]         move_to +
+[error]         move_from +
+[error]         borrow_global +
+[error]         borrow_global_mut +
+[error]         exists +
+[error]         freeze +
+[error]         assert
+[error]     }
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

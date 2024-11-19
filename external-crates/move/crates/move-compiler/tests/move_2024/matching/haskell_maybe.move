@@ -1,14 +1,13 @@
 module 0x42::maybe {
-
     public enum Maybe<T> has drop {
         Just(T),
-        Nothing
+        Nothing,
     }
 
-    macro fun maybe<$A,$B: drop>($b: $B, $f: |$A| -> $B, $ma: Maybe<$A>): $B {
+    macro fun maybe<$A, $B: drop>($b: $B, $f: |$A| -> $B, $ma: Maybe<$A>): $B {
         match ($ma) {
             Maybe::Just(a) => $f(a),
-            Maybe::Nothing => $b
+            Maybe::Nothing => $b,
         }
     }
 
@@ -37,20 +36,23 @@ module 0x42::maybe {
     fun from_just<A>(ma: Maybe<A>): A {
         match (ma) {
             Maybe::Just(a) => a,
-            Maybe::Nothing => abort 0
+            Maybe::Nothing => abort 0,
         }
     }
 
     fun from_maybe<A: drop>(a: A, ma: Maybe<A>): A {
         match (ma) {
             Maybe::Just(a) => a,
-            Maybe::Nothing => a
+            Maybe::Nothing => a,
         }
     }
 
     fun push<T>(_v: &mut vector<T>, _t: T) { abort 0 }
+
     fun pop<T>(_v: &mut vector<T>): T { abort 0 }
+
     fun is_empty<T>(_v: &vector<T>): bool { abort 0 }
+
     fun reverse<T>(_v: vector<T>): vector<T> { abort 0 }
 
     fun cat_maybe<A: drop>(mut ls: vector<Maybe<A>>): vector<A> {
@@ -76,10 +78,10 @@ module 0x42::maybe {
     }
 
     fun macro_map_maybe_call(va: &mut vector<u64>): vector<u64> {
-        map_maybe!(
-            |a| { if (a % 2 == 0) { Maybe::Just(a) } else { Maybe::Nothing }},
-            va
-        )
+        map_maybe!(|a| { if (a % 2 == 0) {
+                Maybe::Just(a)
+            } else {
+                Maybe::Nothing
+            } }, va)
     }
-
 }

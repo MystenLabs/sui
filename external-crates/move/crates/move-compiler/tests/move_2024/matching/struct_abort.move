@@ -6,7 +6,7 @@ module 0x42::m {
 
     public fun from_index(s: S): u64 {
         match (s) {
-            S { x: 0}  => 1,
+            S { x: 0 } => 1,
             _ => abort 0,
         }
     }

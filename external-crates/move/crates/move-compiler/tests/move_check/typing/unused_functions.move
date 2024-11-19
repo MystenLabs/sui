@@ -1,7 +1,5 @@
 module 0x42::unused_functions {
-
-    fun init() {
-    }
+    fun init() {}
 
     public fun f() {
         used_private()

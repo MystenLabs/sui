@@ -1,0 +1,61 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/module_call_wrong_arity.move: Error: tree-sitter failure on 
+[error] ```
+[error] 
+[error] address 0x2 {
+[error] 
+[error] module X {
+[error]     public fun foo(): u64 { 0 }
+[error]     public fun bar(x: u64): (address, u64) {
+[error]         (@0x0, x)
+[error]     }
+[error]     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+[error]         (false, a, x)
+[error]     }
+[error] }
+[error] 
+[error] 
+[error] module M {
+[error]     use 0x2::X;
+[error] 
+[error]     fun foo(): u64 { 0 }
+[error]     fun bar(x: u64): (address, u64) {
+[error]         (@0x0, x)
+[error]     }
+[error]     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+[error]         (false, a, x)
+[error]     }
+[error] 
+[error]     fun t0() {
+[error]         X::foo(1);
+[error]         X::foo(1, 2);
+[error]         X::bar();
+[error]         X::bar(1, 2);
+[error]         X::baz<u64, u64>();
+[error]         X::baz<u64, u64>(1);
+[error]         X::baz(1, 2, 3);
+[error]     }
+[error] 
+[error]     fun t1() {
+[error]         foo(1);
+[error]         foo(1, 2);
+[error]         bar();
+[error]         bar(1, 2);
+[error]         baz<u64, u64>();
+[error]         baz<u64, u64>(1);
+[error]         baz(1, 2, 3);
+[error]     }
+[error] 
+[error] }
+[error] 
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

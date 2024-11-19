@@ -1,8 +1,7 @@
 module 0x42::m {
-
     public enum Option<T> {
         Some(T),
-        None
+        None,
     }
 
     fun t0(): u64 {
@@ -35,5 +34,4 @@ module 0x42::m {
             Option::None => default,
         }
     }
-
 }

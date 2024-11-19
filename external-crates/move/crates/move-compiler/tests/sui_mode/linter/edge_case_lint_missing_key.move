@@ -8,7 +8,6 @@ module a::edge_cases {
     struct NotAnObject {
         id: UID,
     }
-
 }
 
 module sui::object {

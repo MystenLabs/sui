@@ -1,6 +1,6 @@
 module 0x42::m {
     public struct X()
-    public struct Y{}
+    public struct Y {}
 
     public fun f0(x: Y) {
         let Y(..) = x;
@@ -15,14 +15,14 @@ module 0x42::m {
     }
 
     public fun g0(x: X) {
-        let X{..} = x;
+        let X { .. } = x;
     }
 
     public fun g1(x: X) {
-        let X{x, ..} = x;
+        let X { x, .. } = x;
     }
 
     public fun g2(x: X) {
-        let X{} = x;
+        let X {} = x;
     }
 }

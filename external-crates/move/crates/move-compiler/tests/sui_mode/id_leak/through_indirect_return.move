@@ -10,7 +10,6 @@ module a::m {
         let Foo { id } = f;
         Foo { id }
     }
-
 }
 
 module sui::object {

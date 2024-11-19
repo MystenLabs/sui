@@ -1,5 +1,7 @@
 module a::m {
-    macro fun do<$T>($f: || -> $T): $T { $f() }
+    macro fun do<$T>($f: || -> $T): $T {
+        $f()
+    }
 
     // lambdas capture break/continue
     fun t() {
@@ -40,5 +42,4 @@ module a::m {
             });
         }
     }
-
 }

@@ -27,5 +27,4 @@ module a::m {
     }
 
     public fun ignore<T>(_: &mut T) {}
-
 }

@@ -1,0 +1,33 @@
+[error] external-crates/move/crates/move-compiler/tests/move_2024/ide_mode/dot_incomplete.move: Error: tree-sitter failure on 
+[error] ```
+[error] #[allow(ide_path_autocomplete)]
+[error] module a::m {
+[error] 
+[error]     public struct A has copy, drop {
+[error]         x: u64
+[error]     }
+[error] 
+[error]     public struct B has copy, drop {
+[error]         a: A
+[error]     }
+[error] 
+[error]     public fun foo() {
+[error]         let _s = B { a: A { x: 0 } };
+[error]         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+[error]         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+[error]         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+[error]         let _tmp4 = _s.
+[error]         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+[error]     }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

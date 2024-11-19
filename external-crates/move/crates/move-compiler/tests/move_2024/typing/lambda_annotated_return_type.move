@@ -3,7 +3,7 @@ module a::m {
 
     fun foo(_: X) {}
 
-    fun any<T>(): T { abort 0}
+    fun any<T>(): T { abort 0 }
 
     macro fun call<$T>($f: || -> $T): $T {
         $f()

@@ -9,5 +9,6 @@ module a::m {
         x = x + 1;
         x;
     }
+
     fun bar(_: u64) {}
 }

@@ -1,12 +1,11 @@
 module 0x42::m {
+    public struct PTuple2<T, U>(T, U) has drop;
 
-    public struct PTuple2<T,U>(T, U) has drop;
-
-    public struct NTuple2<T,U> { fst: T, snd: U } has drop;
+    public struct NTuple2<T, U> { fst: T, snd: U } has drop;
 
     fun t00(): u64 {
         match (PTuple2(0, 1)) {
-            PTuple2(x, _) => x
+            PTuple2(x, _) => x,
         }
     }
 
@@ -20,8 +19,8 @@ module 0x42::m {
     }
 
     fun t01(): u64 {
-        match (NTuple2 { fst: 0, snd : 1}) {
-            NTuple2 { fst: x, snd: _ } => x
+        match (NTuple2 { fst: 0, snd: 1 }) {
+            NTuple2 { fst: x, snd: _ } => x,
         }
     }
 

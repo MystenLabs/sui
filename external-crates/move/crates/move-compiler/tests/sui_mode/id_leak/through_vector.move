@@ -10,7 +10,6 @@ module a::m {
         let Foo { id } = f;
         std::vector::push_back(v, id)
     }
-
 }
 
 module sui::object {

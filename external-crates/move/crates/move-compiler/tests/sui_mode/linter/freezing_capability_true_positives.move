@@ -2,19 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module a::test_true_positives {
-    use sui::object::UID;
-    use sui::transfer;
+    use sui::{object::UID, transfer};
 
     struct AdminCap has key {
-       id: UID
+        id: UID,
     }
 
     struct UserCapability has key {
-       id: UID
+        id: UID,
     }
 
     struct OwnerCapV2 has key {
-       id: UID
+        id: UID,
     }
 
     public fun freeze_cap1(w: AdminCap) {
@@ -38,6 +37,7 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun public_freeze_object<T: key>(_: T) {
         abort ZERO
     }

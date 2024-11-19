@@ -18,8 +18,7 @@ module 0x8675309::M {
         *x.s.f = 0;
 
         let x_ref = &mut X { s: *&s };
-        *x_ref.s = S{ f: 0 };
+        *x_ref.s = S { f: 0 };
         *x_ref.s.f = 0;
-
     }
 }

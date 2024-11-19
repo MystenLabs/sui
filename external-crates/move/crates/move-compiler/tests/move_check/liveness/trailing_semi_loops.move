@@ -4,7 +4,9 @@ module 0x42::m {
     }
 
     fun t1() {
-        { (loop (): ()) };
+        {
+            (loop (): ())
+        };
     }
 
     fun t2() {

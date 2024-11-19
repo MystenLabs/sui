@@ -7,7 +7,8 @@ module 0x42::M {
         /// A field with a doc comment
         u64,
         /** another field with another doc comment **/
-        u64,)
+        u64,
+    )
 
     fun x() {
         let _x = Foo(0);

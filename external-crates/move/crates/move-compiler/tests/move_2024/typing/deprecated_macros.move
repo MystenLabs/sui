@@ -5,7 +5,7 @@ module 0x42::m {
     public struct Y<phantom T>() has drop;
 
     #[deprecated]
-    fun f() { }
+    fun f() {}
 
     macro fun call_with_x($f: || -> X): X {
         f();

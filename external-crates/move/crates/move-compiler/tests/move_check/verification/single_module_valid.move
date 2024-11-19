@@ -4,11 +4,11 @@ module 0x1::M {
     #[verify_only]
     struct Foo {}
 
-    public fun foo() { }
+    public fun foo() {}
 
     // verify-only struct used in a verify-only function
     #[verify_only]
-    public fun bar(): Foo { Foo{} }
+    public fun bar(): Foo { Foo {} }
 
     // verify-only function used in a verify-only function
     #[verify_only]

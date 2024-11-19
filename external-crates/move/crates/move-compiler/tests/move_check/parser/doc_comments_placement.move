@@ -3,11 +3,10 @@
 /// Documentation comments can have multiple blocks.
 /** They may use different limiters. */
 module 0x42::M {
-    /** There can be doc comments on uses. */
     use std::option::Option;
 
     /// This is f.
-    fun f() { }
+    fun f() {}
 
     /// This is T
     struct T {

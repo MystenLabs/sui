@@ -5,5 +5,4 @@ module 0x8675309::Test {
     public fun destroy_t(t: T) {
         X { b: _ } = t;
     }
-
 }

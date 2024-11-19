@@ -2,13 +2,13 @@
 // has store.
 
 module a::m {
-    use sui::transfer::{Self, Receiving};
     use a::other;
-    use sui::object::UID;
+    use sui::{object::UID, transfer::{Self, Receiving}};
 
     public fun t<T: store>(s: other::S<T>) {
         transfer::public_transfer(s, @0x100)
     }
+
     public fun t_gen<T: key + store>(s: T) {
         transfer::public_transfer(s, @0x100)
     }
@@ -16,6 +16,7 @@ module a::m {
     public fun f<T: store>(s: other::S<T>) {
         transfer::public_freeze_object(s)
     }
+
     public fun f_gen<T: key + store>(s: T) {
         transfer::public_freeze_object(s)
     }
@@ -23,6 +24,7 @@ module a::m {
     public fun s<T: store>(s: other::S<T>) {
         transfer::public_share_object(s)
     }
+
     public fun s_gen<T: key + store>(s: T) {
         transfer::public_share_object(s)
     }
@@ -52,7 +54,7 @@ module sui::object {
 module sui::transfer {
     use sui::object::UID;
 
-    struct Receiving<phantom T: key> { }
+    struct Receiving<phantom T: key> {}
 
     public fun transfer<T: key>(_: T, _: address) {
         abort 0

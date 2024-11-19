@@ -2,13 +2,13 @@
 module a::object {
     struct UID has store { flag: bool }
     struct S has key {
-        id: UID
+        id: UID,
     }
 }
 
 module 0x3::object {
     struct UID has store { flag: bool }
     struct S has key {
-        id: UID
+        id: UID,
     }
 }

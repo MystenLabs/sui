@@ -8,5 +8,4 @@ module a::m {
         bad!();
         bad!(); // only one error expected since all of the source locations are the same
     }
-
 }

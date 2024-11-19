@@ -1,12 +1,11 @@
 module 0x8675309::M {
     public struct S { u: u64 }
     public struct R has key {
-        f: u64
+        f: u64,
     }
     public struct G0<T> has drop { f: T }
     public struct G1<T: key> { f: T }
     public struct G2<phantom T> has drop {}
-
 
     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
         (0: u8) == (1: u128);

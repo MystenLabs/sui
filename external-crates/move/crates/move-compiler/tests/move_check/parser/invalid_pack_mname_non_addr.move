@@ -1,10 +1,14 @@
 module 0x42::M {
     struct S {}
+
     fun foo() {
-        false::M::S { }
+        ERROR
+        M::S {}
     }
 
     fun bar() {
-        fun baz()::baz()::M::S { }
+        ERROR
+        ERROR
+        M::S {}
     }
 }

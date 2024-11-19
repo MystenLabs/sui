@@ -1,8 +1,7 @@
 module a::m {
-
-    struct S { }
+    struct S {}
 
     fun foo(x: S) {
-        ::a::m::S { } = x;
+        a::m::S {} = x;
     }
 }

@@ -1,6 +1,5 @@
 module 0x42::m {
-
-    public struct NTuple2<T,U> { fst: T, snd: U } has drop;
+    public struct NTuple2<T, U> { fst: T, snd: U } has drop;
 
     fun t00(): u64 {
         match (NTuple2 { fst: 0, snd: 1 }) {
@@ -11,7 +10,7 @@ module 0x42::m {
     fun t01(): u64 {
         match (NTuple2 { fst: 0, snd: 1 }) {
             NTuple2 { fst: 0, snd: _ } => 0,
-            NTuple2 { fst: 3, snd: _ } => 3
+            NTuple2 { fst: 3, snd: _ } => 3,
         }
     }
 
@@ -39,7 +38,7 @@ module 0x42::m {
             NTuple2 { fst: 0, snd: _ } => 0,
             NTuple2 { fst: 3, snd: _ } => 3,
             NTuple2 { fst: 7, snd: _ } => 7,
-            NTuple2 { fst: 4, snd: _ } => 4
+            NTuple2 { fst: 4, snd: _ } => 4,
         }
     }
 }

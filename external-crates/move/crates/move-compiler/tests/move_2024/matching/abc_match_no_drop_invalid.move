@@ -1,9 +1,8 @@
 module 0x42::m {
-
     public enum ABC<T> {
         A(T),
         B,
-        C(T)
+        C(T),
     }
 
     fun t0(): u64 {
@@ -13,5 +12,4 @@ module 0x42::m {
             _ => 1,
         }
     }
-
 }

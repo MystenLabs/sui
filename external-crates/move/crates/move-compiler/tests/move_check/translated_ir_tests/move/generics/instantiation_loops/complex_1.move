@@ -20,8 +20,7 @@ module 0x8675309::M {
         b<u64, T>()
     }
 
-    fun e<T>() {
-    }
+    fun e<T>() {}
 
     fun f<T>() {
         g<T>()

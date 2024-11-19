@@ -1,5 +1,6 @@
 module 0x8675309::M {
     struct S<T> has copy, drop { s: T }
+
     fun t(s: signer): S<signer> {
         let x = S<signer> { s };
         *&x
@@ -10,6 +11,7 @@ module 0x8675309::M {
 //! new-transaction
 module 0x8675309::N {
     struct S<T> has copy, drop { s: T }
+
     fun t(s: signer): signer {
         let x = S<signer> { s };
         x.s

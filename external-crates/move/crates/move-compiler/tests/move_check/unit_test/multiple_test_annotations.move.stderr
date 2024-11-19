@@ -1,0 +1,26 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/unit_test/multiple_test_annotations.move: Error: tree-sitter failure on 
+[error] ```
+[error] // cannot have multiple #[test] attributes. Only one test attribute is allowed,
+[error] // and all signer arguments need to be assigned in that attribute.
+[error] address 0x1 {
+[error] module M {
+[error]     #[test(_a=@0x1)]
+[error]     #[test(_b=@0x2)]
+[error]     public fun a(_a: signer, _b: signer) { }
+[error] 
+[error]     #[test]
+[error]     #[test(_a=@0x1, _b=@0x2)]
+[error]     public fun b(_a: signer, _b: signer) { }
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

@@ -4,13 +4,12 @@ module 0x42::m {
 
     public struct Y<phantom T>() has drop;
 
-
     fun f() {
         let _ = Y<X>();
         let Y<X>() = Y<X>();
     }
 
-    fun g<T>() { }
+    fun g<T>() {}
 
     fun call_g() {
         g<X>();

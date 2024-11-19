@@ -3,9 +3,11 @@ module 0x8675309::M {
         let x = *&mut *&v; // Test borrows and dereferences
         x;
     }
+
     fun annotated(v: u64): u64 {
-        (v : u64) // Test an expression annotated with a type
+        (v: u64) // Test an expression annotated with a type
     }
+
     fun cast(v: u64): u64 {
         (v as u64) // Test a type cast
     }

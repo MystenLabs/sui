@@ -40,6 +40,5 @@ module 0x8675309::M {
         &a.g
     }
 
-    fun baz(_a: &u64, _b: &u64) {
-    }
+    fun baz(_a: &u64, _b: &u64) {}
 }

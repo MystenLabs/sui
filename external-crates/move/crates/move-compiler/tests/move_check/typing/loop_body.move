@@ -12,16 +12,23 @@ module 0x8675309::M {
     }
 
     fun t3() {
-        loop { let x = 0; x; }
+        loop {
+            let x = 0;
+            x;
+        }
     }
 
     fun t4() {
-        loop { if (true) () }
+        loop {
+            if (true) ()
+        }
     }
 
     fun t5() {
         loop break;
-        loop { break };
+        loop {
+            break
+        };
         loop return ()
     }
 
@@ -30,10 +37,16 @@ module 0x8675309::M {
     }
 
     fun t7() {
-        loop { continue }
+        loop {
+            continue
+        }
     }
 
     fun t8() {
-        loop { loop { break } }
+        loop {
+            loop {
+                break
+            }
+        }
     }
 }

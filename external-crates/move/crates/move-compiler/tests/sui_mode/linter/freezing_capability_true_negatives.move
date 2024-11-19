@@ -2,35 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module a::test_true_negatives {
-    use sui::object::UID;
-    use sui::transfer;
+    use sui::{object::UID, transfer};
 
     struct NormalStruct has key {
-       id: UID
+        id: UID,
     }
 
     struct Data has key {
-       id: UID
+        id: UID,
     }
 
     struct Token has key {
-       id: UID
+        id: UID,
     }
 
     struct Capture has key {
-       id: UID
+        id: UID,
     }
 
     struct Handicap has key {
-       id: UID
+        id: UID,
     }
 
     struct Recap has key {
-       id: UID
+        id: UID,
     }
 
     struct MyCapybara has key {
-       id: UID
+        id: UID,
     }
 
     public fun freeze_normal(w: NormalStruct) {
@@ -70,6 +69,7 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun public_freeze_object<T: key>(_: T) {
         abort ZERO
     }

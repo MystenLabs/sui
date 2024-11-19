@@ -15,5 +15,4 @@ module 0x8675309::M {
         if ((false, true)) () else ();
         if ((0, false)) () else ()
     }
-
 }

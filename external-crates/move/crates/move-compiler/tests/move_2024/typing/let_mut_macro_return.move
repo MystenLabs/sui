@@ -11,8 +11,11 @@ module a::loopy {
 
 module a::m {
     use a::loopy::for_each;
+
     fun t() {
         // TODO this probably shouldn't give any warnings
-        'a: { for_each!(0, 1, |_| return 'a) }
+        'a: {
+            for_each!(0, 1, |_| return 'a)
+        }
     }
 }

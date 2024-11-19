@@ -1,0 +1,32 @@
+[error] external-crates/move/crates/move-compiler/tests/move_check/typing/constant_invalid_usage.move: Error: tree-sitter failure on 
+[error] ```
+[error] address 0x42 {
+[error] module M {
+[error]     const C1: u8 = 0;
+[error]     const C2: u64 = 0;
+[error]     const C3: u128 = 0;
+[error]     const C4: bool = false;
+[error]     const C5: address = @0x0;
+[error]     const C6: vector<u8> = x"0123";
+[error]     const C7: vector<u8> = b"abcd";
+[error] 
+[error]     fun t1(): u8 { C6 }
+[error]     fun t2(): u64 { C7 }
+[error]     fun t3(): u128 { C1 }
+[error]     fun t4(): bool { C2 }
+[error]     fun t5(): address { C3 }
+[error]     fun t6(): vector<u8> { C4 }
+[error]     fun t7(): vector<u8> { C5 }
+[error] }
+[error] }
+[error] 
+[error] ```
+[error]     at checkErrorsCb (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:30:23)
+[error]     at Object.print (/Users/tedks/Projects/mysten/sui/external-crates/move/tooling/prettier-move/out/printer.js:39:16)
+[error]     at callPluginPrintFunction (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20422:20)
+[error]     at printAstToDoc (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20377:22)
+[error]     at async coreFormat (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20687:14)
+[error]     at async formatWithCursor (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/index.mjs:20885:14)
+[error]     at async formatFiles (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7073:18)
+[error]     at async main (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7279:5)
+[error]     at async Module.run (file:///Users/tedks/Projects/mysten/sui/node_modules/prettier/internal/cli.mjs:7225:5)

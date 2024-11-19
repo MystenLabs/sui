@@ -1,14 +1,19 @@
 module 0x8675309::M {
     struct S { f: u64, g: u64 }
+
     fun id<T>(r: &T): &T {
         r
     }
+
     fun id_mut<T>(r: &mut T): &mut T {
         r
     }
-    fun imm_imm<T1, T2>(_x: &T1, _y: &T2) { }
-    fun mut_imm<T1, T2>(_x: &mut T1, _y: &T2) { }
-    fun mut_mut<T1, T2>(_x: &mut T1, _y: &mut T2) { }
+
+    fun imm_imm<T1, T2>(_x: &T1, _y: &T2) {}
+
+    fun mut_imm<T1, T2>(_x: &mut T1, _y: &T2) {}
+
+    fun mut_mut<T1, T2>(_x: &mut T1, _y: &mut T2) {}
 
     fun t0(s1: &mut S, s2: &mut S) {
         imm_imm(freeze(s1), freeze(s1));
