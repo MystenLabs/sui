@@ -12,8 +12,7 @@ fun inc(x: u64): u64 {
 
 public struct GhostStruct {}
 
-#[spec_only]
-#[ext(no_verify)]
+#[spec]
 fun inc_spec(x: u64): u64 {
     ghost::declare_global_mut<GhostStruct, bool>();
     requires(ghost::global<GhostStruct, _>() == false);
@@ -36,7 +35,7 @@ fun inc_saturated(x: u64): u64 {
     }
 }
 
-#[spec_only]
+#[spec(verify)]
 fun inc_saturated_spec(x: u64): u64 {
     ghost::declare_global_mut<GhostStruct, bool>();
     requires(ghost::global<GhostStruct, _>() == false);
@@ -52,7 +51,7 @@ public struct Wrapper<T> {
     value: T
 }
 
-#[spec_only]
+#[spec(verify)]
 fun wrapper_well_formed_spec() {
     ghost::declare_global<GhostStruct, Wrapper<u64>>();
     ensures(ghost::global<GhostStruct, Wrapper<u64>>().value <= u64::max_value!());

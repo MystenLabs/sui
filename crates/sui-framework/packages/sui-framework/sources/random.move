@@ -149,7 +149,7 @@ public fun new_generator(r: &Random, ctx: &mut TxContext): RandomGenerator {
     RandomGenerator { seed, counter: 0, buffer: vector[] }
 }
 
-#[ext(no_verify)]
+#[spec]
 fun new_generator_spec(r: &Random, ctx: &mut TxContext): RandomGenerator {
     new_generator(r, ctx)
 }
@@ -256,7 +256,7 @@ fun u128_in_range(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u
     min + (rand % range_size as u128)
 }
 
-#[ext(no_verify)]
+#[spec]
 fun u128_in_range_spec(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
     // prover::asserts(min <= max);
     let result = u128_in_range(g, min, max, num_of_bytes);

@@ -498,7 +498,7 @@ public fun has_item_with_type<T: key + store>(self: &Kiosk, id: ID): bool {
     dof::exists_with_type<Item, T>(&self.id, Item { id })
 }
 
-#[ext(no_verify)]
+#[spec]
 public fun has_item_with_type_spec<T: key + store>(self: &Kiosk, id: ID): bool {
     has_item_with_type<T>(self, id)
 }
@@ -526,7 +526,7 @@ public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
     object::id(self) == cap.`for`
 }
 
-#[ext(no_verify)]
+#[spec]
 public fun has_access_spec(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
     has_access(self, cap)
 }

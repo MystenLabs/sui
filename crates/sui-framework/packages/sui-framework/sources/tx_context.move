@@ -67,7 +67,7 @@ public fun fresh_object_address(ctx: &mut TxContext): address {
 #[spec_only]
 use prover::prover::{ensures, old};
 
-#[spec_only, ext(no_verify)]
+#[spec]
 fun fresh_object_address_spec(ctx: &mut TxContext): address {
     let old_ctx = old!(ctx);
     let result = fresh_object_address(ctx);
@@ -88,6 +88,7 @@ fun ids_created(self: &TxContext): u64 {
 /// Native function for deriving an ID via hash(tx_hash || ids_created)
 native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
 
+#[spec]
 fun derive_id_spec(tx_hash: vector<u8>, ids_created: u64): address {
     derive_id(tx_hash, ids_created)
 }

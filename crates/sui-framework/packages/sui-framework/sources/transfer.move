@@ -120,12 +120,14 @@ public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
 
 public(package) native fun freeze_object_impl<T: key>(obj: T);
 
+#[spec]
 fun freeze_object_impl_spec<T: key>(obj: T) {
     freeze_object_impl(obj)
 }
 
 public(package) native fun share_object_impl<T: key>(obj: T);
 
+#[spec]
 fun share_object_impl_spec<T: key>(obj: T) {
     share_object_impl(obj)
 }
@@ -133,8 +135,7 @@ fun share_object_impl_spec<T: key>(obj: T) {
 public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
 #[spec_only]
-use prover::prover::{requires, ensures};
-#[spec_only]
+use prover::prover::ensures;
 use prover::ghost;
 
 #[spec_only]
@@ -142,7 +143,7 @@ public struct SpecTransferAddress {}
 #[spec_only]
 public struct SpecTransferAddressExists {}
 
-#[spec_only]
+#[spec]
 fun transfer_impl_spec<T: key>(obj: T, recipient: address) {
     ghost::declare_global_mut<SpecTransferAddressExists, bool>();
     ghost::declare_global_mut<SpecTransferAddress, address>();
@@ -155,6 +156,7 @@ fun transfer_impl_spec<T: key>(obj: T, recipient: address) {
 
 native fun receive_impl<T: key>(parent: address, to_receive: ID, version: u64): T;
 
+#[spec]
 fun receive_impl_spec<T: key>(parent: address, to_receive: ID, version: u64): T {
     receive_impl(parent, to_receive, version)
 }

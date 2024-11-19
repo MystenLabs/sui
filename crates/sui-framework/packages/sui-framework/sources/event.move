@@ -37,6 +37,7 @@ module sui::event;
 /// phantom parameters, eg `emit(MyEvent<phantom T>)`.
 public native fun emit<T: copy + drop>(event: T);
 
+#[spec]
 public fun emit_spec<T: copy + drop>(event: T) {
     emit(event);
 }
