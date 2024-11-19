@@ -62,7 +62,20 @@ impl FilterContext for Context<'_> {
             && match &item.value {
                 P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
                 P::SequenceItem_::Declare(_, _) => false,
-                P::SequenceItem_::Bind(_, _, exp) => should_remove_exp(exp),
+                P::SequenceItem_::Bind(bind_list, _, exp) => {
+                    let is_call_to_spec = should_remove_exp(exp);
+                    println!("bind list: {:?}", bind_list);
+                    let is_spec_variable = bind_list.value.iter().any(|bind| match bind.value {
+                        P::Bind_::Var(_, var) => {
+                            // var ends in "_spec"
+                            let name = var.0.value.as_str();
+                            name.ends_with("_spec")
+                        }
+                        P::Bind_::Unpack(_, _) => false,
+                    });
+
+                    is_call_to_spec || is_spec_variable
+                }
             }
     }
 }
