@@ -460,9 +460,9 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         opts: OptsWithGas,
 
-        /// Publish the package without checking compatibility locally
+        /// Verify package compatibility locally before publishing.
         #[clap(long)]
-        skip_compatibility_verification: bool,
+        verify_compatibility: bool,
 
         /// Publish the package without checking whether compiling dependencies from source results
         /// in bytecode matching the dependencies found on-chain.
@@ -871,7 +871,7 @@ impl SuiClientCommands {
                 upgrade_capability,
                 build_config,
                 skip_dependency_verification,
-                skip_compatibility_verification,
+                verify_compatibility,
                 with_unpublished_dependencies,
                 opts,
             } => {
@@ -940,7 +940,7 @@ impl SuiClientCommands {
                     compiled_module,
                 ) = upgrade_result?;
 
-                if !skip_compatibility_verification {
+                if verify_compatibility {
                     check_compatibility(&client, package_id, compiled_module, protocol_config)
                         .await?;
                 }
