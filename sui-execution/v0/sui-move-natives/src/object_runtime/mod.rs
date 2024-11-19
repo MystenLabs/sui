@@ -507,11 +507,11 @@ impl ObjectRuntimeState {
         let input_owner_map = input_objects
             .iter()
             .filter_map(|(id, owner)| match owner {
-                Owner::AddressOwner(_)
-                | Owner::Shared { .. }
-                | Owner::Immutable
-                | Owner::ConsensusV2 { .. } => None,
+                Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
+                Owner::ConsensusV2 { .. } => {
+                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                }
             })
             .collect();
         // update the input owners with the new owners from transfers
@@ -588,10 +588,7 @@ fn update_owner_map(
     for (id, recipient) in transfers {
         object_owner_map.remove(&id);
         match recipient {
-            Owner::AddressOwner(_)
-            | Owner::Shared { .. }
-            | Owner::Immutable
-            | Owner::ConsensusV2 { .. } => (),
+            Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
                 let mut cur = new_owner;
@@ -608,6 +605,9 @@ fn update_owner_map(
                     }
                 }
                 object_owner_map.insert(id, new_owner);
+            }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
             }
         }
     }

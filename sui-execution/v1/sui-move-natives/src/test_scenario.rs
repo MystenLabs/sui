@@ -152,16 +152,8 @@ pub fn end_transaction(
                     .or_default()
                     .insert(id, ());
             }
-            Owner::ConsensusV2 { authenticator, .. } => {
-                // TODO-DNS is this right to treat consensusv2 as address-owned for now in these tests?
-                let a = *authenticator.as_single_owner();
-                inventories
-                    .address_inventories
-                    .entry(a)
-                    .or_default()
-                    .entry(ty)
-                    .or_default()
-                    .insert(id, ());
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
             }
         }
     }
@@ -607,10 +599,8 @@ fn transaction_effects(
             Owner::ObjectOwner(o) => transferred_to_object.push((pack_id(id), pack_id(o))),
             Owner::Shared { .. } => shared.push(id),
             Owner::Immutable => frozen.push(id),
-            Owner::ConsensusV2 { authenticator, .. } => {
-                // TODO-DNS is this right to treat consensusv2 as address-owned for now in these tests?
-                let a = *authenticator.as_single_owner();
-                transferred_to_account.push((pack_id(id), Value::address(a.into())))
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
             }
         }
     }

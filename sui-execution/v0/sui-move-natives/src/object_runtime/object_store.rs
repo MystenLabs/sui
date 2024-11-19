@@ -118,14 +118,14 @@ impl<'a> Inner<'a> {
                             ))
                         }
                     }
-                    Owner::AddressOwner(_)
-                    | Owner::Immutable
-                    | Owner::Shared { .. }
-                    | Owner::ConsensusV2 { .. } => {
+                    Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared { .. } => {
                         return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                             format!("Bad owner for {child}. \
-                            Expected an id owner {parent} but found an address, immutable, shared, or consensus owner")
+                            Expected an id owner {parent} but found an address, immutable, or shared owner")
                         ))
+                    }
+                    Owner::ConsensusV2 { .. } => {
+                        unimplemented!("ConsensusV2 does not exist for this execution version")
                     }
                 };
                 match object.data {

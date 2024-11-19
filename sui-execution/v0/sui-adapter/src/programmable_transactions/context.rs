@@ -1171,19 +1171,21 @@ mod checked {
             // protected by transaction input checker
             invariant_violation!("Object {} does not exist yet", id);
         };
-        // override_as_immutable ==> Owner::Shared or Owner::ConsensusV2
+        // override_as_immutable ==> Owner::Shared
         assert_invariant!(
-            !override_as_immutable
-                || matches!(obj.owner, Owner::Shared { .. } | Owner::ConsensusV2 { .. }),
-            "override_as_immutable should only be set for shared or consensus objects"
+            !override_as_immutable || matches!(obj.owner, Owner::Shared { .. }),
+            "override_as_immutable should only be set for shared objects"
         );
         let is_mutable_input = match obj.owner {
             Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusV2 { .. } => !override_as_immutable,
+            Owner::Shared { .. } => !override_as_immutable,
             Owner::Immutable => false,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
+            }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
             }
         };
         let owner = obj.owner;
