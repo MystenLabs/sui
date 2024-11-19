@@ -185,6 +185,7 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
     pub handle_soft_bundle_certificates_consensus_latency: Histogram,
+    pub handle_soft_bundle_certificates_count: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
@@ -267,6 +268,13 @@ impl ValidatorServiceMetrics {
                 "validator_service_handle_soft_bundle_certificates_consensus_latency",
                 "Latency of handling a consensus soft bundle",
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_soft_bundle_certificates_count: register_histogram_with_registry!(
+                "handle_soft_bundle_certificates_count",
+                "The number of certificates included in a soft bundle",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -638,6 +646,7 @@ impl ValidatorService {
             }
         } else {
             // `soft_bundle_validity_check` ensured that all certificates contain shared objects.
+            sefl.metrics.handle_soft_bundle_certificates_count.observe(certificates.len() as f64);
             &self
                 .metrics
                 .handle_soft_bundle_certificates_consensus_latency

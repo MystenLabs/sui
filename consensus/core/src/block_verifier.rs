@@ -19,6 +19,9 @@ pub(crate) trait BlockVerifier: Send + Sync + 'static {
     /// This is called before examining a block's causal history.
     fn verify(&self, block: &SignedBlock) -> ConsensusResult<()>;
 
+    /// Verifies a block's transactions data in respect of included transactions size limits.
+    fn check_transactions(&self, transactions: &[&[u8]]) -> ConsensusResult<()>;
+
     /// Verifies a block w.r.t. ancestor blocks.
     /// This is called after a block has complete causal history locally,
     /// and is ready to be accepted into the DAG.
@@ -147,9 +150,17 @@ impl BlockVerifier for SignedBlockVerifier {
 
         let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
 
+        self.check_transactions(&batch)?;
+
+        self.transaction_verifier
+            .verify_batch(&batch)
+            .map_err(|e| ConsensusError::InvalidTransaction(format!("{e:?}")))
+    }
+
+    fn check_transactions(&self, batch: &[&[u8]]) -> ConsensusResult<()> {
         let max_transaction_size_limit =
             self.context.protocol_config.max_transaction_size_bytes() as usize;
-        for t in &batch {
+        for t in batch {
             if t.len() > max_transaction_size_limit && max_transaction_size_limit > 0 {
                 return Err(ConsensusError::TransactionTooLarge {
                     size: t.len(),
@@ -179,10 +190,7 @@ impl BlockVerifier for SignedBlockVerifier {
                 limit: total_transactions_size_limit,
             });
         }
-
-        self.transaction_verifier
-            .verify_batch(&batch)
-            .map_err(|e| ConsensusError::InvalidTransaction(format!("{e:?}")))
+        Ok(())
     }
 
     fn check_ancestors(
@@ -236,6 +244,10 @@ pub(crate) struct NoopBlockVerifier;
 
 impl BlockVerifier for NoopBlockVerifier {
     fn verify(&self, _block: &SignedBlock) -> ConsensusResult<()> {
+        Ok(())
+    }
+
+    fn check_transactions(&self, _transactions: &[&[u8]]) -> ConsensusResult<()> {
         Ok(())
     }
 

@@ -988,6 +988,10 @@ mod tests {
             Ok(())
         }
 
+        fn check_transactions(&self, _transactions: &[&[u8]]) -> ConsensusResult<()> {
+            Ok(())
+        }
+
         fn check_ancestors(
             &self,
             block: &VerifiedBlock,
