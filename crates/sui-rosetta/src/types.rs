@@ -1079,7 +1079,11 @@ pub async fn pay_sui_to_metadata(
         let total_coin_value = coins.iter().map(|c| c.balance).sum::<u64>() as i128;
 
         let mut coins: Vec<ObjectRef> = coins.into_iter().map(|c| c.object_ref()).collect();
-        let objects = coins.split_off(MAX_GAS_COINS);
+        let objects = if coins.len() > MAX_GAS_COINS {
+            coins.split_off(MAX_GAS_COINS)
+        } else {
+            vec![]
+        };
 
         return Ok(ConstructionMetadata {
             sender,
@@ -1095,6 +1099,7 @@ pub async fn pay_sui_to_metadata(
     let mut coins_stream = Box::pin(client.coin_read_api().get_coins_stream(sender, None));
 
     let mut all_coins = vec![];
+    let mut coins_for_gas: Vec<ObjectRef>;
     let total_amount = amounts.iter().sum::<u64>();
     let mut gathered = 0;
     let mut budget = START_BUDGET;
@@ -1118,12 +1123,17 @@ pub async fn pay_sui_to_metadata(
             .map(|c| c.object_ref())
             .collect();
         let pt = pay_sui_pt(recipients.clone(), amounts.clone(), coins_to_merge)?;
+        coins_for_gas = (if all_coins.len() > MAX_GAS_COINS {
+            &all_coins[..MAX_GAS_COINS]
+        } else {
+            &all_coins[..]
+        })
+        .iter()
+        .map(|c| c.object_ref())
+        .collect();
         let tx_data = TransactionData::new_programmable(
             sender,
-            all_coins[..MAX_GAS_COINS]
-                .iter()
-                .map(|c| c.object_ref())
-                .collect(),
+            coins_for_gas.clone(),
             pt,
             // We don't want dry run to fail due to budget, because
             // it will display the fail-budget
@@ -1146,10 +1156,6 @@ pub async fn pay_sui_to_metadata(
             break;
         }
     }
-    let coins: Vec<ObjectRef> = all_coins[..MAX_GAS_COINS]
-        .iter()
-        .map(|c| c.object_ref())
-        .collect();
     let objects = all_coins
         .iter()
         .skip(MAX_GAS_COINS)
@@ -1159,7 +1165,7 @@ pub async fn pay_sui_to_metadata(
 
     Ok(ConstructionMetadata {
         sender,
-        coins,
+        coins: coins_for_gas,
         budget,
         objects,
         total_coin_value,
