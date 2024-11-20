@@ -11,7 +11,7 @@ use crate::{
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
         codes::Severity,
-        warning_filters::{WarningFilter, WarningFilters},
+        warning_filters::{WarningFilter, WarningFiltersBuilder},
         *,
     },
     editions::Edition,
@@ -60,7 +60,7 @@ pub struct Compiler {
     flags: Flags,
     visitors: Vec<Visitor>,
     /// Predefined filter for compiler warnings.
-    warning_filter: Option<WarningFilters>,
+    warning_filter: Option<WarningFiltersBuilder>,
     known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
@@ -279,7 +279,7 @@ impl Compiler {
         self
     }
 
-    pub fn set_warning_filter(mut self, filter: Option<WarningFilters>) -> Self {
+    pub fn set_warning_filter(mut self, filter: Option<WarningFiltersBuilder>) -> Self {
         assert!(self.warning_filter.is_none());
         self.warning_filter = filter;
         self

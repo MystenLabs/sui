@@ -1,5 +1,59 @@
 # @mysten/zksend
 
+## 0.12.3
+
+### Patch Changes
+
+- f03e60f: Fix getSentTransactionsWithLinks defaulting to the public fullnode URL
+
+## 0.12.2
+
+### Patch Changes
+
+- 4bac808: Improve error handling of links that have not been indexed yet
+- 4bac808: Fix bcs parsing of createLinks query after GraphQL api change
+- Updated dependencies [938fb6e]
+  - @mysten/sui@1.14.4
+  - @mysten/wallet-standard@0.13.13
+
+## 0.12.1
+
+### Patch Changes
+
+- 1765780: fix zksend link network detection
+
+## 0.12.0
+
+### Minor Changes
+
+- 60bdb62: Update graphql query and use stashed host for claim api
+- 364a93a: Remove decoding spaces to `+` in zksend wallet url hashes
+- 364a93a: Add claimedBy property that is set when claimedAssets are loaded
+
+## 0.11.12
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/wallet-standard@0.13.12
+
+## 0.11.11
+
+### Patch Changes
+
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+  - @mysten/wallet-standard@0.13.11
+
+## 0.11.10
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+  - @mysten/wallet-standard@0.13.10
+
 ## 0.11.9
 
 ### Patch Changes

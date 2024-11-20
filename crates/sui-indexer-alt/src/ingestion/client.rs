@@ -6,9 +6,11 @@ use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
 use crate::metrics::IndexerMetrics;
+use backoff::backoff::Constant;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_storage::blob::Blob;
@@ -43,31 +45,78 @@ pub enum FetchError {
 pub type FetchResult = Result<Bytes, FetchError>;
 
 #[derive(Clone)]
-pub(crate) struct IngestionClient {
+pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
     metrics: Arc<IndexerMetrics>,
+    latest_ingested_checkpoint: Arc<AtomicU64>,
 }
 
 impl IngestionClient {
     pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
-        Ok(IngestionClient { client, metrics })
+        let latest_ingested_checkpoint = Arc::new(AtomicU64::new(0));
+        Ok(IngestionClient {
+            client,
+            metrics,
+            latest_ingested_checkpoint,
+        })
     }
 
     pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
-        IngestionClient { client, metrics }
+        let latest_ingested_checkpoint = Arc::new(AtomicU64::new(0));
+        IngestionClient {
+            client,
+            metrics,
+            latest_ingested_checkpoint,
+        }
     }
 
-    /// Repeatedly retries transient errors with an exponential backoff (up to [MAX_RETRY_INTERVAL]).
-    /// Transient errors are either defined by the client implementation that
-    /// returns a `FetchError::Transient` error variant, or within this function
-    /// if we fail to deserialize the result as [CheckpointData].
+    /// Fetch checkpoint data by sequence number.
+    ///
+    /// This function behaves like `IngestionClient::fetch`, but will repeatedly retry the fetch if
+    /// the checkpoint is not found, on a constant back-off. The time between fetches is controlled
+    /// by the `retry_interval` parameter.
+    pub async fn wait_for(
+        &self,
+        checkpoint: u64,
+        retry_interval: Duration,
+        cancel: &CancellationToken,
+    ) -> IngestionResult<Arc<CheckpointData>> {
+        let backoff = Constant::new(retry_interval);
+        let fetch = || async move {
+            use backoff::Error as BE;
+            if cancel.is_cancelled() {
+                return Err(BE::permanent(IngestionError::Cancelled));
+            }
+
+            self.fetch(checkpoint, cancel).await.map_err(|e| match e {
+                IngestionError::NotFound(checkpoint) => {
+                    debug!(checkpoint, "Checkpoint not found, retrying...");
+                    self.metrics.total_ingested_not_found_retries.inc();
+                    BE::transient(e)
+                }
+                e => BE::permanent(e),
+            })
+        };
+
+        backoff::future::retry(backoff, fetch).await
+    }
+
+    /// Fetch checkpoint data by sequence number.
+    ///
+    /// Repeatedly retries transient errors with an exponential backoff (up to
+    /// [MAX_TRANSIENT_RETRY_INTERVAL]). Transient errors are either defined by the client
+    /// implementation that returns a [FetchError::Transient] error variant, or within this
+    /// function if we fail to deserialize the result as [CheckpointData].
+    ///
     /// The function will immediately return on:
-    /// - non-transient errors determined by the client implementation,
-    ///   This includes both the FetcherError::NotFound and FetcherError::Permanent variants.
-    /// - cancellation of the supplied `cancel` token.
+    ///
+    /// - Non-transient errors determined by the client implementation, this includes both the
+    ///   [FetchError::NotFound] and [FetchError::Permanent] variants.
+    ///
+    /// - Cancellation of the supplied `cancel` token.
     pub(crate) async fn fetch(
         &self,
         checkpoint: u64,
@@ -122,6 +171,23 @@ impl IngestionClient {
             elapsed_ms = elapsed * 1000.0,
             "Fetched checkpoint"
         );
+
+        let lag =
+            chrono::Utc::now().timestamp_millis() - data.checkpoint_summary.timestamp_ms as i64;
+        self.metrics
+            .ingested_checkpoint_timestamp_lag
+            .observe((lag as f64) / 1000.0);
+
+        let new_seq = data.checkpoint_summary.sequence_number;
+        let old_seq = self
+            .latest_ingested_checkpoint
+            .fetch_max(new_seq, Ordering::Relaxed);
+        if new_seq > old_seq {
+            self.metrics.latest_ingested_checkpoint.set(new_seq as i64);
+            self.metrics
+                .latest_ingested_checkpoint_timestamp_lag_ms
+                .set(lag);
+        }
 
         self.metrics.total_ingested_checkpoints.inc();
 

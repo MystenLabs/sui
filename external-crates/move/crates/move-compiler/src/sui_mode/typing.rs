@@ -8,10 +8,7 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::Flavor,
     expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, TargetKind, Visibility},
     naming::ast::{
@@ -47,7 +44,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 #[allow(unused)]
 pub struct Context<'a> {
     env: &'a CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'a>,
     info: Arc<TypingProgramInfo>,
     sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
@@ -61,12 +58,12 @@ impl<'a> Context<'a> {
         let sui_module_ident = info
             .modules
             .key_cloned_iter()
-            .find(|(m, _)| m.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME))
+            .find(|(m, _)| m.value.is(&SUI_ADDR_VALUE, TRANSFER_MODULE_NAME))
             .map(|(m, _)| m);
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             info,
             sui_transfer_ident: sui_module_ident,
             current_module: None,
@@ -77,12 +74,12 @@ impl<'a> Context<'a> {
     }
 
     fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     fn set_module(&mut self, current_module: ModuleIdent) {
@@ -114,11 +111,11 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
 
 impl<'a> TypingVisitorContext for Context<'a> {
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
@@ -228,7 +225,7 @@ fn struct_def(context: &mut Context, name: DatatypeName, sdef: &N::StructDefinit
     let id_field_loc = fields.get_loc_(&ID_FIELD_NAME).unwrap();
     if !id_field_type
         .value
-        .is(SUI_ADDR_NAME, OBJECT_MODULE_NAME, UID_TYPE_NAME)
+        .is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, UID_TYPE_NAME)
     {
         let actual = format!(
             "But found type: {}",
@@ -621,7 +618,11 @@ fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
         // not a user defined type
         return TxContextKind::None;
     };
-    if inner_name.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME) {
+    if inner_name.is(
+        &SUI_ADDR_VALUE,
+        TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_TYPE_NAME,
+    ) {
         if *is_mut {
             TxContextKind::Mutable
         } else {
@@ -716,7 +717,9 @@ fn is_mut_clock(param_ty: &Type) -> bool {
     match &param_ty.value {
         Type_::Ref(/* mut */ false, _) => false,
         Type_::Ref(/* mut */ true, t) => is_mut_clock(t),
-        Type_::Apply(_, sp!(_, n_), _) => n_.is(SUI_ADDR_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME),
+        Type_::Apply(_, sp!(_, n_), _) => {
+            n_.is(&SUI_ADDR_VALUE, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME)
+        }
         Type_::Unit
         | Type_::Param(_)
         | Type_::Var(_)
@@ -731,7 +734,7 @@ fn is_mut_random(param_ty: &Type) -> bool {
         Type_::Ref(/* mut */ false, _) => false,
         Type_::Ref(/* mut */ true, t) => is_mut_random(t),
         Type_::Apply(_, sp!(_, n_), _) => n_.is(
-            SUI_ADDR_NAME,
+            &SUI_ADDR_VALUE,
             RANDOMNESS_MODULE_NAME,
             RANDOMNESS_STATE_TYPE_NAME,
         ),
@@ -748,7 +751,7 @@ fn is_entry_receiving_ty(param_ty: &Type) -> bool {
     match &param_ty.value {
         Type_::Ref(_, t) => is_entry_receiving_ty(t),
         Type_::Apply(_, sp!(_, n), targs)
-            if n.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME, RECEIVING_TYPE_NAME) =>
+            if n.is(&SUI_ADDR_VALUE, TRANSFER_MODULE_NAME, RECEIVING_TYPE_NAME) =>
         {
             debug_assert!(targs.len() == 1);
             // Don't care about the type parameter, just that it's a receiving type -- since it has
@@ -778,15 +781,15 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
 
         // custom "primitives"
         Type_::Apply(_, sp!(_, n), targs)
-            if n.is(STD_ADDR_NAME, ASCII_MODULE_NAME, ASCII_TYPE_NAME)
-                || n.is(STD_ADDR_NAME, UTF_MODULE_NAME, UTF_TYPE_NAME)
-                || n.is(SUI_ADDR_NAME, OBJECT_MODULE_NAME, ID_TYPE_NAME) =>
+            if n.is(&STD_ADDR_VALUE, ASCII_MODULE_NAME, ASCII_TYPE_NAME)
+                || n.is(&STD_ADDR_VALUE, UTF_MODULE_NAME, UTF_TYPE_NAME)
+                || n.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, ID_TYPE_NAME) =>
         {
             debug_assert!(targs.is_empty());
             true
         }
         Type_::Apply(_, sp!(_, n), targs)
-            if n.is(STD_ADDR_NAME, OPTION_MODULE_NAME, OPTION_TYPE_NAME) =>
+            if n.is(&STD_ADDR_VALUE, OPTION_MODULE_NAME, OPTION_TYPE_NAME) =>
         {
             debug_assert!(targs.len() == 1);
             is_entry_primitive_ty(&targs[0])
@@ -955,12 +958,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 );
                 context.add_diag(diag)
             }
-            if module.value.is(SUI_ADDR_NAME, EVENT_MODULE_NAME)
+            if module.value.is(&SUI_ADDR_VALUE, EVENT_MODULE_NAME)
                 && name.value() == EVENT_FUNCTION_NAME
             {
                 check_event_emit(context, e.exp.loc, mcall)
             }
-            let is_transfer_module = module.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME);
+            let is_transfer_module = module.value.is(&SUI_ADDR_VALUE, TRANSFER_MODULE_NAME);
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
                 check_private_transfer(context, e.exp.loc, mcall)
             }
@@ -987,11 +990,11 @@ fn exp(context: &mut Context, e: &T::Exp) {
 fn otw_special_cases(context: &Context) -> bool {
     BRIDGE_SUPPORTED_ASSET
         .iter()
-        .any(|token| context.current_module().value.is(BRIDGE_ADDR_NAME, token))
+        .any(|token| context.current_module().value.is(&BRIDGE_ADDR_VALUE, token))
         || context
             .current_module()
             .value
-            .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
+            .is(&SUI_ADDR_VALUE, SUI_MODULE_NAME)
 }
 
 fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
@@ -1035,7 +1038,7 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
     let current_module = context.current_module();
     if current_module
         .value
-        .is(SUI_ADDR_NAME, TRANSFER_FUNCTION_NAME)
+        .is(&SUI_ADDR_VALUE, TRANSFER_FUNCTION_NAME)
     {
         // inside the transfer module, so no private transfer rules
         return;

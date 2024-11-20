@@ -5,31 +5,33 @@
 //! with the key ability. In other words flags freezing of structs whose fields (directly or not)
 //! wrap objects.
 
-use std::{collections::BTreeMap, sync::Arc};
-
 use crate::{
     diag,
     diagnostics::{
         codes::{custom, DiagnosticInfo, Severity},
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
+        warning_filters::WarningFilters,
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     expansion::ast as E,
     naming::ast as N,
     parser::ast::{self as P, Ability_},
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    sui_mode::{
+        linters::{
+            LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, LINT_WARNING_PREFIX,
+            PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
+        },
+        SUI_ADDR_VALUE,
+    },
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-
-use super::{
-    base_type, LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, LINT_WARNING_PREFIX,
-    PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
@@ -39,9 +41,9 @@ const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
     "attempting to freeze wrapped objects",
 );
 
-const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
+const FREEZE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
 /// Information about a field that wraps other objects.
@@ -75,8 +77,9 @@ type WrappingFields =
 pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
+    #[allow(unused)]
     env: &'a CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'a>,
     program_info: Arc<TypingProgramInfo>,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
     wrapping_fields: WrappingFields,
@@ -86,10 +89,10 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
     type Context<'a> = Context<'a>;
 
     fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a> {
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             program_info: program.info.clone(),
             wrapping_fields: WrappingFields::new(),
         }
@@ -98,12 +101,12 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
 
 impl Context<'_> {
     fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 }
 
@@ -127,17 +130,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
         use T::UnannotatedExp_ as E;
         if let E::ModuleCall(fun) = &exp.exp.value {
             if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
-                fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
+                fun.module.value.is(addr, *module) && &fun.name.value().as_str() == fname
             }) {
-                let Some(bt) = base_type(&fun.type_arguments[0]) else {
-                    // not an (potentially dereferenced) N::Type_::Apply nor N::Type_::Param
-                    return false;
-                };
-                let N::Type_::Apply(_, tname, _) = &bt.value else {
-                    // not a struct type
-                    return false;
-                };
-                let N::TypeName_::ModuleType(mident, sname) = tname.value else {
+                let Some(sp!(_, N::TypeName_::ModuleType(mident, sname))) =
+                    fun.type_arguments[0].value.type_name()
+                else {
                     // struct with a given name not found
                     return false;
                 };
@@ -156,11 +153,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
     }
 
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 }
 
@@ -185,7 +182,7 @@ impl<'a> Context<'a> {
                     let sloc = self.program_info.struct_declared_loc(mident, sname);
                     Some((sloc, true))
                 } else {
-                    self.find_wrapping_field_loc(*mident, *sname)
+                    self.find_wrapping_field_loc(mident, sname)
                         .as_ref()
                         .map(|info| (info.wrapped_type_loc, false))
                 }
@@ -207,34 +204,31 @@ impl<'a> Context<'a> {
     /// information is included as well.
     fn find_wrapping_field_loc(
         &mut self,
-        mident: E::ModuleIdent,
-        sname: P::DatatypeName,
+        mident: &E::ModuleIdent,
+        sname: &P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
-        let memoized_info = self
-            .wrapping_fields
-            .get(&mident)
-            .and_then(|m| m.get(&sname));
+        let memoized_info = self.wrapping_fields.get(mident).and_then(|m| m.get(sname));
         if memoized_info.is_none() {
             let info = self.find_wrapping_field_loc_impl(mident, sname);
             self.wrapping_fields
-                .entry(mident)
+                .entry(*mident)
                 .or_default()
-                .insert(sname, info);
+                .insert(*sname, info);
         }
         *self
             .wrapping_fields
-            .get(&mident)
-            .and_then(|m| m.get(&sname))
+            .get(mident)
+            .and_then(|m| m.get(sname))
             .unwrap()
     }
 
     fn find_wrapping_field_loc_impl(
         &mut self,
-        mident: E::ModuleIdent,
-        sname: P::DatatypeName,
+        mident: &E::ModuleIdent,
+        sname: &P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
         let info = self.program_info.clone();
-        let sdef = info.struct_definition(&mident, &sname);
+        let sdef = info.struct_definition(mident, sname);
         let N::StructFields::Defined(_, sfields) = &sdef.fields else {
             return None;
         };

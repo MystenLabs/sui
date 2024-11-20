@@ -2,7 +2,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/ability_modifier_postfix_no_abilities_with_semi.move:5:19
   │
 5 │     struct Foo {} has;
-  │                   ^^^ Postfix abilities are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │                   ^^^ Postfix abilities are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

@@ -225,7 +225,7 @@ pub fn get_sui_system_state_wrapper(
     object_store: &dyn ObjectStore,
 ) -> Result<SuiSystemStateWrapper, SuiError> {
     let wrapper = object_store
-        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         // Don't panic here on None because object_store is a generic store.
         .ok_or_else(|| {
             SuiError::SuiSystemStateReadError("SuiSystemStateWrapper object not found".to_owned())
@@ -414,6 +414,13 @@ impl PoolTokenExchangeRate {
             1_f64
         } else {
             self.pool_token_amount as f64 / self.sui_amount as f64
+        }
+    }
+
+    pub fn new(sui_amount: u64, pool_token_amount: u64) -> Self {
+        Self {
+            sui_amount,
+            pool_token_amount,
         }
     }
 }

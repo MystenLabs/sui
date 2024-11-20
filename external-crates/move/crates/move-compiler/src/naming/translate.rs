@@ -7,8 +7,8 @@ use crate::{
     diagnostics::{
         self,
         codes::{self, *},
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
+        warning_filters::WarningFilters,
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::{
@@ -533,8 +533,8 @@ pub(super) struct OuterContext {
 pub(super) struct Context<'outer, 'env> {
     pub env: &'env CompilationEnv,
     outer: &'outer OuterContext,
+    reporter: DiagnosticReporter<'env>,
     unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
-    warning_filters_scope: WarningFiltersScope,
     current_module: ModuleIdent,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
@@ -597,13 +597,13 @@ impl<'outer, 'env> Context<'outer, 'env> {
         current_module: ModuleIdent,
     ) -> Self {
         let unscoped_types = vec![outer.unscoped_types.clone()];
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
             outer,
+            reporter,
             unscoped_types,
             current_module,
-            warning_filters_scope,
             local_scopes: vec![],
             local_count: BTreeMap::new(),
             nominal_blocks: vec![],
@@ -616,30 +616,34 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     #[allow(unused)]
     pub fn extend_ide_info(&self, info: IDEInfo) {
-        self.env.extend_ide_info(&self.warning_filters_scope, info);
+        self.reporter.extend_ide_info(info);
     }
 
     pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
-        self.env
-            .add_ide_annotation(&self.warning_filters_scope, loc, info);
+        self.reporter.add_ide_annotation(loc, info);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
+    }
+
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env
+            .check_feature(&self.reporter, package, feature, loc)
     }
 
     fn valid_module(&mut self, m: &ModuleIdent) -> bool {
@@ -667,7 +671,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         let result = members.get(&n.value);
         if result.is_none() {
             let diag = make_unbound_module_member_error(self, kind, loc, *m, n.value);
-            self.env.add_diag(&self.warning_filters_scope, diag);
+            self.add_diag(diag);
         }
         result.map(|inner| {
             let mut result = inner.clone();
@@ -738,8 +742,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         match ma_ {
             EN::Name(sp!(_, n)) if n == symbol!("_") => {
                 let current_package = self.current_package;
-                self.env
-                    .check_feature(current_package, FeatureGate::TypeHoles, nloc);
+                self.check_feature(current_package, FeatureGate::TypeHoles, nloc);
                 ResolvedType::Hole
             }
             EN::Name(n) => match self.resolve_unscoped_type(nloc, n) {
@@ -1130,8 +1133,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 }
             }
             ma_ @ E::ModuleAccess_::Variant(_, _) => {
-                self.env
-                    .check_feature(self.current_package, FeatureGate::Enums, mloc);
+                self.check_feature(self.current_package, FeatureGate::Enums, mloc);
                 let Some(result) = self.resolve_datatype_constructor(sp(mloc, ma_), "construction")
                 else {
                     assert!(self.env.has_errors());
@@ -1170,7 +1172,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                     }
                     _ => match self.resolve_datatype_constructor(sp(mloc, ma_), "pattern") {
                         Some(ctor) => ResolvedPatternTerm::Constructor(Box::new(ctor)),
-                        None => todo!(),
+                        None => ResolvedPatternTerm::Unbound, // TODO: some cases here may be handled
                     },
                 }
             }
@@ -1660,12 +1662,19 @@ pub fn program(
     prog: E::Program,
 ) -> N::Program {
     let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
-    let E::Program { modules: emodules } = prog;
+    let E::Program {
+        warning_filters_table,
+        modules: emodules,
+    } = prog;
     let modules = modules(compilation_env, &outer_context, emodules);
     let mut inner = N::Program_ { modules };
     let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
-    N::Program { info, inner }
+    N::Program {
+        info,
+        warning_filters_table,
+        inner,
+    }
 }
 
 fn modules(
@@ -1696,7 +1705,7 @@ fn module(
         constants: econstants,
     } = mdef;
     let context = &mut Context::new(env, outer, package_name, ident);
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
@@ -2043,7 +2052,7 @@ fn function(
     assert!(context.nominal_block_id == 0);
     assert!(context.used_fun_tparams.is_empty());
     assert!(context.used_locals.is_empty());
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
@@ -2077,7 +2086,7 @@ fn function(
         body,
     };
     resolve_syntax_attributes(context, syntax_methods, &module, &name, &f);
-    fake_natives::function(context.env, module, name, &f);
+    fake_natives::function(&context.reporter, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
     context.local_count = BTreeMap::new();
@@ -2172,7 +2181,7 @@ fn struct_def(
         type_parameters,
         fields,
     } = sdef;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, type_parameters);
     let fields = struct_fields(context, fields);
     context.pop_warning_filter_scope();
@@ -2230,7 +2239,7 @@ fn enum_def(
         type_parameters,
         variants,
     } = edef;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, type_parameters);
     let variants = enum_variants(context, variants);
     context.pop_warning_filter_scope();
@@ -2302,7 +2311,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
     assert!(context.used_locals.is_empty());
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     context.local_scopes = vec![BTreeMap::new()];
     let signature = type_(context, TypeAnnotation::ConstantSignature, esignature);
     let value = *exp(context, Box::new(evalue));
@@ -2769,9 +2778,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
 
         EE::Abort(Some(es)) => NE::Abort(exp(context, es)),
         EE::Abort(None) => {
-            context
-                .env
-                .check_feature(context.current_package, FeatureGate::CleverAssertions, eloc);
+            context.check_feature(context.current_package, FeatureGate::CleverAssertions, eloc);
             let abort_const_expr = sp(
                 eloc,
                 N::Exp_::ErrorConstant {
@@ -2901,7 +2908,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             resolve_call(context, eloc, ma, is_macro, tys_opt, rhs)
         }
-        EE::MethodCall(edot, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
+        EE::MethodCall(edot, dot_loc, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
             None => {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
@@ -2910,13 +2917,9 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
-                    context.env.check_feature(
-                        context.current_package,
-                        FeatureGate::MacroFuns,
-                        eloc,
-                    );
+                    context.check_feature(context.current_package, FeatureGate::MacroFuns, eloc);
                 }
-                NE::MethodCall(d, n, is_macro, ty_args, nes)
+                NE::MethodCall(d, dot_loc, n, is_macro, ty_args, nes)
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
@@ -2982,7 +2985,9 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
                 _ => N::ExpDotted_::Exp(ne),
             }
         }
-        E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::Dot(d, loc, f) => {
+            N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), loc, Field(f))
+        }
         E::ExpDotted_::DotUnresolved(loc, d) => {
             N::ExpDotted_::DotAutocomplete(loc, Box::new(dotted(context, *d)?))
         }
@@ -3935,9 +3940,7 @@ fn resolve_call(
             } = *mf;
             // TODO This is a weird place to check this feature gate.
             if let Some(mloc) = is_macro {
-                context
-                    .env
-                    .check_feature(context.current_package, FeatureGate::MacroFuns, mloc);
+                context.check_feature(context.current_package, FeatureGate::MacroFuns, mloc);
             }
             // TODO. We could check arities here, but we don't; type dones that, instead.
             let tyargs_opt = types_opt(context, TypeAnnotation::Expression, in_tyargs_opt);
@@ -3992,7 +3995,7 @@ fn resolve_call(
                     // If no abort code is given for the assert, we add in the abort code as the
                     // bitset-line-number if `CleverAssertions` is set.
                     if args.value.len() == 1 && is_macro.is_some() {
-                        context.env.check_feature(
+                        context.check_feature(
                             context.current_package,
                             FeatureGate::CleverAssertions,
                             subject_loc,
@@ -4010,7 +4013,7 @@ fn resolve_call(
             N::Exp_::Builtin(sp(subject_loc, builtin_), args)
         }
         ResolvedCallSubject::Constructor(_) => {
-            context.env.check_feature(
+            context.check_feature(
                 context.current_package,
                 FeatureGate::PositionalFields,
                 call_loc,
@@ -4055,9 +4058,7 @@ fn resolve_call(
             }
         }
         ResolvedCallSubject::Var(var) => {
-            context
-                .env
-                .check_feature(context.current_package, FeatureGate::Lambda, call_loc);
+            context.check_feature(context.current_package, FeatureGate::Lambda, call_loc);
 
             check_is_not_macro(context, is_macro, &var.value.name);
             let tyargs_opt = types_opt(context, TypeAnnotation::Expression, in_tyargs_opt);
@@ -4336,7 +4337,7 @@ fn remove_unused_bindings_exp(
                 remove_unused_bindings_exp(context, used, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
             for e in es {
                 remove_unused_bindings_exp(context, used, e)
@@ -4354,7 +4355,7 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             remove_unused_bindings_exp_dotted(context, used, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {

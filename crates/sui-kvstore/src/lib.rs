@@ -5,6 +5,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 pub use bigtable::client::BigTableClient;
 pub use bigtable::worker::KvWorker;
+use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointDigest, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -31,6 +32,8 @@ pub trait KeyValueStoreReader {
         &mut self,
         digest: CheckpointDigest,
     ) -> Result<Option<Checkpoint>>;
+    async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber>;
+    async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
 }
 
 #[async_trait]

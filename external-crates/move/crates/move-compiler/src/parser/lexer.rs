@@ -488,8 +488,7 @@ impl<'input> Lexer<'input> {
                 diag!(Syntax::InvalidDocComment, (loc, msg))
             })
             .collect();
-        let warning_filters = env.top_level_warning_filter_scope();
-        env.add_diags(warning_filters, diags);
+        env.diagnostic_reporter_at_top_level().add_diags(diags);
         std::mem::take(&mut self.matched_doc_comments)
     }
 

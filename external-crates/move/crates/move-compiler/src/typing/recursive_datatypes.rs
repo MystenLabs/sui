@@ -63,6 +63,7 @@ pub fn modules(
 }
 
 fn module(compilation_env: &CompilationEnv, mname: ModuleIdent, module: &T::ModuleDefinition) {
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let context = &mut Context::new(mname);
     module
         .structs
@@ -79,7 +80,7 @@ fn module(compilation_env: &CompilationEnv, mname: ModuleIdent, module: &T::Modu
     petgraph_scc(&graph)
         .into_iter()
         .filter(|scc| scc.len() > 1 || graph.contains_edge(scc[0], scc[0]))
-        .for_each(|scc| compilation_env.add_error_diag(cycle_error(context, &graph, scc[0])))
+        .for_each(|scc| reporter.add_diag(cycle_error(context, &graph, scc[0])))
 }
 
 fn struct_def(context: &mut Context, sname: DatatypeName, sdef: &N::StructDefinition) {

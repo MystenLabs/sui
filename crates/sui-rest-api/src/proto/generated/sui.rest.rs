@@ -151,6 +151,8 @@ pub struct EffectsFinality {
     pub signature: ::core::option::Option<ValidatorAggregatedSignature>,
     #[prost(uint64, optional, tag = "2")]
     pub checkpoint: ::core::option::Option<u64>,
+    #[prost(bool, optional, tag = "3")]
+    pub quorum_executed: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionExecutionResponse {

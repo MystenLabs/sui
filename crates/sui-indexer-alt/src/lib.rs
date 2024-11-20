@@ -3,18 +3,22 @@
 
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use db::{Db, DbConfig};
-use ingestion::{IngestionConfig, IngestionService};
+use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
-use pipeline::{concurrent, sequential, PipelineConfig, Processor};
+use pipeline::{
+    concurrent::{self, PrunerConfig},
+    sequential, PipelineConfig, Processor,
+};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub mod args;
+pub mod bootstrap;
 pub mod db;
 pub mod handlers;
 pub mod ingestion;
@@ -134,30 +138,48 @@ impl Indexer {
         })
     }
 
+    /// The database connection pool used by the indexer.
+    pub fn db(&self) -> &Db {
+        &self.db
+    }
+
+    /// The ingestion client used by the indexer to fetch checkpoints.
+    pub fn ingestion_client(&self) -> &IngestionClient {
+        self.ingestion_service.client()
+    }
+
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
     /// exists for, for their pipeline.
-    pub async fn concurrent_pipeline<H: concurrent::Handler + 'static>(&mut self) -> Result<()> {
+    pub async fn concurrent_pipeline<H: concurrent::Handler + Send + Sync + 'static>(
+        &mut self,
+        handler: H,
+        pruner_config: Option<PrunerConfig>,
+    ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
-        let (processor, collector, committer, watermark) = concurrent::pipeline::<H>(
+        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
+        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
+        // and writes should be idempotent.
+        if !self.pipeline_config.skip_watermark {
+            self.check_first_checkpoint_consistency::<H>(&watermark)?;
+        }
+
+        self.handles.push(concurrent::pipeline(
+            handler,
             watermark,
             self.pipeline_config.clone(),
+            pruner_config,
             self.db.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
-        );
-
-        self.handles.push(processor);
-        self.handles.push(collector);
-        self.handles.push(committer);
-        self.handles.push(watermark);
+        ));
 
         Ok(())
     }
@@ -172,17 +194,23 @@ impl Indexer {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H: sequential::Handler + 'static>(
+    pub async fn sequential_pipeline<H: sequential::Handler + Send + Sync + 'static>(
         &mut self,
+        handler: H,
         checkpoint_lag: Option<u64>,
     ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
+        // For a sequential pipeline, data must be written in the order of checkpoints.
+        // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
+        self.check_first_checkpoint_consistency::<H>(&watermark)?;
+
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        let (processor, committer) = sequential::pipeline::<H>(
+        self.handles.push(sequential::pipeline(
+            handler,
             watermark,
             self.pipeline_config.clone(),
             checkpoint_lag,
@@ -191,10 +219,28 @@ impl Indexer {
             watermark_tx,
             self.metrics.clone(),
             self.cancel.clone(),
-        );
+        ));
 
-        self.handles.push(processor);
-        self.handles.push(committer);
+        Ok(())
+    }
+
+    /// Checks that the first checkpoint override is consistent with the watermark for the pipeline.
+    /// If the watermark does not exist, the override can be anything. If the watermark exists, the
+    /// override must not leave any gap in the data: it can be in the past, or at the tip of the
+    /// network, but not in the future.
+    fn check_first_checkpoint_consistency<P: Processor>(
+        &self,
+        watermark: &Option<CommitterWatermark>,
+    ) -> Result<()> {
+        if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
+            ensure!(
+                first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
+                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
+                P::NAME,
+                first_checkpoint,
+                watermark.checkpoint_hi_inclusive,
+            );
+        }
 
         Ok(())
     }

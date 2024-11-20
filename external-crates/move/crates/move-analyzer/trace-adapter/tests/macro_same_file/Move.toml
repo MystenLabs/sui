@@ -1,0 +1,10 @@
+[package]
+name = "macro_same_file"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+macro_same_file = "0x0"
+std = "0x1"

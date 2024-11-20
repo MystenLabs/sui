@@ -15,6 +15,7 @@ use crate::{
 
 struct Context<'env> {
     env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     is_source_def: bool,
     has_spec_code: bool,
     current_package: Option<Symbol>,
@@ -22,8 +23,10 @@ struct Context<'env> {
 
 impl<'env> Context<'env> {
     fn new(env: &'env CompilationEnv) -> Self {
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
+            reporter,
             is_source_def: false,
             has_spec_code: false,
             current_package: None,

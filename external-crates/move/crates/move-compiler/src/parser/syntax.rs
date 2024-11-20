@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::{string_utils::*, *},
@@ -23,6 +23,7 @@ use move_symbol_pool::{symbol, Symbol};
 struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
     env: &'env CompilationEnv,
+    reporter: DiagnosticReporter<'env>,
     tokens: &'lexer mut Lexer<'input>,
     stop_set: TokenSet,
 }
@@ -34,9 +35,11 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         package_name: Option<Symbol>,
     ) -> Self {
         let stop_set = TokenSet::from([Tok::EOF]);
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             current_package: package_name,
             env,
+            reporter,
             tokens,
             stop_set,
         }
@@ -72,8 +75,12 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     }
 
     fn add_diag(&self, diag: Diagnostic) {
-        let warning_filters = self.env.top_level_warning_filter_scope();
-        self.env.add_diag(warning_filters, diag);
+        self.reporter.add_diag(diag);
+    }
+
+    fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env
+            .check_feature(&self.reporter, package, feature, loc)
     }
 }
 
@@ -1277,7 +1284,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     })?;
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
-        context.env.check_feature(
+        context.check_feature(
             context.current_package,
             FeatureGate::PositionalFields,
             current_loc,
@@ -2040,27 +2047,36 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
             }
             _ => None,
         };
-        consume_token(context.tokens, Tok::EqualGreater)?;
-        let rhs = match context.tokens.peek() {
-            Tok::LBrace => {
-                let block_start_loc = context.tokens.start_loc();
-                context.tokens.advance()?; // consume the LBrace
-                let block_ = Exp_::Block(parse_sequence(context)?);
-                let block_end_loc = context.tokens.previous_end_loc();
-                let exp = spanned(
-                    context.tokens.file_hash(),
-                    block_start_loc,
-                    block_end_loc,
-                    block_,
-                );
-                Box::new(exp)
+        if let Err(diag) = consume_token(context.tokens, Tok::EqualGreater) {
+            // report incomplete pattern so that auto-completion can work
+            context.add_diag(*diag);
+            MatchArm_ {
+                pattern,
+                guard,
+                rhs: Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
             }
-            _ => Box::new(parse_exp(context)?),
-        };
-        MatchArm_ {
-            pattern,
-            guard,
-            rhs,
+        } else {
+            let rhs = match context.tokens.peek() {
+                Tok::LBrace => {
+                    let block_start_loc = context.tokens.start_loc();
+                    context.tokens.advance()?; // consume the LBrace
+                    let block_ = Exp_::Block(parse_sequence(context)?);
+                    let block_end_loc = context.tokens.previous_end_loc();
+                    let exp = spanned(
+                        context.tokens.file_hash(),
+                        block_start_loc,
+                        block_end_loc,
+                        block_,
+                    );
+                    Box::new(exp)
+                }
+                _ => Box::new(parse_exp(context)?),
+            };
+            MatchArm_ {
+                pattern,
+                guard,
+                rhs,
+            }
         }
     })
 }
@@ -2570,7 +2586,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                 let loc = current_token_loc(context.tokens);
                 match context.tokens.peek() {
                     Tok::NumValue | Tok::NumTypedValue
-                        if context.env.check_feature(
+                        if context.check_feature(
                             context.current_package,
                             FeatureGate::PositionalFields,
                             loc,
@@ -2581,7 +2597,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         match parse_u8(contents) {
                             Ok((parsed, NumberFormat::Decimal)) => {
                                 let field_access = Name::new(loc, format!("{parsed}").into());
-                                Exp_::Dot(Box::new(lhs), field_access)
+                                Exp_::Dot(Box::new(lhs), first_token_loc, field_access)
                             }
                             Ok((_, NumberFormat::Hex)) => {
                                 let msg = "Invalid field access. Expected a decimal number but was given a hexadecimal";
@@ -2590,7 +2606,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 context.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
-                                Exp_::Dot(Box::new(lhs), field_access)
+                                Exp_::Dot(Box::new(lhs), first_token_loc, field_access)
                             }
                             Err(_) => {
                                 let msg = format!(
@@ -2602,7 +2618,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 context.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
-                                Exp_::Dot(Box::new(lhs), field_access)
+                                Exp_::Dot(Box::new(lhs), first_token_loc, field_access)
                             }
                         }
                     }
@@ -2628,9 +2644,16 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                     parse_macro_opt_and_tyargs_opt(context, false, n.loc);
                                 let tys = tys.map(|t| t.value);
                                 let args = parse_call_args(context);
-                                Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
+                                Exp_::DotCall(
+                                    Box::new(lhs),
+                                    first_token_loc,
+                                    n,
+                                    is_macro,
+                                    tys,
+                                    args,
+                                )
                             } else {
-                                Exp_::Dot(Box::new(lhs), n)
+                                Exp_::Dot(Box::new(lhs), first_token_loc, n)
                             }
                         }
                     },
@@ -3431,9 +3454,7 @@ fn parse_enum_variant_fields(context: &mut Context) -> Result<VariantFields, Box
         Tok::LParen => {
             let current_package = context.current_package;
             let loc = current_token_loc(context.tokens);
-            context
-                .env
-                .check_feature(current_package, FeatureGate::PositionalFields, loc);
+            context.check_feature(current_package, FeatureGate::PositionalFields, loc);
 
             let list = parse_comma_list(
                 context,
@@ -3465,9 +3486,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
     // NB this could be an if-let but we will eventually want the match for other vis. support.
     match &visibility {
         Some(Visibility::Public(loc)) => {
-            context
-                .env
-                .check_feature(current_package, FeatureGate::Enums, *loc);
+            context.check_feature(current_package, FeatureGate::Enums, *loc);
         }
         vis => {
             let (loc, vis_str) = match vis {
@@ -3705,7 +3724,7 @@ fn parse_postfix_ability_declarations(
     let has_location = current_token_loc(context.tokens);
 
     if postfix_ability_declaration {
-        context.env.check_feature(
+        context.check_feature(
             context.current_package,
             FeatureGate::PostFixAbilities,
             has_location,
@@ -3753,9 +3772,7 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
     if positional_declaration {
         let current_package = context.current_package;
         let loc = current_token_loc(context.tokens);
-        context
-            .env
-            .check_feature(current_package, FeatureGate::PositionalFields, loc);
+        context.check_feature(current_package, FeatureGate::PositionalFields, loc);
 
         context.stop_set.union(&TYPE_STOP_SET);
         let list = parse_comma_list(
@@ -3784,9 +3801,7 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
 fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context) {
     let current_package = context.current_package;
     if let Some(Visibility::Public(loc)) = &visibility {
-        context
-            .env
-            .check_feature(current_package, FeatureGate::StructTypeVisibility, *loc);
+        context.check_feature(current_package, FeatureGate::StructTypeVisibility, *loc);
     }
 
     let supports_public = context
@@ -4331,7 +4346,7 @@ fn parse_module(
             consume_token(context.tokens, Tok::LBrace)?;
         }
         Tok::Semicolon => {
-            context.env.check_feature(
+            context.check_feature(
                 context.current_package,
                 FeatureGate::ModuleLabel,
                 name.loc(),

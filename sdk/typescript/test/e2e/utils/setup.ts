@@ -178,6 +178,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			{ encoding: 'utf-8' },
 		),
 	);
+
 	const tx = new Transaction();
 	const cap = tx.publish({
 		modules,

@@ -3,7 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::Diagnostics,
+    diagnostics::{DiagnosticReporter, Diagnostics},
     expansion::ast::{self as E, ModuleIdent},
     ice,
     shared::{
@@ -46,10 +46,11 @@ impl Deprecations {
     /// deprecation attribute for use later on.
     pub fn new(env: &CompilationEnv, info: &NamingProgramInfo) -> Self {
         let mut deprecated_members = HashMap::new();
+        let reporter = env.diagnostic_reporter_at_top_level();
 
         for (mident, module_info) in info.modules.key_cloned_iter() {
             if let Some(deprecation) = deprecations(
-                env,
+                &reporter,
                 AttributePosition::Module,
                 &module_info.attributes,
                 mident.loc,
@@ -60,7 +61,7 @@ impl Deprecations {
 
             for (name, constant) in module_info.constants.key_cloned_iter() {
                 if let Some(deprecation) = deprecations(
-                    env,
+                    &reporter,
                     AttributePosition::Constant,
                     &constant.attributes,
                     name.0.loc,
@@ -72,7 +73,7 @@ impl Deprecations {
 
             for (name, function) in module_info.functions.key_cloned_iter() {
                 if let Some(deprecation) = deprecations(
-                    env,
+                    &reporter,
                     AttributePosition::Function,
                     &function.attributes,
                     name.0.loc,
@@ -84,7 +85,7 @@ impl Deprecations {
 
             for (name, datatype) in module_info.structs.key_cloned_iter() {
                 if let Some(deprecation) = deprecations(
-                    env,
+                    &reporter,
                     AttributePosition::Struct,
                     &datatype.attributes,
                     name.0.loc,
@@ -96,7 +97,7 @@ impl Deprecations {
 
             for (name, datatype) in module_info.enums.key_cloned_iter() {
                 if let Some(deprecation) = deprecations(
-                    env,
+                    &reporter,
                     AttributePosition::Enum,
                     &datatype.attributes,
                     name.0.loc,
@@ -167,7 +168,7 @@ impl Deprecation {
 // #[deprecated] attributes (malformed, or multiple on the member), add an error diagnostic to
 // `env` and return None.
 fn deprecations(
-    env: &CompilationEnv,
+    reporter: &DiagnosticReporter,
     attr_position: AttributePosition,
     attrs: &E::Attributes,
     source_location: Loc,
@@ -183,7 +184,7 @@ fn deprecations(
     }
 
     if deprecations.len() != 1 {
-        env.add_error_diag(ice!((
+        reporter.add_diag(ice!((
             source_location,
             "ICE: verified that there is at at least one deprecation attribute above, \
             and expansion should have failed if there were multiple deprecation attributes."
@@ -208,7 +209,7 @@ fn deprecations(
             DeprecationAttribute.name()
         );
         diag.add_note(note);
-        env.add_error_diag(diag);
+        reporter.add_diag(diag);
         None
     };
 

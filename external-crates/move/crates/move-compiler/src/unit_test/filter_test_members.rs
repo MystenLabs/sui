@@ -8,6 +8,7 @@ use move_symbol_pool::Symbol;
 use crate::{
     command_line::compiler::FullyCompiledProgram,
     diag,
+    diagnostics::DiagnosticReporter,
     parser::{
         ast::{self as P, NamePath, PathEntry},
         filter::{filter_program, FilterContext},
@@ -101,7 +102,8 @@ pub fn program(
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: P::Program,
 ) -> P::Program {
-    if !check_has_unit_test_module(compilation_env, pre_compiled_lib, &prog) {
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
+    if !check_has_unit_test_module(compilation_env, &reporter, pre_compiled_lib, &prog) {
         return prog;
     }
 
@@ -133,6 +135,7 @@ fn has_unit_test_module(prog: &P::Program) -> bool {
 
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
+    reporter: &DiagnosticReporter,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &P::Program,
 ) -> bool {
@@ -150,7 +153,7 @@ fn check_has_unit_test_module(
                 P::Definition::Module(P::ModuleDefinition { name, .. }) => name.0.loc,
                 P::Definition::Address(P::AddressDefinition { loc, .. }) => *loc,
             };
-            compilation_env.add_error_diag(diag!(
+            reporter.add_diag(diag!(
                 Attributes::InvalidTest,
                 (
                     loc,

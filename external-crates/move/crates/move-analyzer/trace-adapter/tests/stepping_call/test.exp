@@ -1,26 +1,15 @@
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 17)
+  function: foo (m.move:17)
     scope 0 :
       p : 42
       type: u64
 
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 18)
-    scope 0 :
-      p : 42
-      type: u64
-
-      v1 : 210
-      type: u64
-
-current frame stack:
-  function: test (line 25)
-    scope 0 :
-  function: foo (line 19)
+  function: foo (m.move:18)
     scope 0 :
       p : 42
       type: u64
@@ -28,14 +17,14 @@ current frame stack:
       v1 : 210
       type: u64
 
-      v2 : 84
+current frame stack:
+  function: test (m.move:25)
+    scope 0 :
+  function: foo (m.move:19)
+    scope 0 :
+      p : 42
       type: u64
 
-current frame stack:
-  function: test (line 25)
-    scope 0 :
-  function: foo (line 19)
-    scope 0 :
       v1 : 210
       type: u64
 
@@ -43,9 +32,20 @@ current frame stack:
       type: u64
 
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 20)
+  function: foo (m.move:19)
+    scope 0 :
+      v1 : 210
+      type: u64
+
+      v2 : 84
+      type: u64
+
+current frame stack:
+  function: test (m.move:25)
+    scope 0 :
+  function: foo (m.move:20)
     scope 0 :
       v1 : 210
       type: u64

@@ -1,7 +1,7 @@
 current frame stack:
-  function: test (line 53)
+  function: test (m.move:53)
     scope 0 :
-  function: foo (line 23)
+  function: foo (m.move:23)
     scope 0 :
       some_struct : (0x0::m::SomeStruct) {
         simple_field : 0
@@ -28,9 +28,9 @@ current frame stack:
       type: u64
 
 current frame stack:
-  function: test (line 53)
+  function: test (m.move:53)
     scope 0 :
-  function: foo (line 37)
+  function: foo (m.move:37)
     scope 0 :
       some_struct : (0x0::m::SomeStruct) {
         simple_field : 42

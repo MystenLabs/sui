@@ -17,6 +17,7 @@ use crate::{
     parser::ast::{ConstantName, DatatypeName, FunctionName},
     shared::CompilationEnv,
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 
@@ -73,7 +74,7 @@ pub trait CFGIRVisitorContext {
     /// required.
     fn visit(&mut self, program: &G::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter() {
-            self.push_warning_filter_scope(mdef.warning_filter.clone());
+            self.push_warning_filter_scope(mdef.warning_filter);
             if self.visit_module_custom(mident, mdef) {
                 self.pop_warning_filter_scope();
                 continue;
@@ -112,7 +113,7 @@ pub trait CFGIRVisitorContext {
         struct_name: DatatypeName,
         sdef: &H::StructDefinition,
     ) {
-        self.push_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter);
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -134,7 +135,7 @@ pub trait CFGIRVisitorContext {
         enum_name: DatatypeName,
         edef: &H::EnumDefinition,
     ) {
-        self.push_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter);
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -156,7 +157,7 @@ pub trait CFGIRVisitorContext {
         constant_name: ConstantName,
         cdef: &G::Constant,
     ) {
-        self.push_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter);
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -178,7 +179,7 @@ pub trait CFGIRVisitorContext {
         function_name: FunctionName,
         fdef: &G::Function,
     ) {
-        self.push_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter);
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -327,18 +328,19 @@ macro_rules! simple_visitor {
         pub struct $visitor;
 
         pub struct Context<'a> {
+            #[allow(unused)]
             env: &'a crate::shared::CompilationEnv,
-            warning_filters_scope: crate::diagnostics::warning_filters::WarningFiltersScope,
+            reporter: crate::diagnostics::DiagnosticReporter<'a>,
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
             fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
-                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+                let reporter = env.diagnostic_reporter_at_top_level();
                 Context {
                     env,
-                    warning_filters_scope,
+                    reporter,
                 }
             }
         }
@@ -346,12 +348,12 @@ macro_rules! simple_visitor {
         impl Context<'_> {
             #[allow(unused)]
             fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
-                self.env.add_diag(&self.warning_filters_scope, diag);
+                self.reporter.add_diag(diag);
             }
 
             #[allow(unused)]
             fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
-                self.env.add_diags(&self.warning_filters_scope, diags);
+                self.reporter.add_diags(diags);
             }
         }
 
@@ -360,11 +362,11 @@ macro_rules! simple_visitor {
                 &mut self,
                 filters: crate::diagnostics::warning_filters::WarningFilters,
             ) {
-                self.warning_filters_scope.push(filters)
+                self.reporter.push_warning_filter_scope(filters)
             }
 
             fn pop_warning_filter_scope(&mut self) {
-                self.warning_filters_scope.pop()
+                self.reporter.pop_warning_filter_scope()
             }
 
             $($overrides)*
@@ -845,19 +847,25 @@ where
     exp_satisfies_(e, &mut p)
 }
 
-pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
+pub fn calls_special_function(
+    special: &[(AccountAddress, &str, &str)],
+    cfg: &ImmForwardCFG,
+) -> bool {
     cfg_satisfies(cfg, |_| true, |e| is_special_function(special, e))
 }
 
-pub fn calls_special_function_command(special: &[(&str, &str, &str)], cmd: &Command) -> bool {
+pub fn calls_special_function_command(
+    special: &[(AccountAddress, &str, &str)],
+    cmd: &Command,
+) -> bool {
     command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
 }
 
-pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+pub fn calls_special_function_exp(special: &[(AccountAddress, &str, &str)], e: &Exp) -> bool {
     exp_satisfies(e, |e| is_special_function(special, e))
 }
 
-fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+fn is_special_function(special: &[(AccountAddress, &str, &str)], e: &Exp) -> bool {
     use H::UnannotatedExp_ as E;
     matches!(
         &e.exp.value,

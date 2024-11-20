@@ -9,7 +9,6 @@ use crate::{
     naming::ast::BuiltinTypeName_,
     parser::ast::{DatatypeName, VariantName},
     shared::{
-        ast_debug::AstDebug,
         ide::{IDEAnnotation, MissingMatchArmsInfo, PatternSuggestion},
         matching::{MatchContext, PatternMatrix},
         string_utils::{debug_print, format_oxford_list},

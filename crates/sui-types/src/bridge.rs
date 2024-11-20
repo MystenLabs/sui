@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use enum_dispatch::enum_dispatch;
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
-use num_enum::TryFromPrimitive;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-
 use crate::base_types::ObjectID;
 use crate::base_types::SequenceNumber;
 use crate::collection_types::LinkedTableNode;
@@ -26,6 +18,14 @@ use crate::{
     error::SuiError,
     id::UID,
 };
+use enum_dispatch::enum_dispatch;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
+use num_enum::TryFromPrimitive;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use strum_macros::Display;
 
 pub type BridgeInnerDynamicField = Field<u64, BridgeInnerV1>;
 pub type BridgeRecordDyanmicField = Field<
@@ -71,7 +71,17 @@ pub const TOKEN_ID_USDC: u8 = 3;
 pub const TOKEN_ID_USDT: u8 = 4;
 
 #[derive(
-    Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, JsonSchema, Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    TryFromPrimitive,
+    JsonSchema,
+    Hash,
+    Display,
 )]
 #[repr(u8)]
 pub enum BridgeChainId {
@@ -97,7 +107,7 @@ pub fn get_bridge_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
 ) -> SuiResult<Option<SequenceNumber>> {
     Ok(object_store
-        .get_object(&SUI_BRIDGE_OBJECT_ID)?
+        .get_object(&SUI_BRIDGE_OBJECT_ID)
         .map(|obj| match obj.owner {
             Owner::Shared {
                 initial_shared_version,
@@ -187,7 +197,7 @@ impl Default for BridgeSummary {
 
 pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrapper, SuiError> {
     let wrapper = object_store
-        .get_object(&SUI_BRIDGE_OBJECT_ID)?
+        .get_object(&SUI_BRIDGE_OBJECT_ID)
         // Don't panic here on None because object_store is a generic store.
         .ok_or_else(|| SuiError::SuiBridgeReadError("BridgeWrapper object not found".to_owned()))?;
     let move_object = wrapper.data.try_as_move().ok_or_else(|| {

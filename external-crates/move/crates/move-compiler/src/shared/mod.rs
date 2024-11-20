@@ -11,10 +11,10 @@ use crate::{
     diagnostics::{
         codes::{DiagnosticsID, Severity},
         warning_filters::{
-            FilterName, FilterPrefix, WarningFilter, WarningFilters, WarningFiltersScope,
-            FILTER_ALL,
+            FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder, WarningFiltersScope,
+            WarningFiltersTable, FILTER_ALL,
         },
-        Diagnostic, Diagnostics, DiagnosticsFormat,
+        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
     },
     editions::{check_feature_or_error, feature_edition_error_msg, Edition, FeatureGate, Flavor},
     expansion::ast as E,
@@ -23,7 +23,7 @@ use crate::{
     parser::ast as P,
     shared::{
         files::{FileName, MappedFiles},
-        ide::{IDEAnnotation, IDEInfo},
+        ide::IDEInfo,
     },
     sui_mode,
     typing::{
@@ -214,7 +214,7 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
 
 pub struct CompilationEnv {
     flags: Flags,
-    top_level_warning_filter_scope: &'static WarningFiltersScope,
+    top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
     diags: RwLock<Diagnostics>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
@@ -237,7 +237,7 @@ impl CompilationEnv {
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
         save_hooks: Vec<SaveHook>,
-        warning_filters: Option<WarningFilters>,
+        warning_filters: Option<WarningFiltersBuilder>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
@@ -274,15 +274,18 @@ impl CompilationEnv {
             })
             .collect();
 
-        let top_level_warning_filter = if flags.silence_warnings() {
-            let mut f = WarningFilters::new_for_source();
+        let top_level_warning_filter_opt = if flags.silence_warnings() {
+            let mut f = WarningFiltersBuilder::new_for_source();
             f.add(WarningFilter::All(None));
             Some(f)
         } else {
             warning_filters
         };
-        let top_level_warning_filter_scope =
-            Box::leak(Box::new(WarningFiltersScope::new(top_level_warning_filter)));
+        let top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder> =
+            top_level_warning_filter_opt.map(|f| {
+                let f: &'static WarningFiltersBuilder = Box::leak(Box::new(f));
+                f
+            });
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
@@ -316,67 +319,14 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn top_level_warning_filter_scope(&self) -> &'static WarningFiltersScope {
-        self.top_level_warning_filter_scope
-    }
-
-    pub fn add_diag(&self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
-        if diag.info().severity() <= Severity::NonblockingError
-            && self
-                .diags
-                .read()
-                .unwrap()
-                .any_syntax_error_with_primary_loc(diag.primary_loc())
-        {
-            // do not report multiple diags for the same location (unless they are blocking) to
-            // avoid noise that is likely to confuse the developer trying to localize the problem
-            //
-            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
-            // becomes one
-            return;
-        }
-
-        if !warning_filters.is_filtered(&diag) {
-            // add help to suppress warning, if applicable
-            // TODO do we want a centralized place for tips like this?
-            if diag.info().severity() == Severity::Warning {
-                if let Some((prefix, name)) = self.known_filter_names.get(&diag.info().id()) {
-                    let help = format!(
-                        "This warning can be suppressed with '#[{}({})]' \
-                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
-                        known_attributes::DiagnosticAttribute::ALLOW,
-                        format_allow_attr(*prefix, *name),
-                    );
-                    diag.add_note(help)
-                }
-                if self.flags.warnings_are_errors() {
-                    diag = diag.set_severity(Severity::NonblockingError)
-                }
-            }
-            self.diags.write().unwrap().add(diag)
-        } else if !warning_filters.is_filtered_for_dependency() {
-            // unwrap above is safe as the filter has been used (thus it must exist)
-            self.diags.write().unwrap().add_source_filtered(diag)
-        }
-    }
-
-    pub fn add_diags(&self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
-        for diag in diags.into_vec() {
-            self.add_diag(warning_filters, diag)
-        }
-    }
-
-    /// Aborts if the diagnostic is a warning
-    pub fn add_error_diag(&self, diag: Diagnostic) {
-        assert!(diag.info().severity() > Severity::Warning);
-        self.add_diag(WarningFiltersScope::EMPTY, diag)
-    }
-
-    /// Aborts if any diagnostic is a warning
-    pub fn add_error_diags(&self, diags: Diagnostics) {
-        for diag in diags.into_vec() {
-            self.add_error_diag(diag)
-        }
+    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter {
+        DiagnosticReporter::new(
+            &self.flags,
+            &self.known_filter_names,
+            &self.diags,
+            &self.ide_information,
+            WarningFiltersScope::root(self.top_level_warning_filter_scope),
+        )
     }
 
     pub fn has_warnings_or_errors(&self) -> bool {
@@ -493,8 +443,14 @@ impl CompilationEnv {
 
     // Logs an error if the feature isn't supported. Returns `false` if the feature is not
     // supported, and `true` otherwise.
-    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
-        check_feature_or_error(self, self.package_config(package).edition, feature, loc)
+    pub fn check_feature(
+        &self,
+        reporter: &DiagnosticReporter,
+        package: Option<Symbol>,
+        feature: FeatureGate,
+        loc: Loc,
+    ) -> bool {
+        check_feature_or_error(reporter, self.package_config(package).edition, feature, loc)
     }
 
     // Returns an error string if if the feature isn't supported, or None otherwise.
@@ -582,32 +538,6 @@ impl CompilationEnv {
 
     pub fn ide_mode(&self) -> bool {
         self.flags.ide_mode()
-    }
-
-    pub fn extend_ide_info(&self, warning_filters: &WarningFiltersScope, info: IDEInfo) {
-        if self.flags().ide_test_mode() {
-            for entry in info.annotations.iter() {
-                let diag = entry.clone().into();
-                self.add_diag(warning_filters, diag);
-            }
-        }
-        self.ide_information.write().unwrap().extend(info);
-    }
-
-    pub fn add_ide_annotation(
-        &self,
-        warning_filters: &WarningFiltersScope,
-        loc: Loc,
-        info: IDEAnnotation,
-    ) {
-        if self.flags().ide_test_mode() {
-            let diag = (loc, info.clone()).into();
-            self.add_diag(warning_filters, diag);
-        }
-        self.ide_information
-            .write()
-            .unwrap()
-            .add_ide_annotation(loc, info);
     }
 
     pub fn ide_information(&self) -> std::sync::RwLockReadGuard<'_, IDEInfo> {
@@ -860,7 +790,7 @@ impl Flags {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: WarningFiltersBuilder,
     pub flavor: Flavor,
     pub edition: Edition,
 }
@@ -869,7 +799,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: WarningFilters::new_for_source(),
+            warning_filter: WarningFiltersBuilder::new_for_source(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
@@ -912,6 +842,8 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
+    check::<&WarningFiltersTable>();
+    check::<&WarningFiltersScope>();
     check::<&CompilationEnv>();
 }
 

@@ -87,6 +87,7 @@ export async function getSentTransactionsWithLinks({
 							address,
 							contract,
 							isContractLink: true,
+							client,
 							...linkOptions,
 						});
 

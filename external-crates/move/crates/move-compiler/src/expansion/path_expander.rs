@@ -521,13 +521,13 @@ impl PathExpander for Move2024PathExpander {
                 // an error if they both resolve (to different things)
                 PV::ModuleAccess(access_chain) => {
                     ice_assert!(
-                        context.env,
+                        context.reporter,
                         access_chain.value.tyargs().is_none(),
                         loc,
                         "Found tyargs"
                     );
                     ice_assert!(
-                        context.env,
+                        context.reporter,
                         access_chain.value.is_macro().is_none(),
                         loc,
                         "Found macro"
@@ -924,8 +924,8 @@ impl PathExpander for LegacyPathExpander {
                     if self.aliases.module_alias_get(&name).is_some() =>
                 {
                     self.ide_autocomplete_suggestion(context, loc);
-                    ice_assert!(context.env, tyargs.is_none(), loc, "Found tyargs");
-                    ice_assert!(context.env, is_macro.is_none(), loc, "Found macro");
+                    ice_assert!(context.reporter, tyargs.is_none(), loc, "Found tyargs");
+                    ice_assert!(context.reporter, is_macro.is_none(), loc, "Found macro");
                     let sp!(_, mident_) = self.aliases.module_alias_get(&name).unwrap();
                     let mident = sp(ident_loc, mident_);
                     if context.module_members.get(&mident).is_none() {
@@ -937,8 +937,13 @@ impl PathExpander for LegacyPathExpander {
                     EV::Module(mident)
                 }
                 PV::ModuleAccess(sp!(ident_loc, PN::Path(path))) => {
-                    ice_assert!(context.env, !path.has_tyargs(), loc, "Found tyargs");
-                    ice_assert!(context.env, path.is_macro().is_none(), loc, "Found macro");
+                    ice_assert!(context.reporter, !path.has_tyargs(), loc, "Found tyargs");
+                    ice_assert!(
+                        context.reporter,
+                        path.is_macro().is_none(),
+                        loc,
+                        "Found macro"
+                    );
                     match (&path.root.name, &path.entries[..]) {
                         (sp!(aloc, LN::AnonymousAddress(a)), [n]) => {
                             let addr = Address::anonymous(*aloc, *a);
@@ -1013,7 +1018,7 @@ impl PathExpander for LegacyPathExpander {
                 single_entry!(name, tyargs, is_macro),
             ) => {
                 if access == Access::Type {
-                    ice_assert!(context.env, is_macro.is_none(), loc, "Found macro");
+                    ice_assert!(context.reporter, is_macro.is_none(), loc, "Found macro");
                 }
                 self.ide_autocomplete_suggestion(context, loc);
                 let access = match self.aliases.member_alias_get(&name) {
@@ -1045,7 +1050,12 @@ impl PathExpander for LegacyPathExpander {
             }
             (_, PN::Path(mut path)) => {
                 if access == Access::Type {
-                    ice_assert!(context.env, path.is_macro().is_none(), loc, "Found macro");
+                    ice_assert!(
+                        context.reporter,
+                        path.is_macro().is_none(),
+                        loc,
+                        "Found macro"
+                    );
                 }
                 match (&path.root.name, &path.entries[..]) {
                     // Error cases
@@ -1148,8 +1158,18 @@ impl PathExpander for LegacyPathExpander {
         use P::NameAccessChain_ as PN;
         match pn_ {
             PN::Single(single) => {
-                ice_assert!(context.env, single.tyargs.is_none(), loc, "Found tyargs");
-                ice_assert!(context.env, single.is_macro.is_none(), loc, "Found macro");
+                ice_assert!(
+                    context.reporter,
+                    single.tyargs.is_none(),
+                    loc,
+                    "Found tyargs"
+                );
+                ice_assert!(
+                    context.reporter,
+                    single.is_macro.is_none(),
+                    loc,
+                    "Found macro"
+                );
                 match self.aliases.module_alias_get(&single.name) {
                     None => {
                         context.add_diag(diag!(
@@ -1165,8 +1185,13 @@ impl PathExpander for LegacyPathExpander {
                 }
             }
             PN::Path(path) => {
-                ice_assert!(context.env, !path.has_tyargs(), loc, "Found tyargs");
-                ice_assert!(context.env, path.is_macro().is_none(), loc, "Found macro");
+                ice_assert!(context.reporter, !path.has_tyargs(), loc, "Found tyargs");
+                ice_assert!(
+                    context.reporter,
+                    path.is_macro().is_none(),
+                    loc,
+                    "Found macro"
+                );
                 match (&path.root.name, &path.entries[..]) {
                     (ln, [n]) => {
                         let pmident_ = P::ModuleIdent_ {

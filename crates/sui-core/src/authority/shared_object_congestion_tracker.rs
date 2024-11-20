@@ -12,6 +12,7 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
+use tracing::trace;
 
 // SharedObjectCongestionTracker stores the accumulated cost of executing transactions on an object, for
 // all transactions in a consensus commit.
@@ -44,6 +45,8 @@ impl SharedObjectCongestionTracker {
         gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
         max_txn_cost_overage_per_object_in_commit: u64,
     ) -> Self {
+        let object_execution_cost: HashMap<ObjectID, u64> =
+            initial_object_debts.into_iter().collect();
         let max_accumulated_txn_cost_per_object_in_commit =
             if mode == PerObjectCongestionControlMode::None {
                 0
@@ -52,14 +55,25 @@ impl SharedObjectCongestionTracker {
                     "max_accumulated_txn_cost_per_object_in_commit must be set if mode is not None",
                 )
             };
+        let gas_budget_based_txn_cost_absolute_cap =
+            gas_budget_based_txn_cost_absolute_cap_commit_count
+                .map(|m| m * max_accumulated_txn_cost_per_object_in_commit);
+        trace!(
+            "created SharedObjectCongestionTracker with
+             {} initial object debts,
+             mode: {mode:?}, 
+             max_accumulated_txn_cost_per_object_in_commit: {max_accumulated_txn_cost_per_object_in_commit:?}, 
+             gas_budget_based_txn_cost_cap_factor: {gas_budget_based_txn_cost_cap_factor:?}, 
+             gas_budget_based_txn_cost_absolute_cap: {gas_budget_based_txn_cost_absolute_cap:?}, 
+             max_txn_cost_overage_per_object_in_commit: {max_txn_cost_overage_per_object_in_commit:?}",
+            object_execution_cost.len(),
+        );
         Self {
-            object_execution_cost: initial_object_debts.into_iter().collect(),
+            object_execution_cost,
             mode,
             max_accumulated_txn_cost_per_object_in_commit,
             gas_budget_based_txn_cost_cap_factor,
-            gas_budget_based_txn_cost_absolute_cap:
-                gas_budget_based_txn_cost_absolute_cap_commit_count
-                    .map(|m| m * max_accumulated_txn_cost_per_object_in_commit),
+            gas_budget_based_txn_cost_absolute_cap,
             max_txn_cost_overage_per_object_in_commit,
         }
     }

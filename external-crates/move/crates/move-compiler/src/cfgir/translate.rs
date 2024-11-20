@@ -10,10 +10,7 @@ use crate::{
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
@@ -30,6 +27,7 @@ use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
 };
+use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
@@ -48,7 +46,7 @@ enum NamedBlockType {
 struct Context<'env> {
     env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
@@ -58,10 +56,10 @@ struct Context<'env> {
 
 impl<'env> Context<'env> {
     pub fn new(env: &'env CompilationEnv, info: &'env TypingProgramInfo) -> Self {
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            warning_filters_scope,
+            reporter,
             info,
             current_package: None,
             label_count: 0,
@@ -71,19 +69,19 @@ impl<'env> Context<'env> {
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn new_label(&mut self) -> Label {
@@ -150,6 +148,7 @@ pub fn program(
 ) -> G::Program {
     let H::Program {
         modules: hmodules,
+        warning_filters_table,
         info,
     } = prog;
 
@@ -159,6 +158,7 @@ pub fn program(
 
     let mut program = G::Program {
         modules,
+        warning_filters_table,
         info: info.clone(),
     };
     visit_program(&mut context, &mut program);
@@ -193,7 +193,7 @@ fn module(
         constants: hconstants,
     } = mdef;
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let constants = constants(context, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.pop_warning_filter_scope();
@@ -425,7 +425,7 @@ fn constant(
         value: (locals, block),
     } = c;
 
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let final_value = constant_(
         context,
         constant_values,
@@ -495,7 +495,7 @@ fn constant_(
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
         env: context.env,
-        warning_filters_scope: context.warning_filters_scope.clone(),
+        reporter: &context.reporter,
         info: context.info,
         package: context.current_package,
         module,
@@ -509,7 +509,7 @@ fn constant_(
     };
     cfgir::refine_inference_and_verify(&function_context, &mut cfg);
     ice_assert!(
-        context.env,
+        context.reporter,
         num_previous_errors == context.env.count_diags(),
         full_loc,
         "{}",
@@ -600,13 +600,14 @@ fn function(
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         compiled_visibility,
         entry,
         signature,
         body,
     } = f;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let body = function_body(
         context,
         module,
@@ -622,6 +623,7 @@ fn function(
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         compiled_visibility,
         entry,
@@ -658,7 +660,7 @@ fn function_body(
 
             let function_context = super::CFGContext {
                 env: context.env,
-                warning_filters_scope: context.warning_filters_scope.clone(),
+                reporter: &context.reporter,
                 info: context.info,
                 package: context.current_package,
                 module,
@@ -999,15 +1001,18 @@ fn visit_program(context: &mut Context, prog: &mut G::Program) {
 
     AbsintVisitor.visit(context.env, prog);
 
-    for v in &context.env.visitors().cfgir {
-        v.visit(context.env, prog)
-    }
+    context
+        .env
+        .visitors()
+        .cfgir
+        .par_iter()
+        .for_each(|v| v.visit(context.env, prog));
 }
 
 struct AbsintVisitor;
 struct AbsintVisitorContext<'a> {
     env: &'a CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'a>,
     info: Arc<TypingProgramInfo>,
     current_package: Option<Symbol>,
 }
@@ -1016,10 +1021,10 @@ impl CFGIRVisitorConstructor for AbsintVisitor {
     type Context<'a> = AbsintVisitorContext<'a>;
 
     fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        let reporter = env.diagnostic_reporter_at_top_level();
         AbsintVisitorContext {
             env,
-            warning_filters_scope,
+            reporter,
             info: program.info.clone(),
             current_package: None,
         }
@@ -1029,21 +1034,21 @@ impl CFGIRVisitorConstructor for AbsintVisitor {
 impl AbsintVisitorContext<'_> {
     #[allow(unused)]
     fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 }
 
 impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &G::ModuleDefinition) -> bool {
@@ -1061,6 +1066,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             warning_filter: _,
             index: _,
             attributes,
+            loc: _,
             compiled_visibility: _,
             visibility,
             entry,
@@ -1079,7 +1085,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
         let function_context = super::CFGContext {
             env: self.env,
-            warning_filters_scope: self.warning_filters_scope.clone(),
+            reporter: &self.reporter,
             info: &self.info,
             package: self.current_package,
             module: mident,
@@ -1091,11 +1097,11 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             locals,
             infinite_loop_starts: &infinite_loop_starts,
         };
-        let mut ds = Diagnostics::new();
-        for v in &self.env.visitors().abs_int {
-            ds.extend(v.verify(&function_context, &cfg));
-        }
-        self.add_diags(ds);
+        self.env
+            .visitors()
+            .abs_int
+            .par_iter()
+            .for_each(|v| self.add_diags(v.verify(&function_context, &cfg)));
         true
     }
 }

@@ -6,7 +6,7 @@ use crate::{
     loader::{Function, Loader},
 };
 use move_binary_format::{
-    errors::PartialVMError,
+    errors::{PartialVMError, VMError, VMResult},
     file_format::{ConstantPoolIndex, SignatureIndex},
 };
 use move_core_types::{
@@ -19,6 +19,7 @@ use move_trace_format::format::{
     TypeTagWithRefs, Write,
 };
 use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
+use smallvec::SmallVec;
 use std::collections::BTreeMap;
 
 /// Internal state for the tracer. This is where the actual tracing logic is implemented.
@@ -1553,7 +1554,19 @@ impl<'a> VMTracer<'a> {
         self.emit_trace_error_if_err(opt.is_none());
     }
 
-    pub(crate) fn close_initial_frame(&mut self, return_values: &[Value], remaining_gas: u64) {
+    pub(crate) fn close_initial_frame(
+        &mut self,
+        return_values: &VMResult<SmallVec<[Value; 1]>>,
+        remaining_gas: u64,
+    ) {
+        let return_values = match return_values {
+            Ok(values) => values,
+            Err(err) => {
+                self.trace
+                    .effect(EF::ExecutionError(format!("{:?}", err.major_status())));
+                return;
+            }
+        };
         let opt = self.close_initial_frame_(return_values, remaining_gas);
         self.emit_trace_error_if_err(opt.is_none());
     }
@@ -1588,7 +1601,13 @@ impl<'a> VMTracer<'a> {
         loader: &Loader,
         remaining_gas: u64,
         link_context: AccountAddress,
+        err: Option<&VMError>,
     ) {
+        if let Some(err) = err {
+            self.trace
+                .effect(EF::ExecutionError(format!("{:?}", err.major_status())));
+            return;
+        }
         let opt = self.close_frame_(
             frame,
             function,

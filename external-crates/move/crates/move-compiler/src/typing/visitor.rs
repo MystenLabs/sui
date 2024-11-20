@@ -10,7 +10,6 @@ use crate::{
     shared::CompilationEnv,
     typing::ast as T,
 };
-
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
@@ -75,7 +74,7 @@ pub trait TypingVisitorContext {
     }
 
     fn visit_module(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) {
-        self.push_warning_filter_scope(mdef.warning_filter.clone());
+        self.push_warning_filter_scope(mdef.warning_filter);
         if self.visit_module_custom(ident, mdef) {
             self.pop_warning_filter_scope();
             return;
@@ -116,7 +115,7 @@ pub trait TypingVisitorContext {
         struct_name: DatatypeName,
         sdef: &N::StructDefinition,
     ) {
-        self.push_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter);
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -149,7 +148,7 @@ pub trait TypingVisitorContext {
         enum_name: DatatypeName,
         edef: &N::EnumDefinition,
     ) {
-        self.push_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter);
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -209,7 +208,7 @@ pub trait TypingVisitorContext {
         constant_name: ConstantName,
         cdef: &T::Constant,
     ) {
-        self.push_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter);
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -233,7 +232,7 @@ pub trait TypingVisitorContext {
         function_name: FunctionName,
         fdef: &T::Function,
     ) {
-        self.push_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter);
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -577,8 +576,9 @@ macro_rules! simple_visitor {
         pub struct $visitor;
 
         pub struct Context<'a> {
+            #[allow(unused)]
             env: &'a crate::shared::CompilationEnv,
-            warning_filters_scope: crate::diagnostics::warning_filters::WarningFiltersScope,
+            reporter: crate::diagnostics::DiagnosticReporter<'a>,
         }
 
         impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
@@ -588,23 +588,23 @@ macro_rules! simple_visitor {
                 env: &'a crate::shared::CompilationEnv,
                 _program: &crate::typing::ast::Program,
             ) -> Self::Context<'a> {
-                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+                let reporter = env.diagnostic_reporter_at_top_level();
                 Context {
                     env,
-                    warning_filters_scope,
+                    reporter,
                 }
             }
         }
 
         impl Context<'_> {
             #[allow(unused)]
-            fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
-                self.env.add_diag(&self.warning_filters_scope, diag);
+            pub fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
+                self.reporter.add_diag(diag);
             }
 
             #[allow(unused)]
-            fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
-                self.env.add_diags(&self.warning_filters_scope, diags);
+            pub fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
+                self.reporter.add_diags(diags);
             }
         }
 
@@ -613,11 +613,11 @@ macro_rules! simple_visitor {
                 &mut self,
                 filters: crate::diagnostics::warning_filters::WarningFilters,
             ) {
-                self.warning_filters_scope.push(filters)
+                self.reporter.push_warning_filter_scope(filters)
             }
 
             fn pop_warning_filter_scope(&mut self) {
-                self.warning_filters_scope.pop()
+                self.reporter.pop_warning_filter_scope()
             }
 
             $($overrides)*
@@ -681,7 +681,7 @@ pub trait TypingMutVisitorContext {
     }
 
     fn visit_module(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) {
-        self.push_warning_filter_scope(mdef.warning_filter.clone());
+        self.push_warning_filter_scope(mdef.warning_filter);
         if self.visit_module_custom(ident, mdef) {
             self.pop_warning_filter_scope();
             return;
@@ -722,7 +722,7 @@ pub trait TypingMutVisitorContext {
         struct_name: DatatypeName,
         sdef: &mut N::StructDefinition,
     ) {
-        self.push_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter);
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -755,7 +755,7 @@ pub trait TypingMutVisitorContext {
         enum_name: DatatypeName,
         edef: &mut N::EnumDefinition,
     ) {
-        self.push_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter);
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -813,7 +813,7 @@ pub trait TypingMutVisitorContext {
         constant_name: ConstantName,
         cdef: &mut T::Constant,
     ) {
-        self.push_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter);
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -837,7 +837,7 @@ pub trait TypingMutVisitorContext {
         function_name: FunctionName,
         fdef: &mut T::Function,
     ) {
-        self.push_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter);
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;

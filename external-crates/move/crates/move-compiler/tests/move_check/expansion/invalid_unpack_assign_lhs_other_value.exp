@@ -17,7 +17,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_other_value.move:5:9
   │
 5 │         foo() = 0;
-  │         ^^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │         ^^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

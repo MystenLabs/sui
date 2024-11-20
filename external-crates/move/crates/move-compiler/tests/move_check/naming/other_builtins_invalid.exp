@@ -29,7 +29,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/other_builtins_invalid.move:6:9
   │
 6 │         assert!(false);
-  │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -37,7 +37,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/other_builtins_invalid.move:7:9
   │
 7 │         assert!(0 != 1);
-  │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

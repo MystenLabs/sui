@@ -262,10 +262,10 @@ mod tests {
         check_db_migration_consistency, check_db_migration_consistency_impl, reset_database,
         ConnectionPoolConfig, MIGRATIONS,
     };
-    use crate::tempdb::TempDb;
     use diesel::migration::{Migration, MigrationSource};
     use diesel::pg::Pg;
     use diesel_migrations::MigrationHarness;
+    use sui_pg_temp_db::TempDb;
 
     // Check that the migration records in the database created from the local schema
     // pass the consistency check.
@@ -391,5 +391,26 @@ mod tests {
         check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn temp_db_smoketest() {
+        use crate::database::Connection;
+        use diesel_async::RunQueryDsl;
+        use sui_pg_temp_db::TempDb;
+
+        telemetry_subscribers::init_for_testing();
+
+        let db = TempDb::new().unwrap();
+        let url = db.database().url();
+        println!("url: {}", url.as_str());
+        let mut connection = Connection::dedicated(url).await.unwrap();
+
+        // Run a simple query to verify the db can properly be queried
+        let resp = diesel::sql_query("SELECT datname FROM pg_database")
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        println!("resp: {:?}", resp);
     }
 }

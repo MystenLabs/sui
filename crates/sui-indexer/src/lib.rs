@@ -41,7 +41,6 @@ pub mod restorer;
 pub mod schema;
 pub mod store;
 pub mod system_package_task;
-pub mod tempdb;
 pub mod test_utils;
 pub mod types;
 

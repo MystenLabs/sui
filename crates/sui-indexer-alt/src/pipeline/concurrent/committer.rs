@@ -22,7 +22,7 @@ use super::{Batched, Handler};
 /// If the committer needs to retry a commit, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
-/// If the commiter needs to retry a commit, it will wait at most this long between retries.
+/// If the committer needs to retry a commit, it will wait at most this long between retries.
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The committer task is responsible for writing batches of rows to the database. It receives
@@ -45,10 +45,11 @@ pub(super) fn committer<H: Handler + 'static>(
 ) -> JoinHandle<()> {
     spawn_monitored_task!(async move {
         info!(pipeline = H::NAME, "Starting committer");
+        let write_concurrency = H::WRITE_CONCURRENCY_OVERRIDE.unwrap_or(config.write_concurrency);
 
         match ReceiverStream::new(rx)
             .map(Ok)
-            .try_for_each_concurrent(config.write_concurrency, |Batched { values, watermark }| {
+            .try_for_each_concurrent(write_concurrency, |Batched { values, watermark }| {
                 let values = Arc::new(values);
                 let tx = tx.clone();
                 let db = db.clone();

@@ -20,7 +20,7 @@ use move_command_line_common::{
 };
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{warning_filters::WarningFilters, Diagnostics},
+    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
     editions::{Edition, Flavor},
     shared::{files::MappedFiles, NumericalAddress, PackageConfig},
     FullyCompiledProgram,
@@ -658,7 +658,7 @@ pub fn compile_source_units(
     // txn testing framework test code includes private unused functions and unused struct types on
     // purpose and generating warnings for all of them does not make much sense (and there would be
     // a lot of them!) so let's suppress them function warnings, so let's suppress these
-    let warning_filter = WarningFilters::unused_warnings_filter_for_test();
+    let warning_filter = WarningFiltersBuilder::unused_warnings_filter_for_test();
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
         None,
         vec![file_name.as_ref().to_str().unwrap().to_owned()],

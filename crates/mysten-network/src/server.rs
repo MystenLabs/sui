@@ -9,7 +9,8 @@ use crate::{
     multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
 };
 use eyre::{eyre, Result};
-use futures::{FutureExt, Stream};
+use futures::stream::FuturesUnordered;
+use futures::{FutureExt, Stream, StreamExt};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -227,8 +228,21 @@ async fn listen_and_update_multiaddr<T: ToSocketAddrs>(
     let tls_acceptor = tls_config.map(|tls_config| TlsAcceptor::from(Arc::new(tls_config)));
     let incoming = TcpOrTlsListener::new(listener, tls_acceptor);
     let stream = async_stream::stream! {
+        let mut new_connections = FuturesUnordered::new();
         loop {
-            yield incoming.accept().await;
+            tokio::select! {
+                result = incoming.accept_raw() => {
+                    match result {
+                        Ok((stream, addr)) => {
+                            new_connections.push(incoming.maybe_upgrade(stream, addr));
+                        }
+                        Err(e) => yield Err(e),
+                    }
+                }
+                Some(result) = new_connections.next() => {
+                    yield result;
+                }
+            }
         }
     };
 
@@ -248,14 +262,23 @@ impl TcpOrTlsListener {
         }
     }
 
-    async fn accept(&self) -> std::io::Result<TcpOrTlsStream> {
-        let (stream, addr) = self.listener.accept().await?;
+    async fn accept_raw(&self) -> std::io::Result<(TcpStream, SocketAddr)> {
+        self.listener.accept().await
+    }
+
+    async fn maybe_upgrade(
+        &self,
+        stream: TcpStream,
+        addr: SocketAddr,
+    ) -> std::io::Result<TcpOrTlsStream> {
         if self.tls_acceptor.is_none() {
             return Ok(TcpOrTlsStream::Tcp(stream, addr));
         }
 
         // Determine whether new connection is TLS.
         let mut buf = [0; 1];
+        // `peek` blocks until at least some data is available, so if there is no error then
+        // it must return the one byte we are requesting.
         stream.peek(&mut buf).await?;
         if buf[0] == 0x16 {
             // First byte of a TLS handshake is 0x16.

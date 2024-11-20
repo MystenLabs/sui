@@ -325,7 +325,6 @@ random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 524288
 consensus_max_num_transactions_in_block: 512
-consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
@@ -337,3 +336,4 @@ max_accumulated_txn_cost_per_object_in_mysticeti_commit: 18500000
 max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 3700000
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
+

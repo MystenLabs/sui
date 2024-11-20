@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
 use crate::diagnostics::codes::{custom, DiagnosticInfo, Severity};
@@ -9,6 +10,13 @@ pub mod id_leak;
 pub mod info;
 pub mod linters;
 pub mod typing;
+
+// DEEPBOOK_ADDRESS / DEEPBOOK_PACKAGE_ID = 0xdee9;
+
+pub const STD_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0x1);
+pub const SUI_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0x2);
+pub const SUI_SYSTEM_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0x3);
+pub const BRIDGE_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0xb);
 
 pub const INIT_FUNCTION_NAME: Symbol = symbol!("init");
 pub const ID_FIELD_NAME: Symbol = symbol!("id");

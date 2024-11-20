@@ -176,6 +176,7 @@ fn module<'a>(
     mname: ModuleIdent,
     module: &T::ModuleDefinition,
 ) {
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let context = &mut Context::new(tparams, mname);
     module
         .functions
@@ -188,7 +189,7 @@ fn module<'a>(
     petgraph_scc(&graph)
         .into_iter()
         .filter(|scc| scc_edges!(&graph, scc).any(|(_, e, _)| e == Edge::Nested))
-        .for_each(|scc| compilation_env.add_error_diag(cycle_error(context, &graph, scc)))
+        .for_each(|scc| reporter.add_diag(cycle_error(context, &graph, scc)))
 }
 
 //**************************************************************************************************

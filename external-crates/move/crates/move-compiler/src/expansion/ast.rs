@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
         FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
@@ -16,7 +16,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::VecDeque, fmt, hash::Hash};
+use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
 
 //**************************************************************************************************
 // Program
@@ -24,6 +24,8 @@ use std::{collections::VecDeque, fmt, hash::Hash};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     // Map of declared named addresses, and their values if specified
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
@@ -336,7 +338,7 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 #[allow(clippy::large_enum_variant)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
-    Dot(Box<ExpDotted>, Name),
+    Dot(Box<ExpDotted>, /* dot location */ Loc, Name),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
     DotUnresolved(Loc, Box<ExpDotted>), // dot where Name could not be parsed
 }
@@ -389,6 +391,7 @@ pub enum Exp_ {
     ),
     MethodCall(
         Box<ExpDotted>,
+        Loc, // location of the dot
         Name,
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
@@ -655,12 +658,17 @@ impl Address {
         }
     }
 
-    pub fn is(&self, address: impl AsRef<str>) -> bool {
+    pub fn is<Addr>(&self, address: &Addr) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
+        self.numerical_value().is_some_and(|sp!(_, v)| v == address)
+    }
+
+    pub fn numerical_value(&self) -> Option<&Spanned<NumericalAddress>> {
         match self {
-            Self::Numerical { name: Some(n), .. } | Self::NamedUnassigned(n) => {
-                n.value.as_str() == address.as_ref()
-            }
-            Self::Numerical { name: None, .. } => false,
+            Self::Numerical { value, .. } => Some(value),
+            Self::NamedUnassigned(_) => None,
         }
     }
 }
@@ -670,7 +678,10 @@ impl ModuleIdent_ {
         Self { address, module }
     }
 
-    pub fn is(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
+    pub fn is<Addr>(&self, address: &Addr, module: impl AsRef<str>) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         let Self {
             address: a,
             module: m,
@@ -971,7 +982,10 @@ impl std::fmt::Display for Value_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules } = self;
+        let Program {
+            warning_filters_table: _,
+            modules,
+        } = self;
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
@@ -1530,7 +1544,7 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, _, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", f));
                 if is_macro.is_some() {
@@ -1730,7 +1744,7 @@ impl AstDebug for ExpDotted_ {
         use ExpDotted_ as D;
         match self {
             D::Exp(e) => e.ast_debug(w),
-            D::Dot(e, n) => {
+            D::Dot(e, _, n) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n))
             }

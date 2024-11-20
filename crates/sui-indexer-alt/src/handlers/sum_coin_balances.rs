@@ -36,7 +36,7 @@ impl Processor for SumCoinBalances {
 
     type Value = StoredObjectUpdate<StoredSumCoinBalance>;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

@@ -269,12 +269,13 @@ fn cursor_completion_items(
             completions.extend(custom_completions);
             completion_finalized |= custom_finalized;
             if !completion_finalized {
-                let (use_decl_completions, use_decl_finalized) =
-                    use_decl_completions(symbols, cursor);
+                let (use_decl_completions, _) = use_decl_completions(symbols, cursor);
                 completions.extend(use_decl_completions);
-                completion_finalized |= use_decl_finalized;
             }
-            (completions, completion_finalized)
+            // do not offer default completions after `{` as this may get annoying
+            // when simply starting a body of a function and hitting enter triggers
+            // auto-completion of an essentially random identifier
+            (completions, true)
         }
         // TODO: should we handle auto-completion on `:`? If we model our support after
         // rust-analyzer then it does not do this - it starts auto-completing types after the first

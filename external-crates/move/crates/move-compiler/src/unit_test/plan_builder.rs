@@ -5,10 +5,7 @@
 use crate::{
     cfgir::ast as G,
     diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     expansion::ast::{
         self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
         ModuleIdent_,
@@ -37,8 +34,9 @@ use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 struct Context<'env> {
+    #[allow(unused)]
     env: &'env CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
     constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>>,
 }
 
@@ -53,29 +51,29 @@ impl<'env> Context<'env> {
                 (constant.loc, v_opt, constant.attributes.clone())
             })
         });
-        let warning_filters_scope = compilation_env.top_level_warning_filter_scope().clone();
+        let reporter = compilation_env.diagnostic_reporter_at_top_level();
         Self {
             env: compilation_env,
-            warning_filters_scope,
+            reporter,
             constants,
         }
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn resolve_address(&self, addr: &Address) -> NumericalAddress {
@@ -109,7 +107,7 @@ pub fn construct_test_plan(
         prog.modules
             .key_cloned_iter()
             .flat_map(|(module_ident, module_def)| {
-                context.push_warning_filter_scope(module_def.warning_filter.clone());
+                context.push_warning_filter_scope(module_def.warning_filter);
                 let plan = construct_module_test_plan(
                     &mut context,
                     package_filter,
@@ -136,7 +134,7 @@ fn construct_module_test_plan(
         .functions
         .iter()
         .filter_map(|(loc, fn_name, func)| {
-            context.push_warning_filter_scope(func.warning_filter.clone());
+            context.push_warning_filter_scope(func.warning_filter);
             let info = build_test_info(context, loc, fn_name, func)
                 .map(|test_case| (fn_name.to_string(), test_case));
             context.pop_warning_filter_scope();

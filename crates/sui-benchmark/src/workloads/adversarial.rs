@@ -163,7 +163,7 @@ impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         // Sometimes useful when figuring out why things failed
         let stat = match effects {
-            ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
+            ExecutionEffects::FinalizedTransactionEffects(e, _) => e.data().status(),
             ExecutionEffects::SuiTransactionBlockEffects(_) => unimplemented!("Not impl"),
         };
 

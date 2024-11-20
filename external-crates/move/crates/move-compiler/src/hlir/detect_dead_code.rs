@@ -3,10 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersScope},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     expansion::ast::ModuleIdent,
     ice,
     naming::ast::{self as N, BlockLabel},
@@ -192,8 +189,9 @@ impl ControlFlow {
 }
 
 struct Context<'env> {
+    #[allow(unused)]
     env: &'env CompilationEnv,
-    warning_filters_scope: WarningFiltersScope,
+    reporter: DiagnosticReporter<'env>,
     // loops: Vec<BlockLabel>,
 }
 
@@ -201,28 +199,25 @@ impl<'env> Context<'env> {
     pub fn new(env: &'env CompilationEnv) -> Self {
         // let loops = vec![];
         // Context { env , loops }
-        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
-        Context {
-            env,
-            warning_filters_scope,
-        }
+        let reporter = env.diagnostic_reporter_at_top_level();
+        Context { env, reporter }
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
+        self.reporter.add_diag(diag);
     }
 
     #[allow(unused)]
     pub fn add_diags(&self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
+        self.reporter.add_diags(diags);
     }
 
     pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+        self.reporter.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.reporter.pop_warning_filter_scope()
     }
 
     fn maybe_report_value_error(&mut self, error: &mut ControlFlow) -> bool {
@@ -380,7 +375,7 @@ fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefi
 }
 
 fn module(context: &mut Context, mdef: &T::ModuleDefinition) {
-    context.push_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter);
     for (_, cname, cdef) in &mdef.constants {
         constant(context, cname, cdef);
     }
@@ -400,7 +395,7 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
         body,
         ..
     } = f;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(*warning_filter);
     function_body(context, body);
     context.pop_warning_filter_scope();
 }
@@ -417,7 +412,7 @@ fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
 //**************************************************************************************************
 
 fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
-    context.push_warning_filter_scope(cdef.warning_filter.clone());
+    context.push_warning_filter_scope(cdef.warning_filter);
     let eloc = cdef.value.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();

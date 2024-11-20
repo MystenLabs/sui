@@ -369,6 +369,8 @@ pub enum FunctionBody {
 /// A Move function/procedure
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function_ {
+    /// Location of the whole function
+    pub loc: Loc,
     /// The visibility
     pub visibility: FunctionVisibility,
     /// Is entry function
@@ -932,6 +934,7 @@ impl Function_ {
     /// Creates a new function declaration from the components of the function
     /// See the declaration of the struct `Function` for more details
     pub fn new(
+        loc: Loc,
         visibility: FunctionVisibility,
         is_entry: bool,
         formals: Vec<(Var, Type)>,
@@ -941,6 +944,7 @@ impl Function_ {
     ) -> Self {
         let signature = FunctionSignature::new(formals, return_type, type_parameters);
         Function_ {
+            loc,
             visibility,
             is_entry,
             signature,

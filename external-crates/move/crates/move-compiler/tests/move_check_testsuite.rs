@@ -10,7 +10,7 @@ use move_command_line_common::{
 };
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::warning_filters::WarningFiltersBuilder,
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
@@ -72,7 +72,7 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
         flavor,
         edition,
         is_dependency: false,
-        warning_filter: WarningFilters::new_for_source(),
+        warning_filter: WarningFiltersBuilder::new_for_source(),
     };
     testsuite(path, config, lint)
 }
@@ -92,7 +92,7 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
         let mut config = config.clone();
         config
             .warning_filter
-            .union(&WarningFilters::unused_warnings_filter_for_test());
+            .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
         run_test(
             path,
             Path::new(&test_exp_path),
@@ -139,7 +139,7 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
         let mut config = config.clone();
         config
             .warning_filter
-            .union(&WarningFilters::unused_warnings_filter_for_test());
+            .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
         run_test_inner(
             path,
             Path::new(&migration_exp_path),
@@ -196,7 +196,7 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
 
     config
         .warning_filter
-        .union(&WarningFilters::unused_warnings_filter_for_test());
+        .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
     run_test(path, &exp_path, &out_path, Flags::empty(), config, lint)?;
     Ok(())
 }

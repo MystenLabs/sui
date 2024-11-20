@@ -1,5 +1,59 @@
 # @mysten/deepbook-v3
 
+## 0.12.10
+
+### Patch Changes
+
+- 46bdaf9: Typus coin type
+
+## 0.12.9
+
+### Patch Changes
+
+- 2a532bc: Governance function update
+
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [938fb6e]
+  - @mysten/sui@1.14.4
+
+## 0.12.7
+
+### Patch Changes
+
+- 4a42691: NS token pools added
+
+## 0.12.6
+
+### Patch Changes
+
+- a43ae92: NS Token
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+
+## 0.12.5
+
+### Patch Changes
+
+- a24d43d: getOrders and decodeOrderId support
+
+## 0.12.4
+
+### Patch Changes
+
+- 6a571f1: Deep conversion
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+
 ## 0.12.2
 
 ### Patch Changes
