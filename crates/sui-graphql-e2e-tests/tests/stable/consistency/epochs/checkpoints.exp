@@ -21,7 +21,7 @@ Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 3,
-      "checkpointSummaryBcs": "AAAAAAAAAAADAAAAAAAAAAIAAAAAAAAAIAQ3s4Mbet/w/8Z/cvdXYfev9qtQv2TuFOZcI5XBlbOtASBccSay4jtpNOLJUZaWlhsTssP4qMfFMpVfgR+y0a9nOQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQFgsWTmpO9qta+EbhNi1JmfZoE7cnLjHchlXrKwsDBBHIfHhvDIyrS5XlX2SKSKymW1Cx+ffk0dthkl6k8iVO6dfANqvfU5l8TzbKggaQFYmzJMQJYP3u1VSIZ5EzM0GH1hECcAAAAAAAAzAAAAAAAAAAACAAA="
+      "bcs": "AAAAAAAAAAADAAAAAAAAAAIAAAAAAAAAIAQ3s4Mbet/w/8Z/cvdXYfev9qtQv2TuFOZcI5XBlbOtASBccSay4jtpNOLJUZaWlhsTssP4qMfFMpVfgR+y0a9nOQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQFgsWTmpO9qta+EbhNi1JmfZoE7cnLjHchlXrKwsDBBHIfHhvDIyrS5XlX2SKSKymW1Cx+ffk0dthkl6k8iVO6dfANqvfU5l8TzbKggaQFYmzJMQJYP3u1VSIZ5EzM0GH1hECcAAAAAAAAzAAAAAAAAAAACAAA="
     },
     "epoch": {
       "epochId": 0,
@@ -29,19 +29,19 @@ Response: {
         "nodes": [
           {
             "sequenceNumber": 0,
-            "checkpointSummaryBcs": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAIA1J8u1KucLNL1LEsIkImYRYHqL2cGqjpC9nlSCsS5nbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA=="
+            "bcs": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAIA1J8u1KucLNL1LEsIkImYRYHqL2cGqjpC9nlSCsS5nbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA=="
           },
           {
             "sequenceNumber": 1,
-            "checkpointSummaryBcs": "AAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAILMD/SjqlardhuNt4bDMq2GGFnNP4NrLhIpVn3gSq6xXASC9LDN3eeve+CTXzQsO9w9hAhFTuNfr+nHnztTf5VhotQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA=="
+            "bcs": "AAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAILMD/SjqlardhuNt4bDMq2GGFnNP4NrLhIpVn3gSq6xXASC9LDN3eeve+CTXzQsO9w9hAhFTuNfr+nHnztTf5VhotQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA=="
           },
           {
             "sequenceNumber": 2,
-            "checkpointSummaryBcs": "AAAAAAAAAAACAAAAAAAAAAEAAAAAAAAAILMD/SjqlardhuNt4bDMq2GGFnNP4NrLhIpVn3gSq6xXASDXzherctqbdwF+KqXFVfyCfHjpTeC2EW77b1vqLPA6/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA=="
+            "bcs": "AAAAAAAAAAACAAAAAAAAAAEAAAAAAAAAILMD/SjqlardhuNt4bDMq2GGFnNP4NrLhIpVn3gSq6xXASDXzherctqbdwF+KqXFVfyCfHjpTeC2EW77b1vqLPA6/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA=="
           },
           {
             "sequenceNumber": 3,
-            "checkpointSummaryBcs": "AAAAAAAAAAADAAAAAAAAAAIAAAAAAAAAIAQ3s4Mbet/w/8Z/cvdXYfev9qtQv2TuFOZcI5XBlbOtASBccSay4jtpNOLJUZaWlhsTssP4qMfFMpVfgR+y0a9nOQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQFgsWTmpO9qta+EbhNi1JmfZoE7cnLjHchlXrKwsDBBHIfHhvDIyrS5XlX2SKSKymW1Cx+ffk0dthkl6k8iVO6dfANqvfU5l8TzbKggaQFYmzJMQJYP3u1VSIZ5EzM0GH1hECcAAAAAAAAzAAAAAAAAAAACAAA="
+            "bcs": "AAAAAAAAAAADAAAAAAAAAAIAAAAAAAAAIAQ3s4Mbet/w/8Z/cvdXYfev9qtQv2TuFOZcI5XBlbOtASBccSay4jtpNOLJUZaWlhsTssP4qMfFMpVfgR+y0a9nOQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQFgsWTmpO9qta+EbhNi1JmfZoE7cnLjHchlXrKwsDBBHIfHhvDIyrS5XlX2SKSKymW1Cx+ffk0dthkl6k8iVO6dfANqvfU5l8TzbKggaQFYmzJMQJYP3u1VSIZ5EzM0GH1hECcAAAAAAAAzAAAAAAAAAAACAAA="
           }
         ]
       }
@@ -230,19 +230,43 @@ Response: {
     "epoch_0": {
       "epochId": 0,
       "checkpoints": {
-        "nodes": []
+        "nodes": [
+          {
+            "sequenceNumber": 1
+          },
+          {
+            "sequenceNumber": 2
+          },
+          {
+            "sequenceNumber": 3
+          }
+        ]
       }
     },
     "epoch_1": {
       "epochId": 1,
       "checkpoints": {
-        "nodes": []
+        "nodes": [
+          {
+            "sequenceNumber": 5
+          },
+          {
+            "sequenceNumber": 6
+          },
+          {
+            "sequenceNumber": 7
+          }
+        ]
       }
     },
     "epoch_2": {
       "epochId": 2,
       "checkpoints": {
-        "nodes": []
+        "nodes": [
+          {
+            "sequenceNumber": 9
+          }
+        ]
       }
     }
   }
@@ -258,13 +282,21 @@ Response: {
     "epoch_0": {
       "epochId": 0,
       "checkpoints": {
-        "nodes": []
+        "nodes": [
+          {
+            "sequenceNumber": 2
+          }
+        ]
       }
     },
     "epoch_1": {
       "epochId": 1,
       "checkpoints": {
-        "nodes": []
+        "nodes": [
+          {
+            "sequenceNumber": 6
+          }
+        ]
       }
     },
     "epoch_2": {

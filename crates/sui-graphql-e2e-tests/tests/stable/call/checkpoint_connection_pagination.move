@@ -41,7 +41,7 @@
       cursor
       node { 
         sequenceNumber 
-        checkpointSummaryBcs
+        bcs
       }
     }
   }
