@@ -22,6 +22,7 @@ use move_binary_format::{
     normalized::{Enum, Function, Module, Struct},
     CompiledModule,
 };
+use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::codes::DiagnosticInfo;
 use move_compiler::{
@@ -1362,8 +1363,6 @@ fn struct_type_param_mismatch_diag(
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
-    let mut diags = Diagnostics::new();
-
     let struct_index = lookup
         .struct_identifier_to_index
         .get(name)
@@ -1377,62 +1376,14 @@ fn struct_type_param_mismatch_diag(
 
     let def_loc = struct_sourcemap.definition_location;
 
-    if old_struct.type_parameters.len() != new_struct.type_parameters.len() {
-        diags.add(Diagnostic::new(
-            Declarations::TypeParamMismatch,
-            (
-                def_loc,
-                format!(
-                    "Incorrect number of type parameters: expected {}, found {}",
-                    old_struct.type_parameters.len(),
-                    new_struct.type_parameters.len()
-                ),
-            ),
-            Vec::<(Loc, String)>::new(),
-            vec![
-                "Structs are part of a module's public interface and \
-                cannot be changed during an upgrade."
-                    .to_string(),
-                format!(
-                    "Restore the original struct's type parameters \
-                    for struct '{name}' including the ordering."
-                ),
-            ],
-        ));
-    } else if old_struct.type_parameters != new_struct.type_parameters {
-        for (i, (old_type_param, new_type_param)) in old_struct
-            .type_parameters
-            .iter()
-            .zip(new_struct.type_parameters.iter())
-            .enumerate()
-        {
-            if old_type_param != new_type_param {
-                let type_param_loc = struct_sourcemap
-                    .type_parameters
-                    .get(i)
-                    .context("Unable to get type parameter location")?;
-
-                let (code, label) = type_parameter_code_and_error(old_type_param, new_type_param);
-
-                diags.add(Diagnostic::new(
-                    code,
-                    (type_param_loc.1, label),
-                    vec![(def_loc, "Struct definition".to_string())],
-                    vec![
-                        "Structs are part of a module's public interface \
-                        and cannot be changed during an upgrade."
-                            .to_string(),
-                        format!(
-                            "Restore the original struct's type parameters \
-                            for struct '{name}' including the ordering."
-                        ),
-                    ],
-                ));
-            }
-        }
-    }
-
-    Ok(diags)
+    type_parameter_diag(
+        "struct",
+        name,
+        &old_struct.type_parameters,
+        &new_struct.type_parameters,
+        def_loc,
+        &struct_sourcemap.type_parameters,
+    )
 }
 
 /// Return a diagnostic for a new variant in an enum
@@ -1700,8 +1651,6 @@ fn enum_type_param_mismatch(
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
-    let mut diags = Diagnostics::new();
-
     let enum_index = lookup
         .enum_identifier_to_index
         .get(enum_name)
@@ -1715,38 +1664,71 @@ fn enum_type_param_mismatch(
 
     let def_loc = enum_sourcemap.definition_location;
 
-    if old_enum.type_parameters.len() != new_enum.type_parameters.len() {
+    type_parameter_diag(
+        "enum",
+        enum_name,
+        &old_enum.type_parameters,
+        &new_enum.type_parameters,
+        def_loc,
+        &enum_sourcemap.type_parameters,
+    )
+}
+
+/// Return a diagnostic for a type parameter mismatch
+fn type_parameter_diag(
+    declaration_kind: &str,
+    name: &Identifier,
+    old_type_parameters: &[DatatypeTyParameter],
+    new_type_parameters: &[DatatypeTyParameter],
+    def_loc: Loc,
+    type_parameter_locs: &Vec<SourceName>,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    // capitalize the first letter
+    let capital_declaration_kind = declaration_kind
+        .chars()
+        .enumerate()
+        .map(|(i, c)| {
+            if i == 0 {
+                c.to_uppercase().next().unwrap()
+            } else {
+                c
+            }
+        })
+        .collect::<String>();
+
+    if old_type_parameters.len() != new_type_parameters.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeParamMismatch,
             (
                 def_loc,
                 format!(
                     "Incorrect number of type parameters: expected {}, found {}",
-                    old_enum.type_parameters.len(),
-                    new_enum.type_parameters.len()
+                    old_type_parameters.len(),
+                    new_type_parameters.len()
                 ),
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                "Enums are part of a module's public interface \
-                and cannot be changed during an upgrade."
-                    .to_string(),
                 format!(
-                    "Restore the original enum's type parameters for \
-                    enum '{enum_name}' including the ordering."
+                    "{capital_declaration_kind}s are part of a module's public interface and \
+                cannot be changed during an upgrade."
+                ),
+                format!(
+                    "Restore the original {declaration_kind}'s type parameters \
+                    for {declaration_kind} '{name}' including the ordering."
                 ),
             ],
-        ))
-    } else {
-        for (i, (old_type_param, new_type_param)) in old_enum
-            .type_parameters
+        ));
+    } else if old_type_parameters != new_type_parameters {
+        for (i, (old_type_param, new_type_param)) in old_type_parameters
             .iter()
-            .zip(new_enum.type_parameters.iter())
+            .zip(new_type_parameters.iter())
             .enumerate()
         {
             if old_type_param != new_type_param {
-                let type_param_loc = enum_sourcemap
-                    .type_parameters
+                let type_param_loc = type_parameter_locs
                     .get(i)
                     .context("Unable to get type parameter location")?;
 
@@ -1754,15 +1736,16 @@ fn enum_type_param_mismatch(
 
                 diags.add(Diagnostic::new(
                     code,
-                    (type_param_loc.1, label),
-                    vec![(def_loc, "Enum definition".to_string())],
+                    (type_param_loc.1.clone(), label),
+                    vec![(def_loc, format!("{capital_declaration_kind} definition"))],
                     vec![
-                        "Enums are part of a module's public interface \
-                        and cannot be changed during an upgrade."
-                            .to_string(),
                         format!(
-                            "Restore the original enum's type parameters \
-                            for enum '{enum_name}' including the ordering."
+                            "{capital_declaration_kind}s are part of a module's public interface \
+                        and cannot be changed during an upgrade."
+                        ),
+                        format!(
+                            "Restore the original {declaration_kind}'s type parameters \
+                            for {declaration_kind} '{name}' including the ordering."
                         ),
                     ],
                 ));
