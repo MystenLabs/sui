@@ -3,7 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{
+        cfg::MutForwardCFG,
+        visitor::{is_zero, same_value_exp},
+    },
+    diag,
+    diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
@@ -19,17 +24,22 @@ use std::convert::TryFrom;
 
 /// returns true if anything changed
 pub fn optimize(
+    reporter: &DiagnosticReporter,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
+    let context = Context {
+        reporter,
+        constants,
+    };
     let mut changed = false;
     for block_ref in cfg.blocks_mut().values_mut() {
         let block = std::mem::take(block_ref);
         *block_ref = block
             .into_iter()
-            .filter_map(|mut cmd| match optimize_cmd(constants, &mut cmd) {
+            .filter_map(|mut cmd| match optimize_cmd(&context, &mut cmd) {
                 None => {
                     changed = true;
                     None
@@ -44,6 +54,11 @@ pub fn optimize(
     changed
 }
 
+struct Context<'a> {
+    reporter: &'a DiagnosticReporter<'a>,
+    constants: &'a UniqueMap<ConstantName, Value>,
+}
+
 //**************************************************************************************************
 // Scaffolding
 //**************************************************************************************************
@@ -51,24 +66,21 @@ pub fn optimize(
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(
-    consts: &UniqueMap<ConstantName, Value>,
-    sp!(_, cmd_): &mut Command,
-) -> Option<bool> {
+fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
-        C::Assign(_, _ls, e) => optimize_exp(consts, e),
+        C::Assign(_, _ls, e) => optimize_exp(context, e),
         C::Mutate(el, er) => {
-            let c1 = optimize_exp(consts, er);
-            let c2 = optimize_exp(consts, el);
+            let c1 = optimize_exp(context, er);
+            let c2 = optimize_exp(context, el);
             c1 || c2
         }
         C::Return { exp: e, .. }
         | C::Abort(_, e)
         | C::JumpIf { cond: e, .. }
-        | C::VariantSwitch { subject: e, .. } => optimize_exp(consts, e),
+        | C::VariantSwitch { subject: e, .. } => optimize_exp(context, e),
         C::IgnoreAndPop { exp: e, .. } => {
-            let c = optimize_exp(consts, e);
+            let c = optimize_exp(context, e);
             if ignorable_exp(e) {
                 // value(s), so the command can be removed
                 return None;
@@ -83,9 +95,9 @@ fn optimize_cmd(
 }
 
 #[growing_stack]
-fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
+fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
-    let optimize_exp = |e| optimize_exp(consts, e);
+    let optimize_exp = |e| optimize_exp(context, e);
     match &mut e.exp.value {
         //************************************
         // Pass through cases
@@ -103,7 +115,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
             let E::Constant(name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = consts.get(name) {
+            if let Some(value) = context.constants.get(name) {
                 *e_ = E::Value(value.clone());
                 true
             } else {
@@ -152,6 +164,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
+            check_equal_operands(context, e.exp.loc, e1, op, e2);
             if let (Some(v1), Some(v2)) = (foldable_exp(e1), foldable_exp(e2)) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
@@ -457,5 +470,50 @@ fn ignorable_exp(e: &Exp) -> bool {
         E::Value(_) => true,
         E::Multiple(es) => es.iter().all(ignorable_exp),
         _ => false,
+    }
+}
+
+//**************************************************************************************************
+// Warnings
+//**************************************************************************************************
+
+fn check_equal_operands(context: &Context, loc: Loc, lhs: &Exp, op: &BinOp, rhs: &Exp) {
+    let Some(resulting_value) = equal_operands(lhs, op.value, rhs) else {
+        return;
+    };
+    let msg = format!(
+        "Equal operands detected in binary operation, \
+            which always evaluates to {resulting_value}"
+    );
+    let lhs_msg = "This expression";
+    let rhs_msg = "Evaluates to the same value as this expression";
+    context.reporter.add_diag(diag!(
+        CodeGeneration::EqualOperands,
+        (loc, msg),
+        (lhs.exp.loc, lhs_msg),
+        (rhs.exp.loc, rhs_msg)
+    ));
+}
+
+fn equal_operands(lhs: &Exp, op: BinOp_, rhs: &Exp) -> Option<&'static str> {
+    let resulting_value = match op {
+        BinOp_::Div | BinOp_::Mod if is_zero(rhs) => return None, // warning reported elsewhere
+        BinOp_::Sub | BinOp_::Mod | BinOp_::Xor => "'0'",
+        BinOp_::Div => "'1'",
+        BinOp_::BitOr | BinOp_::BitAnd | BinOp_::And | BinOp_::Or => "the same value",
+        BinOp_::Neq | BinOp_::Lt | BinOp_::Gt => "'false'",
+        BinOp_::Eq | BinOp_::Le | BinOp_::Ge => "'true'",
+        BinOp_::Add
+        | BinOp_::Mul
+        | BinOp_::Shl
+        | BinOp_::Shr
+        | BinOp_::Range
+        | BinOp_::Implies
+        | BinOp_::Iff => return None,
+    };
+    if same_value_exp(lhs, rhs) {
+        Some(resulting_value)
+    } else {
+        None
     }
 }

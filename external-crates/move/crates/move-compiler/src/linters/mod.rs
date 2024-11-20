@@ -15,7 +15,6 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
-pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
@@ -162,12 +161,6 @@ lints!(
         "unnecessary_unit",
         "unit `()` expression can be removed or simplified"
     ),
-    (
-        EqualOperands,
-        LinterDiagnosticCategory::Suspicious,
-        "equal_operands",
-        "Equal operands detected in binary operation, which might indicate a logical error or redundancy."
-    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -205,7 +198,6 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 self_assignment::SelfAssignment.visitor(),
                 redundant_ref_deref::RedundantRefDeref.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
-                equal_operands::EqualOperands.visitor(),
             ]
         }
     }

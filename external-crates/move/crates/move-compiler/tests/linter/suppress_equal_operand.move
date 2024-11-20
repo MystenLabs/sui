@@ -1,16 +1,13 @@
-module 0x42::suppress_equal_operand {
-    // Example of suppressing at module level
-    #[allow(lint(equal_operands))]
-    fun suppressed_function() {
-        let x = 10;
-        let _ = x == x;  // Lint suppressed for entire function
+#[allow(lint(equal_operands))]
+module a::suppress_equal_operand {
+    fun suppressed_function<T: copy + drop>(x: T): bool {
+        x == x
     }
+}
 
-    // Example of conditional suppression based on configuration
+module b::suppress_equal_operand {
     #[allow(lint(equal_operands))]
-    fun conditionally_suppressed() {
-        let x = 10;
-        let _ = x == x;  // Lint suppressed only when "testing" feature is enabled
+    fun suppressed_function<T: copy + drop>(x: T): bool {
+        x == x
     }
-
 }
