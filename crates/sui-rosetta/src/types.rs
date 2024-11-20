@@ -966,8 +966,9 @@ impl InternalOperation {
                 ..
             } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                if metadata.objects.len() != 0 {
-                    let to_merge: Vec<Argument> = metadata.objects
+                if !metadata.objects.is_empty() {
+                    let to_merge: Vec<Argument> = metadata
+                        .objects
                         .into_iter()
                         .map(|o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
                         .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
@@ -1089,7 +1090,6 @@ pub async fn pay_sui_to_metadata(
         let mut coins: Vec<ObjectRef> = coins.into_iter().map(|c| c.object_ref()).collect();
         let objects = coins.split_off(MAX_GAS_COINS);
 
-        println!("coins.len() = {}", coins.len());
         return Ok(ConstructionMetadata {
             sender,
             coins,
@@ -1164,7 +1164,6 @@ pub async fn pay_sui_to_metadata(
         .collect();
     let total_coin_value = all_coins.into_iter().map(|c| c.balance).sum::<u64>() as i128;
 
-    println!("coins.len() = {}", coins.len());
     Ok(ConstructionMetadata {
         sender,
         coins,

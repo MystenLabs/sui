@@ -111,7 +111,10 @@ pub async fn make_change(
         .await?;
         progress += 1;
         if progress % 4 == 0 {
-            println!("Splitting progress: {}", progress as f32 * 100. / len as f32);
+            println!(
+                "Splitting progress: {}",
+                progress as f32 * 100. / len as f32
+            );
         }
         if !resp.status_ok().ok_or(anyhow!("Expected effects"))? {
             println!("resp: {resp:#?}");
