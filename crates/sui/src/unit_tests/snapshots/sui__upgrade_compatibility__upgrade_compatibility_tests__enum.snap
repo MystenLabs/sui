@@ -9,7 +9,7 @@ error[Compatibility E01003]: ability mismatch
   │                 ^^^^^^^^^^^^^^ Unexpected ability: 'drop'
   │
   = Enums are part of a module's public interface and cannot be changed during an upgrade.
-  = Restore the original enum's abilities for enum 'EnumAddAbility': 'copy'.
+  = Restore the original ability of the enum: 'copy' for enum 'EnumAddAbility'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:13:17
@@ -18,7 +18,7 @@ error[Compatibility E01003]: ability mismatch
    │                 ^^^^^^^^^^^^^^^^^ Missing ability: 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumRemoveAbility': 'copy' and 'drop'.
+   = Restore the original abilities of the enum: 'copy' and 'drop' for enum 'EnumRemoveAbility'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:17:17
@@ -27,7 +27,7 @@ error[Compatibility E01003]: ability mismatch
    │                 ^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'drop', unexpected 'store'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumAddAndRemoveAbility': 'copy' and 'drop'.
+   = Restore the original abilities of the enum: 'copy' and 'drop' for enum 'EnumAddAndRemoveAbility'.
 
 error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:23:9
@@ -126,7 +126,7 @@ error[Compatibility E01003]: ability mismatch
    │                 ^^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumAddAbilityWithTypes': 'copy'.
+   = Restore the original ability of the enum: 'copy' for enum 'EnumAddAbilityWithTypes'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:53:17
@@ -135,7 +135,7 @@ error[Compatibility E01003]: ability mismatch
    │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumRemoveAbilityWithTypes': 'copy' and 'drop'.
+   = Restore the original abilities of the enum: 'copy' and 'drop' for enum 'EnumRemoveAbilityWithTypes'.
 
 error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:59:9

@@ -9,7 +9,7 @@ error[Compatibility E01003]: ability mismatch
    │                   ^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'AddExtraAbility': none.
+   = Restore the original abilities of the struct: none for struct 'AddExtraAbility'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:11:19
@@ -18,7 +18,7 @@ error[Compatibility E01003]: ability mismatch
    │                   ^^^^^^^^^^^^^ Missing ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'RemoveAbility': 'copy' and 'drop'.
+   = Restore the original abilities of the struct: 'copy' and 'drop' for struct 'RemoveAbility'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:12:19
@@ -27,7 +27,7 @@ error[Compatibility E01003]: ability mismatch
    │                   ^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'store'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'AddAndRemoveAbility': 'copy' and 'drop'.
+   = Restore the original abilities of the struct: 'copy' and 'drop' for struct 'AddAndRemoveAbility'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:13:19
@@ -36,7 +36,7 @@ error[Compatibility E01003]: ability mismatch
    │                   ^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities: 'copy' and 'store'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'RemoveMultipleAbilities': 'copy', 'drop', and 'store'.
+   = Restore the original abilities of the struct: 'copy', 'drop', and 'store' for struct 'RemoveMultipleAbilities'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:14:19
@@ -45,7 +45,7 @@ error[Compatibility E01003]: ability mismatch
    │                   ^^^^^^^^^^^^^^^^^^^^ Unexpected abilities: 'copy' and 'drop'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'AddMultipleAbilities': none.
+   = Restore the original abilities of the struct: none for struct 'AddMultipleAbilities'.
 
 error[Compatibility E01002]: type mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:17:19

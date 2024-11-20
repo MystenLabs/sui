@@ -1233,6 +1233,12 @@ fn struct_ability_mismatch_diag(
     let def_loc = struct_sourcemap.definition_location;
 
     if old_struct.abilities != new_struct.abilities {
+        let old_abilities: Vec<String> = old_struct
+            .abilities
+            .into_iter()
+            .map(|a| format!("'{:?}'", a).to_lowercase())
+            .collect();
+
         diags.add(Diagnostic::new(
             Declarations::AbilityMismatch,
             (
@@ -1245,8 +1251,9 @@ fn struct_ability_mismatch_diag(
                 cannot be changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original struct's abilities \
-                    for struct '{struct_name}': {}.",
+                    "Restore the original {} of the struct: {} \
+                    for struct '{struct_name}'.",
+                    singular_or_plural(old_abilities.len(), "ability", "abilities"),
                     format_list(
                         old_struct
                             .abilities
@@ -1428,6 +1435,12 @@ fn enum_ability_mismatch_diag(
     let def_loc = enum_sourcemap.definition_location;
 
     if old_enum.abilities != new_enum.abilities {
+        let old_abilities: Vec<String> = old_enum
+            .abilities
+            .into_iter()
+            .map(|a| format!("'{:?}'", a).to_lowercase())
+            .collect();
+
         diags.add(Diagnostic::new(
             Declarations::AbilityMismatch,
             (
@@ -1440,8 +1453,9 @@ fn enum_ability_mismatch_diag(
                 and cannot be changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original enum's abilities \
-                    for enum '{enum_name}': {}.",
+                    "Restore the original {} of the enum: {} \
+                    for enum '{enum_name}'.",
+                    singular_or_plural(old_abilities.len(), "ability", "abilities"),
                     format_list(
                         old_enum
                             .abilities
