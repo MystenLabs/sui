@@ -1,8 +1,0 @@
-warning[Lint W02011]: Equal operands detected in binary operation, which might indicate a logical error or redundancy.
-  ┌─ tests/linter/false_negative_meaningless_math_operation.move:3:14
-  │
-3 │         x * (y - y) // This is effectively * 0, but is not currently caught
-  │              ^^^^^ Equal operands detected in binary operation, which might indicate a logical error or redundancy.
-  │
-  = This warning can be suppressed with '#[allow(lint(equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
