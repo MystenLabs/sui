@@ -1,0 +1,25 @@
+[package]
+name = "sui-rpc-benchmark"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+clap = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+sui-types.workspace = true
+sui-sdk.workspace = true
+telemetry-subscribers.workspace = true
+
+[[bin]]
+name = "sui-rpc-benchmark"
+path = "src/main.rs"
