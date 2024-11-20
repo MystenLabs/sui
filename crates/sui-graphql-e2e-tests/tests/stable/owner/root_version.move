@@ -95,8 +95,7 @@ module P0::M {
 // lamport version: 5 (inner)
 
 //# run P0::M::new_dof
-// lamprot version: 6 (outer)
-
+// lamport version: 6 (outer)
 
 //# run P0::M::connect --args object(2,0) object(3,0) object(4,0) object(5,0)
 // lamport version: 7 (o, w, inner, outer)
@@ -155,9 +154,8 @@ fragment DOF on Owner {
 { # Querying dynamic fields under the wrapped Move object
   # AA== is the base64 encoding of the boolean value `false` (0x00).
 
-  # The latest version konwn to the service for the wrapped object is
-  # the version it was wrapped at, so that will have no dynamic
-  # fields.
+  # Accessing an ID as an Owner imposes no version constraint, so we will end
+  # up fetching the latest versions of the dynamic object fields.
   unversioned: owner(address: "@{obj_3_0}") { ...DOF }
 
   # Specifying the latest version of the wrapping object has the
@@ -185,8 +183,22 @@ fragment DOF on Owner {
 { # Querying a nested dynamic field, where the version of the child
   # may be greater than the version of its immediate parent
 
-  # At its latest version, it doesn't see the latest change on its child.
+  # Accessing the outer ID as an owner imposes no version constraint, so we see
+  # the latest version of the inner object.
   unversioned: owner(address: "@{obj_4_0}") { ...DOF }
+
+  # At its latest version as an object, it doesn't see the latest change on its
+  # child.
+  latestObject: object(address: "@{obj_4_0}") {
+    dynamicObjectField(name: { type: "bool", bcs: "AA==" }) {
+      value {
+        ... on MoveObject {
+          version
+          contents { json }
+        }
+      }
+    }
+  }
 
   # But at its root's latest version, it does
   latest: owner(address: "@{obj_4_0}", rootVersion: 11) { ...DOF }

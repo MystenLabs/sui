@@ -33,14 +33,14 @@ created: object(5,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 101-104:
+task 6, lines 100-103:
 //# run P0::M::connect --args object(2,0) object(3,0) object(4,0) object(5,0)
 created: object(6,0), object(6,1)
 mutated: object(0,1), object(2,0), object(4,0), object(5,0)
 wrapped: object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 9940800,  storage_rebate: 6041772, non_refundable_storage_fee: 61028
 
-task 7, lines 106-108:
+task 7, lines 105-107:
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 7
@@ -65,27 +65,27 @@ Contents: P0::M::O {
     },
 }
 
-task 8, lines 110-111:
+task 8, lines 109-110:
 //# run P0::M::touch_root --args object(2,0)
 mutated: object(0,1), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2568800,  storage_rebate: 2543112, non_refundable_storage_fee: 25688
 
-task 9, lines 113-114:
+task 9, lines 112-113:
 //# run P0::M::touch_wrapped --args object(2,0)
 mutated: object(0,1), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2568800,  storage_rebate: 2543112, non_refundable_storage_fee: 25688
 
-task 10, lines 116-117:
+task 10, lines 115-116:
 //# run P0::M::touch_inner --args object(2,0)
 mutated: object(0,1), object(2,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 3853200,  storage_rebate: 3814668, non_refundable_storage_fee: 38532
 
-task 11, lines 119-120:
+task 11, lines 118-119:
 //# run P0::M::touch_outer --args object(2,0)
 mutated: object(0,1), object(2,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 3853200,  storage_rebate: 3814668, non_refundable_storage_fee: 38532
 
-task 12, line 122:
+task 12, line 121:
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 11
@@ -110,11 +110,11 @@ Contents: P0::M::O {
     },
 }
 
-task 13, line 124:
+task 13, line 123:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 14, lines 126-141:
+task 14, lines 125-140:
 //# run-graphql
 Response: {
   "data": {
@@ -189,18 +189,18 @@ Response: {
   }
 }
 
-task 15, lines 143-171:
+task 15, lines 142-169:
 //# run-graphql
 Response: {
   "data": {
     "unversioned": {
       "dynamicObjectField": {
         "value": {
-          "version": 7,
+          "version": 10,
           "contents": {
             "json": {
               "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
-              "count": "0"
+              "count": "1"
             }
           }
         }
@@ -261,11 +261,24 @@ Response: {
   }
 }
 
-task 16, lines 173-194:
+task 16, lines 171-206:
 //# run-graphql
 Response: {
   "data": {
     "unversioned": {
+      "dynamicObjectField": {
+        "value": {
+          "version": 11,
+          "contents": {
+            "json": {
+              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
+              "count": "1"
+            }
+          }
+        }
+      }
+    },
+    "latestObject": {
       "dynamicObjectField": {
         "value": {
           "version": 7,

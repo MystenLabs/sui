@@ -14629,7 +14629,7 @@ dependencies = [
  "tokio-util 0.7.10",
  "toml 0.7.4",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.5.2",
  "tracing",
  "uuid 1.2.2",
 ]
