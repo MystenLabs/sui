@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::sync::Arc;
 
+use move_binary_format::compatibility::InclusionCheck;
 use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
     StructDefinitionIndex, TableIndex,
@@ -40,14 +41,22 @@ use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
+use sui_types::move_package::UpgradePolicy;
 use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 /// Errors that can occur during upgrade compatibility checks.
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
+/// Except for the `ModuleMismatch` which is a special case for additive and dependency only policies and `ModuleMissing`
 #[derive(Debug, Clone)]
 pub(crate) enum UpgradeCompatibilityModeError {
     ModuleMissing {
         name: Identifier,
+    },
+    /// The upgrade is not compatible with the existing package due to the policy.
+    /// This error is used for additive and dependency only policies where modules
+    /// are either not allowed to add declarations or change them.
+    ModuleMismatch {
+        policy: UpgradePolicy,
     },
     StructMissing {
         name: Identifier,
@@ -119,7 +128,8 @@ impl UpgradeCompatibilityModeError {
     /// check if the error breaks compatibility for a given [`Compatibility`]
     fn breaks_compatibility(&self, compatability: &Compatibility) -> bool {
         match self {
-            UpgradeCompatibilityModeError::ModuleMissing { .. } => true,
+            UpgradeCompatibilityModeError::ModuleMissing { .. }
+            | UpgradeCompatibilityModeError::ModuleMismatch { .. } => true,
 
             UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
             | UpgradeCompatibilityModeError::StructTypeParamMismatch { .. }
@@ -432,9 +442,9 @@ macro_rules! upgrade_codes {
 }
 
 // Used to generate diagnostics primary labels for upgrade compatibility errors.
-// WARNING: you should add new codes to the END of each category to avoid breaking the existing codes.
+// WARNING: you should add new codes to the END of each category list to avoid breaking the existing codes.
 // adding into the middle of a list will change the error code numbers "error[Compatibility EXXXXX]"
-// similarly new categories should be added to the end of the list.
+// similarly new categories should be added to the end of the outer list.
 upgrade_codes!(
     Declarations: [
         PublicMissing: { msg: "missing public declaration" },
@@ -442,11 +452,12 @@ upgrade_codes!(
         AbilityMismatch: { msg: "ability mismatch" },
         FieldMismatch: { msg: "field mismatch" },
         TypeParamMismatch: { msg: "type parameter mismatch" },
+        ModuleMismatch: { msg: "module incompatible" },
     ],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
     ],
-    Function_: [
+    Functions_: [
         SignatureMismatch: { msg: "function signature mismatch" },
         EntryMismatch: { msg: "function entry mismatch" },
     ],
@@ -457,6 +468,7 @@ pub(crate) async fn check_compatibility(
     client: &SuiClient,
     package_id: ObjectID,
     new_package: CompiledPackage,
+    upgrade_policy: u8,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
     let existing_obj_read = client
@@ -483,15 +495,18 @@ pub(crate) async fn check_compatibility(
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 
-    compare_packages(existing_modules, new_package)
+    if let Ok(policy) = UpgradePolicy::try_from(upgrade_policy) {
+        compare_packages(existing_modules, new_package, policy)
+    } else {
+        Err(anyhow!("Invalid upgrade policy"))
+    }
 }
 
-/// Collect all the errors into a single error message.
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
     new_package: CompiledPackage,
+    policy: UpgradePolicy,
 ) -> Result<(), Error> {
-    // create a map from the new modules
     let new_modules_map: HashMap<Identifier, CompiledModule> = new_package
         .get_modules()
         .map(|m| (m.self_id().name().to_owned(), m.clone()))
@@ -510,15 +525,39 @@ fn compare_packages(
             // find the new module with the same name
             match new_modules_map.get(&name) {
                 Some(new_module) => {
-                    let compatible = Compatibility::upgrade_check()
-                        .check_with_mode::<CliCompatibilityMode>(
-                            &Module::new(existing_module),
-                            &Module::new(new_module),
-                        );
-                    if let Err(errors) = compatible {
-                        errors.into_iter().map(|e| (name.to_owned(), e)).collect()
-                    } else {
-                        vec![]
+                    let existing_module = Module::new(existing_module);
+                    let new_module = Module::new(new_module);
+
+                    match policy {
+                        UpgradePolicy::Compatible => errors_or_empty_vec(
+                            name,
+                            Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
+                                &existing_module,
+                                &new_module,
+                            ),
+                        ),
+                        // TODO improve on this error message
+                        UpgradePolicy::Additive => errors_or_empty_vec(
+                            name,
+                            InclusionCheck::Subset
+                                .check(&existing_module, &new_module)
+                                .map_err(|_| {
+                                    vec![UpgradeCompatibilityModeError::ModuleMismatch {
+                                        policy: UpgradePolicy::Additive,
+                                    }]
+                                }),
+                        ),
+                        // TODO improve on this error message
+                        UpgradePolicy::DepOnly => errors_or_empty_vec(
+                            name,
+                            InclusionCheck::Equal
+                                .check(&existing_module, &new_module)
+                                .map_err(|_| {
+                                    vec![UpgradeCompatibilityModeError::ModuleMismatch {
+                                        policy: UpgradePolicy::DepOnly,
+                                    }]
+                                }),
+                        ),
                     }
                 }
                 None => vec![(
@@ -598,6 +637,16 @@ fn compare_packages(
             "".to_string()
         }
     ))
+}
+
+fn errors_or_empty_vec(
+    name: Identifier,
+    result: Result<(), Vec<UpgradeCompatibilityModeError>>,
+) -> Vec<(Identifier, UpgradeCompatibilityModeError)> {
+    match result {
+        Ok(_) => vec![],
+        Err(errors) => errors.into_iter().map(|e| (name.clone(), e)).collect(),
+    }
 }
 
 /// Convert an error to a diagnostic using the specific error type's function.
@@ -709,10 +758,54 @@ fn diag_from_error(
         UpgradeCompatibilityModeError::FunctionEntryCompatibility {
             name, old_function, ..
         } => function_entry_mismatch(name, old_function, compiled_unit_with_source, lookup),
+        // Specifically handles additive and dep only policies where modules
+        // are either not allowed to add declarations or change them.
+        UpgradeCompatibilityModeError::ModuleMismatch { policy } => {
+            module_compatibility_error_diag(*policy, compiled_unit_with_source)
+        }
         UpgradeCompatibilityModeError::ModuleMissing { .. } => {
             unreachable!("Module Missing should be handled by outer function")
         }
     }
+}
+
+// TODO provide more depth in the diagnostics
+// give specifics about the declarations which do not match
+fn module_compatibility_error_diag(
+    policy: UpgradePolicy,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Declarations::ModuleMismatch,
+        (
+            loc,
+            format!(
+                "The upgrade is not compatible with the existing package due to {} policy.",
+                match policy {
+                    UpgradePolicy::Additive => "additive",
+                    UpgradePolicy::DepOnly => "dependency only",
+                    _ => unreachable!("Invalid upgrade policy for this error type"),
+                }
+            ),
+        ),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "The upgrade is not compatible with the existing package.".to_string(),
+            format!(
+                "The upgrade policy is set to '{}'.",
+                policy.to_string().to_lowercase()
+            ),
+        ],
+    ));
+
+    Ok(diags)
 }
 
 /// Return a diagnostic for a missing definition.
@@ -829,7 +922,7 @@ fn function_signature_mismatch_diag(
     // handle function arguments
     if old_function.parameters.len() != new_function.parameters.len() {
         diags.add(Diagnostic::new(
-            Function_::SignatureMismatch,
+            Functions_::SignatureMismatch,
             (
                 def_loc,
                 format!(
@@ -865,7 +958,7 @@ fn function_signature_mismatch_diag(
                     .1;
 
                 diags.add(Diagnostic::new(
-                    Function_::SignatureMismatch,
+                    Functions_::SignatureMismatch,
                     (
                         param_loc,
                         format!("Unexpected parameter {new_param}, expected {old_param}"),
@@ -949,7 +1042,7 @@ fn function_signature_mismatch_diag(
     // handle return
     if old_function.return_.len() != new_function.return_.len() {
         diags.add(Diagnostic::new(
-            Function_::SignatureMismatch,
+            Functions_::SignatureMismatch,
             (
                 def_loc,
                 format!(
@@ -983,7 +1076,7 @@ fn function_signature_mismatch_diag(
 
             if old_return != new_return {
                 diags.add(Diagnostic::new(
-                    Function_::SignatureMismatch,
+                    Functions_::SignatureMismatch,
                     (
                         *return_,
                         if new_function.return_.len() == 1 {
@@ -1038,7 +1131,7 @@ fn function_entry_mismatch(
     let def_loc = func_sourcemap.definition_location;
 
     diags.add(Diagnostic::new(
-        Function_::EntryMismatch,
+        Functions_::EntryMismatch,
         (
             def_loc,
             if old_function.is_entry {

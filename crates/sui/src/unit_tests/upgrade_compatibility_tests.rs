@@ -7,12 +7,12 @@ use move_binary_format::CompiledModule;
 use std::path::PathBuf;
 use sui_move_build::BuildConfig;
 use sui_move_build::CompiledPackage;
+use sui_types::move_package::UpgradePolicy;
 
 #[test]
 fn test_all_fail() {
     let (mods_v1, pkg_v2) = get_packages("all");
-
-    let result = compare_packages(mods_v1, pkg_v2);
+    let result = compare_packages(mods_v1, pkg_v2, UpgradePolicy::Compatible);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -22,7 +22,7 @@ fn test_all_fail() {
 #[test]
 fn test_declarations_missing() {
     let (pkg_v1, pkg_v2) = get_packages("declaration_errors");
-    let result = compare_packages(pkg_v1, pkg_v2);
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -32,7 +32,7 @@ fn test_declarations_missing() {
 #[test]
 fn test_function() {
     let (pkg_v1, pkg_v2) = get_packages("function_errors");
-    let result = compare_packages(pkg_v1, pkg_v2);
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -42,7 +42,7 @@ fn test_function() {
 #[test]
 fn test_struct() {
     let (pkg_v1, pkg_v2) = get_packages("struct_errors");
-    let result = compare_packages(pkg_v1, pkg_v2);
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -52,7 +52,7 @@ fn test_struct() {
 #[test]
 fn test_enum() {
     let (pkg_v1, pkg_v2) = get_packages("enum_errors");
-    let result = compare_packages(pkg_v1, pkg_v2);
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -62,7 +62,7 @@ fn test_enum() {
 #[test]
 fn test_type_param() {
     let (pkg_v1, pkg_v2) = get_packages("type_param_errors");
-    let result = compare_packages(pkg_v1, pkg_v2);
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -73,14 +73,14 @@ fn test_type_param() {
 fn test_friend_link_ok() {
     let (pkg_v1, pkg_v2) = get_packages("friend_linking");
     // upgrade compatibility ignores friend linking
-    assert!(compare_packages(pkg_v1, pkg_v2).is_ok());
+    assert!(compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible).is_ok());
 }
 
 #[test]
 fn test_entry_linking_ok() {
     let (pkg_v1, pkg_v2) = get_packages("entry_linking");
     // upgrade compatibility ignores entry linking
-    assert!(compare_packages(pkg_v1, pkg_v2).is_ok());
+    assert!(compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible).is_ok());
 }
 
 fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage) {

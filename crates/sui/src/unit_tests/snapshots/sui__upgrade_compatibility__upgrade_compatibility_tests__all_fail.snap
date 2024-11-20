@@ -115,7 +115,7 @@ error[Compatibility E01003]: ability mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumAbilityMismatchChange' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:64:9
    │
 60 │     public enum EnumNewVariant {
@@ -127,7 +127,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumNewVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:68:17
    │
 68 │     public enum EnumVariantMissing {
@@ -145,7 +145,7 @@ error[Compatibility E01001]: missing public declaration
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's 'public' visibility for function 'function_to_have_public_removed'.
 
-error[Compatibility E04001]: function signature mismatch
+error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:82:16
    │
 82 │     public fun function_add_arg(a: u64) {}
@@ -154,7 +154,7 @@ error[Compatibility E04001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's parameters for function 'function_add_arg', expected 0 parameters.
 
-error[Compatibility E04001]: function signature mismatch
+error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:85:16
    │
 85 │     public fun function_remove_arg() {}
@@ -163,7 +163,7 @@ error[Compatibility E04001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's parameters for function 'function_remove_arg', expected 1 parameters.
 
-error[Compatibility E04001]: function signature mismatch
+error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:88:36
    │
 88 │     public fun function_change_arg(a: u8) {} // now has u8 instead of u64

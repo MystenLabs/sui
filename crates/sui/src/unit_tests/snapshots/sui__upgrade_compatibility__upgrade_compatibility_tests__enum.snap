@@ -29,7 +29,7 @@ error[Compatibility E01003]: ability mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumAddAndRemoveAbility' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:23:9
    │
 21 │     public enum EnumAddVariant {
@@ -41,7 +41,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumAddVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:26:17
    │
 26 │     public enum EnumRemoveVariant {
@@ -50,7 +50,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'B' for enum 'EnumRemoveVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:33:9
    │
 31 │     public enum EnumChangeVariant {
@@ -62,7 +62,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:38:9
    │
 36 │     public enum EnumChangeAndAddVariant {
@@ -74,7 +74,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:38:9
    │
 36 │     public enum EnumChangeAndAddVariant {
@@ -86,7 +86,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:39:9
    │
 36 │     public enum EnumChangeAndAddVariant {
@@ -98,7 +98,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:42:17
    │
 42 │     public enum EnumChangeAndRemoveVariant {
@@ -107,7 +107,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'C' for enum 'EnumChangeAndRemoveVariant' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:44:9
    │
 42 │     public enum EnumChangeAndRemoveVariant {
@@ -137,7 +137,7 @@ error[Compatibility E01003]: ability mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's abilities for enum 'EnumRemoveAbilityWithTypes' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:59:9
    │
 57 │     public enum EnumAddVariantWithTypes {
@@ -149,7 +149,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumAddVariantWithTypes' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:62:17
    │
 62 │     public enum EnumRemoveVariantWithTypes {
@@ -158,7 +158,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'B' for enum 'EnumRemoveVariantWithTypes' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:69:9
    │
 67 │     public enum EnumChangeVariantWithTypes {
@@ -170,7 +170,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeVariantWithTypes' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:74:9
    │
 72 │     public enum EnumChangeAndAddVariantWithTypes {
@@ -182,7 +182,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariantWithTypes' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:74:9
    │
 72 │     public enum EnumChangeAndAddVariantWithTypes {
@@ -194,7 +194,7 @@ error[Compatibility E03001]: variant mismatch
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumChangeAndAddVariantWithTypes' including the ordering.
 
-error[Compatibility E03001]: variant mismatch
+error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:75:9
    │
 72 │     public enum EnumChangeAndAddVariantWithTypes {
