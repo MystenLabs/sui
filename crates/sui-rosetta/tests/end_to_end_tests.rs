@@ -592,7 +592,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         );
     }
 
-    // Now send coin previously been used as gas, in order to only have 
+    // Now send coin previously been used as gas, in order to only have
     // the change coins.
     let tx_data = client
         .transaction_builder()
