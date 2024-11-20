@@ -2519,9 +2519,10 @@ impl ExpMap for Exp_ {
             Exp_::UnaryExp(op, e) => Exp_::UnaryExp(op, map_through(e, f)),
             Exp_::BinopExp(l, op, r) => Exp_::BinopExp(map_through(l, f), op, map_through(r, f)),
             Exp_::Borrow(mut_, e) => Exp_::Borrow(mut_, map_through(e, f)),
-            Exp_::Dot(e, n) => Exp_::Dot(map_through(e, f), n),
-            Exp_::DotCall(e, n, is_macro, tyargs, rhs) => Exp_::DotCall(
+            Exp_::Dot(e, l, n) => Exp_::Dot(map_through(e, f), l, n),
+            Exp_::DotCall(e, l, n, is_macro, tyargs, rhs) => Exp_::DotCall(
                 map_through(e, f),
+                l,
                 n,
                 is_macro,
                 tyargs,

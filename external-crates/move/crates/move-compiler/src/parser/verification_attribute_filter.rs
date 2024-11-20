@@ -6,6 +6,7 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use crate::{
+    diagnostics::DiagnosticReporter,
     parser::{
         ast as P,
         filter::{filter_program, FilterContext},
@@ -83,7 +84,7 @@ impl FilterContext for Context<'_> {
     }
 }
 
-const REMOVED_FUNCTIONS: [&str; 2] = ["invariant", "old"];
+const REMOVED_FUNCTIONS: [&str; 3] = ["invariant", "old", "ensures"];
 const REMOVED_METHODS: [&str; 2] = ["to_int", "to_real"];
 
 fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bool {
@@ -102,7 +103,7 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
             }
             should_remove
         }
-        P::Exp_::DotCall(_, name, _, _, _) => {
+        P::Exp_::DotCall(_, _, name, _, _, _) => {
             let name_str = format!("{}", name);
             let should_remove = REMOVED_METHODS
                 .iter()

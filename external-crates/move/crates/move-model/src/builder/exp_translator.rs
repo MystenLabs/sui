@@ -1256,7 +1256,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     fn translate_dotted(&mut self, dotted: &EA::ExpDotted, expected_type: &Type) -> ExpData {
         match &dotted.value {
             EA::ExpDotted_::Exp(e) => self.translate_exp(e, expected_type),
-            EA::ExpDotted_::Dot(e, n) => {
+            EA::ExpDotted_::Dot(e, _, n) => {
                 let loc = self.to_loc(&dotted.loc);
                 let ty = self.fresh_type_var();
                 let exp = self.translate_dotted(e.as_ref(), &ty);
