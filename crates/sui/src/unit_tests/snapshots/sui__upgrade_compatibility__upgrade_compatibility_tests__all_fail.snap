@@ -8,7 +8,6 @@ error[Compatibility E01001]: missing public declaration
 6 │ module upgrades::upgrades {
   │                  ^^^^^^^^ enum 'EnumToBeRemoved' is missing
   │
-  = enum is missing expected enum 'EnumToBeRemoved', but found none
   = enums are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing enum 'EnumToBeRemoved' back to the module 'upgrades'.
 
@@ -18,7 +17,6 @@ error[Compatibility E01001]: missing public declaration
 6 │ module upgrades::upgrades {
   │                  ^^^^^^^^ struct 'StructToBeRemoved' is missing
   │
-  = struct is missing expected struct 'StructToBeRemoved', but found none
   = structs are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing struct 'StructToBeRemoved' back to the module 'upgrades'.
 

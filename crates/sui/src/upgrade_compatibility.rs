@@ -835,10 +835,6 @@ fn missing_definition_diag(
         std::iter::empty::<(Loc, String)>(),
         vec![
             format!(
-                "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', \
-                but found none",
-            ),
-            format!(
                 "{declaration_kind}s are part of a module's public interface \
                 and cannot be removed or changed during an upgrade.",
             ),
@@ -1153,38 +1149,17 @@ fn function_entry_mismatch(
     Ok(diags)
 }
 
-/// Return a diagnostic for an ability mismatch.
-fn struct_ability_mismatch_diag(
-    struct_name: &Identifier,
-    old_struct: &Struct,
-    new_struct: &Struct,
-    compiled_unit_with_source: &CompiledUnitWithSource,
-    lookup: &IdentifierTableLookup,
-) -> Result<Diagnostics, Error> {
-    let mut diags = Diagnostics::new();
+fn ability_mismatch_label(
+    old_abilities: AbilitySet,
+    new_abilities: AbilitySet,
+) -> Result<String, Error> {
+    let missing_abilities = AbilitySet::from_u8(old_abilities.into_u8() & !new_abilities.into_u8())
+        .context("Unable to get missing abilities")?;
+    let extra_abilities = AbilitySet::from_u8(new_abilities.into_u8() & !old_abilities.into_u8())
+        .context("Unable to get extra abilities")?;
 
-    let struct_index = lookup
-        .struct_identifier_to_index
-        .get(struct_name)
-        .context("Unable to get struct index")?;
-
-    let struct_sourcemap = compiled_unit_with_source
-        .unit
-        .source_map
-        .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
-        .context("Unable to get struct source map")?;
-
-    let def_loc = struct_sourcemap.definition_location;
-
-    if old_struct.abilities != new_struct.abilities {
-        let missing_abilities =
-            AbilitySet::from_u8(old_struct.abilities.into_u8() & !new_struct.abilities.into_u8())
-                .context("Unable to get missing abilities")?;
-        let extra_abilities =
-            AbilitySet::from_u8(new_struct.abilities.into_u8() & !old_struct.abilities.into_u8())
-                .context("Unable to get extra abilities")?;
-
-        let label = match (
+    Ok(
+        match (
             missing_abilities != AbilitySet::EMPTY,
             extra_abilities != AbilitySet::EMPTY,
         ) {
@@ -1218,11 +1193,40 @@ fn struct_ability_mismatch_diag(
                 )
             ),
             (false, false) => unreachable!("Abilities should not be the same"),
-        };
+        },
+    )
+}
 
+/// Return a diagnostic for an ability mismatch.
+fn struct_ability_mismatch_diag(
+    struct_name: &Identifier,
+    old_struct: &Struct,
+    new_struct: &Struct,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let struct_index = lookup
+        .struct_identifier_to_index
+        .get(struct_name)
+        .context("Unable to get struct index")?;
+
+    let struct_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
+        .context("Unable to get struct source map")?;
+
+    let def_loc = struct_sourcemap.definition_location;
+
+    if old_struct.abilities != new_struct.abilities {
         diags.add(Diagnostic::new(
             Declarations::AbilityMismatch,
-            (def_loc, label),
+            (
+                def_loc,
+                ability_mismatch_label(old_struct.abilities, new_struct.abilities)?,
+            ),
             Vec::<(Loc, String)>::new(),
             vec![
                 "Structs are part of a module's public interface and \
@@ -1455,52 +1459,12 @@ fn enum_ability_mismatch_diag(
     let def_loc = enum_sourcemap.definition_location;
 
     if old_enum.abilities != new_enum.abilities {
-        let missing_abilities =
-            AbilitySet::from_u8(old_enum.abilities.into_u8() & !new_enum.abilities.into_u8())
-                .context("Unable to get missing abilities")?;
-        let extra_abilities =
-            AbilitySet::from_u8(new_enum.abilities.into_u8() & !old_enum.abilities.into_u8())
-                .context("Unable to get extra abilities")?;
-
-        let label = match (
-            missing_abilities != AbilitySet::EMPTY,
-            extra_abilities != AbilitySet::EMPTY,
-        ) {
-            (true, true) => format!(
-                "Mismatched abilities: missing {}, unexpected {}",
-                format_list(
-                    missing_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                ),
-                format_list(
-                    extra_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                ),
-            ),
-            (true, false) => format!(
-                "Missing abilities {}",
-                format_list(
-                    missing_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                ),
-            ),
-            (false, true) => format!(
-                "Unexpected abilities {}",
-                format_list(
-                    extra_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                ),
-            ),
-            (false, false) => unreachable!("Abilities should not be the same"),
-        };
-
         diags.add(Diagnostic::new(
             Declarations::AbilityMismatch,
-            (def_loc, label),
+            (
+                def_loc,
+                ability_mismatch_label(old_enum.abilities, new_enum.abilities)?,
+            ),
             Vec::<(Loc, String)>::new(),
             vec![
                 "Enums are part of a module's public interface \
