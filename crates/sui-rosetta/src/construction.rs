@@ -378,12 +378,7 @@ pub async fn metadata(
         context
             .client
             .coin_read_api()
-            .select_coins(
-                sender,
-                None,
-                total_amount as u128,
-                exclude_ids.clone(),
-            )
+            .select_coins(sender, None, total_amount as u128, exclude_ids.clone())
             .await
             .ok()
     } else {

@@ -1107,6 +1107,8 @@ pub async fn pay_sui_to_metadata(
     let total_amount = amounts.iter().sum::<u64>();
     let mut gathered = 0;
     let mut budget = START_BUDGET;
+    // We need to dry-run in a loop, because depending on the amount of coins used the tx might
+    // differ slightly: (merge / no merge / number of merge-coins)
     loop {
         while let Some(coin) = coins_stream.next().await {
             gathered += coin.balance;
@@ -1116,6 +1118,7 @@ pub async fn pay_sui_to_metadata(
             }
         }
 
+        // TODO: Code duplication. See try_into_data: case PaySui above.
         let mut builder = ProgrammableTransactionBuilder::new();
         if all_coins.len() > MAX_GAS_COINS {
             let to_merge: Vec<Argument> = all_coins
@@ -1146,12 +1149,14 @@ pub async fn pay_sui_to_metadata(
         if let SuiExecutionStatus::Failure { error } = effects.status() {
             return Err(Error::TransactionDryRunError(error.to_string()));
         }
-        let new_budget =
+        // Update budget to be the result of the dry run
+        budget =
             effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
-        if new_budget == budget {
+        // If we have already gathered the needed amount of coins we don't need to dry run again,
+        // as the transaction will be the same.
+        if budget + total_amount <= gathered {
             break;
         }
-        budget = new_budget;
     }
     let coins: Vec<ObjectRef> = all_coins[..MAX_GAS_COINS]
         .iter()
