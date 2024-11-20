@@ -14,7 +14,7 @@ certain changes to the parser may break the plugin (e.g., if parse tree node typ
 
 ## Prerequisites
 
-Currently, in order to use the plugin, you need to install `npm` command (`brew install npm` on a
+In order to use the plugin, you need to install `npm` command (`brew install npm` on a
 Mac). You can use the plugin to format Move files (`.move` extension) both on the command line and
 using Prettier's VSCode
 [extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode). When the
@@ -22,20 +22,10 @@ plugin is complete, we will make it available directly from Move's VSCode extens
 
 ## Installation
 
-Currently, you need to install plugin from sources (when the plugin is complete, we will submit it
-to the NPM package [registry](https://www.npmjs.com/) for direct download).
+The plugin can be installed via npm:
 
-Clone Sui repository into `$SUI` directory:
-
-```bash
-git clone https://github.com/MystenLabs/sui.git "$SUI"
 ```
-
-Go to `"$SUI"/external-crates/move/crates/move-analyzer/prettier-plugin` and run the following
-command:
-
-```bash
-npm run build
+npm i @mysten/prettier-plugin-move
 ```
 
 ## Usage
@@ -79,10 +69,4 @@ be able to format them by choosing `Format Code` command from VSCode's command p
 
 ## Contribute
 
-If you decide to contribute to this project, please choose the scope of your contribution (e.g.,
-implement formatting for structs) and file an issue in the Sui
-[repository](https://github.com/MystenLabs/sui) describing the work you plan to do, and wait for a
-response from a core team member so that we can avoid duplication of efforts.
-
-Please make sure that the code you add is well documented and that you add relevant tests - please
-use existing code as guidance.
+See [CONTRIBUTING](./CONTRIBUTING.md).

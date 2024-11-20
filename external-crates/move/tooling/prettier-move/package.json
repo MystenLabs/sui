@@ -1,28 +1,28 @@
 {
-  "name": "prettier-plugin-move",
-  "version": "0.0.55",
-  "license": "Apache-2.0",
-  "keywords": [
-    "prettier",
-    "move",
-    "plugin"
-  ],
-  "main": "./out/index.js",
-  "scripts": {
-    "build": "tsc -p .",
-    "watch": "tsc -p . -w",
-    "test": "npm run build && vitest run",
-    "prettier": "npm run build && prettier --plugin out/index.js"
-  },
-  "dependencies": {
-    "prettier": "^3.3.3",
-    "web-tree-sitter": "^0.20.8"
-  },
-  "devDependencies": {
-    "@types/diff": "^5.2.1",
-    "@types/node": "^20.10.6",
-    "diff": "^5.2.0",
-    "typescript": "^5.5.4",
-    "vitest": "^1.6.0"
-  }
+	"name": "@mysten/prettier-plugin-move",
+	"version": "0.0.0",
+	"license": "Apache-2.0",
+	"keywords": [
+		"prettier",
+		"move",
+		"plugin"
+	],
+	"main": "./out/index.js",
+	"scripts": {
+		"build": "tsc -p .",
+		"watch": "tsc -p . -w",
+		"test": "npm run build && vitest run",
+		"prettier": "npm run build && prettier --plugin out/index.js"
+	},
+	"dependencies": {
+		"prettier": "^3.3.2",
+		"web-tree-sitter": "^0.20.8"
+	},
+	"devDependencies": {
+		"@types/diff": "^5.2.1",
+		"@types/node": "^20.14.10",
+		"diff": "^5.2.0",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
+	}
 }
