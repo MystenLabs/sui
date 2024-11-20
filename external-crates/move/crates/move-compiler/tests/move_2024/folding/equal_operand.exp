@@ -1,0 +1,288 @@
+warning[W08002]: redundant equal operands for binary operatiop
+  ┌─ tests/move_2024/folding/equal_operand.move:6:5
+  │
+6 │     1 == 1;
+  │     ^^^^^^
+  │     │    │
+  │     │    Evaluates to the same value as this expression
+  │     Equal operands detected in binary operation, which always evaluates to 'true'
+  │     This expression
+  │
+  = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+  ┌─ tests/move_2024/folding/equal_operand.move:7:5
+  │
+7 │     x == x;
+  │     ^^^^^^
+  │     │    │
+  │     │    Evaluates to the same value as this expression
+  │     Equal operands detected in binary operation, which always evaluates to 'true'
+  │     This expression
+  │
+  = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+  ┌─ tests/move_2024/folding/equal_operand.move:8:5
+  │
+8 │     {1} == 1;
+  │     ^^^^^^^^
+  │     ││     │
+  │     ││     Evaluates to the same value as this expression
+  │     │This expression
+  │     Equal operands detected in binary operation, which always evaluates to 'true'
+  │
+  = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:10:5
+   │
+10 │     x % x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to '0'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:11:5
+   │
+11 │     x ^ x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to '0'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:12:5
+   │
+12 │     x / x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to '1'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:14:5
+   │
+14 │     x | x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to the same value
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:15:5
+   │
+15 │     x & x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to the same value
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:17:5
+   │
+17 │     x != x;
+   │     ^^^^^^
+   │     │    │
+   │     │    Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'false'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:18:5
+   │
+18 │     x < x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'false'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:19:5
+   │
+19 │     x > x;
+   │     ^^^^^
+   │     │   │
+   │     │   Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'false'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:21:5
+   │
+21 │     x == x;
+   │     ^^^^^^
+   │     │    │
+   │     │    Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:22:5
+   │
+22 │     x <= x;
+   │     ^^^^^^
+   │     │    │
+   │     │    Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:23:5
+   │
+23 │     x >= x;
+   │     ^^^^^^
+   │     │    │
+   │     │    Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:27:5
+   │
+27 │     false == false;
+   │     ^^^^^^^^^^^^^^
+   │     │        │
+   │     │        Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:28:5
+   │
+28 │     0u8 == 0u8;
+   │     ^^^^^^^^^^
+   │     │      │
+   │     │      Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:29:5
+   │
+29 │     1u16 == 1u16;
+   │     ^^^^^^^^^^^^
+   │     │       │
+   │     │       Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:30:5
+   │
+30 │     2u32 == 2u32;
+   │     ^^^^^^^^^^^^
+   │     │       │
+   │     │       Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:31:5
+   │
+31 │     3u64 == 3u64;
+   │     ^^^^^^^^^^^^
+   │     │       │
+   │     │       Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:32:5
+   │
+32 │     4u128 == 4u128;
+   │     ^^^^^^^^^^^^^^
+   │     │        │
+   │     │        Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:33:5
+   │
+33 │     5u256 == 5u256;
+   │     ^^^^^^^^^^^^^^
+   │     │        │
+   │     │        Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:34:5
+   │
+34 │     @a == @a;
+   │     ^^^^^^^^
+   │     │     │
+   │     │     Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:35:5
+   │
+35 │     vector<vector<u8>>[] == vector[];
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │                       │
+   │     │                       Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_2024/folding/equal_operand.move:36:5
+   │
+36 │     vector[1] == vector[1];
+   │     ^^^^^^^^^^^^^^^^^^^^^^
+   │     │            │
+   │     │            Evaluates to the same value as this expression
+   │     Equal operands detected in binary operation, which always evaluates to 'true'
+   │     This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

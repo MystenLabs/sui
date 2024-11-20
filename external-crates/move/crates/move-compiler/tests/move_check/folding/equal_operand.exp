@@ -1,0 +1,24 @@
+warning[W08002]: redundant equal operands for binary operatiop
+  ┌─ tests/move_check/folding/equal_operand.move:5:9
+  │
+5 │         1 == 1;
+  │         ^^^^^^
+  │         │    │
+  │         │    Evaluates to the same value as this expression
+  │         Equal operands detected in binary operation, which always evaluates to 'true'
+  │         This expression
+  │
+  = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W08002]: redundant equal operands for binary operatiop
+   ┌─ tests/move_check/folding/equal_operand.move:16:9
+   │
+16 │         x | x;
+   │         ^^^^^
+   │         │   │
+   │         │   Evaluates to the same value as this expression
+   │         Equal operands detected in binary operation, which always evaluates to the same value
+   │         This expression
+   │
+   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
