@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.11
+
+### Patch Changes
+
+- 4cf47ad: Typus pool
+
 ## 0.12.10
 
 ### Patch Changes
