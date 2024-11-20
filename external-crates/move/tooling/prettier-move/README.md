@@ -14,7 +14,7 @@ certain changes to the parser may break the plugin (e.g., if parse tree node typ
 
 ## Prerequisites
 
-Currently, in order to use the plugin, you need to install `npm` command (`brew install npm` on a
+In order to use the plugin, you need to install `npm` command (`brew install npm` on a
 Mac). You can use the plugin to format Move files (`.move` extension) both on the command line and
 using Prettier's VSCode
 [extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode). When the
@@ -22,20 +22,10 @@ plugin is complete, we will make it available directly from Move's VSCode extens
 
 ## Installation
 
-Currently, you need to install plugin from sources (when the plugin is complete, we will submit it
-to the NPM package [registry](https://www.npmjs.com/) for direct download).
+The plugin can be installed via npm:
 
-Clone Sui repository into `$SUI` directory:
-
-```bash
-git clone https://github.com/MystenLabs/sui.git "$SUI"
 ```
-
-Go to `"$SUI"/external-crates/move/crates/move-analyzer/prettier-plugin` and run the following
-command:
-
-```bash
-npm run build
+npm i @mysten/prettier-plugin-move
 ```
 
 ## Usage
