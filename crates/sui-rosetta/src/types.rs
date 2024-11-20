@@ -25,7 +25,9 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
+use sui_types::transaction::{
+    Argument, CallArg, Command, ObjectArg, ProgrammableTransaction, TransactionData,
+};
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::{Error, ErrorType};
@@ -965,17 +967,7 @@ impl InternalOperation {
                 amounts,
                 ..
             } => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-                if !metadata.objects.is_empty() {
-                    let to_merge: Vec<Argument> = metadata
-                        .objects
-                        .into_iter()
-                        .map(|o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
-                        .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
-                    builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
-                }
-                builder.pay_sui(recipients, amounts)?;
-                builder.finish()
+                pay_sui_pt(recipients, amounts, metadata.objects)?
             }
             Self::PayCoin {
                 recipients,
@@ -1118,18 +1110,12 @@ pub async fn pay_sui_to_metadata(
             }
         }
 
-        // TODO: Code duplication. See try_into_data: case PaySui above.
-        let mut builder = ProgrammableTransactionBuilder::new();
-        if all_coins.len() > MAX_GAS_COINS {
-            let to_merge: Vec<Argument> = all_coins
-                .iter()
-                .skip(MAX_GAS_COINS)
-                .map(|c| builder.obj(ObjectArg::ImmOrOwnedObject(c.object_ref())))
-                .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
-            builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
-        }
-        builder.pay_sui(recipients.clone(), amounts.clone())?;
-        let pt = builder.finish();
+        let coins_to_merge = all_coins
+            .iter()
+            .skip(MAX_GAS_COINS)
+            .map(|c| c.object_ref())
+            .collect();
+        let pt = pay_sui_pt(recipients.clone(), amounts.clone(), coins_to_merge)?;
         let tx_data = TransactionData::new_programmable(
             sender,
             all_coins[..MAX_GAS_COINS]
@@ -1178,4 +1164,21 @@ pub async fn pay_sui_to_metadata(
         gas_price,
         currency: None,
     })
+}
+
+pub fn pay_sui_pt(
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
+    coins_to_merge: Vec<ObjectRef>,
+) -> anyhow::Result<ProgrammableTransaction> {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    if !coins_to_merge.is_empty() {
+        let to_merge: Vec<Argument> = coins_to_merge
+            .into_iter()
+            .map(|o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
+            .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+        builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
+    }
+    builder.pay_sui(recipients, amounts)?;
+    Ok(builder.finish())
 }

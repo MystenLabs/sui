@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use anyhow::Result;
 use serde_json::json;
 use shared_crypto::intent::Intent;
@@ -574,7 +573,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     let recipient_change = amount_to_send.to_string();
     let sender_change = (-amount_to_send).to_string();
 
-    // Split balance to something that will need more than 256 coins to execute:
+    // Split balance to something that will need more than 255 coins to execute:
     let resps = make_change(
         &client,
         keystore,
