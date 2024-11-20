@@ -43,6 +43,7 @@ use std::{
 // Context
 //**************************************************************************************************
 
+#[derive(Clone)]
 pub struct UseFunsScope {
     color: Option<Color>,
     count: usize,
@@ -95,7 +96,7 @@ pub struct TVarCounter {
     next: u64,
 }
 
-pub struct Context<'env> {
+pub struct ModuleContext<'env> {
     pub env: &'env CompilationEnv,
     pub reporter: DiagnosticReporter<'env>,
     pub info: &'env NamingProgramInfo,
@@ -103,14 +104,36 @@ pub struct Context<'env> {
     #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
+    global_use_funs: UseFunsScope,
     deprecations: Deprecations,
+    pub current_package: Option<Symbol>,
+    pub current_module: Option<ModuleIdent>,
+    /// collects all friends that should be added over the course of 'public(package)' calls
+    /// structured as (defining module, new friend, location) where `new friend` is usually the
+    /// context's current module. Note there may be more than one location in practice, but
+    /// tracking a single one is sufficient for error reporting.
+    pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
+    /// collects all used module members (functions and constants) but it's a superset of these in
+    /// that it may contain other identifiers that do not in fact represent a function or a constant
+    pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+}
+
+pub struct Context<'outer, 'env> {
+    pub outer: &'outer ModuleContext<'env>,
+
+    pub reporter: DiagnosticReporter<'env>,
+    /// collects all friends that should be added over the course of 'public(package)' calls
+    /// structured as (defining module, new friend, location) where `new friend` is usually the
+    /// context's current module. Note there may be more than one location in practice, but
+    /// tracking a single one is sufficient for error reporting.
+    pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
+    /// collects all used module members (functions and constants) but it's a superset of these in
+    /// that it may contain other identifiers that do not in fact represent a function or a constant
+    pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 
     // for generating new variables during match compilation
     next_match_var_id: usize,
-
     use_funs: Vec<UseFunsScope>,
-    pub current_package: Option<Symbol>,
-    pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
     max_variable_color: RefCell<u16>,
@@ -122,15 +145,6 @@ pub struct Context<'env> {
     pub constraints: Constraints,
 
     named_block_map: BTreeMap<BlockLabel, Type>,
-
-    /// collects all friends that should be added over the course of 'public(package)' calls
-    /// structured as (defining module, new friend, location) where `new friend` is usually the
-    /// context's current module. Note there may be more than one location in practice, but
-    /// tracking a single one is sufficient for error reporting.
-    pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
-    /// collects all used module members (functions and constants) but it's a superset of these in
-    /// that it may contain other identifiers that do not in fact represent a function or a constant
-    pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
     /// Current macros being expanded
     pub macro_expansion: Vec<MacroExpansion>,
     /// Stack of items from `macro_expansion` pushed/popped when entering/leaving a lambda expansion
@@ -187,7 +201,7 @@ impl UseFunsScope {
     }
 }
 
-impl<'env> Context<'env> {
+impl<'env> ModuleContext<'env> {
     pub fn new(
         env: &'env CompilationEnv,
         info: &'env NamingProgramInfo,
@@ -202,30 +216,17 @@ impl<'env> Context<'env> {
             type_elaboration: false,
         };
         let reporter = env.diagnostic_reporter_at_top_level();
-        Box::new(Context {
-            use_funs: vec![global_use_funs],
-            tvar_counter: TVarCounter::new(),
-            subst: Subst::empty(),
+        Box::new(ModuleContext {
+            global_use_funs,
             current_package: None,
             current_module: None,
-            current_function: None,
-            in_macro_function: false,
-            max_variable_color: RefCell::new(0),
-            return_type: None,
-            constraints: vec![],
-            locals: UniqueMap::new(),
             info,
             macros,
-            named_block_map: BTreeMap::new(),
             env,
             reporter,
             debug,
-            next_match_var_id: 0,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
-            macro_expansion: vec![],
-            lambda_expansion: vec![],
-            ide_info: IDEInfo::new(),
             deprecations,
         })
     }
@@ -257,6 +258,305 @@ impl<'env> Context<'env> {
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env
             .check_feature(&self.reporter, package, feature, loc)
+    }
+
+    pub fn new_module_member<'a>(&'a self) -> Context<'a, 'env> {
+        Context {
+            outer: self,
+            reporter: self.reporter.clone(),
+            new_friends: BTreeSet::new(),
+            used_module_members: BTreeMap::new(),
+            next_match_var_id: 0,
+            use_funs: vec![self.global_use_funs.clone()],
+            current_function: None,
+            in_macro_function: false,
+            max_variable_color: RefCell::new(0),
+            return_type: None,
+            locals: UniqueMap::new(),
+            tvar_counter: TVarCounter::new(),
+            subst: Subst::empty(),
+            constraints: Constraints::new(),
+            named_block_map: BTreeMap::new(),
+            macro_expansion: vec![],
+            lambda_expansion: vec![],
+            ide_info: IDEInfo::new(),
+        }
+    }
+
+    pub fn error_type(&self, loc: Loc) -> Type {
+        sp(loc, Type_::UnresolvedError)
+    }
+
+    pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
+        match &self.current_module {
+            Some(curm) => curm == m,
+            None => false,
+        }
+    }
+
+    pub fn current_package(&self) -> Option<Symbol> {
+        self.current_module
+            .as_ref()
+            .and_then(|mident| self.module_info(mident).package)
+    }
+
+    fn current_module_shares_package_and_address(&self, m: &ModuleIdent) -> bool {
+        self.current_module.is_some_and(|current_mident| {
+            m.value.address == current_mident.value.address
+                && self.module_info(m).package == self.module_info(&current_mident).package
+        })
+    }
+
+    fn current_module_is_a_friend_of(&self, m: &ModuleIdent) -> bool {
+        match &self.current_module {
+            None => false,
+            Some(current_mident) => {
+                let minfo = self.module_info(m);
+                minfo.friends.contains_key(current_mident)
+            }
+        }
+    }
+
+    fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
+        self.info.module(m)
+    }
+
+    fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
+        self.info.struct_definition(m, n)
+    }
+
+    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        self.info.struct_declared_abilities(m, n)
+    }
+
+    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.info.struct_declared_loc(m, n)
+    }
+
+    pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
+        self.info.struct_type_parameters(m, n)
+    }
+
+    fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
+        self.info.enum_definition(m, n)
+    }
+
+    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        self.info.enum_declared_abilities(m, n)
+    }
+
+    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.info.enum_declared_loc(m, n)
+    }
+
+    pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
+        self.info.enum_type_parameters(m, n)
+    }
+
+    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
+        self.info.datatype_kind(m, n)
+    }
+
+    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
+        self.info.function_info(m, n)
+    }
+
+    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
+        self.macros.get(m)?.get(n)
+    }
+
+    pub fn constant_info(&self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+        let constants = &self.module_info(m).constants;
+        constants.get(n).expect("ICE should have failed in naming")
+    }
+
+    /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
+    pub fn find_all_fields(&self, tn: &TypeName) -> Vec<(Symbol, N::Type)> {
+        debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
+        let fields_info = match &tn.value {
+            TypeName_::Multiple(_) => vec![],
+            // TODO(cswords): are there any valid builtin fields?
+            TypeName_::Builtin(_) => vec![],
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => vec![],
+            TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
+                DatatypeKind::Enum => vec![],
+                DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
+                    N::StructFields::Native(_) => vec![],
+                    N::StructFields::Defined(is_positional, fields) => {
+                        if *is_positional {
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
+                                .collect::<Vec<_>>()
+                        } else {
+                            fields
+                                .key_cloned_iter()
+                                .map(|(k, (_, t))| (k.value(), t.clone()))
+                                .collect::<Vec<_>>()
+                        }
+                    }
+                },
+            },
+        };
+        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields_info; dbg));
+        fields_info
+    }
+}
+
+impl<'outer, 'env> Context<'outer, 'env> {
+    pub fn env(&self) -> &'outer CompilationEnv {
+        self.outer.env
+    }
+
+    pub fn reporter(&self) -> &'outer DiagnosticReporter<'env> {
+        &self.outer.reporter
+    }
+
+    pub fn info(&self) -> &'outer NamingProgramInfo {
+        self.outer.info
+    }
+
+    pub fn macros(&self) -> &'outer UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
+        self.outer.macros
+    }
+
+    pub fn debug(&self) -> &'outer TypingDebugFlags {
+        &self.outer.debug
+    }
+
+    pub fn global_use_funs(&self) -> &'outer UseFunsScope {
+        &self.outer.global_use_funs
+    }
+
+    pub fn deprecations(&self) -> &'outer Deprecations {
+        &self.outer.deprecations
+    }
+
+    pub fn current_module(&self) -> Option<&'outer ModuleIdent> {
+        self.outer.current_module.as_ref()
+    }
+
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.outer.check_feature(package, feature, loc)
+    }
+
+    pub fn error_type(&mut self, loc: Loc) -> Type {
+        self.outer.error_type(loc)
+    }
+
+    pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
+        self.outer.is_current_module(m)
+    }
+
+    pub fn current_package(&self) -> Option<Symbol> {
+        self.outer.current_package()
+    }
+
+    pub fn current_module_shares_package_and_address(&self, m: &ModuleIdent) -> bool {
+        self.outer.current_module_shares_package_and_address(m)
+    }
+
+    pub fn current_module_is_a_friend_of(&self, m: &ModuleIdent) -> bool {
+        self.outer.current_module_is_a_friend_of(m)
+    }
+
+    pub fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
+        self.outer.module_info(m)
+    }
+
+    pub fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
+        self.outer.struct_definition(m, n)
+    }
+
+    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        self.outer.struct_declared_abilities(m, n)
+    }
+
+    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.outer.struct_declared_loc(m, n)
+    }
+
+    pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
+        self.outer.struct_tparams(m, n)
+    }
+
+    pub fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
+        self.outer.enum_definition(m, n)
+    }
+
+    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        self.outer.enum_declared_abilities(m, n)
+    }
+
+    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.outer.enum_declared_loc(m, n)
+    }
+
+    pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
+        self.outer.enum_tparams(m, n)
+    }
+
+    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
+        self.outer.datatype_kind(m, n)
+    }
+
+    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
+        self.outer.function_info(m, n)
+    }
+
+    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
+        self.outer.macro_body(m, n)
+    }
+
+    pub fn constant_info(&self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+        self.outer.constant_info(m, n)
+    }
+
+    pub fn find_all_fields(&self, tn: &TypeName) -> Vec<(Symbol, N::Type)> {
+        self.outer.find_all_fields(tn)
+    }
+
+    pub fn add_diag(&self, diag: Diagnostic) {
+        self.reporter.add_diag(diag);
+    }
+
+    pub fn add_diags(&self, diags: Diagnostics) {
+        self.reporter.add_diags(diags);
+    }
+
+    pub fn extend_ide_info(&self, info: IDEInfo) {
+        self.reporter.extend_ide_info(info);
+    }
+
+    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
+        self.reporter.add_ide_annotation(loc, info);
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.reporter.push_warning_filter_scope(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.reporter.pop_warning_filter_scope()
+    }
+
+    pub fn emit_warning_if_deprecated(
+        &mut self,
+        mident: &ModuleIdent,
+        name: Name,
+        method_opt: Option<Name>,
+    ) {
+        let in_same_module = self.is_current_module(mident);
+        if let Some(deprecation) = self.deprecations().get_deprecation(*mident, name) {
+            // Don't register a warning if we are in the module that is deprecated and the actual
+            // member is not deprecated.
+            if deprecation.location == AttributePosition::Module && in_same_module {
+                return;
+            }
+            let diags = deprecation.deprecation_warnings(name, method_opt);
+            self.add_diags(diags);
+        }
     }
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
@@ -528,29 +828,6 @@ impl<'env> Context<'env> {
         self.use_funs.last().unwrap().color.unwrap()
     }
 
-    pub fn reset_for_module_item(&mut self, loc: Loc) {
-        self.named_block_map = BTreeMap::new();
-        self.return_type = None;
-        self.locals = UniqueMap::new();
-        self.subst = Subst::empty();
-        self.tvar_counter = TVarCounter::new();
-        self.constraints = Constraints::new();
-        self.current_function = None;
-        self.in_macro_function = false;
-        self.max_variable_color = RefCell::new(0);
-        self.macro_expansion = vec![];
-        self.lambda_expansion = vec![];
-
-        if !self.ide_info.is_empty() {
-            self.add_diag(ice!((loc, "IDE info should be cleared after each item")));
-            self.ide_info = IDEInfo::new();
-        }
-    }
-
-    pub fn error_type(&mut self, loc: Loc) -> Type {
-        sp(loc, Type_::UnresolvedError)
-    }
-
     pub fn add_ability_constraint(
         &mut self,
         loc: Loc,
@@ -623,44 +900,14 @@ impl<'env> Context<'env> {
         self.locals.get(var).unwrap().clone()
     }
 
-    pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
-        match &self.current_module {
-            Some(curm) => curm == m,
-            None => false,
-        }
-    }
-
     pub fn is_current_function(&self, m: &ModuleIdent, f: &FunctionName) -> bool {
         self.is_current_module(m) && matches!(&self.current_function, Some(curf) if curf == f)
-    }
-
-    pub fn current_package(&self) -> Option<Symbol> {
-        self.current_module
-            .as_ref()
-            .and_then(|mident| self.module_info(mident).package)
     }
 
     // `loc` indicates the location that caused the add to occur
     fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
         if matches!(self.current_module, Some(current_mident) if m != &current_mident) {
             self.new_friends.insert((*m, loc));
-        }
-    }
-
-    fn current_module_shares_package_and_address(&self, m: &ModuleIdent) -> bool {
-        self.current_module.is_some_and(|current_mident| {
-            m.value.address == current_mident.value.address
-                && self.module_info(m).package == self.module_info(&current_mident).package
-        })
-    }
-
-    fn current_module_is_a_friend_of(&self, m: &ModuleIdent) -> bool {
-        match &self.current_module {
-            None => false,
-            Some(current_mident) => {
-                let minfo = self.module_info(m);
-                minfo.friends.contains_key(current_mident)
-            }
         }
     }
 
@@ -675,79 +922,6 @@ impl<'env> Context<'env> {
                     finfo.attributes.is_test_or_test_only()
                 })
         })
-    }
-
-    pub fn emit_warning_if_deprecated(
-        &mut self,
-        mident: &ModuleIdent,
-        name: Name,
-        method_opt: Option<Name>,
-    ) {
-        let in_same_module = self
-            .current_module
-            .is_some_and(|current| current == *mident);
-        if let Some(deprecation) = self.deprecations.get_deprecation(*mident, name) {
-            // Don't register a warning if we are in the module that is deprecated and the actual
-            // member is not deprecated.
-            if deprecation.location == AttributePosition::Module && in_same_module {
-                return;
-            }
-            let diags = deprecation.deprecation_warnings(name, method_opt);
-            self.add_diags(diags);
-        }
-    }
-
-    fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.info.module(m)
-    }
-
-    fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
-        self.info.struct_definition(m, n)
-    }
-
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
-        self.info.struct_declared_abilities(m, n)
-    }
-
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
-        self.info.struct_declared_loc(m, n)
-    }
-
-    pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
-        self.info.struct_type_parameters(m, n)
-    }
-
-    fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
-        self.info.enum_definition(m, n)
-    }
-
-    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
-        self.info.enum_declared_abilities(m, n)
-    }
-
-    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
-        self.info.enum_declared_loc(m, n)
-    }
-
-    pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
-        self.info.enum_type_parameters(m, n)
-    }
-
-    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
-        self.info.datatype_kind(m, n)
-    }
-
-    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
-        self.info.function_info(m, n)
-    }
-
-    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
-        self.macros.get(m)?.get(n)
-    }
-
-    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
-        let constants = &self.module_info(m).constants;
-        constants.get(n).expect("ICE should have failed in naming")
     }
 
     // pass in a location for a better error location
@@ -840,39 +1014,6 @@ impl<'env> Context<'env> {
         different.append(&mut same_filtered);
         different.sort_by(|a1, a2| a1.method_name.cmp(&a2.method_name));
         different
-    }
-
-    /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_fields(&mut self, tn: &TypeName) -> Vec<(Symbol, N::Type)> {
-        debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
-        let fields_info = match &tn.value {
-            TypeName_::Multiple(_) => vec![],
-            // TODO(cswords): are there any valid builtin fields?
-            TypeName_::Builtin(_) => vec![],
-            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => vec![],
-            TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
-                DatatypeKind::Enum => vec![],
-                DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
-                    N::StructFields::Native(_) => vec![],
-                    N::StructFields::Defined(is_positional, fields) => {
-                        if *is_positional {
-                            fields
-                                .iter()
-                                .enumerate()
-                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
-                                .collect::<Vec<_>>()
-                        } else {
-                            fields
-                                .key_cloned_iter()
-                                .map(|(k, (_, t))| (k.value(), t.clone()))
-                                .collect::<Vec<_>>()
-                        }
-                    }
-                },
-            },
-        };
-        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields_info; dbg));
-        fields_info
     }
 
     pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {
