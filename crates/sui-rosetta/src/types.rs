@@ -966,9 +966,7 @@ impl InternalOperation {
                 recipients,
                 amounts,
                 ..
-            } => {
-                pay_sui_pt(recipients, amounts, metadata.objects)?
-            }
+            } => pay_sui_pt(recipients, amounts, metadata.objects)?,
             Self::PayCoin {
                 recipients,
                 amounts,
@@ -1177,6 +1175,8 @@ pub fn pay_sui_pt(
             .into_iter()
             .map(|o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
             .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+        // TODO: There is a limit to number of transaction inputs and maybe one for MergeCoins command.
+        // We should handle them.
         builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
     }
     builder.pay_sui(recipients, amounts)?;
