@@ -404,10 +404,10 @@ impl Checkpoint {
                         checkpoint_viewed_at,
                         move || {
                             let mut query = raw_dsl::raw_checkpoints.into_boxed();
-                            query = query
-                                .filter(raw_dsl::sequence_number.eq_any(
-                                    results_clone.iter().map(|r| r.sequence_number as i64),
-                                ));
+                            query = query.filter(
+                                raw_dsl::sequence_number
+                                    .eq_any(results_clone.iter().map(|r| r.sequence_number)),
+                            );
                             query
                         },
                     )
@@ -616,7 +616,7 @@ impl Loader<DigestKey> for Db {
 
         let checkpoint_ids: Vec<i64> = chckp
             .into_iter()
-            .map(|stored| stored.sequence_number as i64)
+            .map(|stored| stored.sequence_number)
             .collect();
 
         let raw_checkpoints: Vec<StoredRawCheckpoint> = self
