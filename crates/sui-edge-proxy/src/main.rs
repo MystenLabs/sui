@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{
-    routing::{any, get},
-    Router,
-};
+use axum::{routing::any, Router};
 use clap::Parser;
 use mysten_metrics::start_prometheus_server;
 use sui_edge_proxy::config::{load, ProxyConfig};
-use sui_edge_proxy::handlers::{health_check_handler, proxy_handler, AppState};
+use sui_edge_proxy::handlers::{proxy_handler, AppState};
 use sui_edge_proxy::metrics::AppMetrics;
 use tracing::info;
 
@@ -60,7 +57,6 @@ async fn main() {
     );
 
     let app = Router::new()
-        .route("/health", get(health_check_handler))
         .fallback(any(proxy_handler))
         .with_state(app_state);
 

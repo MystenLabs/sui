@@ -14,6 +14,21 @@ use bytes::Bytes;
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
+#[derive(Debug)]
+enum PeerRole {
+    Read,
+    Execution,
+}
+
+impl PeerRole {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PeerRole::Read => "read",
+            PeerRole::Execution => "execution",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     client: reqwest::Client,
@@ -43,7 +58,7 @@ pub async fn proxy_handler(
     request: Request<Body>,
 ) -> Result<Response, (StatusCode, String)> {
     let (parts, body) = request.into_parts();
-    let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
+    let body_bytes = match axum::body::to_bytes(body, 100 * 1024 * 1024).await {
         Ok(bytes) => bytes,
         Err(e) => {
             warn!("Failed to read request body: {}", e);
@@ -61,23 +76,22 @@ pub async fn proxy_handler(
     {
         Some("sui_executeTransactionBlock") => {
             info!("Using execution peer");
-            // no need to check the request body, skip right to proxying to execution peer
-            proxy_request(state, parts, body_bytes, true).await
+            proxy_request(state, parts, body_bytes, PeerRole::Execution).await
         }
         _ => {
             let json_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
                 Ok(json_body) => json_body,
                 Err(_) => {
                     debug!("Failed to parse request body as JSON");
-                    return proxy_request(state, parts, body_bytes, false).await;
+                    return proxy_request(state, parts, body_bytes, PeerRole::Read).await;
                 }
             };
             if let Some("sui_executeTransactionBlock") =
                 json_body.get("method").and_then(|m| m.as_str())
             {
-                proxy_request(state, parts, body_bytes, true).await
+                proxy_request(state, parts, body_bytes, PeerRole::Execution).await
             } else {
-                proxy_request(state, parts, body_bytes, false).await
+                proxy_request(state, parts, body_bytes, PeerRole::Read).await
             }
         }
     }
@@ -87,36 +101,31 @@ async fn proxy_request(
     state: AppState,
     parts: Parts,
     body_bytes: Bytes,
-    use_execution_peer: bool,
+    peer_type: PeerRole,
 ) -> Result<Response, (StatusCode, String)> {
     debug!(
-        "Proxying request: method={:?}, uri={:?}, headers={:?}, body_len={}, use_execution_peer={}",
+        "Proxying request: method={:?}, uri={:?}, headers={:?}, body_len={}, peer_type={:?}",
         parts.method,
         parts.uri,
         parts.headers,
         body_bytes.len(),
-        use_execution_peer
+        peer_type
     );
 
     let metrics = &state.metrics;
-    let peer_type = if use_execution_peer {
-        "execution"
-    } else {
-        "read"
-    };
+    let peer_type_str = peer_type.as_str();
 
-    let timer_histogram = metrics.request_latency.with_label_values(&[peer_type]);
+    let timer_histogram = metrics.request_latency.with_label_values(&[peer_type_str]);
     let _timer = timer_histogram.start_timer();
 
     metrics
         .request_size_bytes
-        .with_label_values(&[peer_type])
+        .with_label_values(&[peer_type_str])
         .observe(body_bytes.len() as f64);
 
-    let peer_config = if use_execution_peer {
-        &state.execution_peer
-    } else {
-        &state.read_peer
+    let peer_config = match peer_type {
+        PeerRole::Read => &state.read_peer,
+        PeerRole::Execution => &state.execution_peer,
     };
 
     let mut target_url = peer_config.address.clone();
@@ -141,11 +150,11 @@ async fn proxy_request(
             let status = response.status().as_u16().to_string();
             metrics
                 .upstream_response_latency
-                .with_label_values(&[peer_type, &status])
+                .with_label_values(&[peer_type_str, &status])
                 .observe(upstream_start.elapsed().as_secs_f64());
             metrics
                 .requests_total
-                .with_label_values(&[peer_type, &status])
+                .with_label_values(&[peer_type_str, &status])
                 .inc();
             debug!("Response: {:?}", response);
             response
@@ -154,14 +163,17 @@ async fn proxy_request(
             warn!("Failed to send request: {}", e);
             metrics
                 .upstream_response_latency
-                .with_label_values(&[peer_type, "error"])
+                .with_label_values(&[peer_type_str, "error"])
                 .observe(upstream_start.elapsed().as_secs_f64());
             metrics
                 .requests_total
-                .with_label_values(&[peer_type, "error"])
+                .with_label_values(&[peer_type_str, "error"])
                 .inc();
             if e.is_timeout() {
-                metrics.timeouts_total.with_label_values(&[peer_type]).inc();
+                metrics
+                    .timeouts_total
+                    .with_label_values(&[peer_type_str])
+                    .inc();
             }
             return Err((StatusCode::BAD_GATEWAY, format!("Request failed: {}", e)));
         }
@@ -174,7 +186,7 @@ async fn proxy_request(
             warn!("Failed to read response body: {}", e);
             metrics
                 .error_counts
-                .with_label_values(&[peer_type, "response_body_read"])
+                .with_label_values(&[peer_type_str, "response_body_read"])
                 .inc();
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -184,7 +196,7 @@ async fn proxy_request(
     };
     metrics
         .response_size_bytes
-        .with_label_values(&[peer_type])
+        .with_label_values(&[peer_type_str])
         .observe(response_bytes.len() as f64);
 
     let mut resp = Response::new(response_bytes.into());
