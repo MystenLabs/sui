@@ -61,5 +61,4 @@ cached.workspace = true
 [dev-dependencies]
 mockall.workspace = true
 expect-test.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
 telemetry-subscribers.workspace = true

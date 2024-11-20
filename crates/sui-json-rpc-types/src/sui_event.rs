@@ -23,7 +23,6 @@ use tabled::settings::Style as TableStyle;
 use crate::{type_and_fields_from_move_event_data, Page};
 use sui_types::sui_serde::SuiStructTag;
 
-#[cfg(any(feature = "test-utils", test))]
 use std::str::FromStr;
 
 pub type EventPage = Page<SuiEvent, EventID>;
@@ -154,7 +153,6 @@ impl Display for SuiEvent {
     }
 }
 
-#[cfg(any(feature = "test-utils", test))]
 impl SuiEvent {
     pub fn random_for_testing() -> Self {
         Self {

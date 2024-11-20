@@ -47,5 +47,3 @@ sui-types.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 wiremock.workspace = true
-
-sui-types = { workspace = true, features = ["test-utils"] }

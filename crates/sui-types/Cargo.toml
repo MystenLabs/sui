@@ -99,7 +99,6 @@ harness = false
 
 [features]
 default = []
-test-utils = []
 tracing = [
     "move-vm-profiler/tracing",
     "move-vm-test-utils/tracing",

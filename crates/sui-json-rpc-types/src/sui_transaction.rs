@@ -915,7 +915,6 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
 }
 
 impl SuiTransactionBlockEffects {
-    #[cfg(any(feature = "test-utils", test))]
     pub fn new_for_testing(
         transaction_digest: TransactionDigest,
         status: SuiExecutionStatus,

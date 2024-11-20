@@ -39,7 +39,6 @@ tempfile.workspace = true
 sui-indexer-builder.workspace = true
 
 [dev-dependencies]
-sui-types = { workspace = true, features = ["test-utils"] }
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
