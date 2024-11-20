@@ -26,15 +26,11 @@ use itertools::Itertools;
 use move_binary_format::normalized;
 use schemars::JsonSchema;
 use sui_protocol_config::ProtocolConfig;
+use sui_sdk_types::types::unresolved;
 use sui_sdk_types::types::Argument;
 use sui_sdk_types::types::Command;
 use sui_sdk_types::types::ObjectId;
 use sui_sdk_types::types::Transaction;
-use sui_sdk_types::types::UnresolvedInputArgument;
-use sui_sdk_types::types::UnresolvedObjectReference;
-use sui_sdk_types::types::UnresolvedProgrammableTransaction;
-use sui_sdk_types::types::UnresolvedTransaction;
-use sui_sdk_types::types::UnresolvedValue;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -73,7 +69,7 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
             .query_parameters::<ResolveTransactionQueryParameters>(generator)
             .request_body(
                 RequestBodyBuilder::new()
-                    .json_content::<UnresolvedTransaction>(generator)
+                    .json_content::<unresolved::Transaction>(generator)
                     .build(),
             )
             .response(
@@ -96,7 +92,7 @@ async fn resolve_transaction(
     State(state): State<RestService>,
     Query(parameters): Query<ResolveTransactionQueryParameters>,
     accept: AcceptJsonProtobufBcs,
-    Json(unresolved_transaction): Json<UnresolvedTransaction>,
+    Json(unresolved_transaction): Json<unresolved::Transaction>,
 ) -> Result<
     JsonProtobufBcs<
         ResolveTransactionResponse,
@@ -224,7 +220,7 @@ struct NormalizedPackage {
 fn called_packages(
     reader: &StateReader,
     protocol_config: &ProtocolConfig,
-    unresolved_transaction: &UnresolvedTransaction,
+    unresolved_transaction: &unresolved::Transaction,
 ) -> Result<HashMap<ObjectId, NormalizedPackage>> {
     let binary_config = sui_types::execution_config_utils::to_binary_config(protocol_config);
     let mut packages = HashMap::new();
@@ -283,7 +279,7 @@ fn resolve_unresolved_transaction(
     called_packages: &HashMap<ObjectId, NormalizedPackage>,
     reference_gas_price: u64,
     max_gas_budget: u64,
-    unresolved_transaction: UnresolvedTransaction,
+    unresolved_transaction: unresolved::Transaction,
 ) -> Result<TransactionData> {
     let sender = unresolved_transaction.sender.into();
     let gas_data = if let Some(unresolved_gas_payment) = unresolved_transaction.gas_payment {
@@ -327,7 +323,7 @@ pub struct ResolveTransactionResponse {
 
 fn resolve_object_reference(
     reader: &StateReader,
-    unresolved_object_reference: UnresolvedObjectReference,
+    unresolved_object_reference: unresolved::ObjectReference,
 ) -> Result<ObjectRef> {
     let object_id = unresolved_object_reference.object_id;
     let object = reader
@@ -343,9 +339,9 @@ fn resolve_object_reference(
 // before calling.
 fn resolve_object_reference_with_object(
     object: &sui_types::object::Object,
-    unresolved_object_reference: UnresolvedObjectReference,
+    unresolved_object_reference: unresolved::ObjectReference,
 ) -> Result<ObjectRef> {
-    let UnresolvedObjectReference {
+    let unresolved::ObjectReference {
         object_id,
         version,
         digest,
@@ -393,7 +389,7 @@ fn resolve_object_reference_with_object(
 fn resolve_ptb(
     reader: &StateReader,
     called_packages: &HashMap<ObjectId, NormalizedPackage>,
-    unresolved_ptb: UnresolvedProgrammableTransaction,
+    unresolved_ptb: unresolved::ProgrammableTransaction,
 ) -> Result<ProgrammableTransaction> {
     let inputs = unresolved_ptb
         .inputs
@@ -425,14 +421,14 @@ fn resolve_arg(
     reader: &StateReader,
     called_packages: &HashMap<ObjectId, NormalizedPackage>,
     commands: &[Command],
-    arg: UnresolvedInputArgument,
+    arg: unresolved::Input,
     arg_idx: usize,
 ) -> Result<CallArg> {
     use fastcrypto::encoding::Base64;
     use fastcrypto::encoding::Encoding;
-    use sui_sdk_types::types::UnresolvedInputArgumentKind::*;
+    use sui_sdk_types::types::unresolved::InputKind::*;
 
-    let UnresolvedInputArgument {
+    let unresolved::Input {
         kind,
         value,
         object_id,
@@ -443,7 +439,7 @@ fn resolve_arg(
 
     match (kind, value, object_id, version, digest, mutable) {
         // pre serialized BCS input encoded as a base64 string
-        (Some(Pure), Some(UnresolvedValue::String(v)), None, None, None, None) => {
+        (Some(Pure), Some(unresolved::Value::String(v)), None, None, None, None) => {
             let value = Base64::decode(&v).map_err(|e| {
                 RestError::new(
                     axum::http::StatusCode::BAD_REQUEST,
@@ -453,7 +449,7 @@ fn resolve_arg(
             CallArg::Pure(value)
         }
         // pre serialized BCS input encoded as a a JSON array of u8s
-        (Some(Pure), Some(array @ UnresolvedValue::Array(_)), None, None, None, None) => {
+        (Some(Pure), Some(array @ unresolved::Value::Array(_)), None, None, None, None) => {
             let value = serde_json::from_value(serde_json::Value::from(array)).map_err(|e| {
                 RestError::new(
                     axum::http::StatusCode::BAD_REQUEST,
@@ -473,21 +469,16 @@ fn resolve_arg(
         )?),
 
         // Immutable or owned
-        (
-            Some(ImmutableOrOwned | Immutable | Owned),
-            None,
-            Some(object_id),
-            version,
-            digest,
-            None,
-        ) => CallArg::Object(ObjectArg::ImmOrOwnedObject(resolve_object_reference(
-            reader,
-            UnresolvedObjectReference {
-                object_id,
-                version,
-                digest,
-            },
-        )?)),
+        (Some(ImmutableOrOwned), None, Some(object_id), version, digest, None) => {
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(resolve_object_reference(
+                reader,
+                unresolved::ObjectReference {
+                    object_id,
+                    version,
+                    digest,
+                },
+            )?))
+        }
 
         // Shared object
         (Some(Shared), None, Some(object_id), _version, None, _mutable) => CallArg::Object(
@@ -498,7 +489,7 @@ fn resolve_arg(
         (Some(Receiving), None, Some(object_id), version, digest, None) => {
             CallArg::Object(ObjectArg::Receiving(resolve_object_reference(
                 reader,
-                UnresolvedObjectReference {
+                unresolved::ObjectReference {
                     object_id,
                     version,
                     digest,
@@ -547,7 +538,7 @@ fn resolve_object(
     match object.owner() {
         sui_types::object::Owner::Immutable => resolve_object_reference_with_object(
             &object,
-            UnresolvedObjectReference {
+            unresolved::ObjectReference {
                 object_id,
                 version,
                 digest,
@@ -558,7 +549,7 @@ fn resolve_object(
         sui_types::object::Owner::AddressOwner(_) => {
             let object_ref = resolve_object_reference_with_object(
                 &object,
-                UnresolvedObjectReference {
+                unresolved::ObjectReference {
                     object_id,
                     version,
                     digest,

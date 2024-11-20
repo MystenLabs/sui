@@ -2259,12 +2259,12 @@
           {
             "type": "object",
             "required": [
-              "authenticator_obj_initial_shared_version",
+              "authenticator_object_initial_shared_version",
               "kind",
               "min_epoch"
             ],
             "properties": {
-              "authenticator_obj_initial_shared_version": {
+              "authenticator_object_initial_shared_version": {
                 "description": "The initial version of the authenticator object that it was shared at.",
                 "type": "string",
                 "format": "u64"
@@ -3207,7 +3207,7 @@
         "type": "string",
         "pattern": "(?:[a-zA-Z][a-zA-Z0-9_]{0,127})|(?:_[a-zA-Z0-9_]{0,127})"
       },
-      "InputArgument": {
+      "Input": {
         "oneOf": [
           {
             "type": "object",
@@ -4911,7 +4911,7 @@
                 "description": "Input objects or primitive values",
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/InputArgument"
+                  "$ref": "#/components/schemas/Input"
                 }
               },
               "kind": {
@@ -5506,40 +5506,50 @@
           }
         }
       },
-      "UnresolvedInputArgument": {
+      "UnresolvedInput": {
+        "description": "A potentially unresolved transaction input. Note that one can construct a fully resolved input using the provided constructors, but this struct is also useful when the input data is not complete.\n\nIf used in the context of transaction builder, make sure to call `tx.resolve` function on the transaction builder to resolve all unresolved inputs.",
         "type": "object",
         "properties": {
           "digest": {
-            "$ref": "#/components/schemas/ObjectDigest"
+            "description": "The digest of this object. This field is only relevant for owned/immutable/receiving inputs.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectDigest"
+              }
+            ]
           },
           "kind": {
-            "$ref": "#/components/schemas/UnresolvedInputArgumentKind"
+            "$ref": "#/components/schemas/UnresolvedInputKind"
           },
           "mutable": {
+            "description": "Whether this object is mutable. This field is only relevant for shared objects.",
             "type": "boolean"
           },
           "object_id": {
-            "$ref": "#/components/schemas/ObjectId"
+            "description": "Unique identifier for this object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            ]
           },
           "value": {
             "$ref": "#/components/schemas/UnresolvedValue"
           },
           "version": {
-            "description": "Either the `initial_shared_version` if object is a shared object, or the `version` if this is an owned object",
+            "description": "Either the `initial_shared_version` if object is a shared object, or the `version` if this is an owned object. The semantics of version can change depending on whether the object is shared or not. For shared objects, this is the initial version the object was shared at. For all other objects, this is the version of the object.",
             "type": "string",
             "format": "u64"
           }
         }
       },
-      "UnresolvedInputArgumentKind": {
+      "UnresolvedInputKind": {
         "type": "string",
         "enum": [
           "pure",
           "shared",
           "receiving",
           "immutable_or_owned",
-          "immutable",
-          "owned",
           "literal"
         ]
       },
@@ -5586,7 +5596,7 @@
           "inputs": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/UnresolvedInputArgument"
+              "$ref": "#/components/schemas/UnresolvedInput"
             }
           },
           "sender": {

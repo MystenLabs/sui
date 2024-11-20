@@ -8,14 +8,10 @@ use sui_rest_api::client::reqwest::StatusCode;
 use sui_rest_api::transactions::ResolveTransactionQueryParameters;
 use sui_rest_api::Client;
 use sui_rest_api::ExecuteTransactionQueryParameters;
+use sui_sdk_types::types::unresolved;
 use sui_sdk_types::types::Argument;
 use sui_sdk_types::types::Command;
 use sui_sdk_types::types::TransactionExpiration;
-use sui_sdk_types::types::UnresolvedGasPayment;
-use sui_sdk_types::types::UnresolvedInputArgument;
-use sui_sdk_types::types::UnresolvedProgrammableTransaction;
-use sui_sdk_types::types::UnresolvedTransaction;
-use sui_sdk_types::types::UnresolvedValue;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use test_cluster::TestClusterBuilder;
@@ -31,15 +27,15 @@ async fn resolve_transaction_simple_transfer() {
     gas.sort_by_key(|object_ref| object_ref.0);
     let obj_to_send = gas.first().unwrap().0;
 
-    let unresolved_transaction = UnresolvedTransaction {
-        ptb: UnresolvedProgrammableTransaction {
+    let unresolved_transaction = unresolved::Transaction {
+        ptb: unresolved::ProgrammableTransaction {
             inputs: vec![
-                UnresolvedInputArgument {
+                unresolved::Input {
                     object_id: Some(obj_to_send.into()),
                     ..Default::default()
                 },
-                UnresolvedInputArgument {
-                    value: Some(UnresolvedValue::String(recipient.to_string())),
+                unresolved::Input {
+                    value: Some(unresolved::Value::String(recipient.to_string())),
                     ..Default::default()
                 },
             ],
@@ -98,15 +94,15 @@ async fn resolve_transaction_transfer_with_sponsor() {
     let obj_to_send = gas.first().unwrap().0;
     let sponsor = test_cluster.wallet.get_addresses()[1];
 
-    let unresolved_transaction = UnresolvedTransaction {
-        ptb: UnresolvedProgrammableTransaction {
+    let unresolved_transaction = unresolved::Transaction {
+        ptb: unresolved::ProgrammableTransaction {
             inputs: vec![
-                UnresolvedInputArgument {
+                unresolved::Input {
                     object_id: Some(obj_to_send.into()),
                     ..Default::default()
                 },
-                UnresolvedInputArgument {
-                    value: Some(UnresolvedValue::String(recipient.to_string())),
+                unresolved::Input {
+                    value: Some(unresolved::Value::String(recipient.to_string())),
                     ..Default::default()
                 },
             ],
@@ -118,7 +114,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
             )],
         },
         sender: sender.into(),
-        gas_payment: Some(UnresolvedGasPayment {
+        gas_payment: Some(unresolved::GasPayment {
             objects: vec![],
             owner: sponsor.into(),
             price: None,
@@ -182,9 +178,9 @@ async fn resolve_transaction_borrowed_shared_object() {
 
     let sender = test_cluster.wallet.get_addresses()[0];
 
-    let unresolved_transaction = UnresolvedTransaction {
-        ptb: UnresolvedProgrammableTransaction {
-            inputs: vec![UnresolvedInputArgument {
+    let unresolved_transaction = unresolved::Transaction {
+        ptb: unresolved::ProgrammableTransaction {
+            inputs: vec![unresolved::Input {
                 object_id: Some("0x6".parse().unwrap()),
                 ..Default::default()
             }],
@@ -249,19 +245,19 @@ async fn resolve_transaction_mutable_shared_object() {
         .unwrap()
         .address;
 
-    let unresolved_transaction = UnresolvedTransaction {
-        ptb: UnresolvedProgrammableTransaction {
+    let unresolved_transaction = unresolved::Transaction {
+        ptb: unresolved::ProgrammableTransaction {
             inputs: vec![
-                UnresolvedInputArgument {
+                unresolved::Input {
                     object_id: Some("0x5".parse().unwrap()),
                     ..Default::default()
                 },
-                UnresolvedInputArgument {
+                unresolved::Input {
                     object_id: Some(obj_to_stake.into()),
                     ..Default::default()
                 },
-                UnresolvedInputArgument {
-                    value: Some(UnresolvedValue::String(validator_address.to_string())),
+                unresolved::Input {
+                    value: Some(unresolved::Value::String(validator_address.to_string())),
                     ..Default::default()
                 },
             ],
@@ -316,9 +312,9 @@ async fn resolve_transaction_insufficient_gas() {
     let client = Client::new(test_cluster.rpc_url());
 
     // Test the case where we don't have enough coins/gas for the required budget
-    let unresolved_transaction = UnresolvedTransaction {
-        ptb: UnresolvedProgrammableTransaction {
-            inputs: vec![UnresolvedInputArgument {
+    let unresolved_transaction = unresolved::Transaction {
+        ptb: unresolved::ProgrammableTransaction {
+            inputs: vec![unresolved::Input {
                 object_id: Some("0x6".parse().unwrap()),
                 ..Default::default()
             }],
