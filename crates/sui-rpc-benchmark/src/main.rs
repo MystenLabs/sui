@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 
-use sui_rpc_benchmark::run_benchmarks; 
+use sui_rpc_benchmark::run_benchmarks;
 
 #[tokio::main]
 async fn main() -> Result<()> {

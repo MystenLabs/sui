@@ -13,12 +13,11 @@ clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 futures.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+hex = "0.4"
+sqlparser = "0.52.0"
+tokio-postgres = "0.7.12"
 
-sui-types.workspace = true
-sui-sdk.workspace = true
-telemetry-subscribers.workspace = true
+sui-pg-temp-db = { workspace = true }
 
 [[bin]]
 name = "sui-rpc-benchmark"
