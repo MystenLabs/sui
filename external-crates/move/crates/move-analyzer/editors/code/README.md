@@ -1,7 +1,9 @@
 # Move
 
 Provides language support for the Move programming language. For information about Move visit the
-language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
+language [documentation](https://docs.sui.io/concepts/sui-move-concepts). It also provides early-stage
+support for trace-debugging Move unit tests using a familiar VSCode debugging interface (e.g., stepping
+through the code, tracking local variable names, setting line breakpoints).
 
 # How to Install
 
@@ -28,7 +30,7 @@ its custom location location using VSCode's settings (`⌘` + `,` on macOS, or u
 Preferences > Settings*). Search for the `move.sui.path` user setting, set it to the new location of
 the `sui` binary, and restart VSCode.
 
-In order to trace Move code execution, the `sui` binary must be built with the `tracing` feature flag.
+In order to trace-debug Move code execution, the `sui` binary must be built with the `tracing` feature flag.
 If your version of the `sui` binary was not built with this feature flag, an attempt to trace test
 execution will fail. In this case you may have to build the `sui` binary from source following these
 [instructions](https://docs.sui.io/guides/developer/getting-started/sui-install#install-sui-binaries-from-source).
@@ -70,7 +72,6 @@ move-analyzer binary already exists in the default location (`~/.sui/bin` on mac
 `C:\Users\USER\.sui\bin` on Windows), delete the existing move-analyzer binary and reinstall the
 extension.
 
-
 ## What if everything else fails?
 
 Check [Sui Developer Forum](https://forums.sui.io/c/technical-support) to see if the problem
@@ -101,8 +102,18 @@ Move source file (a file with a `.move` file extension) and:
   - inlay hints:
     - types: local declarations, lambda parameters, variant and struct pattern matching
     - parameter names at function calls
-- If the opened Move source file is located within a buildable project you can build and (locally)
+- If the opened Move source file is located within a buildable project, and you have the `sui`
+  binary installed, you can build and (locally)
   test this project using `Move: Build a Move package` and `Move: Test a Move package` commands from
-  VSCode's command palette. You can also enable Move trace generation during test execution
-  using `Move: Trace Move package execution` command from VSCode's command palette (traces will
-  be available in the `traces` directory in JSON format).
+  VSCode's command palette.
+- If the opened Move source file is located within a buildable project, and you have the `sui`
+  binary installed, you can trace-debug execution of Move unit tests within this project.
+  This functionality is provided by this (Move) extension automatically including the Move Trace Debugging
+  [extension](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debuggin). Go to
+  the Move Trace Debugging extension link to find more detailed information about trace-debugging and
+  the current level of support. Trace-debugging a Move unit test is a two-step process:
+    - first, you need to generate traces for Move unit tests by using `Move: Trace Move test execution`
+    command from VSCode's command palette (traces will be available in the `traces` directory in JSON format)
+    - second, you need to execute `Run->Start Debugging` menu command with Move file containing the test
+    you want to trace-debug opened (if the file contains multiple tests, you will be able to select a specific one
+    from a drop-down menu)

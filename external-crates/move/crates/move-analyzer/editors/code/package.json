@@ -157,8 +157,9 @@
     "publish": "npm run pretest && npm run test && vsce publish"
   },
   "extensionDependencies": [
-    "damirka.move-syntax"
-  ],
+    "damirka.move-syntax",
+    "mysten.move-trace-debug"
+],
   "dependencies": {
     "command-exists": "^1.2.9",
     "lru-cache": "^4.1.3",
