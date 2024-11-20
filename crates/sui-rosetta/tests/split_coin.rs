@@ -88,8 +88,8 @@ pub async fn make_change(
     amount_per_change: u64,
 ) -> Result<Vec<SuiTransactionBlockResponse>> {
     let remainder = coin.balance % amount_per_change;
-    let n_new_coins = (coin.balance / amount_per_change) as usize - 1 * (remainder == 0) as usize;
-    let vecs_remainder = n_new_coins as usize % MAX_NEW_COINS;
+    let n_new_coins = (coin.balance / amount_per_change) as usize - (remainder == 0) as usize;
+    let vecs_remainder = n_new_coins % MAX_NEW_COINS;
     let n_vecs = n_new_coins / MAX_NEW_COINS;
     assert!(n_new_coins as u64 * amount_per_change < coin.balance);
 
@@ -192,7 +192,7 @@ async fn test_make_change_exact_div() -> Result<()> {
 
     let split_resp = split_coins(
         &client,
-        &keystore,
+        keystore,
         sender,
         coin.object_ref(),
         &[SUI_100],
@@ -202,7 +202,7 @@ async fn test_make_change_exact_div() -> Result<()> {
     )
     .await?;
 
-    let tx_digest = split_resp.digest.clone();
+    let tx_digest = split_resp.digest;
     if split_resp
         .effects
         .as_ref()
@@ -239,7 +239,7 @@ async fn test_make_change_exact_div() -> Result<()> {
         previous_transaction: tx_digest,
     };
 
-    let txs = make_change(&client, &keystore, sender, splitted, Some(initial), SUI_10).await?;
+    let txs = make_change(&client, keystore, sender, splitted, Some(initial), SUI_10).await?;
 
     assert!(txs.len() == 1, "Should only have 1 tx");
     let new_coins = txs
@@ -294,7 +294,7 @@ async fn test_make_change_remainder_div() -> Result<()> {
 
     let split_resp = split_coins(
         &client,
-        &keystore,
+        keystore,
         sender,
         coin.object_ref(),
         &[SUI_100],
@@ -304,7 +304,7 @@ async fn test_make_change_remainder_div() -> Result<()> {
     )
     .await?;
 
-    let tx_digest = split_resp.digest.clone();
+    let tx_digest = split_resp.digest;
     if split_resp
         .effects
         .as_ref()
@@ -316,7 +316,6 @@ async fn test_make_change_remainder_div() -> Result<()> {
         return Err(anyhow!("Transaction failed!: {:#?}", split_resp));
     }
 
-    // let digest = (split_resp.digest).clone();
     let (initial, splitted) = match split_resp
         .object_changes
         .ok_or(anyhow!("Expected object_changes"))?
@@ -391,10 +390,10 @@ async fn test_make_change_remainder_div() -> Result<()> {
         };
         let b = balance.parse::<u64>()?;
         match b {
-            b if b == SUI_12 => {
+            SUI_12 => {
                 twelve_count += 1;
             }
-            b if b == 4_000_000_000 => {
+            4_000_000_000 => {
                 four_count += 1;
             }
             b => {
