@@ -113,23 +113,6 @@ pub enum ExecutionCacheConfigType {
 }
 
 pub fn choose_execution_cache(_: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
-    #[cfg(msim)]
-    {
-        let mut use_random_cache = None;
-        sui_macros::fail_point_if!("select-random-cache", || {
-            let random = rand::random::<bool>();
-            tracing::info!("Randomly selecting cache: {}", random);
-            use_random_cache = Some(random);
-        });
-        if let Some(random) = use_random_cache {
-            if random {
-                return ExecutionCacheConfigType::PassthroughCache;
-            } else {
-                return ExecutionCacheConfigType::WritebackCache;
-            }
-        }
-    }
-
     if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
         error!("DISABLE_WRITEBACK_CACHE is no longer respected. WritebackCache is the default.");
     }
@@ -144,17 +127,13 @@ pub fn build_execution_cache(
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
-    if matches!(
-        epoch_start_config.execution_cache_type(),
-        ExecutionCacheConfigType::WritebackCache
-    ) {
-        ExecutionCacheTraitPointers::new(
+    match epoch_start_config.execution_cache_type() {
+        ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
             WritebackCache::new(store.clone(), execution_cache_metrics).into(),
-        )
-    } else {
-        ExecutionCacheTraitPointers::new(
+        ),
+        ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
             ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
-        )
+        ),
     }
 }
 
@@ -870,14 +849,10 @@ macro_rules! implement_passthrough_traits {
                 &'a self,
                 _: &'a EpochStartConfiguration,
             ) -> BoxFuture<'a, ()> {
-                // If we call this method instead of ProxyCache::reconfigure_cache, it's a bug.
-                // Such a bug would almost certainly cause other test failures before reaching this
-                // point, but if it somehow slipped through it is better to crash than risk forking
-                // because ProxyCache::reconfigure_cache was not called.
-                panic!(
-                    "reconfigure_cache should not be called on a {}",
-                    stringify!($implementor)
-                );
+                // Since we now use WritebackCache directly at startup (if the epoch flag is set),
+                // this can be called at reconfiguration time. It is a no-op.
+                // TODO: remove this once we completely remove ProxyCache.
+                std::future::ready(()).boxed()
             }
         }
 
