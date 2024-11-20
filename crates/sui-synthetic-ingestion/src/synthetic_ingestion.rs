@@ -127,11 +127,7 @@ mod tests {
             let path = ingestion_dir.join(format!("{}.chk", checkpoint));
             let bytes = tokio::fs::read(&path).await.unwrap();
             let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
-            if checkpoint_data.transactions.len() != checkpoint_size as usize {
-                for tx in &checkpoint_data.transactions {
-                    println!("{:?}", tx);
-                }
-            }
+
             assert_eq!(
                 checkpoint_data.checkpoint_summary.sequence_number,
                 checkpoint

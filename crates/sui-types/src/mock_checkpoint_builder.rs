@@ -121,10 +121,6 @@ impl MockCheckpointBuilder {
         CheckpointContents,
         VerifiedCheckpointContents,
     ) {
-        println!(
-            "About to build checkpoint, size: {}",
-            self.transactions.len()
-        );
         let contents =
             CheckpointContents::new_with_causally_ordered_execution_data(self.transactions.iter());
         let full_contents = VerifiedCheckpointContents::new_unchecked(
