@@ -27,7 +27,6 @@ use errors::IndexerError;
 
 pub mod apis;
 pub mod backfill;
-pub mod benchmark;
 pub mod config;
 pub mod database;
 pub mod db;

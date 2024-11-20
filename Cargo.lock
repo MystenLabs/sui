@@ -15556,9 +15556,12 @@ name = "sui-synthetic-ingestion"
 version = "0.0.0"
 dependencies = [
  "async-trait",
+ "clap",
  "simulacrum",
+ "sui-storage",
  "sui-test-transaction-builder",
  "sui-types",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tracing",
