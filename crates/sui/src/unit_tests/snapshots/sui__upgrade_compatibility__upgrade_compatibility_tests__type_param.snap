@@ -15,7 +15,7 @@ error[Compatibility E01005]: type parameter mismatch
    ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:16:45
    │
 16 │     public struct StructTypeParamRemoveCopy<T> has copy, drop { x : T }
-   │                   ------------------------- ^ Unexpected type parameter constraints: none, expected parameter with 'Copy'.
+   │                   ------------------------- ^ Unexpected type parameter constraints: none, expected parameter with 'copy'.
    │                   │                          
    │                   Struct definition
    │
@@ -26,7 +26,7 @@ error[Compatibility E01005]: type parameter mismatch
    ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:19:45
    │
 19 │     public struct StructTypeParamRemoveDrop<T: copy> has copy, drop { x : T }
-   │                   ------------------------- ^ Unexpected type parameter constraints: 'Copy', expected parameter with 'Copy' and 'Drop'.
+   │                   ------------------------- ^ Unexpected type parameter constraint: 'copy', expected parameter with 'copy' and 'drop'.
    │                   │                          
    │                   Struct definition
    │
@@ -77,7 +77,7 @@ error[Compatibility E01005]: type parameter mismatch
    ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:39:41
    │
 39 │     public enum EnumTypeParamRemoveCopy<T> has copy, drop {
-   │                 ----------------------- ^ Unexpected type parameter constraints: none, expected parameter with 'Copy'.
+   │                 ----------------------- ^ Unexpected type parameter constraints: none, expected parameter with 'copy'.
    │                 │                        
    │                 Enum definition
    │
@@ -106,10 +106,10 @@ error[Compatibility E01005]: type parameter mismatch
    ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:52:31
    │
 52 │     public fun add_constraint<T: copy>(a: T): T { return a }
-   │                               ^ Unexpected type parameter 'Copy', expected none
+   │                               ^ Unexpected type parameter constraint: 'copy', expected none
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's type parameters for function 'add_constraint'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

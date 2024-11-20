@@ -632,7 +632,7 @@ fn compare_packages(
         if !missing_modules.is_empty() {
             format!(
                 "The following modules are missing from the new package: {}\n",
-                format_list(missing_modules.iter().map(|m| format!("'{}'", m)))
+                format_list(missing_modules.iter().map(|m| format!("'{}'", m)), None)
             )
         } else {
             "".to_string()
@@ -979,6 +979,7 @@ fn function_signature_mismatch_diag(
             }
         }
     }
+    // type parameters are a vector of AbilitySet and therefore cannot share the same logic as structs and enums
     if old_function.type_parameters.len() != new_function.type_parameters.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeParamMismatch,
@@ -1022,8 +1023,18 @@ fn function_signature_mismatch_diag(
                         type_param_loc,
                         format!(
                             "Unexpected type parameter {}, expected {}",
-                            format_list(new_type_param.into_iter().map(|t| format!("'{:?}'", t))),
-                            format_list(old_type_param.into_iter().map(|t| format!("'{:?}'", t))),
+                            format_list(
+                                new_type_param
+                                    .into_iter()
+                                    .map(|t| format!("'{:?}'", t).to_lowercase()),
+                                Some(("constraint", "constraints"))
+                            ),
+                            format_list(
+                                old_type_param
+                                    .into_iter()
+                                    .map(|t| format!("'{:?}'", t).to_lowercase()),
+                                None
+                            ),
                         ),
                     ),
                     Vec::<(Loc, String)>::new(),
@@ -1137,9 +1148,9 @@ fn function_entry_mismatch(
         (
             def_loc,
             if old_function.is_entry {
-                format!("Function '{function_name}' has lost its entry visibility",)
+                format!("Function '{function_name}' has lost its entry visibility")
             } else {
-                format!("Function '{function_name}' has gained entry visibility",)
+                format!("Function '{function_name}' has gained entry visibility")
             },
         ),
         Vec::<(Loc, String)>::new(),
@@ -1164,6 +1175,15 @@ fn ability_mismatch_label(
     let extra_abilities = AbilitySet::from_u8(new_abilities.into_u8() & !old_abilities.into_u8())
         .context("Unable to get extra abilities")?;
 
+    let missing_abilities_list: Vec<String> = missing_abilities
+        .into_iter()
+        .map(|a| format!("'{:?}'", a).to_lowercase())
+        .collect();
+    let extra_abilities_list: Vec<String> = extra_abilities
+        .into_iter()
+        .map(|a| format!("'{:?}'", a).to_lowercase())
+        .collect();
+
     Ok(
         match (
             missing_abilities != AbilitySet::EMPTY,
@@ -1171,32 +1191,18 @@ fn ability_mismatch_label(
         ) {
             (true, true) => format!(
                 "Mismatched abilities: missing {}, unexpected {}",
-                format_list(
-                    missing_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                ),
-                format_list(
-                    extra_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                ),
+                format_list(missing_abilities_list, None),
+                format_list(extra_abilities_list, None),
             ),
             (true, false) => format!(
-                "Missing abilities {}",
-                format_list(
-                    missing_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                )
+                "Missing {}: {}",
+                singular_or_plural(missing_abilities_list.len(), "ability", "abilities"),
+                format_list(missing_abilities_list, None)
             ),
             (false, true) => format!(
-                "Unexpected abilities {}",
-                format_list(
-                    extra_abilities
-                        .into_iter()
-                        .map(|a| format!("'{:?}'", a).to_lowercase())
-                )
+                "Unexpected {}: {}",
+                singular_or_plural(extra_abilities_list.len(), "ability", "abilities"),
+                format_list(extra_abilities_list, None)
             ),
             (false, false) => unreachable!("Abilities should not be the same"),
         },
@@ -1240,7 +1246,14 @@ fn struct_ability_mismatch_diag(
                     .to_string(),
                 format!(
                     "Restore the original struct's abilities \
-                    for struct '{struct_name}'."
+                    for struct '{struct_name}': {}.",
+                    format_list(
+                        old_struct
+                            .abilities
+                            .into_iter()
+                            .map(|a| format!("'{:?}'", a).to_lowercase()),
+                        None
+                    ),
                 ),
             ],
         ));
@@ -1428,7 +1441,14 @@ fn enum_ability_mismatch_diag(
                     .to_string(),
                 format!(
                     "Restore the original enum's abilities \
-                    for enum '{enum_name}' including the ordering."
+                    for enum '{enum_name}': {}.",
+                    format_list(
+                        old_enum
+                            .abilities
+                            .into_iter()
+                            .map(|a| format!("'{:?}'", a).to_lowercase()),
+                        None
+                    ),
                 ),
             ],
         ));
@@ -1686,7 +1706,7 @@ fn type_parameter_diag(
     old_type_parameters: &[DatatypeTyParameter],
     new_type_parameters: &[DatatypeTyParameter],
     def_loc: Loc,
-    type_parameter_locs: &Vec<SourceName>,
+    type_parameter_locs: &[SourceName],
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
@@ -1741,7 +1761,7 @@ fn type_parameter_diag(
 
                 diags.add(Diagnostic::new(
                     code,
-                    (type_param_loc.1.clone(), label),
+                    (type_param_loc.1, label),
                     vec![(def_loc, format!("{capital_declaration_kind} definition"))],
                     vec![
                         format!(
@@ -1773,7 +1793,8 @@ fn type_parameter_code_and_error(
         (true, true) | (true, false) => (
             Declarations::TypeParamMismatch.into(),
             format!(
-                "Unexpected {}type parameter constraints: {}, expected {}parameter with {}.",
+                // type parameter constraints
+                "Unexpected {}type parameter {}, expected {}parameter with {}.",
                 if old_type_param.is_phantom {
                     "phantom "
                 } else {
@@ -1783,7 +1804,8 @@ fn type_parameter_code_and_error(
                     new_type_param
                         .constraints
                         .into_iter()
-                        .map(|c| format!("'{:?}'", c))
+                        .map(|c| format!("'{:?}'", c).to_lowercase()),
+                    Some(("constraint", "constraints")),
                 ),
                 if new_type_param.is_phantom {
                     "phantom "
@@ -1794,7 +1816,8 @@ fn type_parameter_code_and_error(
                     old_type_param
                         .constraints
                         .into_iter()
-                        .map(|c| format!("'{:?}'", c))
+                        .map(|c| format!("'{:?}'", c).to_lowercase()),
+                    None,
                 ),
             ),
         ),
@@ -1819,10 +1842,12 @@ fn type_parameter_code_and_error(
     }
 }
 
-// TODO does this exist somewhere?
-fn format_list(items: impl IntoIterator<Item = impl std::fmt::Display>) -> String {
+fn format_list(
+    items: impl IntoIterator<Item = impl std::fmt::Display>,
+    noun_singular_plural: Option<(&str, &str)>,
+) -> String {
     let items: Vec<_> = items.into_iter().map(|i| i.to_string()).collect();
-    match items.len() {
+    let items_string = match items.len() {
         0 => "none".to_string(),
         1 => items[0].to_string(),
         2 => format!("{} and {}", items[0], items[1]),
@@ -1831,6 +1856,23 @@ fn format_list(items: impl IntoIterator<Item = impl std::fmt::Display>) -> Strin
             let last = items.last().unwrap();
             format!("{}, and {}", all_but_last, last)
         }
+    };
+    if let Some((singular, plural)) = noun_singular_plural {
+        format!(
+            "{}: {}",
+            singular_or_plural(items.len(), singular, plural),
+            items_string,
+        )
+    } else {
+        items_string
+    }
+}
+
+fn singular_or_plural(n: usize, singular: &str, plural: &str) -> String {
+    if n == 1 {
+        singular.to_string()
+    } else {
+        plural.to_string()
     }
 }
 

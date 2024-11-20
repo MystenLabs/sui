@@ -40,4 +40,4 @@ error[Compatibility E01001]: missing public declaration
 
 The following modules are missing from the new package: 'missing_module'
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

@@ -24,19 +24,19 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:11:19
    │
 11 │     public struct StructAbilityMismatchAdd has copy {} // added the copy ability where none existed
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^^ Unexpected abilities 'copy'
+   │                   ^^^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'StructAbilityMismatchAdd'.
+   = Restore the original struct's abilities for struct 'StructAbilityMismatchAdd': none.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:14:19
    │
 14 │     public struct StructAbilityMismatchRemove {} // removed the copy ability
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities 'copy'
+   │                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'StructAbilityMismatchRemove'.
+   = Restore the original struct's abilities for struct 'StructAbilityMismatchRemove': 'copy'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:17:19
@@ -45,7 +45,7 @@ error[Compatibility E01003]: ability mismatch
    │                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'drop'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'StructAbilityMismatchChange'.
+   = Restore the original struct's abilities for struct 'StructAbilityMismatchChange': 'copy'.
 
 error[Compatibility E01005]: type parameter mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:20:19
@@ -90,19 +90,19 @@ error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:45:17
    │
 45 │     public enum EnumAbilityMismatchAdd has copy {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^ Unexpected abilities 'copy'
+   │                 ^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumAbilityMismatchAdd' including the ordering.
+   = Restore the original enum's abilities for enum 'EnumAbilityMismatchAdd': none.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:50:17
    │
 50 │     public enum EnumAbilityMismatchRemove {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities 'copy'
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'copy'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumAbilityMismatchRemove' including the ordering.
+   = Restore the original enum's abilities for enum 'EnumAbilityMismatchRemove': 'copy'.
 
 error[Compatibility E01003]: ability mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:55:17
@@ -111,7 +111,7 @@ error[Compatibility E01003]: ability mismatch
    │                 ^^^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'drop'
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's abilities for enum 'EnumAbilityMismatchChange' including the ordering.
+   = Restore the original enum's abilities for enum 'EnumAbilityMismatchChange': 'copy'.
 
 error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:64:9
@@ -171,4 +171,4 @@ error[Compatibility E03001]: function signature mismatch
    = Restore the original function's parameters for function 'function_change_arg'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

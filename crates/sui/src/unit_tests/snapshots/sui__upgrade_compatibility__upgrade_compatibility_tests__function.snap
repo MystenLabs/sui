@@ -57,4 +57,4 @@ error[Compatibility E03001]: function signature mismatch
    = Restore the original function's return types for function 'func_with_wrong_return_length'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
