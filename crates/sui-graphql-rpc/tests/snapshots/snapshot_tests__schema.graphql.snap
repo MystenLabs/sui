@@ -3386,7 +3386,8 @@ type Query {
 	"""
 	typeByName(name: String!): MoveType!
 	"""
-	The coin metadata associated with the given coin type.
+	The coin metadata associated with the given coin type. Note that if the latest version of
+	the coin's metadata is wrapped or deleted, it will not be found.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 	"""
