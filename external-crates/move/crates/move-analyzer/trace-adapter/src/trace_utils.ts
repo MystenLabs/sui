@@ -330,6 +330,9 @@ export function readTrace(
     filesMap: Map<string, IFileInfo>
 ): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
+    if (traceJSON.events.length === 0) {
+        throw new Error('Trace contains no events');
+    }
     const events: TraceEvent[] = [];
     // We compute the end of lifetime for a local variable as follows.
     // When a given local variable is read or written in an effect, we set the end of its lifetime

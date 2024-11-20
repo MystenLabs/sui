@@ -1,6 +1,6 @@
 {
   "name": "move-trace-debug",
-  "displayName": "move-trace-debug",
+  "displayName": "Move Trace Debugger",
   "description": "An extension to visualize Move VM traces DAP-style",
   "version": "0.0.1",
   "preview": true,
@@ -56,7 +56,7 @@
               },
               "logLevel": {
                 "type": "string",
-                "description": "Logging lavel for the Debug Adapter Protocol.",
+                "description": "Logging level for the Debug Adapter Protocol.",
                 "enum": [
                   "none",
                   "log",
