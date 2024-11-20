@@ -372,6 +372,7 @@ pub async fn metadata(
     };
 
     // Try select gas coins for required amounts
+    let exclude_ids: Vec<ObjectID> = objects.iter().map(|obj| obj.0).collect();
     let maybe_coins = if let Some(amount) = total_required_amount {
         let total_amount = amount + budget;
         context
@@ -381,7 +382,7 @@ pub async fn metadata(
                 sender,
                 None,
                 total_amount as u128,
-                objects.iter().map(|obj| obj.0).collect(),
+                exclude_ids.clone(),
             )
             .await
             .ok()
@@ -389,7 +390,6 @@ pub async fn metadata(
         None
     };
 
-    let exclude_ids: Vec<ObjectID> = objects.iter().map(|obj| obj.0).collect();
     let coins = if let Some(coins) = maybe_coins {
         coins
     } else {
