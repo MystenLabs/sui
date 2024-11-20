@@ -21,7 +21,7 @@ tokio-util.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 sui-config.workspace = true
-sui-core = { workspace = true, features = ["test-utils"] }
+sui-core.workspace = true
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-indexer.workspace = true

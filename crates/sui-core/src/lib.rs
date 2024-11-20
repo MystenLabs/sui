@@ -21,7 +21,6 @@ pub mod execution_cache;
 mod execution_driver;
 pub mod jsonrpc_index;
 pub mod metrics;
-#[cfg(any(test, feature = "test-utils"))]
 pub mod mock_consensus;
 pub mod module_cache_metrics;
 pub mod mysticeti_adapter;
@@ -37,7 +36,6 @@ pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
 pub mod subscription_handler;
-#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 pub mod traffic_controller;
 mod transaction_input_loader;
@@ -68,7 +66,6 @@ mod pay_sui_tests;
 #[cfg(test)]
 #[path = "unit_tests/shared_object_deletion_tests.rs"]
 mod shared_object_deletion_tests;
-#[cfg(any(test, feature = "test-utils"))]
 pub mod test_authority_clients;
 #[cfg(test)]
 #[path = "unit_tests/transfer_to_object_tests.rs"]
