@@ -236,7 +236,7 @@ impl<'backing> TemporaryStore<'backing> {
         // the first coin is where all the others are merged.
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
             let (object, _kind) = &self.written[&coin_id];
-            (object.compute_object_reference(), object.owner)
+            (object.compute_object_reference(), object.owner.clone())
         } else {
             (
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
@@ -249,10 +249,11 @@ impl<'backing> TemporaryStore<'backing> {
         let mut unwrapped = vec![];
         for (object, kind) in self.written.values() {
             let object_ref = object.compute_object_reference();
+            let owner = object.owner.clone();
             match kind {
-                WriteKind::Mutate => mutated.push((object_ref, object.owner)),
-                WriteKind::Create => created.push((object_ref, object.owner)),
-                WriteKind::Unwrap => unwrapped.push((object_ref, object.owner)),
+                WriteKind::Mutate => mutated.push((object_ref, owner)),
+                WriteKind::Create => created.push((object_ref, owner)),
+                WriteKind::Unwrap => unwrapped.push((object_ref, owner)),
             }
         }
 

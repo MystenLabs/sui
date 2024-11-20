@@ -323,7 +323,7 @@ impl<'backing> TemporaryStore<'backing> {
             DynamicallyLoadedObjectMetadata {
                 version: old_ref.1,
                 digest: old_ref.2,
-                owner: old_object.owner,
+                owner: old_object.owner.clone(),
                 storage_rebate: old_object.storage_rebate,
                 previous_transaction: old_object.previous_transaction,
             },
@@ -484,7 +484,7 @@ impl<'backing> TemporaryStore<'backing> {
                         |((version, digest), owner)| DynamicallyLoadedObjectMetadata {
                             version: *version,
                             digest: *digest,
-                            owner: *owner,
+                            owner: owner.clone(),
                             // It's guaranteed that a mutable input object is an input object.
                             storage_rebate: self.input_objects[object_id].storage_rebate,
                             previous_transaction: self.input_objects[object_id]
@@ -500,7 +500,7 @@ impl<'backing> TemporaryStore<'backing> {
                         DynamicallyLoadedObjectMetadata {
                             version: obj.version(),
                             digest: obj.digest(),
-                            owner: obj.owner,
+                            owner: obj.owner.clone(),
                             storage_rebate: obj.storage_rebate,
                             previous_transaction: obj.previous_transaction,
                         }

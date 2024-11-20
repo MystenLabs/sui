@@ -145,7 +145,7 @@ async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
                 let [coin_type]: [TypeTag; 1] =
                     type_.clone().into_type_params().try_into().unwrap();
                 all_mutated_coins.push((
-                    o.owner,
+                    o.owner.clone(),
                     coin_type,
                     // we know this is a coin, safe to unwrap
                     Coin::extract_balance_if_coin(&o).unwrap().unwrap().1,

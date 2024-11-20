@@ -2409,7 +2409,7 @@ impl From<&SuiObjectData> for ObjectOutput {
             version: obj.version,
             digest: obj.digest.to_string(),
             obj_type,
-            owner: obj.owner,
+            owner: obj.owner.clone(),
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
             content: obj.content.clone(),

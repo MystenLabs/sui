@@ -466,7 +466,7 @@ impl Data {
 }
 
 #[derive(
-    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+    Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum Owner {
@@ -491,7 +491,7 @@ pub enum Owner {
         /// if the object's Owner type changes.
         start_version: SequenceNumber,
         /// The authentication mode of the object
-        authenticator: Authenticator,
+        authenticator: Box<Authenticator>,
     },
 }
 
@@ -804,7 +804,7 @@ impl ObjectInner {
     // It's a common pattern to retrieve both the owner and object ID
     // together, if it's owned by a singler owner.
     pub fn get_owner_and_id(&self) -> Option<(Owner, ObjectID)> {
-        Some((self.owner, self.id()))
+        Some((self.owner.clone(), self.id()))
     }
 
     /// Return true if this object is a Move package, false if it is a Move value

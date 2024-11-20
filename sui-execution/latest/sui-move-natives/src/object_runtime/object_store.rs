@@ -194,7 +194,7 @@ impl<'a> Inner<'a> {
                 version,
                 digest: object.digest(),
                 storage_rebate: object.storage_rebate,
-                owner: object.owner,
+                owner: object.owner.clone(),
                 previous_transaction: object.previous_transaction,
             };
 

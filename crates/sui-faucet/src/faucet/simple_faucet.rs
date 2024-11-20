@@ -783,7 +783,7 @@ impl SimpleFaucet {
 
         let mut address_coins_map: HashMap<SuiAddress, Vec<OwnedObjectRef>> = HashMap::new();
         created.iter().for_each(|created_coin_owner_ref| {
-            let owner = created_coin_owner_ref.owner;
+            let owner = created_coin_owner_ref.owner.clone();
             let coin_obj_ref = created_coin_owner_ref.clone();
 
             // Insert the coins into the map based on the destination address

@@ -697,7 +697,7 @@ async fn get_object_arg(
 
     let obj: Object = response.into_object()?.try_into()?;
     let obj_ref = obj.compute_object_reference();
-    let owner = obj.owner;
+    let owner = obj.owner.clone();
     Ok(match owner {
         Owner::Shared {
             initial_shared_version,

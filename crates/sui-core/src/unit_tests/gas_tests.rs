@@ -737,7 +737,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(gas_coin.value(), 0);
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
-    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0];
+    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0].clone();
     assert_eq!(version, gas_object.version());
     assert_eq!(owner, gas_object.owner);
 

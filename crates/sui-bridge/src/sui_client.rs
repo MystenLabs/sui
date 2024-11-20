@@ -567,7 +567,7 @@ impl SuiClientInner for SuiSdkClient {
                 .map(|resp| resp.data)
             {
                 Ok(Some(gas_obj)) => {
-                    let owner = gas_obj.owner.expect("Owner is requested");
+                    let owner = gas_obj.owner.clone().expect("Owner is requested");
                     let gas_coin = GasCoin::try_from(&gas_obj)
                         .unwrap_or_else(|err| panic!("{} is not a gas coin: {err}", gas_object_id));
                     return (gas_coin, gas_obj.object_ref(), owner);

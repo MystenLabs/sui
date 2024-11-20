@@ -75,7 +75,7 @@ impl ExecutionEffects {
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .mutated()
                 .iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
                 .collect(),
         }
     }
@@ -86,7 +86,7 @@ impl ExecutionEffects {
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
                 .iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
                 .collect(),
         }
     }
@@ -123,7 +123,7 @@ impl ExecutionEffects {
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 let refe = &sui_tx_effects.gas_object();
-                (refe.reference.to_object_ref(), refe.owner)
+                (refe.reference.to_object_ref(), refe.owner.clone())
             }
         }
     }

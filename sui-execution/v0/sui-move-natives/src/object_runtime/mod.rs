@@ -410,7 +410,7 @@ impl<'a> ObjectRuntime<'a> {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
-                            owner: obj.owner,
+                            owner: obj.owner.clone(),
                             previous_transaction: obj.previous_transaction,
                         },
                     )
@@ -519,7 +519,7 @@ impl ObjectRuntimeState {
         // TODO can we have cycles in the new system?
         update_owner_map(
             input_owner_map,
-            transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)),
+            transfers.iter().map(|(id, (owner, _, _))| (*id, owner.clone())),
         )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers

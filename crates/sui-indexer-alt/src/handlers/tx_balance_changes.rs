@@ -97,7 +97,7 @@ fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceCha
     Ok(changes
         .into_iter()
         .map(|((owner, coin_type), amount)| BalanceChange::V1 {
-            owner: *owner,
+            owner: owner.clone(),
             coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
             amount,
         })

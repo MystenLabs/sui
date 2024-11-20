@@ -102,7 +102,7 @@ pub fn end_transaction(
         .taken
         .iter()
         .filter(|(_id, owner)| matches!(owner, Owner::Shared { .. } | Owner::Immutable))
-        .map(|(id, owner)| (*id, *owner))
+        .map(|(id, owner)| (*id, owner.clone()))
         .collect();
     // set to true if a shared or imm object was:
     // - transferred in a way that changes it from its original shared/imm state
@@ -193,7 +193,7 @@ pub fn end_transaction(
     for (id, (owner, ty, value)) in writes {
         // write configs to cache
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
-        transferred.push((id, owner));
+        transferred.push((id, owner.clone()));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
             || taken_shared_or_imm
                 .get(&id)
@@ -316,7 +316,7 @@ pub fn end_transaction(
         .test_inventories
         .taken
         .iter()
-        .map(|(id, owner)| (*id, *owner))
+        .map(|(id, owner)| (*id, owner.clone()))
         .collect::<BTreeMap<_, _>>();
     // update inventories
     // check for bad updates to immutable values
@@ -754,7 +754,7 @@ fn take_from_inventory(
             E_OBJECT_NOT_FOUND_CODE,
         ));
     }
-    taken.insert(id, owner);
+    taken.insert(id, owner.clone());
     input_objects.insert(id, owner);
     let obj = obj_opt.unwrap();
     Ok(obj.copy_value().unwrap())

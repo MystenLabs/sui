@@ -3189,7 +3189,10 @@ impl InputObjects {
                         if object.is_immutable() {
                             None
                         } else {
-                            Some((object_ref.0, ((object_ref.1, object_ref.2), object.owner)))
+                            Some((
+                                object_ref.0,
+                                ((object_ref.1, object_ref.2), object.owner.clone()),
+                            ))
                         }
                     }
                     (
@@ -3208,7 +3211,7 @@ impl InputObjects {
                     ) => {
                         if *mutable {
                             let oref = object.compute_object_reference();
-                            Some((oref.0, ((oref.1, oref.2), object.owner)))
+                            Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
                         } else {
                             None
                         }
