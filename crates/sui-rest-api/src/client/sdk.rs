@@ -4,6 +4,7 @@
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
+use sui_sdk_types::types::unresolved::Transaction as UnresolvedTransaction;
 use sui_sdk_types::types::Address;
 use sui_sdk_types::types::CheckpointData;
 use sui_sdk_types::types::CheckpointDigest;
@@ -16,7 +17,6 @@ use sui_sdk_types::types::SignedTransaction;
 use sui_sdk_types::types::StructTag;
 use sui_sdk_types::types::Transaction;
 use sui_sdk_types::types::TransactionDigest;
-use sui_sdk_types::types::UnresolvedTransaction;
 use sui_sdk_types::types::ValidatorCommittee;
 use sui_sdk_types::types::Version;
 use tap::Pipe;
