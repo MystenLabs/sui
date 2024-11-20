@@ -2,6 +2,9 @@
   "name": "move-trace-debug",
   "displayName": "Move Trace Debugger",
   "description": "An extension to visualize Move VM traces DAP-style",
+  "publisher": "mysten",
+  "icon": "images/move.png",
+  "license": "Apache-2.0",
   "version": "0.0.1",
   "preview": true,
   "repository": {
