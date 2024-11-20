@@ -5,8 +5,9 @@ use anyhow::{anyhow, Result};
 
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{
-    Coin, ObjectChange, SuiExecutionStatus, SuiMoveValue, SuiObjectDataOptions, SuiParsedData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Coin, ObjectChange, SuiExecutionStatus, SuiMoveValue, SuiObjectDataOptions, SuiObjectRef,
+    SuiParsedData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
@@ -20,7 +21,7 @@ use test_cluster::TestClusterBuilder;
 
 pub const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
 const DEFAULT_INIT_COIN_BALANCE: u64 = 30_000_000_000_000_000;
-const MAX_NEW_COINS: usize = 500; // maximum arguments in a programmable transaction command is 512
+const MAX_NEW_COINS: usize = 511; // maximum arguments in a programmable transaction command is 511
 
 pub async fn split_coins(
     client: &SuiClient,
@@ -97,6 +98,7 @@ pub async fn make_change(
 
     let mut responses = Vec::with_capacity(amounts_vec.len());
     let mut coin_ref = coin.object_ref();
+    let mut gas_ref = gas;
     let ref_gas_price = client.read_api().get_reference_gas_price().await?;
     let mut progress = 0;
     let len = amounts_vec.len();
@@ -107,7 +109,7 @@ pub async fn make_change(
             sender,
             coin_ref,
             &amounts,
-            gas,
+            gas_ref,
             Some(ref_gas_price),
             None,
         )
@@ -115,7 +117,7 @@ pub async fn make_change(
         progress += 1;
         if progress % 4 == 0 {
             println!(
-                "Splitting progress: {}",
+                "Splitting progress: {}%",
                 progress as f32 * 100. / len as f32
             );
         }
@@ -131,6 +133,31 @@ pub async fn make_change(
             .find(|&chng| chng.object_id() == coin.coin_object_id)
             .ok_or(anyhow!("Expected object_changes to contain coin_object_id"))?
             .object_ref();
+        gas_ref = match gas_ref {
+            Some(_) => {
+                let SuiObjectRef {
+                    object_id,
+                    version,
+                    digest,
+                } = resp
+                    .effects
+                    .as_ref()
+                    .ok_or(anyhow!("Expected balance_changes"))?
+                    .gas_object()
+                    .reference;
+                Some((object_id, version, digest))
+            }
+            None => None,
+        };
+
+        // Make sure the tx has executed locally
+        client
+            .read_api()
+            .get_transaction_with_options(
+                resp.digest,
+                SuiTransactionBlockResponseOptions::default(),
+            )
+            .await?;
         responses.push(resp);
     }
     Ok(responses)

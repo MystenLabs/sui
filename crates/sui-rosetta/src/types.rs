@@ -35,8 +35,9 @@ use crate::operations::Operations;
 use crate::SUI;
 
 const MAX_GAS_COINS: usize = 255;
+const MAX_COMMAND_ARGS: usize = 511;
 const MAX_GAS_BUDGET: u64 = 50_000_000_000;
-const START_BUDGET: u64 = 5_000_000;
+const START_BUDGET: u64 = 1_000_000;
 
 #[cfg(test)]
 #[path = "unit_tests/types_tests.rs"]
@@ -1108,6 +1109,9 @@ pub async fn pay_sui_to_metadata(
             }
         }
 
+        // The coins to merge should be used as transaction object inputs, as
+        // `TransactionData::new_programmable` used in `InternalOperation::try_into_data`,
+        // uses all coins passed as gas payment.
         let coins_to_merge = all_coins
             .iter()
             .skip(MAX_GAS_COINS)
@@ -1164,6 +1168,11 @@ pub async fn pay_sui_to_metadata(
     })
 }
 
+/// Creates the `ProgrammableTransaction` for a pay-sui operation.
+/// In case pay-sui needs more than 255 gas-coins to be smashed, it tries to merge the surplus
+/// coins into the gas coin as regular transaction inputs - not gas-payment.
+/// This approach has the limit at around 1650 coins in total which triggers transaction-size
+/// limit (see also test_limit_many_small_coins test).
 pub fn pay_sui_pt(
     recipients: Vec<SuiAddress>,
     amounts: Vec<u64>,
@@ -1171,14 +1180,19 @@ pub fn pay_sui_pt(
 ) -> anyhow::Result<ProgrammableTransaction> {
     let mut builder = ProgrammableTransactionBuilder::new();
     if !coins_to_merge.is_empty() {
-        let to_merge: Vec<Argument> = coins_to_merge
-            .into_iter()
-            .map(|o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
-            .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
-        // TODO: There is a limit to number of transaction inputs and maybe one for MergeCoins command.
-        // We should handle them.
-        builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
-    }
+        // We need to merge the rest of the coins.
+        // Each merge has a limit of 511 arguments.
+        coins_to_merge
+            .chunks(MAX_COMMAND_ARGS)
+            .try_for_each(|chunk| -> anyhow::Result<()> {
+                let to_merge = chunk
+                    .iter()
+                    .map(|&o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
+                    .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+                builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
+                Ok(())
+            })?;
+    };
     builder.pay_sui(recipients, amounts)?;
     Ok(builder.finish())
 }
