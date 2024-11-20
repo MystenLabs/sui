@@ -351,7 +351,6 @@ impl Checkpoint {
         checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
-
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
@@ -512,7 +511,7 @@ impl Loader<DigestKey> for Db {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;
 
-        let checkpoint_ids: BTreeMap<_, _> = checkpoints
+        let checkpoint_id_to_stored: BTreeMap<_, _> = checkpoints
             .into_iter()
             .map(|stored| (stored.checkpoint_digest.clone(), stored))
             .collect();
@@ -525,9 +524,9 @@ impl Loader<DigestKey> for Db {
                     checkpoint_viewed_at,
                 } = *key;
 
-                let stored = checkpoint_ids.get(digest.as_slice()).cloned()?;
+                let stored = checkpoint_id_to_stored.get(digest.as_slice()).cloned()?;
                 let checkpoint = Checkpoint {
-                    stored: stored.clone(),
+                    stored,
                     checkpoint_viewed_at,
                 };
 
