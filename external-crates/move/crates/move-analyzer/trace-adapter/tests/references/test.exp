@@ -1,5 +1,5 @@
 current frame stack:
-  function: test (line 44)
+  function: test (m.move:44)
     scope 0 :
       num : 42
       type: u64
@@ -21,7 +21,7 @@ current frame stack:
       ]
       type: vector<u64>
 
-  function: foo (line 19)
+  function: foo (m.move:19)
     scope 0 :
       some_struct_ref : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::SimpleStruct) {
@@ -44,7 +44,7 @@ current frame stack:
       type: &u64
 
 current frame stack:
-  function: test (line 44)
+  function: test (m.move:44)
     scope 0 :
       num : 42
       type: u64
@@ -66,7 +66,7 @@ current frame stack:
       ]
       type: vector<u64>
 
-  function: foo (line 27)
+  function: foo (m.move:27)
     scope 0 :
       some_struct_ref : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::SimpleStruct) {

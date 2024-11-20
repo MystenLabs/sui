@@ -6,13 +6,13 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
-import { IFileInfo, readAllSourceMaps } from './source_map_utils';
+import { IFileInfo, ISourceMap, readAllSourceMaps } from './source_map_utils';
 import {
     TraceEffectKind,
     TraceEvent,
     TraceEventKind,
     TraceInstructionKind,
-    readTrace
+    readTrace,
 } from './trace_utils';
 
 /**
@@ -28,7 +28,7 @@ export interface IRuntimeVariableScope {
  * - a vector (converted to an array of values)
  * - a struct/enum (converted to an array of string/field value pairs)
  */
-export type CompoundType = RuntimeValueType[] | IRuntimeCompundValue;
+export type CompoundType = RuntimeValueType[] | IRuntimeCompoundValue;
 
 /**
  * A runtime value can have any of the following types:
@@ -38,7 +38,7 @@ export type CompoundType = RuntimeValueType[] | IRuntimeCompundValue;
 export type RuntimeValueType = string | CompoundType | IRuntimeRefValue;
 
 /**
- * Locaction of a local variable in the runtime.
+ * Location of a local variable in the runtime.
  */
 export interface IRuntimeVariableLoc {
     frameID: number;
@@ -56,7 +56,7 @@ export interface IRuntimeRefValue {
 /**
  * Information about a runtime compound value (struct/enum).
  */
-export interface IRuntimeCompundValue {
+export interface IRuntimeCompoundValue {
     fields: [string, RuntimeValueType][];
     type: string;
     variantName?: string;
@@ -86,11 +86,15 @@ interface IRuntimeStackFrame {
      */
     name: string;
     /**
-     *  Path to the file containing the function.
+     *  Path to the file containing currently executing instruction.
      */
     file: string;
     /**
-     * Current line in the file correponding to currently viewed instruction.
+     *  File hash of the file containing currently executing instruction.
+     */
+    fileHash: string;
+    /**
+     * Current line in the file corresponding to currently viewed instruction.
      */
     line: number; // 1-based
     /**
@@ -216,16 +220,23 @@ export class Runtime extends EventEmitter {
 
         // create file maps for all files in the `build` directory, including both package source
         // files and source files for dependencies
-        hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'), this.filesMap);
+        this.hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'));
         // update with files from the actual "sources" directory rather than from the "build" directory
-        hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap);
+        this.hashToFileMap(path.join(pkgRoot, 'sources'));
 
         // create source maps for all modules in the `build` directory
-        const sourceMapsMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
+        const sourceMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
 
         // reconstruct trace file path from trace info
         const traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + '.json');
-        this.trace = readTrace(traceFilePath, sourceMapsMap, this.filesMap);
+
+        // create a mapping from file hash to its corresponding source map
+        const sourceMapsHashMap = new Map<string, ISourceMap>;
+        for (const [_, sourceMap] of sourceMapsModMap) {
+            sourceMapsHashMap.set(sourceMap.fileHash, sourceMap);
+        }
+
+        this.trace = readTrace(traceFilePath, sourceMapsModMap, sourceMapsHashMap, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -264,7 +275,7 @@ export class Runtime extends EventEmitter {
      *
      * @param next determines if it's `next` (or otherwise `step`) action.
      * @param stopAtCloseFrame determines if the action should stop at `CloseFrame` event
-     * (rather then proceedint to the following instruction).
+     * (rather then proceed to the following instruction).
      * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
      * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the step event cannot be handled.
@@ -289,6 +300,14 @@ export class Runtime extends EventEmitter {
             // in the `instruction` call below
             const lastCallInstructionLine = currentFrame.lastCallInstructionLine;
             let [sameLine, currentLine] = this.instruction(currentFrame, currentEvent);
+            // do not attempt to skip events on the same line if the previous event
+            // was a switch to/from an inlined frame - we want execution to stop before
+            // the first instruction of the inlined frame is processed
+            const prevEvent = this.trace.events[this.eventIndex - 1];
+            sameLine = sameLine &&
+                !(prevEvent.type === TraceEventKind.ReplaceInlinedFrame
+                    || prevEvent.type === TraceEventKind.OpenFrame && prevEvent.id < 0
+                    || prevEvent.type === TraceEventKind.CloseFrame && prevEvent.id < 0);
             if (sameLine) {
                 if (!next && (currentEvent.kind === TraceInstructionKind.CALL
                     || currentEvent.kind === TraceInstructionKind.CALL_GENERIC)
@@ -307,7 +326,7 @@ export class Runtime extends EventEmitter {
                     // step into `bar` rather than having debugger to step
                     // immediately into `baz` as well. At the same time,
                     // if the user intended to step over functions using `next`,
-                    // we shuld skip over all calls on the same line (both `bar`
+                    // we should skip over all calls on the same line (both `bar`
                     // and `baz` in the example above).
                     //
                     // The following explains a bit more formally what needs
@@ -330,7 +349,7 @@ export class Runtime extends EventEmitter {
                     // want to stop on the first instruction of this line,
                     // then after user `step` action enter the call, then
                     // after exiting the call stop on the next call instruction
-                    // and waitl for another `step` action from the user:
+                    // and wait for another `step` action from the user:
                     // 6: instruction
                     // 7: instruction       // stop here
                     // 7: call              // enter call here
@@ -361,10 +380,26 @@ export class Runtime extends EventEmitter {
             }
             this.sendEvent(RuntimeEvents.stopOnStep);
             return ExecutionResult.Ok;
+        } else if (currentEvent.type === TraceEventKind.ReplaceInlinedFrame) {
+            let currentFrame = this.frameStack.frames.pop();
+            if (!currentFrame) {
+                throw new Error('No frame to pop when processing `ReplaceInlinedFrame` event');
+            }
+            currentFrame.fileHash = currentEvent.fileHash;
+            currentFrame.optimizedLines = currentEvent.optimizedLines;
+            const currentFile = this.filesMap.get(currentFrame.fileHash);
+            if (!currentFile) {
+                throw new Error('Cannot find file with hash '
+                    + currentFrame.fileHash
+                    + ' when processing `ReplaceInlinedFrame` event');
+            }
+            currentFrame.file = currentFile.path;
+            this.frameStack.frames.push(currentFrame);
+            return this.step(next, stopAtCloseFrame);
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
             // if function is native then the next event will be CloseFrame
             if (currentEvent.isNative) {
-                // see if naitve function aborted
+                // see if native function aborted
                 if (this.trace.events.length > this.eventIndex + 1) {
                     const nextEvent = this.trace.events[this.eventIndex + 1];
                     if (nextEvent.type === TraceEventKind.Effect &&
@@ -373,7 +408,7 @@ export class Runtime extends EventEmitter {
                         return ExecutionResult.Exception;
                     }
                 }
-                // if native functino executed successfully, then the next event
+                // if native function executed successfully, then the next event
                 // should be CloseFrame
                 if (this.trace.events.length <= this.eventIndex + 1 ||
                     this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
@@ -409,7 +444,7 @@ export class Runtime extends EventEmitter {
         } else if (currentEvent.type === TraceEventKind.CloseFrame) {
             if (stopAtCloseFrame) {
                 // don't do anything as the caller needs to inspect
-                // the event before proceeing
+                // the event before proceeding
                 return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
@@ -640,6 +675,7 @@ export class Runtime extends EventEmitter {
             id: frameID,
             name: funName,
             file: currentFile.path,
+            fileHash,
             line: 0, // line will be updated when next event (Instruction) is processed
             localsTypes,
             localsNames,
@@ -649,8 +685,10 @@ export class Runtime extends EventEmitter {
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
-            this.trace.events[this.eventIndex + 1].type !== TraceEventKind.Instruction) {
-            throw new Error('Expected an Instruction event after OpenFrame event');
+            (this.trace.events[this.eventIndex + 1].type !== TraceEventKind.Instruction &&
+                this.trace.events[this.eventIndex + 1].type !== TraceEventKind.OpenFrame)
+        ) {
+            throw new Error('Expected an Instruction or OpenFrame event after OpenFrame event');
         }
         return stackFrame;
     }
@@ -667,6 +705,34 @@ export class Runtime extends EventEmitter {
         }, 0);
     }
 
+    /**
+     * Creates a map from a file hash to file information for all Move source files in a directory.
+     *
+     * @param directory path to the directory containing Move source files.
+     * @param filesMap map to update with file information.
+     */
+    private hashToFileMap(directory: string): void {
+        const processDirectory = (dir: string) => {
+            const files = fs.readdirSync(dir);
+            for (const f of files) {
+                const filePath = path.join(dir, f);
+                const stats = fs.statSync(filePath);
+                if (stats.isDirectory()) {
+                    processDirectory(filePath);
+                } else if (path.extname(f) === '.move') {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    const numFileHash = computeFileHash(content);
+                    const lines = content.split('\n');
+                    const fileInfo = { path: filePath, content, lines };
+                    const fileHash = Buffer.from(numFileHash).toString('base64');
+                    this.filesMap.set(fileHash, fileInfo);
+                }
+            }
+        };
+
+        processDirectory(directory);
+    }
+
     //
     // Utility functions for testing and debugging.
     //
@@ -677,14 +743,22 @@ export class Runtime extends EventEmitter {
     private singleTab = '  ';
 
     /**
-     * Returns a string representig the current state of the runtime.
+     * Returns a string representing the current state of the runtime.
      *
      * @returns string representation of the runtime.
      */
     public toString(): string {
         let res = 'current frame stack:\n';
         for (const frame of this.frameStack.frames) {
-            res += this.singleTab + 'function: ' + frame.name + ' (line ' + frame.line + ')\n';
+            const fileName = path.basename(frame.file);
+            res += this.singleTab
+                + 'function: '
+                + frame.name
+                + ' ('
+                + fileName
+                + ':'
+                + frame.line
+                + ')\n';
             for (let i = 0; i < frame.locals.length; i++) {
                 res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
                 for (let j = 0; j < frame.locals[i].length; j++) {
@@ -724,7 +798,7 @@ export class Runtime extends EventEmitter {
      * @param compoundValue runtime compound value.
      * @returns string representation of the compound value.
      */
-    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompundValue): string {
+    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompoundValue): string {
         const type = compoundValue.variantName
             ? compoundValue.type + '::' + compoundValue.variantName
             : compoundValue.type;
@@ -837,9 +911,17 @@ function localWrite(
             + frame.name);
     }
 
+    if (name.includes('%')) {
+        // don't show "artificial" variables generated by the compiler
+        // for enum and macro execution as they would be quite confusing
+        // for the user without knowing compilation internals
+        return;
+    }
+
+
     const scopesCount = frame.locals.length;
     if (scopesCount <= 0) {
-        throw new Error("There should be at least one variable scope in functon"
+        throw new Error("There should be at least one variable scope in function"
             + frame.name);
     }
     // If a variable has the same name but a different index (it is shadowed)
@@ -910,38 +992,11 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
 }
 
 /**
- * Creates a map from a file hash to file information for all Move source files in a directory.
- *
- * @param directory path to the directory containing Move source files.
- * @param filesMap map to update with file information.
- */
-function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>): void {
-    const processDirectory = (dir: string) => {
-        const files = fs.readdirSync(dir);
-        for (const f of files) {
-            const filePath = path.join(dir, f);
-            const stats = fs.statSync(filePath);
-            if (stats.isDirectory()) {
-                processDirectory(filePath);
-            } else if (path.extname(f) === '.move') {
-                const content = fs.readFileSync(filePath, 'utf8');
-                const hash = fileHash(content);
-                const lines = content.split('\n');
-                const fileInfo = { path: filePath, content, lines };
-                filesMap.set(Buffer.from(hash).toString('base64'), fileInfo);
-            }
-        }
-    };
-
-    processDirectory(directory);
-}
-
-/**
  * Computes the SHA-256 hash of a file's contents.
  *
  * @param fileContents contents of the file.
  */
-function fileHash(fileContents: string): Uint8Array {
+function computeFileHash(fileContents: string): Uint8Array {
     const hash = crypto.createHash('sha256').update(fileContents).digest();
     return new Uint8Array(hash);
 }

@@ -44,7 +44,12 @@
       },
       {
         "command": "move.test",
-        "title": "Test a Move package",
+        "title": "Run Move package test",
+        "category": "Move"
+      },
+      {
+        "command": "move.trace",
+        "title": "Trace Move test execution",
         "category": "Move"
       }
     ],
@@ -131,8 +136,11 @@
         },
         {
           "command": "move.test"
+        },
+        {
+          "command": "move.trace"
         }
-      ]
+        ]
     }
   },
   "scripts": {

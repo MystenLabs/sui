@@ -1,5 +1,30 @@
 # @mysten/deepbook-v3
 
+## 0.12.11
+
+### Patch Changes
+
+- 4cf47ad: Typus pool
+
+## 0.12.10
+
+### Patch Changes
+
+- 46bdaf9: Typus coin type
+
+## 0.12.9
+
+### Patch Changes
+
+- 2a532bc: Governance function update
+
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [938fb6e]
+  - @mysten/sui@1.14.4
+
 ## 0.12.7
 
 ### Patch Changes

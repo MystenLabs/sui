@@ -3207,7 +3207,7 @@
           "name": "Coin Query API"
         }
       ],
-      "description": "Return metadata(e.g., symbol, decimals) for a coin",
+      "description": "Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was wrapped in the transaction that published its marker type, or the latest version of the metadata object is wrapped or deleted, it will not be found.",
       "params": [
         {
           "name": "coin_type",

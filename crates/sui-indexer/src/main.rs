@@ -3,7 +3,6 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
-use sui_indexer::benchmark::run_indexer_benchmark;
 use sui_indexer::config::{Command, RetentionConfig, UploadOptions};
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::setup_postgres::clear_database;
@@ -73,7 +72,6 @@ async fn main() -> anyhow::Result<()> {
                 snapshot_config,
                 retention_config,
                 CancellationToken::new(),
-                None,
                 mvr_mode,
             )
             .await?;
@@ -118,9 +116,6 @@ async fn main() -> anyhow::Result<()> {
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;
-        }
-        Command::Benchmark(benchmark_config) => {
-            run_indexer_benchmark(benchmark_config, pool, indexer_metrics).await;
         }
     }
 

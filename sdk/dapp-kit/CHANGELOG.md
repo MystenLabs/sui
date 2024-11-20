@@ -1,5 +1,36 @@
 # @mysten/dapp-kit
 
+## 0.14.37
+
+### Patch Changes
+
+- Updated dependencies [f03e60f]
+  - @mysten/zksend@0.12.3
+
+## 0.14.36
+
+### Patch Changes
+
+- 67d4620: Revert dev dependency change from v0.14.35 due to breakage
+
+## 0.14.35
+
+### Patch Changes
+
+- 6f44f4b: Mark vanilla-extract libraries as dev dependencies
+
+## 0.14.34
+
+### Patch Changes
+
+- ec919a0: Ensure wallet-icon is a non-empty string before rendering
+- Updated dependencies [4bac808]
+- Updated dependencies [4bac808]
+- Updated dependencies [938fb6e]
+  - @mysten/zksend@0.12.2
+  - @mysten/sui@1.14.4
+  - @mysten/wallet-standard@0.13.13
+
 ## 0.14.33
 
 ### Patch Changes

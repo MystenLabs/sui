@@ -307,10 +307,7 @@ impl StoredObject {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
         let Some(move_object) = object.data.try_as_move().cloned() else {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Object {:?} is not a Move object",
-                oref,
-            )));
+            return Ok(ObjectRead::Exists(oref, object, None));
         };
 
         let move_type_layout = package_resolver

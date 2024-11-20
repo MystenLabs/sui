@@ -1,5 +1,21 @@
 # @mysten/zksend
 
+## 0.12.3
+
+### Patch Changes
+
+- f03e60f: Fix getSentTransactionsWithLinks defaulting to the public fullnode URL
+
+## 0.12.2
+
+### Patch Changes
+
+- 4bac808: Improve error handling of links that have not been indexed yet
+- 4bac808: Fix bcs parsing of createLinks query after GraphQL api change
+- Updated dependencies [938fb6e]
+  - @mysten/sui@1.14.4
+  - @mysten/wallet-standard@0.13.13
+
 ## 0.12.1
 
 ### Patch Changes
