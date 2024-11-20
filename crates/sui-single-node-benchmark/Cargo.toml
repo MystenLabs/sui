@@ -16,7 +16,7 @@ sui-core = { workspace = true, features = ["test-utils"] }
 sui-move-build.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-transaction-checks.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
+sui-types.workspace = true
 sui-storage.workspace = true
 
 async-trait.workspace = true

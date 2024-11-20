@@ -32,7 +32,7 @@ sui-node.workspace = true
 sui-pg-temp-db.workspace = true
 sui-protocol-config.workspace = true
 sui-swarm.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
+sui-types.workspace = true
 prometheus.workspace = true
 sui-keys.workspace = true
 sui-sdk.workspace = true

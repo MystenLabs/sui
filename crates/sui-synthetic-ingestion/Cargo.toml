@@ -11,7 +11,7 @@ async-trait.workspace = true
 clap.workspace = true
 simulacrum.workspace = true
 sui-test-transaction-builder.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
+sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tokio.workspace = true
 tracing.workspace = true

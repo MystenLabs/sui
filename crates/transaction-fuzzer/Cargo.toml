@@ -28,4 +28,3 @@ sui-move-build.workspace = true
 [dev-dependencies]
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-protocol-config.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
