@@ -27,8 +27,12 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
-use sui_indexer::{models::checkpoints::StoredCheckpoint, schema::checkpoints};
-use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_indexer::{
+    models::{checkpoints::StoredCheckpoint, raw_checkpoints::StoredRawCheckpoint},
+    schema::checkpoints,
+    schema::raw_checkpoints,
+};
+use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointDigest};
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(Default, InputObject)]
@@ -60,12 +64,15 @@ pub(crate) struct Checkpoint {
     /// Representation of transaction data in the Indexer's Store. The indexer stores the
     /// transaction data and its effects together, in one table.
     pub stored: StoredCheckpoint,
+    /// Representation of the raw checkpoint data, including the summary and contents.
+    pub raw_checkpoint: Option<StoredRawCheckpoint>,
     /// The checkpoint_sequence_number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<CheckpointCursor>;
 type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
+type RawQuery<ST, GB> = data::Query<ST, raw_checkpoints::table, GB>;
 
 /// The cursor returned for each `Checkpoint` in a connection's page of results. The
 /// `checkpoint_viewed_at` will set the consistent upper bound for subsequent queries made on this
@@ -188,6 +195,26 @@ impl Checkpoint {
             .await
             .extend()
     }
+
+    /// The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+    async fn checkpoint_summary_bcs(&self) -> Result<Option<Base64>> {
+        let checkpoint_summary = self
+            .raw_checkpoint
+            .as_ref()
+            .map(|raw_checkpoint| {
+                bcs::from_bytes::<CertifiedCheckpointSummary>(&raw_checkpoint.certified_checkpoint)
+            })
+            .transpose()
+            .map_err(|e| {
+                Error::Internal(format!("Failed to deserialize checkpoint summary: {e}"))
+            })?;
+
+        let checkpoint_summary = checkpoint_summary
+            .map(|summary| summary.into_summary_and_sequence())
+            .map(|s| s.1);
+
+        Ok(checkpoint_summary.map(|s| Base64::from(&bcs::to_bytes(&s).unwrap())))
+    }
 }
 
 impl CheckpointId {
@@ -259,6 +286,7 @@ impl Checkpoint {
     /// that cursor).
     async fn query_latest_at(db: &Db, checkpoint_viewed_at: u64) -> Result<Option<Self>, Error> {
         use checkpoints::dsl;
+        use raw_checkpoints::dsl as raw_dsl;
 
         let stored: Option<StoredCheckpoint> = db
             .execute(move |conn| {
@@ -276,8 +304,25 @@ impl Checkpoint {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
 
+        let raw_checkpoint: Option<StoredRawCheckpoint> = db
+            .execute(move |conn| {
+                async move {
+                    conn.first(move || {
+                        raw_dsl::raw_checkpoints
+                            .filter(raw_dsl::sequence_number.le(checkpoint_viewed_at as i64))
+                            .order_by(raw_dsl::sequence_number.desc())
+                    })
+                    .await
+                    .optional()
+                }
+                .scope_boxed()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch raw checkpoint: {e}")))?;
+
         Ok(stored.map(|stored| Checkpoint {
             stored,
+            raw_checkpoint,
             checkpoint_viewed_at,
         }))
     }
@@ -320,22 +365,49 @@ impl Checkpoint {
         checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
+        use raw_checkpoints::dsl as raw_dsl;
+
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let page_stored = page.clone();
 
         let (prev, next, results) = db
             .execute(move |conn| {
                 async move {
-                    page.paginate_query::<StoredCheckpoint, _, _, _>(
+                    page_stored
+                        .paginate_query::<StoredCheckpoint, _, _, _>(
+                            conn,
+                            checkpoint_viewed_at,
+                            move || {
+                                let mut query = dsl::checkpoints.into_boxed();
+                                query = query
+                                    .filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));
+                                if let Some(epoch) = filter {
+                                    query = query.filter(dsl::epoch.eq(epoch as i64));
+                                }
+                                query
+                            },
+                        )
+                        .await
+                }
+                .scope_boxed()
+            })
+            .await?;
+        let results_clone = results.collect::<Vec<_>>();
+        let results = results_clone.clone();
+
+        let (_, _, results_raw) = db
+            .execute(move |conn| {
+                async move {
+                    page.paginate_query::<StoredRawCheckpoint, _, _, _>(
                         conn,
                         checkpoint_viewed_at,
                         move || {
-                            let mut query = dsl::checkpoints.into_boxed();
-                            query =
-                                query.filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));
-                            if let Some(epoch) = filter {
-                                query = query.filter(dsl::epoch.eq(epoch as i64));
-                            }
+                            let mut query = raw_dsl::raw_checkpoints.into_boxed();
+                            query = query
+                                .filter(raw_dsl::sequence_number.eq_any(
+                                    results_clone.iter().map(|r| r.sequence_number as i64),
+                                ));
                             query
                         },
                     )
@@ -347,12 +419,13 @@ impl Checkpoint {
 
         // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
         let mut conn = Connection::new(prev, next);
-        for stored in results {
+        for (stored, raw) in results.into_iter().zip(results_raw) {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
                 cursor,
                 Checkpoint {
                     stored,
+                    raw_checkpoint: Some(raw),
                     checkpoint_viewed_at,
                 },
             ));
@@ -392,6 +465,36 @@ impl Target<Cursor> for StoredCheckpoint {
     }
 }
 
+impl Paginated<Cursor> for StoredRawCheckpoint {
+    type Source = raw_checkpoints::table;
+
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: RawQuery<ST, GB>) -> RawQuery<ST, GB> {
+        query.filter(raw_checkpoints::dsl::sequence_number.ge(cursor.sequence_number as i64))
+    }
+
+    fn filter_le<ST, GB>(cursor: &Cursor, query: RawQuery<ST, GB>) -> RawQuery<ST, GB> {
+        query.filter(raw_checkpoints::dsl::sequence_number.le(cursor.sequence_number as i64))
+    }
+
+    fn order<ST, GB>(asc: bool, query: RawQuery<ST, GB>) -> RawQuery<ST, GB> {
+        use raw_checkpoints::dsl;
+        if asc {
+            query.order(dsl::sequence_number)
+        } else {
+            query.order(dsl::sequence_number.desc())
+        }
+    }
+}
+
+impl Target<Cursor> for StoredRawCheckpoint {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(CheckpointCursor {
+            checkpoint_viewed_at,
+            sequence_number: self.sequence_number as u64,
+        })
+    }
+}
+
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
@@ -407,6 +510,7 @@ impl Loader<SeqNumKey> for Db {
 
     async fn load(&self, keys: &[SeqNumKey]) -> Result<HashMap<SeqNumKey, Checkpoint>, Error> {
         use checkpoints::dsl;
+        use raw_checkpoints::dsl as raw_dsl;
 
         let checkpoint_ids: BTreeSet<_> = keys
             .iter()
@@ -416,6 +520,7 @@ impl Loader<SeqNumKey> for Db {
                     .then_some(key.sequence_number as i64)
             })
             .collect();
+        let raw_checkpoint_ids: Vec<i64> = checkpoint_ids.iter().cloned().collect();
 
         let checkpoints: Vec<StoredCheckpoint> = self
             .execute(move |conn| {
@@ -431,17 +536,39 @@ impl Loader<SeqNumKey> for Db {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;
 
+        let raw_checkpoints: Vec<StoredRawCheckpoint> = self
+            .execute(move |conn| {
+                async move {
+                    conn.results(move || {
+                        raw_dsl::raw_checkpoints.filter(
+                            raw_dsl::sequence_number.eq_any(raw_checkpoint_ids.iter().cloned()),
+                        )
+                    })
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch raw checkpoints: {e}")))?;
+
         let checkpoint_id_to_stored: BTreeMap<_, _> = checkpoints
             .into_iter()
             .map(|stored| (stored.sequence_number as u64, stored))
+            .collect();
+
+        let raw_checkpoints: BTreeMap<_, _> = raw_checkpoints
+            .into_iter()
+            .map(|raw_checkpoint| (raw_checkpoint.sequence_number as u64, raw_checkpoint))
             .collect();
 
         Ok(keys
             .iter()
             .filter_map(|key| {
                 let stored = checkpoint_id_to_stored.get(&key.sequence_number).cloned()?;
+                let raw_checkpoint = raw_checkpoints.get(&key.sequence_number).cloned();
                 let checkpoint = Checkpoint {
                     stored,
+                    raw_checkpoint,
                     checkpoint_viewed_at: key.checkpoint_viewed_at,
                 };
 
@@ -463,6 +590,7 @@ impl Loader<DigestKey> for Db {
 
     async fn load(&self, keys: &[DigestKey]) -> Result<HashMap<DigestKey, Checkpoint>, Error> {
         use checkpoints::dsl;
+        use raw_checkpoints::dsl as raw_dsl;
 
         let digests: BTreeSet<_> = keys.iter().map(|key| key.digest.to_vec()).collect();
 
@@ -479,10 +607,35 @@ impl Loader<DigestKey> for Db {
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;
+        let chckp = checkpoints.clone();
 
         let checkpoint_id_to_stored: BTreeMap<_, _> = checkpoints
             .into_iter()
             .map(|stored| (stored.checkpoint_digest.clone(), stored))
+            .collect();
+
+        let checkpoint_ids: Vec<i64> = chckp
+            .into_iter()
+            .map(|stored| stored.sequence_number as i64)
+            .collect();
+
+        let raw_checkpoints: Vec<StoredRawCheckpoint> = self
+            .execute(move |conn| {
+                async move {
+                    conn.results(move || {
+                        raw_dsl::raw_checkpoints
+                            .filter(raw_dsl::sequence_number.eq_any(checkpoint_ids.iter().cloned()))
+                    })
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch raw checkpoints: {e}")))?;
+
+        let raw_checkpoints: BTreeMap<_, _> = raw_checkpoints
+            .into_iter()
+            .map(|raw_checkpoint| (raw_checkpoint.sequence_number as u64, raw_checkpoint))
             .collect();
 
         Ok(keys
@@ -494,9 +647,13 @@ impl Loader<DigestKey> for Db {
                 } = *key;
 
                 let stored = checkpoint_id_to_stored.get(digest.as_slice()).cloned()?;
+                let raw_checkpoint = raw_checkpoints
+                    .get(&(stored.sequence_number as u64))
+                    .cloned();
 
                 let checkpoint = Checkpoint {
-                    stored,
+                    stored: stored.clone(),
+                    raw_checkpoint,
                     checkpoint_viewed_at,
                 };
 

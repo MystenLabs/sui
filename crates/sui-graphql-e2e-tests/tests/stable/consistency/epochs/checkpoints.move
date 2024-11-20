@@ -22,12 +22,14 @@
 {
   checkpoint {
     sequenceNumber
+    checkpointSummaryBcs
   }
   epoch {
     epochId
     checkpoints {
       nodes {
         sequenceNumber
+        checkpointSummaryBcs
       }
     }
   }

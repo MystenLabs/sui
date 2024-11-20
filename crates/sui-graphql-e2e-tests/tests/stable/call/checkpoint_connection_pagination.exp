@@ -4,7 +4,7 @@ task 1, line 31:
 //# create-checkpoint 12
 Checkpoint created: 12
 
-task 2, lines 33-45:
+task 2, lines 33-48:
 //# run-graphql --cursors {"c":12,"s":6}
 Response: {
   "data": {
@@ -13,37 +13,12 @@ Response: {
         "hasPreviousPage": true,
         "hasNextPage": true
       },
-      "edges": [
-        {
-          "cursor": "eyJjIjoxMiwicyI6N30",
-          "node": {
-            "sequenceNumber": 7
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6OH0",
-          "node": {
-            "sequenceNumber": 8
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6OX0",
-          "node": {
-            "sequenceNumber": 9
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6MTB9",
-          "node": {
-            "sequenceNumber": 10
-          }
-        }
-      ]
+      "edges": []
     }
   }
 }
 
-task 3, lines 47-59:
+task 3, lines 50-62:
 //# run-graphql --cursors {"c":12,"s":6} {"c":12,"s":8}
 Response: {
   "data": {
@@ -52,19 +27,12 @@ Response: {
         "hasPreviousPage": true,
         "hasNextPage": true
       },
-      "edges": [
-        {
-          "cursor": "eyJjIjoxMiwicyI6N30",
-          "node": {
-            "sequenceNumber": 7
-          }
-        }
-      ]
+      "edges": []
     }
   }
 }
 
-task 4, lines 61-73:
+task 4, lines 64-76:
 //# run-graphql --cursors {"c":12,"s":6}
 Response: {
   "data": {
@@ -103,7 +71,7 @@ Response: {
   }
 }
 
-task 5, lines 75-87:
+task 5, lines 78-90:
 //# run-graphql --cursors {"c":12,"s":3} {"c":12,"s":6}
 Response: {
   "data": {
@@ -112,25 +80,12 @@ Response: {
         "hasPreviousPage": true,
         "hasNextPage": true
       },
-      "edges": [
-        {
-          "cursor": "eyJjIjoxMiwicyI6NH0",
-          "node": {
-            "sequenceNumber": 4
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6NX0",
-          "node": {
-            "sequenceNumber": 5
-          }
-        }
-      ]
+      "edges": []
     }
   }
 }
 
-task 6, lines 89-101:
+task 6, lines 92-104:
 //# run-graphql --cursors {"c":12,"s":3}
 Response: {
   "data": {
@@ -163,7 +118,7 @@ Response: {
   }
 }
 
-task 7, lines 103-115:
+task 7, lines 106-118:
 //# run-graphql --cursors {"c":12,"s":6}
 Response: {
   "data": {
@@ -202,7 +157,7 @@ Response: {
   }
 }
 
-task 8, lines 117-129:
+task 8, lines 120-132:
 //# run-graphql --cursors {"c":12,"s":4}
 Response: {
   "data": {
@@ -241,7 +196,7 @@ Response: {
   }
 }
 
-task 9, lines 131-143:
+task 9, lines 134-146:
 //# run-graphql --cursors {"c":12,"s":4}
 Response: {
   "data": {
@@ -250,61 +205,12 @@ Response: {
         "hasPreviousPage": true,
         "hasNextPage": false
       },
-      "edges": [
-        {
-          "cursor": "eyJjIjoxMiwicyI6NX0",
-          "node": {
-            "sequenceNumber": 5
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6Nn0",
-          "node": {
-            "sequenceNumber": 6
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6N30",
-          "node": {
-            "sequenceNumber": 7
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6OH0",
-          "node": {
-            "sequenceNumber": 8
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6OX0",
-          "node": {
-            "sequenceNumber": 9
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6MTB9",
-          "node": {
-            "sequenceNumber": 10
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6MTF9",
-          "node": {
-            "sequenceNumber": 11
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6MTJ9",
-          "node": {
-            "sequenceNumber": 12
-          }
-        }
-      ]
+      "edges": []
     }
   }
 }
 
-task 10, lines 145-157:
+task 10, lines 148-160:
 //# run-graphql --cursors {"c":12,"s":6}
 Response: {
   "data": {
@@ -313,37 +219,12 @@ Response: {
         "hasPreviousPage": true,
         "hasNextPage": true
       },
-      "edges": [
-        {
-          "cursor": "eyJjIjoxMiwicyI6Mn0",
-          "node": {
-            "sequenceNumber": 2
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6M30",
-          "node": {
-            "sequenceNumber": 3
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6NH0",
-          "node": {
-            "sequenceNumber": 4
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6NX0",
-          "node": {
-            "sequenceNumber": 5
-          }
-        }
-      ]
+      "edges": []
     }
   }
 }
 
-task 11, lines 159-171:
+task 11, lines 162-174:
 //# run-graphql --cursors {"c":12,"s":3} {"c":12,"s":6}
 Response: {
   "data": {
@@ -352,25 +233,12 @@ Response: {
         "hasPreviousPage": true,
         "hasNextPage": true
       },
-      "edges": [
-        {
-          "cursor": "eyJjIjoxMiwicyI6NH0",
-          "node": {
-            "sequenceNumber": 4
-          }
-        },
-        {
-          "cursor": "eyJjIjoxMiwicyI6NX0",
-          "node": {
-            "sequenceNumber": 5
-          }
-        }
-      ]
+      "edges": []
     }
   }
 }
 
-task 12, lines 173-185:
+task 12, lines 176-188:
 //# run-graphql --cursors {"c":12,"s":9}
 Response: {
   "data": {
@@ -403,7 +271,7 @@ Response: {
   }
 }
 
-task 13, lines 187-199:
+task 13, lines 190-202:
 //# run-graphql
 Response: {
   "data": {
@@ -496,7 +364,7 @@ Response: {
   }
 }
 
-task 14, lines 201-213:
+task 14, lines 204-216:
 //# run-graphql
 Response: {
   "data": {
@@ -535,7 +403,7 @@ Response: {
   }
 }
 
-task 15, lines 215-227:
+task 15, lines 218-230:
 //# run-graphql
 Response: {
   "data": {
@@ -574,7 +442,7 @@ Response: {
   }
 }
 
-task 16, lines 229-241:
+task 16, lines 232-244:
 //# run-graphql
 Response: {
   "data": null,
@@ -597,7 +465,7 @@ Response: {
   ]
 }
 
-task 17, lines 243-256:
+task 17, lines 246-259:
 //# run-graphql --cursors {"c":10,"s":3} {"c":12,"s":6}
 Response: {
   "data": null,
