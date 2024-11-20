@@ -879,8 +879,13 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
+                let protocol_version = client
+                    .read_api()
+                    .get_protocol_config(None)
+                    .await?
+                    .protocol_version;
                 let protocol_config = ProtocolConfig::get_for_version(
-                    ProtocolVersion::MAX,
+                    protocol_version,
                     match chain_id
                         .as_ref()
                         .and_then(ChainIdentifier::from_chain_short_id)
@@ -941,8 +946,14 @@ impl SuiClientCommands {
                 ) = upgrade_result?;
 
                 if verify_compatibility {
-                    check_compatibility(&client, package_id, compiled_module, protocol_config)
-                        .await?;
+                    check_compatibility(
+                        &client,
+                        package_id,
+                        compiled_module,
+                        upgrade_policy,
+                        protocol_config,
+                    )
+                    .await?;
                 }
 
                 let tx_kind = client
