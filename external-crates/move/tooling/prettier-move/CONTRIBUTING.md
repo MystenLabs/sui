@@ -11,4 +11,4 @@ use existing code as guidance.
 ## Changeset
 
 Make sure to run `pnpm changeset` with appropriate version for the changes made. Commit the change,
-so that it picked up by CI.
+so that it is picked up by CI.
