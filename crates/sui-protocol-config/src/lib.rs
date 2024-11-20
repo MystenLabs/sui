@@ -576,7 +576,7 @@ struct FeatureFlags {
 
     // Enable the atomic inclusion of a soft bundle in a consensus block
     #[serde(skip_serializing_if = "is_false")]
-    consensus_soft_bundle_atomic_inclusion: bool
+    consensus_soft_bundle_atomic_inclusion: bool,
 }
 
 fn is_false(b: &bool) -> bool {
