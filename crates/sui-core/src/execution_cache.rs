@@ -3,8 +3,8 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
-use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigTrait};
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -35,7 +35,7 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
-use tracing::instrument;
+use tracing::{error, instrument};
 
 pub(crate) mod cache_types;
 pub mod metrics;
@@ -112,31 +112,12 @@ pub enum ExecutionCacheConfigType {
     PassthroughCache,
 }
 
-pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
-    #[cfg(msim)]
-    {
-        let mut use_random_cache = None;
-        sui_macros::fail_point_if!("select-random-cache", || {
-            let random = rand::random::<bool>();
-            tracing::info!("Randomly selecting cache: {}", random);
-            use_random_cache = Some(random);
-        });
-        if let Some(random) = use_random_cache {
-            if random {
-                return ExecutionCacheConfigType::PassthroughCache;
-            } else {
-                return ExecutionCacheConfigType::WritebackCache;
-            }
-        }
+pub fn choose_execution_cache(_: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
+    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
+        error!("DISABLE_WRITEBACK_CACHE is no longer respected. WritebackCache is the default.");
     }
 
-    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
-        || matches!(config, ExecutionCacheConfig::PassthroughCache)
-    {
-        ExecutionCacheConfigType::PassthroughCache
-    } else {
-        ExecutionCacheConfigType::WritebackCache
-    }
+    ExecutionCacheConfigType::WritebackCache
 }
 
 pub fn build_execution_cache(
@@ -145,9 +126,15 @@ pub fn build_execution_cache(
     store: &Arc<AuthorityStore>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
-    ExecutionCacheTraitPointers::new(
-        ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
-    )
+
+    match epoch_start_config.execution_cache_type() {
+        ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
+            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+        ),
+        ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
+            ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
+        ),
+    }
 }
 
 /// Should only be used for sui-tool or tests. Nodes must use build_execution_cache which
@@ -862,14 +849,10 @@ macro_rules! implement_passthrough_traits {
                 &'a self,
                 _: &'a EpochStartConfiguration,
             ) -> BoxFuture<'a, ()> {
-                // If we call this method instead of ProxyCache::reconfigure_cache, it's a bug.
-                // Such a bug would almost certainly cause other test failures before reaching this
-                // point, but if it somehow slipped through it is better to crash than risk forking
-                // because ProxyCache::reconfigure_cache was not called.
-                panic!(
-                    "reconfigure_cache should not be called on a {}",
-                    stringify!($implementor)
-                );
+                // Since we now use WritebackCache directly at startup (if the epoch flag is set),
+                // this can be called at reconfiguration time. It is a no-op.
+                // TODO: remove this once we completely remove ProxyCache.
+                std::future::ready(()).boxed()
             }
         }
 

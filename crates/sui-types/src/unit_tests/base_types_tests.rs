@@ -24,6 +24,21 @@ use sui_protocol_config::ProtocolConfig;
 use super::*;
 
 #[test]
+fn test_bcs_enum() {
+    let address = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    let shared = Owner::Shared {
+        initial_shared_version: 1.into(),
+    };
+
+    let address_ser = bcs::to_bytes(&address).unwrap();
+    let shared_ser = bcs::to_bytes(&shared).unwrap();
+
+    println!("{:?}", address_ser);
+    println!("{:?}", shared_ser);
+    assert!(shared_ser.len() < address_ser.len());
+}
+
+#[test]
 fn test_signatures() {
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
