@@ -42,6 +42,7 @@ sui-pg-temp-db.workspace = true
 sui-protocol-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+sui-synthetic-ingestion.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

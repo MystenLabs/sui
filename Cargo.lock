@@ -14104,6 +14104,7 @@ dependencies = [
  "sui-pg-temp-db",
  "sui-protocol-config",
  "sui-storage",
+ "sui-synthetic-ingestion",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -15555,6 +15556,7 @@ dependencies = [
 name = "sui-synthetic-ingestion"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "clap",
  "simulacrum",
