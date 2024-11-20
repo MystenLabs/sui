@@ -618,7 +618,7 @@ fn compare_packages(
     // use colors but inline
     Err(anyhow!(
         "{}{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
-        Its upgrade policy is set to 'Compatible'.",
+        Its upgrade policy is set to '{}'.",
         if !diags.is_empty() {
             String::from_utf8(report_diagnostics_to_buffer(
                 &files.into(),
@@ -636,6 +636,11 @@ fn compare_packages(
             )
         } else {
             "".to_string()
+        },
+        match policy {
+            UpgradePolicy::Compatible => "compatible",
+            UpgradePolicy::Additive => "additive",
+            UpgradePolicy::DepOnly => "dependency only",
         }
     ))
 }
