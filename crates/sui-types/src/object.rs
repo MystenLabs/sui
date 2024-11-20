@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
-use std::mem::size_of;
 use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
@@ -890,11 +889,27 @@ impl ObjectInner {
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
-    /// This will be slgihtly different from the serialized size, but
+    /// This will be slightly different from the serialized size, but
     /// we also don't want to serialize the object just to get the size.
     /// This approximation should be good enough for gas metering.
     pub fn object_size_for_gas_metering(&self) -> usize {
-        let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>() + size_of::<u64>();
+        const DEFAULT_OWNER_SIZE: usize = 40;
+        const TRANSACTION_DIGEST_SIZE: usize = 32;
+        const STORAGE_REBATE_SIZE: usize = 8;
+
+        let owner_size = match &self.owner {
+            Owner::AddressOwner(_)
+            | Owner::ObjectOwner(_)
+            | Owner::Shared { .. }
+            | Owner::Immutable => DEFAULT_OWNER_SIZE,
+            Owner::ConsensusV2 { authenticator, .. } => {
+                DEFAULT_OWNER_SIZE
+                    + match authenticator.as_ref() {
+                        Authenticator::SingleOwner(_) => 8, // marginal cost to store both SuiAddress and SequenceNumber
+                    }
+            }
+        };
+        let meta_data_size = owner_size + TRANSACTION_DIGEST_SIZE + STORAGE_REBATE_SIZE;
         let data_size = match &self.data {
             Data::Move(m) => m.object_size_for_gas_metering(),
             Data::Package(p) => p.object_size_for_gas_metering(),
