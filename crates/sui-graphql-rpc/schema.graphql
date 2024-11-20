@@ -451,7 +451,7 @@ type Checkpoint {
 	"""
 	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
 	"""
-	checkpointSummaryBcs: Base64
+	bcs: Base64
 }
 
 type CheckpointConnection {
