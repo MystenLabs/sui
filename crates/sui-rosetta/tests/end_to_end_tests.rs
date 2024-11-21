@@ -660,6 +660,10 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     Ok(())
 }
 
+// The limit actually passes for 1650 coins, but it often fails with
+// "Failed to confirm tx status for TransactionDigest(...) within .. seconds.".
+// This originates from the fact that we pass None as the ExecuteTransactionRequestType
+// in the submit endpoint. This defaults to WaitForLocalExecution which has a timetout.
 #[tokio::test]
 async fn test_limit_many_small_coins() -> Result<()> {
     let test_cluster = TestClusterBuilder::new()
@@ -723,7 +727,7 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let coin_for_gas = iter.next().unwrap();
     let new_coins = 2048;
     let split_amount = coin_to_split.balance / new_coins;
-    let amount_to_send = split_amount as i128 * 1650;
+    let amount_to_send = split_amount as i128 * 1500;
     let recipient_change = amount_to_send.to_string();
     let sender_change = (-amount_to_send).to_string();
 

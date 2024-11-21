@@ -6,7 +6,7 @@ use sui_types::base_types::SuiAddress;
 
 use crate::{errors::Error, Currency};
 
-use super::{GasCoinsAndObjects, TryFetchNeededObjects};
+use super::{TransactionAndObjectData, TryConstructTransaction};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PayCoin {
@@ -17,13 +17,13 @@ pub struct PayCoin {
 }
 
 #[async_trait]
-impl TryFetchNeededObjects for PayCoin {
+impl TryConstructTransaction for PayCoin {
     async fn try_fetch_needed_objects(
         self,
         client: &SuiClient,
         gas_price: Option<u64>,
         budget: Option<u64>,
-    ) -> Result<GasCoinsAndObjects, Error> {
+    ) -> Result<TransactionAndObjectData, Error> {
         todo!();
     }
 }
