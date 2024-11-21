@@ -4,15 +4,14 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
-use futures::TryStreamExt;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::{metrics::IndexerMetrics, pipeline::Break};
+use crate::{metrics::IndexerMetrics, pipeline::Break, task::TrySpawnStreamExt};
 
 use super::Indexed;
 
@@ -52,15 +51,15 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
     spawn_monitored_task!(async move {
         info!(pipeline = P::NAME, "Starting processor");
         let latest_processed_checkpoint = Arc::new(AtomicU64::new(0));
+        let processor = Arc::new(processor);
 
         match ReceiverStream::new(rx)
-            .map(Ok)
-            .try_for_each_concurrent(P::FANOUT, |checkpoint| {
+            .try_for_each_spawned(P::FANOUT, |checkpoint| {
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let cancel = cancel.clone();
                 let latest_processed_checkpoint = latest_processed_checkpoint.clone();
-                let processor = &processor;
+                let processor = processor.clone();
 
                 async move {
                     if cancel.is_cancelled() {

@@ -4,10 +4,9 @@
 use std::{sync::Arc, time::Duration};
 
 use backoff::ExponentialBackoff;
-use futures::TryStreamExt;
 use mysten_metrics::spawn_monitored_task;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -15,6 +14,7 @@ use crate::{
     db::Db,
     metrics::IndexerMetrics,
     pipeline::{Break, PipelineConfig, WatermarkPart},
+    task::TrySpawnStreamExt,
 };
 
 use super::{Batched, Handler};
@@ -48,8 +48,7 @@ pub(super) fn committer<H: Handler + 'static>(
         let write_concurrency = H::WRITE_CONCURRENCY_OVERRIDE.unwrap_or(config.write_concurrency);
 
         match ReceiverStream::new(rx)
-            .map(Ok)
-            .try_for_each_concurrent(write_concurrency, |Batched { values, watermark }| {
+            .try_for_each_spawned(write_concurrency, |Batched { values, watermark }| {
                 let values = Arc::new(values);
                 let tx = tx.clone();
                 let db = db.clone();
