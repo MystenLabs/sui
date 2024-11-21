@@ -137,13 +137,14 @@ impl SharedObjectCongestionTracker {
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
 
         // Allow tx if it's within budget.
-        if start_cost + tx_cost <= self.max_accumulated_txn_cost_per_object_in_commit {
+        if start_cost.saturating_add(tx_cost) <= self.max_accumulated_txn_cost_per_object_in_commit
+        {
             return None;
         }
 
         // Allow over-budget tx if it's not above the overage limit.
         if start_cost <= self.max_accumulated_txn_cost_per_object_in_commit
-            && start_cost + tx_cost
+            && start_cost.saturating_add(tx_cost)
                 <= self
                     .max_accumulated_txn_cost_per_object_in_commit
                     .saturating_add(self.max_txn_cost_overage_per_object_in_commit)
