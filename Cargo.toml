@@ -205,7 +205,7 @@ members = [
     "sui-execution/v1/sui-verifier",
     "sui-execution/v2/sui-adapter",
     "sui-execution/v2/sui-move-natives",
-    "sui-execution/v2/sui-verifier",
+    "sui-execution/v2/sui-verifier", "crates/showandtell",
 ]
 
 [workspace.package]

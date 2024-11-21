@@ -14,6 +14,7 @@ COPY sui-execution sui-execution
 COPY narwhal narwhal
 COPY external-crates external-crates
 RUN cargo build --release \
+    --bin showandtell \
     --bin sui-oracle \
     --bin suins-indexer
 RUN mkdir /sui/bin/
@@ -32,4 +33,3 @@ ARG BUILD_DATE
 ARG GIT_REVISION
 LABEL build-date=$BUILD_DATE
 LABEL git-revision=$GIT_REVISION
-
