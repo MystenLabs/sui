@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{collections::BTreeMap, sync::Arc};
 
+use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use parking_lot::Mutex;
 use tap::tap::TapFallible;
@@ -80,8 +81,8 @@ impl TransactionConsumer {
     // Attempts to fetch the next transactions that have been submitted for sequence. Respects the `max_transactions_in_block_bytes`
     // and `max_num_transactions_in_block` parameters specified via protocol config.
     // This returns one or more transactions to be included in the block and a callback to acknowledge the inclusion of those transactions.
-    // Also returns a `LimitReached` enum to indicate what limit type has been reached.
-    pub(crate) fn next(&mut self) -> (LimitReached, Vec<Transaction>, Box<dyn FnOnce(BlockRef)>) {
+    // Also returns a `LimitReached` enum to indicate which limit type has been reached.
+    pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce(BlockRef)>, LimitReached) {
         let mut transactions = Vec::new();
         let mut acks = Vec::new();
         let mut total_bytes = 0;
@@ -113,7 +114,9 @@ impl TransactionConsumer {
         };
 
         if let Some(t) = self.pending_transactions.take() {
-            self.pending_transactions = handle_txs(t);
+            if let Some(pending_transactions) = handle_txs(t) {
+                debug_fatal!("Previously pending transaction(s) should fit into an empty block! Dropping: {:?}", pending_transactions.transactions);
+            }
         }
 
         // Until we have reached the limit for the pull.
@@ -129,7 +132,6 @@ impl TransactionConsumer {
         let block_status_subscribers = self.block_status_subscribers.clone();
         let gc_enabled = self.context.protocol_config.gc_depth() > 0;
         (
-            limit_reached,
             transactions,
             Box::new(move |block_ref: BlockRef| {
                 let mut block_status_subscribers = block_status_subscribers.lock();
@@ -151,6 +153,7 @@ impl TransactionConsumer {
                     let _ = ack.send((block_ref, status_rx));
                 }
             }),
+            limit_reached,
         )
     }
 
@@ -407,7 +410,7 @@ mod tests {
         }
 
         // now pull the transactions from the consumer
-        let (_limit_reached, transactions, ack_transactions) = consumer.next();
+        let (transactions, ack_transactions, _limit_reached) = consumer.next();
         assert_eq!(transactions.len(), 3);
 
         for (i, t) in transactions.iter().enumerate() {
@@ -460,7 +463,7 @@ mod tests {
 
             // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
             if i % 2 == 0 {
-                let (_limit_reached, transactions, ack_transactions) = consumer.next();
+                let (transactions, ack_transactions, _limit_reached) = consumer.next();
                 assert_eq!(transactions.len(), 2);
                 ack_transactions(BlockRef::new(
                     i,
@@ -529,7 +532,7 @@ mod tests {
 
             // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
             if i % 2 == 0 {
-                let (_limit_reached, transactions, ack_transactions) = consumer.next();
+                let (transactions, ack_transactions, _limit_reached) = consumer.next();
                 assert_eq!(transactions.len(), 2);
                 ack_transactions(BlockRef::new(
                     i,
@@ -581,7 +584,7 @@ mod tests {
 
         // now pull the transactions from the consumer
         let mut all_transactions = Vec::new();
-        let (_limit_reached, transactions, _ack_transactions) = consumer.next();
+        let (transactions, _ack_transactions, _limit_reached) = consumer.next();
         assert_eq!(transactions.len(), 7);
 
         // ensure their total size is less than `max_bytes_to_fetch`
@@ -594,7 +597,7 @@ mod tests {
         all_transactions.extend(transactions);
 
         // try to pull again transactions, next should be provided
-        let (_limit_reached, transactions, _ack_transactions) = consumer.next();
+        let (transactions, _ack_transactions, _limit_reached) = consumer.next();
         assert_eq!(transactions.len(), 3);
 
         // ensure their total size is less than `max_bytes_to_fetch`
@@ -685,7 +688,7 @@ mod tests {
         let mut all_acks: Vec<Box<dyn FnOnce(BlockRef)>> = Vec::new();
         let mut batch_index = 0;
         while !consumer.is_empty() {
-            let (_limit_reached, transactions, ack_transactions) = consumer.next();
+            let (transactions, ack_transactions, _limit_reached) = consumer.next();
 
             assert!(
                 transactions.len() as u64
@@ -766,9 +769,9 @@ mod tests {
             }
 
             // Fetch the next transactions to be included in a block
-            let (limit, transactions, _ack_transactions) = consumer.next();
+            let (transactions, _ack_transactions, limit) = consumer.next();
             assert_eq!(limit, LimitReached::MaxNumOfTransactions);
-            assert!(transactions.len() as u64 == max_num_transactions_in_block);
+            assert_eq!(transactions.len() as u64, max_num_transactions_in_block);
 
             // Now create a block and verify that transactions are within the size limits
             let block_verifier =
@@ -815,7 +818,7 @@ mod tests {
             }
 
             // Fetch the next transactions to be included in a block
-            let (limit, transactions, _ack_transactions) = consumer.next();
+            let (transactions, _ack_transactions, limit) = consumer.next();
             let batch: Vec<_> = transactions.iter().map(|t| t.data()).collect();
             let size = batch.iter().map(|t| t.len() as u64).sum::<u64>();
 
