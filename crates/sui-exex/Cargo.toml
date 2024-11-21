@@ -10,7 +10,6 @@ description = "ExEx"
 [lints]
 workspace = true
 
-
 [dependencies]
 tokio.workspace = true
 sui-types.workspace = true
@@ -19,4 +18,4 @@ anyhow.workspace = true
 futures.workspace = true
 tokio-util.workspace = true
 mysten-metrics.workspace = true
-axum = "0.7.8"
+sui-network.workspace = true

@@ -103,6 +103,7 @@ use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
 pub struct Handle {
     sender: mpsc::Sender<StateSyncMessage>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    peer_heights: Arc<RwLock<PeerHeights>>,
 }
 
 impl Handle {
@@ -125,8 +126,16 @@ impl Handle {
     pub fn subscribe_to_synced_checkpoints(&self) -> broadcast::Receiver<VerifiedCheckpoint> {
         self.checkpoint_event_sender.subscribe()
     }
+
+    pub fn highest_known_checkpoint_sequence_number(&self) -> Option<CheckpointSequenceNumber> {
+        self.peer_heights
+            .read()
+            .unwrap()
+            .highest_known_checkpoint_sequence_number()
+    }
 }
 
+#[derive(Debug)]
 struct PeerHeights {
     /// Table used to track the highest checkpoint for each of our peers.
     peers: HashMap<PeerId, PeerStateSyncInfo>,

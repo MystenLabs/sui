@@ -136,10 +136,7 @@ where
         let (checkpoint_event_sender, _receiver) =
             broadcast::channel(config.synced_checkpoint_broadcast_channel_capacity());
         let weak_sender = sender.downgrade();
-        let handle = Handle {
-            sender,
-            checkpoint_event_sender: checkpoint_event_sender.clone(),
-        };
+
         let peer_heights = PeerHeights {
             peers: HashMap::new(),
             unprocessed_checkpoints: HashMap::new(),
@@ -149,6 +146,12 @@ where
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);
+
+        let handle = Handle {
+            sender,
+            checkpoint_event_sender: checkpoint_event_sender.clone(),
+            peer_heights: peer_heights.clone(),
+        };
 
         let server = Server {
             store: store.clone(),

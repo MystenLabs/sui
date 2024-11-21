@@ -807,9 +807,13 @@ impl SuiNode {
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         let exex_manager = if is_full_node {
-            ExExLauncher::new(Arc::new(state_sync_store), sui_exexes())
-                .launch()
-                .await?
+            ExExLauncher::new(
+                Arc::new(state_sync_store),
+                state_sync_handle.clone(),
+                sui_exexes(),
+            )
+            .launch()
+            .await?
         } else {
             None
         };

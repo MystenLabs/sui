@@ -25,19 +25,37 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
     Api::new([127, 0, 0, 1], consensus_rx).start().await;
 
     tracing::info!("🧩 Oracle ExEx initiated!");
+    tracing::info!("⏳ Syncing ExEx to blockchain tip...");
+
+    let mut tip_has_been_reached = false;
     while let Some(notification) = ctx.notifications.next().await {
         let checkpoint = match notification {
             ExExNotification::CheckpointSynced { checkpoint_number } => checkpoint_number,
         };
+        if !tip_has_been_reached {
+            if let Some(chain_tip) = ctx.highest_known_checkpoint_sequence_number() {
+                if chain_tip == checkpoint {
+                    tracing::info!("🥳 ExEx reached tip!");
+                    tip_has_been_reached = true;
+                } else {
+                    ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
+                    continue;
+                }
+            } else {
+                ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
+                continue;
+            }
+        }
+        tracing::info!("🤖 Oracle updating at checkpoint #{} !", checkpoint);
+        let started_at = std::time::Instant::now();
         let storage_ids = match setup_storage(&ctx) {
             Ok(s) => s,
             Err(_) => {
+                tracing::info!("⛔ No storage found for checkpoint {}", checkpoint);
                 ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
                 continue;
             }
         };
-        tracing::info!("🤖 Oracle updating at checkpoint #{} !", checkpoint,);
-        let started_at = std::time::Instant::now();
         if let Some(median_price) = fetch_prices_and_aggregate(&ctx, &storage_ids).await? {
             let _ = p2p_broadcaster.broadcast(median_price, checkpoint).await;
         }

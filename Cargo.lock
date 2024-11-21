@@ -14515,10 +14515,10 @@ name = "sui-exex"
 version = "1.38.0"
 dependencies = [
  "anyhow",
- "axum 0.7.8",
  "futures",
  "mysten-metrics",
  "serde",
+ "sui-network",
  "sui-types",
  "tokio",
  "tokio-util 0.7.10",

@@ -5,15 +5,18 @@ use futures::{
     FutureExt,
 };
 
+use sui_network::state_sync;
+
 use crate::{
     context::{ExExContext, ExExStore},
     ExExHandle, ExExManager, ExExManagerHandle,
 };
 
-const DEFAULT_EXEX_MANAGER_CAPACITY: usize = 16;
+const DEFAULT_EXEX_MANAGER_CAPACITY: usize = 8;
 
 pub struct ExExLauncher {
     store: Arc<dyn ExExStore>,
+    state_sync_handle: state_sync::Handle,
     extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
 }
 
@@ -21,9 +24,14 @@ impl ExExLauncher {
     /// Create a new `ExExLauncher` with the given extensions.
     pub const fn new(
         store: Arc<dyn ExExStore>,
+        state_sync_handle: state_sync::Handle,
         extensions: Vec<(String, Box<dyn BoxedLaunchExEx>)>,
     ) -> Self {
-        Self { store, extensions }
+        Self {
+            store,
+            state_sync_handle,
+            extensions,
+        }
     }
 
     /// Launches all execution extensions.
@@ -31,7 +39,11 @@ impl ExExLauncher {
     /// Spawns all extensions and returns the handle to the exex manager if any extensions are
     /// installed.
     pub async fn launch(self) -> anyhow::Result<Option<ExExManagerHandle>> {
-        let Self { store, extensions } = self;
+        let Self {
+            store,
+            state_sync_handle,
+            extensions,
+        } = self;
 
         if extensions.is_empty() {
             return Ok(None);
@@ -46,6 +58,7 @@ impl ExExLauncher {
 
             let context = ExExContext {
                 store: store.clone(),
+                state_sync_handle: state_sync_handle.clone(),
                 events,
                 notifications,
             };
