@@ -196,12 +196,12 @@ impl SharedObjectCongestionTracker {
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
-        let end_cost = start_cost + tx_cost;
+        let end_cost = start_cost.saturating_add(tx_cost);
 
         for obj in shared_input_objects {
             if obj.mutable {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
-                assert!(old_end_cost.is_none() || old_end_cost.unwrap() < end_cost);
+                assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
             }
         }
     }
