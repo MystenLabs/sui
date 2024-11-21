@@ -77,12 +77,6 @@ SUPPORTED_OS[windows-x86_64]=win32-x64
 TMP_DIR=$( mktemp -d -t vscode-create )
 trap "clean_tmp_dir $TMP_DIR" EXIT
 
-LANG_SERVER_DIR="language-server"
-
-rm -rf $LANG_SERVER_DIR
-mkdir $LANG_SERVER_DIR
-
-
 BIN_FILES=($BIN_DIR/*.tgz(.))
 
 if (( ${#BIN_FILES[@]} != 4 )); then
@@ -127,11 +121,19 @@ for SUI_ARCHIVE_PATH in "${BIN_FILES[@]}"; do
 
     # copy move-analyzer binary to the appropriate location where it's picked up when bundling the
     # extension
+    LANG_SERVER_DIR="language-server"
+    rm -rf $LANG_SERVER_DIR
+    mkdir $LANG_SERVER_DIR
+
+    cp $TMP_DIR/$DIST_OS/$SERVER_BIN $LANG_SERVER_DIR
+
     VSCODE_OS=${SUPPORTED_OS[$DIST_OS]}
     vsce "$OP" ${OPTS//VSCODE_OS/$VSCODE_OS} --target "$VSCODE_OS"
+
+    rm -rf $LANG_SERVER_DIR
+
 done
 
-rm -rf $LANG_SERVER_DIR
 
 # build a "generic" version of the extension that does not bundle the move-analyzer binary
 vsce "$OP" ${OPTS//VSCODE_OS/generic}
