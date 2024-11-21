@@ -6,6 +6,7 @@ use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
 use futures::future::AbortHandle;
+use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -32,6 +33,7 @@ use sui_types::committee::QUORUM_THRESHOLD;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_grpc::LayoutGenerationOption;
 use sui_types::multiaddr::Multiaddr;
+use sui_types::transaction::Transaction;
 use sui_types::{base_types::*, object::Owner};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -368,6 +370,45 @@ pub async fn get_object(
         requested_id: obj_id,
         responses,
     })
+}
+
+pub async fn resubmit_transaction_block(
+    tx_digest: TransactionDigest,
+    fullnode_rpc: String,
+) -> Result<()> {
+    let sui_client = Arc::new(SuiClientBuilder::default().build(fullnode_rpc).await?);
+    let clients = make_clients(&sui_client).await?;
+
+    let mut requests = FuturesUnordered::new();
+    for (_, (_, client)) in clients.iter() {
+        let client = client.clone();
+        requests.push(async move {
+            client
+                .handle_transaction_info_request(TransactionInfoRequest {
+                    transaction_digest: tx_digest,
+                })
+                .await
+        });
+    }
+
+    // wait until we get the first successful response
+    while let Some(response) = requests.next().await {
+        let Ok(response) = response else {
+            continue;
+        };
+
+        if matches!(response.status, TransactionStatus::Executed(_, _, _)) {
+            println!("Transaction already executed");
+            break;
+        }
+        let tx = Transaction::new(response.transaction);
+        sui_client
+            .quorum_driver_api()
+            .execute_transaction_block(tx, Default::default(), None)
+            .await?;
+    }
+
+    Ok(())
 }
 
 pub async fn get_transaction_block(
