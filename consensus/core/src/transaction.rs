@@ -53,6 +53,16 @@ pub enum BlockStatus {
     GarbageCollected(BlockRef),
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum LimitReached {
+    // The maximum number of transactions have been included
+    MaxNumOfTransactions,
+    // The maximum number of bytes have been included
+    MaxBytes,
+    // There are no more transactions available to include
+    NoMoreTransactions,
+}
+
 impl TransactionConsumer {
     pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
         Self {
@@ -67,16 +77,15 @@ impl TransactionConsumer {
         }
     }
 
-    // Attempts to fetch the next transactions that have been submitted for sequence. Also a `max_transactions_in_block_bytes` parameter
-    // is given in order to ensure up to `max_transactions_in_block_bytes` of transactions are retrieved. Similar restrictions apply for
-    // the number of transactions been included in the block with value `max_num_transactions_in_block`.
+    // Attempts to fetch the next transactions that have been submitted for sequence. Respects the `max_transactions_in_block_bytes`
+    // and `max_num_transactions_in_block` parameters specified via protocol config.
     // This returns one or more transactions to be included in the block and a callback to acknowledge the inclusion of those transactions.
-    // Note that a TransactionsGuard may be partially consumed and the rest saved for the next pull, in which case its `included_in_block_ack`
-    // will not be signalled in the callback.
-    pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce(BlockRef)>) {
+    // Also returns a `LimitReached` enum to indicate what limit type has been reached.
+    pub(crate) fn next(&mut self) -> (LimitReached, Vec<Transaction>, Box<dyn FnOnce(BlockRef)>) {
         let mut transactions = Vec::new();
         let mut acks = Vec::new();
         let mut total_bytes = 0;
+        let mut limit_reached = LimitReached::NoMoreTransactions;
 
         // Handle one batch of incoming transactions from TransactionGuard.
         // The method will return `None` if all the transactions can be included in the block. Otherwise none of the transactions will be
@@ -86,9 +95,12 @@ impl TransactionConsumer {
                 t.transactions.iter().map(|t| t.data().len()).sum::<usize>() as u64;
             let transactions_num = t.transactions.len() as u64;
 
-            if total_bytes + transactions_bytes > self.max_transactions_in_block_bytes
-                || transactions.len() as u64 + transactions_num > self.max_num_transactions_in_block
-            {
+            if total_bytes + transactions_bytes > self.max_transactions_in_block_bytes {
+                limit_reached = LimitReached::MaxBytes;
+                return Some(t);
+            }
+            if transactions.len() as u64 + transactions_num > self.max_num_transactions_in_block {
+                limit_reached = LimitReached::MaxNumOfTransactions;
                 return Some(t);
             }
 
@@ -117,6 +129,7 @@ impl TransactionConsumer {
         let block_status_subscribers = self.block_status_subscribers.clone();
         let gc_enabled = self.context.protocol_config.gc_depth() > 0;
         (
+            limit_reached,
             transactions,
             Box::new(move |block_ref: BlockRef| {
                 let mut block_status_subscribers = block_status_subscribers.lock();
@@ -364,9 +377,9 @@ mod tests {
     use crate::transaction::NoopTransactionVerifier;
     use crate::{
         block::{BlockDigest, BlockRef},
-        block_verifier::{BlockVerifier, SignedBlockVerifier},
+        block_verifier::SignedBlockVerifier,
         context::Context,
-        transaction::{BlockStatus, TransactionClient, TransactionConsumer},
+        transaction::{BlockStatus, LimitReached, TransactionClient, TransactionConsumer},
     };
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -394,7 +407,7 @@ mod tests {
         }
 
         // now pull the transactions from the consumer
-        let (transactions, ack_transactions) = consumer.next();
+        let (_limit_reached, transactions, ack_transactions) = consumer.next();
         assert_eq!(transactions.len(), 3);
 
         for (i, t) in transactions.iter().enumerate() {
@@ -447,7 +460,7 @@ mod tests {
 
             // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
             if i % 2 == 0 {
-                let (transactions, ack_transactions) = consumer.next();
+                let (_limit_reached, transactions, ack_transactions) = consumer.next();
                 assert_eq!(transactions.len(), 2);
                 ack_transactions(BlockRef::new(
                     i,
@@ -516,7 +529,7 @@ mod tests {
 
             // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
             if i % 2 == 0 {
-                let (transactions, ack_transactions) = consumer.next();
+                let (_limit_reached, transactions, ack_transactions) = consumer.next();
                 assert_eq!(transactions.len(), 2);
                 ack_transactions(BlockRef::new(
                     i,
@@ -568,7 +581,7 @@ mod tests {
 
         // now pull the transactions from the consumer
         let mut all_transactions = Vec::new();
-        let (transactions, _ack_transactions) = consumer.next();
+        let (_limit_reached, transactions, _ack_transactions) = consumer.next();
         assert_eq!(transactions.len(), 7);
 
         // ensure their total size is less than `max_bytes_to_fetch`
@@ -581,7 +594,7 @@ mod tests {
         all_transactions.extend(transactions);
 
         // try to pull again transactions, next should be provided
-        let (transactions, _ack_transactions) = consumer.next();
+        let (_limit_reached, transactions, _ack_transactions) = consumer.next();
         assert_eq!(transactions.len(), 3);
 
         // ensure their total size is less than `max_bytes_to_fetch`
@@ -672,7 +685,7 @@ mod tests {
         let mut all_acks: Vec<Box<dyn FnOnce(BlockRef)>> = Vec::new();
         let mut batch_index = 0;
         while !consumer.is_empty() {
-            let (transactions, ack_transactions) = consumer.next();
+            let (_limit_reached, transactions, ack_transactions) = consumer.next();
 
             assert!(
                 transactions.len() as u64
@@ -725,20 +738,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_over_max_block_size_and_validate_block_size() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(100);
-            config.set_consensus_max_num_transactions_in_block_for_testing(10);
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(300);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let mut all_receivers = Vec::new();
-
         // submit transactions individually so we make sure that we have reached the block size limit of 10
         {
+            let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+                config.set_consensus_max_transaction_size_bytes_for_testing(100);
+                config.set_consensus_max_num_transactions_in_block_for_testing(10);
+                config.set_consensus_max_transactions_in_block_bytes_for_testing(300);
+                config
+            });
+
+            let context = Arc::new(Context::new_for_test(4).0);
+            let (client, tx_receiver) = TransactionClient::new(context.clone());
+            let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+            let mut all_receivers = Vec::new();
+
             // create enough transactions
             let max_num_transactions_in_block =
                 context.protocol_config.max_num_transactions_in_block();
@@ -753,7 +766,8 @@ mod tests {
             }
 
             // Fetch the next transactions to be included in a block
-            let (transactions, _ack_transactions) = consumer.next();
+            let (limit, transactions, _ack_transactions) = consumer.next();
+            assert_eq!(limit, LimitReached::MaxNumOfTransactions);
             assert!(transactions.len() as u64 == max_num_transactions_in_block);
 
             // Now create a block and verify that transactions are within the size limits
@@ -769,6 +783,18 @@ mod tests {
 
         // submit transactions individually so we make sure that we have reached the block size bytes 300
         {
+            let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+                config.set_consensus_max_transaction_size_bytes_for_testing(100);
+                config.set_consensus_max_num_transactions_in_block_for_testing(1_000);
+                config.set_consensus_max_transactions_in_block_bytes_for_testing(300);
+                config
+            });
+
+            let context = Arc::new(Context::new_for_test(4).0);
+            let (client, tx_receiver) = TransactionClient::new(context.clone());
+            let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+            let mut all_receivers = Vec::new();
+
             let max_transactions_in_block_bytes =
                 context.protocol_config.max_transactions_in_block_bytes();
             let mut total_size = 0;
@@ -789,9 +815,18 @@ mod tests {
             }
 
             // Fetch the next transactions to be included in a block
-            let (transactions, _ack_transactions) = consumer.next();
+            let (limit, transactions, _ack_transactions) = consumer.next();
             let batch: Vec<_> = transactions.iter().map(|t| t.data()).collect();
             let size = batch.iter().map(|t| t.len() as u64).sum::<u64>();
+
+            assert_eq!(limit, LimitReached::MaxBytes);
+            assert!(
+                batch.len()
+                    < context
+                        .protocol_config
+                        .consensus_max_num_transactions_in_block() as usize,
+                "Should have submitted less than the max number of transactions in a block"
+            );
             assert!(size <= max_transactions_in_block_bytes);
 
             // Now create a block and verify that transactions are within the size limits
