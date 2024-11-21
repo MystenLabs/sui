@@ -1,0 +1,23 @@
+[package]
+name = "sui-rpc-benchmark"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+clap = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+futures.workspace = true
+sqlparser = "0.52.0"
+tokio-postgres = "0.7.12"
+
+sui-pg-temp-db = { workspace = true }
+
+[[bin]]
+name = "sui-rpc-benchmark"
+path = "src/main.rs"
