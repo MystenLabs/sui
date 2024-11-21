@@ -5,7 +5,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::errors::Error;
 
-use super::{GasCoinsAndObjects, TryFetchNeededObjects};
+use super::{TransactionAndObjectData, TryConstructTransaction};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WithdrawStake {
@@ -15,13 +15,13 @@ pub struct WithdrawStake {
 }
 
 #[async_trait]
-impl TryFetchNeededObjects for WithdrawStake {
+impl TryConstructTransaction for WithdrawStake {
     async fn try_fetch_needed_objects(
         self,
         client: &SuiClient,
         gas_price: Option<u64>,
         budget: Option<u64>,
-    ) -> Result<GasCoinsAndObjects, Error> {
+    ) -> Result<TransactionAndObjectData, Error> {
         todo!();
     }
 }

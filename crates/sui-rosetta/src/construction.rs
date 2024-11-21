@@ -27,15 +27,17 @@ use sui_types::signature_verification::{
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
-use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
+use crate::types::internal_operation::{
+    PayCoin, PaySui, Stake, TransactionAndObjectData, TryConstructTransaction, WithdrawStake,
+};
 use crate::types::{
-    pay_sui_to_metadata, Amount, ConstructionCombineRequest, ConstructionCombineResponse,
-    ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
-    ConstructionMetadata, ConstructionMetadataRequest, ConstructionMetadataResponse,
-    ConstructionParseRequest, ConstructionParseResponse, ConstructionPayloadsRequest,
-    ConstructionPayloadsResponse, ConstructionPreprocessRequest, ConstructionPreprocessResponse,
-    ConstructionSubmitRequest, InternalOperation, MetadataOptions, SignatureType, SigningPayload,
-    TransactionIdentifier, TransactionIdentifierResponse,
+    Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
+    ConstructionDeriveResponse, ConstructionHashRequest, ConstructionMetadata,
+    ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
+    ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
+    ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
+    InternalOperation, MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
+    TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
 
@@ -255,24 +257,29 @@ pub async fn metadata(
     // make sure it works over epoch changes
     gas_price += 100;
 
-    if let InternalOperation::PaySui(PaySui {
-        sender,
-        recipients,
-        amounts,
-    }) = option.internal_operation
-    {
-        let metadata = pay_sui_to_metadata(
-            &context.client,
-            Some(gas_price),
-            sender,
-            recipients.clone(),
-            amounts,
+    if let InternalOperation::PaySui(pay_sui) = option.internal_operation {
+        let TransactionAndObjectData {
+            coins,
+            objects,
+            pt: _,
+            total_sui_balance,
+            // TODO: Check whether we indeed want to fill the budget in the case the budget passed
+            // was None, and we have calculated it here, 
             budget,
-        )
-        .await?;
-        let budget = metadata.budget;
+        } = pay_sui
+            .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
+            .await?;
+
         return Ok(ConstructionMetadataResponse {
-            metadata,
+            metadata: ConstructionMetadata {
+                sender,
+                coins: coins.into_iter().map(|c| c.object_ref()).collect(),
+                objects,
+                total_coin_value: total_sui_balance,
+                gas_price,
+                budget,
+                currency,
+            },
             suggested_fee: vec![Amount::new(budget as i128, None)],
         });
     };

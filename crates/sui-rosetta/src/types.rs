@@ -23,7 +23,6 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
 use crate::SUI;
-pub use internal_operation::pay_sui_to_metadata;
 pub use internal_operation::InternalOperation;
 
 pub mod internal_operation;
