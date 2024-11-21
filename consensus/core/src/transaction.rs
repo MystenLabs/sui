@@ -59,8 +59,8 @@ pub enum LimitReached {
     MaxNumOfTransactions,
     // The maximum number of bytes have been included
     MaxBytes,
-    // There are no more transactions available to include
-    NoMoreTransactions,
+    // All available transactions have been included
+    AllTransactionsIncluded,
 }
 
 impl TransactionConsumer {
@@ -85,7 +85,7 @@ impl TransactionConsumer {
         let mut transactions = Vec::new();
         let mut acks = Vec::new();
         let mut total_bytes = 0;
-        let mut limit_reached = LimitReached::NoMoreTransactions;
+        let mut limit_reached = LimitReached::AllTransactionsIncluded;
 
         // Handle one batch of incoming transactions from TransactionGuard.
         // The method will return `None` if all the transactions can be included in the block. Otherwise none of the transactions will be
