@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 69;
+const MAX_PROTOCOL_VERSION: u64 = 70;
 
 // Record history of protocol version allocations here:
 //
@@ -198,7 +198,7 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
 //             Enable G1Uncompressed group in testnet.
-//             Enable probing for accepted rounds in round prober.
+// Version 70: Enable probing for accepted rounds in round prober.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2979,7 +2979,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
-
+                }
+                70 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // Enable probing for accepted rounds in round prober.
                         cfg.feature_flags
