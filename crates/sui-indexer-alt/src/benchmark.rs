@@ -4,9 +4,10 @@
 use std::{path::PathBuf, time::Instant};
 
 use crate::{
+    args::ConsistencyConfig,
     db::{reset_database, DbConfig},
     ingestion::IngestionConfig,
-    pipeline::{sequential::consistency_config::ConsistencyConfig, PipelineConfig},
+    pipeline::PipelineConfig,
     start_indexer, IndexerConfig,
 };
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
@@ -25,7 +26,7 @@ pub struct BenchmarkConfig {
     pipeline: Vec<String>,
 
     #[command(flatten)]
-    sequential_pipeline_config: ConsistencyConfig,
+    consistency_config: ConsistencyConfig,
 }
 
 pub async fn run_benchmark(
@@ -36,7 +37,7 @@ pub async fn run_benchmark(
         ingestion_path,
         pipeline_config,
         pipeline,
-        sequential_pipeline_config,
+        consistency_config,
     } = benchmark_config;
 
     let ingestion_data = read_ingestion_data(&ingestion_path).await?;
@@ -61,7 +62,7 @@ pub async fn run_benchmark(
         metrics_address: IndexerConfig::default_metrics_address(),
     };
     let cur_time = Instant::now();
-    start_indexer(indexer_config, db_config, sequential_pipeline_config, false).await?;
+    start_indexer(indexer_config, db_config, consistency_config, false).await?;
     let elapsed = Instant::now().duration_since(cur_time);
     println!("Indexed {} transactions in {:?}", num_transactions, elapsed);
     println!("TPS: {}", num_transactions as f64 / elapsed.as_secs_f64());

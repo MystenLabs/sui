@@ -4,6 +4,7 @@
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
+use args::ConsistencyConfig;
 use bootstrap::bootstrap;
 use db::{Db, DbConfig};
 use handlers::{
@@ -21,8 +22,7 @@ use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{
     concurrent::{self, PrunerConfig},
-    sequential::{self, consistency_config::ConsistencyConfig},
-    PipelineConfig, Processor,
+    sequential, PipelineConfig, Processor,
 };
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
@@ -348,6 +348,8 @@ pub async fn start_indexer(
     consistency_config: ConsistencyConfig,
     // If true, the indexer will bootstrap from genesis.
     // Otherwise it will skip the pipelines that rely on genesis data.
+    // TODO: There is probably a better way to handle this.
+    // For instance, we could also pass in dummy genesis data in the benchmark mode.
     with_genesis: bool,
 ) -> anyhow::Result<()> {
     let cancel = CancellationToken::new();
