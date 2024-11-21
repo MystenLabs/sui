@@ -471,7 +471,7 @@ impl Core {
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
-        let (transactions, ack_transactions) = self.transaction_consumer.next();
+        let (transactions, ack_transactions, _limit_reached) = self.transaction_consumer.next();
         self.context
             .metrics
             .node_metrics
