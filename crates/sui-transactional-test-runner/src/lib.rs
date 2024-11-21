@@ -8,7 +8,9 @@ pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;
 
-pub use move_transactional_test_runner::framework::run_test_impl;
+pub use move_transactional_test_runner::framework::{
+    create_adapter, run_tasks_with_adapter, run_test_impl,
+};
 use rand::rngs::StdRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
