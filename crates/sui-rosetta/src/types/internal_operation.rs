@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -17,7 +17,16 @@ use sui_types::transaction::{
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::Error;
-use crate::types::{ConstructionMetadata, Currency};
+use crate::types::ConstructionMetadata;
+pub use pay_coin::PayCoin;
+pub use pay_sui::PaySui;
+pub use stake::Stake;
+pub use withdraw_stake::WithdrawStake;
+
+mod pay_coin;
+mod pay_sui;
+mod stake;
+mod withdraw_stake;
 
 const MAX_GAS_COINS: usize = 255;
 const MAX_COMMAND_ARGS: usize = 511;
@@ -26,51 +35,35 @@ const START_BUDGET: u64 = 1_000_000;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum InternalOperation {
-    PaySui {
-        sender: SuiAddress,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-    },
-    PayCoin {
-        sender: SuiAddress,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        currency: Currency,
-    },
-    Stake {
-        sender: SuiAddress,
-        validator: SuiAddress,
-        amount: Option<u64>,
-    },
-    WithdrawStake {
-        sender: SuiAddress,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        stake_ids: Vec<ObjectID>,
-    },
+    PaySui(PaySui),
+    PayCoin(PayCoin),
+    Stake(Stake),
+    WithdrawStake(WithdrawStake),
 }
 
 impl InternalOperation {
     pub fn sender(&self) -> SuiAddress {
         match self {
-            InternalOperation::PaySui { sender, .. }
-            | InternalOperation::PayCoin { sender, .. }
-            | InternalOperation::Stake { sender, .. }
-            | InternalOperation::WithdrawStake { sender, .. } => *sender,
+            InternalOperation::PaySui(PaySui { sender, .. })
+            | InternalOperation::PayCoin(PayCoin { sender, .. })
+            | InternalOperation::Stake(Stake { sender, .. })
+            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. }) => *sender,
         }
     }
+
     /// Combine with ConstructionMetadata to form the TransactionData
     pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
         let pt = match self {
-            Self::PaySui {
+            Self::PaySui(PaySui {
                 recipients,
                 amounts,
                 ..
-            } => pay_sui_pt(recipients, amounts, metadata.objects)?,
-            Self::PayCoin {
+            }) => pay_sui_pt(recipients, amounts, metadata.objects)?,
+            Self::PayCoin(PayCoin {
                 recipients,
                 amounts,
                 ..
-            } => {
+            }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 builder.pay(metadata.objects.clone(), recipients, amounts)?;
                 let currency_str = serde_json::to_string(&metadata.currency.unwrap()).unwrap();
@@ -84,9 +77,9 @@ impl InternalOperation {
                 builder.pure(currency_str)?;
                 builder.finish()
             }
-            InternalOperation::Stake {
+            InternalOperation::Stake(Stake {
                 validator, amount, ..
-            } => {
+            }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
 
                 // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
@@ -116,7 +109,7 @@ impl InternalOperation {
                 ));
                 builder.finish()
             }
-            InternalOperation::WithdrawStake { stake_ids, .. } => {
+            InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
 
                 for stake_id in metadata.objects {

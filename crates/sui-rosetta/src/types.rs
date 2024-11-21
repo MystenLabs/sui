@@ -26,7 +26,7 @@ use crate::SUI;
 pub use internal_operation::pay_sui_to_metadata;
 pub use internal_operation::InternalOperation;
 
-mod internal_operation;
+pub mod internal_operation;
 
 #[cfg(test)]
 #[path = "unit_tests/types_tests.rs"]
