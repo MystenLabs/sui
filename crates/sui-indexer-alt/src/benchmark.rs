@@ -6,7 +6,7 @@ use std::{path::PathBuf, time::Instant};
 use crate::{
     db::{reset_database, DbConfig},
     ingestion::IngestionConfig,
-    pipeline::{sequential::config::SequentialPipelineConfig, PipelineConfig},
+    pipeline::{sequential::consistency_config::ConsistencyConfig, PipelineConfig},
     start_indexer, IndexerConfig,
 };
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
@@ -25,7 +25,7 @@ pub struct BenchmarkConfig {
     pipeline: Vec<String>,
 
     #[command(flatten)]
-    sequential_pipeline_config: SequentialPipelineConfig,
+    sequential_pipeline_config: ConsistencyConfig,
 }
 
 pub async fn run_benchmark(

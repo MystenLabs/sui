@@ -21,9 +21,9 @@ async fn main() -> Result<()> {
     match args.command {
         Command::Indexer {
             indexer,
-            sequential_pipeline_config,
+            consistency_config,
         } => {
-            start_indexer(indexer, args.db_config, sequential_pipeline_config, true).await?;
+            start_indexer(indexer, args.db_config, consistency_config, true).await?;
         }
         Command::ResetDatabase { skip_migrations } => {
             reset_database(args.db_config, skip_migrations).await?;

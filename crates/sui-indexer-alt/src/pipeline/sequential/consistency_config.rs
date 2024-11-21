@@ -6,7 +6,7 @@ use std::time::Duration;
 use clap::Args;
 
 #[derive(Args, Debug, Clone)]
-pub struct SequentialPipelineConfig {
+pub struct ConsistencyConfig {
     /// How often to check whether write-ahead logs related to the consistent range can be
     /// pruned.
     #[arg(
@@ -31,7 +31,7 @@ pub struct SequentialPipelineConfig {
     pub consistent_range: Option<u64>,
 }
 
-impl SequentialPipelineConfig {
+impl ConsistencyConfig {
     const DEFAULT_CONSISTENT_PRUNING_INTERVAL: &'static str = "300";
     const DEFAULT_PRUNER_DELAY: &'static str = "120";
 

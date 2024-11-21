@@ -18,7 +18,7 @@ use super::{processor::processor, PipelineConfig, Processor, PIPELINE_BUFFER};
 use self::committer::committer;
 
 mod committer;
-pub mod config;
+pub mod consistency_config;
 
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
 /// implementing [Processor]) into rows for their table, how to combine multiple rows into a single

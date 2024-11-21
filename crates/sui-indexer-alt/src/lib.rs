@@ -21,7 +21,7 @@ use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{
     concurrent::{self, PrunerConfig},
-    sequential::{self, config::SequentialPipelineConfig},
+    sequential::{self, consistency_config::ConsistencyConfig},
     PipelineConfig, Processor,
 };
 use task::graceful_shutdown;
@@ -343,7 +343,7 @@ impl Indexer {
 pub async fn start_indexer(
     indexer_config: IndexerConfig,
     db_config: DbConfig,
-    sequential_pipeline_config: SequentialPipelineConfig,
+    consistency_config: ConsistencyConfig,
     // If true, the indexer will bootstrap from genesis.
     // Otherwise it will skip the pipelines that rely on genesis data.
     with_genesis: bool,
@@ -365,11 +365,11 @@ pub async fn start_indexer(
             .await?;
     }
 
-    let SequentialPipelineConfig {
+    let ConsistencyConfig {
         consistent_pruning_interval,
         pruner_delay,
         consistent_range: lag,
-    } = sequential_pipeline_config;
+    } = consistency_config;
 
     // Pipelines that are split up into a summary table, and a write-ahead log, where the
     // write-ahead log needs to be pruned.

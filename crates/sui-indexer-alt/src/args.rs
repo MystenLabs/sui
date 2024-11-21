@@ -3,7 +3,7 @@
 
 use crate::benchmark::BenchmarkConfig;
 use crate::db::DbConfig;
-use crate::pipeline::sequential::config::SequentialPipelineConfig;
+use crate::pipeline::sequential::consistency_config::ConsistencyConfig;
 use crate::IndexerConfig;
 use clap::Subcommand;
 
@@ -25,7 +25,7 @@ pub enum Command {
         indexer: IndexerConfig,
 
         #[command(flatten)]
-        sequential_pipeline_config: SequentialPipelineConfig,
+        consistency_config: ConsistencyConfig,
     },
 
     /// Wipe the database of its contents
