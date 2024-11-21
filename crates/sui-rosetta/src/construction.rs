@@ -27,6 +27,7 @@ use sui_types::signature_verification::{
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
+use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
 use crate::types::{
     pay_sui_to_metadata, Amount, ConstructionCombineRequest, ConstructionCombineResponse,
     ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
@@ -241,7 +242,7 @@ pub async fn metadata(
     let budget = option.budget;
     let sender = option.internal_operation.sender();
     let currency = match &option.internal_operation {
-        InternalOperation::PayCoin { currency, .. } => Some(currency.clone()),
+        InternalOperation::PayCoin(PayCoin { currency, .. }) => Some(currency.clone()),
         _ => None,
     };
     let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
@@ -254,11 +255,11 @@ pub async fn metadata(
     // make sure it works over epoch changes
     gas_price += 100;
 
-    if let InternalOperation::PaySui {
+    if let InternalOperation::PaySui(PaySui {
         sender,
         recipients,
         amounts,
-    } = option.internal_operation
+    }) = option.internal_operation
     {
         let metadata = pay_sui_to_metadata(
             &context.client,
@@ -277,10 +278,10 @@ pub async fn metadata(
     };
     // Get amount, objects, for the operation
     let (total_required_amount, objects) = match &option.internal_operation {
-        InternalOperation::PaySui { .. } => {
+        InternalOperation::PaySui(PaySui { .. }) => {
             unreachable!("PaySui is already handled explicitly")
         }
-        InternalOperation::PayCoin { amounts, .. } => {
+        InternalOperation::PayCoin(PayCoin { amounts, .. }) => {
             let amount = amounts.iter().sum::<u64>();
             let coin_objs: Vec<ObjectRef> = context
                 .client
@@ -294,8 +295,8 @@ pub async fn metadata(
                 .collect();
             (Some(0), coin_objs) // amount is 0 for gas coin
         }
-        InternalOperation::Stake { amount, .. } => (*amount, vec![]),
-        InternalOperation::WithdrawStake { sender, stake_ids } => {
+        InternalOperation::Stake(Stake { amount, .. }) => (*amount, vec![]),
+        InternalOperation::WithdrawStake(WithdrawStake { sender, stake_ids }) => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
                 context
