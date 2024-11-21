@@ -286,9 +286,20 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
         }
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
+        self.send(CoreThreadCommand::AddBlocks(blocks.clone(), sender))
             .await;
-        receiver.await.map_err(|e| Shutdown(e.to_string()))
+        let missing_blocks = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
+
+        for block in blocks {
+            let block_ref = block.reference();
+            if !missing_blocks.contains(&block_ref) {
+                // Block was accepted, update the highest accepted round for author
+                self.highest_accepted_rounds[block.author()]
+                    .fetch_max(block.round(), Ordering::AcqRel);
+            }
+        }
+
+        Ok(missing_blocks)
     }
 
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
