@@ -20,7 +20,7 @@ bcs.workspace = true
 clap.workspace = true
 consensus-core.workspace = true
 prometheus.workspace = true
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "tracing"] }
 tracing.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
@@ -64,18 +64,15 @@ serde_json.workspace = true
 tower-http = { version = "0.6.1", features = ["cors"] }
 libp2p = { version = "0.54.1", features = [
     "tokio",
-    "request-response",
-    "noise",
     "tcp",
     "mdns",
     "yamux",
     "identify",
     "macros",
     "quic",
-    "cbor",
 ]}
+libp2p-gossipsub = { version = "0.47.0" }
 async-trait = "0.1.83"
-dashmap = "6.1.0"
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

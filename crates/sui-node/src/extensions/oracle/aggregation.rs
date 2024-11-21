@@ -1,17 +1,21 @@
 use super::{MedianPrice, PuiPriceStorage};
 
-pub fn aggregate_to_median(storages: &[PuiPriceStorage]) -> MedianPrice {
+pub fn aggregate_to_median(storages: &[PuiPriceStorage]) -> Option<MedianPrice> {
     let mut prices: Vec<u128> = storages
         .iter()
         .filter_map(|storage| storage.price)
         .collect();
+
+    if prices.is_empty() {
+        return None;
+    }
 
     let latest_timestamp = storages
         .iter()
         .filter_map(|storage| storage.timestamp)
         .max();
 
-    let median_price = if !prices.is_empty() {
+    let median_price = {
         prices.sort_unstable();
         let mid = prices.len() / 2;
         if prices.len() % 2 == 0 {
@@ -19,13 +23,11 @@ pub fn aggregate_to_median(storages: &[PuiPriceStorage]) -> MedianPrice {
         } else {
             Some(prices[mid])
         }
-    } else {
-        None
     };
 
-    MedianPrice {
+    Some(MedianPrice {
         pair: "BTC/USD".to_string(),
         median_price,
         timestamp: latest_timestamp,
-    }
+    })
 }
