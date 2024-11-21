@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.13
+
+### Patch Changes
+
+- 9c0987c: AUSD Coin
+
 ## 0.12.12
 
 ### Patch Changes
