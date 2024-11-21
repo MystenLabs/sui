@@ -132,38 +132,21 @@ impl<C: NetworkClient> RoundProber<C> {
             .read()
             .get_last_block_for_authority(own_index)
             .round();
-
-        let mut v1_requests = FuturesUnordered::new();
-        let mut v2_requests = FuturesUnordered::new();
+        let mut requests = FuturesUnordered::new();
 
         for (peer, _) in self.context.committee.authorities() {
             if peer == own_index {
                 continue;
             }
             let network_client = self.network_client.clone();
-            if self
-                .context
-                .protocol_config
-                .consensus_round_prober_probe_accepted_rounds()
-            {
-                v2_requests.push(async move {
-                    let result = tokio::time::timeout(
-                        request_timeout,
-                        network_client.get_latest_rounds_v2(peer, request_timeout),
-                    )
-                    .await;
-                    (peer, result)
-                });
-            } else {
-                v1_requests.push(async move {
-                    let result = tokio::time::timeout(
-                        request_timeout,
-                        network_client.get_latest_rounds(peer, request_timeout),
-                    )
-                    .await;
-                    (peer, result)
-                });
-            }
+            requests.push(async move {
+                let result = tokio::time::timeout(
+                    request_timeout,
+                    network_client.get_latest_rounds(peer, request_timeout),
+                )
+                .await;
+                (peer, result)
+            });
         }
 
         let mut highest_received_rounds =
@@ -178,87 +161,47 @@ impl<C: NetworkClient> RoundProber<C> {
         highest_received_rounds[own_index][own_index] = last_proposed_round;
         highest_accepted_rounds[own_index][own_index] = last_proposed_round;
 
-        if self
-            .context
-            .protocol_config
-            .consensus_round_prober_probe_accepted_rounds()
-        {
-            loop {
-                tokio::select! {
-                    result = v2_requests.next() => {
-                        let Some((peer, result)) = result else { break };
-                        match result {
-                            Ok(Ok((received, accepted))) => {
-                                if received.len() == self.context.committee.size()
-                                    && accepted.len() == self.context.committee.size()
-                                {
-                                    highest_received_rounds[peer] = received;
-                                    highest_accepted_rounds[peer] = accepted;
-                                } else {
-                                    node_metrics.round_prober_request_errors.inc();
-                                    tracing::warn!("Received invalid number of rounds from peer {}", peer);
-                                }
-                            },
-                            // When a request fails, the highest received rounds from that authority will be 0
-                            // for the subsequent computations.
-                            // For propagation delay, this behavior is desirable because the computed delay
-                            // increases as this authority has more difficulty communicating with peers. Logic
-                            // triggered by high delay should usually be triggered with frequent probing failures
-                            // as well.
-                            // For quorum rounds computed for peer, this means the values should be used for
-                            // positive signals (peer A can propagate its blocks well) rather than negative signals
-                            // (peer A cannot propagate its blocks well). It can be difficult to distinguish between
-                            // own probing failures and actual propagation issues.
-                            Ok(Err(err)) => {
+        loop {
+            tokio::select! {
+                result = requests.next() => {
+                    let Some((peer, result)) = result else { break };
+                    match result {
+                        Ok(Ok((received, accepted))) => {
+                            if received.len() == self.context.committee.size()
+                                && (!self
+                                    .context
+                                    .protocol_config
+                                    .consensus_round_prober_probe_accepted_rounds()
+                                    || accepted.len() == self.context.committee.size())
+                            {
+                                highest_received_rounds[peer] = received;
+                                highest_accepted_rounds[peer] = accepted;
+                            } else {
                                 node_metrics.round_prober_request_errors.inc();
-                                tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
-                            },
-                            Err(_) => {
-                                node_metrics.round_prober_request_errors.inc();
-                                tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
-                            },
-                        }
+                                tracing::warn!("Received invalid number of rounds from peer {}", peer);
+                            }
+                        },
+                        // When a request fails, the highest received rounds from that authority will be 0
+                        // for the subsequent computations.
+                        // For propagation delay, this behavior is desirable because the computed delay
+                        // increases as this authority has more difficulty communicating with peers. Logic
+                        // triggered by high delay should usually be triggered with frequent probing failures
+                        // as well.
+                        // For quorum rounds computed for peer, this means the values should be used for
+                        // positive signals (peer A can propagate its blocks well) rather than negative signals
+                        // (peer A cannot propagate its blocks well). It can be difficult to distinguish between
+                        // own probing failures and actual propagation issues.
+                        Ok(Err(err)) => {
+                            node_metrics.round_prober_request_errors.inc();
+                            tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
+                        },
+                        Err(_) => {
+                            node_metrics.round_prober_request_errors.inc();
+                            tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
+                        },
                     }
-                    _ = self.shutdown_notify.wait() => break,
                 }
-            }
-        } else {
-            loop {
-                tokio::select! {
-                    result = v1_requests.next() => {
-                        let Some((peer, result)) = result else { break };
-                        match result {
-                            Ok(Ok(rounds)) => {
-                                if rounds.len() == self.context.committee.size() {
-                                    highest_received_rounds[peer] = rounds;
-
-                                } else {
-                                    node_metrics.round_prober_request_errors.inc();
-                                    tracing::warn!("Received invalid number of rounds from peer {}", peer);
-                                }
-                            },
-                            // When a request fails, the highest received rounds from that authority will be 0
-                            // for the subsequent computations.
-                            // For propagation delay, this behavior is desirable because the computed delay
-                            // increases as this authority has more difficulty communicating with peers. Logic
-                            // triggered by high delay should usually be triggered with frequent probing failures
-                            // as well.
-                            // For quorum rounds computed for peer, this means the values should be used for
-                            // positive signals (peer A can propagate its blocks well) rather than negative signals
-                            // (peer A cannot propagate its blocks well). It can be difficult to distinguish between
-                            // own probing failures and actual propagation issues.
-                            Ok(Err(err)) => {
-                                node_metrics.round_prober_request_errors.inc();
-                                tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
-                            },
-                            Err(_) => {
-                                node_metrics.round_prober_request_errors.inc();
-                                tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
-                            },
-                        }
-                    }
-                    _ = self.shutdown_notify.wait() => break,
-                }
+                _ = self.shutdown_notify.wait() => break,
             }
         }
 
@@ -566,19 +509,6 @@ mod test {
         }
 
         async fn get_latest_rounds(
-            &self,
-            peer: AuthorityIndex,
-            _timeout: Duration,
-        ) -> ConsensusResult<Vec<Round>> {
-            let rounds = self.highest_received_rounds[peer].clone();
-            if rounds.is_empty() {
-                Err(ConsensusError::NetworkRequestTimeout("test".to_string()))
-            } else {
-                Ok(rounds)
-            }
-        }
-
-        async fn get_latest_rounds_v2(
             &self,
             peer: AuthorityIndex,
             _timeout: Duration,
