@@ -704,10 +704,12 @@ pub fn compile_ir_module(
         .into_compiled_module(&code)
 }
 
-pub async fn handle_actual_output<'a, Adapter>(
+/// Creates an adapter for the given tasks, using the first task command to initialize the adapter
+/// if it is a `TaskCommand::Init`.
+pub async fn create_adapter<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
-) -> Result<(String, Adapter), Box<dyn std::error::Error>>
+) -> Result<Adapter, Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -736,14 +738,6 @@ where
     .into_iter()
     .collect::<VecDeque<_>>();
     assert!(!tasks.is_empty());
-    let num_tasks = tasks.len();
-    writeln!(
-        &mut output,
-        "processed {} task{}",
-        num_tasks,
-        if num_tasks > 1 { "s" } else { "" }
-    )
-    .unwrap();
 
     let first_task = tasks.pop_front().unwrap();
     let init_opt = match &first_task.command {
@@ -756,16 +750,62 @@ where
             None
         }
     };
+
     let (mut adapter, result_opt) =
         Adapter::init(default_syntax, fully_compiled_program_opt, init_opt, path).await;
+
     if let Some(result) = result_opt {
         if let Err(e) = writeln!(output, "\ninit:\n{}", result) {
-            // TODO: if this fails, it masks the actual error, need better error handling
-            // in case cleanup_resources() fails
+            // TODO: if this fails, it masks the actual error, need better error handling in case
+            // cleanup_resources() fails
             adapter.cleanup_resources().await?;
             return Err(Box::new(e));
         }
     }
+
+    Ok(adapter)
+}
+
+/// Consumes the adapter to run tasks from path.
+pub async fn run_tasks_with_adapter<'a, Adapter>(
+    path: &Path,
+    mut adapter: Adapter,
+) -> Result<(String, Adapter), Box<dyn std::error::Error>>
+where
+    Adapter: MoveTestAdapter<'a>,
+    Adapter::ExtraInitArgs: Debug,
+    Adapter::ExtraPublishArgs: Debug,
+    Adapter::ExtraValueArgs: Debug,
+    Adapter::ExtraRunArgs: Debug,
+    Adapter::Subcommand: Debug,
+{
+    let mut output = String::new();
+    let mut tasks = taskify::<
+        TaskCommand<
+            Adapter::ExtraInitArgs,
+            Adapter::ExtraPublishArgs,
+            Adapter::ExtraValueArgs,
+            Adapter::ExtraRunArgs,
+            Adapter::Subcommand,
+        >,
+    >(path)?
+    .into_iter()
+    .collect::<VecDeque<_>>();
+    assert!(!tasks.is_empty());
+    let num_tasks = tasks.len();
+    writeln!(
+        &mut output,
+        "processed {} task{}",
+        num_tasks,
+        if num_tasks > 1 { "s" } else { "" }
+    )
+    .unwrap();
+
+    // Pop off init command if present
+    if let Some(TaskCommand::Init(_, _)) = tasks.front().map(|t| &t.command) {
+        tasks.pop_front();
+    }
+
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;
     }
@@ -785,7 +825,8 @@ where
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {
-    let output = handle_actual_output::<Adapter>(path, fully_compiled_program_opt).await?;
+    let adapter = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
+    let output = run_tasks_with_adapter(path, adapter).await?;
     handle_expected_output(path, output.0)?;
     Ok(())
 }
