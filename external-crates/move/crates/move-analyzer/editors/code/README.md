@@ -109,7 +109,7 @@ Move source file (a file with a `.move` file extension) and:
 - If the opened Move source file is located within a buildable project, and you have the `sui`
   binary installed, you can trace-debug execution of Move unit tests within this project.
   This functionality is provided by this (Move) extension automatically including the Move Trace Debugging
-  [extension](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debuggin). Go to
+  [extension](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug). Go to
   the Move Trace Debugging extension link to find more detailed information about trace-debugging and
   the current level of support. Trace-debugging a Move unit test is a two-step process:
     - first, you need to generate traces for Move unit tests by using `Move: Trace Move test execution`
