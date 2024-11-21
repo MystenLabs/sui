@@ -68,7 +68,6 @@ impl FilterContext for Context<'_> {
                 P::SequenceItem_::Declare(_, _) => false,
                 P::SequenceItem_::Bind(bind_list, _, exp) => {
                     let is_call_to_spec = should_remove_exp(exp);
-                    println!("bind list: {:?}", bind_list);
                     let is_spec_variable = bind_list.value.iter().any(|bind| match bind.value {
                         P::Bind_::Var(_, var) => {
                             // var ends in "_spec"
@@ -94,13 +93,6 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
             let should_remove = REMOVED_FUNCTIONS
                 .iter()
                 .any(|&keyword| name_access_chain_str.ends_with(keyword));
-            println!("name_access_chain_str: {}", name_access_chain_str);
-            if should_remove {
-                println!(
-                    "Removing verification function call: {}",
-                    name_access_chain_str
-                );
-            }
             should_remove
         }
         P::Exp_::DotCall(_, _, name, _, _, _) => {
@@ -108,16 +100,9 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
             let should_remove = REMOVED_METHODS
                 .iter()
                 .any(|&keyword| name_str.ends_with(keyword));
-            println!("name_str: {}", name_str);
-            if should_remove {
-                println!("Removing verification function call: {}", name_str);
-            }
             should_remove
         }
-        P::Exp_::Assign(lhs, rhs) => {
-            println!("\n\nlhs: {:?}\n\nrhs: {:?}\n\n", lhs, rhs);
-            should_remove_exp(lhs) || should_remove_exp(rhs)
-        }
+        P::Exp_::Assign(lhs, rhs) => should_remove_exp(lhs) || should_remove_exp(rhs),
         _ => false,
     }
 }

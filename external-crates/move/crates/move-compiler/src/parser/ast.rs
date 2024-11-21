@@ -2404,60 +2404,6 @@ pub trait ExpMap {
         F: Fn(Exp_) -> Exp_;
 }
 
-// Implement the ExpMap trait for MatchPattern_
-impl ExpMap for MatchPattern_ {
-    fn map_exp<F>(self, f: &mut F) -> Self
-    where
-        F: Fn(Exp_) -> Exp_,
-    {
-        match self {
-            MatchPattern_::PositionalConstructor(name, fields) => {
-                MatchPattern_::PositionalConstructor(
-                    name,
-                    fields.map(|fields| {
-                        fields
-                            .into_iter()
-                            .map(|field| match field {
-                                Ellipsis::Binder(t) =>
-                                // not sure if this is correct
-                                {
-                                    Ellipsis::Binder(t)
-                                }
-                                Ellipsis::Ellipsis(loc) => Ellipsis::Ellipsis(loc),
-                            })
-                            .collect()
-                    }),
-                )
-            }
-            MatchPattern_::FieldConstructor(name, fields) => MatchPattern_::FieldConstructor(
-                name,
-                fields.map(|fields| {
-                    fields
-                        .into_iter()
-                        .map(|field| match field {
-                            Ellipsis::Binder(t) =>
-                            // not sure if this is correct
-                            {
-                                Ellipsis::Binder(t)
-                            }
-                            Ellipsis::Ellipsis(loc) => Ellipsis::Ellipsis(loc),
-                        })
-                        .collect()
-                }),
-            ),
-            MatchPattern_::Name(mut_, name) => MatchPattern_::Name(mut_, name),
-            MatchPattern_::Literal(value) => MatchPattern_::Literal(value),
-            MatchPattern_::Or(lhs, rhs) => MatchPattern_::Or(
-                Box::new(lhs.map(|lhs| lhs.map_exp(f))),
-                Box::new(rhs.map(|rhs| rhs.map_exp(f))),
-            ),
-            MatchPattern_::At(var, pat) => {
-                MatchPattern_::At(var, Box::new(pat.map(|pat| pat.map_exp(f))))
-            }
-        }
-    }
-}
-
 // Implement the ExpMap trait for Exp
 impl ExpMap for Exp_ {
     fn map_exp<F>(self, f: &mut F) -> Self
@@ -2465,108 +2411,79 @@ impl ExpMap for Exp_ {
         F: Fn(Exp_) -> Exp_,
     {
         let res: Exp_ = match self {
-            Exp_::Value(_) | Exp_::UnresolvedError => self,
-            Exp_::Name(n) => Exp_::Name(n),
-            Exp_::Move(loc, e) => Exp_::Move(loc, map_through(e, f)),
-            Exp_::Copy(loc, e) => Exp_::Copy(loc, map_through(e, f)),
-            Exp_::Call(n, sp!(loc, args)) => Exp_::Call(
-                n,
-                sp(
-                    loc,
-                    args.into_iter()
-                        .map(|es| es.map(|e| e.map_exp(f)))
-                        .collect(),
-                ),
-            ),
-            Exp_::Pack(n, fields) =>
-            // TODO: incorrect implementation
-            {
-                Exp_::Pack(n, fields)
-            }
-            Exp_::IfElse(b, t, f_opt) => Exp_::IfElse(
-                map_through(b, f),
-                map_through(t, f),
-                f_opt.map(|f_opt| map_through(f_opt, f)),
-            ),
-            Exp_::While(b, e) => Exp_::While(map_through(b, f), map_through(e, f)),
-            Exp_::Loop(e) => Exp_::Loop(map_through(e, f)),
-            Exp_::Block((uses, items, loc, exp)) => Exp_::Block((
-                uses,
-                items
+            Exp_::Value(_) => self,
+            Exp_::Move(loc, exp) => Exp_::Move(loc, exp.map_exp(f)),
+            Exp_::Copy(loc, exp) => Exp_::Copy(loc, exp.map_exp(f)),
+            Exp_::Name(_) => self,
+            Exp_::Call(name, args) => Exp_::Call(name, args.map_exp(f)),
+            Exp_::Pack(name, fields) => Exp_::Pack(
+                name,
+                fields
                     .into_iter()
-                    .map(|item| item.map(|item| item.map_exp(f)))
+                    .map(|(field, exp)| (field, exp.map_exp(f)))
                     .collect(),
-                loc,
-                Box::new(exp.map(|e| e.map(|e| e.map_exp(f)))),
-            )),
-            Exp_::Lambda(sp!(loc, bs), ty_opt, e) => {
-                Exp_::Lambda(sp(loc, bs), ty_opt, map_through(e, f))
+            ),
+            Exp_::Vector(loc, tys, elems) => Exp_::Vector(loc, tys, elems.map_exp(f)),
+            Exp_::IfElse(cond, then_exp, else_exp) => {
+                Exp_::IfElse(cond.map_exp(f), then_exp.map_exp(f), else_exp.map_exp(f))
             }
-            Exp_::Quant(kind, sp!(loc, rs), trs, c_opt, e) => {
-                Exp_::Quant(kind, sp(loc, rs), trs, c_opt, map_through(e, f))
+            Exp_::Match(exp, arms) => Exp_::Match(exp.map_exp(f), arms.map_exp(f)),
+            Exp_::While(cond, body) => Exp_::While(cond.map_exp(f), body.map_exp(f)),
+            Exp_::Loop(body) => Exp_::Loop(body.map_exp(f)),
+            Exp_::Labeled(label, exp) => Exp_::Labeled(label, exp.map_exp(f)),
+            Exp_::Block((uses, items, loc, exp)) => {
+                Exp_::Block((uses, items.map_exp(f), loc, exp.map_exp(f)))
             }
-            Exp_::ExpList(es) => Exp_::ExpList(
-                es.into_iter()
-                    .map(|e| e.map(|e| e.map_exp(f)))
-                    .collect::<Vec<_>>(),
+            Exp_::Lambda(bindings, ty, body) => Exp_::Lambda(bindings, ty, body.map_exp(f)),
+            Exp_::Quant(kind, ranges, triggers, cond, body) => Exp_::Quant(
+                kind,
+                ranges,
+                triggers.map_exp(f),
+                cond.map_exp(f),
+                body.map_exp(f),
             ),
-            Exp_::Assign(lvalue, rhs) => Exp_::Assign(map_through(lvalue, f), map_through(rhs, f)),
-            Exp_::Abort(e_opt) => Exp_::Abort(e_opt.map(|e| map_through(e, f))),
-            Exp_::Return(name, e_opt) => Exp_::Return(name, e_opt.map(|e| map_through(e, f))),
-            Exp_::Break(name, e_opt) => Exp_::Break(name, e_opt.map(|e| map_through(e, f))),
-            Exp_::Continue(name) => Exp_::Continue(name),
-            Exp_::Dereference(e) => Exp_::Dereference(map_through(e, f)),
-            Exp_::UnaryExp(op, e) => Exp_::UnaryExp(op, map_through(e, f)),
-            Exp_::BinopExp(l, op, r) => Exp_::BinopExp(map_through(l, f), op, map_through(r, f)),
-            Exp_::Borrow(mut_, e) => Exp_::Borrow(mut_, map_through(e, f)),
-            Exp_::Dot(e, l, n) => Exp_::Dot(map_through(e, f), l, n),
-            Exp_::DotCall(e, l, n, is_macro, tyargs, rhs) => Exp_::DotCall(
-                map_through(e, f),
-                l,
-                n,
-                is_macro,
-                tyargs,
-                rhs.map(|rhs| {
-                    rhs.into_iter()
-                        .map(|rhs| rhs.map(|e| e.map_exp(f)))
-                        .collect::<Vec<_>>()
-                }),
-            ),
-            Exp_::Cast(e, ty) => Exp_::Cast(map_through(e, f), ty),
-            Exp_::Index(e, rhs) => Exp_::Index(
-                map_through(e, f),
-                rhs.map(|rhs| {
-                    rhs.into_iter()
-                        .map(|e| e.map(|e| e.map_exp(f)))
-                        .collect::<Vec<_>>()
-                }),
-            ),
-            Exp_::Annotate(e, ty) => Exp_::Annotate(map_through(e, f), ty),
-            Exp_::DotUnresolved(loc, e) => Exp_::DotUnresolved(loc, map_through(e, f)),
-            Exp_::Vector(loc, tys_opt, elems) => Exp_::Vector(
-                loc,
-                tys_opt,
-                elems.map(|elems| elems.into_iter().map(|e| e.map(|e| e.map_exp(f))).collect()),
-            ),
-            Exp_::Match(e, arms) => Exp_::Match(
-                map_through(e, f),
-                arms.map(|arms| {
-                    arms.into_iter()
-                        .map(|match_arm| {
-                            match_arm.map(|match_arm| MatchArm_ {
-                                pattern: match_arm.pattern.map(|p| p.map_exp(f)),
-                                guard: match_arm.guard.map(|g| map_through(g, f)),
-                                rhs: map_through(match_arm.rhs, f),
-                            })
-                        })
-                        .collect()
-                }),
-            ),
-            Exp_::Labeled(name, e) => Exp_::Labeled(name, map_through(e, f)),
-            Exp_::Unit => Exp_::Unit,
-            Exp_::Parens(e) => Exp_::Parens(map_through(e, f)),
+            Exp_::ExpList(exps) => Exp_::ExpList(exps.map_exp(f)),
+            Exp_::Unit => self,
+            Exp_::Parens(exp) => Exp_::Parens(exp.map_exp(f)),
+            Exp_::Assign(lhs, rhs) => Exp_::Assign(lhs.map_exp(f), rhs.map_exp(f)),
+            Exp_::Abort(exp) => Exp_::Abort(exp.map_exp(f)),
+            Exp_::Return(label, exp) => Exp_::Return(label, exp.map_exp(f)),
+            Exp_::Break(label, exp) => Exp_::Break(label, exp.map_exp(f)),
+            Exp_::Continue(_) => self,
+            Exp_::Dereference(exp) => Exp_::Dereference(exp.map_exp(f)),
+            Exp_::UnaryExp(op, exp) => Exp_::UnaryExp(op, exp.map_exp(f)),
+            Exp_::BinopExp(lhs, op, rhs) => Exp_::BinopExp(lhs.map_exp(f), op, rhs.map_exp(f)),
+            Exp_::Borrow(mut_, exp) => Exp_::Borrow(mut_, exp.map_exp(f)),
+            Exp_::Dot(exp, loc, name) => Exp_::Dot(exp.map_exp(f), loc, name),
+            Exp_::DotCall(exp, loc, name, is_macro, tyargs, args) => {
+                Exp_::DotCall(exp.map_exp(f), loc, name, is_macro, tyargs, args.map_exp(f))
+            }
+            Exp_::Index(exp, indices) => Exp_::Index(exp.map_exp(f), indices.map_exp(f)),
+            Exp_::Cast(exp, ty) => Exp_::Cast(exp.map_exp(f), ty),
+            Exp_::Annotate(exp, ty) => Exp_::Annotate(exp.map_exp(f), ty),
+            Exp_::UnresolvedError => self,
+            Exp_::DotUnresolved(loc, exp) => Exp_::DotUnresolved(loc, exp.map_exp(f)),
         };
         f(res)
+    }
+}
+
+// Implement the ExpMap trait for MatchArm_
+impl ExpMap for MatchArm_ {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        let MatchArm_ {
+            pattern,
+            guard,
+            rhs,
+        } = self;
+        MatchArm_ {
+            pattern,
+            guard: guard.map(|e| e.map_exp(f)),
+            rhs: rhs.map_exp(f),
+        }
     }
 }
 
@@ -2576,15 +2493,9 @@ impl ExpMap for FunctionBody_ {
         F: Fn(Exp_) -> Exp_,
     {
         match self {
-            FunctionBody_::Defined((uses, items, loc, exp)) => FunctionBody_::Defined((
-                uses,
-                items
-                    .into_iter()
-                    .map(|item| item.map(|exp| exp.map_exp(f)))
-                    .collect(),
-                loc,
-                Box::new(exp.map(|exp| exp.map(|exp| exp.map_exp(f)))),
-            )),
+            FunctionBody_::Defined((uses, items, loc, exp)) => {
+                FunctionBody_::Defined((uses, items.map_exp(f), loc, exp.map_exp(f)))
+            }
             FunctionBody_::Native => FunctionBody_::Native,
         }
     }
@@ -2596,18 +2507,49 @@ impl ExpMap for SequenceItem_ {
         F: Fn(Exp_) -> Exp_,
     {
         match self {
-            SequenceItem_::Seq(e) => SequenceItem_::Seq(map_through(e, f)),
+            SequenceItem_::Seq(e) => SequenceItem_::Seq(e.map_exp(f)),
             SequenceItem_::Declare(bs, ty_opt) => SequenceItem_::Declare(bs, ty_opt),
-            SequenceItem_::Bind(bs, ty_opt, e) => {
-                SequenceItem_::Bind(bs, ty_opt, map_through(e, f))
-            }
+            SequenceItem_::Bind(bs, ty_opt, e) => SequenceItem_::Bind(bs, ty_opt, e.map_exp(f)),
         }
     }
 }
 
-pub fn map_through<F>(b: Box<Spanned<Exp_>>, f: &mut F) -> Box<Spanned<Exp_>>
-where
-    F: Fn(Exp_) -> Exp_,
-{
-    Box::new(b.map(|b| b.map_exp(f)))
+// implement ExpMap for Spanned
+impl<T: ExpMap> ExpMap for Spanned<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        self.map(|x| x.map_exp(f))
+    }
+}
+
+// implement ExpMap for Option
+impl<T: ExpMap> ExpMap for Option<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        self.map(|x| x.map_exp(f))
+    }
+}
+
+// implement ExpMap for Vec
+impl<T: ExpMap> ExpMap for Vec<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        self.into_iter().map(|x| x.map_exp(f)).collect()
+    }
+}
+
+// implement ExpMap for Box
+impl<T: ExpMap> ExpMap for Box<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        Box::new((*self).map_exp(f))
+    }
 }

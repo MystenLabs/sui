@@ -7,7 +7,7 @@ use move_symbol_pool::Symbol;
 use crate::parser::ast as P;
 use move_ir_types::location::Spanned;
 
-use super::ast::{map_through, ExpMap};
+use super::ast::ExpMap;
 
 // TODO we should really do this after expansion so that its done after attribute resolution. But
 // that can only really be done if we move most of expansion into naming.
@@ -250,17 +250,12 @@ fn filter_through_function_body<T: FilterContext>(
     // let new_body = filter_function_body(context, body);
     let new_body = body.map(|b| match b {
         P::FunctionBody_::Native => b,
-        P::FunctionBody_::Defined((uses, items, loc, exp)) => {
-            let new_items = filter_items(context, items);
-            P::FunctionBody_::Defined((
-                uses,
-                new_items,
-                loc,
-                Box::new(exp.map(|exp| {
-                    exp.map(|exp| exp.map_exp(&mut |exp| remove_unwanted(context, exp)))
-                })),
-            ))
-        }
+        P::FunctionBody_::Defined((uses, items, loc, exp)) => P::FunctionBody_::Defined((
+            uses,
+            filter_items(context, items).map_exp(&mut |e| remove_unwanted(context, e)),
+            loc,
+            exp.map_exp(&mut |e| remove_unwanted(context, e)),
+        )),
     });
 
     P::Function {
@@ -288,10 +283,8 @@ fn filter_items<T: FilterContext>(
     context: &T,
     items: Vec<Spanned<P::SequenceItem_>>,
 ) -> Vec<Spanned<P::SequenceItem_>> {
-    let new_items = items
+    items
         .into_iter()
         .filter(|item| !context.should_remove_sequence_item(item))
-        .map(|item| item.map(|item| item.map_exp(&mut |exp| remove_unwanted(context, exp))))
-        .collect();
-    new_items
+        .collect()
 }
