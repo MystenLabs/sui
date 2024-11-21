@@ -37,10 +37,10 @@ const channel = vscode.window.createOutputChannel('Prettier Move');
  * Start the worker and register the document range formatting provider.
  * Upon activation, the extension reads the configuration settings in the following order:
  *
- * - Prettier extension settings
- * - Extension settings
- * - .editorconfig
  * - .prettierrc
+ * - .editorconfig
+ * - Extension settings
+ * - Prettier extension settings
  */
 function activate(context) {
 	const prettierConfig = vscode.workspace.getConfiguration(PRETTIER_EXTENSION_NAME);
@@ -98,11 +98,10 @@ function findMatchingConfig(documentUri) {
 		const editorConfig = cosmiconfig('editorconfig').search(lookup);
 		const prettierConfig = cosmiconfig('prettier').search(lookup);
 
-		channel.appendLine(`Looking for configuration in ${lookup}`);
-		editorConfig && channel.appendLine(`EditorConfig: ${JSON.stringify(editorConfig.config)}`);
-		prettierConfig && channel.appendLine(`PrettierConfig: ${JSON.stringify(prettierConfig.config)}`);
-
 		if (editorConfig || prettierConfig) {
+			channel.appendLine(`Found a configuration file in ${lookup}`);
+			editorConfig && channel.appendLine(`EditorConfig: ${editorConfig.filepath}`);
+			prettierConfig && channel.appendLine(`PrettierConfig: ${prettierConfig.filepath}`);
 			search = prettierConfig.config || editorConfig.config;
 			break;
 		}
