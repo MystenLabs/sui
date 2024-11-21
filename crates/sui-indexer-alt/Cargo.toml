@@ -42,8 +42,13 @@ sui-pg-temp-db.workspace = true
 sui-protocol-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+sui-synthetic-ingestion = { workspace = true, optional = true }
 
 [dev-dependencies]
 rand.workspace = true
 tempfile.workspace = true
 wiremock.workspace = true
+
+[features]
+default = []
+benchmark = ["sui-synthetic-ingestion"]  # This will be used to enable benchmark mode

@@ -4,7 +4,19 @@
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
+use args::ConsistencyConfig;
+use bootstrap::bootstrap;
 use db::{Db, DbConfig};
+use handlers::{
+    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
+    kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
+    kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
+    obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays,
+    sum_obj_types::SumObjTypes, sum_packages::SumPackages,
+    tx_affected_addresses::TxAffectedAddress, tx_affected_objects::TxAffectedObjects,
+    tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
+    tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
+};
 use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
@@ -27,6 +39,9 @@ pub mod models;
 pub mod pipeline;
 pub mod schema;
 pub mod task;
+
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 
 pub struct Indexer {
     /// Connection pool to the database.
@@ -77,21 +92,29 @@ pub struct IndexerConfig {
     /// ingestion will start just after the lowest checkpoint watermark across all active
     /// pipelines.
     #[arg(long)]
-    first_checkpoint: Option<u64>,
+    pub first_checkpoint: Option<u64>,
 
     /// Override for the checkpoint to end ingestion at (inclusive) -- useful for backfills. By
     /// default, ingestion will not stop, and will continue to poll for new checkpoints.
     #[arg(long)]
-    last_checkpoint: Option<u64>,
+    pub last_checkpoint: Option<u64>,
 
     /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
     /// will be run.
     #[arg(long, action = clap::ArgAction::Append)]
-    pipeline: Vec<String>,
+    pub pipeline: Vec<String>,
 
     /// Address to serve Prometheus Metrics from.
-    #[arg(long, default_value = "0.0.0.0:9184")]
+    #[arg(long, default_value = Self::DEFAULT_METRICS_ADDRESS)]
     pub metrics_address: SocketAddr,
+}
+
+impl IndexerConfig {
+    const DEFAULT_METRICS_ADDRESS: &'static str = "0.0.0.0:9184";
+
+    pub fn default_metrics_address() -> SocketAddr {
+        Self::DEFAULT_METRICS_ADDRESS.parse().unwrap()
+    }
 }
 
 impl Indexer {
@@ -317,4 +340,86 @@ impl Indexer {
 
         Ok(Some(watermark))
     }
+}
+
+pub async fn start_indexer(
+    indexer_config: IndexerConfig,
+    db_config: DbConfig,
+    consistency_config: ConsistencyConfig,
+    // If true, the indexer will bootstrap from genesis.
+    // Otherwise it will skip the pipelines that rely on genesis data.
+    // TODO: There is probably a better way to handle this.
+    // For instance, we could also pass in dummy genesis data in the benchmark mode.
+    with_genesis: bool,
+) -> anyhow::Result<()> {
+    let cancel = CancellationToken::new();
+    let retry_interval = indexer_config.ingestion_config.retry_interval;
+    let mut indexer = Indexer::new(db_config, indexer_config, cancel.clone()).await?;
+
+    if with_genesis {
+        let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
+
+        // Pipelines that rely on genesis information
+        indexer
+            .concurrent_pipeline(KvFeatureFlags(genesis.clone()), None)
+            .await?;
+
+        indexer
+            .concurrent_pipeline(KvProtocolConfigs(genesis.clone()), None)
+            .await?;
+    }
+
+    let ConsistencyConfig {
+        consistent_pruning_interval,
+        pruner_delay,
+        consistent_range: lag,
+    } = consistency_config;
+
+    // Pipelines that are split up into a summary table, and a write-ahead log, where the
+    // write-ahead log needs to be pruned.
+    let pruner_config = lag.map(|l| PrunerConfig {
+        interval: consistent_pruning_interval,
+        delay: pruner_delay,
+        // Retain at least twice as much data as the lag, to guarantee overlap between the
+        // summary table and the write-ahead log.
+        retention: l * 2,
+        // Prune roughly five minutes of data in one go.
+        max_chunk_size: 5 * 300,
+    });
+
+    indexer.sequential_pipeline(SumCoinBalances, lag).await?;
+    indexer
+        .concurrent_pipeline(WalCoinBalances, pruner_config.clone())
+        .await?;
+
+    indexer.sequential_pipeline(SumObjTypes, lag).await?;
+    indexer
+        .concurrent_pipeline(WalObjTypes, pruner_config)
+        .await?;
+
+    // Other summary tables (without write-ahead log)
+    indexer.sequential_pipeline(SumDisplays, None).await?;
+    indexer.sequential_pipeline(SumPackages, None).await?;
+
+    // Unpruned concurrent pipelines
+    indexer.concurrent_pipeline(EvEmitMod, None).await?;
+    indexer.concurrent_pipeline(EvStructInst, None).await?;
+    indexer.concurrent_pipeline(KvCheckpoints, None).await?;
+    indexer.concurrent_pipeline(KvEpochEnds, None).await?;
+    indexer.concurrent_pipeline(KvEpochStarts, None).await?;
+    indexer.concurrent_pipeline(KvObjects, None).await?;
+    indexer.concurrent_pipeline(KvTransactions, None).await?;
+    indexer.concurrent_pipeline(ObjVersions, None).await?;
+    indexer.concurrent_pipeline(TxAffectedAddress, None).await?;
+    indexer.concurrent_pipeline(TxAffectedObjects, None).await?;
+    indexer.concurrent_pipeline(TxBalanceChanges, None).await?;
+    indexer.concurrent_pipeline(TxCalls, None).await?;
+    indexer.concurrent_pipeline(TxDigests, None).await?;
+    indexer.concurrent_pipeline(TxKinds, None).await?;
+
+    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
+
+    cancel.cancelled().await;
+    let _ = h_indexer.await;
+    Ok(())
 }

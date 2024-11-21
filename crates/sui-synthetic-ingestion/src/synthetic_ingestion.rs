@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use simulacrum::Simulacrum;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use sui_storage::blob::Blob;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_account_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::fs;
@@ -82,6 +85,21 @@ pub async fn generate_ingestion(config: Config) {
         num_checkpoints,
         timer.elapsed()
     );
+}
+
+pub async fn read_ingestion_data(path: &PathBuf) -> anyhow::Result<BTreeMap<u64, CheckpointData>> {
+    let mut data = BTreeMap::new();
+    let mut dir = fs::read_dir(path).await?;
+    while let Some(entry) = dir.next_entry().await? {
+        let path = entry.path();
+        let bytes = fs::read(path).await?;
+        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes)?;
+        data.insert(
+            checkpoint_data.checkpoint_summary.sequence_number,
+            checkpoint_data,
+        );
+    }
+    Ok(data)
 }
 
 #[cfg(test)]
