@@ -5,7 +5,7 @@
 #![allow(unused_variables)]
 use std::{path::Path, sync::Arc};
 use sui_transactional_test_runner::{
-    run_test_impl,
+    create_adapter, run_tasks_with_adapter,
     test_adapter::{SuiTestAdapter, PRE_COMPILED},
 };
 
@@ -24,7 +24,9 @@ datatest_stable::harness!(
 async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     telemetry_subscribers::init_for_testing();
     if !cfg!(msim) {
-        run_test_impl::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
+        let (output, adapter) =
+            create_adapter::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
+        run_tasks_with_adapter(path, adapter, output).await?;
     }
     Ok(())
 }

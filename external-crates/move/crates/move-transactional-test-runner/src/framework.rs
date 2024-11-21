@@ -815,6 +815,8 @@ where
     Ok(())
 }
 
+/// Convenience function that creates an adapter and runs the tasks, to be used when a caller does
+/// not need to extend the adapter.
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
