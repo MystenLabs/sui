@@ -519,7 +519,9 @@ impl ObjectRuntimeState {
         // TODO can we have cycles in the new system?
         update_owner_map(
             input_owner_map,
-            transfers.iter().map(|(id, (owner, _, _))| (*id, owner.clone())),
+            transfers
+                .iter()
+                .map(|(id, (owner, _, _))| (*id, owner.clone())),
         )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers

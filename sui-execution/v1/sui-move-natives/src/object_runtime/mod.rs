@@ -575,7 +575,11 @@ impl ObjectRuntimeState {
 
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
-        check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, owner.clone())))?;
+        check_circular_ownership(
+            transfers
+                .iter()
+                .map(|(id, (owner, _, _))| (*id, owner.clone())),
+        )?;
         // For both written_objects and deleted_ids, we need to mark the loaded child object as modified.
         // These may not be covered in the child object effects if they are taken out in one PT command and then
         // transferred/deleted in a different command. Marking them as modified will allow us properly determine their
