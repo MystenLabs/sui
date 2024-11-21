@@ -58,7 +58,7 @@ pub async fn proxy_handler(
     request: Request<Body>,
 ) -> Result<Response, (StatusCode, String)> {
     let (parts, body) = request.into_parts();
-    let body_bytes = match axum::body::to_bytes(body, 100 * 1024 * 1024).await {
+    let body_bytes = match axum::body::to_bytes(body, 10 * 1024 * 1024).await {
         Ok(bytes) => bytes,
         Err(e) => {
             warn!("Failed to read request body: {}", e);

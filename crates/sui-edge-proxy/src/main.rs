@@ -4,6 +4,7 @@
 use axum::{routing::any, Router};
 use clap::Parser;
 use mysten_metrics::start_prometheus_server;
+use reqwest::Client;
 use sui_edge_proxy::config::{load, ProxyConfig};
 use sui_edge_proxy::handlers::{proxy_handler, AppState};
 use sui_edge_proxy::metrics::AppMetrics;
@@ -25,7 +26,8 @@ struct Args {
 async fn main() {
     let args = Args::parse();
 
-    let config: ProxyConfig = load(&args.config).unwrap();
+    let (config, client): (ProxyConfig, Client) =
+        load(&args.config).await.expect("Failed to load config");
 
     let registry_service = start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
@@ -37,15 +39,6 @@ async fn main() {
         .init();
 
     info!("Metrics server started at {}", config.metrics_address);
-
-    // Build a reqwest client that supports HTTP/2
-    let client = reqwest::ClientBuilder::new()
-        .http2_prior_knowledge()
-        .http2_keep_alive_while_idle(true)
-        .pool_idle_timeout(None)
-        .pool_max_idle_per_host(config.max_idle_connections.unwrap_or(100))
-        .build()
-        .unwrap();
 
     let app_metrics = AppMetrics::new(&prometheus_registry);
 
