@@ -137,7 +137,7 @@ export function printModuleAccess(path: AstPath<Node>, _opt: MoveOptions, print:
  * Print `ref_type` node.
  */
 export function printRefType(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-	const ref = path.node.child(0)!.text == '&' ? ['&'] : ['&mut '];
+	const ref = path.node.child(1)!.text != 'mut' ? ['&'] : ['&mut '];
 	return group([
 		...ref,
 		path.call(print, 'nonFormattingChildren', 0), // type
