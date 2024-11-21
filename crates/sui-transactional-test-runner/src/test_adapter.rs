@@ -48,6 +48,7 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::client::simple_client::SimpleClient;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
@@ -136,7 +137,9 @@ pub struct SuiTestAdapter {
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
     is_simulator: bool,
-    pub(crate) cluster: Option<ExecutorCluster>,
+    // pub(crate) cluster: Option<ExecutorCluster>,
+    /// A barebones GraphQL client that should be schema-agnostic.
+    pub(crate) graphql_client: Option<SimpleClient>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
 }
 
@@ -211,9 +214,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
         self.default_syntax
     }
     async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
-        if let Some(cluster) = self.cluster.take() {
-            cluster.cleanup_resources().await;
-        }
+        // if let Some(cluster) = self.cluster.take() {
+        // cluster.cleanup_resources().await;
+        // }
         Ok(())
     }
     async fn init(
@@ -354,7 +357,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
 
         let mut test_adapter = Self {
             is_simulator,
-            cluster,
+            // cluster,
+            graphql_client: None,
             executor,
             compiled_state: CompiledState::new(
                 named_address_mapping,
@@ -576,29 +580,33 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
-                let cluster = self.cluster.as_ref().unwrap();
+                // Extract graphql client, and raise an error if it's not set
+                let graphql_client = self
+                    .graphql_client
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("GraphQL client not set"))?;
+                // let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-                cluster
-                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
-                    .await;
+                // cluster
+                // .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
+                // .await;
 
-                cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(180))
-                    .await;
+                // cluster
+                // .wait_for_objects_snapshot_catchup(Duration::from_secs(180))
+                // .await;
 
                 if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
-                    cluster
-                        .wait_for_checkpoint_pruned(
-                            wait_for_checkpoint_pruned,
-                            Duration::from_secs(60),
-                        )
-                        .await;
+                    // cluster
+                    // .wait_for_checkpoint_pruned(
+                    // wait_for_checkpoint_pruned,
+                    // Duration::from_secs(60),
+                    // )
+                    // .await;
                 }
 
                 let interpolated =
                     self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
-                let resp = cluster
-                    .graphql_client
+                let resp = graphql_client
                     .execute_to_graphql(interpolated.trim().to_owned(), show_usage, vec![], vec![])
                     .await?;
 
@@ -1163,6 +1171,10 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl<'a> SuiTestAdapter {
+    pub fn with_graphql_rpc(&mut self, url: String) {
+        self.graphql_client = Some(SimpleClient::new(url));
+    }
+
     pub fn is_simulator(&self) -> bool {
         self.is_simulator
     }
