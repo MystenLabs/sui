@@ -201,7 +201,10 @@ impl SharedObjectCongestionTracker {
         for obj in shared_input_objects {
             if obj.mutable {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
-                assert!(old_end_cost.is_none() || old_end_cost.unwrap() < end_cost);
+                assert!(
+                    old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost,
+                    "failed to bump object execution cost for {}, start_cost: {start_cost}, old_end_cost: {old_end_cost:?}, end_cost: {end_cost}", obj.id
+                );
             }
         }
     }
