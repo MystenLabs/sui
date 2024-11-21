@@ -57,10 +57,10 @@ pub trait Handler: Processor {
 
     /// If there are more than this many rows pending, the committer will only commit this many in
     /// one operation.
-    const MAX_CHUNK_ROWS: usize = 200;
+    const MAX_CHUNK_ROWS: usize = 1000;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
-    const MAX_PENDING_ROWS: usize = 1000;
+    const MAX_PENDING_ROWS: usize = 5000;
 
     /// Provides a way for individual pipeline to override the write_concurrency parameter
     /// from the PipelineConfig. This is used to determine the number of concurrent tasks
