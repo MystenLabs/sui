@@ -705,11 +705,11 @@ pub fn compile_ir_module(
 }
 
 /// Creates an adapter for the given tasks, using the first task command to initialize the adapter
-/// if it is a `TaskCommand::Init`.
+/// if it is a `TaskCommand::Init`. Returns the adapter and the output string.
 pub async fn create_adapter<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
-) -> Result<Adapter, Box<dyn std::error::Error>>
+) -> Result<(String, Adapter), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -738,6 +738,14 @@ where
     .into_iter()
     .collect::<VecDeque<_>>();
     assert!(!tasks.is_empty());
+    let num_tasks = tasks.len();
+    writeln!(
+        &mut output,
+        "processed {} task{}",
+        num_tasks,
+        if num_tasks > 1 { "s" } else { "" }
+    )
+    .unwrap();
 
     let first_task = tasks.pop_front().unwrap();
     let init_opt = match &first_task.command {
@@ -763,11 +771,15 @@ where
         }
     }
 
-    Ok(adapter)
+    Ok((output, adapter))
 }
 
 /// Consumes the adapter to run tasks from path.
-pub async fn run_tasks_with_adapter<'a, Adapter>(path: &Path, mut adapter: Adapter) -> Result<()>
+pub async fn run_tasks_with_adapter<'a, Adapter>(
+    path: &Path,
+    mut adapter: Adapter,
+    mut output: String,
+) -> Result<()>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -776,7 +788,6 @@ where
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {
-    let mut output = String::new();
     let mut tasks = taskify::<
         TaskCommand<
             Adapter::ExtraInitArgs,
@@ -789,14 +800,6 @@ where
     .into_iter()
     .collect::<VecDeque<_>>();
     assert!(!tasks.is_empty());
-    let num_tasks = tasks.len();
-    writeln!(
-        &mut output,
-        "processed {} task{}",
-        num_tasks,
-        if num_tasks > 1 { "s" } else { "" }
-    )
-    .unwrap();
 
     // Pop off init command if present
     if let Some(TaskCommand::Init(_, _)) = tasks.front().map(|t| &t.command) {
@@ -824,8 +827,8 @@ where
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {
-    let adapter = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
-    run_tasks_with_adapter(path, adapter).await?;
+    let (output, adapter) = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
+    run_tasks_with_adapter(path, adapter, output).await?;
     Ok(())
 }
 
