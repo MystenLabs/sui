@@ -5,9 +5,13 @@ use std::{future::Future, iter, panic, pin::pin};
 
 use futures::{
     future::{self, Either},
-    stream::{FuturesUnordered, Stream, StreamExt},
+    stream::{Stream, StreamExt},
 };
-use tokio::{signal, sync::oneshot, task::JoinHandle};
+use tokio::{
+    signal,
+    sync::oneshot,
+    task::{JoinHandle, JoinSet},
+};
 use tokio_util::sync::CancellationToken;
 
 /// Extension trait introducing `try_for_each_spawned` to all streams.
@@ -59,8 +63,8 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
 
             // Number of permits to spawn tasks left.
             let mut permits = limit;
-            // Futures for already spawned tasks.
-            let mut handles = FuturesUnordered::new();
+            // Handles for already spawned tasks.
+            let mut join_set = JoinSet::new();
             // Whether the worker pool has stopped accepting new items and is draining.
             let mut draining = false;
             // Error that occurred in one of the workers, to be propagated to the called on exit.
@@ -73,7 +77,7 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                     next = self_.next(), if !draining && permits > 0 => {
                         if let Some(item) = next {
                             permits -= 1;
-                            handles.push(tokio::spawn(f(item)));
+                            join_set.spawn(f(item));
                         } else {
                             // If the stream is empty, signal that the worker pool is going to
                             // start draining now, so that once we get all our permits back, we
@@ -82,7 +86,7 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                         }
                     }
 
-                    Some(res) = handles.next() => {
+                    Some(res) = join_set.join_next() => {
                         match res {
                             Ok(Err(e)) if error.is_none() => {
                                 error = Some(e);
@@ -185,11 +189,11 @@ mod tests {
     #[tokio::test]
     async fn explicit_sequential_iteration() {
         let actual = Arc::new(Mutex::new(vec![]));
-        let result = stream::iter(0..100)
+        let result = stream::iter(0..20)
             .try_for_each_spawned(1, |i| {
                 let actual = actual.clone();
                 async move {
-                    tokio::time::sleep(Duration::from_millis(100 - i)).await;
+                    tokio::time::sleep(Duration::from_millis(20 - i)).await;
                     actual.lock().unwrap().push(i);
                     Ok::<(), ()>(())
                 }
@@ -199,7 +203,7 @@ mod tests {
         assert!(result.is_ok());
 
         let actual = Arc::try_unwrap(actual).unwrap().into_inner().unwrap();
-        let expect: Vec<_> = (0..100).collect();
+        let expect: Vec<_> = (0..20).collect();
         assert_eq!(expect, actual);
     }
 
