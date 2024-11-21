@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
+use enum_dispatch::enum_dispatch;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_json_rpc_types::{Coin, SuiTransactionBlockEffectsAPI};
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
@@ -33,6 +35,20 @@ const MAX_COMMAND_ARGS: usize = 511;
 const MAX_GAS_BUDGET: u64 = 50_000_000_000;
 const START_BUDGET: u64 = 1_000_000;
 
+pub struct GasCoinsAndObjects(pub Vec<Coin>, pub Vec<ObjectRef>);
+
+#[async_trait]
+#[enum_dispatch]
+pub trait TryFetchNeededObjects {
+    async fn try_fetch_needed_objects(
+        self,
+        client: &SuiClient,
+        gas_price: Option<u64>,
+        budget: Option<u64>,
+    ) -> Result<GasCoinsAndObjects, Error>;
+}
+
+#[enum_dispatch(TryFetchNeededObjects)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum InternalOperation {
     PaySui(PaySui),
