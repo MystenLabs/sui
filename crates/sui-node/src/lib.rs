@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_common::debug_fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -1763,6 +1764,14 @@ impl SuiNode {
                     None
                 }
             } else {
+                // TODO: Remove this after testing.
+                let chain = cur_epoch_store.get_chain_identifier().chain();
+                if chain == Chain::Testnet || chain == Chain::Mainnet {
+                    debug_fatal!(
+                        "Test debug fatal at end of epoch {}",
+                        cur_epoch_store.epoch()
+                    );
+                }
                 let new_epoch_store = self
                     .reconfigure_state(
                         &self.state,
