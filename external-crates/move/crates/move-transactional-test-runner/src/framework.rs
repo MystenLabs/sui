@@ -767,10 +767,7 @@ where
 }
 
 /// Consumes the adapter to run tasks from path.
-pub async fn run_tasks_with_adapter<'a, Adapter>(
-    path: &Path,
-    mut adapter: Adapter,
-) -> Result<(String, Adapter), Box<dyn std::error::Error>>
+pub async fn run_tasks_with_adapter<'a, Adapter>(path: &Path, mut adapter: Adapter) -> Result<()>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -810,7 +807,9 @@ where
         handle_known_task(&mut output, &mut adapter, task).await;
     }
     adapter.cleanup_resources().await?;
-    Ok((output, adapter))
+
+    handle_expected_output(path, output)?;
+    Ok(())
 }
 
 pub async fn run_test_impl<'a, Adapter>(
@@ -826,8 +825,7 @@ where
     Adapter::Subcommand: Debug,
 {
     let adapter = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
-    let output = run_tasks_with_adapter(path, adapter).await?;
-    handle_expected_output(path, output.0)?;
+    run_tasks_with_adapter(path, adapter).await?;
     Ok(())
 }
 
