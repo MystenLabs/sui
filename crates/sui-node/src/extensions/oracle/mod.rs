@@ -19,24 +19,23 @@ use sui_types::base_types::ObjectID;
 /// The Registry ID where we registered the publishers of the Oracle.
 const REGISTRY_ID: &str = "c1f6d875d562097b58bae7eb8341aa59428b7b793d1b3b4fe34b8dce0c82dbf6";
 
-/// Main loop of the Oracle.
+/// Main loop of the Oracle with improved state management and error handling
 pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
-    let (p2p_broadcaster, consensus_rx) = start_p2p().await?;
-    Api::new([127, 0, 0, 1], consensus_rx).start().await;
-
     tracing::info!("🧩 Oracle ExEx initiated!");
     tracing::info!("⏳ Syncing ExEx to blockchain tip...");
 
-    let mut tip_has_been_reached = false;
+    let mut state = ExExOracleState::Syncing;
     while let Some(notification) = ctx.notifications.next().await {
         let checkpoint = match notification {
             ExExNotification::CheckpointSynced { checkpoint_number } => checkpoint_number,
         };
-        if !tip_has_been_reached {
+
+        // Check if we've reached the tip
+        if matches!(state, ExExOracleState::Syncing) {
             if let Some(chain_tip) = ctx.highest_known_checkpoint_sequence_number() {
                 if chain_tip == checkpoint {
-                    tracing::info!("🥳 ExEx reached tip!");
-                    tip_has_been_reached = true;
+                    tracing::info!("🥳 ExEx reached tip! Starting P2P and API services...");
+                    state = state.transition_to_operating().await?;
                 } else {
                     ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
                     continue;
@@ -46,23 +45,34 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
                 continue;
             }
         }
-        tracing::info!("🤖 Oracle updating at checkpoint #{} !", checkpoint);
+
+        // When the tip has been reached, we can process checkpoints.
+        tracing::info!("🤖 Oracle updating at checkpoint #{checkpoint}!");
         let started_at = std::time::Instant::now();
-        let storage_ids = match setup_storage(&ctx) {
-            Ok(s) => s,
-            Err(_) => {
-                tracing::info!("⛔ No storage found for checkpoint {}", checkpoint);
-                ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
-                continue;
-            }
-        };
-        if let Some(median_price) = fetch_prices_and_aggregate(&ctx, &storage_ids).await? {
-            let _ = p2p_broadcaster.broadcast(median_price, checkpoint).await;
-        }
-        tracing::info!("✅ Executed {} in {:?}", checkpoint, started_at.elapsed());
+        process_checkpoint(&ctx, &state, checkpoint).await?;
+        tracing::info!("✅ Executed {checkpoint} in {:?}", started_at.elapsed());
         ctx.events.send(ExExEvent::FinishedHeight(checkpoint))?;
     }
 
+    Ok(())
+}
+
+/// Fetches the price from the publishers storage and broadcast the price to
+/// the P2P network.
+async fn process_checkpoint(
+    ctx: &ExExContext,
+    state: &ExExOracleState,
+    checkpoint: u64,
+) -> anyhow::Result<()> {
+    let storage_ids = setup_storage(ctx);
+    if storage_ids.is_err() {
+        tracing::warn!("😱 Storage setup failed for checkpoint {checkpoint}. Ignoring.");
+        return Ok(());
+    }
+
+    if let Some(median_price) = fetch_prices_and_aggregate(ctx, &storage_ids?).await? {
+        state.broadcast_price(median_price, checkpoint).await?;
+    }
     Ok(())
 }
 
@@ -74,14 +84,16 @@ fn setup_storage(ctx: &ExExContext) -> anyhow::Result<Vec<ObjectID>> {
     let oracle_registry: PuiRegistry =
         deserialize_object(&ctx.store, registry_id).context("Fetching the Oracle PuiRegistry")?;
 
-    let storage_ids = oracle_registry
+    oracle_registry
         .publishers_storages
         .contents
         .iter()
-        .map(|entry| ObjectID::from_address(AccountAddress::from_bytes(entry.value.bytes).unwrap()))
-        .collect();
-
-    Ok(storage_ids)
+        .map(|entry| {
+            AccountAddress::from_bytes(entry.value.bytes)
+                .map(ObjectID::from_address)
+                .context("Invalid storage address")
+        })
+        .collect()
 }
 
 /// Fetch from the storages the published prices and computes the median.
@@ -92,4 +104,38 @@ async fn fetch_prices_and_aggregate(
 ) -> anyhow::Result<Option<MedianPrice>> {
     let price_storages: Vec<PuiPriceStorage> = deserialize_objects(&ctx.store, storage_ids)?;
     Ok(aggregate_to_median(&price_storages))
+}
+
+#[derive(Debug)]
+enum ExExOracleState {
+    Syncing,
+    Operating { p2p_broadcaster: P2PBroadcaster },
+}
+
+impl ExExOracleState {
+    async fn transition_to_operating(self) -> anyhow::Result<Self> {
+        match self {
+            ExExOracleState::Syncing => {
+                let (p2p_broadcaster, consensus_rx) = start_p2p().await?;
+                let api = Api::new([127, 0, 0, 1], consensus_rx);
+
+                tokio::spawn(async move {
+                    api.start().await;
+                });
+
+                Ok(ExExOracleState::Operating { p2p_broadcaster })
+            }
+            state @ ExExOracleState::Operating { .. } => Ok(state),
+        }
+    }
+
+    async fn broadcast_price(&self, price: MedianPrice, checkpoint: u64) -> anyhow::Result<()> {
+        match self {
+            ExExOracleState::Operating { p2p_broadcaster } => {
+                p2p_broadcaster.broadcast(price, checkpoint).await?;
+                Ok(())
+            }
+            ExExOracleState::Syncing => Err(anyhow::anyhow!("Cannot broadcast while syncing")),
+        }
+    }
 }

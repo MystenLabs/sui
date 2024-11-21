@@ -22,6 +22,7 @@ pub struct AppState {
     pub price_data: Arc<Mutex<MedianPrice>>,
 }
 
+#[derive(Debug)]
 pub struct Api {
     state: Arc<AppState>,
     address: SocketAddr,

@@ -33,6 +33,8 @@ pub async fn start_p2p() -> Result<(P2PBroadcaster, mpsc::Receiver<MedianPrice>)
 }
 
 pub type BroadcastedPrice = (MedianPrice, u64);
+
+#[derive(Debug)]
 pub struct P2PBroadcaster(mpsc::UnboundedSender<BroadcastedPrice>);
 
 impl P2PBroadcaster {
@@ -122,7 +124,9 @@ impl P2PNode {
                     let _ = self.broadcast_price(median_price, checkpoint).await;
                 }
                 event = self.swarm.select_next_some() => {
+                    let started_at = std::time::Instant::now();
                     self.handle_swarm_event(event).await;
+                    tracing::info!("Processed p2p event in {:?}", started_at.elapsed());
                 }
             }
         }
