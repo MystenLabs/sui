@@ -122,9 +122,6 @@ export function printTrailingComment(path: AstPath<Node>, shouldBreak: boolean =
 	return [' ', comment.text];
 }
 
-/**
- * TODO: use this type for the `block()` function.
- */
 export type BlockOptions = {
 	path: AstPath<Node>;
 	print: printFn;
@@ -137,8 +134,6 @@ export type BlockOptions = {
 	shouldBreak?: boolean;
 };
 
-/**
- */
 export function block({ path, print, options, shouldBreak, skipChildren }: BlockOptions) {
 	const length = path.node.nonFormattingChildren.length;
 

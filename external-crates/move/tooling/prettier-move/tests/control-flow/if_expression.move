@@ -18,6 +18,15 @@ module test::if_expression {
             do_that();
         } else do_this();
 
+        if (cond) { /* inline block comment */ };
+        if (cond) { /* inline block comment */ } else { /* inline block comment */ };
+        if (cond) { /* very long block comment
+         which breaks */};
+
+        if (cond) {
+            // empty comment
+        };
+
 
         if (true) call_something()
         else call_something_else();
