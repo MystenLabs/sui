@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "benchmark")]
 use crate::benchmark::BenchmarkConfig;
 use crate::db::DbConfig;
 use crate::pipeline::sequential::consistency_config::ConsistencyConfig;
@@ -36,6 +37,11 @@ pub enum Command {
         skip_migrations: bool,
     },
 
+    /// Run the benchmark. It will load ingestion data from the given path and run the pipelines.
+    /// The first and last checkpoint will be determined automatically based on the ingestion data.
+    /// Note that the indexer will not be bootstrapped from genesis, and hence will
+    /// skip any pipelines that rely on genesis data.
+    #[cfg(feature = "benchmark")]
     Benchmark {
         #[command(flatten)]
         config: BenchmarkConfig,

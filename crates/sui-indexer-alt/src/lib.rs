@@ -30,7 +30,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub mod args;
-pub mod benchmark;
 pub mod bootstrap;
 pub mod db;
 pub mod handlers;
@@ -40,6 +39,9 @@ pub mod models;
 pub mod pipeline;
 pub mod schema;
 pub mod task;
+
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 
 pub struct Indexer {
     /// Connection pool to the database.

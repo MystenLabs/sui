@@ -5,7 +5,6 @@ use anyhow::Result;
 use clap::Parser;
 use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
-use sui_indexer_alt::benchmark::run_benchmark;
 use sui_indexer_alt::db::reset_database;
 use sui_indexer_alt::start_indexer;
 
@@ -28,8 +27,9 @@ async fn main() -> Result<()> {
         Command::ResetDatabase { skip_migrations } => {
             reset_database(args.db_config, skip_migrations).await?;
         }
+        #[cfg(feature = "benchmark")]
         Command::Benchmark { config } => {
-            run_benchmark(config, args.db_config).await?;
+            sui_indexer_alt::benchmark::run_benchmark(config, args.db_config).await?;
         }
     }
 
