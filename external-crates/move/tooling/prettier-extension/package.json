@@ -1,6 +1,6 @@
 {
 	"name": "prettier-move",
-	"publisher": "MystenLabs",
+	"publisher": "mysten",
 	"displayName": "Move Formatter Developer Preview",
 	"description": "Adds Move code formatting to VSCode using Prettier@v3",
 	"version": "0.1.0",
