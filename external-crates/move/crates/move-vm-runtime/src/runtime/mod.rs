@@ -20,7 +20,10 @@ use move_core_types::{
     resolver::{MoveResolver, SerializedPackage},
 };
 use move_vm_config::runtime::VMConfig;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use tracing::warn;
 
 // FIXME(cswords): This is only public for testing...
@@ -124,7 +127,7 @@ impl MoveRuntime {
         let runtime_packages = packages
             .into_values()
             .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
-            .collect::<HashMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
+            .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
         let virtual_tables = VMDispatchTables::new(runtime_packages)?;
 

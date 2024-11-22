@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::ArenaPointer,
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
@@ -17,7 +16,10 @@ use crate::{
     },
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
-    shared::gas::{GasMeter, SimpleInstruction},
+    shared::{
+        gas::{GasMeter, SimpleInstruction},
+        vm_pointer::VMPointer,
+    },
 };
 use fail::fail_point;
 use move_binary_format::{errors::*, file_format::JumpTableInner};
@@ -866,7 +868,7 @@ fn op_step_impl(
 fn call_type_to_function(
     run_context: &RunContext,
     call_type: &CallType,
-) -> PartialVMResult<ArenaPointer<Function>> {
+) -> PartialVMResult<VMPointer<Function>> {
     match call_type {
         CallType::Direct(ptr) => Ok(*ptr),
         CallType::Virtual(vtable_key) => run_context.vtables.resolve_function(vtable_key),
@@ -877,7 +879,7 @@ fn call_function(
     state: &mut MachineState,
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
-    function: ArenaPointer<Function>,
+    function: VMPointer<Function>,
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
     let fun_ref = function.to_ref();
@@ -1094,7 +1096,7 @@ where
 fn push_call_frame(
     state: &mut MachineState,
     run_context: &RunContext,
-    function: ArenaPointer<Function>,
+    function: VMPointer<Function>,
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
     let fun_ref = function.ptr_clone().to_ref();

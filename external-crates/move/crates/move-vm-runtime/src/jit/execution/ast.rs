@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{
-        arena::{self, Arena, ArenaPointer},
-        identifier_interner::IdentifierKey,
-        type_cache::CrossVersionPackageCache,
+    cache::arena::Arena,
+    execution::{
+        dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
+        values::ConstantValue,
     },
-    execution::values::ConstantValue,
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
         binary_cache::BinaryCache,
         constants::TYPE_DEPTH_MAX,
         types::{PackageStorageId, RuntimePackageId},
+        vm_pointer::{self, VMPointer},
     },
     string_interner,
 };
@@ -20,40 +20,23 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, CodeOffset, ConstantPoolIndex, DatatypeTyParameter, EnumDefInstantiationIndex,
-        EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
+        AbilitySet, CodeOffset, ConstantPoolIndex, EnumDefInstantiationIndex, EnumDefinitionIndex,
+        FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
         FunctionInstantiationIndex, LocalIndex, SignatureIndex, SignatureToken,
-        StructDefInstantiationIndex, StructDefinitionIndex, TypeParameterIndex, VariantHandle,
-        VariantHandleIndex, VariantInstantiationHandle, VariantInstantiationHandleIndex,
-        VariantJumpTable, VariantJumpTableIndex, VariantTag,
+        StructDefInstantiationIndex, StructDefinitionIndex, VariantHandle, VariantHandleIndex,
+        VariantInstantiationHandle, VariantInstantiationHandleIndex, VariantJumpTable,
+        VariantJumpTableIndex, VariantTag,
     },
 };
 use move_core_types::{
-    annotated_value as A,
-    gas_algebra::AbstractMemorySize,
-    identifier::Identifier,
-    language_storage::{ModuleId, StructTag},
-    runtime_value as R,
+    gas_algebra::AbstractMemorySize, identifier::Identifier, language_storage::ModuleId,
     vm_status::StatusCode,
 };
-use parking_lot::RwLock;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
-
-/// A `PackageVTable` is a collection of function pointers indexed by the module and function name
-/// within the package.
-#[derive(Debug)]
-pub struct PackageVTable {
-    pub functions: BinaryCache<IntraPackageKey, ArenaPointer<Function>>,
-    pub types: Arc<RwLock<CrossVersionPackageCache>>,
-}
-
 /// Representation of a loaded package.
 pub struct Package {
     pub storage_id: PackageStorageId,
@@ -63,9 +46,9 @@ pub struct Package {
     // address in this table.
     pub loaded_modules: BinaryCache<Identifier, Module>,
 
-    // NB: All things except for types are allocated into this arena.
+    // NB: Package functions and code are allocated into this arena.
     pub package_arena: Arena,
-    pub vtable: PackageVTable,
+    pub vtable: PackageVirtualTable,
 }
 
 // A LoadedModule is very similar to a CompiledModule but data is "transformed" to a representation
@@ -77,55 +60,51 @@ pub struct Module {
     #[allow(dead_code)]
     pub id: ModuleId,
 
-    //
-    // types as indexes into the package's vtable
-    //
+    ///
+    /// types as indexes into the package's vtable
+    ///
     #[allow(dead_code)]
     pub type_refs: Vec<IntraPackageKey>,
 
-    // struct references carry the index into the global vector of types.
-    // That is effectively an indirection over the ref table:
-    // the instruction carries an index into this table which contains the index into the
-    // glabal table of types. No instantiation of generic types is saved into the global table.
+    /// struct references carry the index into the global vector of types.
+    /// That is effectively an indirection over the ref table:
+    /// the instruction carries an index into this table which contains the index into the
+    /// glabal table of types. No instantiation of generic types is saved into the global table.
     pub structs: Vec<StructDef>,
-    // materialized instantiations, whether partial or not
+    /// materialized instantiations, whether partial or not
     pub struct_instantiations: Vec<StructInstantiation>,
 
-    // enum references carry the index into the global vector of types.
-    // That is effectively an indirection over the ref table:
-    // the instruction carries an index into this table which contains the index into the
-    // glabal table of types. No instantiation of generic types is saved into the global table.
-    // Note that variants are not carried in the global table as these should stay in sync with the
-    // enum type.
+    /// enum references carry the index into the global vector of types.
+    /// That is effectively an indirection over the ref table:
+    /// the instruction carries an index into this table which contains the index into the
+    /// glabal table of types. No instantiation of generic types is saved into the global table.
+    /// Note that variants are not carried in the global table as these should stay in sync with the
+    /// enum type.
     pub enums: Vec<EnumDef>,
-    // materialized instantiations
+    /// materialized instantiations
     pub enum_instantiations: Vec<EnumInstantiation>,
 
     pub variant_handles: Vec<VariantHandle>,
     pub variant_instantiation_handles: Vec<VariantInstantiationHandle>,
 
-    // materialized instantiations, whether partial or not
+    /// materialized instantiations, whether partial or not
     pub function_instantiations: Vec<FunctionInstantiation>,
 
-    // fields as a pair of index, first to the type, second to the field position in that type
+    /// fields as a pair of index, first to the type, second to the field position in that type
     pub field_handles: Vec<FieldHandle>,
-    // materialized instantiations, whether partial or not
+    /// materialized instantiations, whether partial or not
     pub field_instantiations: Vec<FieldInstantiation>,
 
-    // function name to its arena-loaded definition.
-    // This allows a direct access from function name to `Function`
-    pub function_map: HashMap<Identifier, ArenaPointer<Function>>,
-
-    // a map of single-token signature indices to type.
-    // Single-token signatures are usually indexed by the `SignatureIndex` in bytecode. For example,
-    // `VecMutBorrow(SignatureIndex)`, the `SignatureIndex` maps to a single `SignatureToken`, and
-    // hence, a single type.
+    /// a map of single-token signature indices to type.
+    /// Single-token signatures are usually indexed by the `SignatureIndex` in bytecode. For example,
+    /// `VecMutBorrow(SignatureIndex)`, the `SignatureIndex` maps to a single `SignatureToken`, and
+    /// hence, a single type.
     pub single_signature_token_map: BTreeMap<SignatureIndex, Type>,
 
-    // a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
+    /// a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
     pub instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
 
-    // constant references carry an index into a global vector of values.
+    /// constant references carry an index into a global vector of values.
     pub constants: Vec<Constant>,
 }
 
@@ -172,8 +151,8 @@ pub struct Function {
 // - Virtual: the function is unknown and the index is the index in the global table of vtables
 //   that will be filled in at a later time before execution.
 pub enum CallType {
-    Direct(ArenaPointer<Function>),
-    Virtual(VTableKey),
+    Direct(VMPointer<Function>),
+    Virtual(VirtualTableKey),
 }
 
 // A function instantiation.
@@ -189,7 +168,7 @@ pub struct StructDef {
     // struct field count
     pub field_count: u16,
     // `ModuelCache::structs` global table index
-    pub idx: VTableKey,
+    pub idx: VirtualTableKey,
 }
 
 #[derive(Debug)]
@@ -197,7 +176,7 @@ pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     // `ModuleCache::structs` global table index. It is the generic type.
-    pub def: VTableKey,
+    pub def: VirtualTableKey,
     pub instantiation_idx: SignatureIndex,
 }
 
@@ -206,7 +185,7 @@ pub struct StructInstantiation {
 pub struct FieldHandle {
     pub offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
-    pub owner: VTableKey,
+    pub owner: VirtualTableKey,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
@@ -215,7 +194,7 @@ pub struct FieldInstantiation {
     pub offset: usize,
     // `ModuleCache::structs` global table index. It is the generic type.
     #[allow(unused)]
-    pub owner: VTableKey,
+    pub owner: VirtualTableKey,
 }
 
 #[derive(Debug)]
@@ -225,7 +204,7 @@ pub struct EnumDef {
     pub variant_count: u16,
     pub variants: Vec<VariantDef>,
     // `ModuelCache::types` global table index
-    pub idx: VTableKey,
+    pub idx: VirtualTableKey,
 }
 
 #[derive(Debug)]
@@ -233,7 +212,7 @@ pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: Vec<u16>,
     // `ModuelCache::types` global table index
-    pub def: VTableKey,
+    pub def: VirtualTableKey,
     pub instantiation_idx: SignatureIndex,
 }
 
@@ -246,42 +225,9 @@ pub struct VariantDef {
     pub field_types: Vec<Type>,
 }
 
-//
-// Cache for data associated to a Struct, used for de/serialization and more
-//
-
-#[derive(Debug, Clone)]
-pub struct DatatypeInfo {
-    pub runtime_tag: Option<StructTag>,
-    pub defining_tag: Option<StructTag>,
-    pub layout: Option<R::MoveDatatypeLayout>,
-    pub annotated_layout: Option<A::MoveDatatypeLayout>,
-    pub node_count: Option<u64>,
-    pub annotated_node_count: Option<u64>,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum DatatypeTagType {
-    Runtime,
-    Defining,
-}
-
 // -------------------------------------------------------------------------------------------------
 // Runtime Type representation
 // -------------------------------------------------------------------------------------------------
-
-/// runtime_address::module_name::function_name
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct VTableKey {
-    pub package_key: RuntimePackageId,
-    pub inner_pkg_key: IntraPackageKey,
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct IntraPackageKey {
-    pub module_name: IdentifierKey,
-    pub member_name: IdentifierKey,
-}
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Type {
@@ -292,27 +238,14 @@ pub enum Type {
     Address,
     Signer,
     Vector(Box<Type>),
-    Datatype(VTableKey),
-    DatatypeInstantiation(Box<(VTableKey, Vec<Type>)>),
+    Datatype(VirtualTableKey),
+    DatatypeInstantiation(Box<(VirtualTableKey, Vec<Type>)>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     TyParam(u16),
     U16,
     U32,
     U256,
-}
-
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CachedDatatype {
-    pub abilities: AbilitySet,
-    pub type_parameters: Vec<DatatypeTyParameter>,
-    pub name: Identifier,
-    pub defining_id: ModuleId,
-    pub runtime_id: ModuleId,
-    pub module_key: IdentifierKey,
-    pub member_key: IdentifierKey,
-    pub depth: Option<DepthFormula>,
-    pub datatype_info: Datatype,
 }
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -343,17 +276,9 @@ pub struct StructType {
     pub struct_def: StructDefinitionIndex,
 }
 
-/// A formula for the maximum depth of the value for a type
-/// max(Ti + Ci, ..., CBase)
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-pub struct DepthFormula {
-    /// The terms for each type parameter, if present.
-    /// Ti + Ci
-    pub terms: Vec<(TypeParameterIndex, u64)>,
-    /// The depth for any non type parameter term, if one exists.
-    /// CBase
-    pub constant: Option<u64>,
-}
+// -------------------------------------------------------------------------------------------------
+// Bytecode
+// -------------------------------------------------------------------------------------------------
 
 /// `Bytecode` is a VM instruction of variable size. The type of the bytecode (opcode) defines
 /// the size of the bytecode.
@@ -481,7 +406,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ..., return_value(k)```
-    DirectCall(ArenaPointer<Function>),
+    DirectCall(VMPointer<Function>),
     /// Call an unknown (inter-package) function. The stack has the arguments pushed first to
     /// last. The arguments are consumed and pushed to the locals of the function.
     /// Return values are pushed on the stack and available to the caller.
@@ -492,7 +417,7 @@ pub enum Bytecode {
     ///
     /// The VTableKey must be resolved in the current package context to resolve it to a function
     /// that can be executed.
-    VirtualCall(VTableKey),
+    VirtualCall(VirtualTableKey),
     CallGeneric(FunctionInstantiationIndex),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
@@ -860,17 +785,8 @@ pub enum Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl PackageVTable {
-    pub fn new(package_cache: Arc<RwLock<CrossVersionPackageCache>>) -> Self {
-        Self {
-            functions: BinaryCache::new(),
-            types: package_cache,
-        }
-    }
-}
-
 impl Module {
-    pub fn struct_at(&self, idx: StructDefinitionIndex) -> VTableKey {
+    pub fn struct_at(&self, idx: StructDefinitionIndex) -> VirtualTableKey {
         self.structs[idx.0 as usize].idx.clone()
     }
 
@@ -912,7 +828,7 @@ impl Module {
         })
     }
 
-    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VTableKey {
+    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VirtualTableKey {
         self.enums[idx.0 as usize].idx.clone()
     }
 
@@ -990,7 +906,7 @@ impl Function {
     }
 
     pub fn code(&self) -> &[Bytecode] {
-        arena::ref_slice(self.code)
+        vm_pointer::ref_slice(self.code)
     }
 
     pub fn jump_tables(&self) -> &[VariantJumpTable] {
@@ -1041,164 +957,6 @@ impl Function {
                     .with_message("Missing Native Function".to_string())
             })
         }
-    }
-}
-
-impl Default for DatatypeInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DatatypeInfo {
-    pub fn new() -> Self {
-        Self {
-            runtime_tag: None,
-            defining_tag: None,
-            layout: None,
-            annotated_layout: None,
-            node_count: None,
-            annotated_node_count: None,
-        }
-    }
-}
-
-impl DepthFormula {
-    /// A value with no type parameters
-    pub fn constant(constant: u64) -> Self {
-        Self {
-            terms: vec![],
-            constant: Some(constant),
-        }
-    }
-
-    /// A stand alone type parameter value
-    pub fn type_parameter(tparam: TypeParameterIndex) -> Self {
-        Self {
-            terms: vec![(tparam, 0)],
-            constant: None,
-        }
-    }
-
-    /// We `max` over a list of formulas, and we normalize it to deal with duplicate terms, e.g.
-    /// `max(max(t1 + 1, t2 + 2, 2), max(t1 + 3, t2 + 1, 4))` becomes
-    /// `max(t1 + 3, t2 + 2, 4)`
-    pub fn normalize(formulas: Vec<Self>) -> Self {
-        let mut var_map = BTreeMap::new();
-        let mut constant_acc = None;
-        for formula in formulas {
-            let Self { terms, constant } = formula;
-            for (var, cur_factor) in terms {
-                var_map
-                    .entry(var)
-                    .and_modify(|prev_factor| {
-                        *prev_factor = std::cmp::max(cur_factor, *prev_factor)
-                    })
-                    .or_insert(cur_factor);
-            }
-            match (constant_acc, constant) {
-                (_, None) => (),
-                (None, Some(_)) => constant_acc = constant,
-                (Some(c1), Some(c2)) => constant_acc = Some(std::cmp::max(c1, c2)),
-            }
-        }
-        Self {
-            terms: var_map.into_iter().collect(),
-            constant: constant_acc,
-        }
-    }
-
-    /// Substitute in formulas for each type parameter and normalize the final formula
-    pub fn subst(
-        &self,
-        mut map: BTreeMap<TypeParameterIndex, DepthFormula>,
-    ) -> PartialVMResult<DepthFormula> {
-        let Self { terms, constant } = self;
-        let mut formulas = vec![];
-        if let Some(constant) = constant {
-            formulas.push(DepthFormula::constant(*constant))
-        }
-        for (t_i, c_i) in terms {
-            let Some(mut u_form) = map.remove(t_i) else {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("{t_i:?} missing mapping")),
-                );
-            };
-            u_form.add(*c_i);
-            formulas.push(u_form)
-        }
-        Ok(DepthFormula::normalize(formulas))
-    }
-
-    /// Given depths for each type parameter, solve the formula giving the max depth for the type
-    pub fn solve(&self, tparam_depths: &[u64]) -> PartialVMResult<u64> {
-        let Self { terms, constant } = self;
-        let mut depth = constant.as_ref().copied().unwrap_or(0);
-        for (t_i, c_i) in terms {
-            match tparam_depths.get(*t_i as usize) {
-                None => {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!("{t_i:?} missing mapping")),
-                    )
-                }
-                Some(ty_depth) => depth = std::cmp::max(depth, ty_depth.saturating_add(*c_i)),
-            }
-        }
-        Ok(depth)
-    }
-
-    // `max(t_0 + c_0, ..., t_n + c_n, c_base) + c`. But our representation forces us to distribute
-    // the addition, so it becomes `max(t_0 + c_0 + c, ..., t_n + c_n + c, c_base + c)`
-    pub fn add(&mut self, c: u64) {
-        let Self { terms, constant } = self;
-        for (_t_i, c_i) in terms {
-            *c_i = (*c_i).saturating_add(c);
-        }
-        if let Some(cbase) = constant.as_mut() {
-            *cbase = (*cbase).saturating_add(c);
-        }
-    }
-}
-
-impl CachedDatatype {
-    pub fn get_struct(&self) -> PartialVMResult<&StructType> {
-        match &self.datatype_info {
-            Datatype::Struct(struct_type) => Ok(struct_type),
-            x @ Datatype::Enum(_) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("Expected struct type but got {:?}", x))),
-        }
-    }
-
-    pub fn get_enum(&self) -> PartialVMResult<&EnumType> {
-        match &self.datatype_info {
-            Datatype::Enum(enum_type) => Ok(enum_type),
-            x @ Datatype::Struct(_) => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!("Expected enum type but got {:?}", x))),
-        }
-    }
-
-    pub fn datatype_key(&self) -> VTableKey {
-        let module_name = self.module_key;
-        let member_name = self.member_key;
-        VTableKey {
-            package_key: *self.runtime_id.address(),
-            inner_pkg_key: IntraPackageKey {
-                module_name,
-                member_name,
-            },
-        }
-    }
-}
-
-impl CachedDatatype {
-    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
-        self.type_parameters.iter().map(|param| &param.constraints)
     }
 }
 

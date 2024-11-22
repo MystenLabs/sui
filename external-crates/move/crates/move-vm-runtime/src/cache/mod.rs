@@ -4,4 +4,3 @@
 pub mod arena;
 pub mod identifier_interner;
 pub mod move_cache;
-pub mod type_cache;
