@@ -28,7 +28,7 @@ echo "build date: \t$BUILD_DATE"
 echo "git revision: \t$GIT_REVISION"
 echo
 
-docker buildx build --platform linux/amd64,linux/arm64 -f "$DOCKERFILE" "$REPO_ROOT" \
+docker buildx build -f "$DOCKERFILE" "$REPO_ROOT" \
 	--build-arg GIT_REVISION="$GIT_REVISION" \
 	--build-arg BUILD_DATE="$BUILD_DATE" \
 	--build-arg PROFILE="$PROFILE" \
