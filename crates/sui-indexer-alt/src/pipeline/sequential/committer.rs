@@ -286,6 +286,11 @@ pub(super) fn committer<H: Handler + 'static>(
                         .inc_by(affected as u64);
 
                     metrics
+                        .committer_tx_rows
+                        .with_label_values(&[H::NAME])
+                        .observe(affected as f64);
+
+                    metrics
                         .watermark_epoch_in_db
                         .with_label_values(&[H::NAME])
                         .set(watermark.epoch_hi_inclusive);
