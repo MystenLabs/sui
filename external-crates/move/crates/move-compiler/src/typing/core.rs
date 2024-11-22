@@ -43,11 +43,23 @@ use std::{
 // Context
 //**************************************************************************************************
 
-#[derive(Clone)]
-pub struct UseFunsScope {
+pub struct UseFunsScope<'env, 'outer> {
     color: Option<Color>,
     count: usize,
-    use_funs: ResolvedUseFuns,
+    use_funs: UseFunsScope_<'env, 'outer>,
+}
+
+pub type UsedMethods = BTreeSet<(TypeName, Name)>;
+
+pub enum UseFunsScope_<'env, 'outer> {
+    Global(&'env ResolvedUseFuns),
+    Outer(&'outer ResolvedUseFuns, UsedMethods),
+    Local(ResolvedUseFuns),
+}
+enum FoundMethod<'outer, 'local> {
+    Global(&'outer N::UseFun),
+    Outer(&'outer N::UseFun, &'local mut UsedMethods),
+    Local(&'local mut N::UseFun),
 }
 
 pub enum Constraint {
@@ -104,7 +116,7 @@ pub struct ModuleContext<'env> {
     #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
-    use_funs: Vec<UseFunsScope>,
+    use_funs: Vec<UseFunsScope<'env, /* unused */ 'static>>,
     deprecations: Deprecations,
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
@@ -118,7 +130,7 @@ pub struct ModuleContext<'env> {
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 }
 
-pub struct Context<'outer, 'env> {
+pub struct Context<'env, 'outer> {
     pub outer: &'outer ModuleContext<'env>,
 
     pub reporter: DiagnosticReporter<'env>,
@@ -133,7 +145,7 @@ pub struct Context<'outer, 'env> {
 
     // for generating new variables during match compilation
     next_match_var_id: usize,
-    use_funs: Vec<UseFunsScope>,
+    use_funs: Vec<UseFunsScope<'env, 'outer>>,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
     max_variable_color: RefCell<u16>,
@@ -164,39 +176,74 @@ pub struct ResolvedFunctionType {
     pub return_: Type,
 }
 
-impl UseFunsScope {
-    pub fn global(info: &NamingProgramInfo) -> Self {
-        let count = 1;
-        let mut use_funs = BTreeMap::new();
-        for (_, _, minfo) in &info.modules {
-            for (tn, methods) in &minfo.use_funs {
-                let public_methods = methods.ref_filter_map(|_, uf| {
-                    if uf.is_public.is_some() {
-                        Some(uf.clone())
-                    } else {
-                        None
-                    }
-                });
-                if public_methods.is_empty() {
-                    continue;
+pub fn global_use_funs(info: &NamingProgramInfo) -> ResolvedUseFuns {
+    let mut global_use_funs = BTreeMap::new();
+    for (_, _, minfo) in &info.modules {
+        for (tn, methods) in &minfo.use_funs {
+            let public_methods = methods.ref_filter_map(|_, uf| {
+                if uf.is_public.is_some() {
+                    Some(uf.clone())
+                } else {
+                    None
                 }
-
-                assert!(
-                    !use_funs.contains_key(tn),
-                    "ICE public methods should have been filtered to the defining module.
-                    tn: {tn}.
-                    prev: {}
-                    new: {}",
-                    debug_display!((tn, (use_funs.get(tn).unwrap()))),
-                    debug_display!((tn, &public_methods))
-                );
-                use_funs.insert(tn.clone(), public_methods);
+            });
+            if public_methods.is_empty() {
+                continue;
             }
+
+            assert!(
+                !global_use_funs.contains_key(tn),
+                "ICE public methods should have been filtered to the defining module.
+                tn: {tn}.
+                prev: {}
+                new: {}",
+                debug_display!((tn, (global_use_funs.get(tn).unwrap()))),
+                debug_display!((tn, &public_methods))
+            );
+            global_use_funs.insert(tn.clone(), public_methods);
         }
+    }
+    global_use_funs
+}
+
+impl<'env> UseFunsScope<'env, '_> {
+    pub fn global(global_use_funs: &'env ResolvedUseFuns) -> Self {
         UseFunsScope {
             color: None,
-            count,
-            use_funs,
+            count: 1,
+            use_funs: UseFunsScope_::Global(global_use_funs),
+        }
+    }
+}
+
+impl UseFunsScope_<'_, '_> {
+    pub fn resolved(&self) -> &ResolvedUseFuns {
+        match self {
+            UseFunsScope_::Global(r) => r,
+            UseFunsScope_::Outer(r, _) => r,
+            UseFunsScope_::Local(r) => r,
+        }
+    }
+}
+
+impl FoundMethod<'_, '_> {
+    pub fn use_fun(&self) -> &N::UseFun {
+        match self {
+            FoundMethod::Global(use_fun) => use_fun,
+            FoundMethod::Outer(use_fun, _) => use_fun,
+            FoundMethod::Local(use_fun) => use_fun,
+        }
+    }
+
+    pub fn mark_used(&mut self, tn: &TypeName, method_name: &Name) {
+        match self {
+            FoundMethod::Global(_) => (),
+            FoundMethod::Outer(_, used) => {
+                used.insert((*tn, *method_name));
+            }
+            FoundMethod::Local(use_fun) => {
+                use_fun.used = true;
+            }
         }
     }
 }
@@ -224,15 +271,16 @@ macro_rules! add_use_funs_scope {
                 }
                 let mut same_target = false;
                 let mut case = None;
-                let Some(prev) = $self.find_method_impl(tn, method, |prev| {
-                    if use_fun.target_function == prev.target_function {
-                        case = Some(match &prev.kind {
+                let Some(prev) = $self.find_method_impl(tn, &method, |mut prev| {
+                    let prev_use_fun = prev.use_fun();
+                    if use_fun.target_function == prev_use_fun.target_function {
+                        case = Some(match &prev_use_fun.kind {
                             UseFunKind::UseAlias | UseFunKind::Explicit => "Duplicate",
                             UseFunKind::FunctionDeclaration => "Unnecessary",
                         });
                         same_target = true;
                         // suppress unused warning
-                        prev.used = true;
+                        prev.mark_used(tn, &method);
                     }
                 }) else {
                     continue;
@@ -253,7 +301,7 @@ macro_rules! add_use_funs_scope {
         }
         $self.use_funs.push(UseFunsScope {
             count: 1,
-            use_funs: new_scope,
+            use_funs: UseFunsScope_::Local(new_scope),
             color: Some(color),
         })
     }};
@@ -268,6 +316,11 @@ fn pop_use_funs_scope(use_funs: &mut Vec<UseFunsScope>) -> N::UseFuns {
     let UseFunsScope {
         use_funs, color, ..
     } = use_funs.pop().unwrap();
+    let use_funs = match use_funs {
+        UseFunsScope_::Global(_) => panic!("ICE global scope should never be popped"),
+        UseFunsScope_::Outer(_, _) => panic!("ICE outer scope should never be popped"),
+        UseFunsScope_::Local(use_funs) => use_funs,
+    };
     N::UseFuns {
         resolved: use_funs,
         color: color.unwrap_or(0),
@@ -309,12 +362,12 @@ fn report_unused_use_funs(reporter: &mut DiagnosticReporter, use_funs: &N::UseFu
     }
 }
 
-fn use_funs_find_method<'a>(
-    use_funs: &'a mut Vec<UseFunsScope>,
+fn use_funs_find_method<'env, 'outer, 'local>(
+    use_funs: &'local mut Vec<UseFunsScope<'env, 'outer>>,
     tn: &TypeName,
-    method: Name,
-    mut fmap_use_fun: impl FnMut(&mut N::UseFun),
-) -> Option<&'a UseFun> {
+    method_name: &Name,
+    mut fmap_use_fun: impl FnMut(FoundMethod<'_, '_>),
+) -> Option<&'local UseFun> {
     let cur_color = use_funs.last().unwrap().color;
     use_funs.iter_mut().rev().find_map(|scope| {
         // scope color is None for global scope, which is always in consideration
@@ -323,9 +376,23 @@ fn use_funs_find_method<'a>(
         if scope.color.is_some() && scope.color != cur_color {
             return None;
         }
-        let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
-        fmap_use_fun(use_fun);
-        Some(&*use_fun)
+        match &mut scope.use_funs {
+            UseFunsScope_::Global(r) => {
+                let method = r.get(tn)?.get(method_name)?;
+                fmap_use_fun(FoundMethod::Global(method));
+                Some(method)
+            }
+            UseFunsScope_::Outer(r, used) => {
+                let method = r.get(tn)?.get(method_name)?;
+                fmap_use_fun(FoundMethod::Outer(method, used));
+                Some(method)
+            }
+            UseFunsScope_::Local(r) => {
+                let method = r.get_mut(tn)?.get_mut(method_name)?;
+                fmap_use_fun(FoundMethod::Local(method));
+                Some(&*method)
+            }
+        }
     })
 }
 
@@ -333,9 +400,10 @@ impl<'env> ModuleContext<'env> {
     pub fn new(
         env: &'env CompilationEnv,
         info: &'env NamingProgramInfo,
+        global_use_funs: &'env ResolvedUseFuns,
         macros: &'env UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     ) -> Box<Self> {
-        let global_use_funs = UseFunsScope::global(&info);
+        let global_use_funs = UseFunsScope::global(&global_use_funs);
         let deprecations = Deprecations::new(env, &info);
         let debug = TypingDebugFlags {
             match_counterexample: false,
@@ -408,10 +476,10 @@ impl<'env> ModuleContext<'env> {
     fn find_method_impl(
         &mut self,
         tn: &TypeName,
-        method: Name,
-        fmap_use_fun: impl FnMut(&mut N::UseFun),
+        method: &Name,
+        fmap_use_fun: impl FnMut(FoundMethod<'_, '_>),
     ) -> Option<&UseFun> {
-        use_funs_find_method(&mut self.use_funs, tn, method, fmap_use_fun)
+        use_funs_find_method(&mut self.use_funs, tn, &method, fmap_use_fun)
     }
 
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
@@ -419,14 +487,46 @@ impl<'env> ModuleContext<'env> {
             .check_feature(&self.reporter, package, feature, loc)
     }
 
-    pub fn new_module_member<'a>(&'a self) -> Context<'a, 'env> {
+    pub fn new_module_member<'a>(&'a self) -> Context<'env, 'a> {
+        let use_funs = self
+            .use_funs
+            .iter()
+            .map(|scope| {
+                let UseFunsScope {
+                    color,
+                    count,
+                    use_funs,
+                } = scope;
+                match use_funs {
+                    UseFunsScope_::Global(r) => {
+                        let use_funs = UseFunsScope_::Global(r);
+                        UseFunsScope {
+                            color: *color,
+                            count: *count,
+                            use_funs,
+                        }
+                    }
+                    UseFunsScope_::Outer(_, _) => unreachable!(),
+                    UseFunsScope_::Local(r) => {
+                        let scope = UseFunsScope_::Outer(r, BTreeSet::new());
+                        debug_assert_eq!(color, &Some(0));
+                        debug_assert_eq!(count, &1);
+                        UseFunsScope {
+                            color: *color,
+                            count: *count,
+                            use_funs: scope,
+                        }
+                    }
+                }
+            })
+            .collect();
         Context {
             outer: self,
             reporter: self.reporter.clone(),
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             next_match_var_id: 0,
-            use_funs: self.use_funs.clone(),
+            use_funs,
             current_function: None,
             in_macro_function: false,
             max_variable_color: RefCell::new(0),
@@ -563,7 +663,7 @@ impl<'env> ModuleContext<'env> {
     }
 }
 
-impl<'outer, 'env> Context<'outer, 'env> {
+impl<'env, 'outer> Context<'env, 'outer> {
     pub fn env(&self) -> &'outer CompilationEnv {
         self.outer.env
     }
@@ -728,10 +828,10 @@ impl<'outer, 'env> Context<'outer, 'env> {
     fn find_method_impl(
         &mut self,
         tn: &TypeName,
-        method: Name,
-        fmap_use_fun: impl FnMut(&mut N::UseFun),
+        method: &Name,
+        fmap_use_fun: impl FnMut(FoundMethod<'_, '_>),
     ) -> Option<&UseFun> {
-        use_funs_find_method(&mut self.use_funs, tn, method, fmap_use_fun)
+        use_funs_find_method(&mut self.use_funs, tn, &method, fmap_use_fun)
     }
 
     pub fn find_method_and_mark_used(
@@ -739,7 +839,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         tn: &TypeName,
         method: Name,
     ) -> Option<(ModuleIdent, FunctionName)> {
-        self.find_method_impl(tn, method, |use_fun| use_fun.used = true)
+        self.find_method_impl(tn, &method, |mut use_fun| use_fun.mark_used(tn, &method))
             .map(|use_fun| use_fun.target_function)
     }
 
@@ -1018,7 +1118,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
     ) -> (
         BTreeSet<(ModuleIdent, Loc)>,
         BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
-        BTreeSet<(TypeName, Name)>,
+        UsedMethods,
     ) {
         let Self {
             used_module_members,
@@ -1026,22 +1126,12 @@ impl<'outer, 'env> Context<'outer, 'env> {
             mut use_funs,
             ..
         } = self;
-        assert_eq!(use_funs.len(), 2);
-        let popped_scope = pop_use_funs_scope(&mut use_funs);
-        let used_methods = popped_scope
-            .resolved
-            .into_iter()
-            .flat_map(|(n, methods)| {
-                methods.into_iter().filter_map(move |(method, use_fun)| {
-                    if use_fun.used {
-                        Some((n, method))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
-        assert_eq!(use_funs.len(), 1);
+        assert!(use_funs.len() <= 2);
+        let used_methods = match use_funs.pop().unwrap().use_funs {
+            UseFunsScope_::Global(_) => BTreeSet::new(),
+            UseFunsScope_::Outer(_, used) => used,
+            UseFunsScope_::Local(_) => panic!("ICE last scope should never be local"),
+        };
         (new_friends, used_module_members, used_methods)
     }
 
@@ -1065,7 +1155,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
             if scope.color.is_some() && scope.color != cur_color {
                 return;
             }
-            if let Some(names) = scope.use_funs.get(tn) {
+            if let Some(names) = scope.use_funs.resolved().get(tn) {
                 let mut new_names = names
                     .iter()
                     .map(|(_, method_name, use_fun)| {

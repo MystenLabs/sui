@@ -12,8 +12,8 @@ use crate::{
     },
     ice, ice_assert,
     naming::ast::{
-        self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, TParam, TParamID, Type,
-        TypeName, TypeName_, Type_,
+        self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, ResolvedUseFuns, TParam,
+        TParamID, Type, TypeName, TypeName_, Type_,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, UnaryOp_,
@@ -32,8 +32,8 @@ use crate::{
     typing::{
         ast::{self as T},
         core::{
-            self, public_testing_visibility, report_visibility_error, Context, ModuleContext,
-            PublicForTesting, ResolvedFunctionType, Subst,
+            self, global_use_funs, public_testing_visibility, report_visibility_error, Context,
+            ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
@@ -157,12 +157,18 @@ fn modules(
     all_macro_definitions: &UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     mut modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
+    let global_use_funs = global_use_funs(info);
     // We validate the syntax methods first so that processing syntax method forms later are
     // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
     // much easier to enforce the typeclass-like constraints. We also update the program info to
     // reflect any changes that happened.
     for (mident, mdef) in modules.key_cloned_iter_mut() {
-        let context = ModuleContext::new(compilation_env, &info, all_macro_definitions);
+        let context = ModuleContext::new(
+            compilation_env,
+            &info,
+            &global_use_funs,
+            all_macro_definitions,
+        );
         validate_syntax_methods(&mut context.new_module_member(), &mident, mdef);
     }
     for (mident, mdef) in modules.key_cloned_iter() {
@@ -171,8 +177,14 @@ fn modules(
     let (mut typed_modules, all_new_friends, used_module_members) = modules
         .into_par_iter()
         .map(|(ident, mdef)| {
-            let (typed_mdef, new_friends, used_module_members) =
-                module(compilation_env, &info, all_macro_definitions, ident, mdef);
+            let (typed_mdef, new_friends, used_module_members) = module(
+                compilation_env,
+                &info,
+                &global_use_funs,
+                all_macro_definitions,
+                ident,
+                mdef,
+            );
             (ident, typed_mdef, new_friends, used_module_members)
         })
         .fold(
@@ -227,6 +239,7 @@ fn modules(
 fn module<'env>(
     env: &'env CompilationEnv,
     info: &'env NamingProgramInfo,
+    global_use_funs: &'env ResolvedUseFuns,
     macros: &'env UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
@@ -269,7 +282,7 @@ fn module<'env>(
         }
     }
 
-    let mut context = ModuleContext::new(env, info, macros);
+    let mut context = ModuleContext::new(env, info, global_use_funs, macros);
 
     assert!(context.current_package.is_none());
     assert!(context.new_friends.is_empty());
