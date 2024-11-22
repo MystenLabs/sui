@@ -6,7 +6,7 @@ use std::time::Duration;
 
 pub struct TestResponse {
     pub response_body: String,
-    pub http_headers: Option<String>,
+    pub http_headers: Option<http::HeaderMap>,
     pub service_version: Option<String>,
 }
 

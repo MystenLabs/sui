@@ -50,7 +50,7 @@ impl OffchainStateReader for OffchainReaderForAdapter {
             .await?;
 
         Ok(TestResponse {
-            http_headers: Some(format!("{:#?}", result.http_headers_without_date())),
+            http_headers: Some(result.http_headers_without_date()),
             response_body: result.response_body_json_pretty(),
             service_version: result.graphql_version().ok(),
         })

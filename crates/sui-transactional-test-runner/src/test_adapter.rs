@@ -631,7 +631,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
 
                 let mut output = vec![];
                 if show_headers {
-                    output.push(format!("Headers: {:#?}", resp.http_headers));
+                    output.push(format!("Headers: {:#?}", resp.http_headers.unwrap()));
                 }
                 if show_service_version {
                     output.push(format!(
