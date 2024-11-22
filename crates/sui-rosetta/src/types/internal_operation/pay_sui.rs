@@ -42,27 +42,22 @@ impl TryConstructTransaction for PaySui {
 
         let total_amount = amounts.iter().sum::<u64>();
         if let Some(budget) = budget {
-            let mut coins = client
+            let all_coins = client
                 .coin_read_api()
                 .select_coins(sender, None, (total_amount + budget) as u128, vec![])
                 .await?;
 
-            let total_sui_balance = coins.iter().map(|c| c.balance).sum::<u64>() as i128;
+            let total_sui_balance = all_coins.iter().map(|c| c.balance).sum::<u64>() as i128;
 
-            let objects = if coins.len() > MAX_GAS_COINS {
-                coins
-                    .split_off(MAX_GAS_COINS)
-                    .iter()
-                    .map(|c| c.object_ref())
-                    .collect()
-            } else {
-                vec![]
-            };
-            let pt = pay_sui_pt(recipients, amounts, &objects)?;
+            let mut iter = all_coins.into_iter().map(|c| c.object_ref());
+            let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
+            let extra_gas_coins: Vec<_> = iter.collect();
+            let pt = pay_sui_pt(recipients, amounts, &extra_gas_coins)?;
 
             return Ok(TransactionAndObjectData {
-                coins,
-                objects,
+                gas_coins,
+                extra_gas_coins,
+                objects: vec![],
                 pt,
                 total_sui_balance,
                 budget,
@@ -77,7 +72,8 @@ impl TryConstructTransaction for PaySui {
         let mut coins_stream = Box::pin(client.coin_read_api().get_coins_stream(sender, None));
 
         let mut all_coins = vec![];
-        let mut coins_for_gas: Vec<Coin>;
+        let mut gas_coins: Vec<_>;
+        let mut extra_gas_coins: Vec<_>;
         let total_amount = amounts.iter().sum::<u64>();
         let mut gathered = 0;
         let mut budget = START_BUDGET;
@@ -96,16 +92,13 @@ impl TryConstructTransaction for PaySui {
             // The coins to merge should be used as transaction object inputs, as
             // `TransactionData::new_programmable` used in `InternalOperation::try_into_data`,
             // uses all coins passed as gas payment.
-            let coins_to_merge: Vec<_> = all_coins
-                .iter()
-                .skip(MAX_GAS_COINS)
-                .map(|c| c.object_ref())
-                .collect();
-            pt = pay_sui_pt(recipients.clone(), amounts.clone(), &coins_to_merge)?;
-            coins_for_gas = all_coins.iter().take(MAX_GAS_COINS).cloned().collect();
+            let mut iter = all_coins.iter().map(|c| c.object_ref());
+            gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
+            extra_gas_coins = iter.collect();
+            pt = pay_sui_pt(recipients.clone(), amounts.clone(), &extra_gas_coins)?;
             let tx_data = TransactionData::new_programmable(
                 sender,
-                coins_for_gas.iter().map(|c| c.object_ref()).collect(),
+                gas_coins.clone(),
                 pt.clone(),
                 // We don't want dry run to fail due to budget, because
                 // it will display the fail-budget
@@ -128,15 +121,12 @@ impl TryConstructTransaction for PaySui {
                 break;
             }
         }
-        let objects = all_coins
-            .iter()
-            .skip(MAX_GAS_COINS)
-            .map(|c| c.object_ref())
-            .collect();
-        let total_sui_balance = all_coins.into_iter().map(|c| c.balance).sum::<u64>() as i128;
+        let total_sui_balance = all_coins.iter().map(|c| c.balance).sum::<u64>() as i128;
+
         Ok(TransactionAndObjectData {
-            coins: coins_for_gas,
-            objects,
+            gas_coins,
+            extra_gas_coins,
+            objects: vec![],
             pt,
             total_sui_balance,
             budget,
