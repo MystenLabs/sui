@@ -104,7 +104,7 @@ pub struct ModuleContext<'env> {
     #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
-    global_use_funs: UseFunsScope,
+    use_funs: Vec<UseFunsScope>,
     deprecations: Deprecations,
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
@@ -201,6 +201,134 @@ impl UseFunsScope {
     }
 }
 
+macro_rules! add_use_funs_scope {
+    ($self:ident, $new_scope:expr) => {{
+        let N::UseFuns {
+            color,
+            resolved: mut new_scope,
+            implicit_candidates,
+        } = $new_scope;
+        assert!(
+            implicit_candidates.is_empty(),
+            "ICE use fun candidates should have been resolved"
+        );
+        let cur = $self.use_funs.last_mut().unwrap();
+        if new_scope.is_empty() && cur.color == Some(color) {
+            cur.count += 1;
+            return;
+        }
+        for (tn, methods) in &mut new_scope {
+            for (method, use_fun) in methods.key_cloned_iter_mut() {
+                if use_fun.used || !matches!(use_fun.kind, UseFunKind::Explicit) {
+                    continue;
+                }
+                let mut same_target = false;
+                let mut case = None;
+                let Some(prev) = $self.find_method_impl(tn, method, |prev| {
+                    if use_fun.target_function == prev.target_function {
+                        case = Some(match &prev.kind {
+                            UseFunKind::UseAlias | UseFunKind::Explicit => "Duplicate",
+                            UseFunKind::FunctionDeclaration => "Unnecessary",
+                        });
+                        same_target = true;
+                        // suppress unused warning
+                        prev.used = true;
+                    }
+                }) else {
+                    continue;
+                };
+                if same_target {
+                    let case = case.unwrap();
+                    let prev_loc = prev.loc;
+                    let (target_m, target_f) = &use_fun.target_function;
+                    let msg =
+                        format!("{case} method alias '{tn}.{method}' for '{target_m}::{target_f}'");
+                    $self.add_diag(diag!(
+                        Declarations::DuplicateAlias,
+                        (use_fun.loc, msg),
+                        (prev_loc, "The same alias was previously declared here")
+                    ));
+                }
+            }
+        }
+        $self.use_funs.push(UseFunsScope {
+            count: 1,
+            use_funs: new_scope,
+            color: Some(color),
+        })
+    }};
+}
+
+fn pop_use_funs_scope(use_funs: &mut Vec<UseFunsScope>) -> N::UseFuns {
+    let cur = use_funs.last_mut().unwrap();
+    if cur.count > 1 {
+        cur.count -= 1;
+        return N::UseFuns::new(cur.color.unwrap_or(0));
+    }
+    let UseFunsScope {
+        use_funs, color, ..
+    } = use_funs.pop().unwrap();
+    N::UseFuns {
+        resolved: use_funs,
+        color: color.unwrap_or(0),
+        implicit_candidates: UniqueMap::new(),
+    }
+}
+
+fn report_unused_use_funs(reporter: &mut DiagnosticReporter, use_funs: &N::UseFuns) {
+    for (tn, methods) in &use_funs.resolved {
+        let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
+        for (_, method, use_fun) in unused {
+            let N::UseFun {
+                loc,
+                kind,
+                attributes: _,
+                is_public: _,
+                tname: _,
+                target_function: _,
+                used: _,
+            } = use_fun;
+            match kind {
+                UseFunKind::Explicit => {
+                    let msg = format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it");
+                    reporter.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                }
+                UseFunKind::UseAlias => {
+                    let msg = format!("Unused 'use' of alias '{method}'. Consider removing it");
+                    reporter.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                }
+                UseFunKind::FunctionDeclaration => {
+                    let diag = ice!((
+                        *loc,
+                        "ICE fun declaration 'use' funs should never be added to 'use' funs"
+                    ));
+                    reporter.add_diag(diag);
+                }
+            }
+        }
+    }
+}
+
+fn use_funs_find_method<'a>(
+    use_funs: &'a mut Vec<UseFunsScope>,
+    tn: &TypeName,
+    method: Name,
+    mut fmap_use_fun: impl FnMut(&mut N::UseFun),
+) -> Option<&'a UseFun> {
+    let cur_color = use_funs.last().unwrap().color;
+    use_funs.iter_mut().rev().find_map(|scope| {
+        // scope color is None for global scope, which is always in consideration
+        // otherwise, the color must match the current color. In practice, we are preventing
+        // macro scopes from interfering with each the scopes in which they are expanded
+        if scope.color.is_some() && scope.color != cur_color {
+            return None;
+        }
+        let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
+        fmap_use_fun(use_fun);
+        Some(&*use_fun)
+    })
+}
+
 impl<'env> ModuleContext<'env> {
     pub fn new(
         env: &'env CompilationEnv,
@@ -217,7 +345,7 @@ impl<'env> ModuleContext<'env> {
         };
         let reporter = env.diagnostic_reporter_at_top_level();
         Box::new(ModuleContext {
-            global_use_funs,
+            use_funs: vec![global_use_funs],
             current_package: None,
             current_module: None,
             info,
@@ -255,6 +383,37 @@ impl<'env> ModuleContext<'env> {
         self.reporter.pop_warning_filter_scope()
     }
 
+    pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
+        add_use_funs_scope!(self, new_scope)
+    }
+
+    pub fn finish_use_funs_scope(
+        &mut self,
+        used_methods: &BTreeSet<(TypeName, Name)>,
+    ) -> N::UseFuns {
+        let mut use_funs = pop_use_funs_scope(&mut self.use_funs);
+        for (tn, method) in used_methods {
+            use_funs
+                .resolved
+                .get_mut(tn)
+                .unwrap()
+                .get_mut(method)
+                .unwrap()
+                .used = true;
+        }
+        report_unused_use_funs(&mut self.reporter, &use_funs);
+        use_funs
+    }
+
+    fn find_method_impl(
+        &mut self,
+        tn: &TypeName,
+        method: Name,
+        fmap_use_fun: impl FnMut(&mut N::UseFun),
+    ) -> Option<&UseFun> {
+        use_funs_find_method(&mut self.use_funs, tn, method, fmap_use_fun)
+    }
+
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env
             .check_feature(&self.reporter, package, feature, loc)
@@ -267,7 +426,7 @@ impl<'env> ModuleContext<'env> {
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             next_match_var_id: 0,
-            use_funs: vec![self.global_use_funs.clone()],
+            use_funs: self.use_funs.clone(),
             current_function: None,
             in_macro_function: false,
             max_variable_color: RefCell::new(0),
@@ -421,12 +580,9 @@ impl<'outer, 'env> Context<'outer, 'env> {
         self.outer.macros
     }
 
-    pub fn debug(&self) -> &'outer TypingDebugFlags {
+    #[allow(dead_code)]
+    pub(super) fn debug(&self) -> &'outer TypingDebugFlags {
         &self.outer.debug
-    }
-
-    pub fn global_use_funs(&self) -> &'outer UseFunsScope {
-        &self.outer.global_use_funs
     }
 
     pub fn deprecations(&self) -> &'outer Deprecations {
@@ -560,127 +716,22 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
-        let N::UseFuns {
-            color,
-            resolved: mut new_scope,
-            implicit_candidates,
-        } = new_scope;
-        assert!(
-            implicit_candidates.is_empty(),
-            "ICE use fun candidates should have been resolved"
-        );
-        let cur = self.use_funs.last_mut().unwrap();
-        if new_scope.is_empty() && cur.color == Some(color) {
-            cur.count += 1;
-            return;
-        }
-        for (tn, methods) in &mut new_scope {
-            for (method, use_fun) in methods.key_cloned_iter_mut() {
-                if use_fun.used || !matches!(use_fun.kind, UseFunKind::Explicit) {
-                    continue;
-                }
-                let mut same_target = false;
-                let mut case = None;
-                let Some(prev) = self.find_method_impl(tn, method, |prev| {
-                    if use_fun.target_function == prev.target_function {
-                        case = Some(match &prev.kind {
-                            UseFunKind::UseAlias | UseFunKind::Explicit => "Duplicate",
-                            UseFunKind::FunctionDeclaration => "Unnecessary",
-                        });
-                        same_target = true;
-                        // suppress unused warning
-                        prev.used = true;
-                    }
-                }) else {
-                    continue;
-                };
-                if same_target {
-                    let case = case.unwrap();
-                    let prev_loc = prev.loc;
-                    let (target_m, target_f) = &use_fun.target_function;
-                    let msg =
-                        format!("{case} method alias '{tn}.{method}' for '{target_m}::{target_f}'");
-                    self.add_diag(diag!(
-                        Declarations::DuplicateAlias,
-                        (use_fun.loc, msg),
-                        (prev_loc, "The same alias was previously declared here")
-                    ));
-                }
-            }
-        }
-        self.use_funs.push(UseFunsScope {
-            count: 1,
-            use_funs: new_scope,
-            color: Some(color),
-        })
+        add_use_funs_scope!(self, new_scope)
     }
 
     pub fn pop_use_funs_scope(&mut self) -> N::UseFuns {
-        let cur = self.use_funs.last_mut().unwrap();
-        if cur.count > 1 {
-            cur.count -= 1;
-            return N::UseFuns::new(cur.color.unwrap_or(0));
-        }
-        let UseFunsScope {
-            use_funs, color, ..
-        } = self.use_funs.pop().unwrap();
-        for (tn, methods) in use_funs.iter() {
-            let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
-            for (_, method, use_fun) in unused {
-                let N::UseFun {
-                    loc,
-                    kind,
-                    attributes: _,
-                    is_public: _,
-                    tname: _,
-                    target_function: _,
-                    used: _,
-                } = use_fun;
-                match kind {
-                    UseFunKind::Explicit => {
-                        let msg =
-                            format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it");
-                        self.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
-                    }
-                    UseFunKind::UseAlias => {
-                        let msg = format!("Unused 'use' of alias '{method}'. Consider removing it");
-                        self.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
-                    }
-                    UseFunKind::FunctionDeclaration => {
-                        let diag = ice!((
-                            *loc,
-                            "ICE fun declaration 'use' funs should never be added to 'use' funs"
-                        ));
-                        self.add_diag(diag);
-                    }
-                }
-            }
-        }
-        N::UseFuns {
-            resolved: use_funs,
-            color: color.unwrap_or(0),
-            implicit_candidates: UniqueMap::new(),
-        }
+        let popped_scope = pop_use_funs_scope(&mut self.use_funs);
+        report_unused_use_funs(&mut self.reporter, &popped_scope);
+        popped_scope
     }
 
     fn find_method_impl(
         &mut self,
         tn: &TypeName,
         method: Name,
-        mut fmap_use_fun: impl FnMut(&mut N::UseFun),
+        fmap_use_fun: impl FnMut(&mut N::UseFun),
     ) -> Option<&UseFun> {
-        let cur_color = self.use_funs.last().unwrap().color;
-        self.use_funs.iter_mut().rev().find_map(|scope| {
-            // scope color is None for global scope, which is always in consideration
-            // otherwise, the color must match the current color. In practice, we are preventing
-            // macro scopes from interfering with each the scopes in which they are expanded
-            if scope.color.is_some() && scope.color != cur_color {
-                return None;
-            }
-            let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
-            fmap_use_fun(use_fun);
-            Some(&*use_fun)
-        })
+        use_funs_find_method(&mut self.use_funs, tn, method, fmap_use_fun)
     }
 
     pub fn find_method_and_mark_used(
@@ -906,14 +957,14 @@ impl<'outer, 'env> Context<'outer, 'env> {
 
     // `loc` indicates the location that caused the add to occur
     fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
-        if matches!(self.current_module, Some(current_mident) if m != &current_mident) {
+        if !self.is_current_module(m) {
             self.new_friends.insert((*m, loc));
         }
     }
 
     /// current_module.is_test_only || current_function.is_test_only || current_function.is_test
     fn is_testing_context(&self) -> bool {
-        self.current_module.as_ref().is_some_and(|m| {
+        self.current_module().as_ref().is_some_and(|m| {
             let minfo = self.module_info(m);
             let is_test_only = minfo.attributes.is_test_or_test_only();
             is_test_only
@@ -962,18 +1013,50 @@ impl<'outer, 'env> Context<'outer, 'env> {
         self.next_match_var_id
     }
 
+    pub fn finish(
+        self,
+    ) -> (
+        BTreeSet<(ModuleIdent, Loc)>,
+        BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+        BTreeSet<(TypeName, Name)>,
+    ) {
+        let Self {
+            used_module_members,
+            new_friends,
+            mut use_funs,
+            ..
+        } = self;
+        assert_eq!(use_funs.len(), 2);
+        let popped_scope = pop_use_funs_scope(&mut use_funs);
+        let used_methods = popped_scope
+            .resolved
+            .into_iter()
+            .flat_map(|(n, methods)| {
+                methods.into_iter().filter_map(move |(method, use_fun)| {
+                    if use_fun.used {
+                        Some((n, method))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        assert_eq!(use_funs.len(), 1);
+        (new_friends, used_module_members, used_methods)
+    }
+
     //********************************************
     // IDE Information
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
     pub fn find_all_methods(&mut self, tn: &TypeName) -> Vec<AutocompleteMethod> {
-        debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
+        debug_print!(self.debug().autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
-            .env
+            .env()
             .supports_feature(self.current_package(), FeatureGate::DotCall)
         {
-            debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
+            debug_print!(self.debug().autocomplete_resolution, (msg "dot call unsupported"));
             return vec![];
         }
         let cur_color = self.use_funs.last().unwrap().color;
@@ -1021,9 +1104,9 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 }
 
-impl MatchContext<false> for Context<'_> {
+impl MatchContext<false> for Context<'_, '_> {
     fn env(&self) -> &CompilationEnv {
-        self.env
+        self.env()
     }
 
     fn reporter(&self) -> &DiagnosticReporter {
@@ -1049,7 +1132,7 @@ impl MatchContext<false> for Context<'_> {
     }
 
     fn program_info(&self) -> &ProgramInfo<false> {
-        &self.info
+        self.info()
     }
 }
 
@@ -1460,7 +1543,7 @@ pub fn make_struct_field_type(
 pub fn find_index_funs(context: &mut Context, type_name: &TypeName) -> Option<IndexSyntaxMethods> {
     let module_ident = match &type_name.value {
         TypeName_::Multiple(_) => return None,
-        TypeName_::Builtin(builtin_name) => context.env.primitive_definer(builtin_name.value)?,
+        TypeName_::Builtin(builtin_name) => context.env().primitive_definer(builtin_name.value)?,
         TypeName_::ModuleType(m, _) => m,
     };
     let module_defn = context.module_info(module_ident);
@@ -1538,7 +1621,7 @@ pub fn make_constant_type(
     m: &ModuleIdent,
     c: &ConstantName,
 ) -> Type {
-    let in_current_module = Some(m) == context.current_module.as_ref();
+    let in_current_module = context.is_current_module(m);
     context.emit_warning_if_deprecated(m, c.0, None);
     let (defined_loc, signature) = {
         let ConstantInfo {
@@ -1587,12 +1670,12 @@ pub fn make_method_call_type(
                 context.add_diag(diag);
                 return None;
             }
-            TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
+            TypeName_::Builtin(sp!(_, bt_)) => context.env().primitive_definer(*bt_),
             TypeName_::ModuleType(m, _) => Some(m),
         };
         let finfo_opt = defining_module.and_then(|m| {
             let finfo = context
-                .info
+                .info()
                 .module(m)
                 .functions
                 .get(&FunctionName(method))?;
@@ -1761,16 +1844,13 @@ fn check_function_visibility(
     entry_opt: Option<Loc>,
     visibility: Visibility,
 ) {
-    let in_current_module = match &context.current_module {
-        Some(current) => m == current,
-        None => false,
-    };
+    let in_current_module = context.is_current_module(m);
     let public_for_testing =
-        public_testing_visibility(context.env, context.current_package, f, entry_opt);
+        public_testing_visibility(context.env(), context.current_package(), f, entry_opt);
     let is_testing_context = context.is_testing_context();
     let supports_public_package = context
-        .env
-        .supports_feature(context.current_package, FeatureGate::PublicPackage);
+        .env()
+        .supports_feature(context.current_package(), FeatureGate::PublicPackage);
     match visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
@@ -1819,11 +1899,11 @@ fn check_function_visibility(
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string()),
                 &context
-                    .current_module
+                    .current_module()
                     .map(|cur_module| cur_module.value.address.to_string())
                     .unwrap_or("<unknown addr>".to_string()),
                 &context
-                    .current_module
+                    .current_module()
                     .and_then(|cur_module| context.module_info(&cur_module).package)
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
@@ -1899,7 +1979,7 @@ fn report_visibility_error_(
         (call_loc, call_msg),
         (vis_loc, vis_msg),
     );
-    if context.env.flags().is_testing() {
+    if context.env().flags().is_testing() {
         if let Some(case) = public_for_testing {
             let (test_loc, test_msg) = match case {
                 PublicForTesting::Entry(entry_loc) => {
@@ -2030,7 +2110,7 @@ fn solve_ability_constraint(
     constraints: AbilitySet,
 ) {
     let ty = unfold_type(&context.subst, ty);
-    let ty_abilities = infer_abilities(&context.info, &context.subst, ty.clone());
+    let ty_abilities = infer_abilities(&context.info(), &context.subst, ty.clone());
 
     let (declared_loc_opt, declared_abilities, ty_args) = debug_abilities_info(context, &ty);
     for constraint in constraints {
@@ -2051,7 +2131,7 @@ fn solve_ability_constraint(
             declared_loc_opt,
             &declared_abilities,
             ty_args.iter().map(|ty_arg| {
-                let abilities = infer_abilities(&context.info, &context.subst, ty_arg.clone());
+                let abilities = infer_abilities(&context.info(), &context.subst, ty_arg.clone());
                 (ty_arg, abilities)
             }),
         );
