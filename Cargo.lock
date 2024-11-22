@@ -13956,6 +13956,8 @@ dependencies = [
 name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "datatest-stable",
  "msim",
  "sui-graphql-rpc",

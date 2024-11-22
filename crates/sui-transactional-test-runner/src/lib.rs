@@ -4,7 +4,7 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 pub mod args;
-mod graphql_client;
+pub mod offchain_state;
 pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;

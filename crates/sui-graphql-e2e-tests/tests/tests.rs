@@ -3,13 +3,59 @@
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use std::{path::Path, sync::Arc};
-use sui_graphql_rpc::test_infra::cluster::serve_executor;
+use async_trait::async_trait;
+use std::{path::Path, sync::Arc, time::Duration};
+use sui_graphql_rpc::test_infra::cluster::{serve_executor, ExecutorCluster};
 use sui_transactional_test_runner::{
     args::SuiInitArgs,
-    create_adapter, run_tasks_with_adapter,
+    create_adapter,
+    offchain_state::{OffchainStateReader, TestResponse},
+    run_tasks_with_adapter,
     test_adapter::{SuiTestAdapter, PRE_COMPILED},
 };
+
+pub struct OffchainReaderForAdapter {
+    cluster: Arc<ExecutorCluster>,
+}
+
+#[async_trait]
+impl OffchainStateReader for OffchainReaderForAdapter {
+    async fn wait_for_objects_snapshot_catchup(&self, base_timeout: Duration) {
+        self.cluster
+            .wait_for_objects_snapshot_catchup(base_timeout)
+            .await
+    }
+
+    async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
+        self.cluster
+            .wait_for_checkpoint_catchup(checkpoint, base_timeout)
+            .await
+    }
+
+    async fn wait_for_pruned_checkpoint(&self, checkpoint: u64, base_timeout: Duration) {
+        self.cluster
+            .wait_for_checkpoint_pruned(checkpoint, base_timeout)
+            .await
+    }
+
+    async fn execute_graphql(
+        &self,
+        query: String,
+        show_usage: bool,
+    ) -> Result<TestResponse, anyhow::Error> {
+        let result = self
+            .cluster
+            .graphql_client
+            .execute_to_graphql(query, show_usage, vec![], vec![])
+            .await?;
+
+        Ok(TestResponse {
+            http_headers: Some(format!("{:#?}", result.http_headers_without_date())),
+            response_body: result.response_body_json_pretty(),
+            service_version: result.graphql_version().ok(),
+        })
+    }
+}
 
 datatest_stable::harness!(
     run_test,
@@ -26,42 +72,35 @@ datatest_stable::harness!(
 async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     telemetry_subscribers::init_for_testing();
     if !cfg!(msim) {
-        // extract init args
-
-        // if test wants to provide data-ingestion-path and rest-api-url to testadapter...this seems harder
-        // easier for testadapter to tell indexer where it's writing to
-
-        // then initialize the adapter
-
-        // snapshotconfig and retentionconfig ofc
-        // serve_executor(adapter.read_replica, init_opt..., init_opt..., adapter.data_ingestion_path).await?;
-
-        // start the adapter first to start the executor
+        // start the adapter first to start the executor (simulacrum)
         let (output, mut adapter) =
             create_adapter::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
 
+        // In another crate like `sui-mvr-graphql-e2e-tests`, this would be the place to translate
+        // from `offchain_config` to something compatible with the indexer and graphql flavor of
+        // choice.
+        let offchain_config = adapter.offchain_config.as_ref().unwrap();
+
         let cluster = serve_executor(
             adapter.read_replica.as_ref().unwrap().clone(),
-            None,
-            None,
-            adapter
-                .offchain_config
-                .as_ref()
-                .unwrap()
-                .data_ingestion_path
-                .clone(),
+            Some(offchain_config.snapshot_config.clone()),
+            offchain_config.retention_config.clone(),
+            offchain_config.data_ingestion_path.clone(),
         )
         .await;
 
-        adapter.with_graphql_rpc(format!(
-            "http://{}:{}",
-            cluster.graphql_connection_config.host, cluster.graphql_connection_config.port
-        ));
+        let cluster_arc = Arc::new(cluster);
 
-        // serve_executor, which is kind of a misnomer since it takes the read replica
+        adapter.with_offchain_reader(Box::new(OffchainReaderForAdapter {
+            cluster: cluster_arc.clone(),
+        }));
+
         run_tasks_with_adapter(path, adapter, output).await?;
 
-        // and then cleanup
+        match Arc::try_unwrap(cluster_arc) {
+            Ok(cluster) => cluster.cleanup_resources().await,
+            Err(_) => panic!("Still other Arc references!"),
+        }
     }
     Ok(())
 }

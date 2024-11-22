@@ -3,7 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::graphql_client::*;
+use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
@@ -50,7 +50,6 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_graphql_rpc::client::simple_client::SimpleClient;
 use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
@@ -148,12 +147,13 @@ pub struct SuiTestAdapter {
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
     is_simulator: bool,
-    // pub(crate) cluster: Option<ExecutorCluster>,
-    /// A barebones GraphQL client that should be schema-agnostic.
-    pub(crate) graphql_client: Option<SimpleClient>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
     pub read_replica: Option<Arc<dyn RestStateReader + Send + Sync>>,
+    /// Configuration for offchain state reader read from the file itself, and can be passed to the
+    /// specific indexing and reader flavor.
     pub offchain_config: Option<OffChainConfig>,
+    /// A trait encapsulating methods to interact with offchain state.
+    pub offchain_reader: Option<Box<dyn OffchainStateReader>>,
 }
 
 struct AdapterInitConfig {
@@ -312,9 +312,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
         self.default_syntax
     }
     async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
-        // if let Some(cluster) = self.cluster.take() {
-        // cluster.cleanup_resources().await;
-        // }
         Ok(())
     }
     async fn init(
@@ -384,8 +381,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
 
         let mut test_adapter = Self {
             is_simulator,
-            // cluster,
-            graphql_client: None,
+            // This is opt-in and instantiated later
+            offchain_reader: None,
             executor,
             offchain_config,
             read_replica,
@@ -609,45 +606,40 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
-                // Extract graphql client, and raise an error if it's not set
-                let graphql_client = self
-                    .graphql_client
+                let offchain_reader = self
+                    .offchain_reader
                     .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("GraphQL client not set"))?;
-                // let cluster = self.cluster.as_ref().unwrap();
+                    .ok_or_else(|| anyhow::anyhow!("Offchain reader not set"))?;
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-                wait_for_checkpoint_catchup(
-                    graphql_client,
-                    highest_checkpoint,
-                    Duration::from_secs(60),
-                )
-                .await;
+                offchain_reader
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
+                    .await;
 
                 // wait_for_objects_snapshot_catchup(graphql_client, Duration::from_secs(180)).await;
 
                 if let Some(checkpoint_to_prune) = wait_for_checkpoint_pruned {
-                    wait_for_pruned_checkpoint(
-                        graphql_client,
-                        checkpoint_to_prune,
-                        Duration::from_secs(60),
-                    )
-                    .await;
+                    offchain_reader
+                        .wait_for_pruned_checkpoint(checkpoint_to_prune, Duration::from_secs(60))
+                        .await;
                 }
 
                 let interpolated =
                     self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
-                let resp = graphql_client
-                    .execute_to_graphql(interpolated.trim().to_owned(), show_usage, vec![], vec![])
+                let resp = offchain_reader
+                    .execute_graphql(interpolated.trim().to_owned(), show_usage)
                     .await?;
 
                 let mut output = vec![];
                 if show_headers {
-                    output.push(format!("Headers: {:#?}", resp.http_headers_without_date()));
+                    output.push(format!("Headers: {:#?}", resp.http_headers));
                 }
                 if show_service_version {
-                    output.push(format!("Service version: {}", resp.graphql_version()?));
+                    output.push(format!(
+                        "Service version: {}",
+                        resp.service_version.unwrap()
+                    ));
                 }
-                output.push(format!("Response: {}", resp.response_body_json_pretty()));
+                output.push(format!("Response: {}", resp.response_body));
 
                 Ok(Some(output.join("\n")))
             }
@@ -1201,8 +1193,8 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl<'a> SuiTestAdapter {
-    pub fn with_graphql_rpc(&mut self, url: String) {
-        self.graphql_client = Some(SimpleClient::new(url));
+    pub fn with_offchain_reader(&mut self, offchain_reader: Box<dyn OffchainStateReader>) {
+        self.offchain_reader = Some(offchain_reader);
     }
 
     pub fn is_simulator(&self) -> bool {
