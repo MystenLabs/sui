@@ -22,7 +22,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::ObjectKey;
 use tracing::error;
 
-const TIMEOUT: Duration = Duration::from_secs(60);
+const TIMEOUT: Duration = Duration::from_secs(1800);
 const DDB_SIZE_LIMIT: usize = 399000;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
