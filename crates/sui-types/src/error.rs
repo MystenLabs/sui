@@ -267,6 +267,11 @@ pub enum UserInputError {
         limit
     )]
     TooManyTransactionsInSoftBundle { limit: u64 },
+    #[error(
+        "Total transactions size ({:?})bytes exceeds the maximum allowed ({:?})bytes in a Soft Bundle",
+        size, limit
+    )]
+    SoftBundleTooLarge { size: u64, limit: u64 },
     #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
     NoSharedObjectError { digest: TransactionDigest },
     #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
