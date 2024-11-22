@@ -43,7 +43,7 @@ pub(crate) struct CheckpointId {
 
 /// `DataLoader` key for fetching `StoredRawCheckpoint` by its sequence number.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
-struct SeqNum {
+struct RawSeqNumKey {
     pub sequence_number: i64,
 }
 
@@ -203,7 +203,7 @@ impl Checkpoint {
     async fn bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>> {
         let DataLoader(dl) = ctx.data_unchecked();
         let raw_checkpoint = dl
-            .load_one(SeqNum {
+            .load_one(RawSeqNumKey {
                 sequence_number: self.stored.sequence_number,
             })
             .await?;
@@ -541,11 +541,14 @@ impl Loader<DigestKey> for Db {
 }
 
 #[async_trait::async_trait]
-impl Loader<SeqNum> for Db {
+impl Loader<RawSeqNumKey> for Db {
     type Value = StoredRawCheckpoint;
     type Error = Error;
 
-    async fn load(&self, keys: &[SeqNum]) -> Result<HashMap<SeqNum, StoredRawCheckpoint>, Error> {
+    async fn load(
+        &self,
+        keys: &[RawSeqNumKey],
+    ) -> Result<HashMap<RawSeqNumKey, StoredRawCheckpoint>, Error> {
         use raw_checkpoints::dsl;
 
         let checkpoint_ids = keys
@@ -567,16 +570,15 @@ impl Loader<SeqNum> for Db {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch raw checkpoints: {e}")))?;
 
-        let raw_checkpoints: BTreeMap<_, _> = raw_checkpoints
+        Ok(raw_checkpoints
             .into_iter()
-            .map(|raw| (raw.sequence_number, raw))
-            .collect();
-
-        Ok(keys
-            .iter()
-            .filter_map(|key| {
-                let raw = raw_checkpoints.get(&key.sequence_number).cloned()?;
-                Some((*key, raw))
+            .map(|raw| {
+                (
+                    RawSeqNumKey {
+                        sequence_number: raw.sequence_number,
+                    },
+                    raw,
+                )
             })
             .collect())
     }
