@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::inclusion_mode::{InclusionCheckExecutionMode, InclusionCheckMode};
 use crate::{
     compatibility_mode::{CompatibilityMode, ExecutionCompatibilityMode},
     errors::{PartialVMError, PartialVMResult},
@@ -10,6 +11,7 @@ use crate::{
     normalized::Module,
 };
 use move_core_types::vm_status::StatusCode;
+use std::collections::HashSet;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
 // ***************************************************************************
@@ -360,57 +362,75 @@ pub enum InclusionCheck {
 }
 
 impl InclusionCheck {
+    pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
+        self.check_with_mode::<InclusionCheckExecutionMode>(old_module, new_module)
+            .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
+    }
+
     // Check that all code in `old_module` is included `new_module`. If `Exact` no new code can be
     // in `new_module` (Note: `new_module` may have larger pools, but they are not accessed by the
     // code).
-    pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
-        let err = Err(PartialVMError::new(
-            StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-        ));
+    pub fn check_with_mode<M: InclusionCheckMode>(
+        &self,
+        old_module: &Module,
+        new_module: &Module,
+    ) -> Result<(), M::Error> {
+        let mut context = M::default();
 
         // Module checks
         if old_module.address != new_module.address
             || old_module.name != new_module.name
             || old_module.file_format_version > new_module.file_format_version
         {
-            return err;
+            // TODO move name and address to another if statement
+            context.file_format_version_downgrade(
+                old_module.file_format_version,
+                new_module.file_format_version,
+            );
         }
 
-        // If we're checking exactness we make sure there's an inclusion, and that the size of all
-        // of the tables are the exact same except for constants.
-        if (self == &Self::Equal)
-            && (old_module.structs.len() != new_module.structs.len()
-                || old_module.enums.len() != new_module.enums.len()
-                || old_module.functions.len() != new_module.functions.len()
-                || old_module.friends.len() != new_module.friends.len())
-        {
-            return err;
-        }
-
+        let mut new_structs_set: HashSet<_> = new_module.structs.keys().collect();
         // Struct checks
         for (name, old_struct) in &old_module.structs {
             match new_module.structs.get(name) {
-                Some(new_struct) if old_struct == new_struct => (),
+                Some(new_struct) => {
+                    new_structs_set.remove(name);
+                    if old_struct == new_struct {
+                        continue;
+                    } else {
+                        context.struct_change(name, old_struct, new_struct);
+                    }
+                }
                 _ => {
-                    return err;
+                    context.struct_missing(name);
                 }
             };
         }
 
+        for name in new_structs_set {
+            let new_struct = new_module.structs.get(name).unwrap();
+            context.struct_new(name, new_struct);
+        }
+
+        let mut new_enums_set: HashSet<_> = new_module.enums.keys().collect();
+
         // Enum checks
         for (name, old_enum) in &old_module.enums {
             let Some(new_enum) = new_module.enums.get(name) else {
-                return err;
+                context.enum_missing(name);
+                continue;
             };
 
+            new_enums_set.remove(name);
+
             if old_enum.abilities != new_enum.abilities {
-                return err;
+                context.enum_change(name, new_enum);
             }
             if old_enum.type_parameters != new_enum.type_parameters {
-                return err;
+                context.enum_change(name, new_enum);
             }
             if old_enum.variants.len() > new_enum.variants.len() {
-                return err;
+                context.enum_change(name, new_enum);
             }
 
             // NB: In the future if we allow adding new variants to enums in subset mode
@@ -418,11 +438,12 @@ impl InclusionCheck {
             // below, the one below should be kept if we allow adding variants in subset
             // mode.
             if old_enum.variants.len() != new_enum.variants.len() {
-                return err;
+                context.enum_change(name, new_enum);
             }
 
+            // TODO remove?
             if self == &Self::Equal && old_enum.variants.len() != new_enum.variants.len() {
-                return err;
+                context.enum_change(name, new_enum);
             }
             // NB: We are using the fact that the variants are sorted by tag, that we've
             // already ensured that the old variants are >= new variants, and the fact
@@ -434,10 +455,16 @@ impl InclusionCheck {
                 .zip(&new_enum.variants)
                 .all(|(old, new)| old == new)
             {
-                return err;
+                context.enum_change(name, new_enum);
             }
         }
 
+        for name in new_enums_set {
+            let new_enum = new_module.enums.get(name).unwrap();
+            context.enum_new(name, new_enum);
+        }
+
+        let mut new_functions_set: HashSet<_> = new_module.functions.keys().collect();
         // Function checks
         for (name, old_func) in &old_module.functions {
             match new_module
@@ -445,13 +472,38 @@ impl InclusionCheck {
                 .get(name)
                 .or_else(|| new_module.functions.get(name))
             {
-                Some(new_func) if old_func == new_func => (),
+                Some(new_func) => {
+                    new_functions_set.remove(name);
+                    if old_func == new_func {
+                        continue;
+                    } else {
+                        context.function_change(name, new_func);
+                    }
+                }
                 _ => {
-                    return err;
+                    context.function_missing(name);
                 }
             }
         }
 
-        Ok(())
+        for name in new_functions_set {
+            let new_func = new_module.functions.get(name).unwrap();
+            context.function_new(name, new_func);
+        }
+
+        let mut new_friends_set: HashSet<_> = new_module.friends.iter().collect();
+
+        for friend in &old_module.friends {
+            if !new_module.friends.contains(friend) {
+                context.friend_missing(friend);
+            }
+            new_friends_set.remove(friend);
+        }
+
+        for friend in new_friends_set {
+            context.friend_new(friend);
+        }
+
+        context.finish(self)
     }
 }
