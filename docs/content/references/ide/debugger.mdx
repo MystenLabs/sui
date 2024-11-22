@@ -12,15 +12,15 @@ If you have the Move extension installed, you already have the Move Trace Debugg
 The Move Trace Debugger extension is available in the Visual Studio Code Marketplace. Search for `Move Trace Debugger` in the **Extensions** view, or press <kbd>Ctrl</kbd> + <kbd>P</kbd> or <kbd>⌘</kbd> + <kbd>P</kbd> and type `ext install mysten.move-trace-debug`.
 You can also run `code --install-extension mysten.move-trace-debug` to install the extension from the command line.
 
-In order to use the debugger, you must also have the `sui` binary installed with the `tracing` feature flag enabled. The `sui` binary in release tarballs, Homebrew, and Chocolatey, have this feature enabled.
-See the [Sui installation guide](../../guides/developer/getting-started/sui-install.mdx) for more information, including building from source.
+To use the debugger, you must also have the `sui` binary installed with the `tracing` feature flag enabled. The `sui` binary in release tarballs, Homebrew, and Chocolatey, have this feature enabled.
+See [Install Sui](../../guides/developer/getting-started/sui-install.mdx) for more information, including how to build from source.
 
 ## Usage
 
 Debugging a Move unit test is a two-step process:
 
 1. Generate execution traces:
-   - Open the command palette (`⇧` + `⌘` + `P` on macOS)
+   - Open the command palette (<kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS)
    - Run the `Move: Trace Move test execution` command
    - Traces are generated in JSON format in the `traces` directory
 
@@ -28,7 +28,7 @@ Debugging a Move unit test is a two-step process:
 
 2. Start debugging:
    - Open the Move file containing your test
-   - Select `Run -> Start Debugging` from the menu
+   - Select **Run** -> **Start Debugging** from the menu
    - If the file has multiple tests, select the specific test from the dropdown menu
 
 
