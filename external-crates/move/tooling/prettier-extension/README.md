@@ -1,6 +1,6 @@
-# Prettier Move
+# Move Formatter
 
-This is an alpha build of the Prettier Move Extension. Note that this extension is not final, should not be considered a production-grade tool, and is intended only for early access testing of the Prettier formatter in Move.
+This is an alpha build of the Move Formatter extension. Note that this extension is not final, should not be considered a production-grade tool, and is intended only for early access testing of the Prettier formatter in Move.
 
 # Using the formatter
 
