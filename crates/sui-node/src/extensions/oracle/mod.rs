@@ -16,8 +16,8 @@ use sui_types::{base_types::ObjectID, messages_checkpoint::CheckpointSequenceNum
 const REGISTRY_ID: &str = "c1f6d875d562097b58bae7eb8341aa59428b7b793d1b3b4fe34b8dce0c82dbf6";
 
 pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
-    tracing::info!("🧩 Oracle ExEx initiated!");
-    tracing::info!("⏳ Syncing ExEx to blockchain tip...");
+    tracing::info!("[Oracle ExEx] 🧩 ExEx initiated!");
+    tracing::info!("[Oracle ExEx] ⏳ Syncing to blockchain tip...");
 
     let mut oracle_state: Option<ExExOracleState> = None;
 
@@ -29,7 +29,7 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
             if let Some(chain_tip) = ctx.highest_known_checkpoint_sequence_number() {
                 if chain_tip == checkpoint_number {
                     tracing::info!(
-                        "🥳 ExEx reached tip #{}! Starting P2P and API services...",
+                        "[Oracle ExEx] 🥳 Rreached tip at #{}! Starting P2P and API services...",
                         chain_tip
                     );
                     oracle_state = Some(ExExOracleState::initialize().await?);
@@ -43,7 +43,7 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
                 tracing::error!(
                     error = %e,
                     checkpoint = %checkpoint_number,
-                    "Failed to process checkpoint"
+                    "[Oracle ExEx] Failed to process checkpoint"
                 );
             }
         }
@@ -64,7 +64,7 @@ async fn process_checkpoint(
         tracing::warn!(
             error = %e,
             checkpoint = %checkpoint,
-            "😱 Storage setup failed. Skipping checkpoint."
+            "[Oracle ExEx] 😱 Storage setup failed. Skipping checkpoint."
         );
         e
     })?;

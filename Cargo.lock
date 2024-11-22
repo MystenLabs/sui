@@ -14644,7 +14644,7 @@ dependencies = [
 
 [[package]]
 name = "sui-exex"
-version = "1.38.0"
+version = "1.39.0"
 dependencies = [
  "anyhow",
  "futures",
@@ -15479,7 +15479,7 @@ dependencies = [
  "async-graphql-axum",
  "async-graphql-value",
  "async-trait",
- "axum 0.7.5",
+ "axum 0.7.8",
  "axum-extra",
  "bcs",
  "bin-version",

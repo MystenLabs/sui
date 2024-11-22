@@ -40,7 +40,7 @@ pub fn deserialize_object<'a, T: Deserialize<'a>>(
     address: AccountAddress,
 ) -> anyhow::Result<T> {
     let object = store
-        .get_object(&ObjectID::from_address(address))?
+        .get_object(&ObjectID::from_address(address))
         .context("Fetching the object")?;
 
     match object.as_inner().data.clone() {
@@ -56,9 +56,7 @@ pub fn deserialize_objects<'a, T: Deserialize<'a>>(
     store: &Arc<dyn ExExStore>,
     ids: &[ObjectID],
 ) -> anyhow::Result<Vec<T>> {
-    let objects = store
-        .multi_get_objects(&ids)
-        .context("Fetching the objects")?;
+    let objects = store.multi_get_objects(&ids);
 
     objects
         .into_iter()

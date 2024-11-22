@@ -66,7 +66,7 @@ impl Api {
             .layer(CorsLayer::new().allow_origin(Any))
             .with_state(state.clone());
 
-        tracing::info!("🌐 HTTP API starting at {}", address);
+        tracing::info!("[Oracle ExEx] 🌐 HTTP API starting at {}", address);
         let listener = tokio::net::TcpListener::bind(address).await.unwrap();
         axum::serve(listener, app).await.unwrap();
     }

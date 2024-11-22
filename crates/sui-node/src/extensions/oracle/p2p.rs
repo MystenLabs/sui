@@ -27,6 +27,7 @@ const ORACLE_TOPIC: &str = "pragma/defi_protocol_name";
 pub async fn start_p2p() -> Result<(P2PBroadcaster, mpsc::Receiver<MedianPrice>)> {
     let (consensus_tx, consensus_rx) = mpsc::channel(1024);
     let (mut node, command_tx) = P2PNode::new(consensus_tx).await?;
+    tracing::info!("[Oracle ExEx] 👤 Joined the Oracle P2P network");
     let handle = P2PBroadcaster(command_tx);
     tokio::spawn(async move { node.run().await });
     Ok((handle, consensus_rx))
@@ -138,7 +139,7 @@ impl P2PNode {
             SwarmEvent::Behaviour(behaviour) => match behaviour {
                 OracleBehaviourEvent::Gossipsub(GossipsubEvent::Message { message, .. }) => {
                     if let Err(e) = self.handle_p2p_message(message).await {
-                        tracing::error!(%e, "Failed to handle gossip message");
+                        tracing::error!(%e, "[Oracle ExEx] Failed to handle gossip message");
                     }
                 }
                 OracleBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
