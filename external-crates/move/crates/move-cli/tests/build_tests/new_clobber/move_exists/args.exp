@@ -1,4 +1,4 @@
-Command `new -p gitignore_exists package`:
+Command `new -p package example`:
 error: cannot create package `example` because `package/sources/example.move` would be overwritten.
 External Command `cat package/.gitignore`:
 existing_ignore

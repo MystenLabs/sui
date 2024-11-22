@@ -1,7 +1,12 @@
-Command `new -p gitignore_exists package`:
+Command `new -p package example`:
 External Command `cat package/.gitignore`:
 existing_ignore
 build/*
 External Command `find package`:
 package
 package/.gitignore
+package/Move.toml
+package/sources
+package/sources/example.move
+package/tests
+package/tests/example.move
