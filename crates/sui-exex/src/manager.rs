@@ -115,6 +115,7 @@ impl ExExManager {
     pub fn handle(&self) -> ExExManagerHandle {
         self.handle.clone()
     }
+
     /// Updates the current buffer capacity and notifies all `is_ready` watchers of the manager's
     /// readiness to receive notifications.
     fn update_capacity(&self) {

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -62,14 +62,16 @@ pub struct P2PNode {
     /// History of the prices received in the network. Used to establish a quorum.
     network_prices: NetworkPricesPerCheckpoint,
     /// Allows to send prices that reached a quorum to the API.
-    consensus_sender: mpsc::Sender<MedianPrice>,
-    /// Allows to receive commands from the outside.
+    quorum_sender: mpsc::Sender<MedianPrice>,
+    /// Channel used to retrieve aggregated median prices for a given checkpoint.
     command_rx: mpsc::UnboundedReceiver<BroadcastedPrice>,
+    /// Peers currently connected.
+    peers: HashSet<PeerId>,
 }
 
 impl P2PNode {
     pub async fn new(
-        consensus_sender: mpsc::Sender<MedianPrice>,
+        quorum_sender: mpsc::Sender<MedianPrice>,
     ) -> Result<(Self, mpsc::UnboundedSender<BroadcastedPrice>)> {
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
@@ -110,8 +112,9 @@ impl P2PNode {
             oracle_topic,
             keypair,
             network_prices: NetworkPricesPerCheckpoint::new(),
-            consensus_sender,
+            quorum_sender,
             command_rx,
+            peers: HashSet::default(),
         };
 
         Ok((node, command_tx))
@@ -124,9 +127,7 @@ impl P2PNode {
                     let _ = self.broadcast_price(median_price, checkpoint).await;
                 }
                 event = self.swarm.select_next_some() => {
-                    let started_at = std::time::Instant::now();
                     self.handle_swarm_event(event).await;
-                    tracing::info!("Processed p2p event in {:?}", started_at.elapsed());
                 }
             }
         }
@@ -146,6 +147,7 @@ impl P2PNode {
                             .behaviour_mut()
                             .gossipsub
                             .add_explicit_peer(&peer_id);
+                        self.peers.insert(peer_id);
                     }
                 }
                 OracleBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
@@ -154,6 +156,7 @@ impl P2PNode {
                             .behaviour_mut()
                             .gossipsub
                             .remove_explicit_peer(&peer_id);
+                        self.peers.remove(&peer_id);
                     }
                 }
                 OracleBehaviourEvent::Identify(identify::Event::Received {
@@ -168,6 +171,7 @@ impl P2PNode {
                             .behaviour_mut()
                             .gossipsub
                             .add_explicit_peer(&peer_id);
+                        self.peers.insert(peer_id);
                     }
                 }
                 _ => {}
@@ -178,20 +182,25 @@ impl P2PNode {
 
     async fn handle_p2p_message(&mut self, message: libp2p_gossipsub::Message) -> Result<()> {
         let price: SignedData<MedianPrice> = bcs::from_bytes(&message.data)?;
-        if let Some((checkpoint, consensus_price)) = self.network_prices.add_price(price) {
-            tracing::info!(checkpoint, "Reached consensus");
-            self.consensus_sender.send(consensus_price).await?;
-        }
+        self.add_price(price).await?;
         Ok(())
     }
 
     async fn broadcast_price(&mut self, price: MedianPrice, checkpoint: u64) -> Result<()> {
         let signed_price = SignedData::new(&self.keypair, &price, checkpoint)?;
+        self.add_price(signed_price.clone()).await?;
         self.swarm
             .behaviour_mut()
             .gossipsub
             .publish(self.oracle_topic.clone(), bcs::to_bytes(&signed_price)?)?;
-        self.network_prices.add_price(signed_price);
+        Ok(())
+    }
+
+    async fn add_price(&mut self, price: SignedData<MedianPrice>) -> anyhow::Result<()> {
+        if let Some((checkpoint, price)) = self.network_prices.add_price(price, self.peers.len()) {
+            tracing::info!(checkpoint, "Reached consensus");
+            self.quorum_sender.send(price).await?;
+        }
         Ok(())
     }
 }
@@ -229,12 +238,17 @@ impl NetworkPricesPerCheckpoint {
 
     /// Adds a price into the gathered prices from the network.
     /// Returns Some((checkpoint, price)) if consensus was reached, None otherwise.
+    // TODO: Refactor this function + the struct.
     pub fn add_price(
         &mut self,
         signed_price: SignedData<MedianPrice>,
+        current_number_of_peers: usize,
     ) -> Option<(u64, MedianPrice)> {
-        let checkpoint_data = self.0.entry(signed_price.checkpoint).or_default();
+        if signed_price.price.median_price.is_none() {
+            return None;
+        }
 
+        let checkpoint_data = self.0.entry(signed_price.checkpoint).or_default();
         if checkpoint_data
             .prices
             .iter()
@@ -245,17 +259,17 @@ impl NetworkPricesPerCheckpoint {
 
         let count = checkpoint_data
             .price_counts
-            .entry(signed_price.price.median_price.expect("Should not be None"))
+            .entry(signed_price.price.median_price.unwrap())
             .or_default();
         *count += 1;
-
         checkpoint_data.prices.push(signed_price.clone());
 
-        let consensus = if *count >= 2 {
+        let consensus = if *count >= Self::quorum(current_number_of_peers) {
             let consensus_price = MedianPrice {
                 pair: "BTC/USD".to_string(),
                 median_price: signed_price.price.median_price,
                 timestamp: checkpoint_data.get_latest_timestamp(),
+                checkpoint: Some(signed_price.checkpoint),
             };
             Some((signed_price.checkpoint, consensus_price))
         } else {
@@ -267,6 +281,10 @@ impl NetworkPricesPerCheckpoint {
         }
 
         consensus
+    }
+
+    fn quorum(current_number_of_peers: usize) -> usize {
+        (current_number_of_peers + 1) / 2 + 1
     }
 
     fn cleanup_old_checkpoints(&mut self, current_checkpoint: u64) {

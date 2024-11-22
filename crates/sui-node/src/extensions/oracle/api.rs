@@ -5,6 +5,7 @@ use std::{
 
 use axum::{extract::State, routing::get, Json, Router};
 use serde::{Deserialize, Serialize};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc::Receiver;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -13,6 +14,7 @@ pub struct MedianPrice {
     pub pair: String,
     pub median_price: Option<u128>,
     pub timestamp: Option<u64>,
+    pub checkpoint: Option<CheckpointSequenceNumber>,
 }
 
 const DEFAULT_API_PORT: u16 = 3000;
@@ -26,11 +28,11 @@ pub struct AppState {
 pub struct Api {
     state: Arc<AppState>,
     address: SocketAddr,
-    consensus_price_rx: Receiver<MedianPrice>,
+    quorum_rx: Receiver<MedianPrice>,
 }
 
 impl Api {
-    pub fn new(host: [u8; 4], consensus_price_rx: Receiver<MedianPrice>) -> Self {
+    pub fn new(host: [u8; 4], quorum_rx: Receiver<MedianPrice>) -> Self {
         let api_port = std::env::var("API_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
@@ -38,7 +40,7 @@ impl Api {
         Self {
             state: Arc::new(AppState::default()),
             address: SocketAddr::new(IpAddr::V4(Ipv4Addr::from(host)), api_port),
-            consensus_price_rx,
+            quorum_rx,
         }
     }
 
@@ -49,10 +51,10 @@ impl Api {
             Self::expose_api(state.clone(), address).await;
         });
 
-        let mut consensus_price_rx = self.consensus_price_rx;
+        let mut quorum_rx = self.quorum_rx;
         let state = self.state.clone();
         tokio::spawn(async move {
-            while let Some(consensus_price) = consensus_price_rx.recv().await {
+            while let Some(consensus_price) = quorum_rx.recv().await {
                 Self::update_exposed_price(state.clone(), consensus_price).await;
             }
         });
