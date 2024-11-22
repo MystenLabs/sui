@@ -379,7 +379,7 @@ pub async fn start_indexer(
     with_genesis: bool,
 ) -> anyhow::Result<()> {
     let cancel = CancellationToken::new();
-    let retry_interval = indexer_config.ingestion_config.retry_interval;
+    let retry_interval = indexer_config.ingestion_config.retry_interval();
     let mut indexer = Indexer::new(db_config, indexer_config, cancel.clone()).await?;
 
     if with_genesis {
