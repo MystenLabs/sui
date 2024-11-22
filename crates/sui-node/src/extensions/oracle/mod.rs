@@ -39,9 +39,6 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
 
         // Process checkpoint if we're synced
         if let Some(ref oracle_state) = oracle_state {
-            tracing::info!("🤖 Oracle updating at checkpoint #{checkpoint_number}!");
-            let started_at = std::time::Instant::now();
-
             if let Err(e) = process_checkpoint(&ctx, oracle_state, checkpoint_number).await {
                 tracing::error!(
                     error = %e,
@@ -49,11 +46,6 @@ pub async fn exex_oracle(mut ctx: ExExContext) -> anyhow::Result<()> {
                     "Failed to process checkpoint"
                 );
             }
-
-            tracing::info!(
-                "✅ Executed {checkpoint_number} in {:?}",
-                started_at.elapsed()
-            );
         }
 
         ctx.events

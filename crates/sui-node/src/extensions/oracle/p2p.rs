@@ -189,6 +189,9 @@ impl P2PNode {
     async fn broadcast_price(&mut self, price: MedianPrice, checkpoint: u64) -> Result<()> {
         let signed_price = SignedData::new(&self.keypair, &price, checkpoint)?;
         self.add_price(signed_price.clone()).await?;
+        if self.peers.is_empty() {
+            return Ok(());
+        }
         self.swarm
             .behaviour_mut()
             .gossipsub
@@ -197,9 +200,8 @@ impl P2PNode {
     }
 
     async fn add_price(&mut self, price: SignedData<MedianPrice>) -> anyhow::Result<()> {
-        if let Some((checkpoint, price)) = self.network_prices.add_price(price, self.peers.len()) {
-            tracing::info!(checkpoint, "Reached consensus");
-            self.quorum_sender.send(price).await?;
+        if let Some(quorum_reached_price) = self.network_prices.add_price(price, self.peers.len()) {
+            self.quorum_sender.send(quorum_reached_price).await?;
         }
         Ok(())
     }
@@ -208,17 +210,40 @@ impl P2PNode {
 /// Data associated with each checkpoint
 #[derive(Debug, Default)]
 pub struct CheckpointData {
-    prices: Vec<SignedData<MedianPrice>>,
+    peer_prices: HashMap<String, SignedData<MedianPrice>>,
     price_counts: HashMap<u128, usize>,
+    latest_timestamp: u64,
 }
 
 impl CheckpointData {
+    fn new() -> Self {
+        Self {
+            peer_prices: HashMap::new(),
+            price_counts: HashMap::new(),
+            latest_timestamp: 0,
+        }
+    }
+
+    fn add_peer_price(&mut self, signed_data: &SignedData<MedianPrice>) -> bool {
+        if self.peer_prices.contains_key(&signed_data.peer_id) {
+            return false;
+        }
+
+        if let Some(timestamp) = signed_data.price.timestamp {
+            self.latest_timestamp = self.latest_timestamp.max(timestamp);
+        }
+
+        self.peer_prices
+            .insert(signed_data.peer_id.clone(), signed_data.clone());
+        true
+    }
+
     fn get_latest_timestamp(&self) -> Option<u64> {
-        self.prices
-            .iter()
-            .map(|p| p.price.timestamp)
-            .max()
-            .expect("Should not be None")
+        if self.latest_timestamp > 0 {
+            Some(self.latest_timestamp)
+        } else {
+            None
+        }
     }
 }
 
@@ -226,63 +251,54 @@ impl CheckpointData {
 pub struct NetworkPricesPerCheckpoint(pub BTreeMap<CheckpointSequenceNumber, CheckpointData>);
 
 impl NetworkPricesPerCheckpoint {
-    /// Creates a new NetworkPricesPerCheckpoint instance
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }
 
-    /// Returns the lowest checkpoint in the map or 0 if the map is empty.
-    pub fn earliest_checkpoint(&self) -> u64 {
-        self.0.first_key_value().map(|(key, _)| *key).unwrap_or(0)
+    pub fn latest_checkpoint(&self) -> u64 {
+        self.0.last_key_value().map(|(key, _)| *key).unwrap_or(0)
     }
 
-    /// Adds a price into the gathered prices from the network.
-    /// Returns Some((checkpoint, price)) if consensus was reached, None otherwise.
-    // TODO: Refactor this function + the struct.
     pub fn add_price(
         &mut self,
         signed_price: SignedData<MedianPrice>,
         current_number_of_peers: usize,
-    ) -> Option<(u64, MedianPrice)> {
-        if signed_price.price.median_price.is_none() {
+    ) -> Option<MedianPrice> {
+        let Some(median_price) = signed_price.price.median_price else {
             return None;
-        }
+        };
 
-        let checkpoint_data = self.0.entry(signed_price.checkpoint).or_default();
-        if checkpoint_data
-            .prices
-            .iter()
-            .any(|p| p.peer_id == signed_price.peer_id)
-        {
+        let checkpoint_data = self
+            .0
+            .entry(signed_price.checkpoint)
+            .or_insert_with(CheckpointData::new);
+
+        if !checkpoint_data.add_peer_price(&signed_price) {
             return None;
         }
 
         let count = checkpoint_data
             .price_counts
-            .entry(signed_price.price.median_price.unwrap())
-            .or_default();
-        *count += 1;
-        checkpoint_data.prices.push(signed_price.clone());
+            .entry(median_price)
+            .and_modify(|c| *c += 1)
+            .or_insert(1);
 
-        let consensus = if *count >= Self::quorum(current_number_of_peers) {
+        let quorum_reached = *count >= Self::quorum(current_number_of_peers);
+        if quorum_reached {
             let consensus_price = MedianPrice {
                 pair: "BTC/USD".to_string(),
-                median_price: signed_price.price.median_price,
+                median_price: Some(median_price),
                 timestamp: checkpoint_data.get_latest_timestamp(),
                 checkpoint: Some(signed_price.checkpoint),
             };
-            Some((signed_price.checkpoint, consensus_price))
+            self.cleanup_old_checkpoints(signed_price.checkpoint);
+            Some(consensus_price)
         } else {
             None
-        };
-
-        if consensus.is_some() {
-            self.cleanup_old_checkpoints(signed_price.checkpoint);
         }
-
-        consensus
     }
 
+    #[inline]
     fn quorum(current_number_of_peers: usize) -> usize {
         (current_number_of_peers + 1) / 2 + 1
     }
