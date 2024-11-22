@@ -3,7 +3,7 @@
 
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
+//use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
 use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
@@ -226,6 +226,19 @@ pub(super) fn committer<H: Handler + 'static>(
                         continue;
                     };
 
+                    // TODO: The following code is an experiment to see whether it makes
+                    // a difference to the commit throughput if we do not use a transaction.
+                    // It can lead to inconsistent state for live queries, as well as
+                    // inaccurate affected row counts in case of watermark update failure.
+                    // Remove it later.
+                    let affected = match H::commit(&batch, &mut conn).await {
+                        Ok(affected) => {
+                            watermark.update(&mut conn).await.map(|_| affected).map_err(|e| e.into())
+                        }
+                        e => e,
+                    };
+
+                    /*
                     // Write all the object updates out along with the watermark update, in a
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.
@@ -235,6 +248,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         watermark.update(conn).await?;
                         H::commit(&batch, conn).await
                     }.scope_boxed()).await;
+                    */
 
                     // Drop the connection eagerly to avoid it holding on to references borrowed by
                     // the transaction closure.
