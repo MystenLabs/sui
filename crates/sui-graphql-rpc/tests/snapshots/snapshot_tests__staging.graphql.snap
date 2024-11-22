@@ -178,6 +178,9 @@ enum AddressTransactionBlockRelationship {
 	AFFECTED
 }
 
+"""
+An Authenticator represents the access control rules for a ConsensusV2 object.
+"""
 union Authenticator = Address
 
 """
