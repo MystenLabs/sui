@@ -1,0 +1,8 @@
+Command `new -p package example`:
+error: cannot create package `example` because `package/Move.toml` would be overwritten.
+External Command `cat package/.gitignore`:
+existing_ignore
+External Command `find package`:
+package
+package/.gitignore
+package/Move.toml
