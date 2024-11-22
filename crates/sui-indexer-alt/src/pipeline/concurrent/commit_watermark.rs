@@ -61,7 +61,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             return;
         }
 
-        let mut poll = interval(config.watermark_interval);
+        let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // To correctly update the watermark, the task tracks the watermark it last tried to write

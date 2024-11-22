@@ -76,7 +76,7 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 ///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZE` rows).
 ///
 /// - Otherwise, it will check for any data to write out at a regular interval (controlled by
-///   `config.collect_interval`).
+///   `config.collect_interval()`).
 ///
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
@@ -90,7 +90,7 @@ pub(super) fn collector<H: Handler + 'static>(
     spawn_monitored_task!(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
-        let mut poll = interval(config.collect_interval);
+        let mut poll = interval(config.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Data for checkpoints that haven't been written yet.
