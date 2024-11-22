@@ -7,7 +7,4 @@ package
 package/.gitignore
 package/Move.toml
 package/sources
-package/sources/example.move
 package/sources/package.move
-package/tests
-package/tests/example.move
