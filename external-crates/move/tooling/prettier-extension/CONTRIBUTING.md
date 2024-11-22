@@ -6,10 +6,12 @@ To build and package the extension locally, run:
 
 ```shell
 npm i
-npm package
+npm run package
 ```
 
-You will find the `.vsce` file with the current version of the package.
+> Note: `vsce` does not work with `pnpm`, make sure to use `npm` when building.
+
+You will find the `*.vsce` file with the current version of the package.
 
 ## Submitting changes
 

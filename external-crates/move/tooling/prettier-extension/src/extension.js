@@ -3,6 +3,7 @@
 
 const path = require('path');
 const vscode = require('vscode');
+const prettier = require('prettier');
 const { cosmiconfigSync: cosmiconfig } = require('cosmiconfig');
 const { Worker } = require('node:worker_threads');
 
@@ -11,12 +12,6 @@ const { Worker } = require('node:worker_threads');
  * read the configuration settings.
  */
 const EXTENSION_NAME = 'prettierMove';
-
-/**
- * Prettier extension name.
- * If installed, this extension settings will be used.
- */
-const PRETTIER_EXTENSION_NAME = 'prettier';
 
 /**
  * Max time to wait for the worker to respond.
@@ -38,14 +33,10 @@ const channel = vscode.window.createOutputChannel('Prettier Move');
  * Upon activation, the extension reads the configuration settings in the following order:
  *
  * - .prettierrc
- * - .editorconfig
  * - Extension settings
  * - Prettier extension settings
  */
 function activate(context) {
-	const prettierConfig = vscode.workspace.getConfiguration(PRETTIER_EXTENSION_NAME);
-	const config = vscode.workspace.getConfiguration(EXTENSION_NAME);
-
 	worker = new Worker(path.join(__dirname, 'formatter-worker.js'));
 	const langs = [
 		{ scheme: 'file', language: 'move' },
@@ -55,7 +46,7 @@ function activate(context) {
 	context.subscriptions.push(
 		vscode.languages.registerDocumentRangeFormattingEditProvider(langs, {
 			provideDocumentRangeFormattingEdits: async (document, range, _opts, token) => {
-				const options = findMatchingConfig(document.uri);
+				const options = await findMatchingConfig(document.uri);
 
 				// send the text and options to the worker
 				worker.postMessage(JSON.stringify({ text: document.getText(), options }));
@@ -79,46 +70,50 @@ function activate(context) {
 /**
  * For the given filepath, seach for one of the following configuration files:
  * - .prettierrc (prettier.json etc)
- * - .editorconfig
  *
  * Alternatively use (in order, if set):
  * - Extension settings
  * - Prettier extension settings
  */
-function findMatchingConfig(documentUri) {
+async function findMatchingConfig(documentUri) {
 	const root = vscode.workspace.getWorkspaceFolder(documentUri).uri.path;
 	let lookup = documentUri.path;
 	let search = {};
 
 	// go back in the directory until the root is found; or until we find the
-	// .editorconfig or .prettierrc file
-	while (lookup !== root) {
+	// .prettierrc (.json | .yml) file
+	while (lookup !== root && lookup !== '/') {
 		lookup = path.join(lookup, '..');
 
-		const editorConfig = cosmiconfig('editorconfig').search(lookup);
-		const prettierConfig = cosmiconfig('prettier').search(lookup);
+		const prettierConfig = cosmiconfig('prettier', {
+			searchPlaces: [
+				'.prettierrc',
+				'.prettierrc.json',
+				'.prettierrc.yaml',
+				'.prettierrc.yml',
+				'.prettierrc.js',
+				'prettier.config.js',
+			],
+		}).search(lookup);
 
-		if (editorConfig || prettierConfig) {
-			channel.appendLine(`Found a configuration file in ${lookup}`);
-			editorConfig && channel.appendLine(`EditorConfig: ${editorConfig.filepath}`);
-			prettierConfig && channel.appendLine(`PrettierConfig: ${prettierConfig.filepath}`);
-			search = prettierConfig.config || editorConfig.config;
+		if (prettierConfig) {
+			channel.appendLine(`Found a prettier config at ${prettierConfig.filepath}`);
+			search = prettierConfig.config;
+			channel.append(JSON.stringify(search, null, 2));
 			break;
 		}
 	}
 
-	const prettierConfig = vscode.workspace.getConfiguration(PRETTIER_EXTENSION_NAME);
 	const formatterConfig = vscode.workspace.getConfiguration(EXTENSION_NAME);
 
 	return {
-		...prettierConfig,
 		tabWidth: formatterConfig.get('tabWidth'),
 		printWidth: formatterConfig.get('printWidth'),
 		wrapComments: formatterConfig.get('wrapComments'),
 		useModuleLabel: formatterConfig.get('useModuleLabel'),
 		autoGroupImports: formatterConfig.get('autoGroupImports'),
 		enableErrorDebug: formatterConfig.get('errorDebugMode'),
-		...search, // .editorconfig or .prettierrc overrides the extension settings
+		...search, // .prettierrc overrides the extension settings
 	};
 }
 
