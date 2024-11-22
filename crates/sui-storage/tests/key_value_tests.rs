@@ -190,12 +190,10 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         checkpoint_summaries: &[CheckpointSequenceNumber],
         checkpoint_contents: &[CheckpointSequenceNumber],
         checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
     ) -> SuiResult<(
         Vec<Option<CertifiedCheckpointSummary>>,
         Vec<Option<CheckpointContents>>,
         Vec<Option<CertifiedCheckpointSummary>>,
-        Vec<Option<CheckpointContents>>,
     )> {
         let mut summaries = Vec::new();
         for digest in checkpoint_summaries {
@@ -212,12 +210,7 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
             summaries_by_digest.push(self.checkpoint_summaries_by_digest.get(digest).cloned());
         }
 
-        let mut contents_by_digest = Vec::new();
-        for digest in checkpoint_contents_by_digest {
-            contents_by_digest.push(self.checkpoint_contents_by_digest.get(digest).cloned());
-        }
-
-        Ok((summaries, contents, summaries_by_digest, contents_by_digest))
+        Ok((summaries, contents, summaries_by_digest))
     }
 
     async fn deprecated_get_transaction_checkpoint(
@@ -357,7 +350,6 @@ async fn test_checkpoints() {
             &[s1.sequence_number, s2.sequence_number],
             &[s1.sequence_number, s2.sequence_number],
             &[*s1.digest(), *s2.digest()],
-            &[s1.content_digest, s2.content_digest],
         )
         .now_or_never()
         .unwrap()
@@ -366,12 +358,10 @@ async fn test_checkpoints() {
     let summaries_by_seq = result.0;
     let contents_by_seq = result.1;
     let summaries_by_digest = result.2;
-    let contents_by_digest = result.3;
 
     assert_eq!(summaries_by_seq[0].as_ref().unwrap().data(), s1.data());
     assert_eq!(contents_by_seq[1].as_ref().unwrap(), &c2);
     assert_eq!(summaries_by_digest[0].as_ref().unwrap().data(), s1.data());
-    assert_eq!(contents_by_digest[1].as_ref().unwrap(), &c2);
 }
 
 #[tokio::test]
