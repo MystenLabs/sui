@@ -1,19 +1,19 @@
 ---
 title: Move Analyzer VSCode Extension
+description: The Move extension provides language support features like code navigation, completion, and diagnostics for Move source code.
 ---
-
-The Move Analyzer extension for Visual Studio Code provides language support features for the Move programming language. It enables syntax highlighting, code completion, and advanced features like go-to-definition and type checking.
+The Move Analyzer extension for Visual Studio Code provides language support features for the Move programming language. It enables syntax highlighting, code completion, and advanced features like definition linking and type checking.
 
 ## Installing
 
 You can install the Move extension from the Visual Studio Code Marketplace:
 
 - Open VS Code
-- Open the Extensions view (`⇧` + `⌘` + `X` on macOS) 
-- Search for "mysten.move"
-- Click Install on the Move extension by Mysten Labs
+- Open the Extensions view (<kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>X</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> on Windows/Linux) 
+- Search for `mysten.move`
+- Click **Install** on the Move extension by Mysten Labs
 
-You can also use `Ctrl-P` or `Cmd-P` and type `ext install mysten.move` to install the extension, or install via the command line: 
+You can also use <kbd>Ctrl</kbd> + <kbd>P</kbd> or <kbd>⌘</kbd> + <kbd>P</kbd> and type `ext install mysten.move` to install the extension, or install via the command line: 
 
 ```bash
 code --install-extension mysten.move
@@ -26,7 +26,7 @@ Installing the Move extension also installs the following extensions:
 
 ### Installing `move-analyzer`
 
-The Move extension will attempt to install the appropriate `move-analyzer` binary for your platform. If this doesn't work, or you would prefer to install it manually, you can build it with Cargo:
+The Move extension attempts to install the appropriate `move-analyzer` binary for your platform. If this doesn't work, or you prefer to install it manually, build it with Cargo:
 
 ```bash
 cargo install --git https://github.com/MystenLabs/sui.git sui-move-lsp
@@ -41,9 +41,9 @@ The Move extension installs command palette commands for building, testing, and 
 
 ![Move commands in the command palette](./images/commands.png)
 
-These commands will attempt to find the `Move.toml` file for the open Move source file and will open a terminal to run the appropriate `sui move` command.
+These commands find the `Move.toml` file for the open Move source file and open a terminal to run the appropriate `sui move` command.
 
-In order to generate a trace, you will need to have a trace-capable `sui` binary. See the [Debugging](/references/ide/debugger) page for more information.
+To generate a trace, you need to have a trace-capable `sui` binary. See [Debugger](./debugger.mdx) for more information.
 
 ### Syntax highlighting
 
@@ -59,7 +59,7 @@ Hovering over identifiers shows type information, struct fields and attributes, 
 
 ### Code completion
 
-The Move extension attempts to autocomplete upon a dot operator, displaying the available methods and fields for the type.
+The Move extension autocompletes upon a dot operator, displaying the available methods and fields for the type.
 
 ![Code completion](./images/dot_completion.png)
 
