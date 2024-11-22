@@ -4,6 +4,7 @@
 	"displayName": "Prettier Move Developer Preview",
 	"description": "Adds Move code formatting to VSCode using Prettier@v3",
 	"version": "0.1.0",
+	"private": true,
 	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
