@@ -75,8 +75,10 @@ pub struct SuiInitArgs {
     /// the indexer.
     #[clap(long = "epochs-to-keep")]
     pub epochs_to_keep: Option<u64>,
+    /// TODO (wlmyng): doc comment
     #[clap(long = "data-ingestion-path")]
     pub data_ingestion_path: Option<PathBuf>,
+    /// TODO (wlmyng): doc comment
     #[clap(long = "rest-api-url")]
     pub rest_api_url: Option<String>,
 }

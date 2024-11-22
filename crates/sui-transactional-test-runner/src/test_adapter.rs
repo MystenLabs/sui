@@ -3,6 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
+use crate::graphql_client::*;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
@@ -366,6 +367,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
+                offchain_config
+                    .as_ref()
+                    .unwrap()
+                    .data_ingestion_path
+                    .clone(),
             )
             .await
         } else {
@@ -609,21 +615,22 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .ok_or_else(|| anyhow::anyhow!("GraphQL client not set"))?;
                 // let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-                // cluster
-                // .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
-                // .await;
+                wait_for_checkpoint_catchup(
+                    graphql_client,
+                    highest_checkpoint,
+                    Duration::from_secs(60),
+                )
+                .await;
 
-                // cluster
-                // .wait_for_objects_snapshot_catchup(Duration::from_secs(180))
-                // .await;
+                // wait_for_objects_snapshot_catchup(graphql_client, Duration::from_secs(180)).await;
 
-                if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
-                    // cluster
-                    // .wait_for_checkpoint_pruned(
-                    // wait_for_checkpoint_pruned,
-                    // Duration::from_secs(60),
-                    // )
-                    // .await;
+                if let Some(checkpoint_to_prune) = wait_for_checkpoint_pruned {
+                    wait_for_pruned_checkpoint(
+                        graphql_client,
+                        checkpoint_to_prune,
+                        Duration::from_secs(60),
+                    )
+                    .await;
                 }
 
                 let interpolated =
@@ -2155,6 +2162,7 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
+    data_ingestion_path: PathBuf,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -2210,15 +2218,18 @@ async fn init_sim_executor(
 
     // Create the simulator with the specific account configs, which also crates objects
 
-    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
-        rng,
-        DEFAULT_CHAIN_START_TIMESTAMP,
-        protocol_config.version,
-        acc_cfgs,
-        key_copy.map(|q| vec![q]),
-        reference_gas_price,
-        None,
-    );
+    let (mut sim, read_replica) =
+        PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+            rng,
+            DEFAULT_CHAIN_START_TIMESTAMP,
+            protocol_config.version,
+            acc_cfgs,
+            key_copy.map(|q| vec![q]),
+            reference_gas_price,
+            None,
+        );
+
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
