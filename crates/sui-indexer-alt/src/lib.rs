@@ -68,6 +68,10 @@ pub struct Indexer {
     /// Optional override of enabled pipelines.
     enabled_pipelines: BTreeSet<String>,
 
+    /// Pipelines that have already been registered with the indexer. Used to make sure a pipeline
+    /// with the same name isn't added twice.
+    added_pipelines: BTreeSet<&'static str>,
+
     /// Cancellation token shared among all continuous tasks in the service.
     cancel: CancellationToken,
 
@@ -155,6 +159,7 @@ impl Indexer {
             first_checkpoint,
             last_checkpoint,
             enabled_pipelines: pipeline.into_iter().collect(),
+            added_pipelines: BTreeSet::new(),
             cancel,
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
@@ -321,6 +326,12 @@ impl Indexer {
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
     ) -> Result<Option<Option<CommitterWatermark<'static>>>> {
+        ensure!(
+            self.added_pipelines.insert(P::NAME),
+            "Pipeline {:?} already added",
+            P::NAME,
+        );
+
         if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(P::NAME) {
             info!("Skipping pipeline {}", P::NAME);
             return Ok(None);
