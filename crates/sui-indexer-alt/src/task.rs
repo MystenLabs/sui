@@ -44,90 +44,88 @@ pub trait TrySpawnStreamExt: Stream {
 }
 
 impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
-    fn try_for_each_spawned<Fut, F, E>(
+    async fn try_for_each_spawned<Fut, F, E>(
         self,
         limit: impl Into<Option<usize>>,
         mut f: F,
-    ) -> impl Future<Output = Result<(), E>>
+    ) -> Result<(), E>
     where
         Fut: Future<Output = Result<(), E>> + Send + 'static,
         F: FnMut(Self::Item) -> Fut,
         E: Send + 'static,
     {
-        async move {
-            // Maximum number of tasks to spawn concurrently.
-            let limit = match limit.into() {
-                Some(0) | None => usize::MAX,
-                Some(n) => n,
-            };
+        // Maximum number of tasks to spawn concurrently.
+        let limit = match limit.into() {
+            Some(0) | None => usize::MAX,
+            Some(n) => n,
+        };
 
-            // Number of permits to spawn tasks left.
-            let mut permits = limit;
-            // Handles for already spawned tasks.
-            let mut join_set = JoinSet::new();
-            // Whether the worker pool has stopped accepting new items and is draining.
-            let mut draining = false;
-            // Error that occurred in one of the workers, to be propagated to the called on exit.
-            let mut error = None;
+        // Number of permits to spawn tasks left.
+        let mut permits = limit;
+        // Handles for already spawned tasks.
+        let mut join_set = JoinSet::new();
+        // Whether the worker pool has stopped accepting new items and is draining.
+        let mut draining = false;
+        // Error that occurred in one of the workers, to be propagated to the called on exit.
+        let mut error = None;
 
-            let mut self_ = pin!(self);
+        let mut self_ = pin!(self);
 
-            loop {
-                tokio::select! {
-                    next = self_.next(), if !draining && permits > 0 => {
-                        if let Some(item) = next {
-                            permits -= 1;
-                            join_set.spawn(f(item));
-                        } else {
-                            // If the stream is empty, signal that the worker pool is going to
-                            // start draining now, so that once we get all our permits back, we
-                            // know we can wind down the pool.
+        loop {
+            tokio::select! {
+                next = self_.next(), if !draining && permits > 0 => {
+                    if let Some(item) = next {
+                        permits -= 1;
+                        join_set.spawn(f(item));
+                    } else {
+                        // If the stream is empty, signal that the worker pool is going to
+                        // start draining now, so that once we get all our permits back, we
+                        // know we can wind down the pool.
+                        draining = true;
+                    }
+                }
+
+                Some(res) = join_set.join_next() => {
+                    match res {
+                        Ok(Err(e)) if error.is_none() => {
+                            error = Some(e);
+                            permits += 1;
+                            draining = true;
+                        }
+
+                        Ok(_) => permits += 1,
+
+                        // Worker panicked, propagate the panic.
+                        Err(e) if e.is_panic() => {
+                            panic::resume_unwind(e.into_panic())
+                        }
+
+                        // Worker was cancelled -- this can only happen if its join handle was
+                        // cancelled (not possible because that was created in this function),
+                        // or the runtime it was running in was wound down, in which case,
+                        // prepare the worker pool to drain.
+                        Err(e) => {
+                            assert!(e.is_cancelled());
+                            permits += 1;
                             draining = true;
                         }
                     }
+                }
 
-                    Some(res) = join_set.join_next() => {
-                        match res {
-                            Ok(Err(e)) if error.is_none() => {
-                                error = Some(e);
-                                permits += 1;
-                                draining = true;
-                            }
-
-                            Ok(_) => permits += 1,
-
-                            // Worker panicked, propagate the panic.
-                            Err(e) if e.is_panic() => {
-                                panic::resume_unwind(e.into_panic())
-                            }
-
-                            // Worker was cancelled -- this can only happen if its join handle was
-                            // cancelled (not possible because that was created in this function),
-                            // or the runtime it was running in was wound down, in which case,
-                            // prepare the worker pool to drain.
-                            Err(e) => {
-                                assert!(e.is_cancelled());
-                                permits += 1;
-                                draining = true;
-                            }
-                        }
-                    }
-
-                    else => {
-                        // Not accepting any more items from the stream, and all our workers are
-                        // idle, so we stop.
-                        if permits == limit && draining {
-                            break;
-                        }
+                else => {
+                    // Not accepting any more items from the stream, and all our workers are
+                    // idle, so we stop.
+                    if permits == limit && draining {
+                        break;
                     }
                 }
             }
+        }
 
-            if let Some(e) = error {
-                Err(e)
-            } else {
-                Ok(())
-            }
+        if let Some(e) = error {
+            Err(e)
+        } else {
+            Ok(())
         }
     }
 }
