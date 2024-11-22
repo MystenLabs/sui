@@ -23,6 +23,7 @@ export function getSentryConfig({
 		dsn: SENTRY_DSN,
 		integrations,
 		release: WALLET_VERSION,
+		sampleRate: 0.05,
 		tracesSampler: IS_PROD ? tracesSampler : () => 1,
 		allowUrls: IS_PROD
 			? [
