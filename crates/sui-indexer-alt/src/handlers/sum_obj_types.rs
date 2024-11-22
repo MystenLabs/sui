@@ -9,7 +9,7 @@ use std::{
 use anyhow::{anyhow, ensure};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
-use futures::future::try_join_all;
+use futures::future::{try_join_all, Either};
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
@@ -156,29 +156,30 @@ impl Handler for SumObjTypes {
             }
         }
 
-        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(|chunk| {
-            diesel::insert_into(sum_obj_types::table)
-                .values(chunk)
-                .on_conflict(sum_obj_types::object_id)
-                .do_update()
-                .set((
-                    sum_obj_types::object_version.eq(excluded(sum_obj_types::object_version)),
-                    sum_obj_types::owner_kind.eq(excluded(sum_obj_types::owner_kind)),
-                    sum_obj_types::owner_id.eq(excluded(sum_obj_types::owner_id)),
-                ))
-                .execute(conn)
+        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(Either::Right);
+
+        let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
+            Either::Left(update) => Either::Left(
+                diesel::insert_into(sum_obj_types::table)
+                    .values(update)
+                    .on_conflict(sum_obj_types::object_id)
+                    .do_update()
+                    .set((
+                        sum_obj_types::object_version.eq(excluded(sum_obj_types::object_version)),
+                        sum_obj_types::owner_kind.eq(excluded(sum_obj_types::owner_kind)),
+                        sum_obj_types::owner_id.eq(excluded(sum_obj_types::owner_id)),
+                    ))
+                    .execute(conn),
+            ),
+
+            Either::Right(delete) => Either::Right(
+                diesel::delete(sum_obj_types::table)
+                    .filter(sum_obj_types::object_id.eq_any(delete.iter().cloned()))
+                    .execute(conn),
+            ),
         });
 
-        let updated: usize = try_join_all(update_chunks).await?.into_iter().sum();
-
-        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(|chunk| {
-            diesel::delete(sum_obj_types::table)
-                .filter(sum_obj_types::object_id.eq_any(chunk.iter().cloned()))
-                .execute(conn)
-        });
-
-        let deleted: usize = try_join_all(delete_chunks).await?.into_iter().sum();
-
-        Ok(updated + deleted)
+        Ok(try_join_all(futures).await?.into_iter().sum())
     }
 }
