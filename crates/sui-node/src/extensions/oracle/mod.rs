@@ -3,6 +3,8 @@ pub mod api;
 pub mod p2p;
 pub mod sui_objects;
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use aggregation::*;
 use api::*;
 use p2p::*;
@@ -69,7 +71,28 @@ async fn process_checkpoint(
         e
     })?;
 
-    if let Some(median_price) = aggregate_to_median(publishers_storages, checkpoint) {
+    // Get the current timestamp in seconds since the Unix epoch
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| {
+            tracing::error!("Failed to get the current system time: {:?}", e);
+            anyhow::anyhow!("System time error")
+        })?
+        .as_secs();
+
+    // Filter out prices older than 1 minute (60 seconds)
+    let recent_publishers_storages: Vec<PuiPriceStorage> = publishers_storages
+        .into_iter()
+        .filter(|storage| {
+            if let Some(timestamp) = storage.timestamp {
+                current_timestamp.saturating_sub(timestamp) <= 60
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    if let Some(median_price) = aggregate_to_median(recent_publishers_storages, checkpoint) {
         oracle_state
             .broadcast_price(median_price, checkpoint)
             .await?;
