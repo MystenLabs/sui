@@ -1743,7 +1743,7 @@ fn type_parameter_diag(
             (
                 def_loc,
                 format!(
-                    "Incorrect number of type parameters: expected {}, found {}",
+                    "Incorrect number of type parameters: expected {}, have {}",
                     old_type_parameters.len(),
                     new_type_parameters.len()
                 ),
@@ -1808,19 +1808,7 @@ fn type_parameter_code_and_error(
             Declarations::TypeParamMismatch.into(),
             format!(
                 // type parameter constraints
-                "Unexpected {}type parameter {}, expected {}parameter with {}.",
-                if old_type_param.is_phantom {
-                    "phantom "
-                } else {
-                    ""
-                },
-                format_list(
-                    new_type_param
-                        .constraints
-                        .into_iter()
-                        .map(|c| format!("'{:?}'", c).to_lowercase()),
-                    Some(("constraint", "constraints")),
-                ),
+                "Expected {} type parameter with {}.",
                 if new_type_param.is_phantom {
                     "phantom "
                 } else {
@@ -1839,12 +1827,7 @@ fn type_parameter_code_and_error(
         (false, true) => (
             Declarations::TypeParamMismatch.into(),
             format!(
-                "Type parameter is {}, expected {}.",
-                if new_type_param.is_phantom {
-                    "phantom"
-                } else {
-                    "non-phantom"
-                },
+                "Expected {} type parameter.",
                 if old_type_param.is_phantom {
                     "phantom"
                 } else {
