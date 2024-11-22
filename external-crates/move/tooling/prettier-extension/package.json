@@ -5,6 +5,8 @@
 	"description": "Adds Move code formatting to VSCode using Prettier@v3",
 	"version": "0.1.0",
 	"private": true,
+	"preview": true,
+	"icon": "img/move.png",
 	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
