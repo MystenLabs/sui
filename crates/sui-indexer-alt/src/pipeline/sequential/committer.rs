@@ -26,8 +26,8 @@ use super::Handler;
 ///
 /// Data arrives out of order, grouped by checkpoint, on `rx`. The task orders them and waits to
 /// write them until either a configural polling interval has passed (controlled by
-/// `config.collect_interval`), or `H::BATCH_SIZE` rows have been accumulated and we have received
-/// the next expected checkpoint.
+/// `config.collect_interval()`), or `H::BATCH_SIZE` rows have been accumulated and we have
+/// received the next expected checkpoint.
 ///
 /// Writes are performed on checkpoint boundaries (more than one checkpoint can be present in a
 /// single write), in a single transaction that includes all row updates and an update to the
@@ -53,7 +53,7 @@ pub(super) fn committer<H: Handler + 'static>(
     spawn_monitored_task!(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
-        let mut poll = interval(config.collect_interval);
+        let mut poll = interval(config.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // If no checkpoint lag is specified, we default it to `0` (no lag).
