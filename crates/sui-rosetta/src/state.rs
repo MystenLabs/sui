@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-
+use futures::future::try_join_all;
+use std::sync::Arc;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
@@ -123,30 +122,43 @@ impl CheckpointBlockProvider {
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
         let index = checkpoint.sequence_number;
         let hash = checkpoint.digest;
-        let mut transactions = vec![];
-        for batch in checkpoint.transactions.chunks(50) {
-            let transaction_responses = self
-                .client
-                .read_api()
-                .multi_get_transactions_with_options(
-                    batch.to_vec(),
-                    SuiTransactionBlockResponseOptions::new()
-                        .with_input()
-                        .with_effects()
-                        .with_balance_changes()
-                        .with_events(),
-                )
-                .await?;
-            for tx in transaction_responses.into_iter() {
-                transactions.push(Transaction {
-                    transaction_identifier: TransactionIdentifier { hash: tx.digest },
-                    operations: Operations::try_from_response(tx, &self.coin_metadata_cache)
-                        .await?,
-                    related_transactions: vec![],
-                    metadata: None,
-                })
-            }
-        }
+
+        let chunks = checkpoint
+            .transactions
+            .chunks(5)
+            .map(|batch| async {
+                let transaction_responses = self
+                    .client
+                    .read_api()
+                    .multi_get_transactions_with_options(
+                        batch.to_vec(),
+                        SuiTransactionBlockResponseOptions::new()
+                            .with_input()
+                            .with_effects()
+                            .with_balance_changes()
+                            .with_events(),
+                    )
+                    .await?;
+
+                let mut transactions = vec![];
+                for tx in transaction_responses.into_iter() {
+                    transactions.push(Transaction {
+                        transaction_identifier: TransactionIdentifier { hash: tx.digest },
+                        operations: Operations::try_from_response(tx, &self.coin_metadata_cache)
+                            .await?,
+                        related_transactions: vec![],
+                        metadata: None,
+                    })
+                }
+                Ok::<Vec<_>, anyhow::Error>(transactions)
+            })
+            .collect::<Vec<_>>();
+
+        let transactions = try_join_all(chunks)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         // previous digest should only be None for genesis block.
         if checkpoint.previous_digest.is_none() && index != 0 {
