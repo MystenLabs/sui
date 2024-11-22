@@ -1,0 +1,7 @@
+Command `new -p gitignore_exists package`:
+External Command `cat package/.gitignore`:
+existing_ignore
+build/*
+External Command `find package`:
+package
+package/.gitignore
