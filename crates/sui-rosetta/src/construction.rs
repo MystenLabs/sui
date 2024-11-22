@@ -29,6 +29,7 @@ use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use crate::errors::Error;
 use crate::types::internal_operation::{
     PayCoin, PaySui, Stake, TransactionAndObjectData, TryConstructTransaction, WithdrawStake,
+    MAX_GAS_COINS,
 };
 use crate::types::{
     Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
@@ -259,12 +260,13 @@ pub async fn metadata(
 
     if let InternalOperation::PaySui(pay_sui) = option.internal_operation {
         let TransactionAndObjectData {
-            coins,
+            gas_coins,
+            extra_gas_coins,
             objects,
             pt: _,
             total_sui_balance,
             // TODO: Check whether we indeed want to fill the budget in the case the budget passed
-            // was None, and we have calculated it here, 
+            // was None, and we have calculated it here,
             budget,
         } = pay_sui
             .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
@@ -273,7 +275,8 @@ pub async fn metadata(
         return Ok(ConstructionMetadataResponse {
             metadata: ConstructionMetadata {
                 sender,
-                coins: coins.into_iter().map(|c| c.object_ref()).collect(),
+                gas_coins,
+                extra_gas_coins,
                 objects,
                 total_coin_value: total_sui_balance,
                 gas_price,
@@ -355,7 +358,8 @@ pub async fn metadata(
                 .internal_operation
                 .try_into_data(ConstructionMetadata {
                     sender,
-                    coins: vec![],
+                    gas_coins: vec![],
+                    extra_gas_coins: vec![],
                     objects: objects.clone(),
                     // Mock coin have 1B SUI
                     total_coin_value: 1_000_000_000 * 1_000_000_000,
@@ -407,15 +411,15 @@ pub async fn metadata(
 
     let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
 
-    let coins = coins
-        .into_iter()
-        .map(|c| c.object_ref())
-        .collect::<Vec<_>>();
+    let mut iter = coins.into_iter().map(|c| c.object_ref());
+    let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
+    let extra_gas_coins: Vec<_> = iter.collect();
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
             sender,
-            coins,
+            gas_coins,
+            extra_gas_coins,
             objects,
             total_coin_value: total_coin_value.into(),
             gas_price,

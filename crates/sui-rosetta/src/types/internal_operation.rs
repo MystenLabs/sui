@@ -6,7 +6,6 @@ use enum_dispatch::enum_dispatch;
 use pay_sui::pay_sui_pt;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::Coin;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
@@ -29,14 +28,17 @@ mod pay_sui;
 mod stake;
 mod withdraw_stake;
 
-const MAX_GAS_COINS: usize = 255;
+pub const MAX_GAS_COINS: usize = 255;
 const MAX_COMMAND_ARGS: usize = 511;
 const MAX_GAS_BUDGET: u64 = 50_000_000_000;
 
 pub struct TransactionAndObjectData {
-    pub coins: Vec<Coin>,
+    pub gas_coins: Vec<ObjectRef>,
+    pub extra_gas_coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
     pub pt: ProgrammableTransaction,
+    /// Refers to the sum of the Coin<SUI> balance of the coins participating in the transaction;
+    /// either as gas or as objects.
     pub total_sui_balance: i128,
     pub budget: u64,
 }
@@ -78,7 +80,7 @@ impl InternalOperation {
                 recipients,
                 amounts,
                 ..
-            }) => pay_sui_pt(recipients, amounts, &metadata.objects)?,
+            }) => pay_sui_pt(recipients, amounts, &metadata.extra_gas_coins)?,
             Self::PayCoin(PayCoin {
                 recipients,
                 amounts,
@@ -160,7 +162,7 @@ impl InternalOperation {
 
         Ok(TransactionData::new_programmable(
             metadata.sender,
-            metadata.coins,
+            metadata.gas_coins,
             pt,
             metadata.budget,
             metadata.gas_price,

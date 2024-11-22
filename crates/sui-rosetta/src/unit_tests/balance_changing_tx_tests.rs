@@ -628,7 +628,8 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     .unwrap();
     let metadata = ConstructionMetadata {
         sender,
-        coins: vec![gas],
+        gas_coins: vec![gas],
+        extra_gas_coins: vec![],
         objects: vec![],
         total_coin_value: 0,
         gas_price: rgp,
