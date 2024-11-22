@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, type_cache},
     execution::{
-        dispatch_tables::VMDispatchTables,
+        dispatch_tables::{count_type_nodes, subst, VMDispatchTables, VirtualTableKey},
         interpreter::{locals::MachineHeap, set_err_info},
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{CallType, Constant, Function, Module, Type, VTableKey},
+    jit::execution::ast::{CallType, Constant, Function, Module, Type},
     shared::{
         constants::{
             CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
         },
         views::TypeView,
+        vm_pointer::VMPointer,
     },
 };
 use move_binary_format::{
@@ -95,7 +95,7 @@ pub(crate) struct ModuleDefinitionResolver {
 #[derive(Debug)]
 pub(super) struct CallFrame {
     pub(super) pc: u16,
-    pub(super) function: ArenaPointer<Function>,
+    pub(super) function: VMPointer<Function>,
     pub(super) resolver: ModuleDefinitionResolver,
     pub(super) stack_frame: StackFrame,
     pub(super) ty_args: Vec<Type>,
@@ -162,7 +162,7 @@ impl MachineState {
     pub fn push_call_frame(
         &mut self,
         resolver: ModuleDefinitionResolver,
-        function: ArenaPointer<Function>,
+        function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<()> {
@@ -431,7 +431,7 @@ impl CallStack {
     /// Create a new empty call stack.
     pub fn new(
         resolver: ModuleDefinitionResolver,
-        function: ArenaPointer<Function>,
+        function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> PartialVMResult<Self> {
@@ -460,7 +460,7 @@ impl CallStack {
     pub fn push_call(
         &mut self,
         resolver: ModuleDefinitionResolver,
-        function: ArenaPointer<Function>,
+        function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<()> {
@@ -557,14 +557,14 @@ impl ModuleDefinitionResolver {
         let instantiation: Vec<_> = loaded_module
             .instantiation_signature_at(func_inst.instantiation_idx)?
             .iter()
-            .map(|ty| type_cache::subst(ty, type_params))
+            .map(|ty| subst(ty, type_params))
             .collect::<PartialVMResult<_>>()?;
 
         // Check if the function instantiation over all generics is larger
         // than MAX_TYPE_INSTANTIATION_NODES.
         let mut sum_nodes = 1u64;
         for ty in type_params.iter().chain(instantiation.iter()) {
-            sum_nodes = sum_nodes.saturating_add(type_cache::count_type_nodes(ty));
+            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
             }
@@ -614,7 +614,7 @@ impl ModuleDefinitionResolver {
 
     fn instantiate_type_common(
         &self,
-        gt_idx: &VTableKey,
+        gt_idx: &VirtualTableKey,
         type_params: &[Type],
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
@@ -624,7 +624,7 @@ impl ModuleDefinitionResolver {
         // This prevents constructing larger and larger types via datatype instantiation.
         let mut sum_nodes = 1u64;
         for ty in ty_args.iter().chain(type_params.iter()) {
-            sum_nodes = sum_nodes.saturating_add(type_cache::count_type_nodes(ty));
+            sum_nodes = sum_nodes.saturating_add(count_type_nodes(ty));
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
             }
@@ -634,7 +634,7 @@ impl ModuleDefinitionResolver {
             gt_idx.clone(),
             type_params
                 .iter()
-                .map(|ty| type_cache::subst(ty, ty_args))
+                .map(|ty| subst(ty, ty_args))
                 .collect::<PartialVMResult<_>>()?,
         ))))
     }
@@ -650,7 +650,7 @@ impl ModuleDefinitionResolver {
     ) -> PartialVMResult<Type> {
         let ty = self.single_type_at(idx);
         if !ty_args.is_empty() {
-            type_cache::subst(ty, ty_args)
+            subst(ty, ty_args)
         } else {
             Ok(ty.clone())
         }

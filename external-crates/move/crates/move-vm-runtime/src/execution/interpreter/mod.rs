@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::ArenaPointer,
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::state::{CallStack, MachineState, ModuleDefinitionResolver},
@@ -10,7 +9,7 @@ use crate::{
     },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
-    shared::gas::GasMeter,
+    shared::{gas::GasMeter, vm_pointer::VMPointer},
 };
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
@@ -24,7 +23,7 @@ pub(crate) mod state;
 /// Entrypoint into the interpreter. All external calls need to be routed through this
 /// function.
 pub(crate) fn run(
-    function: ArenaPointer<Function>,
+    function: VMPointer<Function>,
     ty_args: Vec<Type>,
     args: Vec<Value>,
     vtables: &VMDispatchTables,

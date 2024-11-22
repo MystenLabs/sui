@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::ArenaPointer,
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::{self, locals::BaseHeap},
     },
-    jit::execution::ast::{Function, IntraPackageKey, Type, VTableKey},
+    jit::execution::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         serialization::{SerializedReturnValues, *},
+        vm_pointer::VMPointer,
     },
     string_interner,
 };
@@ -28,6 +28,8 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMConfig;
 use std::{borrow::Borrow, sync::Arc};
+
+use super::dispatch_tables::{IntraPackageKey, VirtualTableKey};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -54,7 +56,7 @@ pub struct MoveVM<'extensions> {
 }
 
 pub struct MoveVMFunction {
-    function: ArenaPointer<Function>,
+    function: VMPointer<Function>,
     pub parameters: Vec<Type>,
     pub return_type: Vec<Type>,
 }
@@ -207,7 +209,7 @@ impl<'extensions> MoveVM<'extensions> {
         let member_name = string_interner
             .get_ident_str(function_name)
             .map_err(|err| err.finish(Location::Undefined))?;
-        let vtable_key = VTableKey {
+        let vtable_key = VirtualTableKey {
             package_key,
             inner_pkg_key: IntraPackageKey {
                 module_name,
@@ -248,7 +250,7 @@ impl<'extensions> MoveVM<'extensions> {
     /// interpreter, and serializing the return value(s).
     fn execute_function_impl(
         &mut self,
-        func: ArenaPointer<Function>,
+        func: VMPointer<Function>,
         ty_args: Vec<Type>,
         param_types: Vec<Type>,
         return_types: Vec<Type>,

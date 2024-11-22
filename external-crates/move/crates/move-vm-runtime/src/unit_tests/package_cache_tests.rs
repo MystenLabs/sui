@@ -146,7 +146,7 @@ fn load_package_internal_package_calls_only_with_types() {
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
-    assert_eq!(l_pkg.runtime.vtable.types.read().cached_types.len(), 0);
+    assert_eq!(l_pkg.runtime.vtable.types.cached_types.len(), 0);
 }
 
 #[test]
@@ -168,7 +168,7 @@ fn load_package_external_package_calls_no_types() {
     assert_eq!(l_pkg.runtime.storage_id, package2_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 
-    for fptr in l_pkg.runtime.vtable.functions.binaries.iter() {
+    for fptr in l_pkg.runtime.vtable.functions.values() {
         println!("{:#?}", fptr.to_ref().code());
     }
 }
@@ -187,19 +187,21 @@ fn cache_package_external_package_type_references() {
 
     assert!(result.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 }
@@ -254,11 +256,12 @@ fn cache_package_external_package_type_references_cache_reload() {
 
     assert!(result1.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 
@@ -267,20 +270,22 @@ fn cache_package_external_package_type_references_cache_reload() {
 
     assert!(result2.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
 
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 }
@@ -300,29 +305,30 @@ fn cache_package_external_package_type_references_with_shared_dep() {
 
     assert!(result.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
-
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
-
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 }
@@ -343,11 +349,12 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result1.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 
@@ -355,19 +362,21 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result2.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 
@@ -375,27 +384,30 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result3 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result3.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 
@@ -410,27 +422,30 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result3 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result3.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 
@@ -438,27 +453,30 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result1.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 
@@ -466,27 +484,30 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result2.is_ok());
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .expect("not found")
+            .loaded_types_len(),
         3
     );
     assert_eq!(
-        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
-            .read()
-            .cached_types
-            .id_map
-            .len(),
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .expect("not found")
+            .loaded_types_len(),
         4
     );
 }
