@@ -39,6 +39,7 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -49,8 +50,7 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::client::simple_client::SimpleClient;
-use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-use sui_graphql_rpc::test_infra::cluster::{serve_executor, RetentionConfig, SnapshotLagConfig};
+use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -67,8 +67,8 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
+use sui_types::storage::{ObjectStore, RestStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
@@ -125,6 +125,13 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
+pub struct OffChainConfig {
+    pub snapshot_config: SnapshotLagConfig,
+    pub retention_config: Option<RetentionConfig>,
+    pub data_ingestion_path: PathBuf,
+    pub rest_api_url: Option<String>,
+}
+
 pub struct SuiTestAdapter {
     pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
@@ -141,6 +148,8 @@ pub struct SuiTestAdapter {
     /// A barebones GraphQL client that should be schema-agnostic.
     pub(crate) graphql_client: Option<SimpleClient>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
+    pub read_replica: Option<Arc<dyn RestStateReader + Send + Sync>>,
+    pub offchain_config: Option<OffChainConfig>,
 }
 
 pub(crate) struct StagedPackage {
@@ -245,9 +254,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
-            snapshot_config,
+            // snapshot_config,
             flavor,
-            epochs_to_keep,
+            // epochs_to_keep,
+            // data_ingestion_path,
+            // rest_api_url,
+            offchain_config,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -263,6 +275,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     snapshot_config,
                     flavor,
                     epochs_to_keep,
+                    data_ingestion_path,
+                    rest_api_url,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -291,6 +305,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     panic!("Can only set reference gas price in simulator mode");
                 }
 
+                let offchain_config = if simulator {
+                    let retention_config = epochs_to_keep
+                        .map(RetentionConfig::new_with_default_retention_only_for_testing);
+
+                    Some(OffChainConfig {
+                        snapshot_config,
+                        retention_config,
+                        data_ingestion_path: data_ingestion_path
+                            .unwrap_or(tempdir().unwrap().into_path()),
+                        rest_api_url,
+                    })
+                } else {
+                    None
+                };
+
                 (
                     map,
                     accounts,
@@ -299,9 +328,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
-                    snapshot_config,
                     flavor,
-                    epochs_to_keep,
+                    offchain_config,
                 )
             }
             None => {
@@ -314,7 +342,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     false,
                     None,
                     None,
-                    SnapshotLagConfig::default(),
                     None,
                     None,
                 )
@@ -330,13 +357,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 objects,
                 account_objects,
             },
-            cluster,
+            read_replica,
         ) = if is_simulator {
-            // TODO: (wlmyng) as of right now, we can't test per-table overrides until the pruner is
-            // updated
-            let retention_config =
-                epochs_to_keep.map(RetentionConfig::new_with_default_retention_only_for_testing);
-
             init_sim_executor(
                 rng,
                 account_names,
@@ -344,8 +366,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
-                snapshot_config,
-                retention_config,
             )
             .await
         } else {
@@ -360,6 +380,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             // cluster,
             graphql_client: None,
             executor,
+            offchain_config,
+            read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -2067,7 +2089,7 @@ async fn init_val_fullnode_executor(
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
-    Option<ExecutorCluster>,
+    Option<Arc<dyn RestStateReader + Send + Sync>>,
 ) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -2133,12 +2155,10 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
-    snapshot_config: SnapshotLagConfig,
-    retention_config: Option<RetentionConfig>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
-    Option<ExecutorCluster>,
+    Option<Arc<dyn RestStateReader + Send + Sync>>,
 ) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -2190,26 +2210,15 @@ async fn init_sim_executor(
 
     // Create the simulator with the specific account configs, which also crates objects
 
-    let (mut sim, read_replica) =
-        PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
-            rng,
-            DEFAULT_CHAIN_START_TIMESTAMP,
-            protocol_config.version,
-            acc_cfgs,
-            key_copy.map(|q| vec![q]),
-            reference_gas_price,
-            None,
-        );
-    let data_ingestion_path = tempdir().unwrap().into_path();
-    sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-    let cluster = serve_executor(
-        Arc::new(read_replica),
-        Some(snapshot_config),
-        retention_config,
-        data_ingestion_path,
-    )
-    .await;
+    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+        rng,
+        DEFAULT_CHAIN_START_TIMESTAMP,
+        protocol_config.version,
+        acc_cfgs,
+        key_copy.map(|q| vec![q]),
+        reference_gas_price,
+        None,
+    );
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
@@ -2268,7 +2277,7 @@ async fn init_sim_executor(
             account_objects,
             accounts,
         },
-        Some(cluster),
+        Some(Arc::new(read_replica)),
     )
 }
 
