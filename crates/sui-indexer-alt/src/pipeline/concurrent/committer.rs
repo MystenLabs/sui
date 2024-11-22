@@ -138,6 +138,11 @@ pub(super) fn committer<H: Handler + 'static>(
                             .with_label_values(&[H::NAME])
                             .inc_by(affected as u64);
 
+                        metrics
+                            .committer_tx_rows
+                            .with_label_values(&[H::NAME])
+                            .observe(affected as f64);
+
                         Ok(())
                     }
                 };

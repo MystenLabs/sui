@@ -100,6 +100,7 @@ pub struct IndexerMetrics {
     pub collector_gather_latency: HistogramVec,
     pub collector_batch_size: HistogramVec,
     pub committer_commit_latency: HistogramVec,
+    pub committer_tx_rows: HistogramVec,
     pub watermark_gather_latency: HistogramVec,
     pub watermark_commit_latency: HistogramVec,
     pub watermark_pruner_read_latency: HistogramVec,
@@ -397,6 +398,14 @@ impl IndexerMetrics {
                 "Time taken to write a batch of rows to the database by this committer",
                 &["pipeline"],
                 DB_UPDATE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            committer_tx_rows: register_histogram_vec_with_registry!(
+                "indexer_committer_tx_rows",
+                "Number of rows written to the database in a single database transaction by this committer",
+                &["pipeline"],
+                BATCH_SIZE_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
