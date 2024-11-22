@@ -114,13 +114,8 @@ pub fn jit_and_cache_package(
         panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
     }
 
-    let package_cache = cache
-        .type_cache
-        .write()
-        .get_or_create_package_cache(verified_pkg.runtime_id);
-    let runtime_pkg =
-        jit::translate_package(package_cache, natives, link_context, verified_pkg.clone())
-            .map_err(|err| err.finish(Location::Undefined))?;
+    let runtime_pkg = jit::translate_package(natives, link_context, verified_pkg.clone())
+        .map_err(|err| err.finish(Location::Undefined))?;
 
     cache.add_to_cache(storage_id, verified_pkg, runtime_pkg);
 

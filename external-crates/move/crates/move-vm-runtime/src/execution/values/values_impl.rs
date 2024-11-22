@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::ArenaPointer,
     jit::execution::ast::Type,
-    shared::views::{ValueView, ValueVisitor},
+    shared::{
+        views::{ValueView, ValueVisitor},
+        vm_pointer::VMPointer,
+    },
 };
 use move_binary_format::{
     errors::*,
@@ -87,15 +89,15 @@ pub enum Container {
 /// Runtime representation of a Move value.
 #[derive(Debug)]
 pub enum Reference {
-    U8(ArenaPointer<u8>),
-    U16(ArenaPointer<u16>),
-    U32(ArenaPointer<u32>),
-    U64(ArenaPointer<u64>),
-    U128(ArenaPointer<u128>),
-    U256(ArenaPointer<u256::U256>),
-    Bool(ArenaPointer<bool>),
-    Address(ArenaPointer<AccountAddress>),
-    Container(ArenaPointer<Container>),
+    U8(VMPointer<u8>),
+    U16(VMPointer<u16>),
+    U32(VMPointer<u32>),
+    U64(VMPointer<u64>),
+    U128(VMPointer<u128>),
+    U256(VMPointer<u256::U256>),
+    Bool(VMPointer<bool>),
+    Address(VMPointer<AccountAddress>),
+    Container(VMPointer<Container>),
     Global(GlobalRef),
 }
 
@@ -103,7 +105,7 @@ pub enum Reference {
 pub struct GlobalRef {
     // TODO: Status should really be an allocation property
     status: Rc<RefCell<GlobalDataStatus>>,
-    value: ArenaPointer<Container>,
+    value: VMPointer<Container>,
 }
 
 /// Status for global (on-chain) data:
@@ -153,19 +155,19 @@ pub struct Vector(Container);
 
 /// A reference to a Move struct that allows you to take a reference to one of its fields.
 #[derive(Debug)]
-pub struct StructRef(ArenaPointer<Container>);
+pub struct StructRef(VMPointer<Container>);
 
 // A reference to a signer. Clients can attempt a cast to this struct if they are
 // expecting a Signer on the stack or as an argument.
 #[derive(Debug)]
-pub struct SignerRef(ArenaPointer<Container>);
+pub struct SignerRef(VMPointer<Container>);
 
 // A reference to a vector. This is an alias for a ContainerRef for now but we may change
 // it once Containers are restructured.
 // It's used from vector native functions to get a reference to a vector and operate on that.
 // There is an impl for VectorRef which implements the API private to this module.
 #[derive(Debug)]
-pub struct VectorRef(ArenaPointer<Container>);
+pub struct VectorRef(VMPointer<Container>);
 
 /// A special "slot" in global storage that can hold a resource. It also keeps track of the status
 /// of the resource relative to the global state, which is necessary to compute the effects to emit
@@ -199,7 +201,7 @@ pub struct Variant {
 }
 
 #[derive(Debug)]
-pub struct VariantRef(ArenaPointer<Container>);
+pub struct VariantRef(VMPointer<Container>);
 
 /// Constant representation of a Move value.
 #[derive(Debug, Clone)]
@@ -424,7 +426,7 @@ impl Reference {
             Reference::Global(global_ref) => {
                 let global_ref = GlobalRef {
                     status: Rc::clone(&global_ref.status),
-                    value: global_ref.value.ptr_clone(), // Shallow copy of the ArenaPointer
+                    value: global_ref.value.ptr_clone(), // Shallow copy of the VMPointer
                 };
                 Reference::Global(global_ref)
             }
@@ -634,13 +636,13 @@ impl Reference {
         // TODO: auto-gen this?
         match_reference_impls!(self; other;
             container ref_1, ref_2 => {
-                Ok(ArenaPointer::ptr_eq(ref_1, ref_2) || ref_1.to_ref().equals(ref_2.to_ref())?)
+                Ok(VMPointer::ptr_eq(ref_1, ref_2) || ref_1.to_ref().equals(ref_2.to_ref())?)
             };
             global g_ref, ctor => {
                 Reference::Container(g_ref.value).equals(ctor)
             };
             prim prim_ref_1, prim_ref_2 => {
-                Ok(ArenaPointer::ptr_eq(prim_ref_1, prim_ref_2) || prim_ref_1.to_ref() == prim_ref_2.to_ref())
+                Ok(VMPointer::ptr_eq(prim_ref_1, prim_ref_2) || prim_ref_1.to_ref() == prim_ref_2.to_ref())
             };
         )
     }
@@ -754,17 +756,17 @@ impl Value {
         // TODO: auto-gen part of this?
         match self {
             // Primitive types are converted to corresponding primitive references.
-            Value::U8(val) => Ok(Reference::U8(ArenaPointer::from_ref(val))),
-            Value::U16(val) => Ok(Reference::U16(ArenaPointer::from_ref(val))),
-            Value::U32(val) => Ok(Reference::U32(ArenaPointer::from_ref(val))),
-            Value::U64(val) => Ok(Reference::U64(ArenaPointer::from_ref(val))),
-            Value::U128(val) => Ok(Reference::U128(ArenaPointer::from_ref(val))),
-            Value::U256(val) => Ok(Reference::U256(ArenaPointer::from_ref(val))),
-            Value::Bool(val) => Ok(Reference::Bool(ArenaPointer::from_ref(val))),
-            Value::Address(val) => Ok(Reference::Address(ArenaPointer::from_ref(val))),
+            Value::U8(val) => Ok(Reference::U8(VMPointer::from_ref(val))),
+            Value::U16(val) => Ok(Reference::U16(VMPointer::from_ref(val))),
+            Value::U32(val) => Ok(Reference::U32(VMPointer::from_ref(val))),
+            Value::U64(val) => Ok(Reference::U64(VMPointer::from_ref(val))),
+            Value::U128(val) => Ok(Reference::U128(VMPointer::from_ref(val))),
+            Value::U256(val) => Ok(Reference::U256(VMPointer::from_ref(val))),
+            Value::Bool(val) => Ok(Reference::Bool(VMPointer::from_ref(val))),
+            Value::Address(val) => Ok(Reference::Address(VMPointer::from_ref(val))),
 
             // Containers are converted to `ContainerReference`.
-            Value::Container(val) => Ok(Reference::Container(ArenaPointer::from_ref(val))),
+            Value::Container(val) => Ok(Reference::Container(VMPointer::from_ref(val))),
 
             // If the value is already a reference, return it directly.
             Value::Reference(_) => Err(PartialVMError::new(
@@ -798,7 +800,7 @@ impl StructRef {
     /// wrapped in `ValueImpl`, or an error if the index is out of bounds or the
     /// container is not a struct.
     pub fn borrow_field(&self, index: usize) -> PartialVMResult<Value> {
-        // Dereference the ArenaPointer to access the container.
+        // Dereference the VMPointer to access the container.
         let container: &Container = self.0.to_ref();
 
         // Ensure the container is a struct and return the field at the specified index.
@@ -816,7 +818,7 @@ impl StructRef {
 
 impl VariantRef {
     pub fn get_tag(&self) -> PartialVMResult<VariantTag> {
-        // Dereference the ArenaPointer to access the container.
+        // Dereference the VMPointer to access the container.
         let container: &Container = self.0.to_ref();
 
         // Ensure the container is a variant and return the tag.
@@ -843,7 +845,7 @@ impl VariantRef {
 
     /// Unpacks a variant into a set of references
     pub fn unpack_variant(&self) -> PartialVMResult<Vec<Value>> {
-        // Dereference the ArenaPointer to access the container.
+        // Dereference the VMPointer to access the container.
         let container: &Container = self.0.to_ref();
 
         match container {
@@ -896,7 +898,7 @@ impl VectorRef {
                         .with_sub_status(INDEX_OUT_OF_BOUNDS)
                         .with_message("Vector index out of bounds".to_string()));
                 }
-                let elem_ref: ArenaPointer<$ty> = ArenaPointer::from_ref(&$vec[index]);
+                let elem_ref: VMPointer<$ty> = VMPointer::from_ref(&$vec[index]);
                 Ok(Value::Reference(Box::new(Reference::$ctor(elem_ref))))
             }};
         }
@@ -2120,7 +2122,7 @@ impl GlobalValueImpl {
         match self {
             Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
             GlobalValueImpl::Fresh { container } => {
-                let container_ref = ArenaPointer::from_ref(container.as_ref());
+                let container_ref = VMPointer::from_ref(container.as_ref());
                 Ok(Value::Reference(Box::new(Reference::Container(
                     container_ref,
                 ))))
@@ -2128,7 +2130,7 @@ impl GlobalValueImpl {
             GlobalValueImpl::Cached { container, status } => {
                 let global_ref = GlobalRef {
                     status: Rc::clone(status),
-                    value: ArenaPointer::from_ref(container.as_ref()),
+                    value: VMPointer::from_ref(container.as_ref()),
                 };
                 Ok(Value::Reference(Box::new(Reference::Global(global_ref))))
             }

@@ -12,7 +12,8 @@ use crate::{
         storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
-    jit::execution::ast::{DepthFormula, IntraPackageKey, Type, VTableKey},
+    execution::dispatch_tables::{DepthFormula, IntraPackageKey, VirtualTableKey},
+    jit::execution::ast::Type,
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
     shared::{
@@ -224,7 +225,7 @@ impl Adapter {
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .virtual_tables
-            .calculate_depth_of_type(&VTableKey {
+            .calculate_depth_of_type(&VirtualTableKey {
                 package_key: *module_id.address(),
                 inner_pkg_key: IntraPackageKey {
                     module_name: string_interner()
