@@ -54,7 +54,7 @@ impl DeferralKey {
                 deferred_from_round: 0,
             },
             Self::ConsensusRound {
-                future_round: consensus_round.checked_add(1).unwrap(),
+                future_round: consensus_round.saturating_add(1),
                 deferred_from_round: 0,
             },
         )
@@ -90,11 +90,15 @@ pub fn transaction_deferral_within_limit(
         deferred_from_round,
     } = deferral_key
     {
-        return (future_round - deferred_from_round) <= max_deferral_rounds_for_congestion_control;
+        if let Some(diff) = future_round.checked_sub(*deferred_from_round) {
+            return diff <= max_deferral_rounds_for_congestion_control;
+        } else {
+            // future_round < deferred_from_round
+            return false;
+        }
     }
-
     // TODO: drop transactions at the end of the queue if the queue is too long.
-
+    
     true
 }
 
@@ -208,5 +212,36 @@ mod object_cost_tests {
             }
         }
         assert!(result_count > 0);
+    }
+    #[test]
+    fn test_range_for_up_to_consensus_round_no_overflow() {
+        let consensus_round = u64::MAX;
+        let (_, max_key) = DeferralKey::range_for_up_to_consensus_round(consensus_round);
+    
+        match max_key {
+            DeferralKey::ConsensusRound { future_round, .. } => {
+                assert_eq!(future_round, u64::MAX);
+            }
+            _ => panic!("Expected ConsensusRound variant"),
+        }
+    }
+    #[test]
+    fn test_transaction_deferral_within_limit_underflow() {
+        let future_round = 100;
+        let deferred_from_round = 200;
+        let max_deferral_rounds_for_congestion_control = 10;
+    
+        let deferral_key = DeferralKey::new_for_consensus_round(future_round, deferred_from_round);
+        let result = transaction_deferral_within_limit(
+            &deferral_key,
+            max_deferral_rounds_for_congestion_control,
+        );
+    
+        // Expected result is false due to future_round < deferred_from_round
+        assert_eq!(
+            result,
+            false,
+            "Expected false because future_round < deferred_from_round"
+        );
     }
 }
