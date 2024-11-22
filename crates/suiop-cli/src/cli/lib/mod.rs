@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod autocomplete;
+pub mod cache;
 mod oauth;
 
 pub use autocomplete::FilePathCompleter;

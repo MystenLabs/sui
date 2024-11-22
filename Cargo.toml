@@ -130,6 +130,7 @@ members = [
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-move-lsp",
+    "crates/sui-mvr-graphql-rpc",
     "crates/sui-mvr-indexer",
     "crates/sui-network",
     "crates/sui-node",
@@ -210,7 +211,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.38.0"
+version = "1.39.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -657,6 +658,7 @@ sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
+sui-mvr-graphql-rpc = { path = "crates/sui-mvr-graphql-rpc" }
 sui-mvr-indexer = { path = "crates/sui-mvr-indexer" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }

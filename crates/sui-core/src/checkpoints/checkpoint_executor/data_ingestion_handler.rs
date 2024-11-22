@@ -26,14 +26,14 @@ pub(crate) fn load_checkpoint_data(
         .expect("checkpoint content has to be stored");
 
     let transactions = transaction_cache_reader
-        .multi_get_transaction_blocks(transaction_digests)?
+        .multi_get_transaction_blocks(transaction_digests)
         .into_iter()
         .zip(transaction_digests)
         .map(|(tx, digest)| tx.ok_or(SuiError::TransactionNotFound { digest: *digest }))
         .collect::<SuiResult<Vec<_>>>()?;
 
     let effects = transaction_cache_reader
-        .multi_get_executed_effects(transaction_digests)?
+        .multi_get_executed_effects(transaction_digests)
         .into_iter()
         .zip(transaction_digests)
         .map(|(effects, &digest)| effects.ok_or(SuiError::TransactionNotFound { digest }))
@@ -45,7 +45,7 @@ pub(crate) fn load_checkpoint_data(
         .collect::<Vec<_>>();
 
     let events = transaction_cache_reader
-        .multi_get_events(&event_digests)?
+        .multi_get_events(&event_digests)
         .into_iter()
         .zip(&event_digests)
         .map(|(event, digest)| event.ok_or(SuiError::TransactionEventsNotFound { digest: *digest }))
@@ -68,7 +68,7 @@ pub(crate) fn load_checkpoint_data(
             .collect::<Vec<_>>();
 
         let input_objects = object_cache_reader
-            .multi_get_objects_by_key(&input_object_keys)?
+            .multi_get_objects_by_key(&input_object_keys)
             .into_iter()
             .zip(&input_object_keys)
             .map(|(object, object_key)| {
@@ -88,7 +88,7 @@ pub(crate) fn load_checkpoint_data(
             .collect::<Vec<_>>();
 
         let output_objects = object_cache_reader
-            .multi_get_objects_by_key(&output_object_keys)?
+            .multi_get_objects_by_key(&output_object_keys)
             .into_iter()
             .zip(&output_object_keys)
             .map(|(object, object_key)| {

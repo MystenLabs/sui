@@ -19,7 +19,7 @@ This package is a perfect fit for the following applications:
 ## Example of a Template Module
 
 The following code is a close-copy of the `Coin` example from the
-[Move by Example](https://examples.sui.io/samples/coin.html) book.
+[Coins and Tokens](https://docs.sui.io/guides/developer/coin).
 
 ```move
 module 0x0::template {
@@ -86,19 +86,23 @@ updated = update_constants(
 // Update SYMBOL
 updated = update_constants(
 	updated,
-	bcs.vector(bcs.string()).serialize('MYC').toBytes(), // new value
-	bcs.vector(bcs.string()).serialize('TMPL').toBytes(), // current value
+	bcs.string().serialize('MYC').toBytes(), // new value
+	bcs.string().serialize('TMPL').toBytes(), // current value
 	'Vector(U8)', // type of the constant
 );
 
 // Update NAME
 updated = update_constants(
 	updated,
-	bcs.vector(bcs.string()).serialize('My Coin').toBytes(), // new value
-	bcs.vector(bcs.string()).serialize('Template Coin').toBytes(), // current value
+	bcs.string().serialize('My Coin').toBytes(), // new value
+	bcs.string().serialize('Template Coin').toBytes(), // current value
 	'Vector(U8)', // type of the constant
 );
 ```
+
+After updating the bytecode, refer to the 
+[Asset Tokenization](https://docs.sui.io/guides/developer/nft/asset-tokenization#closer-view-of-the-template-module) 
+guide to deploy the contract. 
 
 ## Usage in Web applications
 

@@ -5,8 +5,8 @@ use colored::Colorize;
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility};
 use move_binary_format::normalized::{
-    Field as NormalizedField, Function as SuiNormalizedFunction, Module as NormalizedModule,
-    Struct as NormalizedStruct, Type as NormalizedType,
+    Enum as NormalizedEnum, Field as NormalizedField, Function as SuiNormalizedFunction,
+    Module as NormalizedModule, Struct as NormalizedStruct, Type as NormalizedType,
 };
 use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
 use move_core_types::identifier::Identifier;
@@ -73,6 +73,14 @@ pub struct SuiMoveNormalizedStruct {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiMoveNormalizedEnum {
+    pub abilities: SuiMoveAbilitySet,
+    pub type_parameters: Vec<SuiMoveStructTypeParameter>,
+    pub variants: BTreeMap<String, Vec<SuiMoveNormalizedField>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveNormalizedType {
     Bool,
     U8,
@@ -120,6 +128,8 @@ pub struct SuiMoveNormalizedModule {
     pub name: String,
     pub friends: Vec<SuiMoveModuleId>,
     pub structs: BTreeMap<String, SuiMoveNormalizedStruct>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub enums: BTreeMap<String, SuiMoveNormalizedEnum>,
     pub exposed_functions: BTreeMap<String, SuiMoveNormalizedFunction>,
 }
 
@@ -150,6 +160,11 @@ impl From<NormalizedModule> for SuiMoveNormalizedModule {
                 .into_iter()
                 .map(|(name, struct_)| (name.to_string(), SuiMoveNormalizedStruct::from(struct_)))
                 .collect::<BTreeMap<String, SuiMoveNormalizedStruct>>(),
+            enums: module
+                .enums
+                .into_iter()
+                .map(|(name, enum_)| (name.to_string(), SuiMoveNormalizedEnum::from(enum_)))
+                .collect(),
             exposed_functions: module
                 .functions
                 .into_iter()
@@ -205,6 +220,33 @@ impl From<NormalizedStruct> for SuiMoveNormalizedStruct {
                 .into_iter()
                 .map(SuiMoveNormalizedField::from)
                 .collect::<Vec<SuiMoveNormalizedField>>(),
+        }
+    }
+}
+
+impl From<NormalizedEnum> for SuiMoveNormalizedEnum {
+    fn from(value: NormalizedEnum) -> Self {
+        Self {
+            abilities: value.abilities.into(),
+            type_parameters: value
+                .type_parameters
+                .into_iter()
+                .map(SuiMoveStructTypeParameter::from)
+                .collect::<Vec<SuiMoveStructTypeParameter>>(),
+            variants: value
+                .variants
+                .into_iter()
+                .map(|variant| {
+                    (
+                        variant.name.to_string(),
+                        variant
+                            .fields
+                            .into_iter()
+                            .map(SuiMoveNormalizedField::from)
+                            .collect::<Vec<SuiMoveNormalizedField>>(),
+                    )
+                })
+                .collect::<BTreeMap<String, Vec<SuiMoveNormalizedField>>>(),
         }
     }
 }

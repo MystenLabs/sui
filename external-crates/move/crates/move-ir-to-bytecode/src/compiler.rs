@@ -72,11 +72,12 @@ macro_rules! record_src_loc {
             )?;
         }
     };
-    (function_decl: $context:expr, $location:expr, $function_index:expr, $is_native:expr) => {{
+    (function_decl: $context:expr, $location:expr, $definition_location: expr, $function_index:expr, $is_native:expr) => {{
         $context.set_function_index($function_index as TableIndex);
         $context.source_map.add_top_level_function_mapping(
             $context.current_function_definition_index(),
             $location,
+            $definition_location,
             $is_native,
         )?;
     }};
@@ -931,6 +932,7 @@ fn compile_function(
 ) -> Result<FunctionDefinition> {
     record_src_loc!(
         function_decl: context,
+        ast_function.value.loc,
         ast_function.loc,
         function_index,
         matches!(ast_function.value.body, FunctionBody::Native)

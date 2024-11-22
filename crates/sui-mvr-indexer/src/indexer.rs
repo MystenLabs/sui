@@ -6,7 +6,7 @@ use std::env;
 
 use anyhow::Result;
 use prometheus::Registry;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -16,7 +16,6 @@ use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
 };
-use sui_synthetic_ingestion::IndexerProgress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
@@ -40,7 +39,6 @@ impl Indexer {
         snapshot_config: SnapshotLagConfig,
         retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
-        committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -90,7 +88,6 @@ impl Indexer {
             store,
             metrics,
             cancel.clone(),
-            committed_checkpoints_tx,
             config.start_checkpoint,
             config.end_checkpoint,
         )

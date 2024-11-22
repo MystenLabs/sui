@@ -411,13 +411,7 @@ impl TransactionManager {
             .filter(|(cert, _)| {
                 let digest = *cert.digest();
                 // skip already executed txes
-                if self
-                    .transaction_cache_read
-                    .is_tx_already_executed(&digest)
-                    .unwrap_or_else(|err| {
-                        fatal!("Failed to check if tx is already executed: {:?}", err)
-                    })
-                {
+                if self.transaction_cache_read.is_tx_already_executed(&digest) {
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -452,7 +446,6 @@ impl TransactionManager {
                             if self
                                 .transaction_cache_read
                                 .is_tx_already_executed(cert.digest())
-                                .expect("is_tx_already_executed cannot fail")
                             {
                                 return None;
                             }
@@ -518,7 +511,6 @@ impl TransactionManager {
                 receiving_objects,
                 epoch_store.epoch(),
             )
-            .unwrap_or_else(|err| panic!("Checking object existence cannot fail: {:?}", err))
             .into_iter()
             .zip(input_object_cache_misses);
 
@@ -605,10 +597,8 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            let is_tx_already_executed = self
-                .transaction_cache_read
-                .is_tx_already_executed(&digest)
-                .expect("Check if tx is already executed should not fail");
+            let is_tx_already_executed =
+                self.transaction_cache_read.is_tx_already_executed(&digest);
             if is_tx_already_executed {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates

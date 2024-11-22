@@ -135,7 +135,6 @@ pub async fn start_indexer_writer_for_testing(
                 snapshot_config,
                 retention_config,
                 token_clone,
-                None,
             )
             .await
         })

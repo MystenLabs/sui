@@ -106,6 +106,8 @@ export class GovernanceContract {
 		const pool = this.#config.getPool(poolKey);
 		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::vote`,
@@ -115,6 +117,7 @@ export class GovernanceContract {
 				tradeProof,
 				tx.pure.id(proposal_id),
 			],
+			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
 }

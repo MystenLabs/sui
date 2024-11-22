@@ -188,6 +188,7 @@ impl BackFillConfig {
     const DEFAULT_CHUNK_SIZE: usize = 1000;
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     Indexer {
@@ -199,6 +200,11 @@ pub enum Command {
         pruning_options: PruningOptions,
         #[command(flatten)]
         upload_options: UploadOptions,
+        /// If true, the indexer will run in MVR mode. It will only index data to
+        /// `objects_snapshot`, `objects_history`, `packages`, `checkpoints`, and `epochs` to
+        /// support MVR queries.
+        #[clap(long, default_value_t = false)]
+        mvr_mode: bool,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {
@@ -232,7 +238,6 @@ pub enum Command {
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
-    Benchmark(BenchmarkConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]

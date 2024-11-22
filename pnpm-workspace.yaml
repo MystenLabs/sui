@@ -3,6 +3,7 @@ packages:
   - 'apps/**'
   - 'dapps/**'
   - 'examples/**'
+  - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'
   - '!**/.next/**'
   - '!sdk/create-dapp/templates'

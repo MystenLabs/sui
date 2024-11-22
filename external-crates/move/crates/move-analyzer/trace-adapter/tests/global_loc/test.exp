@@ -1,5 +1,5 @@
 current frame stack:
-  function: test (line 21)
+  function: test (m.move:21)
     scope 0 :
       ctx : (0x2::tx_context::TxContext) {
         sender : 0000000000000000000000000000000000000000000000000000000000000000

@@ -1,0 +1,29 @@
+query ByEmittingPackageModuleAndEventType {
+  events(
+    first: 1
+    after: "eyJ0eCI6Njc2MywiZSI6MCwiYyI6MjI4MDA3NDJ9"
+    filter: {
+      emittingModule: "0x3::sui_system",
+      eventType: "0x3::validator::StakingRequestEvent"
+    }
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      sendingModule {
+        name
+      }
+      type {
+        repr
+      }
+      sender {
+        address
+      }
+      timestamp
+      json
+      bcs
+    }
+  }
+}

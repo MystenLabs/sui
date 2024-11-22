@@ -1,5 +1,5 @@
 current frame stack:
-  function: test (line 13)
+  function: test (m.move:13)
     scope 0 :
       _res : 43
       type: u64

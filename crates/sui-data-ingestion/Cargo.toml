@@ -39,4 +39,3 @@ url.workspace = true
 [dev-dependencies]
 rand.workspace = true
 tempfile.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }

@@ -55,7 +55,9 @@ pub trait CoinReadApi {
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
 
-    /// Return metadata(e.g., symbol, decimals) for a coin
+    /// Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was
+    /// wrapped in the transaction that published its marker type, or the latest version of the
+    /// metadata object is wrapped or deleted, it will not be found.
     #[method(name = "getCoinMetadata")]
     async fn get_coin_metadata(
         &self,

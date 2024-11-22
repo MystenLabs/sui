@@ -109,7 +109,6 @@ num-bigint = "0.4.4"
 move-symbol-pool.workspace = true
 
 sui-test-transaction-builder.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
 sui-move.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
@@ -140,6 +139,3 @@ harness = false
 [[bench]]
 name = "batch_verification_bench"
 harness = false
-
-[features]
-test-utils = []

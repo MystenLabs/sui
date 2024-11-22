@@ -1,5 +1,5 @@
 current frame stack:
-  function: test (line 33)
+  function: test (m.move:33)
     scope 0 :
       some_struct : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::VecStruct) {
@@ -11,7 +11,7 @@ current frame stack:
       }
       type: 0x0::m::SomeStruct
 
-  function: foo (line 19)
+  function: foo (m.move:19)
     scope 0 :
       some_struct_ref : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::VecStruct) {
@@ -23,7 +23,7 @@ current frame stack:
       }
       type: &mut 0x0::m::SomeStruct
 
-  function: bar (line 13)
+  function: bar (m.move:13)
     scope 0 :
       vec_ref : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::VecStruct) {
@@ -36,7 +36,7 @@ current frame stack:
       type: &mut vector<u64>
 
 current frame stack:
-  function: test (line 33)
+  function: test (m.move:33)
     scope 0 :
       some_struct : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::VecStruct) {
@@ -48,7 +48,7 @@ current frame stack:
       }
       type: 0x0::m::SomeStruct
 
-  function: foo (line 19)
+  function: foo (m.move:19)
     scope 0 :
       some_struct_ref : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::VecStruct) {
@@ -60,7 +60,7 @@ current frame stack:
       }
       type: &mut 0x0::m::SomeStruct
 
-  function: bar (line 15)
+  function: bar (m.move:15)
     scope 0 :
       vec_ref : (0x0::m::SomeStruct) {
         struct_field : (0x0::m::VecStruct) {

@@ -1492,20 +1492,17 @@ impl ConnectionAsObjectStore {
 }
 
 impl sui_types::storage::ObjectStore for ConnectionAsObjectStore {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<sui_types::object::Object> {
         self.get_object(object_id, None)
-            .map_err(sui_types::storage::error::Error::custom)
+            .expect("Error getting object")
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
+    ) -> Option<sui_types::object::Object> {
         self.get_object(object_id, Some(version))
-            .map_err(sui_types::storage::error::Error::custom)
+            .expect("Error getting object by key")
     }
 }
