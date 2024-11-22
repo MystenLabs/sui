@@ -29,6 +29,7 @@ pub(super) fn broadcaster(
 ) -> JoinHandle<()> {
     spawn_monitored_task!(async move {
         info!("Starting ingestion broadcaster");
+        let retry_interval = config.retry_interval();
 
         match ReceiverStream::new(checkpoint_rx)
             .try_for_each_spawned(/* limit */ config.ingest_concurrency, |cp| {
@@ -44,9 +45,9 @@ pub(super) fn broadcaster(
                 async move {
                     // Repeatedly retry if the checkpoint is not found, assuming that we are at the
                     // tip of the network and it will become available soon.
-                    let checkpoint = client.wait_for(cp, config.retry_interval, &cancel).await?;
-                    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
+                    let checkpoint = client.wait_for(cp, retry_interval, &cancel).await?;
 
+                    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
                     if try_join_all(futures).await.is_err() {
                         info!("Subscription dropped, signalling shutdown");
                         supervisor_cancel.cancel();

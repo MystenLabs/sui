@@ -56,26 +56,18 @@ pub struct IngestionConfig {
     #[arg(long, default_value_t = Self::DEFAULT_INGEST_CONCURRENCY)]
     pub ingest_concurrency: usize,
 
-    /// Polling interval to retry fetching checkpoints that do not exist.
-    #[arg(
-        long,
-        default_value = Self::DEFAULT_RETRY_INTERVAL_MS,
-        value_name = "MILLISECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_millis)
-    )]
-    pub retry_interval: Duration,
+    /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
+    #[arg(long, default_value_t = Self::DEFAULT_RETRY_INTERVAL_MS)]
+    pub retry_interval_ms: u64,
 }
 
 impl IngestionConfig {
     pub const DEFAULT_CHECKPOINT_BUFFER_SIZE: usize = 5000;
     pub const DEFAULT_INGEST_CONCURRENCY: usize = 200;
-    const DEFAULT_RETRY_INTERVAL_MS: &'static str = "200";
+    pub const DEFAULT_RETRY_INTERVAL_MS: u64 = 200;
 
-    pub fn default_retry_interval() -> Duration {
-        Self::DEFAULT_RETRY_INTERVAL_MS
-            .parse()
-            .map(Duration::from_millis)
-            .unwrap()
+    pub fn retry_interval(&self) -> Duration {
+        Duration::from_millis(self.retry_interval_ms)
     }
 }
 
@@ -204,7 +196,7 @@ mod tests {
                 local_ingestion_path: None,
                 checkpoint_buffer_size,
                 ingest_concurrency,
-                retry_interval: Duration::from_millis(200),
+                retry_interval_ms: IngestionConfig::DEFAULT_RETRY_INTERVAL_MS,
             },
             Arc::new(test_metrics()),
             cancel,

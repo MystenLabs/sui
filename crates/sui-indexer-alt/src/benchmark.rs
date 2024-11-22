@@ -53,7 +53,7 @@ pub async fn run_benchmark(
             local_ingestion_path: Some(ingestion_path),
             checkpoint_buffer_size: IngestionConfig::DEFAULT_CHECKPOINT_BUFFER_SIZE,
             ingest_concurrency: IngestionConfig::DEFAULT_INGEST_CONCURRENCY,
-            retry_interval: IngestionConfig::default_retry_interval(),
+            retry_interval_ms: IngestionConfig::DEFAULT_RETRY_INTERVAL_MS,
         },
         pipeline_config,
         first_checkpoint: Some(first_checkpoint),
