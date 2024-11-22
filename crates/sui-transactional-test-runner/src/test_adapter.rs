@@ -127,11 +127,14 @@ const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
 /// Extra args related to configuring the indexer and reader.
 // TODO: the configs are still tied to the indexer crate, eventually we'd like a new command that is
-// more agnostic.
+// more agnostic
 pub struct OffChainConfig {
     pub snapshot_config: SnapshotLagConfig,
     pub retention_config: Option<RetentionConfig>,
+    /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer if it
+    /// uses file-based ingestion.
     pub data_ingestion_path: PathBuf,
+    /// URL for the Sui REST API. To be passed to the offchain indexer if it uses the REST API.
     pub rest_api_url: Option<String>,
 }
 
@@ -148,6 +151,9 @@ pub struct SuiTestAdapter {
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
     is_simulator: bool,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
+    /// If `is_simulator` is true, the executor will be a `Simulacrum`, and this will be a
+    /// `RestStateReader` that can be used to spawn the equivalent of a fullnode rest api. This can
+    /// then be used to serve an indexer that reads from said rest api service.
     pub read_replica: Option<Arc<dyn RestStateReader + Send + Sync>>,
     /// Configuration for offchain state reader read from the file itself, and can be passed to the
     /// specific indexing and reader flavor.
@@ -165,6 +171,8 @@ struct AdapterInitConfig {
     reference_gas_price: Option<u64>,
     default_gas_price: Option<u64>,
     flavor: Option<Flavor>,
+    /// Configuration for offchain state reader read from the file itself, and can be passed to the
+    /// specific indexing and reader flavor.
     offchain_config: Option<OffChainConfig>,
 }
 

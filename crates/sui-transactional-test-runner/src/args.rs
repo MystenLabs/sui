@@ -75,11 +75,12 @@ pub struct SuiInitArgs {
     /// the indexer.
     #[clap(long = "epochs-to-keep")]
     pub epochs_to_keep: Option<u64>,
-    /// TODO (wlmyng): doc comment
-    #[clap(long = "data-ingestion-path")]
+    /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer and
+    /// reader.
+    #[clap(long)]
     pub data_ingestion_path: Option<PathBuf>,
-    /// TODO (wlmyng): doc comment
-    #[clap(long = "rest-api-url")]
+    /// URL for the Sui REST API. To be passed to the offchain indexer and reader.
+    #[clap(long)]
     pub rest_api_url: Option<String>,
 }
 

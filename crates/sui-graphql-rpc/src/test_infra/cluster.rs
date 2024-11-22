@@ -174,11 +174,15 @@ pub async fn serve_executor(
         .parse()
         .unwrap();
 
+    info!("Starting executor server on {}", executor_server_url);
+
     let executor_server_handle = tokio::spawn(async move {
         sui_rpc_api::RpcService::new_without_version(executor)
             .start_service(executor_server_url)
             .await;
     });
+
+    info!("spawned executor server");
 
     let snapshot_config = snapshot_config.unwrap_or_default();
 
