@@ -182,6 +182,7 @@ impl P2PNode {
 
     async fn handle_p2p_message(&mut self, message: libp2p_gossipsub::Message) -> Result<()> {
         let price: SignedData<MedianPrice> = bcs::from_bytes(&message.data)?;
+        // TODO: Assert that the price was correctly signed by the peer
         self.add_price(price).await?;
         Ok(())
     }
@@ -201,6 +202,7 @@ impl P2PNode {
 
     async fn add_price(&mut self, price: SignedData<MedianPrice>) -> anyhow::Result<()> {
         if let Some(quorum_reached_price) = self.network_prices.add_price(price, self.peers.len()) {
+            // TODO: Add an attestation for the quorum so we can trace back who signed
             self.quorum_sender.send(quorum_reached_price).await?;
         }
         Ok(())
