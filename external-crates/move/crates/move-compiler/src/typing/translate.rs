@@ -47,7 +47,7 @@ use move_symbol_pool::Symbol;
 use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 //**************************************************************************************************
@@ -174,51 +174,40 @@ fn modules(
     for (mident, mdef) in modules.key_cloned_iter() {
         info.set_module_syntax_methods(mident, mdef.syntax_methods.clone());
     }
-    let (mut typed_modules, all_new_friends, used_module_members) = modules
-        .into_par_iter()
-        .map(|(ident, mdef)| {
-            let (typed_mdef, new_friends, used_module_members) = module(
-                compilation_env,
-                &info,
-                &global_use_funs,
-                all_macro_definitions,
-                ident,
-                mdef,
-            );
-            (ident, typed_mdef, new_friends, used_module_members)
-        })
-        .fold(
-            || (UniqueMap::new(), BTreeMap::new(), BTreeMap::new()),
-            |(mut typed_modules, mut all_new_friends, mut used_module_members),
-             (ident, typed_mdef, new_friends, used_members)| {
-                for (pub_package_module, loc) in new_friends {
-                    let friend = Friend {
-                        attributes: UniqueMap::new(),
-                        attr_locs: vec![],
-                        loc,
-                    };
-                    all_new_friends
-                        .entry(pub_package_module)
-                        .or_insert_with(BTreeMap::new)
-                        .insert(ident, friend);
-                }
-                used_module_members.extend(used_members);
-                typed_modules.add(ident, typed_mdef).unwrap();
-                (typed_modules, all_new_friends, used_module_members)
-            },
-        )
-        .reduce(
-            || (UniqueMap::new(), BTreeMap::new(), BTreeMap::new()),
-            |(mut typed_modules, mut all_new_friends, mut used_module_members),
-             (typed_modules_, all_new_friends_, used_module_members_)| {
-                all_new_friends.extend(all_new_friends_);
-                used_module_members.extend(used_module_members_);
-                for (ident, typed_mdef) in typed_modules_ {
-                    typed_modules.add(ident, typed_mdef).unwrap();
-                }
-                (typed_modules, all_new_friends, used_module_members)
-            },
-        );
+    let typed_modules = Mutex::new(UniqueMap::new());
+    let all_new_friends = Mutex::new(BTreeMap::new());
+    let used_module_members = Mutex::new(BTreeMap::new());
+    modules.into_par_iter().for_each(|(ident, mdef)| {
+        let (typed_mdef, new_friends, used_members) =
+            module(compilation_env, &info, all_macro_definitions, ident, mdef);
+        typed_modules
+            .lock()
+            .unwrap()
+            .add(ident, typed_mdef)
+            .unwrap();
+        let mut all_new_friends = all_new_friends.lock().unwrap();
+        for (pub_package_module, loc) in new_friends {
+            let friend = Friend {
+                attributes: UniqueMap::new(),
+                attr_locs: vec![],
+                loc,
+            };
+            all_new_friends
+                .entry(pub_package_module)
+                .or_insert_with(BTreeMap::new)
+                .insert(ident, friend);
+        }
+        let mut used_module_members = used_module_members.lock().unwrap();
+        for (mident, members) in used_members {
+            used_module_members
+                .entry(mident)
+                .or_insert_with(BTreeSet::new)
+                .extend(members);
+        }
+    });
+    let mut typed_modules = typed_modules.into_inner().unwrap();
+    let all_new_friends = all_new_friends.into_inner().unwrap();
+    let used_module_members = used_module_members.into_inner().unwrap();
 
     for (mident, friends) in all_new_friends {
         let mdef = typed_modules.get_mut(&mident).unwrap();
@@ -306,72 +295,57 @@ fn module<'env>(
     context.push_warning_filter_scope(warning_filter);
     context.add_use_funs_scope(use_funs);
     process_module_attributes(&mut context, &attributes);
-    let collected = nstructs
+    let mut structs = Mutex::new(UniqueMap::new());
+    let mut enums = Mutex::new(UniqueMap::new());
+    let mut constants = Mutex::new(UniqueMap::new());
+    let mut functions = Mutex::new(UniqueMap::new());
+    let mut new_friends = Mutex::new(BTreeSet::new());
+    let mut used_members = Mutex::new(BTreeMap::new());
+    let mut used_methods = Mutex::new(BTreeSet::new());
+    nstructs
         .into_par_iter()
         .map(Member::Struct)
         .chain(nenums.into_par_iter().map(Member::Enum))
         .chain(nconstants.into_par_iter().map(Member::Constant))
         .chain(nfunctions.into_par_iter().map(Member::Function))
-        .map(|member| {
+        .for_each(|member| {
             let mut context = context.new_module_member();
             let member = match member {
                 Member::Struct((name, mut s)) => {
                     struct_def(&mut context, name.loc(), &mut s);
-                    Member::Struct((name, s))
+                    structs.lock().unwrap().add(name, s).unwrap();
                 }
                 Member::Enum((name, mut e)) => {
                     enum_def(&mut context, &mut e);
-                    Member::Enum((name, e))
+                    enums.lock().unwrap().add(name, e).unwrap();
                 }
                 Member::Constant((name, c)) => {
-                    Member::Constant((name, constant(&mut context, name, c)))
+                    let c = constant(&mut context, name, c);
+                    constants.lock().unwrap().add(name, c).unwrap();
                 }
                 Member::Function((name, f)) => {
-                    Member::Function((name, function(&mut context, name, f)))
+                    let f = function(&mut context, name, f);
+                    functions.lock().unwrap().add(name, f).unwrap();
                 }
             };
-            let (new_friends, used_members, used_methods) = context.finish();
-            (member, new_friends, used_members, used_methods)
-        })
-        .fold(
-            Collected::new,
-            |mut collected, (member, new_friends, used_members, used_methods)| {
-                collected.members.push(member);
-                collected.new_friends.extend(new_friends);
-                for (mident, members) in used_members {
-                    collected
-                        .used_members
-                        .entry(mident)
-                        .or_insert_with(BTreeSet::new)
-                        .extend(members);
-                }
-                collected.used_methods.extend(used_methods);
-                collected
-            },
-        )
-        .reduce(Collected::new, |mut a, b| {
-            a.extend(b);
-            a
+            let (cur_new_friends, cur_used_members, cur_used_methods) = context.finish();
+            new_friends.lock().unwrap().extend(cur_new_friends);
+            let mut used_members = used_members.lock().unwrap();
+            for (mident, members) in cur_used_members {
+                used_members
+                    .entry(mident)
+                    .or_insert_with(BTreeSet::new)
+                    .extend(members);
+            }
+            used_methods.lock().unwrap().extend(cur_used_methods);
         });
-
-    let Collected {
-        members,
-        new_friends,
-        used_members,
-        used_methods,
-    } = collected;
-    let mut structs = UniqueMap::new();
-    let mut enums = UniqueMap::new();
-    let mut constants = UniqueMap::new();
-    let mut functions = UniqueMap::new();
-    for member in members {
-        match member {
-            Member::Struct((name, s)) => structs.add(name, s).unwrap(),
-            Member::Enum((name, e)) => enums.add(name, e).unwrap(),
-            Member::Constant((name, c)) => constants.add(name, c).unwrap(),
-            Member::Function((name, f)) => functions.add(name, f).unwrap(),
-        }
-    }
+    let structs = structs.into_inner().unwrap();
+    let enums = enums.into_inner().unwrap();
+    let constants = constants.into_inner().unwrap();
+    let functions = functions.into_inner().unwrap();
+    let new_friends = new_friends.into_inner().unwrap();
+    let used_members = used_members.into_inner().unwrap();
+    let used_methods = used_methods.into_inner().unwrap();
 
     let use_funs = context.finish_use_funs_scope(&used_methods);
     let typed_module = T::ModuleDefinition {
