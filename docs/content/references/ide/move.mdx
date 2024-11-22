@@ -1,0 +1,64 @@
+---
+title: Move Analyzer VSCode Extension
+---
+
+The Move Analyzer extension for Visual Studio Code provides language support features for the Move programming language. It enables syntax highlighting, code completion, and advanced features like go-to-definition and type checking.
+
+## Installing
+
+You can install the Move extension from the Visual Studio Code Marketplace:
+
+- Open VS Code
+- Open the Extensions view (`⇧` + `⌘` + `X` on macOS) 
+- Search for "mysten.move"
+- Click Install on the Move extension by Mysten Labs
+
+You can also use `Ctrl-P` or `Cmd-P` and type `ext install mysten.move` to install the extension, or install via the command line: 
+
+```bash
+code --install-extension mysten.move
+```
+
+### Installing `move-analyzer`
+
+The Move extension will attempt to install the appropriate `move-analyzer` binary for your platform. If this doesn't work, or you would prefer to install it manually, you can build it with Cargo:
+
+```bash
+cargo install --git https://github.com/MystenLabs/sui.git sui-move-lsp
+```
+By default, the Move extension expects to find the `move-analyzer` binary in `~/.sui/bin`. You can either copy the binary here, or configure the extension to use a different path. 
+
+## Features
+
+### Build, Test, and Trace
+
+The Move extension installs command palette commands for building, testing, and tracing Move code. 
+
+![Move commands in the command palette](./images/commands.png)
+
+These commands will attempt to find the `Move.toml` file for the open Move source file and will open a terminal to run the appropriate `sui move` command.
+
+In order to generate a trace, you will need to have a trace-capable `sui` binary. See the [Debugging](/references/ide/debugger) page for more information.
+
+### Syntax highlighting
+
+Syntax highlighting is provided by the [Move Syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax) extension.
+
+### Hover information
+
+Hovering over identifiers will show type information and other information about the identifier. This works for all Move symbols including macros. 
+
+![Struct hoverover](./images/hover_struct.png)
+![Function hoverover](./images/hover_fun.png)
+![Macro hoverover](./images/hover_macros.png)
+
+### Code completion
+
+The move extension will attempt to autocomplete upon a dot operator, displaying the available methods and fields for the type.
+
+![Code completion](./images/dot_completion.png)
+
+
+### Go-to-definition
+
+The move extension supports go-to-definition for all Move symbols including types, functions, and macros, as long as the type was present when move-analyzer last built the file.
