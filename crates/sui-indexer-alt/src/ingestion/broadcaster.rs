@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{future::try_join_all, TryStreamExt};
+use futures::future::try_join_all;
 use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::ingestion::error::Error;
+use crate::{ingestion::error::Error, task::TrySpawnStreamExt};
 
 use super::{client::IngestionClient, IngestionConfig};
 
@@ -31,8 +31,7 @@ pub(super) fn broadcaster(
         info!("Starting ingestion broadcaster");
 
         match ReceiverStream::new(checkpoint_rx)
-            .map(Ok)
-            .try_for_each_concurrent(/* limit */ config.ingest_concurrency, |cp| {
+            .try_for_each_spawned(/* limit */ config.ingest_concurrency, |cp| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
 
