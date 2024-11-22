@@ -126,6 +126,9 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
+/// Extra args related to configuring the indexer and reader.
+// TODO: the configs are still tied to the indexer crate, eventually we'd like a new command that is
+// more agnostic.
 pub struct OffChainConfig {
     pub snapshot_config: SnapshotLagConfig,
     pub retention_config: Option<RetentionConfig>,
@@ -153,6 +156,18 @@ pub struct SuiTestAdapter {
     pub offchain_config: Option<OffChainConfig>,
 }
 
+struct AdapterInitConfig {
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+    account_names: BTreeSet<String>,
+    protocol_config: ProtocolConfig,
+    is_simulator: bool,
+    custom_validator_account: bool,
+    reference_gas_price: Option<u64>,
+    default_gas_price: Option<u64>,
+    flavor: Option<Flavor>,
+    offchain_config: Option<OffChainConfig>,
+}
+
 pub(crate) struct StagedPackage {
     file: NamedTempFile,
     syntax: SyntaxChoice,
@@ -178,6 +193,79 @@ struct TxnSummary {
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
+}
+
+impl AdapterInitConfig {
+    fn from_args(init_cmd: InitCommand, sui_args: SuiInitArgs) -> Self {
+        let InitCommand { named_addresses } = init_cmd;
+        let SuiInitArgs {
+            accounts,
+            protocol_version,
+            max_gas,
+            shared_object_deletion,
+            simulator,
+            custom_validator_account,
+            reference_gas_price,
+            default_gas_price,
+            snapshot_config,
+            flavor,
+            epochs_to_keep,
+            data_ingestion_path,
+            rest_api_url,
+        } = sui_args;
+
+        let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
+        let accounts = accounts
+            .map(|v| v.into_iter().collect::<BTreeSet<_>>())
+            .unwrap_or_default();
+
+        let mut protocol_config = if let Some(protocol_version) = protocol_version {
+            ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+        } else {
+            ProtocolConfig::get_for_max_version_UNSAFE()
+        };
+        if let Some(enable) = shared_object_deletion {
+            protocol_config.set_shared_object_deletion_for_testing(enable);
+        }
+        if let Some(mx_tx_gas_override) = max_gas {
+            if simulator {
+                panic!("Cannot set max gas in simulator mode");
+            }
+            protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+        }
+        if custom_validator_account && !simulator {
+            panic!("Can only set custom validator account in simulator mode");
+        }
+        if reference_gas_price.is_some() && !simulator {
+            panic!("Can only set reference gas price in simulator mode");
+        }
+
+        let offchain_config = if simulator {
+            let retention_config =
+                epochs_to_keep.map(RetentionConfig::new_with_default_retention_only_for_testing);
+
+            Some(OffChainConfig {
+                snapshot_config,
+                retention_config,
+                data_ingestion_path: data_ingestion_path.unwrap_or(tempdir().unwrap().into_path()),
+                rest_api_url,
+            })
+        } else {
+            None
+        };
+
+        Self {
+            additional_mapping: map,
+            account_names: accounts,
+            protocol_config,
+            is_simulator: simulator,
+            custom_validator_account,
+            reference_gas_price,
+            default_gas_price,
+            flavor,
+            offchain_config,
+        }
+    }
 }
 
 #[async_trait]
@@ -247,7 +335,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
         );
 
         // Unpack the init arguments
-        let (
+        let AdapterInitConfig {
             additional_mapping,
             account_names,
             protocol_config,
@@ -255,98 +343,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
-            // snapshot_config,
             flavor,
-            // epochs_to_keep,
-            // data_ingestion_path,
-            // rest_api_url,
             offchain_config,
-        ) = match task_opt.map(|t| t.command) {
-            Some((
-                InitCommand { named_addresses },
-                SuiInitArgs {
-                    accounts,
-                    protocol_version,
-                    max_gas,
-                    shared_object_deletion,
-                    simulator,
-                    custom_validator_account,
-                    reference_gas_price,
-                    default_gas_price,
-                    snapshot_config,
-                    flavor,
-                    epochs_to_keep,
-                    data_ingestion_path,
-                    rest_api_url,
-                },
-            )) => {
-                let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                let accounts = accounts
-                    .map(|v| v.into_iter().collect::<BTreeSet<_>>())
-                    .unwrap_or_default();
-
-                let mut protocol_config = if let Some(protocol_version) = protocol_version {
-                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
-                } else {
-                    ProtocolConfig::get_for_max_version_UNSAFE()
-                };
-                if let Some(enable) = shared_object_deletion {
-                    protocol_config.set_shared_object_deletion_for_testing(enable);
-                }
-                if let Some(mx_tx_gas_override) = max_gas {
-                    if simulator {
-                        panic!("Cannot set max gas in simulator mode");
-                    }
-                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
-                }
-                if custom_validator_account && !simulator {
-                    panic!("Can only set custom validator account in simulator mode");
-                }
-                if reference_gas_price.is_some() && !simulator {
-                    panic!("Can only set reference gas price in simulator mode");
-                }
-
-                let offchain_config = if simulator {
-                    let retention_config = epochs_to_keep
-                        .map(RetentionConfig::new_with_default_retention_only_for_testing);
-
-                    Some(OffChainConfig {
-                        snapshot_config,
-                        retention_config,
-                        data_ingestion_path: data_ingestion_path
-                            .unwrap_or(tempdir().unwrap().into_path()),
-                        rest_api_url,
-                    })
-                } else {
-                    None
-                };
-
-                (
-                    map,
-                    accounts,
-                    protocol_config,
-                    simulator,
-                    custom_validator_account,
-                    reference_gas_price,
-                    default_gas_price,
-                    flavor,
-                    offchain_config,
-                )
-            }
-            None => {
-                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-                (
-                    BTreeMap::new(),
-                    BTreeSet::new(),
-                    protocol_config,
-                    false,
-                    false,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            }
+        } = match task_opt.map(|t| t.command) {
+            Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
+            None => AdapterInitConfig::default(),
         };
 
         let (
@@ -1946,6 +1947,22 @@ impl fmt::Display for FakeID {
                 write!(f, "0x{:x}", addr)
             }
             FakeID::Enumerated(task, i) => write!(f, "{},{}", task, i),
+        }
+    }
+}
+
+impl Default for AdapterInitConfig {
+    fn default() -> Self {
+        Self {
+            additional_mapping: BTreeMap::new(),
+            account_names: BTreeSet::new(),
+            protocol_config: ProtocolConfig::get_for_max_version_UNSAFE(),
+            is_simulator: false,
+            custom_validator_account: false,
+            reference_gas_price: None,
+            default_gas_price: None,
+            flavor: None,
+            offchain_config: None,
         }
     }
 }
