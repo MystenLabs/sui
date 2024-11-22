@@ -231,12 +231,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     // It can lead to inconsistent state for live queries, as well as
                     // inaccurate affected row counts in case of watermark update failure.
                     // Remove it later.
-                    let affected = match H::commit(&batch, &mut conn).await {
-                        Ok(affected) => {
-                            watermark.update(&mut conn).await.map(|_| affected).map_err(|e| e.into())
-                        }
-                        e => e,
-                    };
+                    let affected = H::commit(&batch, &mut conn).await;
 
                     /*
                     // Write all the object updates out along with the watermark update, in a

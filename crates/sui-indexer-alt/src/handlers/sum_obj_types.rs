@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure};
-use diesel::{upsert::excluded, ExpressionMethods};
+use diesel::{debug_query, upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
 use sui_types::{
@@ -132,6 +132,16 @@ impl Processor for SumObjTypes {
     }
 }
 
+fn bytes_to_string(bytes: &Vec<u8>) -> String {
+    use std::fmt::Write; // For the `write!` macro
+
+    let hex_string: String = bytes.iter().fold(String::new(), |mut acc, b| {
+        write!(&mut acc, "{:02x}", b).expect("Failed to write to string");
+        acc
+    });
+    format!("E'\\\\x{}'", hex_string)
+}
+
 #[async_trait::async_trait]
 impl Handler for SumObjTypes {
     type Batch = BTreeMap<ObjectID, Self::Value>;
@@ -155,31 +165,78 @@ impl Handler for SumObjTypes {
                 deletes.push(update.object_id.to_vec());
             }
         }
+        let total_rows = updates.len() + deletes.len();
+        println!("\nTotal rows: {}\n======\n", total_rows);
 
         let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(Either::Left);
         let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(Either::Right);
 
-        let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
-            Either::Left(update) => Either::Left(
-                diesel::insert_into(sum_obj_types::table)
-                    .values(update)
-                    .on_conflict(sum_obj_types::object_id)
-                    .do_update()
-                    .set((
-                        sum_obj_types::object_version.eq(excluded(sum_obj_types::object_version)),
-                        sum_obj_types::owner_kind.eq(excluded(sum_obj_types::owner_kind)),
-                        sum_obj_types::owner_id.eq(excluded(sum_obj_types::owner_id)),
-                    ))
-                    .execute(conn),
-            ),
+        let _ = update_chunks
+            .chain(delete_chunks)
+            .map(|chunk| match chunk {
+                Either::Left(update) => {
+                    let mut bindings = vec![];
+                    for u in update {
+                        bindings.push(bytes_to_string(&u.object_id));
+                        bindings.push(format!("'{}'", u.object_version));
+                        bindings.push(format!("'{}'", u.owner_kind as i16));
+                        if let Some(owner_id) = &u.owner_id {
+                            bindings.push(bytes_to_string(owner_id));
+                        }
+                        if let Some(package) = &u.package {
+                            bindings.push(bytes_to_string(package));
+                        }
+                        if let Some(module) = &u.module {
+                            bindings.push(format!("'{}'", module));
+                        }
+                        if let Some(name) = &u.name {
+                            bindings.push(format!("'{}'", name));
+                        }
+                        if let Some(instantiation) = &u.instantiation {
+                            bindings.push(bytes_to_string(instantiation));
+                        }
+                    }
+                    let insert_query = diesel::insert_into(sum_obj_types::table)
+                        .values(update)
+                        .on_conflict(sum_obj_types::object_id)
+                        .do_update()
+                        .set((
+                            sum_obj_types::object_version
+                                .eq(excluded(sum_obj_types::object_version)),
+                            sum_obj_types::owner_kind.eq(excluded(sum_obj_types::owner_kind)),
+                            sum_obj_types::owner_id.eq(excluded(sum_obj_types::owner_id)),
+                        ));
+                    let mut sql = format!("{}", debug_query::<diesel::pg::Pg, _>(&insert_query));
+                    let mut id = bindings.len();
+                    while id > 0 {
+                        sql = sql.replace(&format!("${}", id), &bindings[id - 1]);
+                        id -= 1;
+                    }
+                    let pos = sql.find("-- binds").unwrap();
+                    sql = sql[..pos].to_string();
+                    println!("EXPLAIN ANALYZE {};\n", sql);
+                }
 
-            Either::Right(delete) => Either::Right(
-                diesel::delete(sum_obj_types::table)
-                    .filter(sum_obj_types::object_id.eq_any(delete.iter().cloned()))
-                    .execute(conn),
-            ),
-        });
+                Either::Right(delete) => {
+                    let delete_query = diesel::delete(sum_obj_types::table)
+                        .filter(sum_obj_types::object_id.eq_any(delete.iter().cloned()));
+                    let mut sql = format!("{}", debug_query::<diesel::pg::Pg, _>(&delete_query));
+                    let binding = format!(
+                        "ARRAY[{}]",
+                        delete
+                            .iter()
+                            .map(bytes_to_string)
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    );
+                    sql = sql.replace("$1", &binding);
+                    let pos = sql.find("-- binds").unwrap();
+                    sql = sql[..pos].to_string();
+                    println!("EXPLAIN ANALYZE {};\n", sql);
+                }
+            })
+            .collect::<Vec<_>>();
 
-        Ok(try_join_all(futures).await?.into_iter().sum())
+        Ok(total_rows)
     }
 }
