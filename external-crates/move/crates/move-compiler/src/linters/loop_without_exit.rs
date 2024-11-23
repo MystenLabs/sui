@@ -4,36 +4,14 @@
 use super::StyleCodes;
 use crate::{
     diag,
-    diagnostics::WarningFilters,
-    shared::CompilationEnv,
     typing::{
         ast::{self as T, UnannotatedExp_},
-        visitor::{exp_satisfies, TypingVisitorConstructor, TypingVisitorContext},
+        visitor::{exp_satisfies, simple_visitor},
     },
 };
 
-pub struct LoopWithoutExit;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for LoopWithoutExit {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    LoopWithoutExit,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         // we do not care about `while` since there is another lint that handles reporting
         // that `while (true)` should be `loop`
@@ -57,10 +35,10 @@ impl TypingVisitorContext for Context<'_> {
                 This code will until it errors, e.g. reaching an 'abort' or running out of gas"
             )
         );
-        self.env.add_diag(diag);
+        self.add_diag(diag);
         false
     }
-}
+);
 
 fn has_return(e: &T::Exp) -> bool {
     exp_satisfies(e, |e| matches!(e.exp.value, UnannotatedExp_::Return(_)))

@@ -10,7 +10,7 @@ use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::payload::Payload;
-use crate::workloads::{Gas, GasCoinConfig};
+use crate::workloads::{workload::ExpectedFailureType, Gas, GasCoinConfig};
 use crate::ProgrammableTransactionBuilder;
 use crate::{convert_move_call_args, BenchMoveCallArg, ExecutionEffects, ValidatorProxy};
 use anyhow::anyhow;
@@ -163,7 +163,7 @@ impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         // Sometimes useful when figuring out why things failed
         let stat = match effects {
-            ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
+            ExecutionEffects::FinalizedTransactionEffects(e, _) => e.data().status(),
             ExecutionEffects::SuiTransactionBlockEffects(_) => unimplemented!("Not impl"),
         };
 
@@ -188,6 +188,10 @@ impl Payload for AdversarialTestPayload {
                 .as_ref()
                 .expect("Protocol config not in system state"),
         )
+    }
+
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 

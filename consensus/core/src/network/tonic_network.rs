@@ -24,6 +24,7 @@ use mysten_network::{
     Multiaddr,
 };
 use parking_lot::RwLock;
+use sui_tls::AllowPublicKeys;
 use tokio::{
     pin,
     task::JoinSet,
@@ -44,7 +45,6 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    tonic_tls::create_rustls_client_config,
     BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
@@ -54,7 +54,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     network::{
         tonic_gen::consensus_service_server::ConsensusServiceServer,
-        tonic_tls::create_rustls_server_config,
+        tonic_tls::certificate_server_name,
     },
     CommitIndex, Round,
 };
@@ -339,7 +339,7 @@ impl NetworkClient for TonicClient {
 // Tonic channel wrapped with layers.
 type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
-        tonic::transport::Channel,
+        tonic_rustls::Channel,
         tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
     >,
     MetricsCallbackMaker,
@@ -381,7 +381,17 @@ impl ChannelPool {
         let address = format!("https://{address}");
         let config = &self.context.parameters.tonic;
         let buffer_size = config.connection_buffer_size;
-        let endpoint = tonic::transport::Channel::from_shared(address.clone())
+        let client_tls_config = sui_tls::create_rustls_client_config(
+            self.context
+                .committee
+                .authority(peer)
+                .network_key
+                .clone()
+                .into_inner(),
+            certificate_server_name(&self.context),
+            Some(network_keypair.private_key().into_inner()),
+        );
+        let endpoint = tonic_rustls::Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
             .initial_connection_window_size(Some(buffer_size as u32))
@@ -391,22 +401,14 @@ impl ChannelPool {
             .http2_keep_alive_interval(config.keepalive_interval)
             // tcp keepalive is probably unnecessary and is unsupported by msim.
             .user_agent("mysticeti")
+            .unwrap()
+            .tls_config(client_tls_config)
             .unwrap();
-
-        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
-        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(client_tls_config)
-            .https_only()
-            .enable_http2()
-            .build();
 
         let deadline = tokio::time::Instant::now() + timeout;
         let channel = loop {
             trace!("Connecting to endpoint at {address}");
-            match endpoint
-                .connect_with_connector(https_connector.clone())
-                .await
-            {
+            match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
                     warn!("Failed to connect to endpoint at {address}: {e:?}");
@@ -735,8 +737,17 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             Arc::new(builder)
         };
 
-        let tls_server_config =
-            create_rustls_server_config(&self.context, self.network_keypair.clone());
+        let tls_server_config = sui_tls::create_rustls_server_config(
+            self.network_keypair.clone().private_key().into_inner(),
+            certificate_server_name(&self.context),
+            AllowPublicKeys::new(
+                self.context
+                    .committee
+                    .authorities()
+                    .map(|(_i, a)| a.network_key.clone().into_inner())
+                    .collect(),
+            ),
+        );
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
         // Create listener to incoming connections.

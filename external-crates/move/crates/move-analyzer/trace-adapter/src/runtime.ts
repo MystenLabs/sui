@@ -6,9 +6,14 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
-import { ISourceMap, IFileInfo, readAllSourceMaps } from './source_map_utils';
-import { TraceEffectKind, TraceEvent, TraceEventKind, TraceLocKind, TraceValKind, TraceValue, readTrace } from './trace_utils';
-import { ModuleInfo } from './utils';
+import { IFileInfo, ISourceMap, readAllSourceMaps } from './source_map_utils';
+import {
+    TraceEffectKind,
+    TraceEvent,
+    TraceEventKind,
+    TraceInstructionKind,
+    readTrace,
+} from './trace_utils';
 
 /**
  * Describes the runtime variable scope (e.g., local variables
@@ -19,11 +24,51 @@ export interface IRuntimeVariableScope {
 }
 
 /**
+ * A compound type:
+ * - a vector (converted to an array of values)
+ * - a struct/enum (converted to an array of string/field value pairs)
+ */
+export type CompoundType = RuntimeValueType[] | IRuntimeCompoundValue;
+
+/**
+ * A runtime value can have any of the following types:
+ * - boolean, number, string (converted to string)
+ * - compound type (vector, struct, enum)
+ */
+export type RuntimeValueType = string | CompoundType | IRuntimeRefValue;
+
+/**
+ * Location of a local variable in the runtime.
+ */
+export interface IRuntimeVariableLoc {
+    frameID: number;
+    localIndex: number;
+}
+
+/**
+ * Value of a reference in the runtime.
+ */
+export interface IRuntimeRefValue {
+    mutable: boolean;
+    loc: IRuntimeVariableLoc
+}
+
+/**
+ * Information about a runtime compound value (struct/enum).
+ */
+export interface IRuntimeCompoundValue {
+    fields: [string, RuntimeValueType][];
+    type: string;
+    variantName?: string;
+    variantTag?: number;
+}
+
+/**
  * Describes a runtime local variable.
  */
 interface IRuntimeVariable {
     name: string;
-    value: string;
+    value: RuntimeValueType;
     type: string;
 }
 
@@ -32,21 +77,48 @@ interface IRuntimeVariable {
  * during trace viewing session.
  */
 interface IRuntimeStackFrame {
-    // Source map for the frame.
-    sourceMap: ISourceMap;
-    // Frame identifier.
+    /**
+     *  Frame identifier.
+     */
     id: number;
-    // Name of the function in this frame.
+    /**
+     *  Name of the function in this frame.
+     */
     name: string;
-    // Path to the file containing the function.
+    /**
+     *  Path to the file containing currently executing instruction.
+     */
     file: string;
-    // Current line in the file correponding to currently viewed instruction.
+    /**
+     *  File hash of the file containing currently executing instruction.
+     */
+    fileHash: string;
+    /**
+     * Current line in the file corresponding to currently viewed instruction.
+     */
     line: number; // 1-based
-    // Local variable types by variable frame index.
+    /**
+     *  Local variable types by variable frame index.
+     */
     localsTypes: string[];
-    // Local variables per scope (local scope at 0 and then following block scopes),
-    // indexed by variable frame index.
+    /**
+     *  Local variable names by variable frame index.
+     */
+    localsNames: string[];
+    /**
+     * Local variables per scope (local scope at 0 and then following block scopes),
+     * indexed by variable frame index.
+     */
     locals: (IRuntimeVariable | undefined)[][];
+    /**
+     * Line of the last call instruction that was processed in this frame.
+     * It's needed to make sure that step/next into/over call works correctly.
+     */
+    lastCallInstructionLine: number | undefined;
+    /**
+     * Lines that are not present in the source map.
+     */
+    optimizedLines: number[]
 }
 
 /**
@@ -61,10 +133,33 @@ export interface IRuntimeStack {
  * Events emitted by the runtime during trace viewing session.
  */
 export enum RuntimeEvents {
-    // Stop after step/next action is performed.
+    /**
+     *  Stop after step/next action is performed.
+     */
     stopOnStep = 'stopOnStep',
-    // Finish trace viewing session.
+
+    /**
+     * Stop after a line breakpoint is hit.
+     */
+    stopOnLineBreakpoint = 'stopOnLineBreakpoint',
+
+    /**
+     * Stop after exception has been encountered.
+     */
+    stopOnException = 'stopOnException',
+
+    /**
+     *  Finish trace viewing session.
+     */
     end = 'end',
+}
+/**
+ * Describes result of the execution.
+ */
+export enum ExecutionResult {
+    Ok,
+    TraceEnd,
+    Exception,
 }
 
 /**
@@ -72,26 +167,41 @@ export enum RuntimeEvents {
  */
 export class Runtime extends EventEmitter {
 
-    // Trace being viewed.
-    private trace = { events: [] as TraceEvent[], localLifetimeEnds: new Map<number, number[]>() };
+    /**
+     * Trace being viewed.
+     */
+    private trace = {
+        events: [] as TraceEvent[],
+        localLifetimeEnds: new Map<number, number[]>(),
+        tracedLines: new Map<string, Set<number>>()
+    };
 
-    // Index of the current trace event being processed.
+    /**
+     * Index of the current trace event being processed.
+     */
     private eventIndex = 0;
 
-    // Current frame stack.
+    /**
+     * Current frame stack.
+     */
     private frameStack = { frames: [] as IRuntimeStackFrame[] };
 
-    // Map of file hashes to file info.
+    /**
+     * Map of file hashes to file info.
+     */
     private filesMap = new Map<string, IFileInfo>();
 
-    // Map of stringified module info to source maps.
-    private sourceMapsMap = new Map<string, ISourceMap>();
+    /**
+     * Map of line breakpoints, keyed on a file path.
+     */
+    private lineBreakpoints = new Map<string, Set<number>>();
 
     /**
      * Start a trace viewing session and set up the initial state of the runtime.
      *
      * @param source  path to the Move source file whose traces are to be viewed.
      * @param traceInfo  trace selected for viewing.
+     * @throws Error with a descriptive error message if starting runtime has failed.
      *
      */
     public async start(source: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
@@ -110,16 +220,23 @@ export class Runtime extends EventEmitter {
 
         // create file maps for all files in the `build` directory, including both package source
         // files and source files for dependencies
-        hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'), this.filesMap);
+        this.hashToFileMap(path.join(pkgRoot, 'build', pkg_name, 'sources'));
         // update with files from the actual "sources" directory rather than from the "build" directory
-        hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap);
+        this.hashToFileMap(path.join(pkgRoot, 'sources'));
 
         // create source maps for all modules in the `build` directory
-        this.sourceMapsMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
+        const sourceMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
 
         // reconstruct trace file path from trace info
         const traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + '.json');
-        this.trace = readTrace(traceFilePath);
+
+        // create a mapping from file hash to its corresponding source map
+        const sourceMapsHashMap = new Map<string, ISourceMap>;
+        for (const [_, sourceMap] of sourceMapsModMap) {
+            sourceMapsHashMap.set(sourceMap.fileHash, sourceMap);
+        }
+
+        this.trace = readTrace(traceFilePath, sourceMapsModMap, sourceMapsHashMap, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -133,13 +250,15 @@ export class Runtime extends EventEmitter {
             this.newStackFrame(
                 currentEvent.id,
                 currentEvent.name,
-                currentEvent.modInfo,
-                currentEvent.localsTypes
+                currentEvent.fileHash,
+                currentEvent.localsTypes,
+                currentEvent.localsNames,
+                currentEvent.optimizedLines
             );
         this.frameStack = {
             frames: [newFrame]
         };
-        this.step(/* next */ false, /* stopAtCloseFrame */ false, /* nextLineSkip */ true);
+        this.step(/* next */ false, /* stopAtCloseFrame */ false);
     }
 
     /**
@@ -156,36 +275,159 @@ export class Runtime extends EventEmitter {
      *
      * @param next determines if it's `next` (or otherwise `step`) action.
      * @param stopAtCloseFrame determines if the action should stop at `CloseFrame` event
-     * (rather then proceedint to the following instruction).
-     * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * (rather then proceed to the following instruction).
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the step event cannot be handled.
      */
-    public step(
-        next: boolean,
-        stopAtCloseFrame: boolean,
-        nextLineSkip: boolean
-    ): boolean {
+    public step(next: boolean, stopAtCloseFrame: boolean): ExecutionResult {
         this.eventIndex++;
         if (this.eventIndex >= this.trace.events.length) {
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return true;
+            return ExecutionResult.TraceEnd;
         }
         let currentEvent = this.trace.events[this.eventIndex];
         if (currentEvent.type === TraceEventKind.Instruction) {
-            let sameLine = this.instruction(currentEvent);
-            if (sameLine && nextLineSkip) {
-                return this.step(next, stopAtCloseFrame, nextLineSkip);
+            const stackHeight = this.frameStack.frames.length;
+            if (stackHeight <= 0) {
+                throw new Error('No frame on the stack when processing Instruction event on line: '
+                    + currentEvent.loc.line
+                    + ' in column: '
+                    + currentEvent.loc.column);
+            }
+            const currentFrame = this.frameStack.frames[stackHeight - 1];
+            // remember last call instruction line before it (potentially) changes
+            // in the `instruction` call below
+            const lastCallInstructionLine = currentFrame.lastCallInstructionLine;
+            let [sameLine, currentLine] = this.instruction(currentFrame, currentEvent);
+            // do not attempt to skip events on the same line if the previous event
+            // was a switch to/from an inlined frame - we want execution to stop before
+            // the first instruction of the inlined frame is processed
+            const prevEvent = this.trace.events[this.eventIndex - 1];
+            sameLine = sameLine &&
+                !(prevEvent.type === TraceEventKind.ReplaceInlinedFrame
+                    || prevEvent.type === TraceEventKind.OpenFrame && prevEvent.id < 0
+                    || prevEvent.type === TraceEventKind.CloseFrame && prevEvent.id < 0);
+            if (sameLine) {
+                if (!next && (currentEvent.kind === TraceInstructionKind.CALL
+                    || currentEvent.kind === TraceInstructionKind.CALL_GENERIC)
+                    && lastCallInstructionLine === currentLine) {
+                    // We are about to step into another call on the same line
+                    // but we should wait for user action to do so rather than
+                    // having debugger step into it automatically. If we don't
+                    // the user will observe a weird effect. For example,
+                    // consider the following code:
+                    // ```
+                    // foo();
+                    // assert(bar() == baz());
+                    // ```
+                    // In the code above, after executing `foo()`, the user
+                    // will move to the next line and will expect to only
+                    // step into `bar` rather than having debugger to step
+                    // immediately into `baz` as well. At the same time,
+                    // if the user intended to step over functions using `next`,
+                    // we should skip over all calls on the same line (both `bar`
+                    // and `baz` in the example above).
+                    //
+                    // The following explains a bit more formally what needs
+                    // to happen both on on `next` and `step` actions when
+                    // call and non-call instructions are interleaved:
+                    //
+                    // When `step` is called:
+                    //
+                    // When there is only one call on the same line, we want to
+                    // stop on the first instruction of this line, then after
+                    // user `step` action enter the call, and then after
+                    // exiting the call go to the instruction on the next line:
+                    // 6: instruction
+                    // 7: instruction       // stop here
+                    // 7: call              // enter call here
+                    // 7: instruction
+                    // 8: instruction       // stop here
+                    //
+                    // When there is more than one call on the same line, we
+                    // want to stop on the first instruction of this line,
+                    // then after user `step` action enter the call, then
+                    // after exiting the call stop on the next call instruction
+                    // and wait for another `step` action from the user:
+                    // 6: instruction
+                    // 7: instruction       // stop here
+                    // 7: call              // enter call here
+                    // 7: instruction
+                    // 7: call              // stop and then enter call here
+                    // 7: instruction
+                    // 8: instruction       // stop here
+                    //
+                    // When `next` is called, things have to happen differently,
+                    // particularly when there are multiple calls on the same line:
+                    // 6: instruction
+                    // 7: instruction       // stop here
+                    // 7: call
+                    // 7: instruction
+                    // 7: call
+                    // 7: instruction
+                    // 8: instruction       // stop here
+                    //
+                    // To support this, we need to keep track of the line number when
+                    // the last call instruction in a give frame happened, and
+                    // also we need to make `stepOut` aware of whether it is executed
+                    // as part of `next` (which is how `next` is implemented) or not.
+                    this.sendEvent(RuntimeEvents.stopOnStep);
+                    return ExecutionResult.Ok;
+                } else {
+                    return this.step(next, stopAtCloseFrame);
+                }
             }
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return false;
+            return ExecutionResult.Ok;
+        } else if (currentEvent.type === TraceEventKind.ReplaceInlinedFrame) {
+            let currentFrame = this.frameStack.frames.pop();
+            if (!currentFrame) {
+                throw new Error('No frame to pop when processing `ReplaceInlinedFrame` event');
+            }
+            currentFrame.fileHash = currentEvent.fileHash;
+            currentFrame.optimizedLines = currentEvent.optimizedLines;
+            const currentFile = this.filesMap.get(currentFrame.fileHash);
+            if (!currentFile) {
+                throw new Error('Cannot find file with hash '
+                    + currentFrame.fileHash
+                    + ' when processing `ReplaceInlinedFrame` event');
+            }
+            currentFrame.file = currentFile.path;
+            this.frameStack.frames.push(currentFrame);
+            return this.step(next, stopAtCloseFrame);
         } else if (currentEvent.type === TraceEventKind.OpenFrame) {
+            // if function is native then the next event will be CloseFrame
+            if (currentEvent.isNative) {
+                // see if native function aborted
+                if (this.trace.events.length > this.eventIndex + 1) {
+                    const nextEvent = this.trace.events[this.eventIndex + 1];
+                    if (nextEvent.type === TraceEventKind.Effect &&
+                        nextEvent.effect.type === TraceEffectKind.ExecutionError) {
+                        this.sendEvent(RuntimeEvents.stopOnException, nextEvent.effect.msg);
+                        return ExecutionResult.Exception;
+                    }
+                }
+                // if native function executed successfully, then the next event
+                // should be CloseFrame
+                if (this.trace.events.length <= this.eventIndex + 1 ||
+                    this.trace.events[this.eventIndex + 1].type !== TraceEventKind.CloseFrame) {
+                    throw new Error('Expected an CloseFrame event after native OpenFrame event');
+                }
+                // skip over CloseFrame as there is no frame to pop
+                this.eventIndex++;
+                return this.step(next, stopAtCloseFrame);
+            }
+
             // create a new frame and push it onto the stack
             const newFrame =
                 this.newStackFrame(
                     currentEvent.id,
                     currentEvent.name,
-                    currentEvent.modInfo,
-                    currentEvent.localsTypes
+                    currentEvent.fileHash,
+                    currentEvent.localsTypes,
+                    currentEvent.localsNames,
+                    currentEvent.optimizedLines
                 );
             // set values of parameters in the new frame
             this.frameStack.frames.push(newFrame);
@@ -195,16 +437,15 @@ export class Runtime extends EventEmitter {
 
             if (next) {
                 // step out of the frame right away
-                this.stepOut();
-                return false;
+                return this.stepOut(next);
             } else {
-                return this.step(next, stopAtCloseFrame, nextLineSkip);
+                return this.step(next, stopAtCloseFrame);
             }
         } else if (currentEvent.type === TraceEventKind.CloseFrame) {
             if (stopAtCloseFrame) {
                 // don't do anything as the caller needs to inspect
-                // the event before proceeing
-                return false;
+                // the event before proceeding
+                return ExecutionResult.Ok;
             } else {
                 // pop the top frame from the stack
                 if (this.frameStack.frames.length <= 0) {
@@ -212,41 +453,49 @@ export class Runtime extends EventEmitter {
                         + currentEvent.id);
                 }
                 this.frameStack.frames.pop();
-                return this.step(next, stopAtCloseFrame, nextLineSkip);
+                return this.step(next, stopAtCloseFrame);
             }
         } else if (currentEvent.type === TraceEventKind.Effect) {
             const effect = currentEvent.effect;
-            if (effect.type === TraceEffectKind.Write) {
-                const stackHeight = this.frameStack.frames.length;
-                if (stackHeight <= 0) {
-                    throw new Error('No frame on the stack when processing a write');
-                }
-                const currentFrame = this.frameStack.frames[stackHeight - 1];
-                const traceLocation = effect.location;
-                const traceValue = effect.value;
-                if (traceLocation.type === TraceLocKind.Local) {
-                    localWrite(currentFrame, traceLocation.localIndex, traceValue);
-                }
+            if (effect.type === TraceEffectKind.ExecutionError) {
+                this.sendEvent(RuntimeEvents.stopOnException, effect.msg);
+                return ExecutionResult.Exception;
             }
-            return this.step(next, stopAtCloseFrame, nextLineSkip);
+            if (effect.type === TraceEffectKind.Write) {
+                const traceLocation = effect.loc;
+                const traceValue = effect.value;
+                const frame = this.frameStack.frames.find(
+                    frame => frame.id === traceLocation.frameID
+                );
+                if (!frame) {
+                    throw new Error('Cannot find frame with ID: '
+                        + traceLocation.frameID
+                        + ' when processing Write effect for local variable at index: '
+                        + traceLocation.localIndex);
+                }
+                localWrite(frame, traceLocation.localIndex, traceValue);
+            }
+            return this.step(next, stopAtCloseFrame);
         } else {
             // ignore other events
-            return this.step(next, stopAtCloseFrame, nextLineSkip);
+            return this.step(next, stopAtCloseFrame);
         }
     }
 
     /**
      * Handles "step out" adapter action.
      *
-     * @returns `true` if was able to step out of the frame, `false` otherwise.
+     * @param next determines if it's  part of `next` (or otherwise `step`) action.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
-    public stepOut(): boolean {
+    public stepOut(next: boolean): ExecutionResult {
         const stackHeight = this.frameStack.frames.length;
         if (stackHeight <= 1) {
             // do nothing as there is no frame to step out to
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return false;
+            return ExecutionResult.Ok;
         }
         // newest frame is at the top of the stack
         const currentFrame = this.frameStack.frames[stackHeight - 1];
@@ -254,8 +503,15 @@ export class Runtime extends EventEmitter {
         // skip all events until the corresponding CloseFrame event,
         // pop the top frame from the stack, and proceed to the next event
         while (true) {
-            if (this.step(/* next */ false, /* stopAtCloseFrame */ true, /* nextLineSkip */ true)) {
-                // trace viewing session finished
+            // when calling `step` in the loop below, we need to avoid
+            // skipping over calls next-style otherwise we can miss seeing
+            // the actual close frame event that we are looking for
+            // and have the loop execute too far
+            const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+            if (executionResult === ExecutionResult.Exception) {
+                return executionResult;
+            }
+            if (executionResult === ExecutionResult.TraceEnd) {
                 throw new Error('Cannot find corresponding CloseFrame event for function: ' +
                     currentFrame.name);
             }
@@ -270,129 +526,70 @@ export class Runtime extends EventEmitter {
                 }
             }
         }
-
-        // Do not skip to same line when stepping out as this may lead
-        // to unusual behavior if multiple bytcode instructions are on the same line.
-        // For example, consider the following code:
-        // ```
-        // assert(foo() == bar());
-        // ```
-        // In the code above if we enter `foo` and then step out of it,
-        // we want to end up on the same line (where the next instruction is)
-        // but we don't want to call `bar` in the same debugging step.
-        return this.step(/* next */ false, /* stopAtCloseFrame */ false, /* nextLineSkip */ false);
-    }
-    /**
-     * Handles "step back" adapter action.
-     * @returns `true` if was able to step back, `false` otherwise.
-     * @throws Error with a descriptive error message if the step back event cannot be handled.
-     */
-    public stepBack(): boolean {
-        if (this.eventIndex <= 1) {
-            // no where to step back to (event 0 is the `OpenFrame` event for the first frame)
-            // and is processed in runtime.start() which is executed only once
-            this.sendEvent(RuntimeEvents.stopOnStep);
-            return false;
-        }
-        let currentEvent = this.trace.events[this.eventIndex - 1];
-        if (currentEvent.type === TraceEventKind.CloseFrame) {
-            // cannot step back into or over function calls
-            this.sendEvent(RuntimeEvents.stopOnStep);
-            return false;
-        } else {
-            this.eventIndex--;
-            if (currentEvent.type === TraceEventKind.Instruction) {
-                let sameLine = this.instruction(currentEvent);
-                if (sameLine) {
-                    this.stepBack();
-                    return true;
-                }
-                this.sendEvent(RuntimeEvents.stopOnStep);
-                return true;
-            } else if (currentEvent.type === TraceEventKind.OpenFrame) {
-                const stackHeight = this.frameStack.frames.length;
-                if (stackHeight <= 0) {
-                    // should never happen but better to signal than crash
-                    throw new Error('Error stepping back to caller function '
-                        + currentEvent.name
-                        + ' as there is no frame on the stack'
-                    );
-                }
-                if (stackHeight <= 1) {
-                    // should never happen as we never step back out of the outermost function
-                    // (never step back to event 0 as per first conditional in this function)
-                    throw new Error('Error stepping back to caller function '
-                        + currentEvent.name
-                        + ' from callee '
-                        + this.frameStack.frames[stackHeight - 1].name
-                        + ' as there would be no frame on the stack afterwards'
-                    );
-                }
-                // pop the top frame from the stack
-                this.frameStack.frames.pop();
-                // cannot simply call stepBack as we are stepping back to the same line
-                // that is now in the current frame, which would result in unintentionally
-                // recursing to previous events
-                if (this.eventIndex <= 1) {
-                    // no where to step back to
-                    this.sendEvent(RuntimeEvents.stopOnStep);
-                    return true; // we actually stepped back just can't step back further
-                }
-                this.eventIndex--;
-                let prevCurrentEvent = this.trace.events[this.eventIndex];
-                if (prevCurrentEvent.type !== TraceEventKind.Instruction) {
-                    throw new Error('Expected an Instruction event before OpenFrame event in function'
-                        + currentEvent.name
-                    );
-                }
-                if (!this.instruction(prevCurrentEvent)) {
-                    // we should be steppping back to the instruction on the same line
-                    // as the one in the current frame
-                    throw new Error('Wrong line of an instruction (at PC ' + prevCurrentEvent.pc + ')'
-                        + ' in the caller function '
-                        + currentEvent.name
-                        + ' to step back to from callee '
-                        + this.frameStack.frames[stackHeight - 1].name
-                        + ' as there would be no frame on the stack afterwards'
-                    );
-                }
-                this.sendEvent(RuntimeEvents.stopOnStep);
-                return true;
-            } else if (currentEvent.type === TraceEventKind.Effect) {
-                // TODO: implement reverting writes when stepping back
-                return this.stepBack();
-            } else {
-                // ignore other events
-                this.stepBack();
-                return true;
-            }
-        }
+        return this.step(next, /* stopAtCloseFrame */ false);
     }
 
     /**
      * Handles "continue" adapter action.
-     * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the continue event cannot be handled.
      */
-    public continue(reverse: boolean): boolean {
-        if (reverse) {
-            while (true) {
-                if (!this.stepBack()) {
-                    return false;
-                }
+    public continue(): ExecutionResult {
+        while (true) {
+            const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ false);
+            if (executionResult === ExecutionResult.TraceEnd ||
+                executionResult === ExecutionResult.Exception) {
+                return executionResult;
             }
-        } else {
-            while (true) {
-                if (this.step(
-                    /* next */ false,
-                    /* stopAtCloseFrame */ false,
-                    /* nextLineSkip */ true)
-                ) {
-                    return true;
+            let currentEvent = this.trace.events[this.eventIndex];
+            if (currentEvent.type === TraceEventKind.Instruction) {
+                const stackHeight = this.frameStack.frames.length;
+                if (stackHeight <= 0) {
+                    throw new Error('No frame on the stack when processing Instruction event on line: '
+                        + currentEvent.loc.line
+                        + ' in column: '
+                        + currentEvent.loc.column);
+                }
+                const currentFrame = this.frameStack.frames[stackHeight - 1];
+                const breakpoints = this.lineBreakpoints.get(currentFrame.file);
+                if (!breakpoints) {
+                    continue;
+                }
+                if (breakpoints.has(currentEvent.loc.line)) {
+                    this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                    return ExecutionResult.Ok;
                 }
             }
         }
+    }
 
+    /**
+     * Sets line breakpoints for a file (resetting any existing ones).
+     *
+     * @param path file path.
+     * @param lines breakpoints lines.
+     * @returns array of booleans indicating if a breakpoint was set on a line.
+     * @throws Error with a descriptive error message if breakpoints cannot be set.
+     */
+    public setLineBreakpoints(path: string, lines: number[]): boolean[] {
+        const breakpoints = new Set<number>();
+        const tracedLines = this.trace.tracedLines.get(path);
+        // Set all breakpoints to invalid and validate the correct ones in the loop,
+        // otherwise let them all be invalid if there are no traced lines.
+        // Valid breakpoints are those that are on lines that have at least
+        // one instruction in the trace on them.
+        const validated = lines.map(() => false);
+        if (tracedLines) {
+            for (let i = 0; i < lines.length; i++) {
+                if (tracedLines.has(lines[i])) {
+                    validated[i] = true;
+                    breakpoints.add(lines[i]);
+                }
+            }
+        }
+        this.lineBreakpoints.set(path, breakpoints);
+        return validated;
     }
 
     /**
@@ -403,32 +600,10 @@ export class Runtime extends EventEmitter {
      * `false` otherwise (so that instructions on the same line can be skipped).
      * @throws Error with a descriptive error message if instruction event cannot be handled.
      */
-    private instruction(instructionEvent: Extract<TraceEvent, { type: TraceEventKind.Instruction }>): boolean {
-        const stackHeight = this.frameStack.frames.length;
-        if (stackHeight <= 0) {
-            throw new Error('No frame on the stack when processing Instruction event at PC: '
-                + instructionEvent.pc);
-        }
-        // newest frame is at the top of the stack
-        const currentFrame = this.frameStack.frames[stackHeight - 1];
-        const currentFun = currentFrame.sourceMap.functions.get(currentFrame.name);
-        if (!currentFun) {
-            throw new Error(`Cannot find function: ${currentFrame.name} in source map`);
-        }
-
-        // if map does not contain an entry for a PC that can be found in the trace file,
-        // it means that the position of the last PC in the source map should be used
-        let currentPCLoc = instructionEvent.pc >= currentFun.pcLocs.length
-            ? currentFun.pcLocs[currentFun.pcLocs.length - 1]
-            : currentFun.pcLocs[instructionEvent.pc];
-
-        if (!currentPCLoc) {
-            throw new Error('Cannot find location for PC: '
-                + instructionEvent.pc
-                + ' in function: '
-                + currentFrame.name);
-        }
-
+    private instruction(
+        currentFrame: IRuntimeStackFrame,
+        instructionEvent: Extract<TraceEvent, { type: TraceEventKind.Instruction }>
+    ): [boolean, number] {
         // if current instruction ends lifetime of a local variable, mark this in the
         // local variable array
         const frameLocalLifetimeEnds = this.trace.localLifetimeEnds.get(currentFrame.id);
@@ -451,13 +626,18 @@ export class Runtime extends EventEmitter {
                 }
             }
         }
+        const loc = instructionEvent.loc;
+        if (instructionEvent.kind === TraceInstructionKind.CALL ||
+            instructionEvent.kind === TraceInstructionKind.CALL_GENERIC) {
+            currentFrame.lastCallInstructionLine = loc.line;
+        }
 
-        if (currentPCLoc.line === currentFrame.line) {
+        if (loc.line === currentFrame.line) {
             // so that instructions on the same line can be bypassed
-            return true;
+            return [true, loc.line];
         } else {
-            currentFrame.line = currentPCLoc.line;
-            return false;
+            currentFrame.line = loc.line;
+            return [false, loc.line];
         }
     }
 
@@ -469,45 +649,46 @@ export class Runtime extends EventEmitter {
      * @param funName function name.
      * @param modInfo information about module containing the function.
      * @param localsTypes types of local variables in the frame.
+     * @param localsNames names of local variables in the frame.
+     * @param optimizedLines lines that are not present in the source map.
      * @returns new frame.
      * @throws Error with a descriptive error message if frame cannot be constructed.
      */
     private newStackFrame(
         frameID: number,
         funName: string,
-        modInfo: ModuleInfo,
-        localsTypes: string[]
+        fileHash: string,
+        localsTypes: string[],
+        localsNames: string[],
+        optimizedLines: number[]
     ): IRuntimeStackFrame {
-        const sourceMap = this.sourceMapsMap.get(JSON.stringify(modInfo));
-
-        if (!sourceMap) {
-            throw new Error('Cannot find source map for module: '
-                + modInfo.name
-                + ' in package: '
-                + modInfo.addr);
-        }
-        const currentFile = this.filesMap.get(sourceMap.fileHash);
+        const currentFile = this.filesMap.get(fileHash);
 
         if (!currentFile) {
-            throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
+            throw new Error(`Cannot find file with hash: ${fileHash}`);
         }
 
         let locals = [];
         // create first scope for local variables
         locals[0] = [];
         const stackFrame: IRuntimeStackFrame = {
-            sourceMap,
             id: frameID,
             name: funName,
             file: currentFile.path,
+            fileHash,
             line: 0, // line will be updated when next event (Instruction) is processed
             localsTypes,
-            locals
+            localsNames,
+            locals,
+            lastCallInstructionLine: undefined,
+            optimizedLines
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
-            this.trace.events[this.eventIndex + 1].type !== TraceEventKind.Instruction) {
-            throw new Error('Expected an Instruction event after OpenFrame event');
+            (this.trace.events[this.eventIndex + 1].type !== TraceEventKind.Instruction &&
+                this.trace.events[this.eventIndex + 1].type !== TraceEventKind.OpenFrame)
+        ) {
+            throw new Error('Expected an Instruction or OpenFrame event after OpenFrame event');
         }
         return stackFrame;
     }
@@ -523,53 +704,225 @@ export class Runtime extends EventEmitter {
             this.emit(event, ...args);
         }, 0);
     }
+
+    /**
+     * Creates a map from a file hash to file information for all Move source files in a directory.
+     *
+     * @param directory path to the directory containing Move source files.
+     * @param filesMap map to update with file information.
+     */
+    private hashToFileMap(directory: string): void {
+        const processDirectory = (dir: string) => {
+            const files = fs.readdirSync(dir);
+            for (const f of files) {
+                const filePath = path.join(dir, f);
+                const stats = fs.statSync(filePath);
+                if (stats.isDirectory()) {
+                    processDirectory(filePath);
+                } else if (path.extname(f) === '.move') {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    const numFileHash = computeFileHash(content);
+                    const lines = content.split('\n');
+                    const fileInfo = { path: filePath, content, lines };
+                    const fileHash = Buffer.from(numFileHash).toString('base64');
+                    this.filesMap.set(fileHash, fileInfo);
+                }
+            }
+        };
+
+        processDirectory(directory);
+    }
+
+    //
+    // Utility functions for testing and debugging.
+    //
+
+    /**
+     * Whitespace used for indentation in the string representation of the runtime.
+     */
+    private singleTab = '  ';
+
+    /**
+     * Returns a string representing the current state of the runtime.
+     *
+     * @returns string representation of the runtime.
+     */
+    public toString(): string {
+        let res = 'current frame stack:\n';
+        for (const frame of this.frameStack.frames) {
+            const fileName = path.basename(frame.file);
+            res += this.singleTab
+                + 'function: '
+                + frame.name
+                + ' ('
+                + fileName
+                + ':'
+                + frame.line
+                + ')\n';
+            for (let i = 0; i < frame.locals.length; i++) {
+                res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
+                for (let j = 0; j < frame.locals[i].length; j++) {
+                    const local = frame.locals[i][j];
+                    if (local) {
+                        res += this.varToString(this.singleTab
+                            + this.singleTab
+                            + this.singleTab, local) + '\n';
+                    }
+                }
+            }
+        }
+        if (this.lineBreakpoints && this.lineBreakpoints.size > 0) {
+            res += 'line breakpoints\n';
+            for (const [file, breakpoints] of this.lineBreakpoints) {
+                res += this.singleTab + path.basename(file) + '\n';
+                for (const line of breakpoints) {
+                    res += this.singleTab + this.singleTab + line + '\n';
+                }
+            }
+        }
+        return res;
+    }
+    /**
+     * Returns a string representation of a runtime variable.
+     *
+     * @param variable runtime variable.
+     * @returns string representation of the variable.
+     */
+    private varToString(tabs: string, variable: IRuntimeVariable): string {
+        return this.valueToString(tabs, variable.value, variable.name, variable.type);
+    }
+
+    /**
+     * Returns a string representation of a runtime compound value.
+     *
+     * @param compoundValue runtime compound value.
+     * @returns string representation of the compound value.
+     */
+    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompoundValue): string {
+        const type = compoundValue.variantName
+            ? compoundValue.type + '::' + compoundValue.variantName
+            : compoundValue.type;
+        let res = '(' + type + ') {\n';
+        for (const [name, value] of compoundValue.fields) {
+            res += this.valueToString(tabs + this.singleTab, value, name);
+        }
+        res += tabs + '}\n';
+        return res;
+    }
+
+    /**
+     * Returns a string representation of a runtime reference value.
+     *
+     * @param refValue runtime reference value.
+     * @param name name of the variable containing reference value.
+     * @param type optional type of the variable containing reference value.
+     * @returns string representation of the reference value.
+     */
+    private refValueToString(
+        tabs: string,
+        refValue: IRuntimeRefValue,
+        name: string,
+        type?: string
+    ): string {
+        let res = '';
+        const frame = this.frameStack.frames.find(frame => frame.id === refValue.loc.frameID);
+        let local = undefined;
+        if (!frame) {
+            return res;
+        }
+        for (const scope of frame.locals) {
+            local = scope[refValue.loc.localIndex];
+            if (local) {
+                break;
+            }
+        }
+        if (!local) {
+            return res;
+        }
+        return this.valueToString(tabs, local.value, name, type);
+    }
+
+    /**
+     * Returns a string representation of a runtime value.
+     *
+     * @param value runtime value.
+     * @param name name of the variable containing the value.
+     * @param type optional type of the variable containing the value.
+     * @returns string representation of the value.
+     */
+    private valueToString(
+        tabs: string,
+        value: RuntimeValueType,
+        name: string,
+        type?: string
+    ): string {
+        let res = '';
+        if (typeof value === 'string') {
+            res += tabs + name + ' : ' + value + '\n';
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+        } else if (Array.isArray(value)) {
+            res += tabs + name + ' : [\n';
+            for (let i = 0; i < value.length; i++) {
+                res += this.valueToString(tabs + this.singleTab, value[i], String(i));
+            }
+            res += tabs + ']\n';
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+            return res;
+        } else if ('fields' in value) {
+            res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+        } else {
+            res += this.refValueToString(tabs, value, name, type);
+        }
+        return res;
+    }
 }
 
 /**
- * Handles a write to a local variable in the current frame.
+ * Handles a write to a local variable in a stack frame.
  *
- * @param currentFrame current frame.
+ * @param frame stack frame frame.
  * @param localIndex variable index in the frame.
  * @param runtimeValue variable value.
  */
 function localWrite(
-    currentFrame: IRuntimeStackFrame,
+    frame: IRuntimeStackFrame,
     localIndex: number,
-    traceValue: TraceValue
+    value: RuntimeValueType
 ): void {
-    if (traceValue.type !== TraceValKind.Runtime) {
-        throw new Error('Expected a RuntimeValue when writing local variable at index: '
-            + localIndex
-            + ' in function: '
-            + currentFrame.name
-            + ' but got: '
-            + traceValue.type);
-    }
-    const type = currentFrame.localsTypes[localIndex];
+    const type = frame.localsTypes[localIndex];
     if (!type) {
         throw new Error('Cannot find type for local variable at index: '
             + localIndex
             + ' in function: '
-            + currentFrame.name);
+            + frame.name);
     }
-    const value = traceValue.value;
-    const funEntry = currentFrame.sourceMap.functions.get(currentFrame.name);
-    if (!funEntry) {
-        throw new Error('Cannot find function entry in source map for function: '
-            + currentFrame.name);
-    }
-    const name = funEntry.localsNames[localIndex];
+    const name = frame.localsNames[localIndex];
     if (!name) {
         throw new Error('Cannot find local variable at index: '
             + localIndex
             + ' in function: '
-            + currentFrame.name);
+            + frame.name);
     }
 
-    const scopesCount = currentFrame.locals.length;
+    if (name.includes('%')) {
+        // don't show "artificial" variables generated by the compiler
+        // for enum and macro execution as they would be quite confusing
+        // for the user without knowing compilation internals
+        return;
+    }
+
+
+    const scopesCount = frame.locals.length;
     if (scopesCount <= 0) {
-        throw new Error("There should be at least one variable scope in functon"
-            + currentFrame.name);
+        throw new Error("There should be at least one variable scope in function"
+            + frame.name);
     }
     // If a variable has the same name but a different index (it is shadowed)
     // it has to be put in a different scope (e.g., locals[1], locals[2], etc.).
@@ -577,7 +930,7 @@ function localWrite(
     // the outermost one
     let existingVarScope = -1;
     for (let i = scopesCount - 1; i >= 0; i--) {
-        const existingVarIndex = currentFrame.locals[i].findIndex(runtimeVar => {
+        const existingVarIndex = frame.locals[i].findIndex(runtimeVar => {
             return runtimeVar && runtimeVar.name === name;
         });
         if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
@@ -586,14 +939,14 @@ function localWrite(
         }
     }
     if (existingVarScope >= 0) {
-        const shadowedScope = currentFrame.locals[existingVarScope + 1];
+        const shadowedScope = frame.locals[existingVarScope + 1];
         if (!shadowedScope) {
-            currentFrame.locals.push([]);
+            frame.locals.push([]);
         }
-        currentFrame.locals[existingVarScope + 1][localIndex] = { name, value, type };
+        frame.locals[existingVarScope + 1][localIndex] = { name, value, type };
     } else {
         // put variable in the "main" locals scope
-        currentFrame.locals[0][localIndex] = { name, value, type };
+        frame.locals[0][localIndex] = { name, value, type };
     }
 }
 
@@ -639,38 +992,11 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
 }
 
 /**
- * Creates a map from a file hash to file information for all Move source files in a directory.
- *
- * @param directory path to the directory containing Move source files.
- * @param filesMap map to update with file information.
- */
-function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>): void {
-    const processDirectory = (dir: string) => {
-        const files = fs.readdirSync(dir);
-        for (const f of files) {
-            const filePath = path.join(dir, f);
-            const stats = fs.statSync(filePath);
-            if (stats.isDirectory()) {
-                processDirectory(filePath);
-            } else if (path.extname(f) === '.move') {
-                const content = fs.readFileSync(filePath, 'utf8');
-                const hash = fileHash(content);
-                const lines = content.split('\n');
-                const fileInfo = { path: filePath, content, lines };
-                filesMap.set(Buffer.from(hash).toString('base64'), fileInfo);
-            }
-        }
-    };
-
-    processDirectory(directory);
-}
-
-/**
  * Computes the SHA-256 hash of a file's contents.
  *
  * @param fileContents contents of the file.
  */
-function fileHash(fileContents: string): Uint8Array {
+function computeFileHash(fileContents: string): Uint8Array {
     const hash = crypto.createHash('sha256').update(fileContents).digest();
     return new Uint8Array(hash);
 }

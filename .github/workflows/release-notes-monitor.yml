@@ -100,22 +100,11 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       with:
         channel-id: '#ext-mysten-release-notes'
-        payload: |
-          {
-            "text": "PR *${{ matrix.pr }}* Release Notes",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ env.release_notes }}"
-                }
-              },
-              {
-                "type": "divider"
-              }
-            ]
-          }
+        slack-message: |
+          <@U03LRLPR1QX> and <@U04A8V9E203>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
+          *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>
+          *Release Notes:*
+          ${{ env.release_notes }}
 
   tag:
     name: Adding git tag to processed commit

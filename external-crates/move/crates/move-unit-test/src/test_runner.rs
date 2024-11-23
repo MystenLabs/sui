@@ -30,6 +30,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
+use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
@@ -51,6 +52,7 @@ pub struct SharedTestingConfig {
     prng_seed: Option<u64>,
     num_iters: u64,
     deterministic_generation: bool,
+    trace_location: Option<String>,
 }
 
 pub struct TestRunner {
@@ -112,12 +114,24 @@ impl TestRunner {
         prng_seed: Option<u64>,
         num_iters: u64,
         deterministic_generation: bool,
+        trace_location: Option<String>,
         tests: TestPlan,
         // TODO: maybe we should require the clients to always pass in a list of native functions so
         // we don't have to make assumptions about their gas parameters.
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
     ) -> Result<Self> {
+        // If we want to trace the execution, check that the tracing compilation feature is
+        // enabled, otherwise we won't generate a trace.
+        move_vm_profiler::tracing_feature_disabled! {
+            if trace_location.is_some() {
+                return Err(anyhow::anyhow!(
+                    "Tracing is enabled but the binary was not compiled with the `tracing` \
+                     feature flag set. Rebuild binary with `--features tracing`"
+                ));
+            }
+        };
+
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state =
             setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
@@ -143,6 +157,7 @@ impl TestRunner {
                 prng_seed,
                 num_iters,
                 deterministic_generation,
+                trace_location,
             },
             num_threads,
             tests,
@@ -247,10 +262,18 @@ impl SharedTestingConfig {
     ) {
         let move_vm = MoveVM::new(self.native_function_table.clone()).unwrap();
         let extensions = extensions::new_extensions();
+
+        let mut move_tracer = MoveTraceBuilder::new();
+        let tracer = if self.trace_location.is_some() {
+            Some(&mut move_tracer)
+        } else {
+            None
+        };
+
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             use move_vm_types::gas::GasMeter;
             gas_meter.set_profiler(GasProfiler::init_default_cfg(
@@ -260,15 +283,16 @@ impl SharedTestingConfig {
         }
 
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
-
         let now = Instant::now();
-        let serialized_return_values_result = session.execute_function_bypass_visibility(
-            &test_plan.module_id,
-            IdentStr::new(function_name).unwrap(),
-            vec![], // no ty args, at least for now
-            serialize_values(arguments.iter()),
-            &mut gas_meter,
-        );
+        let serialized_return_values_result = session
+            .execute_function_bypass_visibility_with_tracer_if_enabled(
+                &test_plan.module_id,
+                IdentStr::new(function_name).unwrap(),
+                vec![], // no ty args, at least for now
+                serialize_values(arguments.iter()),
+                &mut gas_meter,
+                tracer,
+            );
         let mut return_result = serialized_return_values_result.map(|res| {
             res.return_values
                 .into_iter()
@@ -280,6 +304,11 @@ impl SharedTestingConfig {
                 err.remove_exec_state();
             }
         }
+        let trace = if self.trace_location.is_some() {
+            Some(move_tracer.into_trace())
+        } else {
+            None
+        };
         let test_run_info = TestRunInfo::new(
             now.elapsed(),
             // TODO(Gas): This doesn't look quite right...
@@ -288,6 +317,7 @@ impl SharedTestingConfig {
                 .checked_sub(gas_meter.remaining_gas())
                 .unwrap()
                 .into(),
+            trace,
         );
         match session.finish_with_extensions().0 {
             Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
@@ -406,6 +436,25 @@ impl SharedTestingConfig {
     ) -> bool {
         let (_cs_result, _ext_result, exec_result, test_run_info) =
             self.execute_via_move_vm(test_plan, function_name, arguments);
+
+        // Save the trace -- one per test -- for each test that we have traced (and if tracing is
+        // enabled).
+        if let Some(location) = &self.trace_location {
+            let trace_file_location = format!(
+                "{}/{}__{}{}.json",
+                location,
+                format_module_id(output.test_info, &output.test_plan.module_id).replace("::", "__"),
+                function_name,
+                if let Some(seed) = prng_seed {
+                    format!("_seed_{}", seed)
+                } else {
+                    "".to_string()
+                }
+            );
+            if let Err(e) = test_run_info.save_trace(&trace_file_location) {
+                eprintln!("Unable to save trace to {trace_file_location} -- {:?}", e);
+            }
+        }
 
         match exec_result {
             Err(err) => {

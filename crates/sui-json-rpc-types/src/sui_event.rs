@@ -23,7 +23,6 @@ use tabled::settings::Style as TableStyle;
 use crate::{type_and_fields_from_move_event_data, Page};
 use sui_types::sui_serde::SuiStructTag;
 
-#[cfg(any(feature = "test-utils", test))]
 use std::str::FromStr;
 
 pub type EventPage = Page<SuiEvent, EventID>;
@@ -154,7 +153,6 @@ impl Display for SuiEvent {
     }
 }
 
-#[cfg(any(feature = "test-utils", test))]
 impl SuiEvent {
     pub fn random_for_testing() -> Self {
         Self {
@@ -205,6 +203,10 @@ fn try_into_byte(v: &Value) -> Option<u8> {
 pub enum EventFilter {
     /// Return all events.
     All([Box<EventFilter>; 0]),
+
+    /// Return events that match any of the given filters. Only supported on event subscriptions.
+    Any(Vec<EventFilter>),
+
     /// Query by sender address.
     Sender(SuiAddress),
     /// Return events emitted by the given transaction.
@@ -263,6 +265,7 @@ impl Filter<SuiEvent> for EventFilter {
         let _scope = monitored_scope("EventFilter::matches");
         match self {
             EventFilter::All([]) => true,
+            EventFilter::Any(filters) => filters.iter().any(|f| f.matches(item)),
             EventFilter::MoveEventType(event_type) => &item.type_ == event_type,
             EventFilter::Sender(sender) => &item.sender == sender,
             EventFilter::MoveModule { package, module } => {

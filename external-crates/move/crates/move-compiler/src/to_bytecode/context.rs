@@ -27,7 +27,7 @@ pub type DatatypeDeclarations =
 /// Compilation context for a single compilation unit (module).
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
-    pub env: &'a mut CompilationEnv,
+    pub env: &'a CompilationEnv,
     current_package: Option<Symbol>,
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
@@ -36,7 +36,7 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     pub fn new(
-        env: &'a mut CompilationEnv,
+        env: &'a CompilationEnv,
         current_package: Option<Symbol>,
         current_module: Option<&'a ModuleIdent>,
     ) -> Self {

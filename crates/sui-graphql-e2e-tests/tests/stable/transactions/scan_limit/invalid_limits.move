@@ -44,7 +44,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(first: 0 scanLimit: 2 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 0 scanLimit: 2 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -67,7 +67,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(first: 2 scanLimit: 0 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 scanLimit: 0 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -90,7 +90,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(first: 0 scanLimit: 0 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 0 scanLimit: 0 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -113,7 +113,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(first: 0 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 0 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage

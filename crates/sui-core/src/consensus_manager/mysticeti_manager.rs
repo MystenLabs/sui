@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
+use consensus_core::{CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority};
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
@@ -48,6 +48,7 @@ pub struct MysticetiManager {
     client: Arc<LazyMysticetiClient>,
     // TODO: switch to parking_lot::Mutex.
     consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
+    consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
 }
 
 impl MysticetiManager {
@@ -72,6 +73,7 @@ impl MysticetiManager {
             client,
             consensus_handler: Mutex::new(None),
             boot_counter: Mutex::new(0),
+            consumer_monitor: ArcSwapOption::empty(),
         }
     }
 
@@ -128,14 +130,9 @@ impl ConsensusManagerTrait for MysticetiManager {
             .consensus_config()
             .expect("consensus_config should exist");
 
-        let mut parameters = Parameters {
+        let parameters = Parameters {
             db_path: self.get_store_path(epoch),
             ..consensus_config.parameters.clone().unwrap_or_default()
-        };
-
-        // Disable the automated last known block sync for mainnet for now
-        if epoch_store.get_chain_identifier().chain() == sui_protocol_config::Chain::Mainnet {
-            parameters.sync_last_known_own_block_timeout = Duration::ZERO;
         };
 
         let own_protocol_key = self.protocol_keypair.public();
@@ -151,7 +148,30 @@ impl ConsensusManagerTrait for MysticetiManager {
             CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);
         let monitor = commit_consumer.monitor();
 
-        let boot_counter = *self.boot_counter.lock().await;
+        // If there is a previous consumer monitor, it indicates that the consensus engine has been restarted, due to an epoch change. However, that on its
+        // own doesn't tell us much whether it participated on an active epoch or an old one. We need to check if it has handled any commits to determine this.
+        // If indeed any commits did happen, then we assume that node did participate on previous run.
+        let participated_on_previous_run =
+            if let Some(previous_monitor) = self.consumer_monitor.swap(Some(monitor.clone())) {
+                previous_monitor.highest_handled_commit() > 0
+            } else {
+                false
+            };
+
+        // Increment the boot counter only if the consensus successfully participated in the previous run.
+        // This is typical during normal epoch changes, where the node restarts as expected, and the boot counter is incremented to prevent amnesia recovery on the next start.
+        // If the node is recovering from a restore process and catching up across multiple epochs, it won't handle any commits until it reaches the last active epoch.
+        // In this scenario, we do not increment the boot counter, as we need amnesia recovery to run.
+        let mut boot_counter = self.boot_counter.lock().await;
+        if participated_on_previous_run {
+            *boot_counter += 1;
+        } else {
+            info!(
+                "Node has not participated in previous run. Boot counter will not increment {}",
+                *boot_counter
+            );
+        }
+
         let authority = ConsensusAuthority::start(
             network_type,
             own_index,
@@ -163,14 +183,10 @@ impl ConsensusManagerTrait for MysticetiManager {
             Arc::new(tx_validator.clone()),
             commit_consumer,
             registry.clone(),
-            boot_counter,
+            *boot_counter,
         )
         .await;
         let client = authority.transaction_client();
-
-        // Now increment the boot counter
-        let mut boot_counter = self.boot_counter.lock().await;
-        *boot_counter += 1;
 
         let registry_id = self.registry_service.add(registry.clone());
 
@@ -193,6 +209,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             transaction_receiver,
             monitor,
         );
+
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
 

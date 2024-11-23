@@ -15,8 +15,9 @@ use std::time::Instant;
 
 use once_cell::sync::OnceCell;
 use prometheus::{
-    register_histogram_with_registry, register_int_gauge_vec_with_registry, Histogram, IntGaugeVec,
-    Registry, TextEncoder,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, Histogram, IntCounterVec, IntGaugeVec, Registry,
+    TextEncoder,
 };
 use tap::TapFallible;
 use tracing::{warn, Span};
@@ -69,6 +70,7 @@ pub struct Metrics {
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
     pub thread_stall_duration_sec: Histogram,
+    pub system_invariant_violations: IntCounterVec,
 }
 
 impl Metrics {
@@ -143,6 +145,12 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
+            system_invariant_violations: register_int_counter_vec_with_registry!(
+                "system_invariant_violations",
+                "Number of system invariant violations",
+                &["name"],
+                registry,
+            ).unwrap(),
         }
     }
 }

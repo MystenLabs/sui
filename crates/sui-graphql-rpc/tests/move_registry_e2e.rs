@@ -12,10 +12,10 @@ use sui_graphql_rpc::{
     },
 };
 use sui_graphql_rpc_client::simple_client::SimpleClient;
-use sui_indexer::tempdb::get_available_port;
 use sui_json_rpc::name_service::{Domain, DomainFormat};
 use sui_json_rpc_types::ObjectChange;
 use sui_move_build::BuildConfig;
+use sui_pg_temp_db::get_available_port;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,
@@ -215,16 +215,12 @@ fn test_results(
     );
 
     assert_eq!(
-        query_result["data"]["v1_type"]["layout"]["struct"]["type"]
-            .as_str()
-            .unwrap(),
+        query_result["data"]["v1_type"]["repr"].as_str().unwrap(),
         format!("{}{}", v1, DEMO_TYPE)
     );
 
     assert_eq!(
-        query_result["data"]["v2_type"]["layout"]["struct"]["type"]
-            .as_str()
-            .unwrap(),
+        query_result["data"]["v2_type"]["repr"].as_str().unwrap(),
         format!("{}{}", v2, DEMO_TYPE_V2)
     );
 
@@ -233,6 +229,13 @@ fn test_results(
             .as_str()
             .unwrap(),
         format!("{}{}", v3, DEMO_TYPE_V3)
+    );
+
+    assert_eq!(
+        query_result["data"]["v3_type"]["layout"]["struct"]["type"]
+            .as_str()
+            .unwrap(),
+        query_result["data"]["v3_type"]["repr"].as_str().unwrap()
     );
 }
 
@@ -519,5 +522,5 @@ fn name_query(name: &str) -> String {
 }
 
 fn type_query(named_type: &str) -> String {
-    format!(r#"typeByName(name: "{}") {{ layout }}"#, named_type)
+    format!(r#"typeByName(name: "{}") {{ layout, repr }}"#, named_type)
 }

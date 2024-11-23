@@ -21,7 +21,7 @@ itertools.workspace = true
 
 shellexpand.workspace = true
 
-sui-types = { workspace = true, features = ["test-utils"]}
+sui-types.workspace = true
 sui-keys.workspace = true
 sui-sdk.workspace = true
 telemetry-subscribers.workspace = true

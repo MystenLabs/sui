@@ -160,6 +160,10 @@ where
                 if let Some(action) = bridge_event
                     .try_into_bridge_action(sui_event.id.tx_digest, sui_event.id.event_seq as u16)
                 {
+                    metrics.last_observed_actions_seq_num.with_label_values(&[
+                        action.chain_id().to_string().as_str(),
+                        action.action_type().to_string().as_str(),
+                    ]);
                     actions.push(action);
                 }
             }
@@ -238,7 +242,13 @@ where
                     .expect("Sending event to monitor channel should not fail");
 
                 match bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx) {
-                    Ok(Some(action)) => actions.push(action),
+                    Ok(Some(action)) => {
+                        metrics.last_observed_actions_seq_num.with_label_values(&[
+                            action.chain_id().to_string().as_str(),
+                            action.action_type().to_string().as_str(),
+                        ]);
+                        actions.push(action)
+                    }
                     Ok(None) => {}
                     Err(e) => {
                         error!(eth_tx_hash=?log.tx_hash, eth_event_index=?log.log_index_in_tx, "Error converting EthBridgeEvent to BridgeAction: {:?}", e);

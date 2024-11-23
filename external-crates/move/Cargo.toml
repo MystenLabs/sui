@@ -76,7 +76,6 @@ memory-stats = "1.0.0"
 mirai-annotations = "1.10.1"
 named-lock = "0.2.0"
 num = "0.4.0"
-num-bigint = "0.4.0"
 num_cpus = "1.13.0"
 once_cell = "1.7.2"
 ouroboros = "0.17.2"
@@ -93,7 +92,7 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 quote = "1.0.9"
 rand = "0.8.0"
-rayon = "1.5.0"
+rayon = "1.10.0"
 ref-cast = "1.0.6"
 regex = "1.5.5"
 ripemd160 = "0.9.1"
@@ -140,6 +139,7 @@ module-generation = { path = "crates/module-generation" }
 move-abstract-interpreter = { path = "crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "crates/move-abstract-stack" }
 move-binary-format = { path = "crates/move-binary-format" }
+move-trace-format = { path = "crates/move-trace-format" }
 move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }

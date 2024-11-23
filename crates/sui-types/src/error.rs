@@ -412,8 +412,9 @@ pub enum SuiError {
     },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-    #[error("Transaction certificate processing failed: {err}")]
-    ErrorWhileProcessingCertificate { err: String },
+    #[allow(non_camel_case_types)]
+    #[error("DEPRECATED")]
+    DEPRECATED_ErrorWhileProcessingCertificate,
     #[error(
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
@@ -809,6 +810,7 @@ impl SuiError {
             SuiError::ValidatorHaltedAtEpochEnd => true,
             SuiError::MissingCommitteeAtEpoch(..) => true,
             SuiError::WrongEpoch { .. } => true,
+            SuiError::EpochEnded(..) => true,
 
             SuiError::UserInputError { error } => {
                 match error {

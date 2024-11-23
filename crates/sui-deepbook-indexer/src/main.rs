@@ -14,11 +14,12 @@ use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_deepbook_indexer::config::IndexerConfig;
 use sui_deepbook_indexer::metrics::DeepBookIndexerMetrics;
 use sui_deepbook_indexer::postgres_manager::get_connection_pool;
-use sui_deepbook_indexer::sui_datasource::SuiCheckpointDatasource;
+use sui_deepbook_indexer::server::run_server;
 use sui_deepbook_indexer::sui_deepbook_indexer::PgDeepbookPersistent;
 use sui_deepbook_indexer::sui_deepbook_indexer::SuiDeepBookDataMapper;
 use sui_indexer_builder::indexer_builder::IndexerBuilder;
 use sui_indexer_builder::progress::{OutOfOrderSaveAfterDurationPolicy, ProgressSavingPolicy};
+use sui_indexer_builder::sui_datasource::SuiCheckpointDatasource;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectID;
 use tracing::info;
@@ -82,8 +83,13 @@ async fn main() -> Result<()> {
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.deepbook_genesis_checkpoint,
         ingestion_metrics.clone(),
-        indexer_meterics.clone(),
+        Box::new(indexer_meterics.clone()),
     );
+
+    let service_address =
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.service_port);
+    run_server(service_address, datastore.clone());
+
     let indexer = IndexerBuilder::new(
         "SuiDeepBookIndexer",
         sui_checkpoint_datasource,

@@ -238,7 +238,7 @@ impl<C: NetworkClient> RoundProber<C> {
             .set_propagation_delay_and_quorum_rounds(propagation_delay, quorum_rounds.clone())
         {
             tracing::warn!(
-                "Failed to set propagation delay {propagation_delay} on Core: {:?}",
+                "Failed to set propagation delay and quorum rounds {quorum_rounds:?} on Core: {:?}",
                 e
             );
         }

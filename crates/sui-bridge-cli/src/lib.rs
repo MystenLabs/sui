@@ -540,6 +540,8 @@ pub enum BridgeClientCommands {
     ClaimOnEth {
         #[clap(long)]
         seq_num: u64,
+        #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
+        dry_run: bool,
     },
 }
 
@@ -575,8 +577,8 @@ impl BridgeClientCommands {
                 );
                 Ok(())
             }
-            BridgeClientCommands::ClaimOnEth { seq_num } => {
-                claim_on_eth(seq_num, config, sui_bridge_client)
+            BridgeClientCommands::ClaimOnEth { seq_num, dry_run } => {
+                claim_on_eth(seq_num, config, sui_bridge_client, dry_run)
                     .await
                     .map_err(|e| anyhow!("{:?}", e))
             }
@@ -680,6 +682,7 @@ async fn claim_on_eth(
     seq_num: u64,
     config: &LoadedBridgeCliConfig,
     sui_bridge_client: SuiBridgeClient,
+    dry_run: bool,
 ) -> BridgeResult<()> {
     let sui_chain_id = sui_bridge_client.get_bridge_summary().await?.chain_id;
     let parsed_message = sui_bridge_client
@@ -709,8 +712,20 @@ async fn claim_on_eth(
     );
     let message = eth_sui_bridge::Message::from(parsed_message);
     let tx = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
-    let _eth_claim_tx_receipt = tx.send().await.unwrap().await.unwrap().unwrap();
-    info!("Sui to Eth bridge transfer claimed");
+    if dry_run {
+        let tx = tx.tx;
+        let resp = config.eth_signer.estimate_gas(&tx, None).await;
+        println!(
+            "Sui to Eth bridge transfer claim dry run result: {:?}",
+            resp
+        );
+    } else {
+        let eth_claim_tx_receipt = tx.send().await.unwrap().await.unwrap().unwrap();
+        println!(
+            "Sui to Eth bridge transfer claimed: {:?}",
+            eth_claim_tx_receipt
+        );
+    }
     Ok(())
 }
 

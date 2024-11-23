@@ -214,7 +214,7 @@ mod tests {
         let checkpoint = sim.create_checkpoint();
         let checkpoint_data = sim.get_checkpoint_data(
             checkpoint.clone(),
-            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)?
+            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();

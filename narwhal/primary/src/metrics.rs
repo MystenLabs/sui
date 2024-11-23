@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
+use network::metrics::NetworkMetrics;
 use prometheus::{
     core::{AtomicI64, GenericGauge},
     default_registry, linear_buckets, register_histogram_vec_with_registry,
@@ -22,7 +22,6 @@ pub(crate) struct Metrics {
     pub(crate) outbound_network_metrics: Option<NetworkMetrics>,
     pub(crate) primary_channel_metrics: Option<PrimaryChannelMetrics>,
     pub(crate) node_metrics: Option<PrimaryMetrics>,
-    pub(crate) network_connection_metrics: Option<NetworkConnectionMetrics>,
 }
 
 /// Initialises the metrics
@@ -37,15 +36,11 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // Essential/core metrics across the primary node
     let node_metrics = PrimaryMetrics::new(metrics_registry);
 
-    // Network metrics for the primary connection
-    let network_connection_metrics = NetworkConnectionMetrics::new("primary", metrics_registry);
-
     Metrics {
         node_metrics: Some(node_metrics),
         primary_channel_metrics: Some(primary_channel_metrics),
         inbound_network_metrics: Some(inbound_network_metrics),
         outbound_network_metrics: Some(outbound_network_metrics),
-        network_connection_metrics: Some(network_connection_metrics),
     }
 }
 

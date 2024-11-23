@@ -323,9 +323,8 @@ impl Query {
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
-        TransactionBlock::query(ctx, digest, checkpoint)
-            .await
-            .extend()
+        let lookup = TransactionBlock::by_digest(digest, checkpoint);
+        TransactionBlock::query(ctx, lookup).await.extend()
     }
 
     /// The coin objects that exist in the network.
@@ -581,7 +580,8 @@ impl Query {
         Ok(type_tag.into())
     }
 
-    /// The coin metadata associated with the given coin type.
+    /// The coin metadata associated with the given coin type. Note that if the latest version of
+    /// the coin's metadata is wrapped or deleted, it will not be found.
     async fn coin_metadata(
         &self,
         ctx: &Context<'_>,

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
         DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, TargetKind,
@@ -24,6 +24,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -33,6 +34,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: NamingProgramInfo,
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub inner: Program_,
 }
 
@@ -358,7 +361,7 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
-    Dot(Box<ExpDotted>, Field),
+    Dot(Box<ExpDotted>, /* dot loation */ Loc, Field),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
     DotAutocomplete(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
@@ -417,6 +420,7 @@ pub enum Exp_ {
     ),
     MethodCall(
         ExpDotted,
+        Loc, // location of the dot
         Name,
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
@@ -426,7 +430,7 @@ pub enum Exp_ {
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
-    IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
@@ -755,12 +759,10 @@ impl BuiltinFunction_ {
 }
 
 impl TypeName_ {
-    pub fn is(
-        &self,
-        address: impl AsRef<str>,
-        module: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> bool {
+    pub fn is<Addr>(&self, address: &Addr, module: impl AsRef<str>, name: impl AsRef<str>) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             TypeName_::Builtin(_) | TypeName_::Multiple(_) => false,
             TypeName_::ModuleType(mident, n) => {
@@ -892,12 +894,10 @@ impl Type_ {
         }
     }
 
-    pub fn is(
-        &self,
-        address: impl AsRef<str>,
-        module: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> bool {
+    pub fn is<Addr>(&self, address: &Addr, module: impl AsRef<str>, name: impl AsRef<str>) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         self.type_name()
             .is_some_and(|tn| tn.value.is(address, module, name))
     }
@@ -1636,7 +1636,7 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, _, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", f));
                 if is_macro.is_some() {
@@ -1704,13 +1704,15 @@ impl AstDebug for Exp_ {
                 });
                 w.write("}");
             }
-            E::IfElse(b, t, f) => {
+            E::IfElse(b, t, f_opt) => {
                 w.write("if (");
                 b.ast_debug(w);
                 w.write(") ");
                 t.ast_debug(w);
-                w.write(" else ");
-                f.ast_debug(w);
+                if let Some(f) = f_opt {
+                    w.write(" else ");
+                    f.ast_debug(w);
+                }
             }
             E::Match(subject, arms) => {
                 w.write("match (");
@@ -1887,7 +1889,7 @@ impl AstDebug for ExpDotted_ {
         use ExpDotted_ as D;
         match self {
             D::Exp(e) => e.ast_debug(w),
-            D::Dot(e, n) => {
+            D::Dot(e, _, n) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n))
             }

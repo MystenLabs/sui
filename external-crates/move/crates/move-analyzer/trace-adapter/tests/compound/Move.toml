@@ -1,0 +1,10 @@
+[package]
+name = "compound"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+compound = "0x0"
+std = "0x1"

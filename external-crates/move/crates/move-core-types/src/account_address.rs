@@ -32,6 +32,14 @@ impl AccountAddress {
     /// Hex address: 0x2
     pub const TWO: Self = Self::get_hex_address_two();
 
+    pub const fn from_suffix(suffix: u16) -> AccountAddress {
+        let mut addr = [0u8; AccountAddress::LENGTH];
+        let [hi, lo] = suffix.to_be_bytes();
+        addr[AccountAddress::LENGTH - 2] = hi;
+        addr[AccountAddress::LENGTH - 1] = lo;
+        AccountAddress::new(addr)
+    }
+
     const fn get_hex_address_one() -> Self {
         let mut addr = [0u8; AccountAddress::LENGTH];
         addr[AccountAddress::LENGTH - 1] = 1u8;

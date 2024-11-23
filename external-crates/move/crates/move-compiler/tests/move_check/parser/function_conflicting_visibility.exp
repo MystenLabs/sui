@@ -6,14 +6,6 @@ error[E02001]: duplicate declaration, item, or annotation
   │     │               
   │     'public' modifier previously given here
 
-error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
-  │
-2 │     public(friend) public(package) fun t0() {}
-  │                    ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-  │
-  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
 error[E02016]: invalid visibility modifier
    ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
    │
@@ -22,6 +14,14 @@ error[E02016]: invalid visibility modifier
    ·
 11 │     public(friend) public(friend) fun s2() {}
    │                    -------------- 'friend' visibility used here
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:2:20
+  │
+2 │     public(friend) public(package) fun t0() {}
+  │                    ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/function_conflicting_visibility.move:3:21
@@ -47,14 +47,6 @@ error[E02001]: duplicate declaration, item, or annotation
   │     │       
   │     'public' modifier previously given here
 
-error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
-  │
-4 │     public public(package) fun t2() {}
-  │            ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-  │
-  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
 error[E02016]: invalid visibility modifier
    ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
    │
@@ -63,6 +55,14 @@ error[E02016]: invalid visibility modifier
    ·
 11 │     public(friend) public(friend) fun s2() {}
    │                    -------------- 'friend' visibility used here
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/function_conflicting_visibility.move:4:12
+  │
+4 │     public public(package) fun t2() {}
+  │            ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/function_conflicting_visibility.move:5:21
@@ -113,14 +113,6 @@ error[E02001]: duplicate declaration, item, or annotation
    │     │                
    │     'public' modifier previously given here
 
-error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
-   │
-10 │     public(package) public(package) fun s1() {}
-   │                     ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-   │
-   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
 error[E02016]: invalid visibility modifier
    ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
    │
@@ -128,6 +120,14 @@ error[E02016]: invalid visibility modifier
    │                     ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module
 11 │     public(friend) public(friend) fun s2() {}
    │                    -------------- 'friend' visibility used here
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/function_conflicting_visibility.move:10:21
+   │
+10 │     public(package) public(package) fun s1() {}
+   │                     ^^^^^^^^^^^^^^^ 'public(package)' is not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/parser/function_conflicting_visibility.move:11:20

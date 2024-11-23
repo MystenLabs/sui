@@ -10,6 +10,7 @@ use sui_bridge::events::{
     UpdateRouteLimitEvent, UpdateTokenPriceEvent,
 };
 use sui_indexer_builder::indexer_builder::DataMapper;
+use sui_indexer_builder::sui_datasource::CheckpointTxnData;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
@@ -17,7 +18,6 @@ use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID};
 
 use crate::metrics::BridgeIndexerMetrics;
-use crate::sui_datasource::CheckpointTxnData;
 use crate::{
     BridgeDataSource, GovernanceAction, GovernanceActionType, ProcessedTxnData, SuiTxnError,
     TokenTransfer, TokenTransferData, TokenTransferStatus,

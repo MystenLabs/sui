@@ -10,15 +10,14 @@ use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
 use sui_core::execution_cache::ObjectCacheRead;
+use sui_core::jsonrpc_index::TotalBalance;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiObjectDataFilter, TransactionFilter,
 };
-use sui_storage::indexes::TotalBalance;
 use sui_storage::key_value_store::{
-    KVStoreCheckpointData, KVStoreTransactionData, TransactionKeyValueStore,
-    TransactionKeyValueStoreTrait,
+    KVStoreTransactionData, TransactionKeyValueStore, TransactionKeyValueStoreTrait,
 };
 use sui_types::base_types::{
     MoveObjectType, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -60,14 +59,6 @@ pub trait StateRead: Send + Sync {
         effects: &[TransactionDigest],
         events: &[TransactionEventsDigest],
     ) -> StateReadResult<KVStoreTransactionData>;
-
-    async fn multi_get_checkpoints(
-        &self,
-        checkpoint_summaries: &[CheckpointSequenceNumber],
-        checkpoint_contents: &[CheckpointSequenceNumber],
-        checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
-    ) -> StateReadResult<KVStoreCheckpointData>;
 
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead>;
 
@@ -176,7 +167,7 @@ pub trait StateRead: Send + Sync {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>>;
@@ -257,31 +248,12 @@ impl StateRead for AuthorityState {
         )
     }
 
-    async fn multi_get_checkpoints(
-        &self,
-        checkpoint_summaries: &[CheckpointSequenceNumber],
-        checkpoint_contents: &[CheckpointSequenceNumber],
-        checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
-    ) -> StateReadResult<KVStoreCheckpointData> {
-        Ok(
-            <AuthorityState as TransactionKeyValueStoreTrait>::multi_get_checkpoints(
-                self,
-                checkpoint_summaries,
-                checkpoint_contents,
-                checkpoint_summaries_by_digest,
-                checkpoint_contents_by_digest,
-            )
-            .await?,
-        )
-    }
-
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead> {
         Ok(self.get_object_read(object_id)?)
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> StateReadResult<Option<Object>> {
-        Ok(self.get_object(object_id).await?)
+        Ok(self.get_object(object_id).await)
     }
 
     fn get_past_object_read(
@@ -448,15 +420,15 @@ impl StateRead for AuthorityState {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>> {
         Ok(self
             .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
-            .map(|(coin_type, coin_object_id, coin)| SuiCoin {
-                coin_type,
-                coin_object_id,
+            .map(|(key, coin)| SuiCoin {
+                coin_type: key.coin_type,
+                coin_object_id: key.object_id,
                 version: coin.version,
                 digest: coin.digest,
                 balance: coin.balance,
@@ -527,7 +499,7 @@ impl StateRead for AuthorityState {
     ) -> StateReadResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
         Ok(self
             .get_checkpoint_cache()
-            .deprecated_multi_get_transaction_checkpoint(digests)?)
+            .deprecated_multi_get_transaction_checkpoint(digests))
     }
 
     fn deprecated_get_transaction_checkpoint(
@@ -536,7 +508,7 @@ impl StateRead for AuthorityState {
     ) -> StateReadResult<Option<(EpochId, CheckpointSequenceNumber)>> {
         Ok(self
             .get_checkpoint_cache()
-            .deprecated_get_transaction_checkpoint(digest)?)
+            .deprecated_get_transaction_checkpoint(digest))
     }
 
     fn multi_get_checkpoint_by_sequence_number(
@@ -589,7 +561,7 @@ impl<S: ?Sized + StateRead> ObjectProvider for Arc<S> {
     ) -> Result<Option<Object>, Self::Error> {
         Ok(self
             .get_cache_reader()
-            .find_object_lt_or_eq_version(*id, *version)?)
+            .find_object_lt_or_eq_version(*id, *version))
     }
 }
 
@@ -622,7 +594,7 @@ impl<S: ?Sized + StateRead> ObjectProvider for (Arc<S>, Arc<TransactionKeyValueS
         Ok(self
             .0
             .get_cache_reader()
-            .find_object_lt_or_eq_version(*id, *version)?)
+            .find_object_lt_or_eq_version(*id, *version))
     }
 }
 

@@ -3,8 +3,9 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
-use sui_indexer::config::{Command, UploadOptions};
+use sui_indexer::config::{Command, RetentionConfig, UploadOptions};
 use sui_indexer::database::ConnectionPool;
+use sui_indexer::db::setup_postgres::clear_database;
 use sui_indexer::db::{
     check_db_migration_consistency, check_prunable_tables_valid, reset_database, run_migrations,
 };
@@ -44,10 +45,20 @@ async fn main() -> anyhow::Result<()> {
             snapshot_config,
             pruning_options,
             upload_options,
+            mvr_mode,
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
-            let retention_config = pruning_options.load_from_file();
+
+            let retention_config = if mvr_mode {
+                warn!("Indexer in MVR mode is configured to prune `objects_history` to 2 epochs. The other tables have a 2000 epoch retention.");
+                Some(RetentionConfig {
+                    epochs_to_keep: 2000, // epochs, roughly 5+ years. We really just care about pruning `objects_history` per the default 2 epochs.
+                    overrides: Default::default(),
+                })
+            } else {
+                pruning_options.load_from_file()
+            };
             if retention_config.is_some() {
                 check_prunable_tables_valid(&mut pool.get().await?).await?;
             }
@@ -55,12 +66,13 @@ async fn main() -> anyhow::Result<()> {
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
             Indexer::start_writer(
-                &ingestion_config,
+                ingestion_config,
                 store,
                 indexer_metrics,
                 snapshot_config,
                 retention_config,
                 CancellationToken::new(),
+                mvr_mode,
             )
             .await?;
         }
@@ -70,14 +82,21 @@ async fn main() -> anyhow::Result<()> {
             Indexer::start_reader(&json_rpc_config, &registry, pool, CancellationToken::new())
                 .await?;
         }
-        Command::ResetDatabase { force } => {
+        Command::ResetDatabase {
+            force,
+            skip_migrations,
+        } => {
             if !force {
                 return Err(anyhow::anyhow!(
                     "Resetting the DB requires use of the `--force` flag",
                 ));
             }
 
-            reset_database(pool.dedicated_connection().await?).await?;
+            if skip_migrations {
+                clear_database(&mut pool.dedicated_connection().await?).await?;
+            } else {
+                reset_database(pool.dedicated_connection().await?).await?;
+            }
         }
         Command::RunMigrations => {
             run_migrations(pool.dedicated_connection().await?).await?;

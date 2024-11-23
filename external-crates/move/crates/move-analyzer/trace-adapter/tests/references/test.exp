@@ -1,0 +1,90 @@
+current frame stack:
+  function: test (m.move:44)
+    scope 0 :
+      num : 42
+      type: u64
+
+      some_struct : (0x0::m::SomeStruct) {
+        struct_field : (0x0::m::SimpleStruct) {
+          field : 0
+        }
+        simple_field : 0
+        vec_simple_field : [
+          0 : 0
+        ]
+      }
+      type: 0x0::m::SomeStruct
+
+      vec : [
+        0 : 0
+        1 : 7
+      ]
+      type: vector<u64>
+
+  function: foo (m.move:19)
+    scope 0 :
+      some_struct_ref : (0x0::m::SomeStruct) {
+        struct_field : (0x0::m::SimpleStruct) {
+          field : 0
+        }
+        simple_field : 0
+        vec_simple_field : [
+          0 : 0
+        ]
+      }
+      type: &mut 0x0::m::SomeStruct
+
+      vec_ref : [
+        0 : 0
+        1 : 7
+      ]
+      type: &mut vector<u64>
+
+      num_ref : 42
+      type: &u64
+
+current frame stack:
+  function: test (m.move:44)
+    scope 0 :
+      num : 42
+      type: u64
+
+      some_struct : (0x0::m::SomeStruct) {
+        struct_field : (0x0::m::SimpleStruct) {
+          field : 42
+        }
+        simple_field : 42
+        vec_simple_field : [
+          0 : 42
+        ]
+      }
+      type: 0x0::m::SomeStruct
+
+      vec : [
+        0 : 42
+        1 : 7
+      ]
+      type: vector<u64>
+
+  function: foo (m.move:27)
+    scope 0 :
+      some_struct_ref : (0x0::m::SomeStruct) {
+        struct_field : (0x0::m::SimpleStruct) {
+          field : 42
+        }
+        simple_field : 42
+        vec_simple_field : [
+          0 : 42
+        ]
+      }
+      type: &mut 0x0::m::SomeStruct
+
+      vec_ref : [
+        0 : 42
+        1 : 7
+      ]
+      type: &mut vector<u64>
+
+      num_ref : 42
+      type: &u64
+

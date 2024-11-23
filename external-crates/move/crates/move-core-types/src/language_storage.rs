@@ -6,7 +6,7 @@ use crate::{
     account_address::AccountAddress,
     gas_algebra::{AbstractMemorySize, BOX_ABSTRACT_SIZE, ENUM_BASE_ABSTRACT_SIZE},
     identifier::{IdentStr, Identifier},
-    parser::{parse_struct_tag, parse_type_tag},
+    parsing::types::{ParsedModuleId, ParsedStructType, ParsedType},
 };
 use move_proc_macros::test_variant_order;
 use once_cell::sync::Lazy;
@@ -137,7 +137,7 @@ impl FromStr for TypeTag {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_type_tag(s)
+        ParsedType::parse(s)?.into_type_tag(&|_| None)
     }
 }
 
@@ -252,7 +252,7 @@ impl FromStr for StructTag {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_struct_tag(s)
+        ParsedStructType::parse(s)?.into_struct_tag(&|_| None)
     }
 }
 
@@ -324,6 +324,13 @@ impl ModuleId {
 impl Display for ModuleId {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_canonical_display(/* with_prefix */ false))
+    }
+}
+
+impl FromStr for ModuleId {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ParsedModuleId::parse(s)?.into_module_id(&|_| None)
     }
 }
 

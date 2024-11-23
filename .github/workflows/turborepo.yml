@@ -19,13 +19,14 @@ jobs:
       - name: Install Nodejs
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
-          node-version: '18'
+          node-version: '20'
       - name: Run audit
         run: pnpm audit --prod --audit-level high
 
   build:
     name: Lint, Build, and Test
     runs-on: ubuntu-latest
+    environment: sui-typescript-aws-kms-test-env
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -37,7 +38,7 @@ jobs:
       - name: Install Nodejs
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -60,6 +61,12 @@ jobs:
       - name: Build
         run: pnpm turbo build
       - name: Test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KEY_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_KMS_TEST_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_KMS_AWS_REGION }}
+          AWS_KMS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KMS_KEY_ID }}
+          E2E_AWS_KMS_TEST_ENABLE: "true"
         run: pnpm turbo test
 
       # Pack wallet extension and upload it as an artifact for easy developer use:
@@ -70,7 +77,7 @@ jobs:
       - name: Wallet Extension Preview Package
         if: ${{ steps.wallet-diff.outcome == 'failure' }}
         run: pnpm --filter sui-wallet pack:zip
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # pin@4.4.3
         if: ${{ steps.wallet-diff.outcome == 'failure' }}
         with:
           name: wallet-extension

@@ -58,6 +58,10 @@ pub struct FunctionSourceMap {
     /// The source location for the definition of this entire function. Note that in certain
     /// instances this will have no valid source location e.g. the "main" function for modules that
     /// are treated as programs are synthesized and therefore have no valid source location.
+    pub location: Loc,
+    /// The source location for the name under which this functin is defined. Note that in certain
+    /// instances this will have no valid source location e.g. the "main" function for modules that
+    /// are treated as programs are synthesized and therefore have no valid source location.
     pub definition_location: Loc,
 
     /// The names of the type parameters to the function.
@@ -66,6 +70,9 @@ pub struct FunctionSourceMap {
 
     /// The names of the parameters to the function.
     pub parameters: Vec<SourceName>,
+
+    /// The locations of the return values
+    pub returns: Vec<Loc>,
 
     /// The index into the vector is the local's index. The corresponding `(Identifier, Location)` tuple
     /// is the name and location of the local.
@@ -201,11 +208,13 @@ impl EnumSourceMap {
 }
 
 impl FunctionSourceMap {
-    pub fn new(definition_location: Loc, is_native: bool) -> Self {
+    pub fn new(location: Loc, definition_location: Loc, is_native: bool) -> Self {
         Self {
+            location,
             definition_location,
             type_parameters: Vec::new(),
             parameters: Vec::new(),
+            returns: Vec::new(),
             locals: Vec::new(),
             code_map: BTreeMap::new(),
             is_native,
@@ -252,6 +261,10 @@ impl FunctionSourceMap {
         self.parameters.push(name)
     }
 
+    /// add the locations of return values
+    pub fn add_return_mapping(&mut self, loc: Loc) {
+        self.returns.push(loc);
+    }
     /// Recall that we are using a segment tree. We therefore lookup the location for the code
     /// offset by performing a range query for the largest number less than or equal to the code
     /// offset passed in.
@@ -353,9 +366,10 @@ impl SourceMap {
         &mut self,
         fdef_idx: FunctionDefinitionIndex,
         location: Loc,
+        definition_location: Loc,
         is_native: bool,
     ) -> Result<()> {
-        self.function_map.insert(fdef_idx.0, FunctionSourceMap::new(location, is_native)).map_or(Ok(()), |_| { Err(format_err!(
+        self.function_map.insert(fdef_idx.0, FunctionSourceMap::new(location, definition_location, is_native)).map_or(Ok(()), |_| { Err(format_err!(
                     "Multiple functions at same function definition index encountered when constructing source map"
                 )) })
     }
@@ -448,6 +462,18 @@ impl SourceMap {
             format_err!("Tried to add parameter mapping to undefined function index")
         })?;
         func_entry.add_parameter_mapping(name);
+        Ok(())
+    }
+
+    pub fn add_return_mapping(
+        &mut self,
+        fdef_idx: FunctionDefinitionIndex,
+        loc: Loc,
+    ) -> Result<()> {
+        let func_entry = self.function_map.get_mut(&fdef_idx.0).ok_or_else(|| {
+            format_err!("Tried to add return mapping to undefined function index")
+        })?;
+        func_entry.add_return_mapping(loc);
         Ok(())
     }
 
@@ -635,6 +661,7 @@ impl SourceMap {
         for (function_idx, function_def) in module.function_defs.iter().enumerate() {
             empty_source_map.add_top_level_function_mapping(
                 FunctionDefinitionIndex(function_idx as TableIndex),
+                default_loc,
                 default_loc,
                 false,
             )?;

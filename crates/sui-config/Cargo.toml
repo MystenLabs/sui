@@ -38,4 +38,3 @@ sui-rest-api.workspace = true
 [dev-dependencies]
 insta.workspace = true
 tempfile.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }

@@ -142,6 +142,43 @@ pub enum MoveTypeLayout {
     Enum(Box<MoveEnumLayout>),
 }
 
+impl MoveStructLayout {
+    /// Returns `true` if and only if the layout is for `type_`.
+    pub fn is_type(&self, type_: &StructTag) -> bool {
+        self.type_ == *type_
+    }
+}
+
+impl MoveEnumLayout {
+    /// Returns `true` if and only if the layout is for `type_`.
+    pub fn is_type(&self, type_: &StructTag) -> bool {
+        self.type_ == *type_
+    }
+}
+
+impl MoveTypeLayout {
+    /// Returns `true` if and only if the layout is for `type_`.
+    pub fn is_type(&self, type_: &TypeTag) -> bool {
+        use MoveTypeLayout as L;
+        use TypeTag as T;
+
+        match self {
+            L::Bool => matches!(type_, T::Bool),
+            L::U8 => matches!(type_, T::U8),
+            L::U16 => matches!(type_, T::U16),
+            L::U32 => matches!(type_, T::U32),
+            L::U64 => matches!(type_, T::U64),
+            L::U128 => matches!(type_, T::U128),
+            L::U256 => matches!(type_, T::U256),
+            L::Address => matches!(type_, T::Address),
+            L::Signer => matches!(type_, T::Signer),
+            L::Vector(l) => matches!(type_, T::Vector(t) if l.is_type(t)),
+            L::Struct(l) => matches!(type_, T::Struct(t) if l.is_type(t)),
+            L::Enum(l) => matches!(type_, T::Struct(t) if l.is_type(t)),
+        }
+    }
+}
+
 impl MoveValue {
     /// TODO (annotated-visitor): Port legacy uses of this method to `BoundedVisitor`.
     pub fn simple_deserialize(blob: &[u8], ty: &MoveTypeLayout) -> AResult<Self> {

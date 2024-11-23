@@ -16,7 +16,7 @@ use miette::Severity;
 use move_binary_format::{
     binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
 };
-use move_command_line_common::{
+use move_core_types::parsing::{
     address::{NumericalAddress, ParsedAddress},
     parser::NumberFormat,
 };
@@ -443,13 +443,13 @@ impl<'a> PTBBuilder<'a> {
         sp!(loc, arg): Spanned<PTBArg>,
         param: &SignatureToken,
     ) -> PTBResult<Tx::Argument> {
-        let (is_primitive, layout) = primitive_type(view, ty_args, param);
+        let layout = primitive_type(view, ty_args, param);
 
         // If it's a primitive value, see if we've already resolved this argument. Otherwise, we
         // need to resolve it.
-        if is_primitive {
+        if let Some(layout) = layout {
             return self
-                .resolve(loc.wrap(arg), ToPure::new_from_layout(layout.unwrap()))
+                .resolve(loc.wrap(arg), ToPure::new_from_layout(layout))
                 .await;
         }
 
@@ -1029,7 +1029,7 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
                     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self

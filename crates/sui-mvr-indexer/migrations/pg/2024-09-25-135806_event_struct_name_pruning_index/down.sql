@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS event_struct_name_tx_sequence_number;

@@ -12,4 +12,4 @@ move-binary-format.workspace = true
 once_cell.workspace = true
 
 [features]
-gas-profiler = []
+tracing = []

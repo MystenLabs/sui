@@ -190,7 +190,7 @@ mod checked {
 
             // Set the profiler if feature is enabled
             #[skip_checked_arithmetic]
-            move_vm_profiler::gas_profiler_feature_enabled! {
+            move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
                 use move_vm_types::gas::GasMeter;
 

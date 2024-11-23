@@ -8,9 +8,7 @@ use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::base_types::ObjectID;
-use sui_types::digests::{
-    CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
-};
+use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 #[derive(Parser)]
@@ -104,28 +102,12 @@ impl Command {
                     }
 
                     "ckpt_contents" => {
-                        let digests: Vec<_> = digest
-                            .into_iter()
-                            .map(|s| {
-                                CheckpointContentsDigest::from_str(&s)
-                                    .expect("invalid checkpoint digest")
-                            })
-                            .collect();
-
-                        let ckpts = kv
-                            .multi_get_checkpoints(&[], &seqs, &[], &digests)
-                            .await
-                            .unwrap();
+                        let ckpts = kv.multi_get_checkpoints(&[], &seqs, &[]).await.unwrap();
 
                         for (seq, ckpt) in seqs.iter().zip(ckpts.1.iter()) {
                             // populate digest before printing
                             ckpt.as_ref().map(|c| c.digest());
                             println!("fetched ckpt contents: {:?} {:?}", seq, ckpt);
-                        }
-                        for (digest, ckpt) in digests.iter().zip(ckpts.3.iter()) {
-                            // populate digest before printing
-                            ckpt.as_ref().map(|c| c.digest());
-                            println!("fetched ckpt contents: {:?} {:?}", digest, ckpt);
                         }
                     }
 
@@ -138,7 +120,7 @@ impl Command {
                             .collect();
 
                         let ckpts = kv
-                            .multi_get_checkpoints(&seqs, &[], &digests, &[])
+                            .multi_get_checkpoints(&seqs, &[], &digests)
                             .await
                             .unwrap();
 

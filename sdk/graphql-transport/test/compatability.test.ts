@@ -729,6 +729,9 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getProtocolConfig();
 		const graphql = await graphQLClient!.getProtocolConfig();
 
+		// If this check fails and the difference is due to types,
+		// the config field type may need to overridden if it is not u64,
+		// in sdk/graphql-transport/src/methods.ts getProtocolConfig().
 		expect(graphql).toEqual(rpc);
 	});
 

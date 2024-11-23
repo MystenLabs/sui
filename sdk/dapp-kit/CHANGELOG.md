@@ -1,5 +1,113 @@
 # @mysten/dapp-kit
 
+## 0.14.38
+
+### Patch Changes
+
+- Updated dependencies [6460e45]
+  - @mysten/sui@1.15.0
+  - @mysten/wallet-standard@0.13.14
+  - @mysten/zksend@0.12.4
+
+## 0.14.37
+
+### Patch Changes
+
+- Updated dependencies [f03e60f]
+  - @mysten/zksend@0.12.3
+
+## 0.14.36
+
+### Patch Changes
+
+- 67d4620: Revert dev dependency change from v0.14.35 due to breakage
+
+## 0.14.35
+
+### Patch Changes
+
+- 6f44f4b: Mark vanilla-extract libraries as dev dependencies
+
+## 0.14.34
+
+### Patch Changes
+
+- ec919a0: Ensure wallet-icon is a non-empty string before rendering
+- Updated dependencies [4bac808]
+- Updated dependencies [4bac808]
+- Updated dependencies [938fb6e]
+  - @mysten/zksend@0.12.2
+  - @mysten/sui@1.14.4
+  - @mysten/wallet-standard@0.13.13
+
+## 0.14.33
+
+### Patch Changes
+
+- Updated dependencies [1765780]
+  - @mysten/zksend@0.12.1
+
+## 0.14.32
+
+### Patch Changes
+
+- Updated dependencies [60bdb62]
+- Updated dependencies [364a93a]
+- Updated dependencies [364a93a]
+  - @mysten/zksend@0.12.0
+
+## 0.14.31
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/wallet-standard@0.13.12
+  - @mysten/zksend@0.11.12
+
+## 0.14.30
+
+### Patch Changes
+
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+  - @mysten/wallet-standard@0.13.11
+  - @mysten/zksend@0.11.11
+
+## 0.14.29
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+  - @mysten/wallet-standard@0.13.10
+  - @mysten/zksend@0.11.10
+
+## 0.14.28
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+  - @mysten/wallet-standard@0.13.9
+  - @mysten/zksend@0.11.9
+
+## 0.14.27
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+  - @mysten/wallet-standard@0.13.8
+  - @mysten/zksend@0.11.8
+
+## 0.14.26
+
+### Patch Changes
+
+- Updated dependencies [af39b6a]
+  - @mysten/zksend@0.11.7
+
 ## 0.14.25
 
 ### Patch Changes

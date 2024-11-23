@@ -28,12 +28,6 @@ error[E03005]: unbound unscoped name
 15 │         F { No };
    │             ^^ Unbound constant 'No'
 
-error[E03011]: invalid use of reserved name
-   ┌─ tests/move_check/expansion/invalid_local_name.move:23:13
-   │
-23 │         let vector;
-   │             ^^^^^^ Invalid variable name 'vector'. 'vector' is restricted and cannot be used to name a variable
-
 warning[W09002]: unused variable
    ┌─ tests/move_check/expansion/invalid_local_name.move:23:13
    │
@@ -41,4 +35,10 @@ warning[W09002]: unused variable
    │             ^^^^^^ Unused local variable 'vector'. Consider removing or prefixing with an underscore: '_vector'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03011]: invalid use of reserved name
+   ┌─ tests/move_check/expansion/invalid_local_name.move:23:13
+   │
+23 │         let vector;
+   │             ^^^^^^ Invalid variable name 'vector'. 'vector' is restricted and cannot be used to name a variable
 

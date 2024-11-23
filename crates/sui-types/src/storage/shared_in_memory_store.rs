@@ -32,24 +32,17 @@ impl SharedInMemoryStore {
 }
 
 impl ReadStore for SharedInMemoryStore {
-    fn get_checkpoint_by_digest(
-        &self,
-        digest: &CheckpointDigest,
-    ) -> Result<Option<VerifiedCheckpoint>> {
-        self.inner()
-            .get_checkpoint_by_digest(digest)
-            .cloned()
-            .pipe(Ok)
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        self.inner().get_checkpoint_by_digest(digest).cloned()
     }
 
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<VerifiedCheckpoint>> {
+    ) -> Option<VerifiedCheckpoint> {
         self.inner()
             .get_checkpoint_by_sequence_number(sequence_number)
             .cloned()
-            .pipe(Ok)
     }
 
     fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint> {
@@ -75,70 +68,51 @@ impl ReadStore for SharedInMemoryStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointContents>> {
-        Ok(self
-            .inner()
+    ) -> Option<FullCheckpointContents> {
+        self.inner()
             .full_checkpoint_contents
             .get(&sequence_number)
-            .cloned())
+            .cloned()
     }
 
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>> {
+    ) -> Option<FullCheckpointContents> {
         // First look to see if we saved the complete contents already.
         let inner = self.inner();
         let contents = inner
             .get_sequence_number_by_contents_digest(digest)
             .and_then(|seq_num| inner.full_checkpoint_contents.get(&seq_num).cloned());
         if contents.is_some() {
-            return Ok(contents);
+            return contents;
         }
 
         // Otherwise gather it from the individual components.
-        inner
-            .get_checkpoint_contents(digest)
-            .map(|contents| {
-                FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
-            })
-            .transpose()
-            .map(|contents| contents.flatten())
+        inner.get_checkpoint_contents(digest).and_then(|contents| {
+            FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
+        })
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>> {
+    fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
         self.inner()
             .get_committee_by_epoch(epoch)
             .cloned()
             .map(Arc::new)
-            .pipe(Ok)
     }
 
-    fn get_transaction(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<Arc<VerifiedTransaction>>> {
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
         self.inner()
             .get_transaction_block(digest)
             .map(|tx| Arc::new(tx.clone()))
-            .pipe(Ok)
     }
 
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<TransactionEffects>> {
-        self.inner()
-            .get_transaction_effects(digest)
-            .cloned()
-            .pipe(Ok)
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
+        self.inner().get_transaction_effects(digest).cloned()
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Result<Option<TransactionEvents>> {
-        self.inner()
-            .get_transaction_events(digest)
-            .cloned()
-            .pipe(Ok)
+    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+        self.inner().get_transaction_events(digest).cloned()
     }
 
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {
@@ -148,14 +122,14 @@ impl ReadStore for SharedInMemoryStore {
     fn get_checkpoint_contents_by_digest(
         &self,
         _digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>> {
+    ) -> Option<CheckpointContents> {
         todo!()
     }
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         _sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<CheckpointContents>> {
+    ) -> Option<CheckpointContents> {
         todo!()
     }
 }
@@ -164,7 +138,7 @@ impl ObjectStore for SharedInMemoryStore {
     fn get_object(
         &self,
         _object_id: &crate::base_types::ObjectID,
-    ) -> Result<Option<crate::object::Object>> {
+    ) -> Option<crate::object::Object> {
         todo!()
     }
 
@@ -172,7 +146,7 @@ impl ObjectStore for SharedInMemoryStore {
         &self,
         _object_id: &crate::base_types::ObjectID,
         _version: crate::base_types::VersionNumber,
-    ) -> Result<Option<crate::object::Object>> {
+    ) -> Option<crate::object::Object> {
         todo!()
     }
 }
@@ -474,7 +448,7 @@ impl ObjectStore for SingleCheckpointSharedInMemoryStore {
     fn get_object(
         &self,
         _object_id: &crate::base_types::ObjectID,
-    ) -> Result<Option<crate::object::Object>> {
+    ) -> Option<crate::object::Object> {
         todo!()
     }
 
@@ -482,23 +456,20 @@ impl ObjectStore for SingleCheckpointSharedInMemoryStore {
         &self,
         _object_id: &crate::base_types::ObjectID,
         _version: crate::base_types::VersionNumber,
-    ) -> Result<Option<crate::object::Object>> {
+    ) -> Option<crate::object::Object> {
         todo!()
     }
 }
 
 impl ReadStore for SingleCheckpointSharedInMemoryStore {
-    fn get_checkpoint_by_digest(
-        &self,
-        digest: &CheckpointDigest,
-    ) -> Result<Option<VerifiedCheckpoint>> {
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
         self.0.get_checkpoint_by_digest(digest)
     }
 
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<VerifiedCheckpoint>> {
+    ) -> Option<VerifiedCheckpoint> {
         self.0.get_checkpoint_by_sequence_number(sequence_number)
     }
 
@@ -517,7 +488,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointContents>> {
+    ) -> Option<FullCheckpointContents> {
         self.0
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
@@ -525,29 +496,23 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>> {
+    ) -> Option<FullCheckpointContents> {
         self.0.get_full_checkpoint_contents(digest)
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>> {
+    fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
         self.0.get_committee(epoch)
     }
 
-    fn get_transaction(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<Arc<VerifiedTransaction>>> {
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
         self.0.get_transaction(digest)
     }
 
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<TransactionEffects>> {
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
         self.0.get_transaction_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Result<Option<TransactionEvents>> {
+    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
         self.0.get_events(digest)
     }
 
@@ -558,14 +523,14 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_checkpoint_contents_by_digest(
         &self,
         _digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>> {
+    ) -> Option<CheckpointContents> {
         todo!()
     }
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         _sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<CheckpointContents>> {
+    ) -> Option<CheckpointContents> {
         todo!()
     }
 }

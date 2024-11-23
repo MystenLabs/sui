@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::sync::Arc;
+use std::time::Duration;
 
+use diesel::dsl::count_star;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
@@ -12,9 +14,16 @@ use sui_indexer::models::{
     checkpoints::StoredCheckpoint, objects::StoredObject, objects::StoredObjectSnapshot,
     transactions::StoredTransaction,
 };
+use sui_indexer::schema::epochs;
+use sui_indexer::schema::events;
+use sui_indexer::schema::full_objects_history;
+use sui_indexer::schema::objects_history;
 use sui_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
 use sui_indexer::store::indexer_store::IndexerStore;
-use sui_indexer::test_utils::{set_up, wait_for_checkpoint, wait_for_objects_snapshot};
+use sui_indexer::test_utils::set_up_on_mvr_mode;
+use sui_indexer::test_utils::{
+    set_up, set_up_with_start_and_end_checkpoints, wait_for_checkpoint, wait_for_objects_snapshot,
+};
 use sui_indexer::types::EventIndex;
 use sui_indexer::types::IndexedDeletedObject;
 use sui_indexer::types::IndexedObject;
@@ -68,6 +77,72 @@ pub async fn test_transaction_table() -> Result<(), IndexerError> {
     assert_eq!(db_txn.checkpoint_sequence_number, 1);
     assert_eq!(db_txn.transaction_kind, 1);
     assert_eq!(db_txn.success_command_count, 2); // split coin + transfer
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn test_checkpoint_range_ingestion() -> Result<(), IndexerError> {
+    let tempdir = tempdir().unwrap();
+    let mut sim = Simulacrum::new();
+    let data_ingestion_path = tempdir.path().to_path_buf();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
+
+    // Create multiple checkpoints
+    for _ in 0..10 {
+        let transfer_recipient = SuiAddress::random_for_testing_only();
+        let (transaction, _) = sim.transfer_txn(transfer_recipient);
+        let (_, err) = sim.execute_transaction(transaction).unwrap();
+        assert!(err.is_none());
+        sim.create_checkpoint();
+    }
+
+    // Set up indexer with specific start and end checkpoints
+    let start_checkpoint = 2;
+    let end_checkpoint = 4;
+    let (_, pg_store, _, _database) = set_up_with_start_and_end_checkpoints(
+        Arc::new(sim),
+        data_ingestion_path,
+        start_checkpoint,
+        end_checkpoint,
+    )
+    .await;
+
+    // Wait for the indexer to catch up to the end checkpoint
+    wait_for_checkpoint(&pg_store, end_checkpoint).await?;
+
+    // Verify that only checkpoints within the specified range were ingested
+    let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
+    let checkpoint_count: i64 = checkpoints::table
+        .count()
+        .get_result(&mut connection)
+        .await
+        .expect("Failed to count checkpoints");
+    assert_eq!(checkpoint_count, 3, "Expected 3 checkpoints to be ingested");
+
+    // Verify the range of ingested checkpoints
+    let min_checkpoint = checkpoints::table
+        .select(diesel::dsl::min(checkpoints::sequence_number))
+        .first::<Option<i64>>(&mut connection)
+        .await
+        .expect("Failed to get min checkpoint")
+        .expect("Min checkpoint should be Some");
+    let max_checkpoint = checkpoints::table
+        .select(diesel::dsl::max(checkpoints::sequence_number))
+        .first::<Option<i64>>(&mut connection)
+        .await
+        .expect("Failed to get max checkpoint")
+        .expect("Max checkpoint should be Some");
+    assert_eq!(
+        min_checkpoint, start_checkpoint as i64,
+        "Minimum ingested checkpoint should be {}",
+        start_checkpoint
+    );
+    assert_eq!(
+        max_checkpoint, end_checkpoint as i64,
+        "Maximum ingested checkpoint should be {}",
+        end_checkpoint
+    );
+
     Ok(())
 }
 
@@ -269,5 +344,102 @@ pub async fn test_epoch_boundary() -> Result<(), IndexerError> {
         .expect("Failed reading checkpoint from PostgresDB");
     assert_eq!(db_checkpoint.sequence_number, 3);
     assert_eq!(db_checkpoint.epoch, 1);
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn test_mvr_mode() -> Result<(), IndexerError> {
+    let tempdir = tempdir().unwrap();
+    let mut sim = Simulacrum::new();
+    let data_ingestion_path = tempdir.path().to_path_buf();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
+
+    // Create 3 checkpoints and epochs of sequence number 0 through 2 inclusive
+    for _ in 0..=2 {
+        let transfer_recipient = SuiAddress::random_for_testing_only();
+        let (transaction, _) = sim.transfer_txn(transfer_recipient);
+        let (_, err) = sim.execute_transaction(transaction.clone()).unwrap();
+        assert!(err.is_none());
+
+        // creates checkpoint and advances epoch
+        sim.advance_epoch(true);
+    }
+
+    sim.create_checkpoint(); // advance to checkpoint 4 to stabilize indexer
+
+    let (_, pg_store, _, _database) =
+        set_up_on_mvr_mode(Arc::new(sim), data_ingestion_path, true).await;
+    wait_for_checkpoint(&pg_store, 4).await?;
+    let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
+    let db_checkpoint: StoredCheckpoint = checkpoints::table
+        .order(checkpoints::sequence_number.desc())
+        .first::<StoredCheckpoint>(&mut connection)
+        .await
+        .expect("Failed reading checkpoint from PostgresDB");
+    let db_epoch = epochs::table
+        .order(epochs::epoch.desc())
+        .select(epochs::epoch)
+        .first::<i64>(&mut connection)
+        .await
+        .expect("Failed reading epoch from PostgresDB");
+
+    assert_eq!(db_checkpoint.sequence_number, 4);
+    assert_eq!(db_checkpoint.epoch, db_epoch);
+
+    // Check that other tables have not been written to
+    assert_eq!(
+        0_i64,
+        transactions::table
+            .select(count_star())
+            .first::<i64>(&mut connection)
+            .await
+            .expect("Failed to count * transactions")
+    );
+    assert_eq!(
+        0_i64,
+        events::table
+            .select(count_star())
+            .first::<i64>(&mut connection)
+            .await
+            .expect("Failed to count * transactions")
+    );
+    assert_eq!(
+        0_i64,
+        full_objects_history::table
+            .select(count_star())
+            .first::<i64>(&mut connection)
+            .await
+            .expect("Failed to count * transactions")
+    );
+
+    // Check that objects_history is being correctly pruned. At epoch 3, we should only have data
+    // between 2 and 3 inclusive.
+    loop {
+        let history_objects = objects_history::table
+            .select(objects_history::checkpoint_sequence_number)
+            .load::<i64>(&mut connection)
+            .await?;
+
+        let has_invalid_entries = history_objects.iter().any(|&elem| elem < 2);
+
+        if !has_invalid_entries {
+            // No more invalid entries found, exit the loop
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    // After the loop, verify all entries are within expected range
+    let final_check = objects_history::table
+        .select(objects_history::checkpoint_sequence_number)
+        .order_by(objects_history::checkpoint_sequence_number.asc())
+        .load::<i64>(&mut connection)
+        .await?;
+
+    for elem in final_check {
+        assert!(elem >= 2);
+    }
+
     Ok(())
 }

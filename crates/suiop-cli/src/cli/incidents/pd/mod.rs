@@ -11,6 +11,7 @@ use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::env;
+use tracing::debug;
 
 use super::incident::Incident;
 
@@ -49,15 +50,18 @@ pub async fn fetch_incidents(
 ) -> Result<Vec<PagerDutyIncident>> {
     let url = "https://api.pagerduty.com/incidents";
 
+    let api_key = env::var("PD_API_KEY").expect("please set the PD_API_KEY env var");
+    if api_key.is_empty() {
+        panic!("PD_API_KEY is not set");
+    }
+
+    debug!("fetching incidents from pagerduty with {}", api_key);
     let mut headers = HeaderMap::new();
     headers.insert(
         AUTHORIZATION,
-        format!(
-            "Token token={}",
-            env::var("PD_API_KEY").expect("please set the PD_API_KEY env var")
-        )
-        .parse()
-        .expect("header parsing"),
+        format!("Token token={}", api_key)
+            .parse()
+            .expect("header parsing"),
     );
     headers.insert(
         ACCEPT,

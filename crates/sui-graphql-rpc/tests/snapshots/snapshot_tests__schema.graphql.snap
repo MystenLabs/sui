@@ -168,25 +168,14 @@ The possible relationship types for a transaction block: sent, or received.
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
-	`SENT` which behaves identically but is named more clearly. Both filters restrict
-	transactions by their sender, only, not signers in general.
-	
-	This filter will be removed with 1.36.0 (2024-10-14).
-	"""
-	SIGN
-	"""
 	Transactions this address has sent.
 	"""
 	SENT
 	"""
-	Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-	in favor of `AFFECTED`, which offers an easier to understand behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`AFFECTED` is introduced, whichever is later.
+	Transactions that this address was involved in, either as the sender, sponsor, or as the
+	owner of some object that was created, modified or transfered.
 	"""
-	RECV
+	AFFECTED
 }
 
 """
@@ -463,6 +452,10 @@ type Checkpoint {
 	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
+	"""
+	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+	"""
+	bcs: Base64
 }
 
 type CheckpointConnection {
@@ -1234,6 +1227,12 @@ type EpochEdge {
 }
 
 type Event {
+	"""
+	The transaction block that emitted this event. This information is only available for
+	events from indexed transactions, and not from transactions that have just been executed or
+	dry-run.
+	"""
+	transactionBlock: TransactionBlock
 	"""
 	The Move module containing some function that when called by
 	a programmable transaction block (PTB) emitted this event.
@@ -2368,6 +2367,10 @@ type MovePackage implements IObject & IOwner {
 	"""
 	typeOrigins: [TypeOrigin!]
 	"""
+	BCS representation of the package itself, as a MovePackage.
+	"""
+	packageBcs: Base64
+	"""
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
@@ -3080,11 +3083,13 @@ type PageInfo {
 
 """
 If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
-the dynamic field, or the intermediate Field object itself). Also note that if the owner
-is a parent, then it's guaranteed to be an object.
+the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+
+Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+object could be wrapped and therefore not directly accessible.
 """
 type Parent {
-	parent: Object
+	parent: Owner
 }
 
 """
@@ -3385,7 +3390,8 @@ type Query {
 	"""
 	typeByName(name: String!): MoveType!
 	"""
-	The coin metadata associated with the given coin type.
+	The coin metadata associated with the given coin type. Note that if the latest version of
+	the coin's metadata is wrapped or deleted, it will not be found.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 	"""
@@ -4213,7 +4219,7 @@ type TransactionBlock {
 	"""
 	expiration: Epoch
 	"""
-	Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+	Serialized form of this transaction's `TransactionData`, BCS serialized and Base64 encoded.
 	"""
 	bcs: Base64
 }
@@ -4336,26 +4342,14 @@ input TransactionBlockFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
-	Limit to transactions that were sent by the given address. NOTE: this input filter has been
-	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
-	Both filters restrict transactions by their sender, only, not signers in general.
-	
-	This filter will be removed with 1.36.0 (2024-10-14).
+	Limit to transactions that interacted with the given address. The address could be a
+	sender, sponsor, or recipient of the transaction.
 	"""
-	signAddress: SuiAddress
+	affectedAddress: SuiAddress
 	"""
 	Limit to transactions that were sent by the given address.
 	"""
 	sentAddress: SuiAddress
-	"""
-	Limit to transactions that sent an object to the given address. NOTE: this input filter has
-	been deprecated in favor of `affectedAddress` which offers an easier to understand
-	behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`affectedAddress` is introduced, whichever is later.
-	"""
-	recvAddress: SuiAddress
 	"""
 	Limit to transactions that accepted the given object as an input. NOTE: this input filter
 	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
@@ -4801,3 +4795,4 @@ schema {
 	query: Query
 	mutation: Mutation
 }
+

@@ -262,7 +262,6 @@ where
 
     let modified_at_digests: Vec<_> = store
         .multi_get_objects_by_key(&modified_at_version_keys.clone())
-        .expect("Failed to get modified_at_versions object from object table")
         .into_iter()
         .zip(modified_at_version_keys)
         .map(|(obj, key)| {
@@ -339,7 +338,6 @@ where
 
     let modified_at_digests: Vec<_> = store
         .multi_get_objects_by_key(&modified_at_version_keys.clone())
-        .expect("Failed to get modified_at_versions object from object table")
         .into_iter()
         .zip(modified_at_version_keys)
         .map(|(obj, key)| {

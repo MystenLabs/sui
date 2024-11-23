@@ -1,0 +1,25 @@
+[package]
+name = "sui-kvstore"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bcs.workspace = true
+http.workspace = true
+gcp_auth.workspace = true
+prometheus.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+serde.workspace = true
+sui-data-ingestion-core.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tonic = {version = "0.12.2",features = ["tls", "transport"] }
+tracing.workspace = true

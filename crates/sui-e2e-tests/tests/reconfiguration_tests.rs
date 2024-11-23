@@ -182,7 +182,6 @@ async fn reconfig_with_revert_end_to_end_test() {
                 .state()
                 .get_objects(&[gas2.0])
                 .await
-                .unwrap()
                 .into_iter()
                 .next()
                 .unwrap()
@@ -216,7 +215,6 @@ async fn reconfig_with_revert_end_to_end_test() {
                     .state()
                     .get_objects(&[gas1.0])
                     .await
-                    .unwrap()
                     .into_iter()
                     .next()
                     .unwrap()
@@ -232,7 +230,6 @@ async fn reconfig_with_revert_end_to_end_test() {
                     .state()
                     .get_objects(&[gas2.0])
                     .await
-                    .unwrap()
                     .into_iter()
                     .next()
                     .unwrap()

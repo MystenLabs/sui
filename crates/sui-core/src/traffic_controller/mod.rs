@@ -378,13 +378,13 @@ async fn run_tally_loop(
                     metrics
                         .highest_direct_spam_rate
                         .set(highest_direct_rate.0 as i64);
-                    trace!("Recent highest direct spam rate: {:?}", highest_direct_rate);
+                    debug!("Recent highest direct spam rate: {:?}", highest_direct_rate);
                 }
                 if let Some(highest_proxied_rate) = spam_policy.highest_proxied_rate() {
                     metrics
                         .highest_proxied_spam_rate
                         .set(highest_proxied_rate.0 as i64);
-                    trace!(
+                    debug!(
                         "Recent highest proxied spam rate: {:?}",
                         highest_proxied_rate
                     );
@@ -395,7 +395,7 @@ async fn run_tally_loop(
                     metrics
                         .highest_direct_error_rate
                         .set(highest_direct_rate.0 as i64);
-                    trace!(
+                    debug!(
                         "Recent highest direct error rate: {:?}",
                         highest_direct_rate
                     );
@@ -404,7 +404,7 @@ async fn run_tally_loop(
                     metrics
                         .highest_proxied_error_rate
                         .set(highest_proxied_rate.0 as i64);
-                    trace!(
+                    debug!(
                         "Recent highest proxied error rate: {:?}",
                         highest_proxied_rate
                     );
@@ -425,10 +425,22 @@ async fn handle_error_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if !tally.error_weight.is_sampled() {
+    let Some((error_weight, error_type)) = tally.clone().error_info else {
+        return Ok(());
+    };
+    if !error_weight.is_sampled() {
         return Ok(());
     }
-    let resp = policy.handle_tally(tally.clone());
+    trace!(
+        "Handling error_type {:?} from client {:?}",
+        error_type,
+        tally.direct,
+    );
+    metrics
+        .tally_error_types
+        .with_label_values(&[error_type.as_str()])
+        .inc();
+    let resp = policy.handle_tally(tally);
     metrics.error_tally_handled.inc();
     if let Some(fw_config) = fw_config {
         if fw_config.delegate_error_blocking && !mem_drainfile_present {
@@ -509,6 +521,7 @@ async fn handle_policy_response(
         {
             // Only increment the metric if the client was not already blocked
             debug!("Blocking client: {:?}", client);
+            metrics.requests_blocked_at_protocol.inc();
             metrics.connection_ip_blocklist_len.inc();
         }
     }
@@ -523,6 +536,7 @@ async fn handle_policy_response(
         {
             // Only increment the metric if the client was not already blocked
             debug!("Blocking proxied client: {:?}", client);
+            metrics.requests_blocked_at_protocol.inc();
             metrics.proxy_ip_blocklist_len.inc();
         }
     }
@@ -745,7 +759,7 @@ impl TrafficSim {
                     // TODO add proxy IP for testing
                     None,
                     // TODO add weight adjustments
-                    Weight::one(),
+                    None,
                     Weight::one(),
                 ));
             } else {

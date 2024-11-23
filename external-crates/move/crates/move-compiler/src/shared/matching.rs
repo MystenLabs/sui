@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::DiagnosticReporter,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value},
     hlir::translate::NEW_NAME_DELIM,
+    ice,
     naming::ast::{self as N, Type, Var},
     parser::ast::{BinOp_, ConstantName, Field, VariantName},
     shared::{program_info::ProgramInfo, unique_map::UniqueMap, CompilationEnv},
-    {
-        ice,
-        typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
-    },
+    typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -67,8 +66,8 @@ pub struct ArmResult {
 /// A shared match context trait for use with counterexample generation in Typing and match
 /// compilation in HLIR lowering.
 pub trait MatchContext<const AFTER_TYPING: bool> {
-    fn env(&mut self) -> &mut CompilationEnv;
-    fn env_ref(&self) -> &CompilationEnv;
+    fn env(&self) -> &CompilationEnv;
+    fn reporter(&self) -> &DiagnosticReporter;
     fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var;
     fn program_info(&self) -> &ProgramInfo<AFTER_TYPING>;
 
@@ -481,7 +480,7 @@ impl PatternMatrix {
                 // Make a match pattern that only holds guard binders
                 let guard_binders = guard_binders.union_with(&const_binders, |k, _, x| {
                     let msg = "Match compilation made a binder for this during const compilation";
-                    context.env().add_diag(ice!((k.loc, msg)));
+                    context.reporter().add_diag(ice!((k.loc, msg)));
                     *x
                 });
                 let pat = apply_pattern_subst(pat, &guard_binders);
@@ -518,9 +517,10 @@ impl PatternMatrix {
             .any(|pat| pat.is_wild_arm() && pat.guard.is_none())
     }
 
-    pub fn wild_arm_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
+    pub fn wild_tree_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
         // NB: If the first row is all wild, we need to collect _all_ wild rows that have guards
-        // until we find one that does not.
+        // until we find one that does not. If we do not find one without a guard, then this isn't
+        // a wild tree.
         if let Some(arm) = self.patterns[0].all_wild_arm(fringe) {
             if arm.guard.is_none() {
                 return Some(vec![arm]);
@@ -535,7 +535,7 @@ impl PatternMatrix {
                     }
                 }
             }
-            Some(result)
+            None
         } else {
             None
         }

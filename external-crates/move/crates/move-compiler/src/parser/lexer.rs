@@ -482,10 +482,7 @@ impl<'input> Lexer<'input> {
     // At the end of parsing, checks whether there are any unmatched documentation comments,
     // producing errors if so. Otherwise returns a map from file position to associated
     // documentation.
-    pub fn check_and_get_doc_comments(
-        &mut self,
-        env: &mut CompilationEnv,
-    ) -> MatchedFileCommentMap {
+    pub fn check_and_get_doc_comments(&mut self, env: &CompilationEnv) -> MatchedFileCommentMap {
         let msg = "Documentation comment cannot be matched to a language item";
         let diags = self
             .doc_comments
@@ -495,7 +492,7 @@ impl<'input> Lexer<'input> {
                 diag!(Syntax::InvalidDocComment, (loc, msg))
             })
             .collect();
-        env.add_diags(diags);
+        env.diagnostic_reporter_at_top_level().add_diags(diags);
         std::mem::take(&mut self.matched_doc_comments)
     }
 

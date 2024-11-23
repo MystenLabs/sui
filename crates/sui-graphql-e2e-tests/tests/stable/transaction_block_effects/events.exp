@@ -1,4 +1,4 @@
-processed 10 tasks
+processed 11 tasks
 
 init:
 A: object(0,0)
@@ -287,6 +287,90 @@ Response: {
                       },
                       "bcs": "ZgAAAAAAAAA="
                     }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 122-138:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "FPhSSzT7tHmrPhs3H9GT1n4Dqj3eyCgaFLkQSc9FEDVV",
+          "effects": {
+            "events": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "digest": "GJMTYHH46d31ohELwH3ZfvGvbiDZ7GCqNcyg4fGGFJJQ",
+          "effects": {
+            "events": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "digest": "48LNnMV9MFXiXfXwDRWzu6SndwxY3ZfKUNEKJiDqJqM7",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "48LNnMV9MFXiXfXwDRWzu6SndwxY3ZfKUNEKJiDqJqM7"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
                   }
                 }
               ]

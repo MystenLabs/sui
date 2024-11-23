@@ -1,4 +1,5 @@
 import {
+    Breakpoint,
     Handles,
     Logger,
     logger,
@@ -13,7 +14,16 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
-import { Runtime, RuntimeEvents, IRuntimeVariableScope } from './runtime';
+import {
+    Runtime,
+    RuntimeEvents,
+    RuntimeValueType,
+    IRuntimeVariableScope,
+    CompoundType,
+    IRuntimeRefValue,
+    ExecutionResult
+} from './runtime';
+
 
 const enum LogLevel {
     Log = 'log',
@@ -80,24 +90,27 @@ export class MoveDebugSession extends LoggingDebugSession {
     private runtime: Runtime;
 
     /**
-     * Handles to create variable scopes
-     * (ideally we would use numbers but DAP package does not like it)
-     *
+     * Handles to create variable scopes and compound variable values.
      */
-    private variableHandles: Handles<IRuntimeVariableScope>;
-
+    private variableHandles: Handles<IRuntimeVariableScope | CompoundType>;
 
     public constructor() {
         super();
         this.setDebuggerLinesStartAt1(false);
         this.setDebuggerColumnsStartAt1(false);
         this.runtime = new Runtime();
-        this.variableHandles = new Handles<IRuntimeVariableScope>();
+        this.variableHandles = new Handles<IRuntimeVariableScope | CompoundType>();
 
         // setup event handlers
 
         this.runtime.on(RuntimeEvents.stopOnStep, () => {
             this.sendEvent(new StoppedEvent('step', MoveDebugSession.THREAD_ID));
+        });
+        this.runtime.on(RuntimeEvents.stopOnLineBreakpoint, () => {
+            this.sendEvent(new StoppedEvent('breakpoint', MoveDebugSession.THREAD_ID));
+        });
+        this.runtime.on(RuntimeEvents.stopOnException, (msg) => {
+            this.sendEvent(new StoppedEvent('exception', MoveDebugSession.THREAD_ID, msg));
         });
         this.runtime.on(RuntimeEvents.end, () => {
             this.sendEvent(new TerminatedEvent());
@@ -112,6 +125,12 @@ export class MoveDebugSession extends LoggingDebugSession {
 
         // the adapter implements the configurationDone request
         response.body.supportsConfigurationDoneRequest = false;
+
+        // the adapter supports conditional breakpoints
+        response.body.supportsConditionalBreakpoints = false;
+
+        // the adapter supports breakpoints that break execution after a specified number of hits
+        response.body.supportsHitConditionalBreakpoints = false;
 
         // make VS Code use 'evaluate' when hovering over source
         response.body.supportsEvaluateForHovers = false;
@@ -172,6 +191,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): Promise<void> {
         logger.setup(convertLoggerLogLevel(args.logLevel ?? LogLevel.None), false);
         logger.log(`Launching trace viewer for file: ${args.source} and trace: ${args.traceInfo}`);
+
         try {
             await this.runtime.start(args.source, args.traceInfo, args.stopOnEntry || false);
         } catch (err) {
@@ -180,13 +200,6 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         this.sendResponse(response);
         this.sendEvent(new StoppedEvent('entry', MoveDebugSession.THREAD_ID));
-    }
-
-    protected configurationDoneRequest(
-        response: DebugProtocol.ConfigurationDoneResponse,
-        _args: DebugProtocol.ConfigurationDoneArguments
-    ): void {
-        this.sendResponse(response);
     }
 
     protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -212,7 +225,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 }).reverse(),
                 totalFrames: stack_height,
                 optimized_lines: stack_height > 0
-                    ? runtimeStack.frames[stack_height - 1].sourceMap.optimizedLines
+                    ? runtimeStack.frames[stack_height - 1].optimizedLines
                     : []
             };
         } catch (err) {
@@ -225,14 +238,15 @@ export class MoveDebugSession extends LoggingDebugSession {
     /**
      * Gets the scopes for a given frame.
      *
-     * @param frameId identifier of the frame scopes are requested for.
+     * @param frameID identifier of the frame scopes are requested for.
      * @returns an array of scopes.
+     * @throws Error with a descriptive error message if scopes cannot be retrieved.
      */
-    private getScopes(frameId: number): DebugProtocol.Scope[] {
+    private getScopes(frameID: number): DebugProtocol.Scope[] {
         const runtimeStack = this.runtime.stack();
-        const frame = runtimeStack.frames.find(frame => frame.id === frameId);
+        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
         if (!frame) {
-            throw new Error(`No frame found for id: ${frameId}`);
+            throw new Error(`No frame found for id: ${frameID} when getting scopes`);
         }
         const scopes: DebugProtocol.Scope[] = [];
         if (frame.locals.length > 0) {
@@ -269,26 +283,114 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
     /**
+     * Converts a runtime reference value to a DAP variable.
+     *
+     * @param value reference value.
+     * @param name name of variable containing the reference value.
+     * @param type optional type of the variable containing the reference value.
+     * @returns a DAP variable.
+     * @throws Error with a descriptive error message if conversion fails.
+     */
+    private convertRefValue(
+        value: IRuntimeRefValue,
+        name: string,
+        type?: string
+    ): DebugProtocol.Variable {
+        const frameID = value.loc.frameID;
+        const localIndex = value.loc.localIndex;
+        const runtimeStack = this.runtime.stack();
+        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
+        if (!frame) {
+            throw new Error('No frame found for id '
+                + frameID
+                + ' when converting ref value for local index '
+                + localIndex);
+        }
+        // a local will be in one of the scopes at a position corresponding to its local index
+        let local = undefined;
+        for (const scope of frame.locals) {
+            local = scope[localIndex];
+            if (local) {
+                break;
+            }
+        }
+        if (!local) {
+            throw new Error('No local found for index '
+                + localIndex
+                + ' when converting ref value for frame id '
+                + frameID);
+        }
+
+        return this.convertRuntimeValue(local.value, name, type);
+    }
+
+    /**
+     * Converts a runtime value to a DAP variable.
+     *
+     * @param value variable value
+     * @param name variable name
+     * @param type optional variable type
+     * @returns a DAP variable.
+     */
+    private convertRuntimeValue(
+        value: RuntimeValueType,
+        name: string,
+        type?: string
+    ): DebugProtocol.Variable {
+        if (typeof value === 'string') {
+            return {
+                name,
+                type,
+                value,
+                variablesReference: 0
+            };
+        } else if (Array.isArray(value)) {
+            const compoundValueReference = this.variableHandles.create(value);
+            return {
+                name,
+                type,
+                value: '(' + value.length + ')[...]',
+                variablesReference: compoundValueReference
+            };
+        } else if ('fields' in value) {
+            const compoundValueReference = this.variableHandles.create(value);
+            // use type if available as it will have information about whether
+            // it's a reference or not (e.g., `&mut 0x42::mod::SomeStruct`),
+            // as opposed to the type that come with the value
+            // (e.g., `0x42::mod::SomeStruct`)
+            const actualType = type ? type : value.type;
+            const accessChainParts = actualType.split('::');
+            const datatypeName = accessChainParts[accessChainParts.length - 1];
+            return {
+                name,
+                type: value.variantName
+                    ? actualType + '::' + value.variantName
+                    : actualType,
+                value: (value.variantName
+                    ? datatypeName + '::' + value.variantName
+                    : datatypeName
+                ) + '{...}',
+                variablesReference: compoundValueReference
+            };
+        } else {
+            return this.convertRefValue(value, name, type);
+        }
+    }
+
+    /**
      * Converts runtime variables to DAP variables.
      *
      * @param runtimeScope runtime variables scope,
-     * @returns an array of variables.
+     * @returns an array of DAP variables.
      */
     private convertRuntimeVariables(runtimeScope: IRuntimeVariableScope): DebugProtocol.Variable[] {
         const variables: DebugProtocol.Variable[] = [];
         const runtimeVariables = runtimeScope.locals;
-        for (let i = 0; i < runtimeVariables.length; i++) {
-            const v = runtimeVariables[i];
+        runtimeVariables.forEach(v => {
             if (v) {
-                variables.push({
-                    name: v.name,
-                    type: v.type,
-                    value: v.value,
-                    variablesReference: 0
-                });
+                variables.push(this.convertRuntimeValue(v.value, v.name, v.type));
             }
-        }
-
+        });
         return variables;
     }
 
@@ -296,13 +398,27 @@ export class MoveDebugSession extends LoggingDebugSession {
         response: DebugProtocol.VariablesResponse,
         args: DebugProtocol.VariablesArguments
     ): void {
-        const handle = this.variableHandles.get(args.variablesReference);
-        if (!handle) {
-            this.sendResponse(response);
-            return;
-        }
         try {
-            const variables = this.convertRuntimeVariables(handle);
+            const variableHandle = this.variableHandles.get(args.variablesReference);
+            let variables: DebugProtocol.Variable[] = [];
+            if (variableHandle) {
+                if ('locals' in variableHandle) {
+                    // we are dealing with a scope
+                    variables = this.convertRuntimeVariables(variableHandle);
+                } else {
+                    // we are dealing with a compound value
+                    if (Array.isArray(variableHandle)) {
+                        for (let i = 0; i < variableHandle.length; i++) {
+                            const v = variableHandle[i];
+                            variables.push(this.convertRuntimeValue(v, String(i)));
+                        }
+                    } else {
+                        variableHandle.fields.forEach(([fname, fvalue]) => {
+                            variables.push(this.convertRuntimeValue(fvalue, fname));
+                        });
+                    }
+                }
+            }
             if (variables.length > 0) {
                 response.body = {
                     variables
@@ -312,7 +428,6 @@ export class MoveDebugSession extends LoggingDebugSession {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
-
         this.sendResponse(response);
     }
 
@@ -323,11 +438,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(
-                /* next */ true,
-                /* stopAtCloseFrame */ false,
-                /* nextLineSkip */ true
-            );
+            const executionResult = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -344,11 +456,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(
-                /* next */ false,
-                /* stopAtCloseFrame */ false,
-                /* nextLineSkip */ true
-            );
+            const executionResult = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -363,30 +472,16 @@ export class MoveDebugSession extends LoggingDebugSession {
         response: DebugProtocol.StepOutResponse,
         _args: DebugProtocol.StepOutArguments
     ): void {
+        let terminate = false;
         try {
-            const steppedOut = this.runtime.stepOut();
-            if (!steppedOut) {
-                logger.log(`Cannot step out`);
-            }
+            const executionResult = this.runtime.stepOut(/* next */ false);
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
-        this.sendResponse(response);
-    }
-
-    protected stepBackRequest(
-        response: DebugProtocol.StepBackResponse,
-        _args: DebugProtocol.StepBackArguments
-    ): void {
-        try {
-            const steppedBack = this.runtime.stepBack();
-            if (!steppedBack) {
-                logger.log(`Cannot step back`);
-            }
-        } catch (err) {
-            response.success = false;
-            response.message = err instanceof Error ? err.message : String(err);
+        if (terminate) {
+            this.sendEvent(new TerminatedEvent());
         }
         this.sendResponse(response);
     }
@@ -397,7 +492,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.continue(/* reverse */ false);
+            const executionResult = this.runtime.continue();
+            terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -408,22 +504,26 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected reverseContinueRequest(
-        response: DebugProtocol.ReverseContinueResponse,
-        _args: DebugProtocol.ReverseContinueArguments
-    ): void {
-        let terminate = false;
+    protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
         try {
-            terminate = this.runtime.continue(/* reverse */ true);
+            const finalBreakpoints = [];
+            if (args.breakpoints && args.source.path) {
+                const breakpointLines = args.breakpoints.map(bp => bp.line);
+                const validatedBreakpoints = this.runtime.setLineBreakpoints(args.source.path, breakpointLines);
+                for (let i = 0; i < breakpointLines.length; i++) {
+                    finalBreakpoints.push(new Breakpoint(validatedBreakpoints[i], breakpointLines[i]));
+                }
+            }
+            response.body = {
+                breakpoints: finalBreakpoints
+            };
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
-        if (terminate) {
-            this.sendEvent(new TerminatedEvent());
-        }
         this.sendResponse(response);
     }
+
 
     protected disconnectRequest(
         response: DebugProtocol.DisconnectResponse,

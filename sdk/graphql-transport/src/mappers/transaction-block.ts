@@ -67,13 +67,14 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
 				type: toShortTypeString(event.contents.type?.repr)!,
 			})) ?? [],
-		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
+		rawTransaction: options?.showRawInput ? mapRawTransaction(transactionBlock) : undefined,
 		...(options?.showInput
 			? {
 					transaction:
 						transactionBlock.rawTransaction &&
 						mapTransactionBlockToInput(
-							bcs.SenderSignedData.parse(fromBase64(transactionBlock.rawTransaction))[0],
+							bcs.TransactionData.fromBase64(transactionBlock.rawTransaction),
+							transactionBlock.signatures,
 						),
 				}
 			: {}),
@@ -81,6 +82,30 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 			? mapObjectChanges(transactionBlock, effects)
 			: undefined,
 	};
+}
+
+function mapRawTransaction(transactionBlock: Rpc_Transaction_FieldsFragment) {
+	const txData = bcs.TransactionData.fromBase64(transactionBlock.rawTransaction);
+
+	return bcs.SenderSignedData.serialize([
+		{
+			intentMessage: {
+				intent: {
+					scope: {
+						TransactionData: true,
+					},
+					version: {
+						V0: true,
+					},
+					appId: {
+						Sui: true,
+					},
+				},
+				value: txData,
+			},
+			txSignatures: transactionBlock.signatures?.map((sig) => fromBase64(sig)) ?? [],
+		},
+	]).toBase64();
 }
 
 function mapObjectChanges(
@@ -169,10 +194,12 @@ function mapObjectChanges(
 }
 
 export function mapTransactionBlockToInput(
-	data: typeof bcs.SenderSignedTransaction.$inferType,
+	data: typeof bcs.TransactionData.$inferType,
+	signatures: any[] | null | undefined,
 ): SuiTransactionBlock | null {
-	const txData = data.intentMessage.value.V1;
-
+	const txData = data.V1;
+	console.log('Signatures:', signatures);
+	const sigs: string[] = (signatures ?? []).filter((sig): sig is string => typeof sig === 'string');
 	const programableTransaction =
 		'ProgrammableTransaction' in txData.kind ? txData.kind.ProgrammableTransaction : null;
 
@@ -181,7 +208,7 @@ export function mapTransactionBlockToInput(
 	}
 
 	return {
-		txSignatures: data.txSignatures,
+		txSignatures: sigs,
 		data: {
 			gasData: {
 				budget: txData.gasData.budget,

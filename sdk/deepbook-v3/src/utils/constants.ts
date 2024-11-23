@@ -18,8 +18,8 @@ export const testnetPackageIds = {
 } satisfies DeepbookPackageIds;
 
 export const mainnetPackageIds = {
-	DEEPBOOK_PACKAGE_ID: '0x6f2abaa15ea8f1935968310a196807272b37150878dc4072f2e0cbaa9eca894a',
-	REGISTRY_ID: '0x87f0e925e7ae938dc344bfe3ab58253511be2906f2435f5b7562b1c7430fe4a5',
+	DEEPBOOK_PACKAGE_ID: '0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809',
+	REGISTRY_ID: '0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d',
 	DEEP_TREASURY_ID: '0x032abf8948dda67a271bcc18e776dbbcfb0d58c8d288a700ff0d5521e57a1ffe',
 };
 
@@ -72,14 +72,34 @@ export const mainnetCoins: CoinMap = {
 		type: `0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN`,
 		scalar: 100000000,
 	},
+	BETH: {
+		address: `0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29`,
+		type: `0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH`,
+		scalar: 100000000,
+	},
 	WBTC: {
 		address: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881`,
 		type: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN`,
-		scalar: 0,
+		scalar: 100000000,
 	},
 	WUSDT: {
 		address: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c`,
 		type: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`,
+		scalar: 1000000,
+	},
+	NS: {
+		address: `0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178`,
+		type: `0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS`,
+		scalar: 1000000,
+	},
+	TYPUS: {
+		address: `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385`,
+		type: `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS`,
+		scalar: 1000000000,
+	},
+	AUSD: {
+		address: `0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2`,
+		type: `0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD`,
 		scalar: 1000000,
 	},
 };
@@ -109,28 +129,48 @@ export const testnetPools: PoolMap = {
 
 export const mainnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: ``,
+		address: `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
 	SUI_USDC: {
-		address: ``,
+		address: `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407`,
 		baseCoin: 'SUI',
 		quoteCoin: 'USDC',
 	},
 	DEEP_USDC: {
-		address: ``,
+		address: `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'USDC',
 	},
-	USDT_USDC: {
-		address: ``,
-		baseCoin: 'USDT',
+	WUSDT_USDC: {
+		address: `0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f`,
+		baseCoin: 'WUSDT',
 		quoteCoin: 'USDC',
 	},
 	WUSDC_USDC: {
-		address: ``,
+		address: `0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545`,
 		baseCoin: 'WUSDC',
 		quoteCoin: 'USDC',
+	},
+	BETH_USDC: {
+		address: `0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c`,
+		baseCoin: 'BETH',
+		quoteCoin: 'USDC',
+	},
+	NS_USDC: {
+		address: `0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060`,
+		baseCoin: 'NS',
+		quoteCoin: 'USDC',
+	},
+	NS_SUI: {
+		address: `0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8`,
+		baseCoin: 'NS',
+		quoteCoin: 'SUI',
+	},
+	TYPUS_SUI: {
+		address: `0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec`,
+		baseCoin: 'TYPUS',
+		quoteCoin: 'SUI',
 	},
 };

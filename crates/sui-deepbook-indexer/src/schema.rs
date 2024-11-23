@@ -3,12 +3,13 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    balances (id) {
-        id -> Int4,
+    balances (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         balance_manager_id -> Text,
         asset -> Text,
@@ -18,12 +19,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    flashloans (id) {
-        id -> Int4,
+    flashloans (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         borrow -> Bool,
         pool_id -> Text,
@@ -33,12 +35,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    order_fills (id) {
-        id -> Int4,
+    order_fills (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         pool_id -> Text,
         maker_order_id -> Text,
@@ -60,12 +63,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    order_updates (id) {
-        id -> Int4,
+    order_updates (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         status -> Text,
         pool_id -> Text,
@@ -83,12 +87,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    pool_prices (id) {
-        id -> Int4,
+    pool_prices (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         target_pool -> Text,
         reference_pool -> Text,
@@ -124,12 +129,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    proposals (id) {
-        id -> Int4,
+    proposals (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         pool_id -> Text,
         balance_manager_id -> Text,
@@ -141,12 +147,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    rebates (id) {
-        id -> Int4,
+    rebates (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         pool_id -> Text,
         balance_manager_id -> Text,
@@ -156,12 +163,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    stakes (id) {
-        id -> Int4,
+    stakes (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         pool_id -> Text,
         balance_manager_id -> Text,
@@ -184,12 +192,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    trade_params_update (id) {
-        id -> Int4,
+    trade_params_update (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         pool_id -> Text,
         taker_fee -> Int8,
@@ -199,12 +208,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    votes (id) {
-        id -> Int4,
+    votes (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        checkpoint_timestamp_ms -> Int8,
         package -> Text,
         pool_id -> Text,
         balance_manager_id -> Text,
@@ -230,3 +240,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     trade_params_update,
     votes,
 );
+
+diesel::table! {
+    balances_summary (asset) {
+        asset -> Text,
+        amount -> Int8,
+        deposit -> Bool,
+    }
+}

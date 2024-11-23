@@ -3,8 +3,8 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::jsonrpc_index::{CoinIndexKey2, CoinInfo, IndexStore};
 use anyhow::{anyhow, bail, Result};
-use sui_storage::{indexes::CoinInfo, IndexStore};
 use sui_types::{base_types::ObjectInfo, object::Owner};
 use tracing::info;
 use typed_store::traits::Map;
@@ -38,7 +38,7 @@ pub fn verify_indexes(store: &dyn AccumulatorStore, indexes: Arc<IndexStore>) ->
         if let Some(type_tag) = object.coin_type_maybe() {
             let info =
                 CoinInfo::from_object(&object).expect("already checked that this is a coin type");
-            let key = (owner, type_tag.to_string(), object.id());
+            let key = CoinIndexKey2::new(owner, type_tag.to_string(), info.balance, object.id());
 
             coin_index.insert(key, info);
         }

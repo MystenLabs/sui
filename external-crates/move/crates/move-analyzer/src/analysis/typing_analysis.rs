@@ -11,7 +11,7 @@ use crate::{
 };
 
 use move_compiler::{
-    diagnostics as diag,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast::{self as P, ConstantName},
@@ -661,7 +661,7 @@ impl TypingAnalysisContext<'_> {
 
 impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
     // Nothing to do -- we're not producing errors.
-    fn add_warning_filter_scope(&mut self, _filter: diag::WarningFilters) {}
+    fn push_warning_filter_scope(&mut self, _filter: WarningFilters) {}
 
     // Nothing to do -- we're not producing errors.
     fn pop_warning_filter_scope(&mut self) {}
@@ -907,7 +907,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
 
         match &fdef.body.value {
             T::FunctionBody_::Defined(seq) => {
-                self.visit_seq(seq);
+                self.visit_seq(fdef.body.loc, seq);
             }
             T::FunctionBody_::Macro | T::FunctionBody_::Native => (),
         }
@@ -985,7 +985,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
     }
 
-    fn visit_seq(&mut self, (use_funs, seq): &T::Sequence) {
+    fn visit_seq(&mut self, _loc: Loc, (use_funs, seq): &T::Sequence) {
         let old_traverse_mode = self.traverse_only;
         // start adding new use-defs etc. when processing arguments
         if use_funs.color == 0 {

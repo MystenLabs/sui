@@ -7,66 +7,83 @@ import { ModuleInfo } from './utils';
 
 // Data types corresponding to source map file JSON schema.
 
-interface ISrcDefinitionLocation {
+interface JSONSrcDefinitionLocation {
     file_hash: number[];
     start: number;
     end: number;
 }
 
-interface ISrcStructSourceMapEntry {
-    definition_location: ISrcDefinitionLocation;
-    type_parameters: [string, ISrcDefinitionLocation][];
-    fields: ISrcDefinitionLocation[];
+interface JSONSrcStructSourceMapEntry {
+    definition_location: JSONSrcDefinitionLocation;
+    type_parameters: [string, JSONSrcDefinitionLocation][];
+    fields: JSONSrcDefinitionLocation[];
 }
 
-interface ISrcEnumSourceMapEntry {
-    definition_location: ISrcDefinitionLocation;
-    type_parameters: [string, ISrcDefinitionLocation][];
-    variants: [[string, ISrcDefinitionLocation], ISrcDefinitionLocation[]][];
+interface JSONSrcEnumSourceMapEntry {
+    definition_location: JSONSrcDefinitionLocation;
+    type_parameters: [string, JSONSrcDefinitionLocation][];
+    variants: [[string, JSONSrcDefinitionLocation], JSONSrcDefinitionLocation[]][];
 }
 
-interface ISrcFunctionMapEntry {
-    definition_location: ISrcDefinitionLocation;
-    type_parameters: [string, ISrcDefinitionLocation][];
-    parameters: [string, ISrcDefinitionLocation][];
-    locals: [string, ISrcDefinitionLocation][];
+interface JSONSrcFunctionMapEntry {
+    location: JSONSrcDefinitionLocation;
+    definition_location: JSONSrcDefinitionLocation;
+    type_parameters: [string, JSONSrcDefinitionLocation][];
+    parameters: [string, JSONSrcDefinitionLocation][];
+    locals: [string, JSONSrcDefinitionLocation][];
     nops: Record<string, any>;
-    code_map: Record<string, ISrcDefinitionLocation>;
+    code_map: Record<string, JSONSrcDefinitionLocation>;
     is_native: boolean;
 }
 
-interface ISrcRootObject {
-    definition_location: ISrcDefinitionLocation;
+interface JSONSrcRootObject {
+    definition_location: JSONSrcDefinitionLocation;
     module_name: string[];
-    struct_map: Record<string, ISrcStructSourceMapEntry>;
-    enum_map: Record<string, ISrcEnumSourceMapEntry>;
-    function_map: Record<string, ISrcFunctionMapEntry>;
+    struct_map: Record<string, JSONSrcStructSourceMapEntry>;
+    enum_map: Record<string, JSONSrcEnumSourceMapEntry>;
+    function_map: Record<string, JSONSrcFunctionMapEntry>;
     constant_map: Record<string, string>;
 }
 
 // Runtime data types.
 
 /**
- * Describes a location in the source file.
+ * Describes a location in terms of line/column.
  */
-interface ILoc {
+export interface ILoc {
     line: number;
     column: number;
 }
 
 /**
+ * Describes a location in the source file.
+ */
+export interface IFileLoc {
+    fileHash: string;
+    loc: ILoc;
+}
+
+/**
  * Describes a function in the source map.
  */
-interface ISourceMapFunction {
+export interface ISourceMapFunction {
     /**
      * Locations indexed with PC values.
      */
-    pcLocs: ILoc[],
+    pcLocs: IFileLoc[],
     /**
      * Names of local variables by their index in the frame
      * (parameters first, then actual locals).
      */
-    localsNames: string[]
+    localsNames: string[],
+    /**
+     * Location of function definition start.
+     */
+    startLoc: ILoc,
+    /**
+     * Location of function definition start.
+     */
+    endLoc: ILoc
 }
 
 /**
@@ -85,10 +102,13 @@ export interface IFileInfo {
  * Source map for a Move module.
  */
 export interface ISourceMap {
+    filePath: string
     fileHash: string
     modInfo: ModuleInfo,
     functions: Map<string, ISourceMapFunction>,
-    // Lines that are not present in the source map.
+    /**
+     * Lines that are not present in the source map.
+     */
     optimizedLines: number[]
 }
 
@@ -97,6 +117,7 @@ export function readAllSourceMaps(
     filesMap: Map<string, IFileInfo>
 ): Map<string, ISourceMap> {
     const sourceMapsMap = new Map<string, ISourceMap>();
+    const allSourceMapLinesMap = new Map<string, Set<number>>;
 
     const processDirectory = (dir: string) => {
         const files = fs.readdirSync(dir);
@@ -106,13 +127,27 @@ export function readAllSourceMaps(
             if (stats.isDirectory()) {
                 processDirectory(filePath);
             } else if (path.extname(f) === '.json') {
-                const sourceMap = readSourceMap(filePath, filesMap);
+                const sourceMap = readSourceMap(filePath, filesMap, allSourceMapLinesMap);
                 sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
             }
         }
     };
 
     processDirectory(directory);
+
+    for (const sourceMap of sourceMapsMap.values()) {
+        const fileHash = sourceMap.fileHash;
+        const sourceMapLines = allSourceMapLinesMap.get(fileHash);
+        const fileInfo = filesMap.get(fileHash);
+        if (sourceMapLines && fileInfo) {
+            for (let i = 0; i < fileInfo.lines.length; i++) {
+                if (!sourceMapLines.has(i + 1)) { // allSourceMapLines is 1-based
+                    sourceMap.optimizedLines.push(i); // result must be 0-based
+                }
+            }
+        }
+    }
+
 
     return sourceMapsMap;
 }
@@ -122,11 +157,18 @@ export function readAllSourceMaps(
  *
  * @param sourceMapPath path to the source map JSON file.
  * @param filesMap map from file hash to file information.
+ * @param sourceMapLinesMap map from file hash to set of lines present
+ * in all source maps for a given file (a given source map may contain
+ * source lines for different files due to inlining).
  * @returns source map.
  * @throws Error if with a descriptive error message if the source map cannot be read.
  */
-function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>): ISourceMap {
-    const sourceMapJSON: ISrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
+function readSourceMap(
+    sourceMapPath: string,
+    filesMap: Map<string, IFileInfo>,
+    sourceMapLinesMap: Map<string, Set<number>>
+): ISourceMap {
+    const sourceMapJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
 
     const fileHash = Buffer.from(sourceMapJSON.definition_location.file_hash).toString('base64');
     const modInfo: ModuleInfo = {
@@ -141,33 +183,52 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
             + ' when processing source map at: '
             + sourceMapPath);
     }
-    const allSourceMapLines = new Set<number>();
-    prePopulateSourceMapLines(sourceMapJSON, fileInfo, allSourceMapLines);
+    const sourceMapLines = sourceMapLinesMap.get(fileHash) ?? new Set<number>;
+    prePopulateSourceMapLines(sourceMapJSON, fileInfo, sourceMapLines);
+    sourceMapLinesMap.set(fileHash, sourceMapLines);
     const functionMap = sourceMapJSON.function_map;
     for (const funEntry of Object.values(functionMap)) {
         let nameStart = funEntry.definition_location.start;
         let nameEnd = funEntry.definition_location.end;
         const funName = fileInfo.content.slice(nameStart, nameEnd);
-        const pcLocs: ILoc[] = [];
+        const pcLocs: IFileLoc[] = [];
         let prevPC = 0;
-        // we need to initialize `prevLoc` to make the compiler happy but it's never
+        // we need to initialize `prevFileLoc` to make the compiler happy but it's never
         // going to be used as the first PC in the frame is always 0 so the inner
-        // loop never gets executed during first iteration of the outer loopq
-        let prevLoc = { line: -1, column: -1 };
+        // loop never gets executed during first iteration of the outer loop
+        let prevLoc: IFileLoc = {
+            fileHash: "",
+            loc: { line: -1, column: -1 }
+        };
         // create a list of locations for each PC, even those not explicitly listed
         // in the source map
         for (const [pc, defLocation] of Object.entries(funEntry.code_map)) {
             const currentPC = parseInt(pc);
-            const currentLoc = byteOffsetToLineColumn(fileInfo, defLocation.start);
-            allSourceMapLines.add(currentLoc.line);
+            const defLocFileHash = Buffer.from(defLocation.file_hash).toString('base64');
+            const fileInfo = filesMap.get(defLocFileHash);
+            if (!fileInfo) {
+                throw new Error('Could not find file with hash: '
+                    + fileHash
+                    + ' when processing source map at: '
+                    + sourceMapPath);
+            }
+            const currentStartLoc = byteOffsetToLineColumn(fileInfo, defLocation.start);
+            const currentFileStartLoc: IFileLoc = {
+                fileHash: defLocFileHash,
+                loc: currentStartLoc
+            };
+            const sourceMapLines = sourceMapLinesMap.get(defLocFileHash) ?? new Set<number>;
+            sourceMapLines.add(currentStartLoc.line);
             // add the end line to the set as well even if we don't need it for pcLocs
-            allSourceMapLines.add(byteOffsetToLineColumn(fileInfo, defLocation.end).line);
+            const currentEndLoc = byteOffsetToLineColumn(fileInfo, defLocation.end);
+            sourceMapLines.add(currentEndLoc.line);
+            sourceMapLinesMap.set(defLocFileHash, sourceMapLines);
             for (let i = prevPC + 1; i < currentPC; i++) {
                 pcLocs.push(prevLoc);
             }
-            pcLocs.push(currentLoc);
+            pcLocs.push(currentFileStartLoc);
             prevPC = currentPC;
-            prevLoc = currentLoc;
+            prevLoc = currentFileStartLoc;
         }
 
         const localsNames: string[] = [];
@@ -188,17 +249,12 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
                 localsNames.push(localsName);
             }
         }
-
-        functions.set(funName, { pcLocs, localsNames });
+        // compute start and end of function definition
+        const startLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.start);
+        const endLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.end);
+        functions.set(funName, { pcLocs, localsNames, startLoc, endLoc });
     }
-    let optimized_lines: number[] = [];
-    for (let i = 0; i < fileInfo.lines.length; i++) {
-        if (!allSourceMapLines.has(i + 1)) { // allSourceMapLines is 1-based
-            optimized_lines.push(i); // result must be 0-based
-        }
-    }
-
-    return { fileHash, modInfo, functions, optimizedLines: optimized_lines };
+    return { filePath: fileInfo.path, fileHash, modInfo, functions, optimizedLines: [] };
 }
 
 /**
@@ -212,7 +268,7 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
  * @param sourceMapLines
  */
 function prePopulateSourceMapLines(
-    sourceMapJSON: ISrcRootObject,
+    sourceMapJSON: JSONSrcRootObject,
     fileInfo: IFileInfo,
     sourceMapLines: Set<number>
 ): void {
@@ -265,7 +321,7 @@ function prePopulateSourceMapLines(
  * @param sourceMapLines  set of source file lines.
  */
 function addLinesForLocation(
-    loc: ISrcDefinitionLocation,
+    loc: JSONSrcDefinitionLocation,
     fileInfo: IFileInfo,
     sourceMapLines: Set<number>
 ): void {
@@ -284,7 +340,10 @@ function addLinesForLocation(
  * @param offset  byte offset in the source file.
  * @returns Source file location (line/column).
  */
-function byteOffsetToLineColumn(fileInfo: IFileInfo, offset: number): ILoc {
+function byteOffsetToLineColumn(
+    fileInfo: IFileInfo,
+    offset: number,
+): ILoc {
     if (offset < 0) {
         return { line: 1, column: 1 };
     }

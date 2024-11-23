@@ -55,7 +55,7 @@ module Test::M1 {
 //# run-graphql
 # Expect ten results
 {
-  transactionBlocks(filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -76,7 +76,7 @@ module Test::M1 {
 //# run-graphql
 # Don't need scanLimit with sender
 {
-  transactionBlocks(filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -97,7 +97,7 @@ module Test::M1 {
 //# run-graphql
 # scanLimit required
 {
-  transactionBlocks(filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 function: "@{Test}::M1::create"}) {
+  transactionBlocks(filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 function: "@{Test}::M1::create"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -118,7 +118,7 @@ module Test::M1 {
 //# run-graphql
 # valid
 {
-  transactionBlocks(scanLimit: 50 filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 function: "@{Test}::M1::create"}) {
+  transactionBlocks(scanLimit: 50 filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 function: "@{Test}::M1::create"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -139,7 +139,7 @@ module Test::M1 {
 //# run-graphql
 # scanLimit required
 {
-  transactionBlocks(filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 kind: PROGRAMMABLE_TX}) {
+  transactionBlocks(filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 kind: PROGRAMMABLE_TX}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -160,7 +160,7 @@ module Test::M1 {
 //# run-graphql
 # valid
 {
-  transactionBlocks(scanLimit: 50 filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 kind: PROGRAMMABLE_TX}) {
+  transactionBlocks(scanLimit: 50 filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 kind: PROGRAMMABLE_TX}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -181,7 +181,7 @@ module Test::M1 {
 //# run-graphql
 # scanLimit required
 {
-  transactionBlocks(filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 inputObject: "@{obj_3_0}"}) {
+  transactionBlocks(filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 inputObject: "@{obj_3_0}"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -202,7 +202,7 @@ module Test::M1 {
 //# run-graphql
 # valid
 {
-  transactionBlocks(scanLimit: 50 filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 inputObject: "@{obj_3_0}"}) {
+  transactionBlocks(scanLimit: 50 filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 inputObject: "@{obj_3_0}"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -224,7 +224,7 @@ module Test::M1 {
 //# run-graphql
 # scanLimit required
 {
-  transactionBlocks(filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 changedObject: "@{obj_3_0}"}) {
+  transactionBlocks(filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 changedObject: "@{obj_3_0}"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -247,7 +247,7 @@ module Test::M1 {
 # Because scanLimit is specified, the boundary cursors should be at 2 and 11,
 # and both will indicate is_scan_limited
 {
-  transactionBlocks(scanLimit: 50 filter: {signAddress: "@{A}" recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 changedObject: "@{obj_3_0}"}) {
+  transactionBlocks(scanLimit: 50 filter: {sentAddress: "@{A}" affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4 changedObject: "@{obj_3_0}"}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
