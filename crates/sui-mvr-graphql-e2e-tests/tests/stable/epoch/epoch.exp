@@ -77,20 +77,7 @@ Response: {
       "fundOutflow": "978120",
       "netInflow": "997880",
       "transactionBlocks": {
-        "nodes": [
-          {
-            "kind": {
-              "__typename": "ProgrammableTransactionBlock"
-            },
-            "digest": "Gmyzb2VbPeBeaEaUHz7UkcLy8ptVe3CCynfKdvd27BYs"
-          },
-          {
-            "kind": {
-              "__typename": "EndOfEpochTransaction"
-            },
-            "digest": "3e1j1uEGkxTFNdsq5srGGGNADrDuebKFj9c2JFeqNG7t"
-          }
-        ]
+        "nodes": []
       }
     }
   }

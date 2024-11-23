@@ -152,17 +152,7 @@ Response: {
   "data": {
     "address": {
       "objects": {
-        "edges": [
-          {
-            "node": {
-              "address": "0x23ef71b8e66389131447b14f452128212257d2db53805e37af8fba4b41ad8ca3",
-              "digest": "3qUjwuGdE86PTc8Z3ucr1WKZC4SmUXtXdjUcPywy6hLQ",
-              "owner": {
-                "__typename": "AddressOwner"
-              }
-            }
-          }
-        ]
+        "edges": []
       }
     }
   }
@@ -179,17 +169,7 @@ Response: {
     },
     "second": {
       "objects": {
-        "edges": [
-          {
-            "node": {
-              "address": "0x23ef71b8e66389131447b14f452128212257d2db53805e37af8fba4b41ad8ca3",
-              "digest": "3qUjwuGdE86PTc8Z3ucr1WKZC4SmUXtXdjUcPywy6hLQ",
-              "owner": {
-                "__typename": "AddressOwner"
-              }
-            }
-          }
-        ]
+        "edges": []
       }
     },
     "val_objs": {
@@ -199,15 +179,6 @@ Response: {
             "node": {
               "address": "0x423c9d76d2aaf5fcacfe5c95b934d44c43f9e88775264c1316a802b3f4623afb",
               "digest": "83GBKCTiDtfEV5F8QaProZjfzHVfH3p5Y9hrSt9FW85Z",
-              "owner": {
-                "__typename": "AddressOwner"
-              }
-            }
-          },
-          {
-            "node": {
-              "address": "0x6163fffa44de65f44ccaf0a0d661c40822af07ceaa02e601b4cb59b458ab6ce2",
-              "digest": "2y11yoS1zEnvCqvHFGrQDaXaQSFhd9hKvN9haoP8jNqz",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -239,28 +210,11 @@ Response: {
                 "__typename": "AddressOwner"
               }
             }
-          },
-          {
-            "node": {
-              "address": "0xfe887d694d116e30f8efa961484a199fff9f845542845a86be86b4d8f474ed4a",
-              "digest": "8qaumCh1NPMvjdwamiaVy8LnqMQPbSmhSSigcHZQ6Cy1",
-              "owner": {
-                "__typename": "AddressOwner"
-              }
-            }
           }
         ]
       }
     },
-    "object": {
-      "version": 3,
-      "owner": {
-        "__typename": "AddressOwner",
-        "owner": {
-          "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
-        }
-      }
-    }
+    "object": null
   }
 }
 

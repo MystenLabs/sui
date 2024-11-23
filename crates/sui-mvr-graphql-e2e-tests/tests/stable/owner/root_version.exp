@@ -136,55 +136,13 @@ Response: {
       }
     },
     "versioned": {
-      "asObject": {
-        "asMoveObject": {
-          "version": 10,
-          "contents": {
-            "json": {
-              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
-              "count": "1",
-              "wrapped": {
-                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
-                "count": "1"
-              }
-            }
-          }
-        }
-      }
+      "asObject": null
     },
     "beforeWrappedBump": {
-      "asObject": {
-        "asMoveObject": {
-          "version": 8,
-          "contents": {
-            "json": {
-              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
-              "count": "1",
-              "wrapped": {
-                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
-                "count": "0"
-              }
-            }
-          }
-        }
-      }
+      "asObject": null
     },
     "beforeBump": {
-      "asObject": {
-        "asMoveObject": {
-          "version": 7,
-          "contents": {
-            "json": {
-              "id": "0xdecc5c8f1ae3f8e6bfa4493d9e9711a033e1eb00551e07854d5f08ac6dae7588",
-              "count": "0",
-              "wrapped": {
-                "id": "0xec73f4e0490995f1661d8248f4402b475a4f9643d309c1bb792874484cb0adbd",
-                "count": "0"
-              }
-            }
-          }
-        }
-      }
+      "asObject": null
     }
   }
 }
@@ -195,68 +153,20 @@ Response: {
   "data": {
     "unversioned": {
       "dynamicObjectField": {
-        "value": {
-          "version": 7,
-          "contents": {
-            "json": {
-              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
-              "count": "0"
-            }
-          }
-        }
+        "value": null
       }
     },
     "latest": {
-      "dynamicObjectField": {
-        "value": {
-          "version": 10,
-          "contents": {
-            "json": {
-              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
-              "count": "1"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "afterFirstInnerBump": {
-      "dynamicObjectField": {
-        "value": {
-          "version": 10,
-          "contents": {
-            "json": {
-              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
-              "count": "1"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "beforeFirstInnerBump": {
-      "dynamicObjectField": {
-        "value": {
-          "version": 7,
-          "contents": {
-            "json": {
-              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
-              "count": "0"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "beforeBumps": {
-      "dynamicObjectField": {
-        "value": {
-          "version": 7,
-          "contents": {
-            "json": {
-              "id": "0xc6648a3386f34bd5b4757713a6d5f81852df299ef5a867de257b0c28a56f07e3",
-              "count": "0"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     }
   }
 }
@@ -267,42 +177,14 @@ Response: {
   "data": {
     "unversioned": {
       "dynamicObjectField": {
-        "value": {
-          "version": 7,
-          "contents": {
-            "json": {
-              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
-              "count": "0"
-            }
-          }
-        }
+        "value": null
       }
     },
     "latest": {
-      "dynamicObjectField": {
-        "value": {
-          "version": 11,
-          "contents": {
-            "json": {
-              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
-              "count": "1"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "beforeInnerBump": {
-      "dynamicObjectField": {
-        "value": {
-          "version": 7,
-          "contents": {
-            "json": {
-              "id": "0x418dc1ff6ea1cdccbc2ab29974b3f233855dee9bedecfadaab0d4f906bef4295",
-              "count": "0"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     }
   }
 }

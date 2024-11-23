@@ -112,30 +112,10 @@ Response: {
           }
         ]
       },
-      "dynamicField": {
-        "name": {
-          "bcs": "A2RmMQ=="
-        },
-        "value": {
-          "json": "df1"
-        }
-      }
-    },
-    "df_added": {
-      "version": 3,
-      "dynamicField": {
-        "name": {
-          "bcs": "A2RmMQ=="
-        },
-        "value": {
-          "json": "df1"
-        }
-      }
-    },
-    "before_df_added": {
-      "version": 2,
       "dynamicField": null
-    }
+    },
+    "df_added": null,
+    "before_df_added": null
   }
 }
 
@@ -235,36 +215,9 @@ Response: {
           }
         ]
       },
-      "dynamicField": {
-        "name": {
-          "bcs": "A2RmMQ=="
-        },
-        "value": {
-          "json": "df1_mutated"
-        }
-      }
+      "dynamicField": null
     },
-    "df1_mutated": {
-      "version": 5,
-      "dynamicField": {
-        "name": {
-          "bcs": "A2RmMQ=="
-        },
-        "value": {
-          "json": "df1_mutated"
-        }
-      }
-    },
-    "before_df1_mutated": {
-      "version": 4,
-      "dynamicField": {
-        "name": {
-          "bcs": "A2RmMQ=="
-        },
-        "value": {
-          "json": "df1"
-        }
-      }
-    }
+    "df1_mutated": null,
+    "before_df1_mutated": null
   }
 }

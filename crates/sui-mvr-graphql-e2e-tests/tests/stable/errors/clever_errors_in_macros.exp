@@ -33,26 +33,7 @@ task 6, lines 44-54:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "effects": {
-            "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x6846951eaea99f8742b4ad253534ef8b44459248f322f3cd404050aa1b9a3cbb::m::t_a' (line 20)"
-          }
-        },
-        {
-          "effects": {
-            "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x6846951eaea99f8742b4ad253534ef8b44459248f322f3cd404050aa1b9a3cbb::m::t_calls_a' (line 23)"
-          }
-        },
-        {
-          "effects": {
-            "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x6846951eaea99f8742b4ad253534ef8b44459248f322f3cd404050aa1b9a3cbb::m::t_const_assert' (line 9), abort 'EMsg': This is a string"
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }

@@ -53,27 +53,7 @@ task 9, lines 84-114:
 //# run-graphql
 Response: {
   "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
-              "version": 5,
-              "contents": {
-                "json": {
-                  "id": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
-                  "count": "0"
-                }
-              },
-              "dynamicFields": {
-                "nodes": []
-              }
-            }
-          }
-        ]
-      }
-    }
+    "object": null
   }
 }
 
@@ -81,40 +61,7 @@ task 10, lines 116-146:
 //# run-graphql
 Response: {
   "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
-              "version": 5,
-              "contents": {
-                "json": {
-                  "id": "0xe3679305061cc482496424b6d7620aaf7547c119248c3a32d92cfd960be18f70",
-                  "count": "0"
-                }
-              },
-              "dynamicFields": {
-                "nodes": [
-                  {
-                    "value": {
-                      "address": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
-                      "version": 6,
-                      "contents": {
-                        "json": {
-                          "id": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
-                          "count": "0"
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
-    }
+    "object": null
   }
 }
 
@@ -122,11 +69,7 @@ task 11, lines 148-178:
 //# run-graphql
 Response: {
   "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": []
-      }
-    }
+    "object": null
   }
 }
 
@@ -142,16 +85,7 @@ task 13, lines 212-239:
 //# run-graphql
 Response: {
   "data": {
-    "object": {
-      "owner": {
-        "parent": {
-          "address": "0x9958869e2da5c5af828a334520a81de2bec0861e171b575db12fb4987cb27a78"
-        }
-      },
-      "dynamicFields": {
-        "nodes": []
-      }
-    }
+    "object": null
   }
 }
 
@@ -167,27 +101,7 @@ task 15, lines 260-287:
 //# run-graphql
 Response: {
   "data": {
-    "object": {
-      "owner": {
-        "_": null
-      },
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
-              "version": 6,
-              "contents": {
-                "json": {
-                  "id": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
-                  "count": "0"
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
+    "object": null
   }
 }
 
@@ -202,16 +116,7 @@ Response: {
       "dynamicFields": {
         "nodes": [
           {
-            "value": {
-              "address": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
-              "version": 6,
-              "contents": {
-                "json": {
-                  "id": "0xe9da616bc3a2cadb507658554aa60744f6745a9580dd0512553cdf3a64f41618",
-                  "count": "0"
-                }
-              }
-            }
+            "value": null
           }
         ]
       }

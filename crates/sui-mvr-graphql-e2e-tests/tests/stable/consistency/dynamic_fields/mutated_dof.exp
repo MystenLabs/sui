@@ -46,31 +46,12 @@ Response: {
               "name": {
                 "bcs": "KgAAAAAAAAA="
               },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-                    "count": "0"
-                  }
-                }
-              }
+              "value": null
             }
           }
         ]
       },
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "0"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "owner_view": {
       "version": 4,
@@ -82,52 +63,15 @@ Response: {
               "name": {
                 "bcs": "KgAAAAAAAAA="
               },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-                    "count": "0"
-                  }
-                }
-              }
+              "value": null
             }
           }
         ]
       },
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "0"
-            }
-          }
-        }
-      }
-    },
-    "dof_added": {
-      "version": 3,
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "0"
-            }
-          }
-        }
-      }
-    },
-    "before_dof_added": {
-      "version": 2,
       "dynamicObjectField": null
-    }
+    },
+    "dof_added": null,
+    "before_dof_added": null
   }
 }
 
@@ -159,22 +103,7 @@ Response: {
       },
       "dynamicObjectField": null
     },
-    "before_reclaim_dof": {
-      "version": 4,
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "0"
-            }
-          }
-        }
-      }
-    }
+    "before_reclaim_dof": null
   }
 }
 
@@ -207,31 +136,12 @@ Response: {
               "name": {
                 "bcs": "KgAAAAAAAAA="
               },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-                    "count": "1"
-                  }
-                }
-              }
+              "value": null
             }
           }
         ]
       },
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "1"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "owner_view": {
       "version": 7,
@@ -243,52 +153,15 @@ Response: {
               "name": {
                 "bcs": "KgAAAAAAAAA="
               },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-                    "count": "1"
-                  }
-                }
-              }
+              "value": null
             }
           }
         ]
       },
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "1"
-            }
-          }
-        }
-      }
-    },
-    "parent_version_6": null,
-    "parent_version_5": {
-      "version": 5,
       "dynamicObjectField": null
     },
-    "parent_version_4": {
-      "version": 4,
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0x36c21ebf0f400be2910c524ee30635e60c220a4b493ce49536b10ec85519e065",
-              "count": "0"
-            }
-          }
-        }
-      }
-    }
+    "parent_version_6": null,
+    "parent_version_5": null,
+    "parent_version_4": null
   }
 }

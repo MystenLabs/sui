@@ -18,100 +18,7 @@ task 3, lines 18-76:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "effects": {
-            "objectChanges": {
-              "nodes": [
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": {
-                      "module": {
-                        "all": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjowLCJjIjoxfQ",
-                              "node": {
-                                "name": "m0"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoyLCJjIjoxfQ",
-                              "node": {
-                                "name": "m2"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": false,
-                            "hasPreviousPage": false
-                          }
-                        },
-                        "after": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoyLCJjIjoxfQ",
-                              "node": {
-                                "name": "m2"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": false,
-                            "hasPreviousPage": true
-                          }
-                        },
-                        "before": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjowLCJjIjoxfQ",
-                              "node": {
-                                "name": "m0"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": true,
-                            "hasPreviousPage": false
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -121,62 +28,9 @@ task 4, lines 79-108:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "effects": {
-            "objectChanges": {
-              "nodes": [
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": {
-                      "module": null
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
-  },
-  "errors": [
-    {
-      "message": "Connection's page size of 1000 exceeds max of 50",
-      "locations": [
-        {
-          "line": 5,
-          "column": 13
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "effects",
-        "objectChanges",
-        "nodes",
-        2,
-        "outputState",
-        "asMovePackage",
-        "module",
-        "friends"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
 
 task 5, lines 110-172:
@@ -184,102 +38,7 @@ task 5, lines 110-172:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "effects": {
-            "objectChanges": {
-              "nodes": [
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": {
-                      "module": {
-                        "prefix": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": true,
-                            "hasPreviousPage": true
-                          }
-                        },
-                        "prefixAll": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoyLCJjIjoxfQ",
-                              "node": {
-                                "name": "m2"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": false,
-                            "hasPreviousPage": true
-                          }
-                        },
-                        "suffix": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": true,
-                            "hasPreviousPage": true
-                          }
-                        },
-                        "suffixAll": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjowLCJjIjoxfQ",
-                              "node": {
-                                "name": "m0"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoxfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            }
-                          ],
-                          "pageInfo": {
-                            "hasNextPage": true,
-                            "hasPreviousPage": false
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -299,62 +58,7 @@ task 8, lines 187-220:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "effects": {
-            "objectChanges": {
-              "nodes": [
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": {
-                      "module": {
-                        "friends": {
-                          "edges": [
-                            {
-                              "cursor": "eyJpIjowLCJjIjoyfQ",
-                              "node": {
-                                "name": "m0"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoxLCJjIjoyfQ",
-                              "node": {
-                                "name": "m1"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjoyLCJjIjoyfQ",
-                              "node": {
-                                "name": "m2"
-                              }
-                            },
-                            {
-                              "cursor": "eyJpIjozLCJjIjoyfQ",
-                              "node": {
-                                "name": "m3"
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }

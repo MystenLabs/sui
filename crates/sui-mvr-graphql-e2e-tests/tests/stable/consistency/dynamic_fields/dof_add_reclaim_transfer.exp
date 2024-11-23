@@ -41,31 +41,12 @@ Response: {
               "name": {
                 "bcs": "KgAAAAAAAAA="
               },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-                    "count": "0"
-                  }
-                }
-              }
+              "value": null
             }
           }
         ]
       },
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-              "count": "0"
-            }
-          }
-        }
-      }
+      "dynamicObjectField": null
     },
     "owner_view": {
       "dynamicFields": {
@@ -76,14 +57,7 @@ Response: {
               "name": {
                 "bcs": "KgAAAAAAAAA="
               },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-                    "count": "0"
-                  }
-                }
-              }
+              "value": null
             }
           }
         ]
@@ -92,59 +66,11 @@ Response: {
         "name": {
           "bcs": "KgAAAAAAAAA="
         },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-              "count": "0"
-            }
-          }
-        }
+        "value": null
       }
     },
-    "dof_added": {
-      "version": 3,
-      "dynamicFields": {
-        "edges": [
-          {
-            "cursor": "IINo9rtSKYxa8qTnsANAx+SVF2gwG9jIfKKxVO/XfZaIAQAAAAAAAAA=",
-            "node": {
-              "name": {
-                "bcs": "KgAAAAAAAAA="
-              },
-              "value": {
-                "contents": {
-                  "json": {
-                    "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-                    "count": "0"
-                  }
-                }
-              }
-            }
-          }
-        ]
-      },
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-              "count": "0"
-            }
-          }
-        }
-      }
-    },
-    "before_dof_added": {
-      "version": 2,
-      "dynamicFields": {
-        "edges": []
-      },
-      "dynamicObjectField": null
-    }
+    "dof_added": null,
+    "before_dof_added": null
   }
 }
 
@@ -175,21 +101,6 @@ Response: {
       },
       "dynamicObjectField": null
     },
-    "before_reclaim_and_transfer_dof": {
-      "version": 3,
-      "dynamicObjectField": {
-        "name": {
-          "bcs": "KgAAAAAAAAA="
-        },
-        "value": {
-          "contents": {
-            "json": {
-              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
-              "count": "0"
-            }
-          }
-        }
-      }
-    }
+    "before_reclaim_and_transfer_dof": null
   }
 }

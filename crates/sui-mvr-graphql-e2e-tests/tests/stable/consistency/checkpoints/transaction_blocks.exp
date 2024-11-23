@@ -90,157 +90,19 @@ Response: {
         {
           "sequenceNumber": 1,
           "transactionBlocks": {
-            "edges": [
-              {
-                "cursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
-              {
-                "cursor": "eyJjIjozLCJ0IjozLCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "H1WU8uXMGaENQs54EpoHGpV1iMYdH8P5scd1d16s9ECB",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
-              {
-                "cursor": "eyJjIjozLCJ0Ijo0LCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "4vJbSYKwEJb5sYU2jiayqsZNRnBywD8y6sd3RQoMppF9",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
-              {
-                "cursor": "eyJjIjozLCJ0Ijo1LCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
+            "edges": []
           }
         },
         {
           "sequenceNumber": 2,
           "transactionBlocks": {
-            "edges": [
-              {
-                "cursor": "eyJjIjozLCJ0Ijo2LCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "JLAF7P6DumC8rgzT1Ygp2QgTwpHE2FUqQbVXL6cGEEQ",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
-              {
-                "cursor": "eyJjIjozLCJ0Ijo3LCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "BVMVdn7DDpTbCjtYwWFekcFA9sNeMgDh1wTNWRrngZxh",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
-              {
-                "cursor": "eyJjIjozLCJ0Ijo4LCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "4J5tno4AoU4NPS2NgEseAZK7cpLDh6KJduVtbtwzmHk5",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
+            "edges": []
           }
         },
         {
           "sequenceNumber": 3,
           "transactionBlocks": {
-            "edges": [
-              {
-                "cursor": "eyJjIjozLCJ0Ijo5LCJpIjpmYWxzZX0",
-                "node": {
-                  "digest": "5BCS9sencxEJRJHBBPeGhx3rWutYoGSuLFCmnMAaYcDm",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
-              {
-                "cursor": "eyJjIjozLCJ0IjoxMCwiaSI6ZmFsc2V9",
-                "node": {
-                  "digest": "HQYJnLLcGf4DwgTkpqF4zHbQsLHwc1s4WbQ3Xr5BBaxh",
-                  "sender": {
-                    "objects": {
-                      "edges": [
-                        {
-                          "cursor": "IPdBQipzs53YXv+f5ZHkysnhkenevKFjtWcKDBtTiWu8AwAAAAAAAAA="
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
+            "edges": []
           }
         }
       ]

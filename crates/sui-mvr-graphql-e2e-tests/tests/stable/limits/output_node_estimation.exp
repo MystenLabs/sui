@@ -27,13 +27,7 @@ task 2, lines 16-26:
 Response: {
   "data": {
     "transactionBlocks": {
-      "edges": [
-        {
-          "node": {
-            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-          }
-        }
-      ]
+      "edges": []
     }
   },
   "extensions": {
@@ -56,13 +50,7 @@ Response: {
       "nodes": [
         {
           "transactionBlocks": {
-            "edges": [
-              {
-                "txns": {
-                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-                }
-              }
-            ]
+            "edges": []
           }
         }
       ]
@@ -88,22 +76,10 @@ Response: {
       "nodes": [
         {
           "notOne": {
-            "edges": [
-              {
-                "txns": {
-                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-                }
-              }
-            ]
+            "edges": []
           },
           "isOne": {
-            "edges": [
-              {
-                "txns": {
-                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-                }
-              }
-            ]
+            "edges": []
           }
         }
       ]
@@ -129,13 +105,7 @@ Response: {
       "nodes": [
         {
           "notZero": {
-            "edges": [
-              {
-                "txns": {
-                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-                }
-              }
-            ]
+            "edges": []
           },
           "isZero": {
             "edges": []
@@ -161,13 +131,7 @@ task 6, lines 90-100:
 Response: {
   "data": {
     "transactionBlocks": {
-      "edges": [
-        {
-          "txns": {
-            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-          }
-        }
-      ]
+      "edges": []
     }
   },
   "extensions": {
@@ -187,13 +151,7 @@ task 7, lines 102-112:
 Response: {
   "data": {
     "transactionBlocks": {
-      "edges": [
-        {
-          "txns": {
-            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-          }
-        }
-      ]
+      "edges": []
     }
   },
   "extensions": {
@@ -213,15 +171,7 @@ task 8, lines 114-142:
 Response: {
   "data": {
     "transactionBlocks": {
-      "edges": [
-        {
-          "txns": {
-            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
-            "first": null,
-            "last": null
-          }
-        }
-      ]
+      "edges": []
     }
   },
   "extensions": {
@@ -241,13 +191,7 @@ task 9, lines 144-171:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
-          "first": null,
-          "last": null
-        }
-      ]
+      "nodes": []
     }
   },
   "extensions": {
@@ -267,15 +211,7 @@ task 10, lines 173-222:
 Response: {
   "data": {
     "transactionBlocks": {
-      "edges": [
-        {
-          "txns": {
-            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
-            "a": null,
-            "b": null
-          }
-        }
-      ]
+      "edges": []
     },
     "events": {
       "edges": []
@@ -298,14 +234,7 @@ task 11, lines 224-249:
 Response: {
   "data": {
     "transactionBlocks": {
-      "edges": [
-        {
-          "node": {
-            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
-            "a": null
-          }
-        }
-      ]
+      "edges": []
     }
   },
   "extensions": {
@@ -325,18 +254,10 @@ task 12, lines 251-272:
 Response: {
   "data": {
     "fragmentSpread": {
-      "nodes": [
-        {
-          "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-        }
-      ]
+      "nodes": []
     },
     "inlineFragment": {
-      "nodes": [
-        {
-          "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
-        }
-      ]
+      "nodes": []
     }
   },
   "extensions": {

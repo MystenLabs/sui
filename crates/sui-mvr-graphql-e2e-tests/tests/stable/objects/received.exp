@@ -28,11 +28,7 @@ Response: {
   "data": {
     "object": {
       "receivedTransactionBlocks": {
-        "nodes": [
-          {
-            "digest": "6stsHkPZxpZr1kuzuNCfUQJJh6fb27jWdnwEpBYX7uHL"
-          }
-        ]
+        "nodes": []
       }
     }
   }

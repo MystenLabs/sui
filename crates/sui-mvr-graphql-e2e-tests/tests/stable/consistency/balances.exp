@@ -63,33 +63,7 @@ task 16, lines 78-99:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "700"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999982296272"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 3,
-                  "totalBalance": "700"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -99,33 +73,7 @@ task 17, lines 101-122:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "500"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 2,
-                  "totalBalance": "500"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -135,33 +83,7 @@ task 18, lines 124-145:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "400"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "400"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -175,33 +97,7 @@ task 21, lines 151-172:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "700"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999982296272"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 3,
-                  "totalBalance": "700"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -211,33 +107,7 @@ task 22, lines 174-195:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "500"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 2,
-                  "totalBalance": "500"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -247,33 +117,7 @@ task 23, lines 197-218:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "400"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "400"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -299,34 +143,9 @@ Response: {
       }
     },
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": null
-        }
-      ]
+      "nodes": []
     }
-  },
-  "errors": [
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 17,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
 
 task 29, lines 259-280:
@@ -334,33 +153,7 @@ task 29, lines 259-280:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "500"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 2,
-                  "totalBalance": "500"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -370,33 +163,7 @@ task 30, lines 282-303:
 Response: {
   "data": {
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "400"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "400"
-                }
-              ]
-            }
-          }
-        }
-      ]
+      "nodes": []
     }
   }
 }
@@ -430,34 +197,9 @@ Response: {
       }
     },
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": null
-        }
-      ]
+      "nodes": []
     }
-  },
-  "errors": [
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 17,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
 
 task 40, lines 352-381:
@@ -473,34 +215,9 @@ Response: {
       }
     },
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": null
-        }
-      ]
+      "nodes": []
     }
-  },
-  "errors": [
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 17,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
 
 task 41, lines 383-412:
@@ -516,32 +233,7 @@ Response: {
       }
     },
     "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": null
-        }
-      ]
+      "nodes": []
     }
-  },
-  "errors": [
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 17,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
