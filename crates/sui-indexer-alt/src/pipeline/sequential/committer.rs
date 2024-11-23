@@ -17,7 +17,7 @@ use crate::{
     db::Db,
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
-    pipeline::{Indexed, PipelineConfig, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
+    pipeline::{Indexed, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
 };
 
 use super::Handler;
@@ -41,7 +41,6 @@ use super::Handler;
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H: Handler + 'static>(
-    config: PipelineConfig,
     checkpoint_lag: Option<u64>,
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<Indexed<H>>,
@@ -53,7 +52,7 @@ pub(super) fn committer<H: Handler + 'static>(
     spawn_monitored_task!(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
-        let mut poll = interval(config.collect_interval);
+        let mut poll = interval(H::COLLECT_INTERVAL);
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // If no checkpoint lag is specified, we default it to `0` (no lag).
