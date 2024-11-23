@@ -39,7 +39,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
             return;
         };
 
-        let mut poll = interval(config.interval);
+        let mut poll = interval(config.interval());
 
         loop {
             tokio::select! {

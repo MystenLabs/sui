@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 #[cfg(feature = "benchmark")]
 use crate::benchmark::BenchmarkConfig;
 use crate::db::DbConfig;
@@ -68,12 +66,4 @@ pub struct ConsistencyConfig {
 impl ConsistencyConfig {
     const DEFAULT_CONSISTENT_PRUNING_INTERVAL_MS: u64 = 300_000;
     const DEFAULT_PRUNER_DELAY_MS: u64 = 120_000;
-
-    pub fn consistent_pruning_interval(&self) -> Duration {
-        Duration::from_millis(self.consistent_pruning_interval_ms)
-    }
-
-    pub fn pruner_delay(&self) -> Duration {
-        Duration::from_millis(self.pruner_delay_ms)
-    }
 }
