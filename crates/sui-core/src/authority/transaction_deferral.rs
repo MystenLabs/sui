@@ -63,7 +63,7 @@ impl DeferralKey {
                 deferred_from_round: 0,
             },
             Self::ConsensusRound {
-                future_round: consensus_round.saturating_add(1),
+                future_round: consensus_round.checked_add(1).unwrap(),
                 deferred_from_round: 0,
             },
         )
