@@ -88,7 +88,8 @@ async fn test_simple_client_simulator_cluster() {
         None,
         None,
         data_ingestion_path.path().to_path_buf(),
-    );
+    )
+    .await;
     cluster
         .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
         .await;
