@@ -246,7 +246,6 @@ impl Indexer {
         self.handles.push(sequential::pipeline(
             handler,
             watermark,
-            self.pipeline_config.clone(),
             checkpoint_lag,
             self.db.clone(),
             checkpoint_rx,

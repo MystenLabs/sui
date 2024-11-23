@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -13,7 +14,7 @@ use crate::{
     models::watermarks::CommitterWatermark,
 };
 
-use super::{processor::processor, PipelineConfig, Processor, PIPELINE_BUFFER};
+use super::{processor::processor, Processor, PIPELINE_BUFFER};
 
 use self::committer::committer;
 
@@ -39,12 +40,19 @@ mod committer;
 #[async_trait::async_trait]
 pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
-    const MIN_EAGER_ROWS: usize = 50;
+    /// TODO: Add more detailed comments.
+    const MIN_EAGER_ROWS: usize = 400000;
+
+    /// The committer will wake up and commit rows at this interval.
+    /// TODO: Add more detailed comments.
+    /// 5 minutes * 60 seconds.
+    const COLLECT_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
     /// transaction is likely to be.
-    const MAX_BATCH_CHECKPOINTS: usize = 5 * 60;
+    /// TODO: Add more detailed comments.
+    const MAX_BATCH_CHECKPOINTS: usize = 10 * 60 * 4;
 
     /// A type to combine multiple `Self::Value`-s into. This can be used to avoid redundant writes
     /// by combining multiple rows into one (e.g. if one row supersedes another, the latter can be
@@ -88,7 +96,6 @@ pub trait Handler: Processor {
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
-    config: PipelineConfig,
     checkpoint_lag: Option<u64>,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
@@ -107,7 +114,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
-        config.clone(),
         checkpoint_lag,
         initial_watermark,
         committer_rx,
