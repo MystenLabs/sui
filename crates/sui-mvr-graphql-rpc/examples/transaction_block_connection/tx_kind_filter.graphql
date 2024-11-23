@@ -1,0 +1,14 @@
+# Filter on TransactionKind (only SYSTEM_TX or PROGRAMMABLE_TX)
+{
+  transactionBlocks(filter: { kind: SYSTEM_TX }) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}
