@@ -13608,6 +13608,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-default-config"
+version = "1.39.0"
+dependencies = [
+ "quote 1.0.35",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "sui-e2e-tests"
 version = "1.39.0"
 dependencies = [
@@ -13866,14 +13874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-graphql-config"
-version = "1.39.0"
-dependencies = [
- "quote 1.0.35",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
@@ -13935,8 +13935,8 @@ dependencies = [
  "shared-crypto",
  "similar",
  "simulacrum",
+ "sui-default-config",
  "sui-framework",
- "sui-graphql-config",
  "sui-graphql-rpc-client",
  "sui-graphql-rpc-headers",
  "sui-indexer",
@@ -14590,8 +14590,8 @@ dependencies = [
  "shared-crypto",
  "similar",
  "simulacrum",
+ "sui-default-config",
  "sui-framework",
- "sui-graphql-config",
  "sui-graphql-rpc-client",
  "sui-graphql-rpc-headers",
  "sui-indexer",

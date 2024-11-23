@@ -17,7 +17,7 @@ use syn::{
 /// the config struct.
 #[allow(non_snake_case)]
 #[proc_macro_attribute]
-pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
+pub fn DefaultConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let DeriveInput {
         attrs,
         vis,
@@ -32,7 +32,7 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
         semi_token,
     }) = data
     else {
-        panic!("GraphQL configs must be structs.");
+        panic!("Default configs must be structs.");
     };
 
     let Fields::Named(FieldsNamed {
@@ -40,7 +40,7 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
         named,
     }) = fields
     else {
-        panic!("GraphQL configs must have named fields.");
+        panic!("Default configs must have named fields.");
     };
 
     // Figure out which derives need to be added to meet the criteria of a config struct.

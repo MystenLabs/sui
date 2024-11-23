@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
-use sui_graphql_config::GraphQLConfig;
+use sui_default_config::DefaultConfig;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
@@ -28,7 +28,7 @@ const MOVE_REGISTRY_TABLE_ID: &str =
 const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// The combination of all configurations for the GraphQL service.
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(Default)]
 pub struct ServerConfig {
     pub service: ServiceConfig,
@@ -41,7 +41,7 @@ pub struct ServerConfig {
 /// Configuration for connections for the RPC, passed in as command-line arguments. This configures
 /// specific connections between this service and other services, and might differ from instance to
 /// instance of the GraphQL service.
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(clap::Args, Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
@@ -71,7 +71,7 @@ pub struct ConnectionConfig {
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
 /// configurations are shared across fleets of the service, i.e. all testnet services will have the
 /// same `ServiceConfig`.
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
     pub limits: Limits,
@@ -83,7 +83,7 @@ pub struct ServiceConfig {
     pub move_registry: MoveRegistryConfig,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 pub struct Limits {
     /// Maximum depth of nodes in the requests.
     pub max_query_depth: u32,
@@ -127,7 +127,7 @@ pub struct Limits {
     pub max_scan_limit: u32,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(Copy)]
 pub struct BackgroundTasksConfig {
     /// How often the watermark task checks the indexer database to update the checkpoint and epoch
@@ -135,7 +135,7 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(Clone)]
 pub struct MoveRegistryConfig {
     pub(crate) external_api_url: Option<String>,
@@ -185,7 +185,7 @@ impl Version {
     }
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(clap::Args)]
 pub struct Ide {
     /// The title to display at the top of the web-based GraphiQL IDE.
@@ -193,7 +193,7 @@ pub struct Ide {
     pub ide_title: String,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(Default)]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
@@ -202,7 +202,7 @@ pub struct Experiments {
     test_flag: bool,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 pub struct InternalFeatureConfig {
     pub(crate) query_limits_checker: bool,
     pub(crate) directive_checker: bool,
@@ -215,7 +215,7 @@ pub struct InternalFeatureConfig {
     pub(crate) open_telemetry: bool,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(clap::Args, Default)]
 pub struct TxExecFullNodeConfig {
     /// RPC URL for the fullnode to send transactions to execute and dry-run.
@@ -223,7 +223,7 @@ pub struct TxExecFullNodeConfig {
     pub(crate) node_rpc_url: Option<String>,
 }
 
-#[GraphQLConfig]
+#[DefaultConfig]
 #[derive(Default)]
 pub struct ZkLoginConfig {
     pub env: ZkLoginEnv,

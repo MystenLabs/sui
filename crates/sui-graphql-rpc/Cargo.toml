@@ -64,7 +64,7 @@ uuid.workspace = true
 im.workspace = true
 downcast = "0.11.0"
 
-sui-graphql-config.workspace = true
+sui-default-config.workspace = true
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true
 
