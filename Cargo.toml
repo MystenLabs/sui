@@ -136,6 +136,7 @@ members = [
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-move-lsp",
+    "crates/sui-mvr-graphql-e2e-tests",
     "crates/sui-mvr-graphql-rpc",
     "crates/sui-network",
     "crates/sui-node",
