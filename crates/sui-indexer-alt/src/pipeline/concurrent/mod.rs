@@ -81,12 +81,12 @@ pub trait Handler: Processor {
 
 #[derive(Debug, Clone)]
 pub struct PrunerConfig {
-    /// How often the pruner should check whether there is any data to prune.
-    pub interval: Duration,
+    /// How often the pruner should check whether there is any data to prune, in milliseconds.
+    pub interval_ms: u64,
 
     /// How long to wait after the reader low watermark was set, until it is safe to prune up until
-    /// this new watermark.
-    pub delay: Duration,
+    /// this new watermark, in milliseconds.
+    pub delay_ms: u64,
 
     /// How much data to keep, this is measured in checkpoints.
     pub retention: u64,
@@ -102,6 +102,16 @@ struct Batched<H: Handler> {
     values: Vec<H::Value>,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+}
+
+impl PrunerConfig {
+    pub fn interval(&self) -> Duration {
+        Duration::from_millis(self.interval_ms)
+    }
+
+    pub fn delay(&self) -> Duration {
+        Duration::from_millis(self.delay_ms)
+    }
 }
 
 impl<H: Handler> Batched<H> {

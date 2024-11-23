@@ -397,10 +397,15 @@ pub async fn start_indexer(
 
     // Pipelines that are split up into a summary table, and a write-ahead log, where the
     // write-ahead log needs to be pruned.
-    let lag = consistency_config.consistent_range;
+    let ConsistencyConfig {
+        consistent_pruning_interval_ms,
+        pruner_delay_ms,
+        consistent_range: lag,
+    } = consistency_config;
+
     let pruner_config = lag.map(|l| PrunerConfig {
-        interval: consistency_config.consistent_pruning_interval(),
-        delay: consistency_config.pruner_delay(),
+        interval_ms: consistent_pruning_interval_ms,
+        delay_ms: pruner_delay_ms,
         // Retain at least twice as much data as the lag, to guarantee overlap between the
         // summary table and the write-ahead log.
         retention: l * 2,
