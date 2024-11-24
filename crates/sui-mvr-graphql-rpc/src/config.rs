@@ -29,7 +29,7 @@ const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// The combination of all configurations for the GraphQL service.
 #[DefaultConfig]
-#[derive(Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ServerConfig {
     pub service: ServiceConfig,
     pub connection: ConnectionConfig,
@@ -42,7 +42,7 @@ pub struct ServerConfig {
 /// specific connections between this service and other services, and might differ from instance to
 /// instance of the GraphQL service.
 #[DefaultConfig]
-#[derive(clap::Args, Clone, Eq, PartialEq)]
+#[derive(clap::Args, Clone, Eq, PartialEq, Debug)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
     #[clap(short, long, default_value_t = ConnectionConfig::default().port)]
@@ -72,7 +72,7 @@ pub struct ConnectionConfig {
 /// configurations are shared across fleets of the service, i.e. all testnet services will have the
 /// same `ServiceConfig`.
 #[DefaultConfig]
-#[derive(Default)]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct ServiceConfig {
     pub limits: Limits,
     pub disabled_features: BTreeSet<FunctionalGroup>,
@@ -84,6 +84,7 @@ pub struct ServiceConfig {
 }
 
 #[DefaultConfig]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Limits {
     /// Maximum depth of nodes in the requests.
     pub max_query_depth: u32,
@@ -128,7 +129,7 @@ pub struct Limits {
 }
 
 #[DefaultConfig]
-#[derive(Copy)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct BackgroundTasksConfig {
     /// How often the watermark task checks the indexer database to update the checkpoint and epoch
     /// watermarks.
@@ -136,7 +137,7 @@ pub struct BackgroundTasksConfig {
 }
 
 #[DefaultConfig]
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct MoveRegistryConfig {
     pub(crate) external_api_url: Option<String>,
     pub(crate) resolution_type: ResolutionType,
@@ -186,7 +187,7 @@ impl Version {
 }
 
 #[DefaultConfig]
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone, Debug)]
 pub struct Ide {
     /// The title to display at the top of the web-based GraphiQL IDE.
     #[clap(short, long, default_value_t = Ide::default().ide_title)]
@@ -194,7 +195,7 @@ pub struct Ide {
 }
 
 #[DefaultConfig]
-#[derive(Default)]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
     // implementation.
@@ -203,6 +204,7 @@ pub struct Experiments {
 }
 
 #[DefaultConfig]
+#[derive(Clone, Debug)]
 pub struct InternalFeatureConfig {
     pub(crate) query_limits_checker: bool,
     pub(crate) directive_checker: bool,
@@ -216,7 +218,7 @@ pub struct InternalFeatureConfig {
 }
 
 #[DefaultConfig]
-#[derive(clap::Args, Default)]
+#[derive(clap::Args, Clone, Default, Debug)]
 pub struct TxExecFullNodeConfig {
     /// RPC URL for the fullnode to send transactions to execute and dry-run.
     #[clap(long)]
@@ -224,7 +226,7 @@ pub struct TxExecFullNodeConfig {
 }
 
 #[DefaultConfig]
-#[derive(Default)]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct ZkLoginConfig {
     pub env: ZkLoginEnv,
 }
