@@ -99,7 +99,7 @@ export function NicknameDialog({ accountID, trigger }: NicknameDialogProps) {
 						<div className="flex items-center gap-2">
 							<input type="checkbox" {...register('useDomain')} id="use-domain" />
 							<label htmlFor="use-domain" className="text-sm flex items-center gap-1">
-								Use SUINS domain:
+							Use Sui Name Service:
 								<span className="font-medium text-hero px-2 py-0.5 bg-hero/10 rounded-lg">
 									{domainName}
 								</span>
