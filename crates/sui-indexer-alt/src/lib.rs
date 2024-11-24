@@ -13,7 +13,7 @@ use handlers::{
     kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
     obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays,
     sum_obj_types::SumObjTypes, sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddress, tx_affected_objects::TxAffectedObjects,
+    tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
 };
@@ -577,7 +577,7 @@ pub async fn start_indexer(
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
     add_concurrent!(ObjVersions, obj_versions);
-    add_concurrent!(TxAffectedAddress, tx_affected_addresses);
+    add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
     add_concurrent!(TxBalanceChanges, tx_balance_changes);
     add_concurrent!(TxCalls, tx_calls);
