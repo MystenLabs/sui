@@ -252,7 +252,9 @@ impl Operations {
         status: Option<OperationStatus>,
     ) -> Result<Vec<Operation>, Error> {
         Ok(match tx {
-            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
+            SuiTransactionBlockKind::ProgrammableTransaction(pt)
+                if status == Some(OperationStatus::Success) =>
+            {
                 Self::parse_programmable_transaction(sender, status, pt)?
             }
             _ => vec![Operation::generic_op(status, sender, tx)],
