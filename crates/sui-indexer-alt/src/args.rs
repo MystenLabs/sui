@@ -31,6 +31,9 @@ pub enum Command {
         config: PathBuf,
     },
 
+    /// Output the contents of the default configuration to STDOUT.
+    GenerateConfig,
+
     /// Wipe the database of its contents
     ResetDatabase {
         /// If true, only drop all tables but do not run the migrations.

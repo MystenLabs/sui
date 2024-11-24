@@ -35,6 +35,14 @@ async fn main() -> Result<()> {
             start_indexer(args.db_args, indexer_args, indexer_config, true).await?;
         }
 
+        Command::GenerateConfig => {
+            let config = IndexerConfig::default();
+            let config_toml = toml::to_string_pretty(&config)
+                .context("Failed to serialize default configuration to TOML.")?;
+
+            println!("{}", config_toml);
+        }
+
         Command::ResetDatabase { skip_migrations } => {
             reset_database(args.db_args, skip_migrations).await?;
         }
