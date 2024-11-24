@@ -2903,8 +2903,9 @@ input ObjectFilter {
 	"""
 	objectIds: [SuiAddress!]
 	"""
-	Filter for live objects by their ID and version.
-	For historical versions, use multiGetObjects query instead.
+	Filter for live objects by their ID and version. NOTE:  this input filter has been
+	deprecated in favor of `multiGetObjects` query as it does not make sense to query for live
+	objects by their versions. This filter will be removed with v1.40.0 release.
 	"""
 	objectKeys: [ObjectKey!]
 }
@@ -3330,6 +3331,10 @@ type Query {
 	"""
 	transactionBlock(digest: String!): TransactionBlock
 	"""
+	Fetch a list of objects by their IDs and versions.
+	"""
+	multiGetObjects(objectKeys: [ObjectKey!]!): [Object!]!
+	"""
 	The coin objects that exist in the network.
 	
 	The type field is a string of the inner type of the coin by which to filter (e.g.
@@ -3424,10 +3429,6 @@ type Query {
 	- `author` is the address of the signer of the transaction or personal msg.
 	"""
 	verifyZkloginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
-	"""
-	Fetch a list of objects by their IDs and versions.
-	"""
-	multiGetObjects(objectKeys: [ObjectKey!]!): [Object!]!
 }
 
 type RandomnessStateCreateTransaction {
