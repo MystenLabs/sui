@@ -491,7 +491,6 @@ impl Default for Limits {
     fn default() -> Self {
         // Picked so that TS SDK shim layer queries all pass limit.
         // TODO: calculate proper cost limits
-        let max_page_size = 50;
         Self {
             max_query_depth: 20,
             max_query_nodes: 300,
@@ -499,8 +498,7 @@ impl Default for Limits {
             max_query_payload_size: 5_000,
             max_db_query_cost: 20_000,
             default_page_size: 20,
-            max_page_size,
-            max_multi_get_objects_keys: max_page_size, // keep the same as max_page_size
+            max_page_size: 50,
             // This default was picked as the sum of pre- and post- quorum timeouts from
             // [`sui_core::authority_aggregator::TimeoutConfig`], with a 10% buffer.
             //
@@ -519,6 +517,7 @@ impl Default for Limits {
             // Filter-specific limits, such as the number of transaction ids that can be specified
             // for the `TransactionBlockFilter`.
             max_transaction_ids: 1000,
+            max_multi_get_objects_keys: 500,
             max_scan_limit: 100_000_000,
             // This value is set to be the size of the max transaction bytes allowed + base64
             // overhead (roughly 1/3 of the original string). This is rounded up.

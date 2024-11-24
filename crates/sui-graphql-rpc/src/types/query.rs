@@ -328,6 +328,27 @@ impl Query {
         TransactionBlock::query(ctx, lookup).await.extend()
     }
 
+    /// Fetch a list of objects by their IDs and versions.
+    async fn multi_get_objects(
+        &self,
+        ctx: &Context<'_>,
+        object_keys: Vec<ObjectKey>,
+    ) -> Result<Vec<Object>> {
+        let cfg: &ServiceConfig = ctx.data_unchecked();
+        if object_keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
+            return Err(Error::Client(format!(
+                "Number of keys exceeds max limit of '{}'",
+                cfg.limits.max_multi_get_objects_keys
+            ))
+            .into());
+        }
+
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        Object::query_many(ctx, object_keys, checkpoint)
+            .await
+            .extend()
+    }
+
     /// The coin objects that exist in the network.
     ///
     /// The type field is a string of the inner type of the coin by which to filter (e.g.
@@ -601,27 +622,6 @@ impl Query {
         author: SuiAddress,
     ) -> Result<ZkLoginVerifyResult> {
         verify_zklogin_signature(ctx, bytes, signature, intent_scope, author)
-            .await
-            .extend()
-    }
-
-    /// Fetch a list of objects by their IDs and versions.
-    async fn multi_get_objects(
-        &self,
-        ctx: &Context<'_>,
-        object_keys: Vec<ObjectKey>,
-    ) -> Result<Vec<Object>> {
-        let cfg: &ServiceConfig = ctx.data_unchecked();
-        if object_keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
-            return Err(Error::Client(format!(
-                "Number of keys exceeds max limit of '{}'",
-                cfg.limits.max_multi_get_objects_keys
-            ))
-            .into());
-        }
-
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        Object::query_many(ctx, object_keys, checkpoint)
             .await
             .extend()
     }

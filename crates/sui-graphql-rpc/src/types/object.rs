@@ -130,8 +130,9 @@ pub(crate) struct ObjectFilter {
     /// Filter for live objects by their IDs.
     pub object_ids: Option<Vec<SuiAddress>>,
 
-    /// Filter for live objects by their ID and version.
-    /// For historical versions, use multiGetObjects query instead.
+    /// Filter for live objects by their ID and version. NOTE:  this input filter has been
+    /// deprecated in favor of `multiGetObjects` query as it does not make sense to query for live
+    /// objects by their versions. This filter will be removed with v1.40.0 release.
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
@@ -802,6 +803,40 @@ impl Object {
         self.root_version
     }
 
+    /// Fetch objects by their id and version. If you need to query for live objects, use the
+    /// `objects` field.
+    pub(crate) async fn query_many(
+        ctx: &Context<'_>,
+        keys: Vec<ObjectKey>,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Vec<Self>, Error> {
+        let DataLoader(loader) = &ctx.data_unchecked();
+
+        let keys: Vec<PointLookupKey> = keys
+            .into_iter()
+            .map(|key| PointLookupKey {
+                id: key.object_id,
+                version: key.version.into(),
+            })
+            .collect();
+
+        let data = loader.load_many(keys).await?;
+        let objects = data
+            .into_iter()
+            .filter_map(|(lookup_key, bcs)| {
+                Object::new_serialized(
+                    lookup_key.id,
+                    lookup_key.version,
+                    bcs,
+                    checkpoint_viewed_at,
+                    lookup_key.version,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        Ok(objects)
+    }
+
     /// Query the database for a `page` of objects, optionally `filter`-ed.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
@@ -903,40 +938,6 @@ impl Object {
             version,
             checkpoint_viewed_at,
         }
-    }
-
-    /// Fetch objects by their id and version. If you need to query for live objects, use the
-    /// `objects` query together with the `ObjectFilter`.
-    pub(crate) async fn query_many(
-        ctx: &Context<'_>,
-        keys: Vec<ObjectKey>,
-        checkpoint_viewed_at: u64,
-    ) -> Result<Vec<Self>, Error> {
-        let DataLoader(loader) = &ctx.data_unchecked();
-
-        let keys: Vec<PointLookupKey> = keys
-            .into_iter()
-            .map(|key| PointLookupKey {
-                id: key.object_id,
-                version: key.version.into(),
-            })
-            .collect();
-
-        let data = loader.load_many(keys).await?;
-        let objects = data
-            .into_iter()
-            .filter_map(|(lookup_key, bcs)| {
-                Object::new_serialized(
-                    lookup_key.id,
-                    lookup_key.version,
-                    bcs,
-                    checkpoint_viewed_at,
-                    lookup_key.version,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        Ok(objects)
     }
 
     pub(crate) async fn query(
