@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use const_str::format as const_format;
 use diesel::migration::MigrationVersion;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::{
@@ -18,8 +17,6 @@ use tracing::info;
 use url::Url;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-const DEFAULT_POOL_SIZE: u32 = 100;
-const DEFAULT_CONNECTION_TIMEOUT_SECS: u64 = 60;
 
 #[derive(Clone)]
 pub struct Db {
@@ -29,24 +26,25 @@ pub struct Db {
 #[derive(clap::Args, Debug, Clone)]
 pub struct DbConfig {
     /// The URL of the database to connect to.
-    #[arg(long)]
+    #[arg(long, default_value_t = Self::default().database_url)]
     database_url: Url,
 
     /// Number of connections to keep in the pool.
-    #[arg(long, default_value_t = DEFAULT_POOL_SIZE)]
+    #[arg(long, default_value_t = Self::default().connection_pool_size)]
     connection_pool_size: u32,
 
-    /// Time spent waiting for a connection from the pool to become available.
-    #[arg(
-        long,
-        default_value = const_format!("{DEFAULT_CONNECTION_TIMEOUT_SECS}"),
-        value_name = "SECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_secs)
-    )]
-    connection_timeout: Duration,
+    /// Time spent waiting for a connection from the pool to become available, in milliseconds.
+    #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
+    pub connection_timeout_ms: u64,
 }
 
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
+
+impl DbConfig {
+    pub fn connection_timeout(&self) -> Duration {
+        Duration::from_millis(self.connection_timeout_ms)
+    }
+}
 
 impl Db {
     /// Construct a new DB connection pool. Instances of [Db] can be cloned to share access to the
@@ -56,7 +54,7 @@ impl Db {
 
         let pool = Pool::builder()
             .max_size(config.connection_pool_size)
-            .connection_timeout(config.connection_timeout)
+            .connection_timeout(config.connection_timeout())
             .build(manager)
             .await?;
 
@@ -147,17 +145,15 @@ impl Db {
     }
 }
 
-impl DbConfig {
-    pub fn new(
-        database_url: Url,
-        connection_pool_size: Option<u32>,
-        connection_timeout: Option<Duration>,
-    ) -> Self {
+impl Default for DbConfig {
+    fn default() -> Self {
         Self {
-            database_url,
-            connection_pool_size: connection_pool_size.unwrap_or(DEFAULT_POOL_SIZE),
-            connection_timeout: connection_timeout
-                .unwrap_or(Duration::from_secs(DEFAULT_CONNECTION_TIMEOUT_SECS)),
+            database_url: Url::parse(
+                "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt",
+            )
+            .unwrap(),
+            connection_pool_size: 100,
+            connection_timeout_ms: 60_000,
         }
     }
 }
@@ -174,6 +170,7 @@ pub async fn reset_database(
     }
     Ok(())
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,17 +184,23 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let db = TempDb::new().unwrap();
         let url = db.database().url();
-        println!("url: {}", url.as_str());
-        let db_config = DbConfig::new(url.clone(), None, None);
+
+        info!(%url);
+        let db_config = DbConfig {
+            database_url: url.clone(),
+            ..Default::default()
+        };
+
         let db = Db::new(db_config).await.unwrap();
-        let mut connection = db.connect().await.unwrap();
+        let mut conn = db.connect().await.unwrap();
 
         // Run a simple query to verify the db can properly be queried
         let resp = diesel::sql_query("SELECT datname FROM pg_database")
-            .execute(&mut connection)
+            .execute(&mut conn)
             .await
             .unwrap();
-        println!("resp: {:?}", resp);
+
+        info!(?resp);
     }
 
     #[derive(QueryableByName)]
@@ -210,7 +213,11 @@ mod tests {
     async fn test_reset_database_skip_migrations() {
         let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
-        let db_config = DbConfig::new(url.clone(), None, None);
+
+        let db_config = DbConfig {
+            database_url: url.clone(),
+            ..Default::default()
+        };
 
         let db = Db::new(db_config.clone()).await.unwrap();
         let mut conn = db.connect().await.unwrap();

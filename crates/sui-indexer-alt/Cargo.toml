@@ -19,7 +19,6 @@ bb8 = "0.8.5"
 bcs.workspace = true
 chrono.workspace = true
 clap.workspace = true
-const-str = { workspace = true, features = ["proc"] }
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true

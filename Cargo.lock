@@ -2898,20 +2898,6 @@ name = "const-str"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aca749d3d3f5b87a0d6100509879f9cf486ab510803a4a4e1001da1ff61c2bd6"
-dependencies = [
- "const-str-proc-macro",
-]
-
-[[package]]
-name = "const-str-proc-macro"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d3007177ccd2435eef6de9e7471365c36bc35c0b31773e27b4fe797f39f84bf"
-dependencies = [
- "proc-macro2 1.0.87",
- "quote 1.0.35",
- "syn 2.0.79",
-]
 
 [[package]]
 name = "constant_time_eq"
@@ -14115,7 +14101,6 @@ dependencies = [
  "bcs",
  "chrono",
  "clap",
- "const-str",
  "diesel",
  "diesel-async",
  "diesel_migrations",
