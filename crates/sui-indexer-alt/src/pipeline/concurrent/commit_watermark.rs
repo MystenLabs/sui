@@ -21,7 +21,7 @@ use crate::{
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
     pipeline::{
-        PipelineConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
+        CommitterConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
     },
 };
 
@@ -49,7 +49,7 @@ use super::Handler;
 /// shutdown immediately.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     initial_watermark: Option<CommitterWatermark<'static>>,
-    config: PipelineConfig,
+    config: CommitterConfig,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     db: Db,
     metrics: Arc<IndexerMetrics>,

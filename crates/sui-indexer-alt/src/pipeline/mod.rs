@@ -6,6 +6,7 @@ use std::time::Duration;
 use crate::models::watermarks::CommitterWatermark;
 
 pub use processor::Processor;
+use sui_default_config::DefaultConfig;
 
 pub mod concurrent;
 mod processor;
@@ -28,22 +29,19 @@ const PIPELINE_BUFFER: usize = 5;
 /// `--skip-watermarks` should be used.
 const WARN_PENDING_WATERMARKS: usize = 10000;
 
-#[derive(clap::Args, Debug, Clone)]
-pub struct PipelineConfig {
+#[DefaultConfig]
+#[derive(Clone)]
+pub struct CommitterConfig {
     /// Number of concurrent writers per pipeline.
-    #[arg(long, default_value_t = 5)]
     write_concurrency: usize,
 
     /// The collector will check for pending data at least this often, in milliseconds.
-    #[arg(long, default_value_t = 500)]
     collect_interval_ms: u64,
 
     /// Watermark task will check for pending watermarks this often, in milliseconds.
-    #[arg(long, default_value_t = 500)]
     watermark_interval_ms: u64,
 
     /// Avoid writing to the watermark table
-    #[arg(long)]
     pub skip_watermark: bool,
 }
 
@@ -78,7 +76,7 @@ enum Break {
     Err(#[from] anyhow::Error),
 }
 
-impl PipelineConfig {
+impl CommitterConfig {
     pub fn collect_interval(&self) -> Duration {
         Duration::from_millis(self.collect_interval_ms)
     }
@@ -147,6 +145,17 @@ impl WatermarkPart {
             watermark: self.watermark.clone(),
             batch_rows: rows,
             total_rows: self.total_rows,
+        }
+    }
+}
+
+impl Default for CommitterConfig {
+    fn default() -> Self {
+        Self {
+            write_concurrency: 5,
+            collect_interval_ms: 500,
+            watermark_interval_ms: 500,
+            skip_watermark: false,
         }
     }
 }

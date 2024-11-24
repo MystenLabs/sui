@@ -14,7 +14,7 @@ use tracing::{debug, info};
 
 use crate::{
     metrics::IndexerMetrics,
-    pipeline::{Indexed, PipelineConfig, WatermarkPart},
+    pipeline::{CommitterConfig, Indexed, WatermarkPart},
 };
 
 use super::{Batched, Handler};
@@ -81,7 +81,7 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
-    config: PipelineConfig,
+    config: CommitterConfig,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::Sender<Batched<H>>,
     metrics: Arc<IndexerMetrics>,

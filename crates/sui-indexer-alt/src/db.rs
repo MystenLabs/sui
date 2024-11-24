@@ -18,13 +18,8 @@ use url::Url;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-#[derive(Clone)]
-pub struct Db {
-    pool: Pool<AsyncPgConnection>,
-}
-
 #[derive(clap::Args, Debug, Clone)]
-pub struct DbConfig {
+pub struct DbArgs {
     /// The URL of the database to connect to.
     #[arg(long, default_value_t = Self::default().database_url)]
     database_url: Url,
@@ -38,9 +33,14 @@ pub struct DbConfig {
     pub connection_timeout_ms: u64,
 }
 
+#[derive(Clone)]
+pub struct Db {
+    pool: Pool<AsyncPgConnection>,
+}
+
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
 
-impl DbConfig {
+impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
         Duration::from_millis(self.connection_timeout_ms)
     }
@@ -49,7 +49,7 @@ impl DbConfig {
 impl Db {
     /// Construct a new DB connection pool. Instances of [Db] can be cloned to share access to the
     /// same pool.
-    pub async fn new(config: DbConfig) -> Result<Self, PoolError> {
+    pub async fn new(config: DbArgs) -> Result<Self, PoolError> {
         let manager = AsyncDieselConnectionManager::new(config.database_url.as_str());
 
         let pool = Pool::builder()
@@ -145,7 +145,7 @@ impl Db {
     }
 }
 
-impl Default for DbConfig {
+impl Default for DbArgs {
     fn default() -> Self {
         Self {
             database_url: Url::parse(
@@ -159,10 +159,7 @@ impl Default for DbConfig {
 }
 
 /// Drop all tables and rerunning migrations.
-pub async fn reset_database(
-    db_config: DbConfig,
-    skip_migrations: bool,
-) -> Result<(), anyhow::Error> {
+pub async fn reset_database(db_config: DbArgs, skip_migrations: bool) -> Result<(), anyhow::Error> {
     let db = Db::new(db_config).await?;
     db.clear_database().await?;
     if !skip_migrations {
@@ -174,7 +171,7 @@ pub async fn reset_database(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{Db, DbConfig};
+    use crate::db::{Db, DbArgs};
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
     use sui_pg_temp_db::TempDb;
@@ -186,12 +183,12 @@ mod tests {
         let url = db.database().url();
 
         info!(%url);
-        let db_config = DbConfig {
+        let db_args = DbArgs {
             database_url: url.clone(),
             ..Default::default()
         };
 
-        let db = Db::new(db_config).await.unwrap();
+        let db = Db::new(db_args).await.unwrap();
         let mut conn = db.connect().await.unwrap();
 
         // Run a simple query to verify the db can properly be queried
@@ -214,12 +211,12 @@ mod tests {
         let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
 
-        let db_config = DbConfig {
+        let db_args = DbArgs {
             database_url: url.clone(),
             ..Default::default()
         };
 
-        let db = Db::new(db_config.clone()).await.unwrap();
+        let db = Db::new(db_args.clone()).await.unwrap();
         let mut conn = db.connect().await.unwrap();
         diesel::sql_query("CREATE TABLE test_table (id INTEGER PRIMARY KEY)")
             .execute(&mut conn)
@@ -233,7 +230,7 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database(db_config, true).await.unwrap();
+        reset_database(db_args, true).await.unwrap();
 
         let mut conn = db.connect().await.unwrap();
         let cnt = diesel::sql_query(
