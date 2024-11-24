@@ -13,7 +13,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
-    pipeline::{Break, PipelineConfig, WatermarkPart},
+    pipeline::{Break, CommitterConfig, WatermarkPart},
     task::TrySpawnStreamExt,
 };
 
@@ -36,7 +36,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// This task will shutdown via its `cancel`lation token, or if its receiver or sender channels are
 /// closed.
 pub(super) fn committer<H: Handler + 'static>(
-    config: PipelineConfig,
+    config: CommitterConfig,
     rx: mpsc::Receiver<Batched<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: Db,

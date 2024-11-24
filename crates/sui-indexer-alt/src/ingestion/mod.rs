@@ -8,6 +8,7 @@
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
+use sui_default_config::DefaultConfig;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -28,6 +29,26 @@ mod remote_client;
 #[cfg(test)]
 mod test_utils;
 
+#[DefaultConfig]
+#[derive(Clone)]
+pub struct IngestionConfig {
+    /// Remote Store to fetch checkpoints from.
+    pub remote_store_url: Option<Url>,
+
+    /// Path to the local ingestion directory.
+    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
+    pub local_ingestion_path: Option<PathBuf>,
+
+    /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
+    pub checkpoint_buffer_size: usize,
+
+    /// Maximum number of checkpoints to attempt to fetch concurrently.
+    pub ingest_concurrency: usize,
+
+    /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
+    pub retry_interval_ms: u64,
+}
+
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
@@ -37,35 +58,7 @@ pub struct IngestionService {
     cancel: CancellationToken,
 }
 
-#[derive(clap::Args, Debug, Clone)]
-pub struct IngestionConfig {
-    /// Remote Store to fetch checkpoints from.
-    #[arg(long, required = true, group = "source")]
-    pub remote_store_url: Option<Url>,
-
-    /// Path to the local ingestion directory.
-    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
-    #[arg(long, required = true, group = "source")]
-    pub local_ingestion_path: Option<PathBuf>,
-
-    /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
-    #[arg(long, default_value_t = Self::DEFAULT_CHECKPOINT_BUFFER_SIZE)]
-    pub checkpoint_buffer_size: usize,
-
-    /// Maximum number of checkpoints to attempt to fetch concurrently.
-    #[arg(long, default_value_t = Self::DEFAULT_INGEST_CONCURRENCY)]
-    pub ingest_concurrency: usize,
-
-    /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
-    #[arg(long, default_value_t = Self::DEFAULT_RETRY_INTERVAL_MS)]
-    pub retry_interval_ms: u64,
-}
-
 impl IngestionConfig {
-    pub const DEFAULT_CHECKPOINT_BUFFER_SIZE: usize = 5000;
-    pub const DEFAULT_INGEST_CONCURRENCY: usize = 200;
-    pub const DEFAULT_RETRY_INTERVAL_MS: u64 = 200;
-
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
     }
@@ -170,6 +163,18 @@ impl IngestionService {
     }
 }
 
+impl Default for IngestionConfig {
+    fn default() -> Self {
+        Self {
+            remote_store_url: None,
+            local_ingestion_path: None,
+            checkpoint_buffer_size: 5000,
+            ingest_concurrency: 200,
+            retry_interval_ms: 200,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
@@ -193,10 +198,9 @@ mod tests {
         IngestionService::new(
             IngestionConfig {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
-                local_ingestion_path: None,
                 checkpoint_buffer_size,
                 ingest_concurrency,
-                retry_interval_ms: IngestionConfig::DEFAULT_RETRY_INTERVAL_MS,
+                ..Default::default()
             },
             Arc::new(test_metrics()),
             cancel,

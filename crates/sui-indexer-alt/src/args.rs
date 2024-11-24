@@ -1,16 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 #[cfg(feature = "benchmark")]
-use crate::benchmark::BenchmarkConfig;
-use crate::db::DbConfig;
-use crate::IndexerConfig;
+use crate::benchmark::BenchmarkArgs;
+use crate::db::DbArgs;
+use crate::IndexerArgs;
 use clap::Subcommand;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
     #[command(flatten)]
-    pub db_config: DbConfig,
+    pub db_args: DbArgs,
 
     #[command(subcommand)]
     pub command: Command,
@@ -22,10 +24,11 @@ pub enum Command {
     /// Run the indexer.
     Indexer {
         #[command(flatten)]
-        indexer: IndexerConfig,
+        indexer_args: IndexerArgs,
 
-        #[command(flatten)]
-        consistency_config: ConsistencyConfig,
+        /// Path to the indexer's configuration TOML file.
+        #[arg(long)]
+        config: PathBuf,
     },
 
     /// Wipe the database of its contents
@@ -43,27 +46,10 @@ pub enum Command {
     #[cfg(feature = "benchmark")]
     Benchmark {
         #[command(flatten)]
-        config: BenchmarkConfig,
+        benchmark_args: BenchmarkArgs,
+
+        /// Path to the indexer's configuration TOML file.
+        #[arg(long)]
+        config: PathBuf,
     },
-}
-
-#[derive(clap::Args, Debug, Clone)]
-pub struct ConsistencyConfig {
-    /// How often to check whether write-ahead logs related to the consistent range can be
-    /// pruned.
-    #[arg(long, default_value_t = Self::DEFAULT_CONSISTENT_PRUNING_INTERVAL_MS)]
-    pub consistent_pruning_interval_ms: u64,
-
-    /// How long to wait before honouring reader low watermarks.
-    #[arg(long, default_value_t = Self::DEFAULT_PRUNER_DELAY_MS)]
-    pub pruner_delay_ms: u64,
-
-    /// Number of checkpoints to delay indexing summary tables for.
-    #[clap(long)]
-    pub consistent_range: Option<u64>,
-}
-
-impl ConsistencyConfig {
-    const DEFAULT_CONSISTENT_PRUNING_INTERVAL_MS: u64 = 300_000;
-    const DEFAULT_PRUNER_DELAY_MS: u64 = 120_000;
 }

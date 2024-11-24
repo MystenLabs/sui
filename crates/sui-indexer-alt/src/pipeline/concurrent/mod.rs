@@ -4,6 +4,8 @@
 use std::{sync::Arc, time::Duration};
 
 use reader_watermark::reader_watermark;
+use serde::{Deserialize, Serialize};
+use sui_default_config::DefaultConfig;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -14,7 +16,7 @@ use crate::{
     models::watermarks::CommitterWatermark,
 };
 
-use super::{processor::processor, PipelineConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
+use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
@@ -79,7 +81,18 @@ pub trait Handler: Processor {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Configuration for a concurrent pipeline
+#[DefaultConfig]
+#[derive(Clone, Default)]
+pub struct ConcurrentConfig {
+    /// Configuration for the writer, that makes forward progress.
+    pub committer: CommitterConfig,
+
+    /// Configuration for the pruner, that deletes old data.
+    pub pruner: Option<PrunerConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PrunerConfig {
     /// How often the pruner should check whether there is any data to prune, in milliseconds.
     pub interval_ms: u64,
@@ -156,18 +169,22 @@ impl<H: Handler> Batched<H> {
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     initial_commit_watermark: Option<CommitterWatermark<'static>>,
-    commit_config: PipelineConfig,
-    pruner_config: Option<PrunerConfig>,
+    config: ConcurrentConfig,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
+    let ConcurrentConfig {
+        committer: committer_config,
+        pruner: pruner_config,
+    } = config;
+
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
     let (collector_tx, committer_rx) =
-        mpsc::channel(commit_config.write_concurrency + PIPELINE_BUFFER);
+        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
     let (committer_tx, watermark_rx) =
-        mpsc::channel(commit_config.write_concurrency + PIPELINE_BUFFER);
+        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
 
     // The pruner is not connected to the rest of the tasks by channels, so it needs to be
     // explicitly signalled to shutdown when the other tasks shutdown, in addition to listening to
@@ -184,7 +201,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let collector = collector::<H>(
-        commit_config.clone(),
+        committer_config.clone(),
         collector_rx,
         collector_tx,
         metrics.clone(),
@@ -192,7 +209,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
-        commit_config.clone(),
+        committer_config.clone(),
         committer_rx,
         committer_tx,
         db.clone(),
@@ -202,7 +219,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let commit_watermark = commit_watermark::<H>(
         initial_commit_watermark,
-        commit_config,
+        committer_config,
         watermark_rx,
         db.clone(),
         metrics.clone(),
