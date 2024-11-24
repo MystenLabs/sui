@@ -29,7 +29,7 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
-const MULTI_GET_OBJECTS: &str = "multiGetObjects";
+const MULTI_GET_QUERY: &str = "multiGet";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Clone, Copy, Debug)]
@@ -68,9 +68,6 @@ struct LimitsTraversal<'a> {
     input_budget: u32,
     output_budget: u32,
     depth_seen: u32,
-
-    // The total number of object keys  in multiGetObjects query
-    num_obj_keys_seen: u32,
 }
 
 /// Builds error messages and reports them to tracing.
@@ -114,7 +111,6 @@ impl<'a> LimitsTraversal<'a> {
             input_budget: reporter.limits.max_query_nodes,
             output_budget: reporter.limits.max_output_nodes,
             depth_seen: 0,
-            num_obj_keys_seen: 0,
         }
     }
 
@@ -127,7 +123,7 @@ impl<'a> LimitsTraversal<'a> {
             self.check_input_limits(op)?;
         }
 
-        // Next, check the size of the multiget queries inputs.
+        // Next, check the size of the multiget queries inputs and outputs.
         for (_name, op) in doc.operations.iter() {
             self.check_multiget_queries(op)?;
         }
@@ -171,9 +167,12 @@ impl<'a> LimitsTraversal<'a> {
         match &item.node {
             Selection::Field(f) => {
                 let name = &f.node.name.node;
-                if name.starts_with(MULTI_GET_OBJECTS) {
-                    for (name, value) in &f.node.arguments {
-                        self.check_multiget_objs_arg(&name.node, value)?;
+                if name.starts_with(MULTI_GET_QUERY) {
+                    for (_, value) in &f.node.arguments {
+                        let m = self.check_multiget_args(value);
+                        for selection in &f.node.selection_set.node.items {
+                            self.traverse_selection_for_output(selection, m as u32, None)?;
+                        }
                     }
                 }
             }
@@ -189,7 +188,7 @@ impl<'a> LimitsTraversal<'a> {
                 let def = self
                     .fragments
                     .get(name)
-                    .expect("Fragment not found in document");
+                    .ok_or_else(|| self.reporter.fragment_not_found_error(name, fs.pos))?;
 
                 for selection in &def.node.selection_set.node.items {
                     self.traverse_multiget_queries(selection)?;
@@ -308,47 +307,24 @@ impl<'a> LimitsTraversal<'a> {
         Ok(())
     }
 
-    /// multiGetObject query can only pass a number of object keys that does not exceed the max
+    /// multiGet queries can only pass a number of keys that does not exceed the max
     /// page size. This checks for the number of keys and deducts the raw size of the keys from
     /// the payload size.
-    fn check_multiget_objs_arg(
-        &mut self,
-        name: &Name,
-        value: &'a Positioned<Value>,
-    ) -> ServerResult<()> {
+    fn check_multiget_args(&mut self, value: &'a Positioned<Value>) -> usize {
         use GqlValue as V;
 
-        let limits = self.reporter.limits;
-        let mut stack = vec![&value.node];
-        while let Some(value) = stack.pop() {
-            match value {
-                V::List(vs) => {
-                    if vs.len() > limits.max_multi_get_objects_keys as usize {
-                        return Err(self.reporter.graphql_error(
-                            code::BAD_USER_INPUT,
-                            format!(
-                                "{name} keys exceed the maximum allowed number of {}",
-                                limits.max_multi_get_objects_keys
-                            ),
-                        ));
-                    }
-                    self.num_obj_keys_seen += vs.len() as u32;
-                    stack.extend(vs);
+        match &value.node {
+            V::List(vs) => vs.len(),
+            V::Variable(var) => {
+                let v = self.variables.get(var);
+                if let Some(ConstValue::List(vs)) = v {
+                    vs.len()
+                } else {
+                    1
                 }
-                // account for the quotes around the string
-                V::String(s) => self.payload_size -= (s.len() + 2) as u64,
-                V::Object(obj) => {
-                    for (name, value) in obj {
-                        self.payload_size -= name.len() as u64;
-                        stack.push(value);
-                    }
-                }
-                // versions in multiGetObjects are numbers
-                V::Number(n) => self.payload_size -= n.to_string().len() as u64,
-                _ => {}
             }
+            _ => 1,
         }
-        Ok(())
     }
 
     /// Deduct the size of the transaction argument's `value` from the transaction payload budget.
@@ -502,20 +478,12 @@ impl<'a> LimitsTraversal<'a> {
                     self.output_budget -= multiplicity;
                 }
 
-                // If the field being traversed is a multiGet query, multiplicity is the number of
-                // keys seen in the request.
-                //
                 // If the field being traversed is a connection field, increase multiplicity by a
                 // factor of page size. This operation can fail due to overflow, which will be
                 // treated as a limits check failure, even if the resulting value does not get used
                 // for anything.
-                //
                 let name = &f.node.name.node;
                 let multiplicity = 'm: {
-                    if name.starts_with(MULTI_GET_OBJECTS) {
-                        break 'm self.num_obj_keys_seen;
-                    }
-
                     if !CONNECTION_FIELDS.contains(&name.as_str()) {
                         break 'm multiplicity;
                     }
@@ -528,10 +496,6 @@ impl<'a> LimitsTraversal<'a> {
                         .checked_mul(page_size)
                         .ok_or_else(|| self.output_node_error())?
                 };
-
-                if multiplicity > self.output_budget {
-                    return Err(self.output_node_error());
-                }
 
                 let page_size = self.connection_page_size(f)?;
                 for selection in &f.node.selection_set.node.items {
