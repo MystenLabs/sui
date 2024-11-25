@@ -157,6 +157,7 @@ pub struct PipelineLayer {
     pub kv_objects: Option<ConcurrentLayer>,
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
+    pub obj_info: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
@@ -293,6 +294,7 @@ impl PipelineLayer {
             kv_objects: Some(Default::default()),
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
+            obj_info: Some(Default::default()),
             obj_versions: Some(Default::default()),
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
@@ -430,6 +432,7 @@ impl Merge for PipelineLayer {
             kv_objects: self.kv_objects.merge(other.kv_objects),
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
+            obj_info: self.obj_info.merge(other.obj_info),
             obj_versions: self.obj_versions.merge(other.obj_versions),
             tx_affected_addresses: self
                 .tx_affected_addresses

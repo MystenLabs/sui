@@ -11,8 +11,8 @@ use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
-    obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays,
-    sum_obj_types::SumObjTypes, sum_packages::SumPackages,
+    obj_info::ObjInfo, obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances,
+    sum_displays::SumDisplays, sum_obj_types::SumObjTypes, sum_packages::SumPackages,
     tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
@@ -423,6 +423,7 @@ pub async fn start_indexer(
         kv_objects,
         kv_protocol_configs,
         kv_transactions,
+        obj_info,
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
@@ -576,6 +577,7 @@ pub async fn start_indexer(
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
+    add_concurrent!(ObjInfo, obj_info);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
