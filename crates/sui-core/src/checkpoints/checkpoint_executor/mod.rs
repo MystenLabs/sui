@@ -1309,7 +1309,7 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    if data_ingestion_dir.is_some() || state.rest_index.is_some() {
+    if data_ingestion_dir.is_some() || state.rpc_index.is_some() {
         let checkpoint_data = load_checkpoint_data(
             checkpoint,
             object_cache_reader,
@@ -1320,12 +1320,12 @@ async fn finalize_checkpoint(
 
         // TODO(bmwill) discuss with team a better location for this indexing so that it isn't on
         // the critical path and the writes to the DB are done in checkpoint order
-        if let Some(rest_index) = &state.rest_index {
+        if let Some(rpc_index) = &state.rpc_index {
             let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
                 PackageStoreWithFallback::new(state.get_backing_package_store(), &checkpoint_data),
             ));
 
-            rest_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
+            rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
         }
 
         if let Some(path) = data_ingestion_dir {
