@@ -18,9 +18,9 @@ pub struct WithdrawStake {
 impl TryConstructTransaction for WithdrawStake {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
-        gas_price: Option<u64>,
-        budget: Option<u64>,
+        _client: &SuiClient,
+        _gas_price: Option<u64>,
+        _budget: Option<u64>,
     ) -> Result<TransactionAndObjectData, Error> {
         todo!();
     }

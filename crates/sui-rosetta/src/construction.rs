@@ -17,7 +17,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::rpc_types::SuiExecutionStatus;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
@@ -248,7 +248,6 @@ pub async fn metadata(
         InternalOperation::PayCoin(PayCoin { currency, .. }) => Some(currency.clone()),
         _ => None,
     };
-    let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
 
     let mut gas_price = context
         .client
@@ -285,25 +284,39 @@ pub async fn metadata(
             },
             suggested_fee: vec![Amount::new(budget as i128, None)],
         });
-    };
+    } else if let InternalOperation::PayCoin(pay_coin) = option.internal_operation {
+        let TransactionAndObjectData {
+            gas_coins,
+            extra_gas_coins,
+            objects,
+            pt: _,
+            total_sui_balance,
+            budget,
+        } = pay_coin
+            .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
+            .await?;
+        return Ok(ConstructionMetadataResponse {
+            metadata: ConstructionMetadata {
+                sender,
+                gas_coins,
+                extra_gas_coins,
+                objects,
+                total_coin_value: total_sui_balance,
+                gas_price,
+                budget,
+                currency,
+            },
+            suggested_fee: vec![Amount::new(budget as i128, None)],
+        });
+    }
+
     // Get amount, objects, for the operation
     let (total_required_amount, objects) = match &option.internal_operation {
         InternalOperation::PaySui(PaySui { .. }) => {
             unreachable!("PaySui is already handled explicitly")
         }
-        InternalOperation::PayCoin(PayCoin { amounts, .. }) => {
-            let amount = amounts.iter().sum::<u64>();
-            let coin_objs: Vec<ObjectRef> = context
-                .client
-                .coin_read_api()
-                .select_coins(sender, coin_type, amount.into(), vec![])
-                .await
-                .ok()
-                .unwrap_or_default()
-                .iter()
-                .map(|coin| coin.object_ref())
-                .collect();
-            (Some(0), coin_objs) // amount is 0 for gas coin
+        InternalOperation::PayCoin(PayCoin { .. }) => {
+            unreachable!("PayCoin is already handled explicitly")
         }
         InternalOperation::Stake(Stake { amount, .. }) => (*amount, vec![]),
         InternalOperation::WithdrawStake(WithdrawStake { sender, stake_ids }) => {

@@ -19,9 +19,9 @@ pub struct Stake {
 impl TryConstructTransaction for Stake {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
-        gas_price: Option<u64>,
-        budget: Option<u64>,
+        _client: &SuiClient,
+        _gas_price: Option<u64>,
+        _budget: Option<u64>,
     ) -> Result<TransactionAndObjectData, Error> {
         todo!();
     }
