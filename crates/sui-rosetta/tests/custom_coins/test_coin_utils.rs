@@ -297,8 +297,14 @@ async fn test_mint() {
             }
         })
         .collect::<Vec<_>>();
-    let coin1 = coins.iter().find(|coin| coin.1 == address1).unwrap();
-    let coin2 = coins.iter().find(|coin| coin.1 == address2).unwrap();
+    let coin1 = coins
+        .iter()
+        .find(|coin| coin.1.get_address_owner_address().unwrap() == address1)
+        .unwrap();
+    let coin2 = coins
+        .iter()
+        .find(|coin| coin.1.get_address_owner_address().unwrap() == address2)
+        .unwrap();
     assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
     assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
 }

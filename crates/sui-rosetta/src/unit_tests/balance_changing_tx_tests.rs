@@ -657,7 +657,7 @@ fn find_module_object(
             {
                 if type_pred(object_type) {
                     return Some(OwnedObjectRef {
-                        owner: *owner,
+                        owner: owner.clone(),
                         reference: SuiObjectRef {
                             object_id: *object_id,
                             version: *version,

@@ -89,7 +89,7 @@ async fn test_publishing_with_unpublished_deps() {
 
     assert!(effects.status().is_ok());
     assert_eq!(effects.created().len(), 1);
-    let ((_, v, _), owner) = effects.created()[0];
+    let ((_, v, _), owner) = effects.created()[0].clone();
 
     // Check that calling the function does what we expect
     assert!(matches!(

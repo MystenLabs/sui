@@ -5249,6 +5249,23 @@
   ],
   "components": {
     "schemas": {
+      "Authenticator": {
+        "oneOf": [
+          {
+            "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
+            "type": "object",
+            "required": [
+              "SingleOwner"
+            ],
+            "properties": {
+              "SingleOwner": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "AuthorityPublicKeyBytes": {
         "description": "Defines the compressed version of the public key that we pass around in Sui",
         "allOf": [
@@ -7613,6 +7630,41 @@
             "enum": [
               "Immutable"
             ]
+          },
+          {
+            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "type": "object",
+            "required": [
+              "ConsensusV2"
+            ],
+            "properties": {
+              "ConsensusV2": {
+                "type": "object",
+                "required": [
+                  "authenticator",
+                  "start_version"
+                ],
+                "properties": {
+                  "authenticator": {
+                    "description": "The authentication mode of the object",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Authenticator"
+                      }
+                    ]
+                  },
+                  "start_version": {
+                    "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/SequenceNumber2"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },

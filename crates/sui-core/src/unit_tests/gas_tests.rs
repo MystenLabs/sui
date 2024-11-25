@@ -571,7 +571,10 @@ async fn test_transfer_sui_insufficient_gas() {
         ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None)
     );
     // Ensure that the owner of the object did not change if the transfer failed.
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
 }
 
 /// - All gas coins should be owned by an address (not shared or immutable)
@@ -734,7 +737,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(gas_coin.value(), 0);
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
-    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0];
+    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0].clone();
     assert_eq!(version, gas_object.version());
     assert_eq!(owner, gas_object.owner);
 

@@ -608,7 +608,7 @@ mod checked {
                     return Ok(());
                 };
                 if *is_mutable_input {
-                    add_additional_write(&mut additional_writes, *owner, object_value)?;
+                    add_additional_write(&mut additional_writes, owner.clone(), object_value)?;
                 }
                 Ok(())
             };
@@ -1184,13 +1184,16 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
+            }
         };
-        let owner = obj.owner;
+        let owner = obj.owner.clone();
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
             is_mutable_input,
-            owner,
+            owner: owner.clone(),
             version,
         };
         let obj_value = value_from_object(vm, session, obj)?;

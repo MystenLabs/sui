@@ -410,7 +410,7 @@ impl<'a> ObjectRuntime<'a> {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
-                            owner: obj.owner,
+                            owner: obj.owner.clone(),
                             previous_transaction: obj.previous_transaction,
                         },
                     )
@@ -509,6 +509,9 @@ impl ObjectRuntimeState {
             .filter_map(|(id, owner)| match owner {
                 Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
+                Owner::ConsensusV2 { .. } => {
+                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                }
             })
             .collect();
         // update the input owners with the new owners from transfers
@@ -516,7 +519,9 @@ impl ObjectRuntimeState {
         // TODO can we have cycles in the new system?
         update_owner_map(
             input_owner_map,
-            transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)),
+            transfers
+                .iter()
+                .map(|(id, (owner, _, _))| (*id, owner.clone())),
         )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
@@ -602,6 +607,9 @@ fn update_owner_map(
                     }
                 }
                 object_owner_map.insert(id, new_owner);
+            }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
             }
         }
     }

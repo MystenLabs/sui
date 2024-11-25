@@ -3599,7 +3599,7 @@ impl AuthorityState {
                     version: Some(version),
                 })
             })
-            .map(|o| o.owner)
+            .map(|o| o.owner.clone())
     }
 
     #[instrument(level = "trace", skip_all)]

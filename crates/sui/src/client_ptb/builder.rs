@@ -119,6 +119,7 @@ impl<'a> Resolver<'a> for ToObject {
         let obj = builder.get_object(obj_id, loc).await?;
         let owner = obj
             .owner
+            .clone()
             .ok_or_else(|| err!(loc, "Unable to get owner info for object {obj_id}"))?;
         let object_ref = obj.object_ref();
         // Depending on the ownership of the object, we resolve it to different types of object
@@ -128,6 +129,10 @@ impl<'a> Resolver<'a> for ToObject {
             Owner::Immutable | Owner::AddressOwner(_) => ObjectArg::ImmOrOwnedObject(object_ref),
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id: object_ref.0,
                 initial_shared_version,

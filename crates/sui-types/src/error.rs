@@ -290,6 +290,9 @@ pub enum UserInputError {
 
     #[error("Invalid identifier found in the transaction: {error}")]
     InvalidIdentifier { error: String },
+
+    #[error("Object used as owned is not owned")]
+    NotOwnedObjectError,
 }
 
 #[derive(
