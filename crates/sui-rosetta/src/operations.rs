@@ -252,7 +252,9 @@ impl Operations {
         status: Option<OperationStatus>,
     ) -> Result<Vec<Operation>, Error> {
         Ok(match tx {
-            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
+            SuiTransactionBlockKind::ProgrammableTransaction(pt)
+                if status != Some(OperationStatus::Failure) =>
+            {
                 Self::parse_programmable_transaction(sender, status, pt)?
             }
             _ => vec![Operation::generic_op(status, sender, tx)],
@@ -558,14 +560,16 @@ impl Operations {
     }
 }
 
-impl TryFrom<SuiTransactionBlockData> for Operations {
-    type Error = Error;
-    fn try_from(data: SuiTransactionBlockData) -> Result<Self, Self::Error> {
+impl Operations {
+    fn try_from_data(
+        data: SuiTransactionBlockData,
+        status: Option<OperationStatus>,
+    ) -> Result<Self, anyhow::Error> {
         let sender = *data.sender();
         Ok(Self::new(Self::from_transaction(
             data.transaction().clone(),
             sender,
-            None,
+            status,
         )?))
     }
 }
@@ -588,8 +592,8 @@ impl Operations {
             - gas_summary.computation_cost as i128;
 
         let status = Some(effect.into_status().into());
-        let ops: Operations = tx.data.try_into()?;
-        let ops = ops.set_status(status).into_iter();
+        let ops = Operations::try_from_data(tx.data, status)?;
+        let ops = ops.into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
         // change amount extracted from event to prevent double counting.
@@ -735,7 +739,10 @@ impl TryFrom<TransactionData> for Operations {
             }
         }
         // Rosetta don't need the call args to be parsed into readable format
-        SuiTransactionBlockData::try_from(data, &&mut NoOpsModuleResolver)?.try_into()
+        Ok(Operations::try_from_data(
+            SuiTransactionBlockData::try_from(data, &&mut NoOpsModuleResolver)?,
+            None,
+        )?)
     }
 }
 
