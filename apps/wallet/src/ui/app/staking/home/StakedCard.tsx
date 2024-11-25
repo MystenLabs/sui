@@ -127,7 +127,7 @@ export function StakeCard({
 
 	// For inactive validator, show principal + rewards
 	const [principalStaked, symbol] = useFormatCoin(
-		inactiveValidator ? principal + rewards : principal,
+		inactiveValidator ? BigInt(principal) + BigInt(rewards) : principal,
 		SUI_TYPE_ARG,
 	);
 	const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);
