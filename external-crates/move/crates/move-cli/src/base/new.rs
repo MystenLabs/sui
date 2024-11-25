@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{self, bail};
+use anyhow::{self, ensure, Context};
 use clap::*;
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
@@ -38,12 +38,11 @@ impl New {
     ) -> anyhow::Result<()> {
         // TODO warn on build config flags
 
-        if !Identifier::is_valid(&self.name) {
-            bail!(
-                "Invalid package name. Package name must start with a lowercase letter \
-                 and consist only of lowercase letters, numbers, and underscores."
-            );
-        }
+        ensure!(
+            !Identifier::is_valid(&self.name),
+            "Invalid package name. Package name must start with a lowercase letter \
+                     and consist only of lowercase letters, numbers, and underscores."
+        );
 
         let path = path.unwrap_or_else(|| Path::new(&self.name));
         create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
@@ -58,7 +57,8 @@ impl New {
         let mut w = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(path.join(".gitignore"))?;
+            .open(path.join(".gitignore"))
+            .context("Unexpected error creating .gitignore")?;
 
         writeln!(w, "build/*")?;
         Ok(())
