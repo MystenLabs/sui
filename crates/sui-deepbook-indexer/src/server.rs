@@ -9,16 +9,16 @@ use crate::{
 };
 use axum::{
     debug_handler,
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     routing::get,
     Json, Router,
 };
+use diesel::dsl::sql;
 use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
 use diesel_async::RunQueryDsl;
-use diesel::dsl::sql;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
@@ -28,8 +28,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
     "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
-pub const GET_HISTORICAL_VOLUME_PATH: &str =
-    "/get_historical_volume/:pool_ids";
+pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -106,7 +105,12 @@ async fn get_historical_volume(
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
         .map(|t| t * 1000) // Convert to milliseconds
-        .unwrap_or_else(|| SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64);
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
 
     let start_time = params
         .get("start_time")
@@ -115,7 +119,10 @@ async fn get_historical_volume(
         .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
 
     // Determine whether to query volume in base or quote
-    let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+    let volume_in_base = params
+        .get("volume_in_base")
+        .map(|v| v == "true")
+        .unwrap_or(true);
     let column_to_query = if volume_in_base {
         sql::<diesel::sql_types::BigInt>("base_quantity")
     } else {
@@ -123,10 +130,7 @@ async fn get_historical_volume(
     };
 
     let results: Vec<(String, i64)> = schema::order_fills::table
-        .select((
-            schema::order_fills::pool_id,
-            column_to_query,
-        ))
+        .select((schema::order_fills::pool_id, column_to_query))
         .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
         .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
         .load(connection)
@@ -154,7 +158,12 @@ async fn get_historical_volume_by_balance_manager_id(
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
         .map(|t| t * 1000) // Convert to milliseconds
-        .unwrap_or_else(|| SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64);
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
 
     let start_time = params
         .get("start_time")
@@ -162,7 +171,10 @@ async fn get_historical_volume_by_balance_manager_id(
         .map(|t| t * 1000) // Convert to milliseconds
         .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
 
-    let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+    let volume_in_base = params
+        .get("volume_in_base")
+        .map(|v| v == "true")
+        .unwrap_or(true);
     let column_to_query = if volume_in_base {
         sql::<diesel::sql_types::BigInt>("base_quantity")
     } else {
@@ -229,7 +241,12 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
         .map(|t| t * 1000) // Convert to milliseconds
-        .unwrap_or_else(|| SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64);
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
 
     let start_time = params
         .get("start_time")
@@ -243,7 +260,10 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     while current_start + interval_ms <= end_time {
         let current_end = current_start + interval_ms;
 
-        let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+        let volume_in_base = params
+            .get("volume_in_base")
+            .map(|v| v == "true")
+            .unwrap_or(true);
         let column_to_query = if volume_in_base {
             sql::<diesel::sql_types::BigInt>("base_quantity")
         } else {
