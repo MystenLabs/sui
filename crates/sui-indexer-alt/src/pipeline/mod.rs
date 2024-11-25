@@ -45,6 +45,17 @@ pub struct CommitterConfig {
     pub skip_watermark: bool,
 }
 
+/// Like a [CommitterConfig] but with all its fields optional. This type is accepted in configs
+/// when we want to support layering overrides on top of a [CommitterConfig].
+#[DefaultConfig]
+#[derive(Clone, Default)]
+pub struct CommitterLayer {
+    write_concurrency: Option<usize>,
+    collect_interval_ms: Option<u64>,
+    watermark_interval_ms: Option<u64>,
+    skip_watermark: Option<bool>,
+}
+
 /// Processed values associated with a single checkpoint. This is an internal type used to
 /// communicate between the processor and the collector parts of the pipeline.
 struct Indexed<P: Processor> {
@@ -83,6 +94,27 @@ impl CommitterConfig {
 
     pub fn watermark_interval(&self) -> Duration {
         Duration::from_millis(self.watermark_interval_ms)
+    }
+}
+
+impl CommitterLayer {
+    /// Apply the overrides in this layer on top of the base `committer_config`, and return the
+    /// result.
+    pub fn finish(self, committer_config: &CommitterConfig) -> CommitterConfig {
+        CommitterConfig {
+            write_concurrency: self
+                .write_concurrency
+                .unwrap_or(committer_config.write_concurrency),
+            collect_interval_ms: self
+                .collect_interval_ms
+                .unwrap_or(committer_config.collect_interval_ms),
+            watermark_interval_ms: self
+                .watermark_interval_ms
+                .unwrap_or(committer_config.watermark_interval_ms),
+            skip_watermark: self
+                .skip_watermark
+                .unwrap_or(committer_config.skip_watermark),
+        }
     }
 }
 

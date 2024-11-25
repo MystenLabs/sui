@@ -6,7 +6,11 @@ use sui_default_config::DefaultConfig;
 
 use crate::{
     ingestion::IngestionConfig,
-    pipeline::{concurrent::ConcurrentConfig, sequential::SequentialConfig, CommitterConfig},
+    pipeline::{
+        concurrent::{ConcurrentConfig, PrunerConfig},
+        sequential::SequentialConfig,
+        CommitterConfig, CommitterLayer,
+    },
 };
 
 #[DefaultConfig]
@@ -17,6 +21,10 @@ pub struct IndexerConfig {
 
     /// How wide the consistent read range is.
     pub consistency: ConsistencyConfig,
+
+    /// Default configuration for committers that is shared by all pipelines. Pipelines can
+    /// override individual settings in their own configuration sections.
+    pub committer: CommitterConfig,
 
     /// Per-pipeline configurations.
     pub pipeline: PipelineConfig,
@@ -36,37 +44,81 @@ pub struct ConsistencyConfig {
     pub consistent_range: Option<u64>,
 }
 
+/// A layer of overrides on top of an existing [SequentialConfig]. In particular, the pipeline's
+/// committer configuration is defined as overrides on top of a base configuration.
+#[DefaultConfig]
+#[derive(Clone, Default)]
+pub struct SequentialLayer {
+    committer: Option<CommitterLayer>,
+    checkpoint_lag: Option<u64>,
+}
+
+/// A layer of overrides on top of an existing [ConcurrentConfig]. In particular, the pipeline's
+/// committer configuration is defined as overrides on top of a base configuration.
+#[DefaultConfig]
+#[derive(Clone, Default)]
+pub struct ConcurrentLayer {
+    committer: Option<CommitterLayer>,
+    pruner: Option<PrunerConfig>,
+}
+
 #[DefaultConfig]
 #[derive(Clone, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct PipelineConfig {
     // Consistent pipelines (a sequential pipeline with a write-ahead log)
-    pub sum_coin_balances: CommitterConfig,
-    pub wal_coin_balances: CommitterConfig,
-    pub sum_obj_types: CommitterConfig,
-    pub wal_obj_types: CommitterConfig,
+    pub sum_coin_balances: CommitterLayer,
+    pub wal_coin_balances: CommitterLayer,
+    pub sum_obj_types: CommitterLayer,
+    pub wal_obj_types: CommitterLayer,
 
     // Sequential pipelines without a write-ahead log
-    pub sum_displays: SequentialConfig,
-    pub sum_packages: SequentialConfig,
+    pub sum_displays: SequentialLayer,
+    pub sum_packages: SequentialLayer,
 
     // All concurrent pipelines
-    pub ev_emit_mod: ConcurrentConfig,
-    pub ev_struct_inst: ConcurrentConfig,
-    pub kv_checkpoints: ConcurrentConfig,
-    pub kv_epoch_ends: ConcurrentConfig,
-    pub kv_epoch_starts: ConcurrentConfig,
-    pub kv_feature_flags: ConcurrentConfig,
-    pub kv_objects: ConcurrentConfig,
-    pub kv_protocol_configs: ConcurrentConfig,
-    pub kv_transactions: ConcurrentConfig,
-    pub obj_versions: ConcurrentConfig,
-    pub tx_affected_addresses: ConcurrentConfig,
-    pub tx_affected_objects: ConcurrentConfig,
-    pub tx_balance_changes: ConcurrentConfig,
-    pub tx_calls: ConcurrentConfig,
-    pub tx_digests: ConcurrentConfig,
-    pub tx_kinds: ConcurrentConfig,
+    pub ev_emit_mod: ConcurrentLayer,
+    pub ev_struct_inst: ConcurrentLayer,
+    pub kv_checkpoints: ConcurrentLayer,
+    pub kv_epoch_ends: ConcurrentLayer,
+    pub kv_epoch_starts: ConcurrentLayer,
+    pub kv_feature_flags: ConcurrentLayer,
+    pub kv_objects: ConcurrentLayer,
+    pub kv_protocol_configs: ConcurrentLayer,
+    pub kv_transactions: ConcurrentLayer,
+    pub obj_versions: ConcurrentLayer,
+    pub tx_affected_addresses: ConcurrentLayer,
+    pub tx_affected_objects: ConcurrentLayer,
+    pub tx_balance_changes: ConcurrentLayer,
+    pub tx_calls: ConcurrentLayer,
+    pub tx_digests: ConcurrentLayer,
+    pub tx_kinds: ConcurrentLayer,
+}
+
+impl SequentialLayer {
+    /// Apply the overrides in this layer on top of the base `committer` configuration, and return
+    /// the result.
+    pub fn finish(self, committer: &CommitterConfig) -> SequentialConfig {
+        SequentialConfig {
+            committer: self
+                .committer
+                .map_or_else(|| committer.clone(), |l| l.finish(committer)),
+            checkpoint_lag: self.checkpoint_lag,
+        }
+    }
+}
+
+impl ConcurrentLayer {
+    /// Apply the overrides in this layer on top of the base `committer` configuration, and return
+    /// the result.
+    pub fn finish(self, committer: &CommitterConfig) -> ConcurrentConfig {
+        ConcurrentConfig {
+            committer: self
+                .committer
+                .map_or_else(|| committer.clone(), |l| l.finish(committer)),
+            pruner: self.pruner,
+        }
+    }
 }
 
 impl Default for ConsistencyConfig {
