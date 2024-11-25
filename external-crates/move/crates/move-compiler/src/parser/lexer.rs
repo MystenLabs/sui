@@ -286,65 +286,9 @@ impl<'input> Lexer<'input> {
             text = trim_start_whitespace(text);
 
             if text.starts_with("/*") {
-                // Strip multi-line comments like '/* ... */' or '/** ... */'.
-                // These can be nested, as in '/* /* ... */ */', so record the
-                // start locations of each nested comment as a stack. The
-                // boolean indicates whether it's a documentation comment.
-                let mut locs: Vec<(usize, bool)> = vec![];
-                loop {
-                    text = text.trim_start_matches(|c: char| c != '/' && c != '*');
-                    if text.is_empty() {
-                        // We've reached the end of string while searching for a
-                        // terminating '*/'.
-                        let loc = *locs.last().unwrap();
-                        // Highlight the '/**' if it's a documentation comment, or the '/*'
-                        // otherwise.
-                        let location =
-                            make_loc(self.file_hash, loc.0, loc.0 + if loc.1 { 3 } else { 2 });
-                        return Err(Box::new(diag!(
-                            Syntax::InvalidDocComment,
-                            (location, "Unclosed block comment"),
-                        )));
-                    } else if text.starts_with("/*") {
-                        // We've found a (perhaps nested) multi-line comment.
-                        let start = get_offset(text);
-                        text = &text[2..];
-
-                        // Check if this is a documentation comment: '/**', but not '/***'.
-                        // A documentation comment cannot be nested within another comment.
-                        let is_doc =
-                            text.starts_with('*') && !text.starts_with("**") && locs.is_empty();
-
-                        locs.push((start, is_doc));
-                    } else if text.starts_with("*/") {
-                        // We've found a multi-line comment terminator that ends
-                        // our innermost nested comment.
-                        let loc = locs.pop().unwrap();
-                        text = &text[2..];
-
-                        // If this was a documentation comment, record it in our map.
-                        if loc.1 {
-                            let end = get_offset(text);
-                            self.doc_comments.insert(
-                                (loc.0 as u32, end as u32),
-                                self.text[(loc.0 + 3)..(end - 2)].to_string(),
-                            );
-                        }
-
-                        // If this terminated our last comment, exit the loop.
-                        if locs.is_empty() {
-                            break;
-                        }
-                    } else {
-                        // This is a solitary '/' or '*' that isn't part of any comment delimiter.
-                        // Skip over it.
-                        let c = text.chars().next().unwrap();
-                        text = &text[c.len_utf8()..];
-                    }
-                }
-
                 // Continue the loop immediately after the multi-line comment.
                 // There may be whitespace or another comment following this one.
+                text = self.parse_block_comment(get_offset(text))?;
                 continue;
             } else if text.starts_with("//") {
                 let start = get_offset(text);
@@ -366,6 +310,81 @@ impl<'input> Lexer<'input> {
                 continue;
             }
             break;
+        }
+        Ok(text)
+    }
+
+    fn parse_block_comment(&mut self, offset: usize) -> Result<&'input str, Box<Diagnostic>> {
+        struct CommentEntry {
+            start: usize,
+            is_doc_comment: bool,
+        }
+
+        let text = &self.text[offset..];
+
+        // A helper function to compute the index of the start of the given substring.
+        let len = text.len();
+        let get_offset = |substring: &str| offset + len - substring.len();
+
+        let block_doc_comment_start: &str = "/**";
+
+        assert!(text.starts_with("/*"));
+        let initial_entry = CommentEntry {
+            start: get_offset(text),
+            is_doc_comment: text.starts_with(block_doc_comment_start),
+        };
+        let mut comment_queue: Vec<CommentEntry> = vec![initial_entry];
+
+        // This is a _rough_ apporximation which disregards doc comments in order to handle the
+        // case where we have `/**/` or similar.
+        let mut text = &text[2..];
+
+        while let Some(comment) = comment_queue.pop() {
+            text = text.trim_start_matches(|c: char| c != '/' && c != '*');
+            if text.is_empty() {
+                // We've reached the end of string while searching for a terminating '*/'.
+                // Highlight the '/**' if it's a documentation comment, or the '/*' otherwise.
+                let location = make_loc(
+                    self.file_hash,
+                    comment.start,
+                    comment.start + if comment.is_doc_comment { 3 } else { 2 },
+                );
+                return Err(Box::new(diag!(
+                    Syntax::InvalidDocComment,
+                    (location, "Unclosed block comment"),
+                )));
+            };
+
+            match &text[..2] {
+                "*/" => {
+                    let end = get_offset(text);
+                    // If the comment was not empty -- fuzzy ot handle `/**/`, which triggers the
+                    // doc comment check but is not actually a doc comment.
+                    if comment.start + 3 < end && comment.is_doc_comment {
+                        self.doc_comments.insert(
+                            (comment.start as u32, end as u32),
+                            self.text[(comment.start + 3)..end].to_string(),
+                        );
+                    }
+                    text = &text[2..];
+                }
+                "/*" => {
+                    comment_queue.push(comment);
+                    let new_comment = CommentEntry {
+                        start: get_offset(text),
+                        is_doc_comment: text.starts_with(block_doc_comment_start),
+                    };
+                    comment_queue.push(new_comment);
+                    text = &text[2..];
+                }
+                _ => {
+                    // This is a solitary '/' or '*' that isn't part of any comment delimiter.
+                    // Skip over it.
+                    comment_queue.push(comment);
+                    let c = text.chars().next().unwrap();
+                    text = &text[c.len_utf8()..];
+                }
+            }
         }
         Ok(text)
     }
