@@ -9,7 +9,7 @@ use crate::{
 };
 use axum::{
     debug_handler,
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     routing::get,
     Json, Router,
@@ -18,6 +18,7 @@ use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
 use diesel_async::RunQueryDsl;
+use diesel::dsl::sql;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
@@ -134,16 +135,23 @@ async fn get_24hr_volume(
 
 async fn get_historical_volume(
     Path((pool_ids, start_time, end_time)): Path<(String, i64, i64)>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
 
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+    let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+    let column_to_query = if volume_in_base {
+        sql::<diesel::sql_types::BigInt>("base_quantity")
+    } else {
+        sql::<diesel::sql_types::BigInt>("quote_quantity")
+    };
 
     let results: Vec<(String, i64)> = schema::order_fills::table
         .select((
             schema::order_fills::pool_id,
-            schema::order_fills::base_quantity,
+            column_to_query,
         ))
         .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
         .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
@@ -161,6 +169,7 @@ async fn get_historical_volume(
 
 async fn get_24hr_volume_by_balance_manager_id(
     Path((pool_id, balance_manager_id)): Path<(String, String)>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<i64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
@@ -169,12 +178,20 @@ async fn get_24hr_volume_by_balance_manager_id(
         .unwrap()
         .as_millis() as i64;
     let day_ago = unix_ts - 24 * 60 * 60 * 1000;
+
+    let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+    let column_to_query = if volume_in_base {
+        sql::<diesel::sql_types::BigInt>("base_quantity")
+    } else {
+        sql::<diesel::sql_types::BigInt>("quote_quantity")
+    };
+
     let results: Vec<OrderFillSummary> = schema::order_fills::table
         .select((
             schema::order_fills::pool_id,
             schema::order_fills::maker_balance_manager_id,
             schema::order_fills::taker_balance_manager_id,
-            schema::order_fills::base_quantity,
+            column_to_query,
         ))
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
@@ -190,10 +207,10 @@ async fn get_24hr_volume_by_balance_manager_id(
     let mut taker_vol = 0;
     for order_fill in results {
         if order_fill.maker_balance_manager_id == balance_manager_id {
-            maker_vol += order_fill.base_quantity;
+            maker_vol += order_fill.quantity;
         };
         if order_fill.taker_balance_manager_id == balance_manager_id {
-            taker_vol += order_fill.base_quantity;
+            taker_vol += order_fill.quantity;
         };
     }
 
@@ -208,6 +225,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
         i64,
         i64,
     )>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, HashMap<String, Vec<i64>>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
@@ -225,12 +243,19 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     while current_start + interval_ms <= end_time * 1000 {
         let current_end = current_start + interval_ms;
 
+        let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+        let column_to_query = if volume_in_base {
+            sql::<diesel::sql_types::BigInt>("base_quantity")
+        } else {
+            sql::<diesel::sql_types::BigInt>("quote_quantity")
+        };
+
         let results: Vec<OrderFillSummary> = schema::order_fills::table
             .select((
                 schema::order_fills::pool_id,
                 schema::order_fills::maker_balance_manager_id,
                 schema::order_fills::taker_balance_manager_id,
-                schema::order_fills::base_quantity,
+                column_to_query,
             ))
             .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
             .filter(schema::order_fills::onchain_timestamp.between(current_start, current_end))
@@ -248,10 +273,10 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
                 .entry(order_fill.pool_id.clone())
                 .or_insert(vec![0, 0]);
             if order_fill.maker_balance_manager_id == balance_manager_id {
-                entry[0] += order_fill.base_quantity;
+                entry[0] += order_fill.quantity;
             }
             if order_fill.taker_balance_manager_id == balance_manager_id {
-                entry[1] += order_fill.base_quantity;
+                entry[1] += order_fill.quantity;
             }
         }
 
@@ -265,17 +290,25 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
 async fn get_historical_volume_by_balance_manager_id(
     Path((pool_ids, balance_manager_id, start_time, end_time)): Path<(String, String, i64, i64)>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, Vec<i64>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+
+    let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
+    let column_to_query = if volume_in_base {
+        sql::<diesel::sql_types::BigInt>("base_quantity")
+    } else {
+        sql::<diesel::sql_types::BigInt>("quote_quantity")
+    };
 
     let results: Vec<OrderFillSummary> = schema::order_fills::table
         .select((
             schema::order_fills::pool_id,
             schema::order_fills::maker_balance_manager_id,
             schema::order_fills::taker_balance_manager_id,
-            schema::order_fills::base_quantity,
+            column_to_query,
         ))
         .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
         .filter(schema::order_fills::onchain_timestamp.between(start_time * 1000, end_time * 1000))
@@ -293,10 +326,10 @@ async fn get_historical_volume_by_balance_manager_id(
             .entry(order_fill.pool_id.clone())
             .or_insert(vec![0, 0]);
         if order_fill.maker_balance_manager_id == balance_manager_id {
-            entry[0] += order_fill.base_quantity;
+            entry[0] += order_fill.quantity;
         }
         if order_fill.taker_balance_manager_id == balance_manager_id {
-            entry[1] += order_fill.base_quantity;
+            entry[1] += order_fill.quantity;
         }
     }
 
