@@ -47,6 +47,7 @@ use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
 use sui_move_build::SuiPackageHooks;
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -438,6 +439,7 @@ impl SuiCommand {
                     if let Err(e) = context.get_client().await?.check_api_version() {
                         eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
+                    check_protocol_version_and_warn(&mut context).await?;
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -1238,4 +1240,27 @@ pub fn parse_host_port(
     } else {
         format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
     }
+}
+
+/// Warn the user if the CLI falls behind more than 2 protocol versions.
+async fn check_protocol_version_and_warn(context: &mut WalletContext) -> Result<(), anyhow::Error> {
+    let client = context.get_client().await?;
+    let protocol_cfg = client.read_api().get_protocol_config(None).await?;
+    let on_chain_protocol_version = protocol_cfg.protocol_version.as_u64();
+    let cli_protocol_version = ProtocolConfig::get_for_max_version_UNSAFE()
+        .version
+        .as_u64();
+
+    if (cli_protocol_version + 2) < on_chain_protocol_version {
+        eprintln!(
+            "{}",
+            format!(
+                "[warning] CLI is aware protocol version {cli_protocol_version}, but the active \
+                network's protocol version is {on_chain_protocol_version}.\nPlease consider \
+                updating the CLI: https://docs.sui.io/guides/developer/getting-started/sui-install"
+            )
+        );
+    }
+
+    Ok(())
 }
