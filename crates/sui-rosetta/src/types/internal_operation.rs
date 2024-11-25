@@ -4,27 +4,22 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
-use pay_coin::pay_coin_pt;
-use pay_sui::pay_sui_pt;
 use serde::{Deserialize, Serialize};
 
 use sui_json_rpc_types::Coin;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::governance::ADD_STAKE_FUN_NAME;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::{
-    Argument, CallArg, Command, ProgrammableTransaction, TransactionData,
-};
-use sui_types::SUI_SYSTEM_PACKAGE_ID;
-use withdraw_stake::withdraw_stake_pt;
+use sui_types::transaction::{ProgrammableTransaction, TransactionData};
 
 use crate::errors::Error;
 use crate::types::ConstructionMetadata;
+use pay_coin::pay_coin_pt;
 pub use pay_coin::PayCoin;
+use pay_sui::pay_sui_pt;
 pub use pay_sui::PaySui;
+use stake::stake_pt;
 pub use stake::Stake;
+use withdraw_stake::withdraw_stake_pt;
 pub use withdraw_stake::WithdrawStake;
 
 mod pay_coin;
@@ -99,34 +94,19 @@ impl InternalOperation {
             InternalOperation::Stake(Stake {
                 validator, amount, ..
             }) => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-
-                // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
-                // if amount is none, validator input will be created after the system object input
-                let (validator, system_state, amount) = if let Some(amount) = amount {
-                    let amount = builder.pure(amount)?;
-                    let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-                    let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                    (validator, state, amount)
-                } else {
-                    let amount =
-                        builder.pure(metadata.total_coin_value as u64 - metadata.budget)?;
-                    let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                    let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-                    (validator, state, amount)
+                let (stake_all, amount) = match amount {
+                    Some(amount) => (false, amount),
+                    None => {
+                        if (metadata.total_coin_value - metadata.budget as i128) < 0 {
+                            return Err(anyhow!(
+                                "ConstructionMetadata malformed. total_coin_value - budget < 0"
+                            )
+                            .into());
+                        }
+                        (true, metadata.total_coin_value as u64 - metadata.budget)
+                    }
                 };
-                let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
-
-                let arguments = vec![system_state, coin, validator];
-
-                builder.command(Command::move_call(
-                    SUI_SYSTEM_PACKAGE_ID,
-                    SUI_SYSTEM_MODULE_NAME.to_owned(),
-                    ADD_STAKE_FUN_NAME.to_owned(),
-                    vec![],
-                    arguments,
-                ));
-                builder.finish()
+                stake_pt(validator, amount, stake_all, &metadata.extra_gas_coins)?
             }
             InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
                 let withdraw_all = stake_ids.is_empty();
