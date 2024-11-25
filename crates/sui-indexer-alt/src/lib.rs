@@ -379,6 +379,7 @@ pub async fn start_indexer(
     let IndexerConfig {
         ingestion,
         consistency,
+        committer,
         pipeline:
             PipelineConfig {
                 sum_coin_balances,
@@ -406,31 +407,14 @@ pub async fn start_indexer(
             },
     } = indexer_config;
 
-    let cancel = CancellationToken::new();
-    let retry_interval = ingestion.retry_interval();
-    let mut indexer = Indexer::new(db_args, indexer_args, ingestion, cancel.clone()).await?;
-
-    if with_genesis {
-        let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
-
-        // Pipelines that rely on genesis information
-        indexer
-            .concurrent_pipeline(KvFeatureFlags(genesis.clone()), kv_feature_flags)
-            .await?;
-
-        indexer
-            .concurrent_pipeline(KvProtocolConfigs(genesis.clone()), kv_protocol_configs)
-            .await?;
-    }
-
-    // Pipelines that are split up into a summary table, and a write-ahead log, where the
-    // write-ahead log needs to be pruned.
     let ConsistencyConfig {
         consistent_pruning_interval_ms,
         pruner_delay_ms,
         consistent_range: checkpoint_lag,
     } = consistency;
 
+    // Pipelines that are split up into a summary table, and a write-ahead log prune their
+    // write-ahead log so it contains just enough information to overlap with the summary table.
     let pruner_config = checkpoint_lag.map(|l| PrunerConfig {
         interval_ms: consistent_pruning_interval_ms,
         delay_ms: pruner_delay_ms,
@@ -441,101 +425,87 @@ pub async fn start_indexer(
         max_chunk_size: 5 * 300,
     });
 
-    indexer
-        .sequential_pipeline(
-            SumCoinBalances,
-            SequentialConfig {
-                committer: sum_coin_balances,
-                checkpoint_lag,
-            },
-        )
-        .await?;
+    let cancel = CancellationToken::new();
+    let retry_interval = ingestion.retry_interval();
+    let mut indexer = Indexer::new(db_args, indexer_args, ingestion, cancel.clone()).await?;
 
-    indexer
-        .concurrent_pipeline(
-            WalCoinBalances,
-            ConcurrentConfig {
-                committer: wal_coin_balances,
-                pruner: pruner_config.clone(),
-            },
-        )
-        .await?;
+    macro_rules! add_concurrent {
+        ($handler:expr, $config:expr) => {
+            indexer
+                .concurrent_pipeline($handler, $config.finish(&committer))
+                .await?
+        };
+    }
 
-    indexer
-        .sequential_pipeline(
-            SumObjTypes,
-            SequentialConfig {
-                committer: sum_obj_types,
-                checkpoint_lag,
-            },
-        )
-        .await?;
+    macro_rules! add_sequential {
+        ($handler:expr, $config:expr) => {
+            indexer
+                .sequential_pipeline($handler, $config.finish(&committer))
+                .await?
+        };
+    }
 
-    indexer
-        .concurrent_pipeline(
-            WalObjTypes,
-            ConcurrentConfig {
-                committer: wal_obj_types,
-                pruner: pruner_config,
-            },
-        )
-        .await?;
+    macro_rules! add_consistent {
+        ($sum_handler:expr, $sum_config:expr; $wal_handler:expr, $wal_config:expr) => {
+            indexer
+                .sequential_pipeline(
+                    $sum_handler,
+                    SequentialConfig {
+                        committer: $sum_config.finish(&committer),
+                        checkpoint_lag,
+                    },
+                )
+                .await?;
+
+            indexer
+                .concurrent_pipeline(
+                    $wal_handler,
+                    ConcurrentConfig {
+                        committer: $wal_config.finish(&committer),
+                        pruner: pruner_config.clone(),
+                    },
+                )
+                .await?;
+        };
+    }
+
+    if with_genesis {
+        let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
+
+        // Pipelines that rely on genesis information
+        add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
+        add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
+    }
+
+    add_consistent!(
+        SumCoinBalances, sum_coin_balances;
+        WalCoinBalances, wal_coin_balances
+    );
+
+    add_consistent!(
+        SumObjTypes, sum_obj_types;
+        WalObjTypes, wal_obj_types
+    );
 
     // Other summary tables (without write-ahead log)
-    indexer
-        .sequential_pipeline(SumDisplays, sum_displays)
-        .await?;
-
-    indexer
-        .sequential_pipeline(SumPackages, sum_packages)
-        .await?;
+    add_sequential!(SumDisplays, sum_displays);
+    add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
-    indexer.concurrent_pipeline(EvEmitMod, ev_emit_mod).await?;
-
-    indexer
-        .concurrent_pipeline(EvStructInst, ev_struct_inst)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(KvCheckpoints, kv_checkpoints)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(KvEpochEnds, kv_epoch_ends)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(KvEpochStarts, kv_epoch_starts)
-        .await?;
-
-    indexer.concurrent_pipeline(KvObjects, kv_objects).await?;
-
-    indexer
-        .concurrent_pipeline(KvTransactions, kv_transactions)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(ObjVersions, obj_versions)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(TxAffectedAddress, tx_affected_addresses)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(TxAffectedObjects, tx_affected_objects)
-        .await?;
-
-    indexer
-        .concurrent_pipeline(TxBalanceChanges, tx_balance_changes)
-        .await?;
-
-    indexer.concurrent_pipeline(TxCalls, tx_calls).await?;
-
-    indexer.concurrent_pipeline(TxDigests, tx_digests).await?;
-
-    indexer.concurrent_pipeline(TxKinds, tx_kinds).await?;
+    add_concurrent!(EvEmitMod, ev_emit_mod);
+    add_concurrent!(EvStructInst, ev_struct_inst);
+    add_concurrent!(KvCheckpoints, kv_checkpoints);
+    add_concurrent!(KvEpochEnds, kv_epoch_ends);
+    add_concurrent!(KvEpochStarts, kv_epoch_starts);
+    add_concurrent!(KvObjects, kv_objects);
+    add_concurrent!(KvTransactions, kv_transactions);
+    add_concurrent!(ObjVersions, obj_versions);
+    add_concurrent!(TxAffectedAddress, tx_affected_addresses);
+    add_concurrent!(TxAffectedObjects, tx_affected_objects);
+    add_concurrent!(TxBalanceChanges, tx_balance_changes);
+    add_concurrent!(TxCalls, tx_calls);
+    add_concurrent!(TxDigests, tx_digests);
+    add_concurrent!(TxKinds, tx_kinds);
 
     let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
