@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
-use move_core_types::language_storage::StructTag;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
@@ -550,15 +549,6 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
 }
 
 impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for Simulacrum<T, V> {
-    fn get_transaction_checkpoint(
-        &self,
-        _digest: &sui_types::digests::TransactionDigest,
-    ) -> sui_types::storage::error::Result<
-        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
-    > {
-        todo!()
-    }
-
     fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
@@ -577,38 +567,8 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
             .into())
     }
 
-    fn account_owned_objects_info_iter(
-        &self,
-        _owner: SuiAddress,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
-    > {
-        todo!()
-    }
-
-    fn dynamic_field_iter(
-        &self,
-        _parent: ObjectID,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<
-            dyn Iterator<
-                    Item = (
-                        sui_types::storage::DynamicFieldKey,
-                        sui_types::storage::DynamicFieldIndexInfo,
-                    ),
-                > + '_,
-        >,
-    > {
-        todo!()
-    }
-
-    fn get_coin_info(
-        &self,
-        _coin_type: &StructTag,
-    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
-        todo!()
+    fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
+        None
     }
 }
 
