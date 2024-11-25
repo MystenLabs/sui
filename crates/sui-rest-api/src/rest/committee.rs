@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accept::AcceptJsonProtobufBcs,
-    openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     proto,
     reader::StateReader,
     response::JsonProtobufBcs,
+    rest::accept::AcceptJsonProtobufBcs,
+    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     RestService, Result,
 };
 use axum::extract::{Path, State};
