@@ -3,7 +3,10 @@
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Fields, FieldsNamed};
+use syn::{
+    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Fields, FieldsNamed, Meta,
+    MetaList, MetaNameValue, NestedMeta,
+};
 
 /// Attribute macro to be applied to config-based structs. It ensures that the struct derives serde
 /// traits, and `Debug`, that all fields are renamed with "kebab case", and adds a `#[serde(default
@@ -70,9 +73,35 @@ pub fn DefaultConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
         }
     });
 
+    // Check if there's already a serde rename_all attribute
+    let has_rename_all = attrs.iter().any(|attr| {
+        if !attr.path.is_ident("serde") {
+            return false;
+        };
+
+        let Ok(Meta::List(MetaList { nested, .. })) = attr.parse_meta() else {
+            return false;
+        };
+
+        nested.iter().any(|nested| {
+            if let NestedMeta::Meta(Meta::NameValue(MetaNameValue { path, .. })) = nested {
+                path.is_ident("rename_all")
+            } else {
+                false
+            }
+        })
+    });
+
+    // Only include the default rename_all if none exists
+    let rename_all = if !has_rename_all {
+        quote! { #[serde(rename_all = "kebab-case")] }
+    } else {
+        quote! {}
+    };
+
     TokenStream::from(quote! {
         #[derive(serde::Serialize, serde::Deserialize)]
-        #[serde(rename_all = "kebab-case")]
+        #rename_all
         #(#attrs)* #vis #struct_token #ident #generics {
             #(#fields),*
         } #semi_token
