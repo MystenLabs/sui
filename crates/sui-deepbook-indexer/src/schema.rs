@@ -240,11 +240,3 @@ diesel::allow_tables_to_appear_in_same_query!(
     trade_params_update,
     votes,
 );
-
-diesel::table! {
-    balances_summary (asset) {
-        asset -> Text,
-        amount -> Int8,
-        deposit -> Bool,
-    }
-}
