@@ -8,6 +8,7 @@ use pay_coin::pay_coin_pt;
 use pay_sui::pay_sui_pt;
 use serde::{Deserialize, Serialize};
 
+use sui_json_rpc_types::Coin;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::governance::ADD_STAKE_FUN_NAME;
@@ -140,5 +141,22 @@ impl InternalOperation {
             metadata.budget,
             metadata.gas_price,
         ))
+    }
+}
+
+fn insert_in_reverse_order(vec: &mut Vec<Coin>, coin: Coin) -> usize {
+    match vec
+        .iter()
+        .enumerate()
+        .find(|(_pos, existing)| existing.balance < coin.balance)
+    {
+        Some((pos, _)) => {
+            vec.insert(pos, coin);
+            pos
+        }
+        None => {
+            vec.push(coin);
+            vec.len() - 1
+        }
     }
 }
