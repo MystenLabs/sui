@@ -6,7 +6,21 @@ import Admonition from '@theme/Admonition';
 
 {@include: ../snippets/deepbook.mdx}
 
-## Get all pool information
+Some overview content here
+
+## Public DeepBook indexer
+
+[Mysten Labs](https://www.mystenlabs.com/) provides a public indexer for DeepBook. You can access this indexer at the following URL:
+
+```http
+https://deepbook-indexer.mainnet.mystenlabs.com/
+```
+
+## Available endpoints
+
+You can perform the following tasks using the endpoints the DeepBook Indexer API provides.
+
+### Get all pool information
 
 ```
 /get_pools
@@ -98,7 +112,7 @@ produces a response similar to
 ]
 ```
 
-## Get historical volume for pool in a specific time range
+### Get historical volume for pool in a specific time range
 
 ```
 /get_historical_volume/:pool_ids?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
@@ -137,7 +151,7 @@ produces a response similar to
 }
 ```
 
-## Get historical volume by balance manager within a specific time range
+### Get historical volume by balance manager within a specific time range
 
 ```
 /get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
@@ -179,7 +193,7 @@ produces a response similar to
 }
 ```
 
-## Get historical volume by balance manager within a specific time range and intervals
+### Get historical volume by balance manager within a specific time range and intervals
 
 ```
 /get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&interval=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
