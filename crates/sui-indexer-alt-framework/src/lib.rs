@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
 use db::{Db, DbArgs};
-use diesel_migrations::EmbeddedMigrations;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use pipeline::{
@@ -26,6 +26,8 @@ pub mod pipeline;
 pub(crate) mod schema;
 pub mod task;
 pub(crate) mod watermarks;
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Debug, Clone)]
