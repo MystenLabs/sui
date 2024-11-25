@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accept::AcceptJsonProtobufBcs;
-use crate::openapi::{
+use crate::response::{Bcs, JsonProtobufBcs};
+use crate::rest::accept::AcceptJsonProtobufBcs;
+use crate::rest::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
-use crate::response::{Bcs, JsonProtobufBcs};
 use crate::{proto, RestError, RestService, Result};
 use axum::extract::{Query, State};
 use schemars::JsonSchema;
@@ -303,7 +303,7 @@ enum ReadableEffectsFinality {
     },
     Checkpointed {
         #[serde_as(as = "sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>")]
-        #[schemars(with = "crate::_schemars::U64")]
+        #[schemars(with = "crate::rest::_schemars::U64")]
         checkpoint: CheckpointSequenceNumber,
     },
     QuorumExecuted,

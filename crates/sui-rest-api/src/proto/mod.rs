@@ -341,10 +341,10 @@ impl TryFrom<&UserSignature> for sui_types::signature::GenericSignature {
 // GetObjectResponse
 //
 
-impl TryFrom<crate::objects::ObjectResponse> for GetObjectResponse {
+impl TryFrom<crate::rest::objects::ObjectResponse> for GetObjectResponse {
     type Error = bcs::Error;
 
-    fn try_from(value: crate::objects::ObjectResponse) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::rest::objects::ObjectResponse) -> Result<Self, Self::Error> {
         Ok(Self {
             digest: value.digest.as_bytes().to_vec().into(),
             object: Some(Object::try_from(&value.object)?),
@@ -352,7 +352,7 @@ impl TryFrom<crate::objects::ObjectResponse> for GetObjectResponse {
     }
 }
 
-impl TryFrom<GetObjectResponse> for crate::objects::ObjectResponse {
+impl TryFrom<GetObjectResponse> for crate::rest::objects::ObjectResponse {
     type Error = bcs::Error;
 
     fn try_from(value: GetObjectResponse) -> Result<Self, Self::Error> {
@@ -371,10 +371,10 @@ impl TryFrom<GetObjectResponse> for crate::objects::ObjectResponse {
 // GetCheckpointResponse
 //
 
-impl TryFrom<crate::checkpoints::CheckpointResponse> for GetCheckpointResponse {
+impl TryFrom<crate::rest::checkpoints::CheckpointResponse> for GetCheckpointResponse {
     type Error = bcs::Error;
 
-    fn try_from(c: crate::checkpoints::CheckpointResponse) -> Result<Self, Self::Error> {
+    fn try_from(c: crate::rest::checkpoints::CheckpointResponse) -> Result<Self, Self::Error> {
         Ok(Self {
             digest: c.digest.as_bytes().to_vec().into(),
             summary: Some(CheckpointSummary::try_from(&c.summary)?),
@@ -388,7 +388,7 @@ impl TryFrom<crate::checkpoints::CheckpointResponse> for GetCheckpointResponse {
     }
 }
 
-impl TryFrom<GetCheckpointResponse> for crate::checkpoints::CheckpointResponse {
+impl TryFrom<GetCheckpointResponse> for crate::rest::checkpoints::CheckpointResponse {
     type Error = bcs::Error;
 
     fn try_from(value: GetCheckpointResponse) -> Result<Self, Self::Error> {
@@ -413,9 +413,11 @@ impl TryFrom<GetCheckpointResponse> for crate::checkpoints::CheckpointResponse {
     }
 }
 
-impl TryFrom<Vec<crate::checkpoints::CheckpointResponse>> for ListCheckpointResponse {
+impl TryFrom<Vec<crate::rest::checkpoints::CheckpointResponse>> for ListCheckpointResponse {
     type Error = bcs::Error;
-    fn try_from(value: Vec<crate::checkpoints::CheckpointResponse>) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: Vec<crate::rest::checkpoints::CheckpointResponse>,
+    ) -> Result<Self, Self::Error> {
         let checkpoints = value
             .into_iter()
             .map(TryInto::try_into)
@@ -429,10 +431,12 @@ impl TryFrom<Vec<crate::checkpoints::CheckpointResponse>> for ListCheckpointResp
 // GetTransactionResponse
 //
 
-impl TryFrom<crate::transactions::TransactionResponse> for GetTransactionResponse {
+impl TryFrom<crate::rest::transactions::TransactionResponse> for GetTransactionResponse {
     type Error = bcs::Error;
 
-    fn try_from(value: crate::transactions::TransactionResponse) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: crate::rest::transactions::TransactionResponse,
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             digest: value.digest.as_bytes().to_vec().into(),
             transaction: Some(Transaction::try_from(&value.transaction)?),
@@ -453,7 +457,7 @@ impl TryFrom<crate::transactions::TransactionResponse> for GetTransactionRespons
     }
 }
 
-impl TryFrom<GetTransactionResponse> for crate::transactions::TransactionResponse {
+impl TryFrom<GetTransactionResponse> for crate::rest::transactions::TransactionResponse {
     type Error = bcs::Error;
 
     fn try_from(value: GetTransactionResponse) -> Result<Self, Self::Error> {
@@ -784,18 +788,18 @@ impl TryFrom<&BalanceChange> for crate::client::BalanceChange {
 // EffectsFinality
 //
 
-impl TryFrom<&crate::transactions::EffectsFinality> for EffectsFinality {
+impl TryFrom<&crate::rest::transactions::EffectsFinality> for EffectsFinality {
     type Error = bcs::Error;
 
-    fn try_from(value: &crate::transactions::EffectsFinality) -> Result<Self, Self::Error> {
+    fn try_from(value: &crate::rest::transactions::EffectsFinality) -> Result<Self, Self::Error> {
         let (signature, checkpoint, quorum_executed) = match value {
-            crate::transactions::EffectsFinality::Certified { signature } => {
+            crate::rest::transactions::EffectsFinality::Certified { signature } => {
                 (Some(signature.try_into()?), None, None)
             }
-            crate::transactions::EffectsFinality::Checkpointed { checkpoint } => {
+            crate::rest::transactions::EffectsFinality::Checkpointed { checkpoint } => {
                 (None, Some(*checkpoint), None)
             }
-            crate::transactions::EffectsFinality::QuorumExecuted => (None, None, Some(true)),
+            crate::rest::transactions::EffectsFinality::QuorumExecuted => (None, None, Some(true)),
         };
 
         Ok(Self {
@@ -806,7 +810,7 @@ impl TryFrom<&crate::transactions::EffectsFinality> for EffectsFinality {
     }
 }
 
-impl TryFrom<&EffectsFinality> for crate::transactions::EffectsFinality {
+impl TryFrom<&EffectsFinality> for crate::rest::transactions::EffectsFinality {
     type Error = bcs::Error;
 
     fn try_from(value: &EffectsFinality) -> Result<Self, Self::Error> {
@@ -817,12 +821,12 @@ impl TryFrom<&EffectsFinality> for crate::transactions::EffectsFinality {
             .transpose()?;
         match (signature, value.checkpoint, value.quorum_executed) {
             (Some(signature), None, None) => {
-                crate::transactions::EffectsFinality::Certified { signature }
+                crate::rest::transactions::EffectsFinality::Certified { signature }
             }
             (None, Some(checkpoint), None) => {
-                crate::transactions::EffectsFinality::Checkpointed { checkpoint }
+                crate::rest::transactions::EffectsFinality::Checkpointed { checkpoint }
             }
-            (None, None, Some(true)) => crate::transactions::EffectsFinality::QuorumExecuted,
+            (None, None, Some(true)) => crate::rest::transactions::EffectsFinality::QuorumExecuted,
             _ => return Err(bcs::Error::Custom("invalid EffectsFinality message".into())),
         }
         .pipe(Ok)
@@ -855,11 +859,13 @@ impl TryFrom<&EffectsFinality> for crate::client::EffectsFinality {
 // TransactionExecutionResponse
 //
 
-impl TryFrom<crate::transactions::TransactionExecutionResponse> for TransactionExecutionResponse {
+impl TryFrom<crate::rest::transactions::TransactionExecutionResponse>
+    for TransactionExecutionResponse
+{
     type Error = bcs::Error;
 
     fn try_from(
-        value: crate::transactions::TransactionExecutionResponse,
+        value: crate::rest::transactions::TransactionExecutionResponse,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             effects: Some(TransactionEffects::try_from(&value.effects)?),
@@ -891,7 +897,9 @@ impl TryFrom<crate::transactions::TransactionExecutionResponse> for TransactionE
     }
 }
 
-impl TryFrom<TransactionExecutionResponse> for crate::transactions::TransactionExecutionResponse {
+impl TryFrom<TransactionExecutionResponse>
+    for crate::rest::transactions::TransactionExecutionResponse
+{
     type Error = bcs::Error;
 
     fn try_from(value: TransactionExecutionResponse) -> Result<Self, Self::Error> {
@@ -973,11 +981,13 @@ impl TryFrom<TransactionExecutionResponse> for crate::client::TransactionExecuti
 // TransactionSimulationResponse
 //
 
-impl TryFrom<crate::transactions::TransactionSimulationResponse> for TransactionSimulationResponse {
+impl TryFrom<crate::rest::transactions::TransactionSimulationResponse>
+    for TransactionSimulationResponse
+{
     type Error = bcs::Error;
 
     fn try_from(
-        value: crate::transactions::TransactionSimulationResponse,
+        value: crate::rest::transactions::TransactionSimulationResponse,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             effects: Some(TransactionEffects::try_from(&value.effects)?),
@@ -1008,7 +1018,9 @@ impl TryFrom<crate::transactions::TransactionSimulationResponse> for Transaction
     }
 }
 
-impl TryFrom<TransactionSimulationResponse> for crate::transactions::TransactionSimulationResponse {
+impl TryFrom<TransactionSimulationResponse>
+    for crate::rest::transactions::TransactionSimulationResponse
+{
     type Error = bcs::Error;
 
     fn try_from(value: TransactionSimulationResponse) -> Result<Self, Self::Error> {
@@ -1047,11 +1059,11 @@ impl TryFrom<TransactionSimulationResponse> for crate::transactions::Transaction
 // ResolveTransactionResponse
 //
 
-impl TryFrom<crate::transactions::ResolveTransactionResponse> for ResolveTransactionResponse {
+impl TryFrom<crate::rest::transactions::ResolveTransactionResponse> for ResolveTransactionResponse {
     type Error = bcs::Error;
 
     fn try_from(
-        value: crate::transactions::ResolveTransactionResponse,
+        value: crate::rest::transactions::ResolveTransactionResponse,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             transaction: Some(Transaction::try_from(&value.transaction)?),
@@ -1063,7 +1075,7 @@ impl TryFrom<crate::transactions::ResolveTransactionResponse> for ResolveTransac
     }
 }
 
-impl TryFrom<ResolveTransactionResponse> for crate::transactions::ResolveTransactionResponse {
+impl TryFrom<ResolveTransactionResponse> for crate::rest::transactions::ResolveTransactionResponse {
     type Error = bcs::Error;
 
     fn try_from(value: ResolveTransactionResponse) -> Result<Self, Self::Error> {

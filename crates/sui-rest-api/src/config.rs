@@ -25,4 +25,3 @@ impl Config {
         self.enable_unstable_apis.unwrap_or(true)
     }
 }
-

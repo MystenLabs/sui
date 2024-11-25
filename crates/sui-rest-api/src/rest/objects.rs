@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accept::{AcceptFormat, AcceptJsonProtobufBcs},
-    openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     proto::GetObjectResponse,
     reader::StateReader,
     response::{JsonProtobufBcs, ResponseContent},
-    Page, RestError, RestService, Result,
+    rest::accept::{AcceptFormat, AcceptJsonProtobufBcs},
+    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
+    rest::Page,
+    RestError, RestService, Result,
 };
 use axum::extract::Query;
 use axum::extract::{Path, State};
@@ -57,7 +58,7 @@ impl ApiEndpoint<RestService> for GetObject {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), get_object)
     }
 }
@@ -118,7 +119,7 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), get_object_with_version)
     }
 }
@@ -219,7 +220,7 @@ impl ApiEndpoint<RestService> for ListDynamicFields {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), list_dynamic_fields)
     }
 }
@@ -277,8 +278,8 @@ pub struct ListDynamicFieldsQueryParameters {
 impl ListDynamicFieldsQueryParameters {
     pub fn limit(&self) -> usize {
         self.limit
-            .map(|l| (l as usize).clamp(1, crate::MAX_PAGE_SIZE))
-            .unwrap_or(crate::DEFAULT_PAGE_SIZE)
+            .map(|l| (l as usize).clamp(1, crate::rest::MAX_PAGE_SIZE))
+            .unwrap_or(crate::rest::DEFAULT_PAGE_SIZE)
     }
 
     pub fn start(&self) -> Option<sui_types::base_types::ObjectID> {

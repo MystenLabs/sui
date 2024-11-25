@@ -24,17 +24,17 @@ use sui_sdk_types::types::{
 };
 use tap::Pipe;
 
-use crate::accept::AcceptJsonProtobufBcs;
-use crate::openapi::ApiEndpoint;
-use crate::openapi::OperationBuilder;
-use crate::openapi::ResponseBuilder;
-use crate::openapi::RouteHandler;
 use crate::proto;
 use crate::proto::ListTransactionsResponse;
 use crate::reader::StateReader;
 use crate::response::JsonProtobufBcs;
+use crate::rest::accept::AcceptJsonProtobufBcs;
+use crate::rest::openapi::ApiEndpoint;
+use crate::rest::openapi::OperationBuilder;
+use crate::rest::openapi::ResponseBuilder;
+use crate::rest::openapi::RouteHandler;
+use crate::rest::PageCursor;
 use crate::Direction;
-use crate::PageCursor;
 use crate::RestError;
 use crate::RestService;
 use crate::Result;
@@ -102,12 +102,12 @@ pub struct TransactionResponse {
     #[serde_as(
         as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
     )]
-    #[schemars(with = "Option<crate::_schemars::U64>")]
+    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
     pub checkpoint: Option<u64>,
     #[serde_as(
         as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
     )]
-    #[schemars(with = "Option<crate::_schemars::U64>")]
+    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
     pub timestamp_ms: Option<u64>,
 }
 
@@ -308,8 +308,8 @@ pub struct ListTransactionsQueryParameters {
 impl ListTransactionsQueryParameters {
     pub fn limit(&self) -> usize {
         self.limit
-            .map(|l| (l as usize).clamp(1, crate::MAX_PAGE_SIZE))
-            .unwrap_or(crate::DEFAULT_PAGE_SIZE)
+            .map(|l| (l as usize).clamp(1, crate::rest::MAX_PAGE_SIZE))
+            .unwrap_or(crate::rest::DEFAULT_PAGE_SIZE)
     }
 
     pub fn start(&self, default: CheckpointSequenceNumber) -> TransactionCursor {

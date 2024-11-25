@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::RestError;
 use crate::RestService;
 use crate::{reader::StateReader, Result};
@@ -41,7 +41,7 @@ impl ApiEndpoint<RestService> for GetCoinInfo {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), get_coin_info)
     }
 }
@@ -164,7 +164,7 @@ impl From<sui_types::coin::CoinMetadata> for CoinMetadata {
 pub struct CoinTreasury {
     pub id: Option<ObjectId>,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
     pub total_supply: u64,
 }
 

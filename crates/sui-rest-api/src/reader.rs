@@ -54,7 +54,7 @@ impl StateReader {
             .map(|committee| (*committee).clone().into())
     }
 
-    pub fn get_system_state_summary(&self) -> Result<super::system::SystemStateSummary> {
+    pub fn get_system_state_summary(&self) -> Result<super::rest::system::SystemStateSummary> {
         use sui_types::sui_system_state::SuiSystemStateTrait;
 
         let system_state = sui_types::sui_system_state::get_sui_system_state(self.inner())
@@ -72,7 +72,7 @@ impl StateReader {
         sui_sdk_types::types::TransactionEffects,
         Option<sui_sdk_types::types::TransactionEvents>,
     )> {
-        use super::transactions::TransactionNotFoundError;
+        use super::rest::transactions::TransactionNotFoundError;
         use sui_types::effects::TransactionEffectsAPI;
 
         let transaction_digest = digest.into();
@@ -116,7 +116,7 @@ impl StateReader {
     pub fn get_transaction_response(
         &self,
         digest: sui_sdk_types::types::TransactionDigest,
-    ) -> crate::Result<super::transactions::TransactionResponse> {
+    ) -> crate::Result<super::rest::transactions::TransactionResponse> {
         let (
             SignedTransaction {
                 transaction,
@@ -135,7 +135,7 @@ impl StateReader {
             None
         };
 
-        Ok(crate::transactions::TransactionResponse {
+        Ok(crate::rest::transactions::TransactionResponse {
             digest: transaction.digest(),
             transaction,
             signatures,

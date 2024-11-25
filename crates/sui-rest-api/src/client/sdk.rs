@@ -21,26 +21,26 @@ use sui_sdk_types::types::ValidatorCommittee;
 use sui_sdk_types::types::Version;
 use tap::Pipe;
 
-use crate::accounts::AccountOwnedObjectInfo;
-use crate::accounts::ListAccountOwnedObjectsQueryParameters;
-use crate::checkpoints::CheckpointResponse;
-use crate::checkpoints::ListCheckpointsQueryParameters;
-use crate::coins::CoinInfo;
-use crate::health::Threshold;
-use crate::info::NodeInfo;
-use crate::objects::DynamicFieldInfo;
-use crate::objects::ListDynamicFieldsQueryParameters;
-use crate::system::GasInfo;
-use crate::system::ProtocolConfigResponse;
-use crate::system::SystemStateSummary;
-use crate::system::X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION;
-use crate::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
-use crate::transactions::ListTransactionsQueryParameters;
-use crate::transactions::ResolveTransactionQueryParameters;
-use crate::transactions::ResolveTransactionResponse;
-use crate::transactions::TransactionExecutionResponse;
-use crate::transactions::TransactionResponse;
-use crate::transactions::TransactionSimulationResponse;
+use crate::rest::accounts::AccountOwnedObjectInfo;
+use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
+use crate::rest::checkpoints::CheckpointResponse;
+use crate::rest::checkpoints::ListCheckpointsQueryParameters;
+use crate::rest::coins::CoinInfo;
+use crate::rest::health::Threshold;
+use crate::rest::info::NodeInfo;
+use crate::rest::objects::DynamicFieldInfo;
+use crate::rest::objects::ListDynamicFieldsQueryParameters;
+use crate::rest::system::GasInfo;
+use crate::rest::system::ProtocolConfigResponse;
+use crate::rest::system::SystemStateSummary;
+use crate::rest::system::X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION;
+use crate::rest::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
+use crate::rest::transactions::ListTransactionsQueryParameters;
+use crate::rest::transactions::ResolveTransactionQueryParameters;
+use crate::rest::transactions::ResolveTransactionResponse;
+use crate::rest::transactions::TransactionExecutionResponse;
+use crate::rest::transactions::TransactionResponse;
+use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
 use crate::types::X_SUI_CHECKPOINT_HEIGHT;
@@ -324,7 +324,7 @@ impl Client {
             .inner
             .post(url)
             .query(parameters)
-            .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
+            .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
             .body(body);
 
         self.bcs(request).await
@@ -341,7 +341,7 @@ impl Client {
         let request = self
             .inner
             .post(url)
-            .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
+            .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
             .body(body);
 
         self.bcs(request).await
@@ -403,7 +403,7 @@ impl Client {
         request: reqwest::RequestBuilder,
     ) -> Result<Response<T>> {
         let response = request
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
+            .header(reqwest::header::ACCEPT, crate::rest::APPLICATION_JSON)
             .send()
             .await?;
 
@@ -418,7 +418,7 @@ impl Client {
         request: reqwest::RequestBuilder,
     ) -> Result<Response<T>> {
         let response = request
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
+            .header(reqwest::header::ACCEPT, crate::rest::APPLICATION_BCS)
             .send()
             .await?;
 
@@ -437,7 +437,7 @@ impl Client {
         request: reqwest::RequestBuilder,
     ) -> Result<Response<T>> {
         let response = request
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_PROTOBUF)
+            .header(reqwest::header::ACCEPT, crate::rest::APPLICATION_PROTOBUF)
             .send()
             .await?;
 
