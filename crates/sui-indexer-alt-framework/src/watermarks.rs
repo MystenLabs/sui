@@ -122,6 +122,19 @@ impl<'p> CommitterWatermark<'p> {
             .await?
             > 0)
     }
+
+    #[cfg(test)]
+    pub async fn read_highest_watermark(
+        conn: &mut Connection<'_>,
+        pipeline: &'static str,
+    ) -> QueryResult<Option<Self>> {
+        watermarks::table
+            .select(CommitterWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(conn)
+            .await
+            .optional()
+    }
 }
 
 impl<'p> ReaderWatermark<'p> {
