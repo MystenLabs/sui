@@ -20,6 +20,7 @@ mod checkpoints;
 pub mod client;
 mod coins;
 mod committee;
+mod config;
 pub mod content_type;
 mod error;
 mod health;
@@ -42,6 +43,7 @@ pub use metrics::RestMetrics;
 pub use objects::ObjectResponse;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 pub use transactions::ExecuteTransactionQueryParameters;
+pub use config::Config;
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
@@ -252,31 +254,6 @@ pub fn info(version: &'static str) -> openapiv3::v3_1::Info {
 
 async fn redirect(axum::extract::Path(path): axum::extract::Path<String>) -> Redirect {
     Redirect::permanent(&format!("/v2/{path}"))
-}
-
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct Config {
-    /// Enable serving of unstable APIs
-    ///
-    /// Defaults to `false`, with unstable APIs being disabled
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enable_unstable_apis: Option<bool>,
-
-    // Only include this till we have another field that isn't set with a non-default value for
-    // testing
-    #[doc(hidden)]
-    #[serde(skip)]
-    pub _hidden: (),
-}
-
-impl Config {
-    pub fn enable_unstable_apis(&self) -> bool {
-        // TODO
-        // Until the rest service as a whole is "stabalized" with a sane set of default stable
-        // apis, have the default be to enable all apis
-        self.enable_unstable_apis.unwrap_or(true)
-    }
 }
 
 mod _schemars {
