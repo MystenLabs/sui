@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::{Coin, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -14,10 +14,8 @@ use crate::errors::Error;
 
 use super::{
     TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, MAX_GAS_BUDGET,
-    MAX_GAS_COINS,
+    MAX_GAS_COINS, START_BUDGET,
 };
-
-const START_BUDGET: u64 = 1_000_000;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PaySui {
@@ -42,6 +40,7 @@ impl TryConstructTransaction for PaySui {
 
         let total_amount = amounts.iter().sum::<u64>();
         if let Some(budget) = budget {
+            // We have a constant budget, so no need to dry-run
             let all_coins = client
                 .coin_read_api()
                 .select_coins(sender, None, (total_amount + budget) as u128, vec![])

@@ -341,7 +341,7 @@ async fn test_make_change_remainder_div() -> Result<()> {
     };
 
     let splitted_id = splitted.coin_object_id;
-    let txs = make_change(&client, &keystore, sender, splitted, Some(initial), SUI_12).await?;
+    let txs = make_change(&client, keystore, sender, splitted, Some(initial), SUI_12).await?;
 
     assert!(txs.len() == 1, "Should only have 1 tx");
     let new_coins = txs
