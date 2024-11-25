@@ -598,7 +598,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 ///
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
-pub trait RestStateReader: ObjectStore + ReadStore + Send + Sync {
+pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,

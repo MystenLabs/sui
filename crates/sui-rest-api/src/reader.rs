@@ -9,22 +9,22 @@ use sui_sdk_types::types::{
 use sui_sdk_types::types::{Object, ObjectId, Version};
 use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::ObjectStore;
-use sui_types::storage::RestStateReader;
+use sui_types::storage::RpcStateReader;
 use tap::Pipe;
 
 use crate::Direction;
 
 #[derive(Clone)]
 pub struct StateReader {
-    inner: Arc<dyn RestStateReader>,
+    inner: Arc<dyn RpcStateReader>,
 }
 
 impl StateReader {
-    pub fn new(inner: Arc<dyn RestStateReader>) -> Self {
+    pub fn new(inner: Arc<dyn RpcStateReader>) -> Self {
         Self { inner }
     }
 
-    pub fn inner(&self) -> &Arc<dyn RestStateReader> {
+    pub fn inner(&self) -> &Arc<dyn RpcStateReader> {
         &self.inner
     }
 

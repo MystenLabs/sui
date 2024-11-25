@@ -29,7 +29,7 @@ use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
 use sui_types::digests::ConsensusCommitDigest;
 use sui_types::object::Object;
-use sui_types::storage::{ObjectStore, ReadStore, RestStateReader};
+use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -549,7 +549,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     }
 }
 
-impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for Simulacrum<T, V> {
+impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for Simulacrum<T, V> {
     fn get_transaction_checkpoint(
         &self,
         _digest: &sui_types::digests::TransactionDigest,

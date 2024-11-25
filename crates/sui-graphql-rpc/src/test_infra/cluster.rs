@@ -21,7 +21,7 @@ use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::start_indexer_writer_for_testing;
 use sui_pg_temp_db::{get_available_port, TempDb};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
-use sui_types::storage::RestStateReader;
+use sui_types::storage::RpcStateReader;
 use tempfile::tempdir;
 use tempfile::TempDir;
 use test_cluster::TestCluster;
@@ -150,7 +150,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
 /// Takes in a simulated instantiation of a Sui blockchain and builds a cluster around it. This
 /// cluster is typically used in e2e tests to emulate and test behaviors.
 pub async fn serve_executor(
-    executor: Arc<dyn RestStateReader + Send + Sync>,
+    executor: Arc<dyn RpcStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     retention_config: Option<RetentionConfig>,
     data_ingestion_path: PathBuf,
