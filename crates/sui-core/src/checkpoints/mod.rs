@@ -344,6 +344,16 @@ impl CheckpointStore {
         self.get_checkpoint_by_digest(&highest_synced.1)
     }
 
+    pub fn get_highest_synced_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        if let Some(highest_synced) = self.watermarks.get(&CheckpointWatermark::HighestSynced)? {
+            Ok(Some(highest_synced.0))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn get_highest_executed_checkpoint_seq_number(
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
