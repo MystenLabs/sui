@@ -338,7 +338,13 @@ fn module<'env>(
             |mut collected, (member, new_friends, used_members, used_methods)| {
                 collected.members.push(member);
                 collected.new_friends.extend(new_friends);
-                collected.used_members.extend(used_members);
+                for (mident, members) in used_members {
+                    collected
+                        .used_members
+                        .entry(mident)
+                        .or_insert_with(BTreeSet::new)
+                        .extend(members);
+                }
                 collected.used_methods.extend(used_methods);
                 collected
             },
