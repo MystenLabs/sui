@@ -31,12 +31,13 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// The writing of each batch will be repeatedly retried on an exponential back-off until it
 /// succeeds. Once the write succeeds, the [WatermarkPart]s for that batch are sent on `tx` to the
-/// watermark task.
+/// watermark task, as long as `skip_watermark` is not true.
 ///
 /// This task will shutdown via its `cancel`lation token, or if its receiver or sender channels are
 /// closed.
 pub(super) fn committer<H: Handler + 'static>(
     config: CommitterConfig,
+    skip_watermark: bool,
     rx: mpsc::Receiver<Batched<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: Db,
@@ -158,7 +159,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         }
                     };
 
-                    if !config.skip_watermark && tx.send(watermark).await.is_err() {
+                    if !skip_watermark && tx.send(watermark).await.is_err() {
                         info!(pipeline = H::NAME, "Watermark closed channel");
                         return Err(Break::Cancel);
                     }

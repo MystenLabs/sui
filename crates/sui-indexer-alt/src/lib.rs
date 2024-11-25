@@ -28,7 +28,7 @@ use pipeline::{
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 pub mod args;
 pub mod bootstrap;
@@ -59,6 +59,10 @@ pub struct IndexerArgs {
     #[arg(long)]
     pub last_checkpoint: Option<u64>,
 
+    /// Don't write to the watermark tables for concurrent pipelines.
+    #[arg(long)]
+    pub skip_watermark: bool,
+
     /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
     /// will be run.
     #[arg(long, action = clap::ArgAction::Append)]
@@ -87,6 +91,9 @@ pub struct Indexer {
 
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
+
+    /// Don't write to the watermark tables for concurrent pipelines.
+    skip_watermark: bool,
 
     /// Optional override of enabled pipelines.
     enabled_pipelines: Option<BTreeSet<String>>,
@@ -117,6 +124,7 @@ impl Indexer {
         let IndexerArgs {
             first_checkpoint,
             last_checkpoint,
+            skip_watermark,
             pipeline,
             metrics_address,
         } = indexer_args;
@@ -144,6 +152,7 @@ impl Indexer {
             ingestion_service,
             first_checkpoint,
             last_checkpoint,
+            skip_watermark,
             enabled_pipelines: if enabled_pipelines.is_empty() {
                 None
             } else {
@@ -184,7 +193,7 @@ impl Indexer {
         // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
         // watermark consistency. first_checkpoint can be anything since we don't update watermark,
         // and writes should be idempotent.
-        if !config.committer.skip_watermark {
+        if !self.skip_watermark {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
@@ -192,6 +201,7 @@ impl Indexer {
             handler,
             watermark,
             config,
+            self.skip_watermark,
             self.db.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
@@ -220,10 +230,12 @@ impl Indexer {
             return Ok(());
         };
 
-        ensure!(
-            !config.committer.skip_watermark,
-            "Sequential pipelines must update watermarks"
-        );
+        if self.skip_watermark {
+            warn!(
+                pipeline = H::NAME,
+                "--skip-watermarks enabled and ignored for sequential pipeline"
+            );
+        }
 
         // For a sequential pipeline, data must be written in the order of checkpoints.
         // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
@@ -256,7 +268,8 @@ impl Indexer {
         if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
             ensure!(
                 first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
+                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
+                 This could create gaps in the data.",
                 P::NAME,
                 first_checkpoint,
                 watermark.checkpoint_hi_inclusive,
@@ -360,6 +373,7 @@ impl Default for IndexerArgs {
         Self {
             first_checkpoint: None,
             last_checkpoint: None,
+            skip_watermark: false,
             pipeline: vec![],
             metrics_address: "0.0.0.0:9184".parse().unwrap(),
         }

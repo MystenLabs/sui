@@ -160,7 +160,8 @@ impl<H: Handler> Batched<H> {
 /// time.
 ///
 /// The pipeline also maintains a row in the `watermarks` table for the pipeline which tracks the
-/// watermark below which all data has been committed (modulo pruning).
+/// watermark below which all data has been committed (modulo pruning), as long as `skip_watermark`
+/// is not true.
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline can be
@@ -170,6 +171,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     initial_commit_watermark: Option<CommitterWatermark<'static>>,
     config: ConcurrentConfig,
+    skip_watermark: bool,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
@@ -210,6 +212,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let committer = committer::<H>(
         committer_config.clone(),
+        skip_watermark,
         committer_rx,
         committer_tx,
         db.clone(),
@@ -220,6 +223,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let commit_watermark = commit_watermark::<H>(
         initial_commit_watermark,
         committer_config,
+        skip_watermark,
         watermark_rx,
         db.clone(),
         metrics.clone(),
