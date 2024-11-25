@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_rest_api::openapi;
-use sui_rest_api::ENDPOINTS;
-use sui_rest_api::info;
+use sui_rest_api::rest::info;
+use sui_rest_api::rest::openapi;
+use sui_rest_api::rest::ENDPOINTS;
 
 #[test]
 fn openapi_spec() {

@@ -37,7 +37,10 @@ async fn list_checkpoint() {
     // Make sure list works with json
     let _checkpoints = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_JSON)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_JSON,
+        )
         .send()
         .await
         .unwrap()
@@ -48,7 +51,10 @@ async fn list_checkpoint() {
     // Make sure list works with protobuf
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_PROTOBUF)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_PROTOBUF,
+        )
         .send()
         .await
         .unwrap()
@@ -62,7 +68,7 @@ async fn list_checkpoint() {
     // Make sure list works with BCS and the old format of only a SignedCheckpoint with no contents
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()
@@ -95,7 +101,10 @@ async fn get_checkpoint() {
     // Make sure list works with json
     let _checkpoints = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_JSON)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_JSON,
+        )
         .send()
         .await
         .unwrap()
@@ -106,7 +115,10 @@ async fn get_checkpoint() {
     // Make sure it works with protobuf
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_PROTOBUF)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_PROTOBUF,
+        )
         .send()
         .await
         .unwrap()
@@ -119,7 +131,7 @@ async fn get_checkpoint() {
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()
@@ -157,7 +169,10 @@ async fn get_full_checkpoint() {
     // Make sure it works with protobuf
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_PROTOBUF)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_PROTOBUF,
+        )
         .send()
         .await
         .unwrap()
@@ -170,7 +185,7 @@ async fn get_full_checkpoint() {
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()

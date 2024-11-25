@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     reader::StateReader,
+    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     RestService, Result,
 };
 use axum::{
@@ -51,7 +51,7 @@ impl ApiEndpoint<RestService> for HealthCheck {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), health)
     }
 }

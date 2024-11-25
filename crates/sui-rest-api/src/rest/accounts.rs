@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::reader::StateReader;
+use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::{response::ResponseContent, Result};
-use crate::{Page, RestError, RestService};
+use crate::{rest::Page, RestError, RestService};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use openapiv3::v3_1::Operation;
@@ -39,7 +39,7 @@ impl ApiEndpoint<RestService> for ListAccountObjects {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), list_account_objects)
     }
 }
@@ -90,8 +90,8 @@ pub struct ListAccountOwnedObjectsQueryParameters {
 impl ListAccountOwnedObjectsQueryParameters {
     pub fn limit(&self) -> usize {
         self.limit
-            .map(|l| (l as usize).clamp(1, crate::MAX_PAGE_SIZE))
-            .unwrap_or(crate::DEFAULT_PAGE_SIZE)
+            .map(|l| (l as usize).clamp(1, crate::rest::MAX_PAGE_SIZE))
+            .unwrap_or(crate::rest::DEFAULT_PAGE_SIZE)
     }
 
     pub fn start(&self) -> Option<sui_types::base_types::ObjectID> {
@@ -105,7 +105,7 @@ pub struct AccountOwnedObjectInfo {
     pub owner: Address,
     pub object_id: ObjectId,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
     pub version: Version,
     #[serde(rename = "type")]
     pub type_: StructTag,
