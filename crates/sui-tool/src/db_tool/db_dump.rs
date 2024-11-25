@@ -21,7 +21,7 @@ use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_core::jsonrpc_index::IndexStoreTables;
-use sui_core::rest_index::RestIndexStore;
+use sui_core::rpc_index::RpcIndexStore;
 use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
@@ -204,7 +204,7 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
-    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
+    let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
     let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
     info!(
@@ -223,7 +223,7 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_objects_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
-        Some(&rest_index),
+        Some(&rpc_index),
         &lock_table,
         pruning_config,
         metrics,
@@ -242,7 +242,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
-    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
+    let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
     let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
@@ -255,7 +255,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
-        Some(&rest_index),
+        Some(&rpc_index),
         &lock_table,
         pruning_config,
         metrics,

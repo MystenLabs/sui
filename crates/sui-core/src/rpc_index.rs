@@ -12,6 +12,7 @@ use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -101,7 +102,7 @@ impl CoinIndexInfo {
     }
 }
 
-/// RocksDB tables for the RestIndexStore
+/// RocksDB tables for the RpcIndexStore
 ///
 /// Anytime a new table is added, or and existing one has it's schema changed, make sure to also
 /// update the value of `CURRENT_DB_VERSION`.
@@ -151,7 +152,7 @@ impl IndexStoreTables {
     fn open<P: Into<PathBuf>>(path: P) -> Self {
         IndexStoreTables::open_tables_read_write(
             path.into(),
-            MetricConf::new("rest-index"),
+            MetricConf::new("rpc-index"),
             None,
             None,
         )
@@ -180,7 +181,7 @@ impl IndexStoreTables {
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
     ) -> Result<(), StorageError> {
-        info!("Initializing REST indexes");
+        info!("Initializing RPC indexes");
 
         // Iterate through available, executed checkpoints that have yet to be pruned
         // to initialize checkpoint and transaction based indexes.
@@ -224,7 +225,7 @@ impl IndexStoreTables {
 
         let coin_index = Mutex::new(HashMap::new());
 
-        let make_live_object_indexer = RestParLiveObjectSetIndexer {
+        let make_live_object_indexer = RpcParLiveObjectSetIndexer {
             tables: self,
             coin_index: &coin_index,
             epoch_store,
@@ -245,7 +246,7 @@ impl IndexStoreTables {
             },
         )?;
 
-        info!("Finished initializing REST indexes");
+        info!("Finished initializing RPC indexes");
 
         Ok(())
     }
@@ -454,18 +455,25 @@ impl IndexStoreTables {
     }
 }
 
-pub struct RestIndexStore {
+pub struct RpcIndexStore {
     tables: IndexStoreTables,
 }
 
-impl RestIndexStore {
+impl RpcIndexStore {
+    /// Given the provided directory, construct the path to the db
+    fn db_path(dir: &Path) -> PathBuf {
+        dir.join("rpc-index")
+    }
+
     pub fn new(
-        path: PathBuf,
+        dir: &Path,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
     ) -> Self {
+        let path = Self::db_path(dir);
+
         let tables = {
             let tables = IndexStoreTables::open(&path);
 
@@ -475,7 +483,7 @@ impl RestIndexStore {
                 let mut tables = if tables.needs_to_delete_old_db() {
                     drop(tables);
                     typed_store::rocks::safe_drop_db(path.clone())
-                        .expect("unable to destroy old rest-index db");
+                        .expect("unable to destroy old rpc-index db");
                     IndexStoreTables::open(path)
                 } else {
                     tables
@@ -488,7 +496,7 @@ impl RestIndexStore {
                         epoch_store,
                         package_store,
                     )
-                    .expect("unable to initialize rest index from live object set");
+                    .expect("unable to initialize rpc index from live object set");
                 tables
             } else {
                 tables
@@ -498,7 +506,8 @@ impl RestIndexStore {
         Self { tables }
     }
 
-    pub fn new_without_init(path: PathBuf) -> Self {
+    pub fn new_without_init(dir: &Path) -> Self {
+        let path = Self::db_path(dir);
         let tables = IndexStoreTables::open(path);
 
         Self { tables }
@@ -628,25 +637,25 @@ fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinInde
         })
 }
 
-struct RestParLiveObjectSetIndexer<'a> {
+struct RpcParLiveObjectSetIndexer<'a> {
     tables: &'a IndexStoreTables,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
     epoch_store: &'a AuthorityPerEpochStore,
     package_store: &'a Arc<dyn BackingPackageStore + Send + Sync>,
 }
 
-struct RestLiveObjectIndexer<'a> {
+struct RpcLiveObjectIndexer<'a> {
     tables: &'a IndexStoreTables,
     batch: typed_store::rocks::DBBatch,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
     resolver: Box<dyn LayoutResolver + 'a>,
 }
 
-impl<'a> ParMakeLiveObjectIndexer for RestParLiveObjectSetIndexer<'a> {
-    type ObjectIndexer = RestLiveObjectIndexer<'a>;
+impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
+    type ObjectIndexer = RpcLiveObjectIndexer<'a>;
 
     fn make_live_object_indexer(&self) -> Self::ObjectIndexer {
-        RestLiveObjectIndexer {
+        RpcLiveObjectIndexer {
             tables: self.tables,
             batch: self.tables.owner.batch(),
             coin_index: self.coin_index,
@@ -658,7 +667,7 @@ impl<'a> ParMakeLiveObjectIndexer for RestParLiveObjectSetIndexer<'a> {
     }
 }
 
-impl<'a> LiveObjectIndexer for RestLiveObjectIndexer<'a> {
+impl<'a> LiveObjectIndexer for RpcLiveObjectIndexer<'a> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         match object.owner {
             // Owner Index

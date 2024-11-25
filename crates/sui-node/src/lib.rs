@@ -91,7 +91,7 @@ use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
-use sui_core::rest_index::RestIndexStore;
+use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -588,12 +588,12 @@ impl SuiNode {
             None
         };
 
-        let rest_index = if is_full_node
+        let rpc_index = if is_full_node
             && config.enable_experimental_rest_api
             && config.enable_index_processing
         {
-            Some(Arc::new(RestIndexStore::new(
-                config.db_path().join("rest_index"),
+            Some(Arc::new(RpcIndexStore::new(
+                &config.db_path(),
                 &store,
                 &checkpoint_store,
                 &epoch_store,
@@ -696,7 +696,7 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            rest_index,
+            rpc_index,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),

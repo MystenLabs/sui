@@ -36,10 +36,10 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
-use crate::rest_index::CoinIndexInfo;
-use crate::rest_index::OwnerIndexInfo;
-use crate::rest_index::OwnerIndexKey;
-use crate::rest_index::RestIndexStore;
+use crate::rpc_index::CoinIndexInfo;
+use crate::rpc_index::OwnerIndexInfo;
+use crate::rpc_index::OwnerIndexKey;
+use crate::rpc_index::RpcIndexStore;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
@@ -341,9 +341,9 @@ impl RestReadStore {
         Self { state, rocks }
     }
 
-    fn index(&self) -> sui_types::storage::error::Result<&RestIndexStore> {
+    fn index(&self) -> sui_types::storage::error::Result<&RpcIndexStore> {
         self.state
-            .rest_index
+            .rpc_index
             .as_deref()
             .ok_or_else(|| sui_types::storage::error::Error::custom("rest index store is disabled"))
     }
