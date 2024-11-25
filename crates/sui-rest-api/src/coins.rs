@@ -50,13 +50,14 @@ async fn get_coin_info(
     Path(coin_type): Path<StructTag>,
     State(state): State<StateReader>,
 ) -> Result<Json<CoinInfo>> {
+    let indexes = state.inner().indexes().ok_or_else(RestError::not_found)?;
+
     let core_coin_type = struct_tag_sdk_to_core(coin_type.clone())?;
 
     let sui_types::storage::CoinInfo {
         coin_metadata_object_id,
         treasury_object_id,
-    } = state
-        .inner()
+    } = indexes
         .get_coin_info(&core_coin_type)?
         .ok_or_else(|| CoinNotFoundError(coin_type.clone()))?;
 
