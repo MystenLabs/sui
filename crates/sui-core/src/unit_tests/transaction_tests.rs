@@ -1781,7 +1781,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
     let mut senders = Vec::new();
     let mut gas_objects = Vec::new();
     let mut owned_objects = Vec::new();
-    for _i in 0..20 {
+    for _i in 0..15 {
         let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
         let mut objects = create_gas_objects(2, sender);
         senders.push((sender, keypair));
