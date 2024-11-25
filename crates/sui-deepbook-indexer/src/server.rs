@@ -280,7 +280,10 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
             }
         }
 
-        metrics_by_interval.insert(current_start.to_string(), volume_by_pool);
+        metrics_by_interval.insert(
+            format!("[{}, {}]", current_start / 1000, current_end / 1000),
+            volume_by_pool,
+        );
 
         current_start = current_end;
     }
