@@ -4,7 +4,7 @@
 use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::reader::StateReader;
 use crate::{response::ResponseContent, Result};
-use crate::{Page, RestService};
+use crate::{Page, RestError, RestService};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use openapiv3::v3_1::Operation;
@@ -49,11 +49,11 @@ async fn list_account_objects(
     Query(parameters): Query<ListAccountOwnedObjectsQueryParameters>,
     State(state): State<StateReader>,
 ) -> Result<Page<AccountOwnedObjectInfo, ObjectId>> {
+    let indexes = state.inner().indexes().ok_or_else(RestError::not_found)?;
     let limit = parameters.limit();
     let start = parameters.start();
 
-    let mut object_info = state
-        .inner()
+    let mut object_info = indexes
         .account_owned_objects_info_iter(address.into(), start)?
         .take(limit + 1)
         .map(|info| {
