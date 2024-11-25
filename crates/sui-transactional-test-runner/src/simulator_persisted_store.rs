@@ -13,7 +13,7 @@ use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::storage::{ReadStore, RestStateReader};
+use sui_types::storage::{ReadStore, RpcStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
@@ -657,7 +657,7 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     }
 }
 
-impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
+impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
     fn get_transaction_checkpoint(
         &self,
         _digest: &TransactionDigest,

@@ -10,7 +10,7 @@ use mysten_network::callback::CallbackLayer;
 use openapi::ApiEndpoint;
 use reader::StateReader;
 use std::sync::Arc;
-use sui_types::storage::RestStateReader;
+use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
@@ -151,7 +151,7 @@ impl axum::extract::FromRef<RestService> for Option<Arc<dyn TransactionExecutor>
 }
 
 impl RestService {
-    pub fn new(reader: Arc<dyn RestStateReader>, software_version: &'static str) -> Self {
+    pub fn new(reader: Arc<dyn RpcStateReader>, software_version: &'static str) -> Self {
         let chain_id = reader.get_chain_identifier().unwrap();
         Self {
             reader: StateReader::new(reader),
@@ -163,7 +163,7 @@ impl RestService {
         }
     }
 
-    pub fn new_without_version(reader: Arc<dyn RestStateReader>) -> Self {
+    pub fn new_without_version(reader: Arc<dyn RpcStateReader>) -> Self {
         Self::new(reader, "unknown")
     }
 

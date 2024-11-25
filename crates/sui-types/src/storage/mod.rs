@@ -27,7 +27,7 @@ pub use read_store::CoinInfo;
 pub use read_store::DynamicFieldIndexInfo;
 pub use read_store::DynamicFieldKey;
 pub use read_store::ReadStore;
-pub use read_store::RestStateReader;
+pub use read_store::RpcStateReader;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
