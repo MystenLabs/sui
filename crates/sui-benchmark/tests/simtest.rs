@@ -563,7 +563,7 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
-            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 5 };
+            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
             simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
                 0 => None, // shared_counter_hotness_factor is in play in this case.
                 n => Some(n),
