@@ -4,7 +4,7 @@
 use prost::Message;
 use sui_macros::sim_test;
 use sui_rest_api::client::sdk::Client;
-use sui_rest_api::transactions::{ListTransactionsQueryParameters, TransactionResponse};
+use sui_rest_api::rest::transactions::{ListTransactionsQueryParameters, TransactionResponse};
 use test_cluster::TestClusterBuilder;
 
 use crate::transfer_coin;
@@ -28,7 +28,10 @@ async fn get_transaction() {
     // Make sure it works with json
     let _transaction = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_JSON)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_JSON,
+        )
         .send()
         .await
         .unwrap()
@@ -39,7 +42,10 @@ async fn get_transaction() {
     // Make sure it works with protobuf
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_PROTOBUF)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_PROTOBUF,
+        )
         .send()
         .await
         .unwrap()
@@ -52,7 +58,7 @@ async fn get_transaction() {
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()
@@ -83,7 +89,10 @@ async fn list_checkpoint() {
     // Make sure it works with json
     let _transactions = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_JSON)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_JSON,
+        )
         .send()
         .await
         .unwrap()
@@ -94,7 +103,10 @@ async fn list_checkpoint() {
     // Make sure it works with protobuf
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_PROTOBUF)
+        .header(
+            reqwest::header::ACCEPT,
+            sui_rest_api::rest::APPLICATION_PROTOBUF,
+        )
         .send()
         .await
         .unwrap()
@@ -107,7 +119,7 @@ async fn list_checkpoint() {
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()

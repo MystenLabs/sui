@@ -9,14 +9,16 @@ use axum::{
 use prost::bytes::BytesMut;
 
 use crate::{
-    accept::APPLICATION_PROTOBUF,
-    content_type::ContentType,
+    rest::accept::APPLICATION_PROTOBUF,
+    rest::content_type::ContentType,
+    rest::APPLICATION_BCS,
+    rest::TEXT_PLAIN_UTF_8,
     types::{
         X_SUI_CHAIN, X_SUI_CHAIN_ID, X_SUI_CHECKPOINT_HEIGHT, X_SUI_EPOCH,
         X_SUI_LOWEST_AVAILABLE_CHECKPOINT, X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
         X_SUI_TIMESTAMP_MS,
     },
-    RestService, APPLICATION_BCS, TEXT_PLAIN_UTF_8,
+    RestService,
 };
 
 pub struct Bcs<T>(pub T);

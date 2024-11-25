@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::{RestService, Result};
 use axum::extract::State;
 use axum::Json;
@@ -46,7 +46,7 @@ impl ApiEndpoint<RestService> for GetNodeInfo {
             .build()
     }
 
-    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), get_node_info)
     }
 }
@@ -90,28 +90,28 @@ pub struct NodeInfo {
 
     /// Current epoch of the Node based on its highest executed checkpoint
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
     pub epoch: u64,
 
     /// Checkpoint height of the most recently executed checkpoint
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
     pub checkpoint_height: u64,
 
     /// Unix timestamp of the most recently executed checkpoint
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
     pub timestamp_ms: u64,
 
     /// The lowest checkpoint for which checkpoints and transaction data is available
     #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
-    #[schemars(with = "Option<crate::_schemars::U64>")]
+    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lowest_available_checkpoint: Option<u64>,
 
     /// The lowest checkpoint for which object data is available
     #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
-    #[schemars(with = "Option<crate::_schemars::U64>")]
+    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lowest_available_checkpoint_objects: Option<u64>,
     pub software_version: Cow<'static, str>,

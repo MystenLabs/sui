@@ -10,13 +10,13 @@ use sui_sdk_types::types::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::accept::AcceptJsonProtobufBcs;
-use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::proto;
 use crate::proto::ListCheckpointResponse;
 use crate::reader::StateReader;
 use crate::response::{JsonProtobufBcs, ProtobufBcs};
-use crate::PageCursor;
+use crate::rest::accept::AcceptJsonProtobufBcs;
+use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use crate::rest::PageCursor;
 use crate::{Direction, RestService};
 use crate::{RestError, Result};
 use documented::Documented;
@@ -141,7 +141,7 @@ pub enum CheckpointId {
         example = "CheckpointSequenceNumber::default"
     )]
     /// Sequence number or height of a Checkpoint
-    SequenceNumber(#[schemars(with = "crate::_schemars::U64")] CheckpointSequenceNumber),
+    SequenceNumber(#[schemars(with = "crate::rest::_schemars::U64")] CheckpointSequenceNumber),
     #[schemars(title = "Digest", example = "example_digest")]
     /// Base58 encoded 32-byte digest of a Checkpoint
     Digest(CheckpointDigest),
@@ -369,8 +369,8 @@ pub struct ListCheckpointsQueryParameters {
 impl ListCheckpointsQueryParameters {
     pub fn limit(&self) -> usize {
         self.limit
-            .map(|l| (l as usize).clamp(1, crate::MAX_PAGE_SIZE))
-            .unwrap_or(crate::DEFAULT_PAGE_SIZE)
+            .map(|l| (l as usize).clamp(1, crate::rest::MAX_PAGE_SIZE))
+            .unwrap_or(crate::rest::DEFAULT_PAGE_SIZE)
     }
 
     pub fn start(&self, default: CheckpointSequenceNumber) -> CheckpointSequenceNumber {
