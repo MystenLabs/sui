@@ -13384,6 +13384,7 @@ dependencies = [
  "fastcrypto",
  "insta",
  "move-vm-config",
+ "mysten-common",
  "narwhal-config",
  "object_store",
  "once_cell",
