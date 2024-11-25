@@ -16,7 +16,10 @@ use sui_types::transaction::{
 use crate::types::internal_operation::MAX_GAS_COINS;
 use crate::{errors::Error, Currency};
 
-use super::{TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, MAX_GAS_BUDGET};
+use super::{
+    insert_in_reverse_order, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+    MAX_GAS_BUDGET,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PayCoin {
@@ -58,13 +61,13 @@ impl TryConstructTransaction for PayCoin {
             .collect();
 
         let pt = pay_coin_pt(recipients, amounts, &coin_objs, &currency)?;
-        let gas_price = match gas_price {
-            Some(p) => p,
-            None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-        };
         let budget = match budget {
             Some(budget) => budget,
             None => {
+                let gas_price = match gas_price {
+                    Some(p) => p,
+                    None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
+                };
                 let tx_data = TransactionData::new_programmable(
                     sender,
                     vec![],
@@ -89,6 +92,7 @@ impl TryConstructTransaction for PayCoin {
         // are enough for budget. If they are not it continues iterating moving the smallest
         // ones on the end of the vector and keeping the largest ones in the start, so we can
         // satisfy the limit of max 255 gas-coins
+        // TODO move to super and test
         let mut sum_largest_255 = 0;
         let mut gathered_coins_reverse_sorted = vec![];
         client
@@ -197,21 +201,4 @@ pub fn pay_coin_pt(
     let currency_string = serde_json::to_string(currency)?;
     builder.pure(currency_string)?;
     Ok(builder.finish())
-}
-
-fn insert_in_reverse_order(vec: &mut Vec<Coin>, coin: Coin) -> usize {
-    match vec
-        .iter()
-        .enumerate()
-        .find(|(_pos, existing)| existing.balance < coin.balance)
-    {
-        Some((pos, _)) => {
-            vec.insert(pos, coin);
-            pos
-        }
-        None => {
-            vec.push(coin);
-            vec.len() - 1
-        }
-    }
 }

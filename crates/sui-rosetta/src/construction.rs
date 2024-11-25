@@ -12,14 +12,10 @@ use fastcrypto::hash::HashFunction;
 use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{
-    Coin, StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{Coin, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
-use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
@@ -264,8 +260,6 @@ pub async fn metadata(
             objects,
             pt: _,
             total_sui_balance,
-            // TODO: Check whether we indeed want to fill the budget in the case the budget passed
-            // was None, and we have calculated it here,
             budget,
         } = pay_sui
             .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
@@ -279,6 +273,8 @@ pub async fn metadata(
                 objects,
                 total_coin_value: total_sui_balance,
                 gas_price,
+                // TODO: Check whether we indeed want to fill the budget in the case the budget passed
+                // was None, and we have calculated it here,
                 budget,
                 currency,
             },
@@ -303,6 +299,34 @@ pub async fn metadata(
                 objects,
                 total_coin_value: total_sui_balance,
                 gas_price,
+                // TODO: Check whether we indeed want to fill the budget in the case the budget passed
+                // was None, and we have calculated it here,
+                budget,
+                currency,
+            },
+            suggested_fee: vec![Amount::new(budget as i128, None)],
+        });
+    } else if let InternalOperation::WithdrawStake(withdraw_stake) = option.internal_operation {
+        let TransactionAndObjectData {
+            gas_coins,
+            extra_gas_coins,
+            objects,
+            pt: _,
+            total_sui_balance,
+            budget,
+        } = withdraw_stake
+            .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
+            .await?;
+        return Ok(ConstructionMetadataResponse {
+            metadata: ConstructionMetadata {
+                sender,
+                gas_coins,
+                extra_gas_coins,
+                objects,
+                total_coin_value: total_sui_balance,
+                gas_price,
+                // TODO: Check whether we indeed want to fill the budget in the case the budget passed
+                // was None, and we have calculated it here,
                 budget,
                 currency,
             },
@@ -319,45 +343,8 @@ pub async fn metadata(
             unreachable!("PayCoin is already handled explicitly")
         }
         InternalOperation::Stake(Stake { amount, .. }) => (*amount, vec![]),
-        InternalOperation::WithdrawStake(WithdrawStake { sender, stake_ids }) => {
-            let stake_ids = if stake_ids.is_empty() {
-                // unstake all
-                context
-                    .client
-                    .governance_api()
-                    .get_stakes(*sender)
-                    .await?
-                    .into_iter()
-                    .flat_map(|s| {
-                        s.stakes.into_iter().filter_map(|s| {
-                            if let StakeStatus::Active { .. } = s.status {
-                                Some(s.staked_sui_id)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect()
-            } else {
-                stake_ids.clone()
-            };
-
-            if stake_ids.is_empty() {
-                return Err(Error::InvalidInput("No active stake to withdraw".into()));
-            }
-
-            let responses = context
-                .client
-                .read_api()
-                .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
-                .await?;
-            let stake_refs = responses
-                .into_iter()
-                .map(|stake| stake.into_object().map(|o| o.object_ref()))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(SuiError::from)?;
-
-            (Some(0), stake_refs)
+        InternalOperation::WithdrawStake(WithdrawStake { .. }) => {
+            unreachable!("WithdrawStake is already handled explicitly")
         }
     };
 
