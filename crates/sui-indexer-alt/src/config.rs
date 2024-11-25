@@ -67,32 +67,32 @@ pub struct ConcurrentLayer {
 #[serde(rename_all = "snake_case")]
 pub struct PipelineConfig {
     // Consistent pipelines (a sequential pipeline with a write-ahead log)
-    pub sum_coin_balances: CommitterLayer,
-    pub wal_coin_balances: CommitterLayer,
-    pub sum_obj_types: CommitterLayer,
-    pub wal_obj_types: CommitterLayer,
+    pub sum_coin_balances: Option<CommitterLayer>,
+    pub wal_coin_balances: Option<CommitterLayer>,
+    pub sum_obj_types: Option<CommitterLayer>,
+    pub wal_obj_types: Option<CommitterLayer>,
 
     // Sequential pipelines without a write-ahead log
-    pub sum_displays: SequentialLayer,
-    pub sum_packages: SequentialLayer,
+    pub sum_displays: Option<SequentialLayer>,
+    pub sum_packages: Option<SequentialLayer>,
 
     // All concurrent pipelines
-    pub ev_emit_mod: ConcurrentLayer,
-    pub ev_struct_inst: ConcurrentLayer,
-    pub kv_checkpoints: ConcurrentLayer,
-    pub kv_epoch_ends: ConcurrentLayer,
-    pub kv_epoch_starts: ConcurrentLayer,
-    pub kv_feature_flags: ConcurrentLayer,
-    pub kv_objects: ConcurrentLayer,
-    pub kv_protocol_configs: ConcurrentLayer,
-    pub kv_transactions: ConcurrentLayer,
-    pub obj_versions: ConcurrentLayer,
-    pub tx_affected_addresses: ConcurrentLayer,
-    pub tx_affected_objects: ConcurrentLayer,
-    pub tx_balance_changes: ConcurrentLayer,
-    pub tx_calls: ConcurrentLayer,
-    pub tx_digests: ConcurrentLayer,
-    pub tx_kinds: ConcurrentLayer,
+    pub ev_emit_mod: Option<ConcurrentLayer>,
+    pub ev_struct_inst: Option<ConcurrentLayer>,
+    pub kv_checkpoints: Option<ConcurrentLayer>,
+    pub kv_epoch_ends: Option<ConcurrentLayer>,
+    pub kv_epoch_starts: Option<ConcurrentLayer>,
+    pub kv_feature_flags: Option<ConcurrentLayer>,
+    pub kv_objects: Option<ConcurrentLayer>,
+    pub kv_protocol_configs: Option<ConcurrentLayer>,
+    pub kv_transactions: Option<ConcurrentLayer>,
+    pub obj_versions: Option<ConcurrentLayer>,
+    pub tx_affected_addresses: Option<ConcurrentLayer>,
+    pub tx_affected_objects: Option<ConcurrentLayer>,
+    pub tx_balance_changes: Option<ConcurrentLayer>,
+    pub tx_calls: Option<ConcurrentLayer>,
+    pub tx_digests: Option<ConcurrentLayer>,
+    pub tx_kinds: Option<ConcurrentLayer>,
 }
 
 impl SequentialLayer {
