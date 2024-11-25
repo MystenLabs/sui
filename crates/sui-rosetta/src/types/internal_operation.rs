@@ -10,13 +10,14 @@ use serde::{Deserialize, Serialize};
 
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
+use sui_types::governance::ADD_STAKE_FUN_NAME;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    Argument, CallArg, Command, ObjectArg, ProgrammableTransaction, TransactionData,
+    Argument, CallArg, Command, ProgrammableTransaction, TransactionData,
 };
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
+use withdraw_stake::withdraw_stake_pt;
 
 use crate::errors::Error;
 use crate::types::ConstructionMetadata;
@@ -127,31 +128,8 @@ impl InternalOperation {
                 builder.finish()
             }
             InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-
-                for stake_id in metadata.objects {
-                    // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for selected stake_ids or None (all stakes) using the index of the call args.
-                    // if stake_ids is not empty, id input will be created after the system object input
-                    let (system_state, id) = if !stake_ids.is_empty() {
-                        let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                        let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
-                        (system_state, id)
-                    } else {
-                        let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
-                        let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                        (system_state, id)
-                    };
-
-                    let arguments = vec![system_state, id];
-                    builder.command(Command::move_call(
-                        SUI_SYSTEM_PACKAGE_ID,
-                        SUI_SYSTEM_MODULE_NAME.to_owned(),
-                        WITHDRAW_STAKE_FUN_NAME.to_owned(),
-                        vec![],
-                        arguments,
-                    ));
-                }
-                builder.finish()
+                let withdraw_all = stake_ids.is_empty();
+                withdraw_stake_pt(metadata.objects, withdraw_all)?
             }
         };
 
