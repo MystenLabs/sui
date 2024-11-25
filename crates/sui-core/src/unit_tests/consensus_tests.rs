@@ -203,6 +203,11 @@ pub fn make_consensus_adapter_for_test(
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
                 .collect();
 
+            for t in transactions {
+                let size = bcs::serialized_size(t).unwrap();
+                println!("Transaction serialized size: {:?}", size);
+            }
+
             let checkpoint_service = Arc::new(CheckpointServiceNoop {});
             let mut transactions = Vec::new();
             let mut executed_via_checkpoint = 0;

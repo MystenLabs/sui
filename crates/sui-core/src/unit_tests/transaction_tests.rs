@@ -2213,7 +2213,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
             SuiError::UserInputError {
                 error: UserInputError::SoftBundleTooLarge {
                     size: 25116,
-                    limit: 10000
+                    limit: 5000
                 },
             }
         );

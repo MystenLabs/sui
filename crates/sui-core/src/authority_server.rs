@@ -1036,12 +1036,17 @@ impl ValidatorService {
             .into()
         );
 
+        // We set the soft bundle max size to be half of the consensus max transactions in block size. We do this to account for
+        // serialisation overheads and to ensure that the soft bundle is not too large when is attempted to be posted via consensus.
+        // Although half the block size is on the extreme side, it's should be good enough for now.
+        let soft_bundle_max_size_bytes =
+            protocol_config.consensus_max_transactions_in_block_bytes() / 2;
         fp_ensure!(
-            total_size_bytes <= protocol_config.consensus_max_transactions_in_block_bytes(),
+            total_size_bytes <= soft_bundle_max_size_bytes,
             SuiError::UserInputError {
                 error: UserInputError::SoftBundleTooLarge {
                     size: total_size_bytes,
-                    limit: protocol_config.consensus_max_transactions_in_block_bytes(),
+                    limit: soft_bundle_max_size_bytes,
                 },
             }
             .into()
@@ -1131,7 +1136,7 @@ impl ValidatorService {
             .await?;
 
         info!(
-            "Received Soft Bundle with {} certificates, from {}, tx digests are [{}]",
+            "Received Soft Bundle with {} certificates, from {}, tx digests are [{}], total size [{}]bytes",
             certificates.len(),
             client_addr
                 .map(|x| x.to_string())
@@ -1140,7 +1145,8 @@ impl ValidatorService {
                 .iter()
                 .map(|x| x.digest().to_string())
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            total_size_bytes
         );
 
         let span = error_span!("handle_soft_bundle_certificates_v3");
