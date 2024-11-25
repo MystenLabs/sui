@@ -1,0 +1,239 @@
+---
+title: DeepBookV3 Indexer
+---
+
+import Admonition from '@theme/Admonition';
+
+{@include: ../snippets/deepbook.mdx}
+
+## Get all pool information
+
+```
+/get_pools
+```
+
+Returns a list of all available pools, each containing detailed information about the base and quote assets, as well as pool parameters like minimum size, lot size, and tick size.
+
+#### Response
+
+```json
+[
+	{
+	“pool_id”: “string”,
+	“pool_name”: “string”,
+	“base_asset_id”: “string”,
+	“base_asset_decimals”: integer,
+	“base_asset_symbol”: “string”,
+	“base_asset_name”: “string”,
+	“quote_asset_id”: “string”,
+	“quote_asset_decimals”: integer,
+	“quote_asset_symbol”: “string”,
+	“quote_asset_name”: “string”,
+	“min_size”: integer,
+	“lot_size”: integer,
+	“tick_size”: integer
+	},
+	…
+]
+```
+
+Each pool object in the response includes the following fields:
+
+-	**pool_id:** ID for the pool.
+-	**pool_name:** Name of the pool.
+-	**base_asset_id:** ID for the base asset.
+-	**base_asset_decimals:** Number of decimals for the base asset.
+-	**base_asset_symbol:** Symbol for the base asset.
+-	**base_asset_name:** Name of the base asset.
+-	**quote_asset_id:** ID for the quote asset.
+-	**quote_asset_decimals:** Number of decimals for the quote asset.
+-	**quote_asset_symbol:** Symbol for the quote asset.
+-	**quote_asset_name:** Name of the quote asset.
+-	**min_size:** Minimum trade size for the pool, in smallest units of the base asset.
+-	**lot_size:** Minimum increment for trades in this pool, in smallest units of the base asset.
+-	**tick_size:** Minimum price increment for trades in this pool.
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/get_pools
+```
+
+produces a response similar to
+
+```json
+[
+	{
+		"pool_id": "0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22",
+		"pool_name": "DEEP_SUI",
+		"base_asset_id": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+		"base_asset_decimals": 6,
+		"base_asset_symbol": "DEEP",
+		"base_asset_name": "DeepBook Token",
+		"quote_asset_id": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+		"quote_asset_decimals": 9,
+		"quote_asset_symbol": "SUI",
+		"quote_asset_name": "Sui",
+		"min_size": 100000000,
+		"lot_size": 10000000,
+		"tick_size": 10000000
+	},
+	{
+		"pool_id": "0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce",
+		"pool_name": "DEEP_USDC",
+		"base_asset_id": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+		"base_asset_decimals": 6,
+		"base_asset_symbol": "DEEP",
+		"base_asset_name": "DeepBook Token",
+		"quote_asset_id": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+		"quote_asset_decimals": 6,
+		"quote_asset_symbol": "USDC",
+		"quote_asset_name": "USDC",
+		"min_size": 100000000,
+		"lot_size": 10000000,
+		"tick_size": 10000
+	}
+]
+```
+
+## Get historical volume for pool in a specific time range
+
+```
+/get_historical_volume/:pool_ids?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
+```
+
+Use this endpoint to get historical volume for pools for a specific time range. Delimit the	`pool_ids` with commas, and use Unix timestamp seconds for `start_time` and `end_time` values. 
+
+By default, this endpoint retrieves the last 24-hour trading volume in the base asset for specified pools. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+
+#### Response
+
+Returns the historical volume for each specified pool within the given time range.
+
+```json
+{
+	“pool_id_1”: total_pool1_volume,
+	“pool_id_2”: total_pool2_volume,
+	...
+}
+```
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/get_historical_volume/0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22,0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce?start_time=1731260703&end_time=1731692703&volume_in_base=true
+```
+
+produces a response similar to
+
+```json
+{
+	"0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce": 130000590000000,
+	"0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22": 22557460000000
+}
+```
+
+## Get historical volume by balance manager within a specific time range
+
+```
+/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
+```
+
+Get historical volume by balance manager for a specific time range. Delimit the	`pool_ids` with commas, and use Unix timestamp seconds for `start_time` and `end_time` values.
+
+By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the base asset for specified pools. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+
+#### Response
+
+```json
+{
+	“pool_id_1”: [maker_volume, taker_volume],
+	“pool_id_2”: …
+}
+```
+
+#### Example
+
+A successful request to the following endpoint
+
+```http
+/get_historical_volume_by_balance_manager_id/0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22,0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407/0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d?start_time=1731260703&end_time=1731692703&volume_in_base=true
+```
+
+produces a response similar to
+
+```json
+{
+	"0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22": [
+		14207960000000,
+		3690000000
+	],
+	"0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407": [
+		2089300100000000,
+		17349400000000
+	]
+}
+```
+
+## Get historical volume by balance manager within a specific time range and intervals
+
+```
+/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&interval=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
+```
+
+Get historical volume by `BalanceManager` for a specific time range with intervals. Delimit `pool_ids` with commas and use Unix timestamp seconds for	`start_time` and `end_time` values. Use number of seconds for the `interval` value. As a simplified interval example, if `start_time` is 5, `end_time` is 10, and `interval` is 2, then the response includes volume from 5 to 7 and 7 to 9, with start time of the periods as keys.
+
+By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the base asset for specified pools. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+
+#### Response
+
+```json
+{
+“time_1”: {
+		“pool_id_1”: [maker_volume, taker_volume],
+		“pool_id_2”: …
+	},
+“time_2”: {
+	“pool_id_1”: [maker_volume, taker_volume],
+	“pool_id_2”: …
+	}
+}
+```
+
+#### Example
+
+A successful request to the following endpoint with an interval of 24 hours
+
+```http
+/get_historical_volume_by_balance_manager_id_with_interval/0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22,0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407/0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d?start_time=1731460703&end_time=1731692703&interval=86400&volume_in_base=true
+```
+produces a response similar to
+
+```json
+{
+	"[1731460703, 1731547103]": {
+		"0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22": [
+			703740000000,
+			0
+		],
+		"0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407": [
+			505887400000000,
+			2051300000000
+		]
+	},
+	"[1731547103, 1731633503]": {
+		"0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407": [
+			336777500000000,
+			470600000000
+		],
+		"0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22": [
+			2665470000000,
+			0
+		]
+	}
+}
+```
