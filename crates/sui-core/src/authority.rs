@@ -214,6 +214,7 @@ pub mod test_authority_builder;
 pub mod transaction_deferral;
 
 pub(crate) mod authority_store;
+pub mod backpressure;
 
 pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
