@@ -10,7 +10,7 @@ use sui_move_build::CompiledPackage;
 use sui_types::move_package::UpgradePolicy;
 
 #[test]
-fn test_all_fail() {
+fn test_all() {
     let (mods_v1, pkg_v2) = get_packages("all");
     let result = compare_packages(mods_v1, pkg_v2, UpgradePolicy::Compatible);
 
