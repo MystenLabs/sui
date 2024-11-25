@@ -810,6 +810,8 @@ fn select_gas(
     //TODO implement index of gas coins sorted in order of decreasing value
     let gas_coins = reader
         .inner()
+        .indexes()
+        .ok_or_else(RestError::not_found)?
         .account_owned_objects_info_iter(owner, None)?
         .filter(|info| info.type_.is_gas_coin())
         .filter(|info| !input_objects.contains(&info.object_id))

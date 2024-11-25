@@ -18,6 +18,13 @@ impl RestError {
             message: Some(message.into()),
         }
     }
+
+    pub fn not_found() -> Self {
+        Self {
+            status: StatusCode::NOT_FOUND,
+            message: None,
+        }
+    }
 }
 
 // Tell axum how to convert `AppError` into a response.

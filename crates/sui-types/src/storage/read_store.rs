@@ -599,11 +599,6 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
 pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
-    fn get_transaction_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<CheckpointSequenceNumber>>;
-
     /// Lowest available checkpoint for which object data can be requested.
     ///
     /// Specifically this is the lowest checkpoint for which input/output object data will be
@@ -611,6 +606,16 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
     fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
 
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
+
+    // Get a handle to an instance of the RpcIndexes
+    fn indexes(&self) -> Option<&dyn RpcIndexes>;
+}
+
+pub trait RpcIndexes: Send + Sync {
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>>;
 
     fn account_owned_objects_info_iter(
         &self,
