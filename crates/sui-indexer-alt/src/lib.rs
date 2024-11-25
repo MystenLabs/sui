@@ -63,11 +63,6 @@ pub struct IndexerArgs {
     #[arg(long)]
     pub skip_watermark: bool,
 
-    /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
-    /// will be run.
-    #[arg(long, action = clap::ArgAction::Append)]
-    pub pipeline: Vec<String>,
-
     /// Address to serve Prometheus Metrics from.
     #[arg(long, default_value_t = Self::default().metrics_address)]
     pub metrics_address: SocketAddr,
@@ -94,9 +89,6 @@ pub struct Indexer {
 
     /// Don't write to the watermark tables for concurrent pipelines.
     skip_watermark: bool,
-
-    /// Optional override of enabled pipelines.
-    enabled_pipelines: Option<BTreeSet<String>>,
 
     /// Pipelines that have already been registered with the indexer. Used to make sure a pipeline
     /// with the same name isn't added twice.
@@ -125,7 +117,6 @@ impl Indexer {
             first_checkpoint,
             last_checkpoint,
             skip_watermark,
-            pipeline,
             metrics_address,
         } = indexer_args;
 
@@ -143,8 +134,6 @@ impl Indexer {
         let ingestion_service =
             IngestionService::new(ingestion_config, metrics.clone(), cancel.clone())?;
 
-        let enabled_pipelines: BTreeSet<_> = pipeline.into_iter().collect();
-
         Ok(Self {
             db,
             metrics,
@@ -153,11 +142,6 @@ impl Indexer {
             first_checkpoint,
             last_checkpoint,
             skip_watermark,
-            enabled_pipelines: if enabled_pipelines.is_empty() {
-                None
-            } else {
-                Some(enabled_pipelines)
-            },
             added_pipelines: BTreeSet::new(),
             cancel,
             first_checkpoint_from_watermark: u64::MAX,
@@ -284,13 +268,6 @@ impl Indexer {
     /// Ingestion will stop after consuming the configured `last_checkpoint`, if one is provided,
     /// or will continue until it tracks the tip of the network.
     pub async fn run(mut self) -> Result<JoinHandle<()>> {
-        if let Some(enabled_pipelines) = &self.enabled_pipelines {
-            ensure!(
-                enabled_pipelines.is_empty(),
-                "Tried to enable pipelines that this indexer does not know about: {enabled_pipelines:#?}",
-            );
-        }
-
         let metrics_handle = self
             .metrics_service
             .run()
@@ -345,13 +322,6 @@ impl Indexer {
             P::NAME,
         );
 
-        if let Some(enabled_pipelines) = &mut self.enabled_pipelines {
-            if !enabled_pipelines.remove(P::NAME) {
-                info!("Skipping pipeline {}", P::NAME);
-                return Ok(None);
-            }
-        }
-
         let mut conn = self.db.connect().await.context("Failed DB connection")?;
 
         let watermark = CommitterWatermark::get(&mut conn, P::NAME)
@@ -374,7 +344,6 @@ impl Default for IndexerArgs {
             first_checkpoint: None,
             last_checkpoint: None,
             skip_watermark: false,
-            pipeline: vec![],
             metrics_address: "0.0.0.0:9184".parse().unwrap(),
         }
     }
@@ -445,41 +414,49 @@ pub async fn start_indexer(
 
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {
-            indexer
-                .concurrent_pipeline($handler, $config.finish(&committer))
-                .await?
+            if let Some(layer) = $config {
+                indexer
+                    .concurrent_pipeline($handler, layer.finish(&committer))
+                    .await?
+            }
         };
     }
 
     macro_rules! add_sequential {
         ($handler:expr, $config:expr) => {
-            indexer
-                .sequential_pipeline($handler, $config.finish(&committer))
-                .await?
+            if let Some(layer) = $config {
+                indexer
+                    .sequential_pipeline($handler, layer.finish(&committer))
+                    .await?
+            }
         };
     }
 
     macro_rules! add_consistent {
         ($sum_handler:expr, $sum_config:expr; $wal_handler:expr, $wal_config:expr) => {
-            indexer
-                .sequential_pipeline(
-                    $sum_handler,
-                    SequentialConfig {
-                        committer: $sum_config.finish(&committer),
-                        checkpoint_lag,
-                    },
-                )
-                .await?;
+            if let Some(sum_layer) = $sum_config {
+                indexer
+                    .sequential_pipeline(
+                        $sum_handler,
+                        SequentialConfig {
+                            committer: sum_layer.finish(&committer),
+                            checkpoint_lag,
+                        },
+                    )
+                    .await?;
 
-            indexer
-                .concurrent_pipeline(
-                    $wal_handler,
-                    ConcurrentConfig {
-                        committer: $wal_config.finish(&committer),
-                        pruner: pruner_config.clone(),
-                    },
-                )
-                .await?;
+                if let Some(pruner_config) = pruner_config.clone() {
+                    indexer
+                        .concurrent_pipeline(
+                            $wal_handler,
+                            ConcurrentConfig {
+                                committer: $wal_config.unwrap_or_default().finish(&committer),
+                                pruner: Some(pruner_config),
+                            },
+                        )
+                        .await?;
+                }
+            }
         };
     }
 
