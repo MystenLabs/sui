@@ -1253,12 +1253,9 @@ async fn check_protocol_version_and_warn(context: &mut WalletContext) -> Result<
 
     if (cli_protocol_version + 2) < on_chain_protocol_version {
         eprintln!(
-            "{}",
-            format!(
-                "[warning] CLI is aware protocol version {cli_protocol_version}, but the active \
+            "[warning] CLI is aware protocol version {cli_protocol_version}, but the active \
                 network's protocol version is {on_chain_protocol_version}.\nPlease consider \
                 updating the CLI: https://docs.sui.io/guides/developer/getting-started/sui-install"
-            )
         );
     }
 
