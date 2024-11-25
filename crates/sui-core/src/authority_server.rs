@@ -986,15 +986,20 @@ impl ValidatorService {
         .instrument(span)
         .await
         .map(|(resp, spam_weight)| {
-            (
-                tonic::Response::new(
-                    resp.expect(
-                        "handle_certificate should not return none with wait_for_effects=true",
-                    )
-                    .remove(0),
-                ),
-                spam_weight,
-            )
+            let ret = {
+                let ret = resp
+                    .expect("handle_certificate should not return none with wait_for_effects=true")
+                    .remove(0);
+                if ret.effects.gas_cost_summary().computation_cost > 0 {
+                    ret
+                } else {
+                    let err = SuiError::UserInputError {
+                        error: UserInputError::ExecutionTimeExceeded,
+                    };
+                    return (tonic::Status::from(err), Weight::zero());
+                }
+            };
+            (tonic::Response::new(ret), spam_weight)
         })
     }
 
