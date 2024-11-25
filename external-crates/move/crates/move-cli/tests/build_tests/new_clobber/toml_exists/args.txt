@@ -1,4 +1,0 @@
-# if `example.move` exists, `move new` should abort and nothing should be touched
-new -p package example
->cat package/.gitignore
->find package

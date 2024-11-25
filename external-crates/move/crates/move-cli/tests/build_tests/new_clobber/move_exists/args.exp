@@ -1,9 +1,0 @@
-Command `new -p package example`:
-error: cannot create package `example` because `package/sources/example.move` would be overwritten.
-External Command `cat package/.gitignore`:
-existing_ignore
-External Command `find package`:
-package
-package/.gitignore
-package/sources
-package/sources/example.move
