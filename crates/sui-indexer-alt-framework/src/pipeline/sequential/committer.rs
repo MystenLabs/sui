@@ -32,7 +32,7 @@ use super::{Handler, SequentialConfig};
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
 ///
-/// The committer can be configured to lag behind the ingestion serice by a fixed number of
+/// The committer can be configured to lag behind the ingestion service by a fixed number of
 /// checkpoints (configured by `checkpoint_lag`). A value of `0` means no lag.
 ///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
@@ -41,7 +41,8 @@ use super::{Handler, SequentialConfig};
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H: Handler + 'static>(
     config: SequentialConfig,
-    watermark: Option<CommitterWatermark<'static>>,
+    mut watermark: CommitterWatermark<'static>,
+    skip_watermark: bool,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     db: Db,
@@ -71,12 +72,7 @@ pub(super) fn committer<H: Handler + 'static>(
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch,
         // and whether that batch needs to be written out. By extension it also knows the next
         // checkpoint to expect and add to the batch.
-        let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive as u64 + 1;
-            (watermark, next)
-        } else {
-            (CommitterWatermark::initial(H::NAME.into()), 0)
-        };
+        let mut next_checkpoint = watermark.checkpoint_hi_inclusive as u64 + 1;
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
@@ -227,9 +223,11 @@ pub(super) fn committer<H: Handler + 'static>(
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.
                     let affected = conn.transaction::<_, anyhow::Error, _>(|conn| async {
-                        // TODO: If initial_watermark is empty, when we update watermark
+                        if !skip_watermark {
+                            // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
-                        watermark.update(conn).await?;
+                            watermark.update(conn).await?;
+                        }
                         H::commit(&batch, conn).await
                     }.scope_boxed()).await;
 
