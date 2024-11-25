@@ -250,8 +250,8 @@ pub struct OpenApiDocument {
 
 impl OpenApiDocument {
     pub fn new(openapi: openapiv3::versioned::OpenApi) -> Self {
-        const OPENAPI_UI: &str = include_str!("../openapi/elements.html");
-        // const OPENAPI_UI: &str = include_str!("../openapi/swagger.html");
+        const OPENAPI_UI: &str = include_str!("../../openapi/elements.html");
+        // const OPENAPI_UI: &str = include_str!("../../openapi/swagger.html");
 
         Self {
             openapi,
@@ -649,11 +649,11 @@ impl ResponseBuilder {
     }
 
     pub fn bcs_content(&mut self) -> &mut Self {
-        self.content(crate::APPLICATION_BCS, MediaType::default())
+        self.content(crate::rest::APPLICATION_BCS, MediaType::default())
     }
 
     pub fn protobuf_content(&mut self) -> &mut Self {
-        self.content(crate::APPLICATION_PROTOBUF, MediaType::default())
+        self.content(crate::rest::APPLICATION_PROTOBUF, MediaType::default())
     }
 
     pub fn text_content(&mut self) -> &mut Self {
@@ -701,6 +701,6 @@ impl RequestBodyBuilder {
     }
 
     pub fn bcs_content(&mut self) -> &mut Self {
-        self.content(crate::APPLICATION_BCS, MediaType::default())
+        self.content(crate::rest::APPLICATION_BCS, MediaType::default())
     }
 }

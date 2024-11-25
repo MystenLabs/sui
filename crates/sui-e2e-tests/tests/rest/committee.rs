@@ -22,7 +22,10 @@ async fn get_committee() {
         // Make sure list works with json
         let _object = client
             .get(url)
-            .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_JSON)
+            .header(
+                reqwest::header::ACCEPT,
+                sui_rest_api::rest::APPLICATION_JSON,
+            )
             .send()
             .await
             .unwrap()
@@ -33,7 +36,10 @@ async fn get_committee() {
         // Make sure it works with protobuf
         let bytes = client
             .get(url)
-            .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_PROTOBUF)
+            .header(
+                reqwest::header::ACCEPT,
+                sui_rest_api::rest::APPLICATION_PROTOBUF,
+            )
             .send()
             .await
             .unwrap()
@@ -46,7 +52,7 @@ async fn get_committee() {
         // protobuf version
         let bytes = client
             .get(url)
-            .header(reqwest::header::ACCEPT, sui_rest_api::APPLICATION_BCS)
+            .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
             .send()
             .await
             .unwrap()
