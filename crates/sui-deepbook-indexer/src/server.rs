@@ -3,7 +3,7 @@
 
 use crate::{
     error::DeepBookError,
-    models::{BalancesSummary, OrderFillSummary, Pools},
+    models::{OrderFillSummary, Pools},
     schema::{self},
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
@@ -29,7 +29,7 @@ pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
     "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id/:start_time/:end_time/:interval";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
-    "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id/:start_time/:end_time";
+    "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_PATH: &str =
     "/get_historical_volume/:pool_ids";
 
@@ -198,12 +198,25 @@ async fn get_24hr_volume_by_balance_manager_id(
 }
 
 async fn get_historical_volume_by_balance_manager_id(
-    Path((pool_ids, balance_manager_id, start_time, end_time)): Path<(String, String, i64, i64)>,
+    Path((pool_ids, balance_manager_id)): Path<(String, String)>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, Vec<i64>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+
+    // Get start_time and end_time from query parameters (in seconds)
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64);
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
 
     let volume_in_base = params.get("volume_in_base").map(|v| v == "true").unwrap_or(true);
     let column_to_query = if volume_in_base {
@@ -220,7 +233,7 @@ async fn get_historical_volume_by_balance_manager_id(
             column_to_query,
         ))
         .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
-        .filter(schema::order_fills::onchain_timestamp.between(start_time * 1000, end_time * 1000))
+        .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
         .filter(
             schema::order_fills::maker_balance_manager_id
                 .eq(&balance_manager_id)

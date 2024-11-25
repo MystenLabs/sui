@@ -70,14 +70,6 @@ pub struct OrderFillSummary {
     pub quantity: i64,
 }
 
-#[derive(QueryableByName, Debug, Serialize)]
-#[diesel(table_name = balances_summary)]
-pub struct BalancesSummary {
-    pub asset: String,
-    pub amount: i64,
-    pub deposit: bool,
-}
-
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
 #[diesel(table_name = flashloans, primary_key(event_digest))]
 pub struct Flashloan {
