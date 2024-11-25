@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test } from 'vitest';
 
-import { BN254_FIELD_SIZE, poseidonHash } from '../src/poseidon';
+import { poseidonHash } from '../../../src/zklogin';
+import { BN254_FIELD_SIZE } from '../../../src/zklogin/poseidon';
 
 test('can hash single input', () => {
 	const result = poseidonHash([123]);

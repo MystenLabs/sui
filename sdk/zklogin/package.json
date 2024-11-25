@@ -1,7 +1,7 @@
 {
 	"name": "@mysten/zklogin",
 	"version": "0.7.30",
-	"description": "Utilities for interacting with zkLogin in Sui",
+	"description": "Deprecated: use @mysten/sui/zklogin instead",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"type": "commonjs",
@@ -29,8 +29,7 @@
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
-		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
-		"test": "vitest run"
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"repository": {
 		"type": "git",
@@ -47,10 +46,6 @@
 		"vitest": "^2.0.1"
 	},
 	"dependencies": {
-		"@mysten/bcs": "workspace:*",
-		"@mysten/sui": "workspace:*",
-		"@noble/hashes": "^1.4.0",
-		"jose": "^5.6.3",
-		"poseidon-lite": "^0.2.0"
+		"@mysten/sui": "workspace:*"
 	}
 }

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toHex } from '@mysten/bcs';
-import type { PublicKey } from '@mysten/sui/cryptography';
-import { toPaddedBigEndianBytes } from '@mysten/sui/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { base64url } from 'jose';
 
+import type { PublicKey } from '../cryptography/publickey.js';
 import { poseidonHash } from './poseidon.js';
+import { toPaddedBigEndianBytes } from './utils.js';
 
 export const NONCE_LENGTH = 27;
 

@@ -155,6 +155,8 @@
 		"bech32": "^2.0.0",
 		"gql.tada": "^1.8.2",
 		"graphql": "^16.9.0",
+		"jose": "^5.6.3",
+		"poseidon-lite": "^0.2.0",
 		"tweetnacl": "^1.0.3",
 		"valibot": "^0.36.0"
 	}
