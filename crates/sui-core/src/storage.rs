@@ -26,7 +26,7 @@ use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::ObjectStore;
-use sui_types::storage::RestStateReader;
+use sui_types::storage::RpcStateReader;
 use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
@@ -445,7 +445,7 @@ impl ReadStore for RestReadStore {
     }
 }
 
-impl RestStateReader for RestReadStore {
+impl RpcStateReader for RestReadStore {
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
