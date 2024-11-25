@@ -45,9 +45,10 @@ pub fn run() {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(
-        BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
-    ));
+    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<
+        PathBuf,
+        symbols::PrecomputedPkgDepsInfo,
+    >::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -147,7 +148,8 @@ pub fn run() {
     // main reason for this is to enable unit tests that rely on the symbolication information
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
-        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
+        let build_path = uri.to_file_path().unwrap();
+        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&build_path) {
             if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
                 Arc::new(Mutex::new(BTreeMap::new())),
                 ide_files_root.clone(),
@@ -277,7 +279,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecompiledPkgDeps>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgDepsInfo>>>,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {

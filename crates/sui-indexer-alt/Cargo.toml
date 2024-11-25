@@ -17,10 +17,14 @@ axum.workspace = true
 backoff.workspace = true
 bb8 = "0.8.5"
 bcs.workspace = true
+chrono.workspace = true
 clap.workspace = true
+const-str = { workspace = true, features = ["proc"] }
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+diesel_migrations.workspace = true
 futures.workspace = true
+itertools.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 serde.workspace = true
@@ -33,11 +37,18 @@ tracing.workspace = true
 url.workspace = true
 
 mysten-metrics.workspace = true
+sui-field-count.workspace = true
+sui-pg-temp-db.workspace = true
+sui-protocol-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+sui-synthetic-ingestion = { workspace = true, optional = true }
 
 [dev-dependencies]
 rand.workspace = true
+tempfile.workspace = true
 wiremock.workspace = true
 
-sui-types = { workspace = true, features = ["test-utils"] }
+[features]
+default = []
+benchmark = ["sui-synthetic-ingestion"]  # This will be used to enable benchmark mode

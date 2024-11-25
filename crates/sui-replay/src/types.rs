@@ -273,7 +273,7 @@ pub enum ExecutionStoreEvent {
     },
     ParentSyncStoreGetLatestParentEntryRef {
         object_id: ObjectID,
-        result: SuiResult<Option<ObjectRef>>,
+        result: Option<ObjectRef>,
     },
     ResourceResolverGetResource {
         address: AccountAddress,

@@ -27,6 +27,7 @@ prometheus.workspace = true
 openapiv3 = { git = "https://github.com/bmwill/openapiv3.git", rev = "ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963" }
 schemars.workspace = true
 documented = "0.6.0"
+prost.workspace = true
 
 fastcrypto.workspace = true
 sui-types.workspace = true
@@ -37,3 +38,4 @@ move-core-types.workspace = true
 
 [dev-dependencies]
 diffy = "0.3"
+prost-build = "0.13.3"

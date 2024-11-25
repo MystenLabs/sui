@@ -39,9 +39,9 @@ parking_lot.workspace = true
 move-package.workspace = true
 
 [features]
-gas-profiler = [
-    "sui-types/gas-profiler",
-    "move-vm-runtime/gas-profiler",
-    "move-vm-profiler/gas-profiler",
-    "move-vm-config/gas-profiler",
+tracing = [
+    "sui-types/tracing",
+    "move-vm-runtime/tracing",
+    "move-vm-profiler/tracing",
+    "move-vm-config/tracing",
 ]

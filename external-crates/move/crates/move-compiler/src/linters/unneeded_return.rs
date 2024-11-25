@@ -6,15 +6,10 @@
 
 use crate::{
     diag,
-    diagnostics::WarningFilters,
     expansion::ast::ModuleIdent,
     linters::StyleCodes,
     parser::ast::FunctionName,
-    shared::CompilationEnv,
-    typing::{
-        ast as T,
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
-    },
+    typing::{ast as T, visitor::simple_visitor},
 };
 
 use move_ir_types::location::Loc;
@@ -22,21 +17,8 @@ use move_proc_macros::growing_stack;
 
 use std::collections::VecDeque;
 
-pub struct UnneededReturnVisitor;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for UnneededReturnVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
+simple_visitor!(
+    UnneededReturnVisitor,
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,
@@ -48,15 +30,7 @@ impl TypingVisitorContext for Context<'_> {
         };
         true
     }
-
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
+);
 
 /// Recur down the tail (last) position of the sequence, looking for returns that
 /// might occur in the function's taul/return position..
@@ -75,9 +49,11 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) {
 #[growing_stack]
 fn tail(context: &mut Context, exp: &T::Exp) {
     match &exp.exp.value {
-        T::UnannotatedExp_::IfElse(_, conseq, alt) => {
+        T::UnannotatedExp_::IfElse(_, conseq, alt_opt) => {
             tail(context, conseq);
-            tail(context, alt);
+            if let Some(alt) = alt_opt {
+                tail(context, alt);
+            }
         }
         T::UnannotatedExp_::Match(_, arms) => {
             for arm in &arms.value {
@@ -209,7 +185,7 @@ fn returnable_value(context: &mut Context, exp: &T::Exp) -> bool {
 }
 
 fn report_unneeded_return(context: &mut Context, loc: Loc) {
-    context.env.add_diag(diag!(
+    context.add_diag(diag!(
         StyleCodes::UnneededReturn.diag_info(),
         (
             loc,

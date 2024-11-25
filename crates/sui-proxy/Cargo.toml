@@ -52,7 +52,6 @@ mime.workspace = true
 serde_json.workspace = true
 tower.workspace = true
 axum-server.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
 
 [build-dependencies]
 prost-build.workspace = true

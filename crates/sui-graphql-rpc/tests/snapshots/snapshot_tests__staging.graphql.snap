@@ -452,6 +452,10 @@ type Checkpoint {
 	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
+	"""
+	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+	"""
+	bcs: Base64
 }
 
 type CheckpointConnection {
@@ -3386,7 +3390,8 @@ type Query {
 	"""
 	typeByName(name: String!): MoveType!
 	"""
-	The coin metadata associated with the given coin type.
+	The coin metadata associated with the given coin type. Note that if the latest version of
+	the coin's metadata is wrapped or deleted, it will not be found.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 	"""

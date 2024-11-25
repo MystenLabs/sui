@@ -6,8 +6,8 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{
-    Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
-    STORAGE_COST_PER_COUNTER,
+    ExpectedFailureType, Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST,
+    MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER,
 };
 use crate::workloads::GasCoinConfig;
 use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
@@ -117,6 +117,9 @@ impl Payload for SharedCounterDeletionTestPayload {
             _ => panic!("Invalid transaction selector"),
         }
         .build_and_sign(self.gas.2.as_ref())
+    }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 

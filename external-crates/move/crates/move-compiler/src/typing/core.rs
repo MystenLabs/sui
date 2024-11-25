@@ -6,7 +6,8 @@ use crate::{
     debug_display, diag,
     diagnostics::{
         codes::{NameResolution, TypeSafety},
-        Diagnostic,
+        warning_filters::WarningFilters,
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
@@ -82,16 +83,22 @@ pub enum MacroExpansion {
 }
 
 pub(super) struct TypingDebugFlags {
+    #[allow(dead_code)]
     pub(super) match_counterexample: bool,
+    #[allow(dead_code)]
     pub(super) autocomplete_resolution: bool,
+    #[allow(dead_code)]
     pub(super) function_translation: bool,
+    #[allow(dead_code)]
     pub(super) type_elaboration: bool,
 }
 
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
-    pub env: &'env mut CompilationEnv,
+    pub env: &'env CompilationEnv,
+    pub reporter: DiagnosticReporter<'env>,
+    #[allow(dead_code)]
     pub(super) debug: TypingDebugFlags,
 
     deprecations: Deprecations,
@@ -179,7 +186,7 @@ impl UseFunsScope {
 
 impl<'env> Context<'env> {
     pub fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         info: NamingProgramInfo,
     ) -> Self {
@@ -191,6 +198,7 @@ impl<'env> Context<'env> {
             function_translation: false,
             type_elaboration: false,
         };
+        let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
@@ -206,6 +214,7 @@ impl<'env> Context<'env> {
             macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
+            reporter,
             debug,
             next_match_var_id: 0,
             new_friends: BTreeSet::new(),
@@ -215,6 +224,35 @@ impl<'env> Context<'env> {
             ide_info: IDEInfo::new(),
             deprecations,
         }
+    }
+
+    pub fn add_diag(&self, diag: Diagnostic) {
+        self.reporter.add_diag(diag);
+    }
+
+    pub fn add_diags(&self, diags: Diagnostics) {
+        self.reporter.add_diags(diags);
+    }
+
+    pub fn extend_ide_info(&self, info: IDEInfo) {
+        self.reporter.extend_ide_info(info);
+    }
+
+    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
+        self.reporter.add_ide_annotation(loc, info);
+    }
+
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.reporter.push_warning_filter_scope(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.reporter.pop_warning_filter_scope()
+    }
+
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
+        self.env
+            .check_feature(&self.reporter, package, feature, loc)
     }
 
     pub fn set_macros(
@@ -266,7 +304,7 @@ impl<'env> Context<'env> {
                     let (target_m, target_f) = &use_fun.target_function;
                     let msg =
                         format!("{case} method alias '{tn}.{method}' for '{target_m}::{target_f}'");
-                    self.env.add_diag(diag!(
+                    self.add_diag(diag!(
                         Declarations::DuplicateAlias,
                         (use_fun.loc, msg),
                         (prev_loc, "The same alias was previously declared here")
@@ -306,18 +344,18 @@ impl<'env> Context<'env> {
                     UseFunKind::Explicit => {
                         let msg =
                             format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it");
-                        self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                        self.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
                     }
                     UseFunKind::UseAlias => {
                         let msg = format!("Unused 'use' of alias '{method}'. Consider removing it");
-                        self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                        self.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
                     }
                     UseFunKind::FunctionDeclaration => {
                         let diag = ice!((
                             *loc,
                             "ICE fun declaration 'use' funs should never be added to 'use' funs"
                         ));
-                        self.env.add_diag(diag);
+                        self.add_diag(diag);
                     }
                 }
             }
@@ -411,7 +449,7 @@ impl<'env> Context<'env> {
                 };
                 diag.add_secondary_label((*prev_loc, msg));
             }
-            self.env.add_diag(diag);
+            self.add_diag(diag);
             false
         } else {
             self.macro_expansion
@@ -433,7 +471,7 @@ impl<'env> Context<'env> {
                     loc,
                     "ICE macro expansion stack should have a call when leaving a macro expansion"
                 ));
-                self.env.add_diag(diag);
+                self.add_diag(diag);
                 return false;
             }
         };
@@ -471,7 +509,7 @@ impl<'env> Context<'env> {
                         loc,
                         "ICE macro expansion stack should have a lambda when leaving a lambda",
                     ));
-                    self.env.add_diag(diag);
+                    self.add_diag(diag);
                 }
             }
         }
@@ -507,8 +545,7 @@ impl<'env> Context<'env> {
         self.lambda_expansion = vec![];
 
         if !self.ide_info.is_empty() {
-            self.env
-                .add_diag(ice!((loc, "IDE info should be cleared after each item")));
+            self.add_diag(ice!((loc, "IDE info should be cleared after each item")));
             self.ide_info = IDEInfo::new();
         }
     }
@@ -575,15 +612,14 @@ impl<'env> Context<'env> {
     pub fn declare_local(&mut self, _: Mutability, var: Var, ty: Type) {
         if let Err((_, prev_loc)) = self.locals.add(var, ty) {
             let msg = format!("ICE duplicate {var:?}. Should have been made unique in naming");
-            self.env
-                .add_diag(ice!((var.loc, msg), (prev_loc, "Previously declared here")));
+            self.add_diag(ice!((var.loc, msg), (prev_loc, "Previously declared here")));
         }
     }
 
     pub fn get_local_type(&mut self, var: &Var) -> Type {
         if !self.locals.contains_key(var) {
             let msg = format!("ICE unbound {var:?}. Should have failed in naming");
-            self.env.add_diag(ice!((var.loc, msg)));
+            self.add_diag(ice!((var.loc, msg)));
             return self.error_type(var.loc);
         }
 
@@ -659,7 +695,8 @@ impl<'env> Context<'env> {
             if deprecation.location == AttributePosition::Module && in_same_module {
                 return;
             }
-            deprecation.emit_deprecation_warning(self.env, name, method_opt);
+            let diags = deprecation.deprecation_warnings(name, method_opt);
+            self.add_diags(diags);
         }
     }
 
@@ -847,12 +884,12 @@ impl<'env> Context<'env> {
 }
 
 impl MatchContext<false> for Context<'_> {
-    fn env(&mut self) -> &mut CompilationEnv {
+    fn env(&self) -> &CompilationEnv {
         self.env
     }
 
-    fn env_ref(&self) -> &CompilationEnv {
-        self.env
+    fn reporter(&self) -> &DiagnosticReporter {
+        &self.reporter
     }
 
     /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
@@ -1102,7 +1139,7 @@ fn debug_abilities_info(context: &mut Context, ty: &Type) -> (Option<Loc>, Abili
                 loc,
                 "ICE did not call unfold_type before debug_abiliites_info"
             ));
-            context.env.add_diag(diag);
+            context.add_diag(diag);
             (None, AbilitySet::all(loc), vec![])
         }
         T::UnresolvedError | T::Anything => (None, AbilitySet::all(loc), vec![]),
@@ -1238,7 +1275,7 @@ pub fn make_struct_field_type(
         N::StructFields::Native(nloc) => {
             let nloc = *nloc;
             let msg = format!("Unbound field '{}' for native struct '{}::{}'", field, m, n);
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 NameResolution::UnboundField,
                 (loc, msg),
                 (nloc, "Struct declared 'native' here")
@@ -1249,7 +1286,7 @@ pub fn make_struct_field_type(
     };
     match fields_map.get(field).cloned() {
         None => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 NameResolution::UnboundField,
                 (loc, format!("Unbound field '{}' in '{}::{}'", field, m, n)),
             ));
@@ -1364,7 +1401,7 @@ pub fn make_constant_type(
         let msg = format!("Invalid access of '{}::{}'", m, c);
         let internal_msg = "Constants are internal to their module, and cannot can be accessed \
                             outside of their module";
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             TypeSafety::Visibility,
             (loc, msg),
             (defined_loc, internal_msg)
@@ -1396,7 +1433,7 @@ pub fn make_method_call_type(
                     loc,
                     format!("ICE method on tuple type {}", debug_display!(tn))
                 ));
-                context.env.add_diag(diag);
+                context.add_diag(diag);
                 return None;
             }
             TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
@@ -1433,7 +1470,7 @@ pub fn make_method_call_type(
                 No known method '{method}' on type '{lhs_ty_str}'"
             );
             let fmsg = format!("The function '{m}::{method}' exists, {arg_msg}");
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 TypeSafety::InvalidMethodCall,
                 (loc, msg),
                 (first_ty_loc, fmsg)
@@ -1451,7 +1488,7 @@ pub fn make_method_call_type(
             };
             let fmsg =
                 format!("No local 'use fun' alias was found for '{lhs_ty_str}.{method}'{decl_msg}");
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 TypeSafety::InvalidMethodCall,
                 (loc, msg),
                 (method.loc, fmsg)
@@ -1739,7 +1776,7 @@ fn report_visibility_error_(
                 diag.add_secondary_label((call.invocation, "While expanding this macro"));
             }
             _ => {
-                context.env.add_diag(ice!((
+                context.add_diag(ice!((
                     call_loc,
                     "Error when dealing with macro visibilities"
                 )));
@@ -1752,7 +1789,7 @@ fn report_visibility_error_(
             "Visibility inside of expanded macros is resolved in the scope of the caller.",
         );
     }
-    context.env.add_diag(diag);
+    context.add_diag(diag);
 }
 
 pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
@@ -1777,7 +1814,7 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
         arity,
         given_len
     );
-    context.env.add_diag(diag!(
+    context.add_diag(diag!(
         code,
         (loc, cmsg),
         (argloc, format!("Found {} argument(s) here", given_len)),
@@ -1873,7 +1910,7 @@ fn solve_ability_constraint(
                 format!("'{}' constraint declared here", constraint),
             ));
         }
-        context.env.add_diag(diag)
+        context.add_diag(diag)
     }
 }
 
@@ -1973,7 +2010,7 @@ fn solve_builtin_type_constraint(
         }
         _ => {
             let tmsg = mk_tmsg();
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 TypeSafety::BuiltinOperation,
                 (loc, format!("Invalid argument to '{}'", op)),
                 (tloc, tmsg)
@@ -1991,7 +2028,7 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
         Unit | Ref(_, _) | Apply(_, sp!(_, Multiple(_)), _) => {
             let tystr = error_format(ty, &context.subst);
             let tmsg = format!("Expected a single non-reference type, but found: {}", tystr);
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 TypeSafety::ExpectedBaseType,
                 (loc, msg),
                 (tyloc, tmsg)
@@ -2012,7 +2049,7 @@ fn solve_single_type_constraint(context: &mut Context, loc: Loc, msg: String, ty
                 "Expected a single type, but found expression list type: {}",
                 error_format(ty, &context.subst)
             );
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 TypeSafety::ExpectedSingleType,
                 (loc, msg),
                 (tyloc, tmsg)
@@ -2363,7 +2400,7 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
             arity,
             args_len
         );
-        context.env.add_diag(diag!(code, (loc, msg)));
+        context.add_diag(diag!(code, (loc, msg)));
     }
 
     while ty_args.len() > arity {

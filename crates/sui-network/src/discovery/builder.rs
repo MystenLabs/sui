@@ -58,7 +58,7 @@ impl Builder {
 
         // Apply rate limits from configuration as needed.
         if let Some(limit) = discovery_config.get_known_peers_rate_limit {
-            discovery_server = discovery_server.add_layer_for_get_known_peers(
+            discovery_server = discovery_server.add_layer_for_get_known_peers_v2(
                 InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
                     governor::Quota::per_second(limit),
                     rate_limit::WaitMode::Block,

@@ -8,41 +8,19 @@
 use crate::linters::StyleCodes;
 use crate::{
     diag,
-    diagnostics::WarningFilters,
-    shared::CompilationEnv,
     typing::{
-        ast::{self as T, Exp, UnannotatedExp_ as TE},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+        ast::{Exp, UnannotatedExp_ as TE},
+        visitor::simple_visitor,
     },
 };
 
-pub struct RedundantRefDerefVisitor;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for RedundantRefDerefVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    RedundantRefDerefVisitor,
     fn visit_exp_custom(&mut self, exp: &Exp) -> bool {
         self.check_redundant_ref_deref(exp);
         false
     }
-}
+);
 
 impl Context<'_> {
     // Check for &* pattern
@@ -59,7 +37,7 @@ impl Context<'_> {
             return;
         }
         match &deref_exp.exp.value {
-            TE::TempBorrow(_, inner) if is_simple_deref_ref_exp(inner) => self.env.add_diag(diag!(
+            TE::TempBorrow(_, inner) if is_simple_deref_ref_exp(inner) => self.add_diag(diag!(
                 StyleCodes::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,
@@ -67,7 +45,7 @@ impl Context<'_> {
                      Remove this borrow-deref and use the expression directly."
                 )
             )),
-            TE::TempBorrow(_, inner) if all_deref_borrow(inner) => self.env.add_diag(diag!(
+            TE::TempBorrow(_, inner) if all_deref_borrow(inner) => self.add_diag(diag!(
                 StyleCodes::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,
@@ -75,17 +53,15 @@ impl Context<'_> {
                      Use the inner expression directly."
                 )
             )),
-            TE::Borrow(false, _, _) if exp.exp.loc != deref_exp.exp.loc => {
-                self.env.add_diag(diag!(
-                    StyleCodes::RedundantRefDeref.diag_info(),
-                    (
-                        exp.exp.loc,
-                        "Redundant borrow-dereference detected. \
+            TE::Borrow(false, _, _) if exp.exp.loc != deref_exp.exp.loc => self.add_diag(diag!(
+                StyleCodes::RedundantRefDeref.diag_info(),
+                (
+                    exp.exp.loc,
+                    "Redundant borrow-dereference detected. \
                          Use the field access directly."
-                    )
-                ))
-            }
-            TE::Borrow(_, _, _) | TE::BorrowLocal(_, _) => self.env.add_diag(diag!(
+                )
+            )),
+            TE::Borrow(_, _, _) | TE::BorrowLocal(_, _) => self.add_diag(diag!(
                 StyleCodes::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,

@@ -95,7 +95,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:23:9
    │
 23 │         false as u8;
-   │         ^^^^^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -112,7 +112,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:24:9
    │
 24 │         true as u128;
-   │         ^^^^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -129,7 +129,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:26:9
    │
 26 │         () as u64;
-   │         ^^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -146,7 +146,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:27:9
    │
 27 │         (0, 1) as u8;
-   │         ^^^^^^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -163,7 +163,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:29:9
    │
 29 │         0 as bool;
-   │         ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -179,7 +179,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:30:9
    │
 30 │         0 as address;
-   │         ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -195,7 +195,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:31:15
    │
 31 │         R{} = 0 as R;
-   │               ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │               ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -211,7 +211,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:32:9
    │
 32 │         0 as Cup<u8>;
-   │         ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -227,7 +227,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:33:9
    │
 33 │         0 as ();
-   │         ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -243,7 +243,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:34:9
    │
 34 │         0 as (u64, u8);
-   │         ^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -259,7 +259,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:36:9
    │
 36 │         x"1234" as u64;
-   │         ^^^^^^^ 'as' without parentheses is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^^^^^^ 'as' without parentheses is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

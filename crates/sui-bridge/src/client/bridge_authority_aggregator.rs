@@ -99,7 +99,7 @@ impl BridgeAuthorityAggregator {
             self.committee.clone(),
             self.clients.clone(),
             state,
-            Duration::from_secs(PREFETCH_TIMEOUT_MS),
+            Duration::from_millis(PREFETCH_TIMEOUT_MS),
         )
         .await
     }

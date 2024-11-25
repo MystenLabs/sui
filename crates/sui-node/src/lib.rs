@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -27,8 +28,8 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
-use sui_core::consensus_adapter::SubmitToConsensus;
-use sui_core::consensus_manager::ConsensusClient;
+use sui_core::consensus_adapter::ConsensusClient;
+use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
 use sui_core::state_accumulator::StateAccumulatorMetrics;
@@ -1197,7 +1198,7 @@ impl SuiNode {
             .as_mut()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        let client = Arc::new(ConsensusClient::new());
+        let client = Arc::new(UpdatableConsensusClient::new());
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
@@ -1347,7 +1348,8 @@ impl SuiNode {
                 epoch_store.clone(),
                 consensus_handler_initializer,
                 SuiTxValidator::new(
-                    epoch_store.clone(),
+                    state.clone(),
+                    consensus_adapter.clone(),
                     checkpoint_service.clone(),
                     state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
@@ -1432,7 +1434,7 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
         protocol_config: ProtocolConfig,
-        consensus_client: Arc<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn ConsensusClient>,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -1473,8 +1475,13 @@ impl SuiNode {
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 
+        let tls_config = sui_tls::create_rustls_server_config(
+            config.network_key_pair().copy().private(),
+            SUI_TLS_SERVER_NAME.to_string(),
+            sui_tls::AllowAll,
+        );
         let server = server_builder
-            .bind(config.network_address())
+            .bind(config.network_address(), Some(tls_config))
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
         let local_addr = server.local_addr();

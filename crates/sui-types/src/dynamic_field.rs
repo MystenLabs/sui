@@ -311,7 +311,7 @@ where
 {
     let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
-    let object = object_store.get_object(&id)?.ok_or_else(|| {
+    let object = object_store.get_object(&id).ok_or_else(|| {
         SuiError::DynamicFieldReadError(format!(
             "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
             key, id, parent_id

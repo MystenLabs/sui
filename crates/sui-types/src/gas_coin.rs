@@ -112,12 +112,10 @@ mod checked {
             Coin::layout(TypeTag::Struct(Box::new(GAS::type_())))
         }
 
-        #[cfg(any(feature = "test-utils", test))]
         pub fn new_for_testing(value: u64) -> Self {
             Self::new(ObjectID::random(), value)
         }
 
-        #[cfg(any(feature = "test-utils", test))]
         pub fn new_for_testing_with_id(id: ObjectID, value: u64) -> Self {
             Self::new(id, value)
         }

@@ -82,4 +82,9 @@ module Completion::colon_colon {
         MultiField
     }
 
+    public fun match_pattern(e: SomeEnum) {
+        match (e) {
+            SomeEnum::
+        }
+    }
 }

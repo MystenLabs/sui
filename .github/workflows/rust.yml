@@ -55,7 +55,6 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
-      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
@@ -72,33 +71,6 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: cargo xlint
-
-  move-auto-formatter-ci-test:
-    needs: diff
-    if: needs.diff.outputs.isMoveAutoFormatter == 'true'
-    runs-on: [ ubuntu-latest ]
-    strategy:
-      matrix:
-        node-version: [ 20 ]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
-        with:
-          version: 9.1.1
-      - name: Setup Node
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
-        with:
-          node-version: '20.x'
-          cache: 'pnpm'
-      - name: Install dependencies
-        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
-        run: npm install && npm i web-tree-sitter
-      - name: Run npm test
-        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
-        shell: bash
-        run: npm run test
 
   test:
     needs: diff
@@ -120,6 +92,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
@@ -128,7 +101,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E '!package(sui-bridge)'
+          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -153,6 +126,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
@@ -240,6 +214,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space

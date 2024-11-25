@@ -19,7 +19,10 @@ async fn get_known_peers() -> Result<()> {
         .build_internal();
 
     // Err when own_info not set
-    server.get_known_peers(Request::new(())).await.unwrap_err();
+    server
+        .get_known_peers_v2(Request::new(()))
+        .await
+        .unwrap_err();
 
     // Normal response with our_info
     let our_info = NodeInfo {
@@ -33,11 +36,11 @@ async fn get_known_peers() -> Result<()> {
         Ed25519Signature::default(),
     ));
     let response = server
-        .get_known_peers(Request::new(()))
+        .get_known_peers_v2(Request::new(()))
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(response.own_info, our_info);
+    assert_eq!(response.own_info.data(), &our_info);
     assert!(response.known_peers.is_empty());
 
     // Normal response with some known peers
@@ -55,27 +58,32 @@ async fn get_known_peers() -> Result<()> {
         )),
     );
     let response = server
-        .get_known_peers(Request::new(()))
+        .get_known_peers_v2(Request::new(()))
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(response.own_info, our_info);
-    assert_eq!(response.known_peers, vec![other_peer]);
+    assert_eq!(response.own_info.data(), &our_info);
+    assert_eq!(
+        response
+            .known_peers
+            .into_iter()
+            .map(|peer| peer.into_data())
+            .collect::<Vec<_>>(),
+        vec![other_peer]
+    );
 
     Ok(())
 }
 
 #[tokio::test]
 async fn make_connection_to_seed_peer() -> Result<()> {
-    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
-        enable_node_info_signatures: Some(true),
-        ..DiscoveryConfig::default()
-    });
-    let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
+    let mut config = P2pConfig::default();
+    let (builder, server) = Builder::new(create_test_channel().1)
+        .config(config.clone())
+        .build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let mut config = P2pConfig::default();
     config.seed_peers.push(SeedPeer {
         peer_id: None,
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
@@ -103,15 +111,13 @@ async fn make_connection_to_seed_peer() -> Result<()> {
 
 #[tokio::test]
 async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
-    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
-        enable_node_info_signatures: Some(true),
-        ..DiscoveryConfig::default()
-    });
-    let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
+    let mut config = P2pConfig::default();
+    let (builder, server) = Builder::new(create_test_channel().1)
+        .config(config.clone())
+        .build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let mut config = P2pConfig::default();
     config.seed_peers.push(SeedPeer {
         peer_id: Some(network_1.peer_id()),
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
@@ -140,15 +146,13 @@ async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn three_nodes_can_connect_via_discovery() -> Result<()> {
     // Setup the peer that will be the seed for the other two
-    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
-        enable_node_info_signatures: Some(true),
-        ..DiscoveryConfig::default()
-    });
-    let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
+    let mut config = P2pConfig::default();
+    let (builder, server) = Builder::new(create_test_channel().1)
+        .config(config.clone())
+        .build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let mut config = P2pConfig::default();
     config.seed_peers.push(SeedPeer {
         peer_id: Some(network_1.peer_id()),
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
@@ -207,10 +211,7 @@ async fn three_nodes_can_connect_via_discovery() -> Result<()> {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn peers_are_added_from_reconfig_channel() -> Result<()> {
     let (tx_1, rx_1) = create_test_channel();
-    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
-        enable_node_info_signatures: Some(true),
-        ..DiscoveryConfig::default()
-    });
+    let config = P2pConfig::default();
     let (builder, server) = Builder::new(rx_1).config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
@@ -299,7 +300,6 @@ async fn test_access_types() {
     let default_discovery_config = DiscoveryConfig {
         target_concurrent_connections: Some(100),
         interval_period_ms: Some(1000),
-        enable_node_info_signatures: Some(true),
         ..Default::default()
     };
     let default_p2p_config = P2pConfig {
@@ -310,7 +310,6 @@ async fn test_access_types() {
         target_concurrent_connections: Some(100),
         interval_period_ms: Some(1000),
         access_type: Some(AccessType::Private),
-        enable_node_info_signatures: Some(true),
         ..Default::default()
     };
 

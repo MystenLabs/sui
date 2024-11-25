@@ -6,9 +6,9 @@ use std::env;
 
 use anyhow::Result;
 use prometheus::Registry;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use async_trait::async_trait;
 use futures::future::try_join_all;
@@ -16,7 +16,6 @@ use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
 };
-use sui_synthetic_ingestion::IndexerProgress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
@@ -38,9 +37,9 @@ impl Indexer {
         store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
-        retention_config: Option<RetentionConfig>,
+        mut retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
-        committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
+        mvr_mode: bool,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -48,17 +47,11 @@ impl Indexer {
         );
         info!("Sui Indexer Writer config: {config:?}",);
 
-        let primary_watermark = store
-            .get_latest_checkpoint_sequence_number()
-            .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB")
-            .map(|seq| seq + 1)
-            .unwrap_or_default();
-
         let extra_reader_options = ReaderOptions {
             batch_size: config.checkpoint_download_queue_size,
             timeout_secs: config.checkpoint_download_timeout,
             data_limit: config.checkpoint_download_queue_size_bytes,
+            gc_checkpoint_files: config.gc_checkpoint_files,
             ..Default::default()
         };
 
@@ -68,8 +61,18 @@ impl Indexer {
             metrics.clone(),
             snapshot_config,
             cancel.clone(),
+            config.start_checkpoint,
+            config.end_checkpoint,
         )
         .await?;
+
+        if mvr_mode {
+            warn!("Indexer in MVR mode is configured to prune `objects_history` to 2 epochs. The other tables have a 2000 epoch retention.");
+            retention_config = Some(RetentionConfig {
+                epochs_to_keep: 2000, // epochs, roughly 5+ years. We really just care about pruning `objects_history` per the default 2 epochs.
+                overrides: Default::default(),
+            });
+        }
 
         if let Some(retention_config) = retention_config {
             let pruner = Pruner::new(store.clone(), retention_config, metrics.clone())?;
@@ -89,6 +92,16 @@ impl Indexer {
 
         let mut exit_senders = vec![];
         let mut executors = vec![];
+
+        let (worker, primary_watermark) = new_handlers(
+            store,
+            metrics,
+            cancel.clone(),
+            config.start_checkpoint,
+            config.end_checkpoint,
+            mvr_mode,
+        )
+        .await?;
         // Ingestion task watermarks are snapshotted once on indexer startup based on the
         // corresponding watermark table before being handed off to the ingestion task.
         let progress_store = ShimIndexerProgressStore::new(vec![
@@ -100,14 +113,7 @@ impl Indexer {
             2,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(
-            store,
-            metrics,
-            primary_watermark,
-            cancel.clone(),
-            committed_checkpoints_tx,
-        )
-        .await?;
+
         let worker_pool = WorkerPool::new(
             worker,
             "primary".to_string(),

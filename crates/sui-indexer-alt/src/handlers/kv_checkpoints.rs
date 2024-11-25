@@ -7,19 +7,19 @@ use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{db, models::checkpoints::StoredCheckpoint, schema::kv_checkpoints};
-
-use super::Handler;
+use crate::{
+    db, models::checkpoints::StoredCheckpoint, pipeline::concurrent::Handler, pipeline::Processor,
+    schema::kv_checkpoints,
+};
 
 pub struct KvCheckpoints;
 
-#[async_trait::async_trait]
-impl Handler for KvCheckpoints {
+impl Processor for KvCheckpoints {
     const NAME: &'static str = "kv_checkpoints";
 
     type Value = StoredCheckpoint;
 
-    fn handle(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
         Ok(vec![StoredCheckpoint {
             sequence_number,
@@ -29,7 +29,10 @@ impl Handler for KvCheckpoints {
                 .with_context(|| format!("Serializing checkpoint {sequence_number} contents"))?,
         }])
     }
+}
 
+#[async_trait::async_trait]
+impl Handler for KvCheckpoints {
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         Ok(diesel::insert_into(kv_checkpoints::table)
             .values(values)

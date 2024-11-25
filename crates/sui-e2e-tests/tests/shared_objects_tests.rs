@@ -136,8 +136,7 @@ async fn shared_object_deletion_multiple_times() {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
-        .await
-        .unwrap();
+        .await;
 }
 
 #[sim_test]
@@ -193,8 +192,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
-        .await
-        .unwrap();
+        .await;
 }
 
 /// Test for execution of shared object certs that are sequenced after a shared object is deleted.
@@ -307,8 +305,7 @@ async fn shared_object_deletion_multi_certs() {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[inc_tx_a_digest, inc_tx_b_digest])
-        .await
-        .unwrap();
+        .await;
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,

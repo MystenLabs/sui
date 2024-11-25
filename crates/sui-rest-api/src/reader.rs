@@ -31,8 +31,9 @@ impl StateReader {
     pub fn get_object(&self, object_id: ObjectId) -> crate::Result<Option<Object>> {
         self.inner
             .get_object(&object_id.into())
+            .map(TryInto::try_into)
+            .transpose()
             .map_err(Into::into)
-            .and_then(|maybe| maybe.map(TryInto::try_into).transpose().map_err(Into::into))
     }
 
     pub fn get_object_with_version(
@@ -42,14 +43,15 @@ impl StateReader {
     ) -> crate::Result<Option<Object>> {
         self.inner
             .get_object_by_key(&object_id.into(), version.into())
+            .map(TryInto::try_into)
+            .transpose()
             .map_err(Into::into)
-            .and_then(|maybe| maybe.map(TryInto::try_into).transpose().map_err(Into::into))
     }
 
-    pub fn get_committee(&self, epoch: EpochId) -> Result<Option<ValidatorCommittee>> {
+    pub fn get_committee(&self, epoch: EpochId) -> Option<ValidatorCommittee> {
         self.inner
             .get_committee(epoch)
-            .map(|maybe| maybe.map(|committee| (*committee).clone().into()))
+            .map(|committee| (*committee).clone().into())
     }
 
     pub fn get_system_state_summary(&self) -> Result<super::system::SystemStateSummary> {
@@ -77,17 +79,17 @@ impl StateReader {
 
         let transaction = (*self
             .inner()
-            .get_transaction(&transaction_digest)?
+            .get_transaction(&transaction_digest)
             .ok_or(TransactionNotFoundError(digest))?)
         .clone()
         .into_inner();
         let effects = self
             .inner()
-            .get_transaction_effects(&transaction_digest)?
+            .get_transaction_effects(&transaction_digest)
             .ok_or(TransactionNotFoundError(digest))?;
         let events = if let Some(event_digest) = effects.events_digest() {
             self.inner()
-                .get_events(event_digest)?
+                .get_events(event_digest)
                 .ok_or(TransactionNotFoundError(digest))?
                 .pipe(Some)
         } else {
@@ -117,7 +119,7 @@ impl StateReader {
         let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()))?;
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()
-                .get_checkpoint_by_sequence_number(checkpoint)?
+                .get_checkpoint_by_sequence_number(checkpoint)
                 .map(|checkpoint| checkpoint.timestamp_ms)
         } else {
             None
@@ -197,18 +199,16 @@ impl Iterator for CheckpointTransactionsIter {
                     .inner()
                     .get_checkpoint_by_sequence_number(current_checkpoint)
                 {
-                    Ok(Some(checkpoint)) => checkpoint,
-                    Ok(None) => return None,
-                    Err(e) => return Some(Err(e)),
+                    Some(checkpoint) => checkpoint,
+                    None => return None,
                 };
                 let contents = match self
                     .reader
                     .inner()
                     .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)
                 {
-                    Ok(Some(contents)) => contents,
-                    Ok(None) => return None,
-                    Err(e) => return Some(Err(e)),
+                    Some(contents) => contents,
+                    None => return None,
                 };
 
                 self.checkpoint = Some((checkpoint.into_inner().into_data(), contents));
@@ -306,9 +306,8 @@ impl Iterator for CheckpointIter {
             .inner()
             .get_checkpoint_by_sequence_number(current_checkpoint)
         {
-            Ok(Some(checkpoint)) => checkpoint,
-            Ok(None) => return None,
-            Err(e) => return Some(Err(e)),
+            Some(checkpoint) => checkpoint,
+            None => return None,
         }
         .into_inner();
         let contents = match self
@@ -316,9 +315,8 @@ impl Iterator for CheckpointIter {
             .inner()
             .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)
         {
-            Ok(Some(contents)) => contents,
-            Ok(None) => return None,
-            Err(e) => return Some(Err(e)),
+            Some(contents) => contents,
+            None => return None,
         };
 
         self.next_cursor = match self.direction {

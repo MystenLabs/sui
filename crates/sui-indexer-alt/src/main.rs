@@ -1,17 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
-use sui_indexer_alt::{
-    args::Args,
-    handlers::{
-        kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, kv_transactions::KvTransactions,
-        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-    },
-    Indexer,
-};
-use tokio_util::sync::CancellationToken;
+use sui_indexer_alt::args::Args;
+use sui_indexer_alt::args::Command;
+use sui_indexer_alt::db::reset_database;
+use sui_indexer_alt::start_indexer;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,20 +17,21 @@ async fn main() -> Result<()> {
         .with_env()
         .init();
 
-    let cancel = CancellationToken::new();
-
-    let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
-
-    indexer.pipeline::<KvCheckpoints>().await?;
-    indexer.pipeline::<KvObjects>().await?;
-    indexer.pipeline::<KvTransactions>().await?;
-    indexer.pipeline::<TxAffectedObjects>().await?;
-    indexer.pipeline::<TxBalanceChanges>().await?;
-
-    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
-
-    cancel.cancelled().await;
-    let _ = h_indexer.await;
+    match args.command {
+        Command::Indexer {
+            indexer,
+            consistency_config,
+        } => {
+            start_indexer(indexer, args.db_config, consistency_config, true).await?;
+        }
+        Command::ResetDatabase { skip_migrations } => {
+            reset_database(args.db_config, skip_migrations).await?;
+        }
+        #[cfg(feature = "benchmark")]
+        Command::Benchmark { config } => {
+            sui_indexer_alt::benchmark::run_benchmark(config, args.db_config).await?;
+        }
+    }
 
     Ok(())
 }

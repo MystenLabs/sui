@@ -131,12 +131,7 @@ export class StashedHost {
 		const parsed = new URL(url);
 
 		const urlHashData = parsed.hash
-			? Object.fromEntries(
-					[...new URLSearchParams(parsed.hash.slice(1))].map(([key, value]) => [
-						key,
-						value.replace(/ /g, '+'),
-					]),
-				)
+			? Object.fromEntries([...new URLSearchParams(parsed.hash.slice(1))])
 			: {};
 
 		const request = parse(StashedRequest, {

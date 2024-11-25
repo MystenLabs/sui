@@ -51,6 +51,12 @@ const TASK_QUEUE_SIZE: usize = 2000;
 const EFFECTS_QUEUE_SIZE: usize = 10000;
 const TX_MAX_RETRY_TIMES: u32 = 10;
 
+pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
+    fn epoch(&self) -> EpochId;
+    fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>>;
+    fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>);
+}
+
 #[derive(Clone)]
 pub struct QuorumDriverTask {
     pub request: ExecuteTransactionRequestV3,
@@ -509,14 +515,6 @@ where
         Ok(response)
     }
 
-    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
-        info!(
-            "Quorum Driver updating AuthorityAggregator with committee {}",
-            new_validators.committee
-        );
-        self.validators.store(new_validators);
-    }
-
     /// Returns Some(true) if the conflicting transaction is executed successfully
     /// (or already executed), or Some(false) if it did not.
     #[instrument(level = "trace", skip_all)]
@@ -607,6 +605,27 @@ where
             });
         // We only try it once
         Ok(result.is_ok())
+    }
+}
+
+impl<A> AuthorityAggregatorUpdatable<A> for QuorumDriver<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    fn epoch(&self) -> EpochId {
+        self.validators.load().committee.epoch
+    }
+
+    fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.validators.load_full()
+    }
+
+    fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>) {
+        info!(
+            "Quorum Driver updating AuthorityAggregator with committee {}",
+            new_authorities.committee
+        );
+        self.validators.store(new_authorities);
     }
 }
 

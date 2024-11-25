@@ -1,5 +1,43 @@
 # @mysten/sui.js
 
+## 1.15.0
+
+### Minor Changes
+
+- 6460e45: Adding back 'Client-Request-Method' header
+
+## 1.14.4
+
+### Patch Changes
+
+- 938fb6e: fix bug in object cache's applyEffects method that doesn't correctly await cache deletes
+
+## 1.14.3
+
+### Patch Changes
+
+- d5a23d7: Add tx.object.option for creatnig object options in transaction builder
+
+## 1.14.2
+
+### Patch Changes
+
+- e7bc63e: Allow 0 amounts with `coinWithBalance` intent when the wallet has no coin objects of the
+  required type.
+
+## 1.14.1
+
+### Patch Changes
+
+- 69ef100: revert adding client-request-method header
+
+## 1.14.0
+
+### Minor Changes
+
+- c24814b: Adds a custom header; 'Client-Request-Method' which will contain the method name used in
+  each outgoing jsonrpc request
+
 ## 1.13.0
 
 ### Minor Changes

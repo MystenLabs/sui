@@ -1,7 +1,7 @@
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 10)
+  function: foo (m.move:10)
     scope 0 :
       val2 : 7
       type: u64
@@ -17,9 +17,9 @@ current frame stack:
       type: u64
 
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 12)
+  function: foo (m.move:12)
     scope 0 :
       shadowed_var : 7
       type: u64
@@ -36,9 +36,9 @@ current frame stack:
       type: u64
 
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 17)
+  function: foo (m.move:17)
     scope 0 :
       shadowed_var : 7
       type: u64
@@ -51,9 +51,9 @@ current frame stack:
       type: u64
 
 current frame stack:
-  function: test (line 25)
+  function: test (m.move:25)
     scope 0 :
-  function: foo (line 20)
+  function: foo (m.move:20)
     scope 0 :
       shadowed_var : 7
       type: u64

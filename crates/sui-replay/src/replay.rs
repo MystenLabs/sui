@@ -473,8 +473,13 @@ impl LocalExec {
         objs: Vec<ObjectID>,
         protocol_version: u64,
     ) -> Result<Vec<Object>, ReplayEngineError> {
-        let syst_packages = self.system_package_versions_for_protocol_version(protocol_version)?;
-        let syst_packages_objs = self.multi_download(&syst_packages).await?;
+        let syst_packages_objs = if self.protocol_version.is_some_and(|i| i < 0) {
+            BuiltInFramework::genesis_objects().collect()
+        } else {
+            let syst_packages =
+                self.system_package_versions_for_protocol_version(protocol_version)?;
+            self.multi_download(&syst_packages).await?
+        };
 
         // Download latest version of all packages that are not system packages
         // This is okay since the versions can never change
@@ -707,17 +712,6 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let tx_digest = &tx_info.tx_digest;
-        // TODO: Support system transactions.
-        if tx_info.sender_signed_data.transaction_data().is_system_tx() {
-            warn!(
-                "System TX replay not supported: {}, skipping transaction",
-                tx_digest
-            );
-            return Err(ReplayEngineError::TransactionNotSupported {
-                digest: *tx_digest,
-                reason: "System transaction".to_string(),
-            });
-        }
         // Before protocol version 16, the generation of effects depends on the wrapped tombstones.
         // It is not possible to retrieve such data for replay.
         if tx_info.protocol_version.as_u64() < 16 {
@@ -759,30 +753,32 @@ impl LocalExec {
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) = SuiGasStatus::new(
-            tx_info.gas_budget,
-            tx_info.gas_price,
-            tx_info.reference_gas_price,
-            protocol_config,
-        ) {
-            executor.execute_transaction_to_effects(
-                &self,
-                protocol_config,
-                metrics.clone(),
-                expensive_checks,
-                &certificate_deny_set,
-                &tx_info.executed_epoch,
-                tx_info.epoch_start_timestamp,
-                CheckedInputObjects::new_for_replay(input_objects.clone()),
-                tx_info.gas.clone(),
-                gas_status,
-                transaction_kind.clone(),
-                tx_info.sender,
-                *tx_digest,
-            )
+        let gas_status = if tx_info.kind.is_system_tx() {
+            SuiGasStatus::new_unmetered()
         } else {
-            unreachable!("Transaction was valid so gas status must be valid");
+            SuiGasStatus::new(
+                tx_info.gas_budget,
+                tx_info.gas_price,
+                tx_info.reference_gas_price,
+                protocol_config,
+            )
+            .expect("Failed to create gas status")
         };
+        let (inner_store, gas_status, effects, result) = executor.execute_transaction_to_effects(
+            &self,
+            protocol_config,
+            metrics.clone(),
+            expensive_checks,
+            &certificate_deny_set,
+            &tx_info.executed_epoch,
+            tx_info.epoch_start_timestamp,
+            CheckedInputObjects::new_for_replay(input_objects.clone()),
+            tx_info.gas.clone(),
+            gas_status,
+            transaction_kind.clone(),
+            tx_info.sender,
+            *tx_digest,
+        );
 
         if let Err(err) = self.pretty_print_for_tracing(
             &gas_status,
@@ -1798,7 +1794,11 @@ impl LocalExec {
         self.multi_download_and_store(&shared_refs).await?;
 
         // Download gas (although this should already be in cache from modified at versions?)
-        let gas_refs: Vec<_> = tx_info.gas.iter().map(|w| (w.0, w.1)).collect();
+        let gas_refs: Vec<_> = tx_info
+            .gas
+            .iter()
+            .filter_map(|w| (w.0 != ObjectID::ZERO).then_some((w.0, w.1)))
+            .collect();
         self.multi_download_and_store(&gas_refs).await?;
 
         // Fetch the input objects we know from the raw transaction
@@ -1914,7 +1914,7 @@ impl ChildObjectResolver for LocalExec {
             receiving_object_id: &ObjectID,
             receive_object_at_version: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
-            let recv_object = match self_.get_object(receiving_object_id)? {
+            let recv_object = match self_.get_object(receiving_object_id) {
                 None => return Ok(None),
                 Some(o) => o,
             };
@@ -1947,11 +1947,8 @@ impl ChildObjectResolver for LocalExec {
 impl ParentSync for LocalExec {
     /// The objects here much already exist in the store because we downloaded them earlier
     /// No download from network
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
-        fn inner(self_: &LocalExec, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(&self, object_id: ObjectID) -> Option<ObjectRef> {
+        fn inner(self_: &LocalExec, object_id: ObjectID) -> Option<ObjectRef> {
             if let Some(v) = self_
                 .storage
                 .live_objects_store
@@ -1959,9 +1956,9 @@ impl ParentSync for LocalExec {
                 .expect("Can't lock")
                 .get(&object_id)
             {
-                return Ok(Some(v.compute_object_reference()));
+                return Some(v.compute_object_reference());
             }
-            Ok(None)
+            None
         }
         let res = inner(self, object_id);
         self.exec_store_events
@@ -1970,7 +1967,7 @@ impl ParentSync for LocalExec {
             .push(
                 ExecutionStoreEvent::ParentSyncStoreGetLatestParentEntryRef {
                     object_id,
-                    result: res.clone(),
+                    result: res,
                 },
             );
         res
@@ -2064,10 +2061,7 @@ impl ModuleResolver for &mut LocalExec {
 impl ObjectStore for LocalExec {
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         let res = self
             .storage
             .live_objects_store
@@ -2082,16 +2076,12 @@ impl ObjectStore for LocalExec {
                 object_id: *object_id,
                 result: Ok(res.clone()),
             });
-        Ok(res)
+        res
     }
 
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         let res = self
             .storage
             .live_objects_store
@@ -2115,24 +2105,17 @@ impl ObjectStore for LocalExec {
                 result: Ok(res.clone()),
             });
 
-        Ok(res)
+        res
     }
 }
 
 impl ObjectStore for &mut LocalExec {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }

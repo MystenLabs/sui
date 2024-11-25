@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use reqwest::StatusCode;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
@@ -14,7 +12,7 @@ pub enum Error {
     DeserializationError(u64, #[source] anyhow::Error),
 
     #[error("Failed to fetch checkpoint {0}: {1}")]
-    HttpError(u64, StatusCode),
+    FetchError(u64, #[source] anyhow::Error),
 
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),

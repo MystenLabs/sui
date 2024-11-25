@@ -73,7 +73,6 @@ pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = 1000;
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
 #[cfg(test)]
-#[cfg(feature = "test-utils")]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
@@ -2360,7 +2359,12 @@ impl SenderSignedData {
     }
 
     /// Validate untrusted user transaction, including its size, input count, command count, etc.
-    pub fn validity_check(&self, config: &ProtocolConfig, epoch: EpochId) -> SuiResult {
+    /// Returns the certificate serialised bytes size.
+    pub fn validity_check(
+        &self,
+        config: &ProtocolConfig,
+        epoch: EpochId,
+    ) -> Result<usize, SuiError> {
         // Check that the features used by the user signatures are enabled on the network.
         self.check_user_signature_protocol_compatibility(config)?;
 
@@ -2403,7 +2407,7 @@ impl SenderSignedData {
             .validity_check(config)
             .map_err(Into::<SuiError>::into)?;
 
-        Ok(())
+        Ok(tx_size)
     }
 }
 
@@ -2420,6 +2424,10 @@ impl Message for SenderSignedData {
 impl<S> Envelope<SenderSignedData, S> {
     pub fn sender_address(&self) -> SuiAddress {
         self.data().intent_message().value.sender()
+    }
+
+    pub fn gas_owner(&self) -> SuiAddress {
+        self.data().intent_message().value.gas_owner()
     }
 
     pub fn gas(&self) -> &[ObjectRef] {

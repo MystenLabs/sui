@@ -16,7 +16,7 @@ const ListCreatedLinksQuery = graphql(`
 		transactionBlocks(
 			last: 10
 			before: $cursor
-			filter: { sentAddress: $address, function: $function, kind: PROGRAMMABLE_TX }
+			filter: { sentAddress: $address, function: $function }
 		) {
 			pageInfo {
 				startCursor
@@ -85,10 +85,9 @@ export async function listCreatedLinks({
 					return null;
 				}
 
-				const kind = bcs.SenderSignedData.parse(fromBase64(node.bcs))?.[0]?.intentMessage.value.V1
-					.kind;
+				const kind = bcs.TransactionData.parse(fromBase64(node.bcs)).V1.kind;
 
-				if (!kind.ProgrammableTransaction) {
+				if (!kind?.ProgrammableTransaction) {
 					return null;
 				}
 

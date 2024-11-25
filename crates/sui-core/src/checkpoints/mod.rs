@@ -778,9 +778,7 @@ impl CheckpointStore {
 
             let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
             let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
-            let txns = cache
-                .multi_get_transaction_blocks(&tx_digests)
-                .expect("multi_get_transaction_blocks should not fail");
+            let txns = cache.multi_get_transaction_blocks(&tx_digests);
             for (tx, digest) in txns.iter().zip(tx_digests.iter()) {
                 if tx.is_none() {
                     panic!("transaction {:?} not found", digest);
@@ -828,8 +826,7 @@ impl CheckpointStore {
 
             cache
                 .notify_read_executed_effects_digests(&tx_digests)
-                .await
-                .expect("notify_read_executed_effects_digests should not fail");
+                .await;
 
             waiting_logger.abort();
             waiting_logger.await.ok();
@@ -1046,7 +1043,7 @@ impl CheckpointBuilder {
             .effects_store
             .notify_read_executed_effects(&root_digests)
             .in_monitored_scope("CheckpointNotifyRead")
-            .await?;
+            .await;
 
         let _scope = monitored_scope("CheckpointBuilder");
 
@@ -1127,7 +1124,7 @@ impl CheckpointBuilder {
         let first_tx = self
             .state
             .get_transaction_cache_reader()
-            .get_transaction_block(&root_digests[0])?
+            .get_transaction_block(&root_digests[0])
             .expect("Transaction block must exist");
 
         Ok(match first_tx.transaction_data().kind() {
@@ -1197,7 +1194,7 @@ impl CheckpointBuilder {
         self.state
             .get_cache_commit()
             .persist_transactions(&all_tx_digests)
-            .await?;
+            .await;
 
         batch.write()?;
 
@@ -1624,7 +1621,7 @@ impl CheckpointBuilder {
                 break;
             }
             let pending = pending.into_iter().collect::<Vec<_>>();
-            let effects = self.effects_store.multi_get_executed_effects(&pending)?;
+            let effects = self.effects_store.multi_get_executed_effects(&pending);
             let effects = effects
                 .into_iter()
                 .zip(pending)
@@ -1663,8 +1660,7 @@ impl CheckpointBuilder {
         let root_txs = self
             .state
             .get_transaction_cache_reader()
-            .multi_get_transaction_blocks(root_digests)
-            .unwrap();
+            .multi_get_transaction_blocks(root_digests);
         let ccps = root_txs
             .iter()
             .filter_map(|tx| {
@@ -1697,8 +1693,7 @@ impl CheckpointBuilder {
                     .iter()
                     .map(|tx| tx.transaction_digest().clone())
                     .collect::<Vec<_>>(),
-            )
-            .unwrap();
+            );
 
         if ccps.len() == 0 {
             // If there is no consensus commit prologue transaction in the roots, then there should be no
@@ -2259,7 +2254,7 @@ impl CheckpointService {
     ) -> SuiResult {
         use crate::authority::authority_per_epoch_store::ConsensusCommitOutput;
 
-        let mut output = ConsensusCommitOutput::new();
+        let mut output = ConsensusCommitOutput::new(0);
         epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
         let mut batch = epoch_store.db_batch_for_test();
         output.write_to_batch(epoch_store, &mut batch)?;
@@ -2606,34 +2601,38 @@ mod tests {
         fn notify_read_executed_effects(
             &self,
             digests: &[TransactionDigest],
-        ) -> BoxFuture<'_, SuiResult<Vec<TransactionEffects>>> {
-            std::future::ready(Ok(digests
-                .iter()
-                .map(|d| self.get(d).expect("effects not found").clone())
-                .collect()))
+        ) -> BoxFuture<'_, Vec<TransactionEffects>> {
+            std::future::ready(
+                digests
+                    .iter()
+                    .map(|d| self.get(d).expect("effects not found").clone())
+                    .collect(),
+            )
             .boxed()
         }
 
         fn notify_read_executed_effects_digests(
             &self,
             digests: &[TransactionDigest],
-        ) -> BoxFuture<'_, SuiResult<Vec<TransactionEffectsDigest>>> {
-            std::future::ready(Ok(digests
-                .iter()
-                .map(|d| {
-                    self.get(d)
-                        .map(|fx| fx.digest())
-                        .expect("effects not found")
-                })
-                .collect()))
+        ) -> BoxFuture<'_, Vec<TransactionEffectsDigest>> {
+            std::future::ready(
+                digests
+                    .iter()
+                    .map(|d| {
+                        self.get(d)
+                            .map(|fx| fx.digest())
+                            .expect("effects not found")
+                    })
+                    .collect(),
+            )
             .boxed()
         }
 
         fn multi_get_executed_effects(
             &self,
             digests: &[TransactionDigest],
-        ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-            Ok(digests.iter().map(|d| self.get(d).cloned()).collect())
+        ) -> Vec<Option<TransactionEffects>> {
+            digests.iter().map(|d| self.get(d).cloned()).collect()
         }
 
         // Unimplemented methods - its unfortunate to have this big blob of useless code, but it wasn't
@@ -2644,28 +2643,28 @@ mod tests {
         fn multi_get_transaction_blocks(
             &self,
             _: &[TransactionDigest],
-        ) -> SuiResult<Vec<Option<Arc<VerifiedTransaction>>>> {
+        ) -> Vec<Option<Arc<VerifiedTransaction>>> {
             unimplemented!()
         }
 
         fn multi_get_executed_effects_digests(
             &self,
             _: &[TransactionDigest],
-        ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+        ) -> Vec<Option<TransactionEffectsDigest>> {
             unimplemented!()
         }
 
         fn multi_get_effects(
             &self,
             _: &[TransactionEffectsDigest],
-        ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        ) -> Vec<Option<TransactionEffects>> {
             unimplemented!()
         }
 
         fn multi_get_events(
             &self,
             _: &[TransactionEventsDigest],
-        ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        ) -> Vec<Option<TransactionEvents>> {
             unimplemented!()
         }
     }

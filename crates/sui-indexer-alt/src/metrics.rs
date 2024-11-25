@@ -11,8 +11,8 @@ use prometheus::{
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec,
-    IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -23,6 +23,13 @@ use crate::{db::Db, ingestion::error::Error};
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
+];
+
+/// Histogram buckets for the distribution of checkpoint lag (difference between the system time and
+/// the timestamp in the checkpoint).
+const LAG_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.95, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0,
 ];
 
 /// Histogram buckets for the distribution of latencies for processing a checkpoint in the indexer
@@ -61,6 +68,10 @@ pub struct IndexerMetrics {
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
 
+    pub latest_ingested_checkpoint: IntGauge,
+    pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
+    pub ingested_checkpoint_timestamp_lag: Histogram,
+
     pub ingested_checkpoint_latency: Histogram,
 
     // Statistics related to individual ingestion pipelines' handlers.
@@ -68,31 +79,47 @@ pub struct IndexerMetrics {
     pub total_handler_checkpoints_processed: IntCounterVec,
     pub total_handler_rows_created: IntCounterVec,
 
+    pub latest_processed_checkpoint: IntGaugeVec,
+    pub latest_processed_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub processed_checkpoint_timestamp_lag: HistogramVec,
+
     pub handler_checkpoint_latency: HistogramVec,
 
-    // Statistics related to individual ingestion pipelines' committers.
+    // Statistics related to individual ingestion pipelines.
+    pub total_collector_rows_received: IntCounterVec,
+    pub total_collector_batches_created: IntCounterVec,
     pub total_committer_batches_attempted: IntCounterVec,
     pub total_committer_batches_succeeded: IntCounterVec,
-    pub total_committer_rows_received: IntCounterVec,
     pub total_committer_rows_committed: IntCounterVec,
     pub total_committer_rows_affected: IntCounterVec,
+    pub total_watermarks_out_of_order: IntCounterVec,
+    pub total_pruner_chunks_attempted: IntCounterVec,
+    pub total_pruner_chunks_deleted: IntCounterVec,
+    pub total_pruner_rows_deleted: IntCounterVec,
 
-    pub committer_gather_latency: HistogramVec,
+    pub collector_gather_latency: HistogramVec,
+    pub collector_batch_size: HistogramVec,
     pub committer_commit_latency: HistogramVec,
-    pub committer_batch_size: HistogramVec,
-
+    pub committer_tx_rows: HistogramVec,
     pub watermark_gather_latency: HistogramVec,
     pub watermark_commit_latency: HistogramVec,
-
-    pub total_watermarks_out_of_order: IntCounterVec,
+    pub watermark_pruner_read_latency: HistogramVec,
+    pub watermark_pruner_write_latency: HistogramVec,
+    pub pruner_delete_latency: HistogramVec,
 
     pub watermark_epoch: IntGaugeVec,
     pub watermark_checkpoint: IntGaugeVec,
     pub watermark_transaction: IntGaugeVec,
+    pub watermark_timestamp_ms: IntGaugeVec,
+    pub watermark_reader_lo: IntGaugeVec,
+    pub watermark_pruner_hi: IntGaugeVec,
 
     pub watermark_epoch_in_db: IntGaugeVec,
     pub watermark_checkpoint_in_db: IntGaugeVec,
     pub watermark_transaction_in_db: IntGaugeVec,
+    pub watermark_timestamp_in_db_ms: IntGaugeVec,
+    pub watermark_reader_lo_in_db: IntGaugeVec,
+    pub watermark_pruner_hi_in_db: IntGaugeVec,
 }
 
 /// Collects information about the database connection pool.
@@ -199,6 +226,27 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            latest_ingested_checkpoint: register_int_gauge_with_registry!(
+                "indexer_latest_ingested_checkpoint",
+                "Latest checkpoint sequence number fetched from the remote store",
+                registry,
+            )
+            .unwrap(),
+            latest_ingested_checkpoint_timestamp_lag_ms: register_int_gauge_with_registry!(
+                "latest_ingested_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was fetched and the \
+                 timestamp in the checkpoint, in milliseconds",
+                registry,
+            )
+            .unwrap(),
+            ingested_checkpoint_timestamp_lag: register_histogram_with_registry!(
+                "indexer_ingested_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was fetched and the \
+                 timestamp in each checkpoint, in seconds",
+                LAG_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             ingested_checkpoint_latency: register_histogram_with_registry!(
                 "indexer_ingested_checkpoint_latency",
                 "Time taken to fetch a checkpoint from the remote store, including retries",
@@ -227,11 +275,49 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            latest_processed_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_latest_processed_checkpoint",
+                "Latest checkpoint sequence number processed by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_processed_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_processed_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was processed and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processed_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_processed_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was processed and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             handler_checkpoint_latency: register_histogram_vec_with_registry!(
                 "indexer_handler_checkpoint_latency",
                 "Time taken to process a checkpoint by this handler",
                 &["pipeline"],
                 PROCESSING_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_collector_rows_received: register_int_counter_vec_with_registry!(
+                "indexer_total_collector_rows_received",
+                "Total number of rows received by this collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_collector_batches_created: register_int_counter_vec_with_registry!(
+                "indexer_total_collector_batches_created",
+                "Total number of batches created by this collector",
+                &["pipeline"],
                 registry,
             )
             .unwrap(),
@@ -245,13 +331,6 @@ impl IndexerMetrics {
             total_committer_batches_succeeded: register_int_counter_vec_with_registry!(
                 "indexer_total_committer_batches_succeeded",
                 "Total number of successful batches writes by this committer",
-                &["pipeline"],
-                registry,
-            )
-            .unwrap(),
-            total_committer_rows_received: register_int_counter_vec_with_registry!(
-                "indexer_total_committer_rows_received",
-                "Total number of rows received by this committer",
                 &["pipeline"],
                 registry,
             )
@@ -270,11 +349,47 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            committer_gather_latency: register_histogram_vec_with_registry!(
-                "indexer_committer_gather_latency",
-                "Time taken to gather rows into a batch by this committer",
+            total_watermarks_out_of_order: register_int_counter_vec_with_registry!(
+                "indexer_watermark_out_of_order",
+                "Number of times this committer encountered a batch for a checkpoint before its watermark",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_pruner_chunks_attempted: register_int_counter_vec_with_registry!(
+                "indexer_pruner_chunks_attempted",
+                "Number of chunks this pruner attempted to delete",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_pruner_chunks_deleted: register_int_counter_vec_with_registry!(
+                "indexer_pruner_chunks_deleted",
+                "Number of chunks this pruner successfully deleted",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_pruner_rows_deleted: register_int_counter_vec_with_registry!(
+                "indexer_pruner_rows_deleted",
+                "Number of rows this pruner successfully deleted",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collector_gather_latency: register_histogram_vec_with_registry!(
+                "indexer_collector_gather_latency",
+                "Time taken to gather rows into a batch by this collector",
                 &["pipeline"],
                 PROCESSING_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            collector_batch_size: register_histogram_vec_with_registry!(
+                "indexer_collector_batch_size",
+                "Number of rows in a batch written to the database by this collector",
+                &["pipeline"],
+                BATCH_SIZE_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -286,9 +401,9 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            committer_batch_size: register_histogram_vec_with_registry!(
-                "indexer_committer_batch_size",
-                "Number of rows in a batch written to the database by this committer",
+            committer_tx_rows: register_histogram_vec_with_registry!(
+                "indexer_committer_tx_rows",
+                "Number of rows written to the database in a single database transaction by this committer",
                 &["pipeline"],
                 BATCH_SIZE_BUCKETS.to_vec(),
                 registry,
@@ -310,10 +425,27 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            total_watermarks_out_of_order: register_int_counter_vec_with_registry!(
-                "indexer_watermark_out_of_order",
-                "Number of times this committer encountered a batch for a checkpoint before its watermark",
+            watermark_pruner_read_latency: register_histogram_vec_with_registry!(
+                "indexer_watermark_pruner_read_latency",
+                "Time taken to read pruner's next upper and lowerbounds from the database by this pruner",
                 &["pipeline"],
+                DB_UPDATE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            watermark_pruner_write_latency: register_histogram_vec_with_registry!(
+                "indexer_watermark_pruner_write_latency",
+                "Time taken to write the pruner's new upperbound to the database by this pruner",
+                &["pipeline"],
+                DB_UPDATE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            pruner_delete_latency: register_histogram_vec_with_registry!(
+                "indexer_pruner_delete_latency",
+                "Time taken to delete a chunk of data from the database by this pruner",
+                &["pipeline"],
+                DB_UPDATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -338,6 +470,27 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            watermark_timestamp_ms: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_timestamp_ms",
+                "Current timestamp high watermark for this committer, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_reader_lo: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_reader_lo",
+                "Current reader low watermark for this pruner",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_pruner_hi: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_pruner_hi",
+                "Current pruner high watermark for this pruner",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
             watermark_epoch_in_db: register_int_gauge_vec_with_registry!(
                 "indexer_watermark_epoch_in_db",
                 "Last epoch high watermark this committer wrote to the DB",
@@ -355,6 +508,27 @@ impl IndexerMetrics {
             watermark_transaction_in_db: register_int_gauge_vec_with_registry!(
                 "indexer_watermark_transaction_in_db",
                 "Last transaction high watermark this committer wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_timestamp_in_db_ms: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_timestamp_ms_in_db",
+                "Last timestamp high watermark this committer wrote to the DB, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_reader_lo_in_db: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_reader_lo_in_db",
+                "Last reader low watermark this pruner wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_pruner_hi_in_db: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_pruner_hi_in_db",
+                "Last pruner high watermark this pruner wrote to the DB",
                 &["pipeline"],
                 registry,
             )

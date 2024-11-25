@@ -4,13 +4,12 @@
 /// Create a simple Token with Denylist for every action; all four default
 /// actions are allowed as long as the user is not on the denylist.
 module examples::simple_token {
-    use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{sender};
-
-    use sui::token::{Self, TokenPolicy, TokenPolicyCap};
-
-    // import rules and use them for this app
     use examples::denylist_rule::Denylist;
+    use sui::{
+        coin::{Self, TreasuryCap},
+        token::{Self, TokenPolicy, TokenPolicyCap},
+        tx_context::sender
+    };
 
     /// OTW and the type for the Token.
     public struct SIMPLE_TOKEN has drop {}
@@ -34,7 +33,7 @@ module examples::simple_token {
     public(package) fun set_rules<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         // Create a denylist rule and add it to every action
         // Now all actions are allowed but require a denylist
@@ -46,17 +45,15 @@ module examples::simple_token {
 
     /// Internal: not necessary, but moving this call to a separate function for
     /// better visibility of the Closed Loop setup in `init`.
-    fun create_currency<T: drop>(
-        otw: T,
-        ctx: &mut TxContext
-    ): TreasuryCap<T> {
+    fun create_currency<T: drop>(otw: T, ctx: &mut TxContext): TreasuryCap<T> {
         let (treasury_cap, metadata) = coin::create_currency(
-            otw, 6,
+            otw,
+            6,
             b"SMPL",
             b"Simple Token",
             b"Token that showcases denylist",
             option::none(),
-            ctx
+            ctx,
         );
 
         transfer::public_freeze_object(metadata);
@@ -69,13 +66,12 @@ module examples::simple_token {
 /// We don't test the currency itself but rather use the same set of regulations
 /// on a test currency.
 module examples::simple_token_tests {
-    use sui::coin;
-
-    use sui::token::{Self, TokenPolicy, TokenPolicyCap};
-    use sui::token_test_utils::{Self as test, TEST};
-
-    use examples::simple_token::set_rules;
-    use examples::denylist_rule as denylist;
+    use examples::{denylist_rule as denylist, simple_token::set_rules};
+    use sui::{
+        coin,
+        token::{Self, TokenPolicy, TokenPolicyCap},
+        token_test_utils::{Self as test, TEST}
+    };
 
     const ALICE: address = @0x0;
     const BOB: address = @0x1;
@@ -117,7 +113,7 @@ module examples::simple_token_tests {
         let (mut policy, cap) = test::get_policy(ctx);
 
         set_rules(&mut policy, &cap, ctx);
-        denylist::add_records(&mut policy, &cap, vector[ BOB ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[BOB], ctx);
 
         let token = test::mint(1000_000000, ctx);
         let mut request = token::transfer(token, BOB, ctx);
@@ -160,7 +156,7 @@ module examples::simple_token_tests {
         let (mut policy, cap) = test::get_policy(ctx);
         set_rules(&mut policy, &cap, ctx);
 
-        denylist::add_records(&mut policy, &cap, vector[ ALICE ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[ALICE], ctx);
         (policy, cap)
     }
 }

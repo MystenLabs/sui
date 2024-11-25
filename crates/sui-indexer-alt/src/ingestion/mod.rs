@@ -1,28 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+// Allow use of `unbounded_channel` in `ingestion` -- it is used by the regulator task to receive
+// feedback. Traffic through this task should be minimal, but if a bound is applied to it and that
+// bound is hit, the indexer could deadlock.
+#![allow(clippy::disallowed_methods)]
 
-use backoff::backoff::Constant;
-use client::IngestionClient;
-use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
-use mysten_metrics::spawn_monitored_task;
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
 use url::Url;
 
+use crate::ingestion::broadcaster::broadcaster;
+use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
+use crate::ingestion::regulator::regulator;
 use crate::metrics::IndexerMetrics;
 
-mod client;
+mod broadcaster;
+pub mod client;
 pub mod error;
+mod local_client;
+mod regulator;
+mod remote_client;
+#[cfg(test)]
+mod test_utils;
 
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
-    metrics: Arc<IndexerMetrics>,
+    ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
+    ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     cancel: CancellationToken,
 }
@@ -30,25 +40,43 @@ pub struct IngestionService {
 #[derive(clap::Args, Debug, Clone)]
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
-    #[arg(long)]
-    remote_store_url: Url,
+    #[arg(long, required = true, group = "source")]
+    pub remote_store_url: Option<Url>,
+
+    /// Path to the local ingestion directory.
+    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
+    #[arg(long, required = true, group = "source")]
+    pub local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
-    #[arg(long, default_value_t = 5000)]
-    buffer_size: usize,
+    #[arg(long, default_value_t = Self::DEFAULT_CHECKPOINT_BUFFER_SIZE)]
+    pub checkpoint_buffer_size: usize,
 
-    /// Maximum number of checkpoint to attempt to fetch concurrently.
-    #[arg(long, default_value_t = 200)]
-    concurrency: usize,
+    /// Maximum number of checkpoints to attempt to fetch concurrently.
+    #[arg(long, default_value_t = Self::DEFAULT_INGEST_CONCURRENCY)]
+    pub ingest_concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
     #[arg(
         long,
-        default_value = "200",
+        default_value = Self::DEFAULT_RETRY_INTERVAL_MS,
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis)
     )]
-    retry_interval: Duration,
+    pub retry_interval: Duration,
+}
+
+impl IngestionConfig {
+    pub const DEFAULT_CHECKPOINT_BUFFER_SIZE: usize = 5000;
+    pub const DEFAULT_INGEST_CONCURRENCY: usize = 200;
+    const DEFAULT_RETRY_INTERVAL_MS: &'static str = "200";
+
+    pub fn default_retry_interval() -> Duration {
+        Self::DEFAULT_RETRY_INTERVAL_MS
+            .parse()
+            .map(Duration::from_millis)
+            .unwrap()
+    }
 }
 
 impl IngestionService {
@@ -57,22 +85,49 @@ impl IngestionService {
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
+        // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
+        let client = if let Some(url) = config.remote_store_url.as_ref() {
+            IngestionClient::new_remote(url.clone(), metrics.clone())?
+        } else if let Some(path) = config.local_ingestion_path.as_ref() {
+            IngestionClient::new_local(path.clone(), metrics.clone())
+        } else {
+            panic!("Either remote_store_url or local_ingestion_path must be provided");
+        };
+        let subscribers = Vec::new();
+        let (ingest_hi_tx, ingest_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
-            client: IngestionClient::new(config.remote_store_url.clone(), metrics.clone())?,
-            subscribers: Vec::new(),
             config,
-            metrics,
+            client,
+            ingest_hi_tx,
+            ingest_hi_rx,
+            subscribers,
             cancel,
         })
+    }
+
+    /// The client this service uses to fetch checkpoints.
+    pub fn client(&self) -> &IngestionClient {
+        &self.client
     }
 
     /// Add a new subscription to the ingestion service. Note that the service is susceptible to
     /// the "slow receiver" problem: If one receiver is slower to process checkpoints than the
     /// checkpoint ingestion rate, it will eventually hold up all receivers.
-    pub fn subscribe(&mut self) -> mpsc::Receiver<Arc<CheckpointData>> {
-        let (sender, receiver) = mpsc::channel(self.config.buffer_size);
+    ///
+    /// The ingestion service can optionally receive checkpoint high watermarks from its
+    /// subscribers. If a subscriber provides a watermark, the ingestion service will commit to not
+    /// run ahead of the watermark by more than the config's buffer_size.
+    ///
+    /// Returns the channel to receive checkpoints from and the channel to accept watermarks from.
+    pub fn subscribe(
+        &mut self,
+    ) -> (
+        mpsc::Receiver<Arc<CheckpointData>>,
+        mpsc::UnboundedSender<(&'static str, u64)>,
+    ) {
+        let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
         self.subscribers.push(sender);
-        receiver
+        (receiver, self.ingest_hi_tx.clone())
     }
 
     /// Start the ingestion service as a background task, consuming it in the process.
@@ -83,13 +138,13 @@ impl IngestionService {
     ///
     /// - If a subscriber is lagging (not receiving checkpoints fast enough), it will eventually
     ///   provide back-pressure to the ingestion service, which will stop fetching new checkpoints.
-    /// - If a subscriber closes its channel, the ingestion service will intepret that as a signal
+    /// - If a subscriber closes its channel, the ingestion service will interpret that as a signal
     ///   to shutdown as well.
     ///
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<I>(self, checkpoints: I) -> Result<JoinHandle<()>>
+    pub async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
     where
         I: IntoIterator<Item = u64> + Send + Sync + 'static,
         I::IntoIter: Send + Sync + 'static,
@@ -97,7 +152,8 @@ impl IngestionService {
         let IngestionService {
             config,
             client,
-            metrics,
+            ingest_hi_tx: _,
+            ingest_hi_rx,
             subscribers,
             cancel,
         } = self;
@@ -106,77 +162,19 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        Ok(spawn_monitored_task!(async move {
-            info!("Starting ingestion service");
+        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
 
-            match stream::iter(checkpoints)
-                .map(Ok)
-                .try_for_each_concurrent(/* limit */ config.concurrency, |cp| {
-                    let client = client.clone();
-                    let metrics = metrics.clone();
-                    let subscribers = subscribers.clone();
+        let regulator = regulator(
+            checkpoints,
+            config.checkpoint_buffer_size,
+            ingest_hi_rx,
+            checkpoint_tx,
+            cancel.clone(),
+        );
 
-                    // One clone is for the supervisor to signal a cancel if it detects a
-                    // subscriber that wants to wind down ingestion, and the other is to pass to
-                    // each worker to detect cancellation.
-                    let supervisor_cancel = cancel.clone();
-                    let cancel = cancel.clone();
+        let broadcaster = broadcaster(config, client, checkpoint_rx, subscribers, cancel.clone());
 
-                    // Repeatedly retry if the checkpoint is not found, assuming that we are at the
-                    // tip of the network and it will become available soon.
-                    let backoff = Constant::new(config.retry_interval);
-                    let fetch = move || {
-                        let client = client.clone();
-                        let metrics = metrics.clone();
-                        let cancel = cancel.clone();
-
-                        async move {
-                            use backoff::Error as BE;
-                            if cancel.is_cancelled() {
-                                return Err(BE::permanent(Error::Cancelled));
-                            }
-
-                            client.fetch(cp, &cancel).await.map_err(|e| match e {
-                                Error::NotFound(checkpoint) => {
-                                    debug!(checkpoint, "Checkpoint not found, retrying...");
-                                    metrics.total_ingested_not_found_retries.inc();
-                                    BE::transient(e)
-                                }
-                                e => BE::permanent(e),
-                            })
-                        }
-                    };
-
-                    async move {
-                        let checkpoint = backoff::future::retry(backoff, fetch).await?;
-                        let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
-
-                        if try_join_all(futures).await.is_err() {
-                            info!("Subscription dropped, signalling shutdown");
-                            supervisor_cancel.cancel();
-                            Err(Error::Cancelled)
-                        } else {
-                            Ok(())
-                        }
-                    }
-                })
-                .await
-            {
-                Ok(()) => {
-                    info!("Checkpoints done, stopping ingestion service");
-                    // drop(subscribers);
-                }
-
-                Err(Error::Cancelled) => {
-                    info!("Shutdown received, stopping ingestion service");
-                }
-
-                Err(e) => {
-                    error!("Ingestion service failed: {}", e);
-                    cancel.cancel();
-                }
-            }
-        }))
+        Ok((regulator, broadcaster))
     }
 }
 
@@ -184,25 +182,28 @@ impl IngestionService {
 mod tests {
     use std::sync::Mutex;
 
+    use mysten_metrics::spawn_monitored_task;
     use reqwest::StatusCode;
     use wiremock::{MockServer, Request};
 
-    use crate::ingestion::client::tests::{respond_with, status, test_checkpoint_data};
+    use crate::ingestion::remote_client::tests::{respond_with, status};
+    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
 
     use super::*;
 
     async fn test_ingestion(
         uri: String,
-        buffer_size: usize,
-        concurrency: usize,
+        checkpoint_buffer_size: usize,
+        ingest_concurrency: usize,
         cancel: CancellationToken,
     ) -> IngestionService {
         IngestionService::new(
             IngestionConfig {
-                remote_store_url: Url::parse(&uri).unwrap(),
-                buffer_size,
-                concurrency,
+                remote_store_url: Some(Url::parse(&uri).unwrap()),
+                local_ingestion_path: None,
+                checkpoint_buffer_size,
+                ingest_concurrency,
                 retry_interval: Duration::from_millis(200),
             },
             Arc::new(test_metrics()),
@@ -266,13 +267,14 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let rx = ingestion_service.subscribe();
-        let subscriber_handle = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
+        let (rx, _) = ingestion_service.subscribe();
+        let subscriber = test_subscriber(usize::MAX, rx, cancel.clone()).await;
+        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancel();
-        subscriber_handle.await.unwrap();
-        ingestion_handle.await.unwrap();
+        subscriber.await.unwrap();
+        regulator.await.unwrap();
+        broadcaster.await.unwrap();
     }
 
     /// The subscriber will stop after receiving a single checkpoint, and this will trigger the
@@ -291,13 +293,14 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let rx = ingestion_service.subscribe();
-        let subscriber_handle = test_subscriber(1, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
+        let (rx, _) = ingestion_service.subscribe();
+        let subscriber = test_subscriber(1, rx, cancel.clone()).await;
+        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
-        subscriber_handle.await.unwrap();
-        ingestion_handle.await.unwrap();
+        subscriber.await.unwrap();
+        regulator.await.unwrap();
+        broadcaster.await.unwrap();
     }
 
     /// If fetching the checkpoint throws an unexpected error, the whole pipeline will be shut
@@ -312,13 +315,14 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let rx = ingestion_service.subscribe();
-        let subscriber_handle = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
+        let (rx, _) = ingestion_service.subscribe();
+        let subscriber = test_subscriber(usize::MAX, rx, cancel.clone()).await;
+        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
-        subscriber_handle.await.unwrap();
-        ingestion_handle.await.unwrap();
+        subscriber.await.unwrap();
+        regulator.await.unwrap();
+        broadcaster.await.unwrap();
     }
 
     /// The service will retry fetching a checkpoint that does not exist, in this test, the 4th
@@ -343,13 +347,14 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let rx = ingestion_service.subscribe();
-        let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
+        let (rx, _) = ingestion_service.subscribe();
+        let subscriber = test_subscriber(5, rx, cancel.clone()).await;
+        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
-        let seqs = subscriber_handle.await.unwrap();
-        ingestion_handle.await.unwrap();
+        let seqs = subscriber.await.unwrap();
+        regulator.await.unwrap();
+        broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
     }
@@ -375,13 +380,14 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let rx = ingestion_service.subscribe();
-        let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
+        let (rx, _) = ingestion_service.subscribe();
+        let subscriber = test_subscriber(5, rx, cancel.clone()).await;
+        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
-        let seqs = subscriber_handle.await.unwrap();
-        ingestion_handle.await.unwrap();
+        let seqs = subscriber.await.unwrap();
+        regulator.await.unwrap();
+        broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
     }
@@ -407,15 +413,15 @@ mod tests {
             test_ingestion(server.uri(), /* buffer */ 3, 1, cancel.clone()).await;
 
         // This subscriber will take its sweet time processing checkpoints.
-        let mut laggard = ingestion_service.subscribe();
+        let (mut laggard, _) = ingestion_service.subscribe();
         async fn unblock(laggard: &mut mpsc::Receiver<Arc<CheckpointData>>) -> u64 {
             let checkpoint = laggard.recv().await.unwrap();
             checkpoint.checkpoint_summary.sequence_number
         }
 
-        let rx = ingestion_service.subscribe();
-        let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
+        let (rx, _) = ingestion_service.subscribe();
+        let subscriber = test_subscriber(5, rx, cancel.clone()).await;
+        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two
@@ -425,8 +431,9 @@ mod tests {
         assert_eq!(unblock(&mut laggard).await, 2);
 
         cancel.cancelled().await;
-        let seqs = subscriber_handle.await.unwrap();
-        ingestion_handle.await.unwrap();
+        let seqs = subscriber.await.unwrap();
+        regulator.await.unwrap();
+        broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 4, 5]);
     }

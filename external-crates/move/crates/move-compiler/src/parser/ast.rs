@@ -609,7 +609,7 @@ pub enum Exp_ {
     Assign(Box<Exp>, Box<Exp>),
 
     // abort e
-    Abort(Box<Exp>),
+    Abort(Option<Box<Exp>>),
     // return e
     Return(Option<BlockLabel>, Option<Box<Exp>>),
     // break
@@ -628,11 +628,12 @@ pub enum Exp_ {
     // &mut e
     Borrow(bool, Box<Exp>),
 
-    // e.f
-    Dot(Box<Exp>, Name),
+    // e.f (along with the location of the dot)
+    Dot(Box<Exp>, /* dot location */ Loc, Name),
     // e.f(earg,*)
     DotCall(
         Box<Exp>,
+        Loc, // location of the dot
         Name,
         /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
@@ -2079,8 +2080,11 @@ impl AstDebug for Exp_ {
                 rhs.ast_debug(w);
             }
             E::Abort(e) => {
-                w.write("abort ");
-                e.ast_debug(w);
+                w.write("abort");
+                if let Some(e) = e {
+                    w.write(" ");
+                    e.ast_debug(w);
+                }
             }
             E::Return(name, e) => {
                 w.write("return");
@@ -2125,11 +2129,11 @@ impl AstDebug for Exp_ {
                 }
                 e.ast_debug(w);
             }
-            E::Dot(e, n) => {
+            E::Dot(e, _, n) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n));
             }
-            E::DotCall(e, n, is_macro, tyargs, sp!(_, rhs)) => {
+            E::DotCall(e, _, n, is_macro, tyargs, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(format!(".{}", n));
                 if is_macro.is_some() {

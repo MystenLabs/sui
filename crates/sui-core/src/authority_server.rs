@@ -4,7 +4,9 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use fastcrypto::traits::KeyPair;
 use mysten_metrics::spawn_monitored_task;
+use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
@@ -19,6 +21,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV3, HandleTransactionResponseV2,
 };
@@ -39,10 +42,6 @@ use sui_types::{
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
-};
-use sui_types::{
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
-    messages_grpc::TransactionStatus,
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
@@ -149,6 +148,11 @@ impl AuthorityServer {
         self,
         address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
+        let tls_config = sui_tls::create_rustls_server_config(
+            self.state.config.network_key_pair().copy().private(),
+            SUI_TLS_SERVER_NAME.to_string(),
+            sui_tls::AllowAll,
+        );
         let mut server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
@@ -156,7 +160,7 @@ impl AuthorityServer {
                 self.consensus_adapter,
                 self.metrics,
             )))
-            .bind(&address)
+            .bind(&address, Some(tls_config))
             .await
             .unwrap();
         let local_addr = server.local_addr().to_owned();
@@ -181,6 +185,8 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
     pub handle_soft_bundle_certificates_consensus_latency: Histogram,
+    pub handle_soft_bundle_certificates_count: Histogram,
+    pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
@@ -191,6 +197,7 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
     forwarded_header_not_included: IntCounter,
+    client_id_source_config_mismatch: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -218,7 +225,7 @@ impl ValidatorServiceMetrics {
             .unwrap(),
             consensus_latency: register_histogram_with_registry!(
                 "validator_service_consensus_latency",
-                "Time spent between submitting a shared obj txn to consensus and getting result",
+                "Time spent between submitting a txn to consensus and getting back local acknowledgement. Execution and finalization time are not included.",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -262,6 +269,20 @@ impl ValidatorServiceMetrics {
                 "validator_service_handle_soft_bundle_certificates_consensus_latency",
                 "Latency of handling a consensus soft bundle",
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_soft_bundle_certificates_count: register_histogram_with_registry!(
+                "handle_soft_bundle_certificates_count",
+                "The number of certificates included in a soft bundle",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_soft_bundle_certificates_size_bytes: register_histogram_with_registry!(
+                "handle_soft_bundle_certificates_size_bytes",
+                "The size of soft bundle in bytes",
+                mysten_metrics::BYTES_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -319,6 +340,12 @@ impl ValidatorServiceMetrics {
             forwarded_header_not_included: register_int_counter_with_registry!(
                 "validator_service_forwarded_header_not_included",
                 "Number of times x-forwarded-for header was (unexpectedly) not included in request",
+                registry,
+            )
+            .unwrap(),
+            client_id_source_config_mismatch: register_int_counter_with_registry!(
+                "validator_service_client_id_source_config_mismatch",
+                "Number of times detected that client id source config doesn't agree with x-forwarded-for header",
                 registry,
             )
             .unwrap(),
@@ -398,6 +425,8 @@ impl ValidatorService {
         self.transaction(request).await
     }
 
+    // When making changes to this function, see if the changes should be applied to
+    // `handle_transaction_v2()` and `SuiTxValidator::vote_transaction()` as well.
     async fn handle_transaction(
         &self,
         request: tonic::Request<Transaction>,
@@ -423,7 +452,7 @@ impl ValidatorService {
         // higher chance to succeed.
         let mut validator_pushback_error = None;
         let overload_check_res = state.check_system_overload(
-            &consensus_adapter,
+            &*consensus_adapter,
             transaction.data(),
             state.check_system_overload_at_signing(),
         );
@@ -504,7 +533,7 @@ impl ValidatorService {
 
         // Check system overload
         let overload_check_res = self.state.check_system_overload(
-            &consensus_adapter,
+            &*consensus_adapter,
             transaction.data(),
             state.check_system_overload_at_signing(),
         );
@@ -528,7 +557,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
         let span = error_span!("validator_state_process_tx_v2", ?tx_digest);
 
-        let tx_status = state
+        let tx_output = state
             .handle_transaction_v2(&epoch_store, transaction.clone())
             .instrument(span)
             .await
@@ -537,25 +566,18 @@ impl ValidatorService {
                     metrics.num_rejected_tx_in_epoch_boundary.inc();
                 }
             })?;
-        if let Some((
-            _sender_signed_data,
-            // TODO(fastpath): Suppress duplicate transaction submission in consensus
-            // adapter, if not already done. (If we get back `TransactionStatus::Signed``
-            // here we still need to proceed with submission logic, because the previous
-            // RPC might have been dropped after signing but before submission.)
-            TransactionStatus::Executed(_sign_info, signed_effects, events),
-        )) = tx_status
-        {
+        // Fetch remaining fields if the transaction has been executed.
+        if let Some((effects, events)) = tx_output {
             let input_objects = include_input_objects
-                .then(|| state.get_transaction_input_objects(signed_effects.data()))
+                .then(|| state.get_transaction_input_objects(&effects))
                 .and_then(Result::ok);
             let output_objects = include_output_objects
-                .then(|| state.get_transaction_output_objects(signed_effects.data()))
+                .then(|| state.get_transaction_output_objects(&effects))
                 .and_then(Result::ok);
 
             return Ok((
                 tonic::Response::new(HandleTransactionResponseV2 {
-                    effects: signed_effects.into_data(),
+                    effects,
                     events: include_events.then_some(events),
                     input_objects,
                     output_objects,
@@ -676,7 +698,7 @@ impl ValidatorService {
         // Check system overload
         for certificate in &certificates {
             let overload_check_res = self.state.check_system_overload(
-                &self.consensus_adapter,
+                &*self.consensus_adapter,
                 certificate.data(),
                 self.state.check_system_overload_at_execution(),
             );
@@ -770,17 +792,7 @@ impl ValidatorService {
             if !epoch_store.all_external_consensus_messages_processed(
                 consensus_transactions.iter().map(|tx| tx.key()),
             )? {
-                let _metrics_guard = if consensus_transactions.iter().any(|tx| match &tx.kind {
-                    ConsensusTransactionKind::CertifiedTransaction(tx) => {
-                        tx.contains_shared_object()
-                    }
-                    ConsensusTransactionKind::UserTransaction(_) => true,
-                    _ => false,
-                }) {
-                    Some(self.metrics.consensus_latency.start_timer())
-                } else {
-                    None
-                };
+                let _metrics_guard = self.metrics.consensus_latency.start_timer();
                 self.consensus_adapter.submit_batch(
                     &consensus_transactions,
                     Some(&reconfiguration_lock),
@@ -823,12 +835,12 @@ impl ValidatorService {
                     ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                         // Certificates already verified by callers of this function.
                         let certificate = VerifiedCertificate::new_unchecked(*(certificate.clone()));
-                         self.state
+                        self.state
                             .execute_certificate(&certificate, epoch_store)
                             .await?
                     }
                     ConsensusTransactionKind::UserTransaction(tx) => {
-                        self.state.await_transaction_effects(*tx.digest()).await?
+                        self.state.await_transaction_effects(*tx.digest(), epoch_store).await?
                     }
                     _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
                 };
@@ -1032,7 +1044,7 @@ impl ValidatorService {
                 .into()
             );
             fp_ensure!(
-                !self.state.is_tx_already_executed(&tx_digest)?,
+                !self.state.is_tx_already_executed(&tx_digest),
                 SuiError::UserInputError {
                     error: UserInputError::AlreadyExecutedError { digest: tx_digest }
                 }
@@ -1084,10 +1096,20 @@ impl ValidatorService {
 
         let certificates = NonEmpty::from_vec(request.certificates)
             .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
+        let mut total_size_bytes = 0;
         for certificate in &certificates {
             // We need to check this first because we haven't verified the cert signature.
-            certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+            total_size_bytes +=
+                certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
         }
+
+        self.metrics
+            .handle_soft_bundle_certificates_count
+            .observe(certificates.len() as f64);
+
+        self.metrics
+            .handle_soft_bundle_certificates_size_bytes
+            .observe(total_size_bytes as f64);
 
         // Now that individual certificates are valid, we check if the bundle is valid.
         self.soft_bundle_validity_check(&certificates, &epoch_store)
@@ -1105,6 +1127,7 @@ impl ValidatorService {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+
         let span = error_span!("handle_soft_bundle_certificates_v3");
         self.handle_certificates(
             certificates,
@@ -1218,6 +1241,19 @@ impl ValidatorService {
                                 return None;
                             }
                             let contents_len = header_contents.len();
+                            if contents_len < *num_hops {
+                                error!(
+                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
+                                    Expected at least {} values. Please correctly set the `x-forwarded-for` value under \
+                                    `client-id-source` in the node config.",
+                                    header_contents,
+                                    contents_len,
+                                    num_hops,
+                                    contents_len,
+                                );
+                                self.metrics.client_id_source_config_mismatch.inc();
+                                return None;
+                            }
                             let Some(client_ip) = header_contents.get(contents_len - num_hops)
                             else {
                                 error!(
@@ -1289,7 +1325,11 @@ impl ValidatorService {
             traffic_controller.tally(TrafficTally {
                 direct: client,
                 through_fullnode: None,
-                error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+                error_info: error.map(|e| {
+                    let error_type = String::from(e.clone().as_ref());
+                    let error_weight = normalize(e);
+                    (error_weight, error_type)
+                }),
                 spam_weight,
                 timestamp: SystemTime::now(),
             })
@@ -1313,8 +1353,10 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
 // TODO: refine error matching here
 fn normalize(err: SuiError) -> Weight {
     match err {
-        SuiError::UserInputError { .. }
-        | SuiError::InvalidSignature { .. }
+        SuiError::UserInputError {
+            error: UserInputError::IncorrectUserSignature { .. },
+        } => Weight::one(),
+        SuiError::InvalidSignature { .. }
         | SuiError::SignerSignatureAbsent { .. }
         | SuiError::SignerSignatureNumberMismatch { .. }
         | SuiError::IncorrectSigner { .. }

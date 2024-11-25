@@ -13,19 +13,38 @@ pub(crate) mod verification_attribute_filter;
 
 use crate::{
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
-    shared::{files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMaps},
+    shared::{
+        files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex,
+        NamedAddressMaps,
+    },
 };
 use anyhow::anyhow;
 use comments::*;
 use move_command_line_common::files::FileHash;
 use move_symbol_pool::Symbol;
+use rayon::iter::*;
 use std::{collections::BTreeSet, sync::Arc};
 use vfs::VfsPath;
+
+struct ParsedFile {
+    fname: Symbol,
+    defs: Vec<parser::ast::Definition>,
+    comments: MatchedFileCommentMap,
+    hash: FileHash,
+    text: Arc<str>,
+}
+
+struct ParsedPackageFile {
+    is_dep: bool,
+    package: Option<Symbol>,
+    named_address_map: NamedAddressMapIndex,
+    file: ParsedFile,
+}
 
 /// Parses program's targets and dependencies, both of which are read from different virtual file
 /// systems (vfs and deps_out_vfs, respectively).
 pub(crate) fn parse_program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     named_address_maps: NamedAddressMaps,
     mut targets: Vec<IndexedVfsPackagePath>,
     mut deps: Vec<IndexedVfsPackagePath>,
@@ -40,35 +59,51 @@ pub(crate) fn parse_program(
     let mut source_comments = CommentMap::new();
     let mut lib_definitions = Vec::new();
 
-    for IndexedVfsPackagePath {
-        package,
-        path,
-        named_address_map,
-    } in targets
-    {
-        let (defs, comments, file_hash) = parse_file(&path, compilation_env, &mut files, package)?;
-        source_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
+    let parsed = targets
+        .into_par_iter()
+        .map(|p| (false, p))
+        .chain(deps.into_par_iter().map(|p| (true, p)))
+        .map(|(is_dep, package_path)| {
+            let IndexedVfsPackagePath {
+                package,
+                path,
+                named_address_map,
+            } = package_path;
+            let file = parse_file(&path, compilation_env, package)?;
+            Ok(ParsedPackageFile {
+                is_dep,
+                package,
+                named_address_map,
+                file,
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    for parsed_package_file in parsed {
+        let ParsedPackageFile {
+            is_dep,
+            package,
+            named_address_map,
+            file,
+        } = parsed_package_file;
+        let ParsedFile {
+            fname,
+            defs,
+            comments,
+            hash,
+            text,
+        } = file;
+        files.add(hash, fname, text);
+        source_comments.insert(hash, comments);
+        let defs = defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
             def,
-        }));
-        source_comments.insert(file_hash, comments);
-    }
-
-    for IndexedVfsPackagePath {
-        package,
-        path,
-        named_address_map,
-    } in deps
-    {
-        let (defs, dep_comment_map, fhash) =
-            parse_file(&path, compilation_env, &mut files, package)?;
-        lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
-            package,
-            named_address_map,
-            def,
-        }));
-        source_comments.insert(fhash, dep_comment_map);
+        });
+        if is_dep {
+            lib_definitions.extend(defs);
+        } else {
+            source_definitions.extend(defs)
+        }
     }
 
     let pprog = parser::ast::Program {
@@ -113,32 +148,38 @@ fn ensure_targets_deps_dont_intersect(
 
 fn parse_file(
     path: &VfsPath,
-    compilation_env: &mut CompilationEnv,
-    files: &mut MappedFiles,
+    compilation_env: &CompilationEnv,
     package: Option<Symbol>,
-) -> anyhow::Result<(
-    Vec<parser::ast::Definition>,
-    MatchedFileCommentMap,
-    FileHash,
-)> {
+) -> anyhow::Result<ParsedFile> {
     let mut source_buffer = String::new();
     path.open_file()?.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);
     let fname = Symbol::from(path.as_str());
     let source_str = Arc::from(source_buffer);
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     if let Err(ds) = verify_string(file_hash, &source_str) {
-        compilation_env.add_diags(ds);
-        files.add(file_hash, fname, source_str);
-        return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
+        reporter.add_diags(ds);
+        return Ok(ParsedFile {
+            fname,
+            defs: vec![],
+            comments: MatchedFileCommentMap::new(),
+            hash: file_hash,
+            text: source_str,
+        });
     }
     let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
     {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
-            compilation_env.add_diags(ds);
+            reporter.add_diags(ds);
             (vec![], MatchedFileCommentMap::new())
         }
     };
-    files.add(file_hash, fname, source_str);
-    Ok((defs, comments, file_hash))
+    Ok(ParsedFile {
+        fname,
+        defs,
+        comments,
+        hash: file_hash,
+        text: source_str,
+    })
 }

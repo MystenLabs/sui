@@ -41,4 +41,10 @@ module 0x1::errors {
     fun fail_during_abort() {
         abort 1/0
     }
+
+    #[test]
+    #[expected_failure]
+    fun fail_in_native() {
+        std::string::internal_sub_string_for_testing(&vector[1, 2, 3], 4, 1);
+    }
 }

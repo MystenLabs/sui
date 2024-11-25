@@ -9,6 +9,7 @@ title: Module `0x3::stake_subsidy`
 -  [Function `create`](#0x3_stake_subsidy_create)
 -  [Function `advance_epoch`](#0x3_stake_subsidy_advance_epoch)
 -  [Function `current_epoch_subsidy_amount`](#0x3_stake_subsidy_current_epoch_subsidy_amount)
+-  [Function `get_distribution_counter`](#0x3_stake_subsidy_get_distribution_counter)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/u64.md#0x1_u64">0x1::u64</a>;
@@ -169,7 +170,6 @@ Advance the epoch counter and draw down the subsidy for the epoch.
 
     // Drawn down the subsidy for this epoch.
     <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.split(to_withdraw);
-
     self.distribution_counter = self.distribution_counter + 1;
 
     // Decrease the subsidy amount only when the current period ends.
@@ -205,6 +205,31 @@ Returns the amount of stake subsidy to be added at the end of the current epoch.
 
 <pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.current_distribution_amount.<b>min</b>(self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.value())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_stake_subsidy_get_distribution_counter"></a>
+
+## Function `get_distribution_counter`
+
+Returns the number of distributions that have occurred.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_get_distribution_counter">get_distribution_counter</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_get_distribution_counter">get_distribution_counter</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    self.distribution_counter
 }
 </code></pre>
 

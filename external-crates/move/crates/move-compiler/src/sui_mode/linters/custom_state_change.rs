@@ -8,6 +8,7 @@
 //! parameter an instance of a struct type defined in a given module with a store ability and passes
 //! it as an argument to a "private" transfer/share/freeze call.
 
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 
 use crate::{
@@ -29,20 +30,21 @@ use crate::{
         BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, TypeName_, Type_, Var,
     },
     parser::ast::Ability_,
-    shared::{CompilationEnv, Identifier},
+    shared::Identifier,
+    sui_mode::SUI_ADDR_VALUE,
 };
 use std::collections::BTreeMap;
 
 use super::{
     LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, INVALID_LOC, LINT_WARNING_PREFIX,
-    RECEIVE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
+    RECEIVE_FUN, SHARE_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
-const PRIVATE_OBJ_FUNCTIONS: &[(&str, &str, &str)] = &[
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, TRANSFER_FUN),
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, SHARE_FUN),
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
-    (SUI_PKG_NAME, TRANSFER_MOD_NAME, RECEIVE_FUN),
+const PRIVATE_OBJ_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, TRANSFER_FUN),
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, SHARE_FUN),
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, FREEZE_FUN),
+    (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, RECEIVE_FUN),
 ];
 
 const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(
@@ -87,7 +89,6 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
     type AI<'a> = CustomStateChangeVerifierAI;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         init_state: &mut State,

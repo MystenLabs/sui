@@ -42,6 +42,14 @@ fn is_msm_supported(context: &NativeContext) -> bool {
         .enable_group_ops_native_function_msm()
 }
 
+fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
+    context
+        .extensions()
+        .get::<ObjectRuntime>()
+        .protocol_config
+        .uncompressed_g1_group_elements()
+}
+
 // Gas related structs and functions.
 
 #[derive(Clone)]
@@ -86,6 +94,14 @@ pub struct GroupOpsCostParams {
     pub bls12381_msm_max_len: Option<u32>,
     // costs for decode, pairing, and encode output
     pub bls12381_pairing_cost: Option<InternalGas>,
+    // costs for conversion to and from uncompressed form
+    pub bls12381_g1_to_uncompressed_g1_cost: Option<InternalGas>,
+    pub bls12381_uncompressed_g1_to_g1_cost: Option<InternalGas>,
+    // costs for sum of elements uncompressed form
+    pub bls12381_uncompressed_g1_sum_base_cost: Option<InternalGas>,
+    pub bls12381_uncompressed_g1_sum_cost_per_term: Option<InternalGas>,
+    // limit the number of terms in a sum
+    pub bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -109,6 +125,7 @@ enum Groups {
     BLS12381G1 = 1,
     BLS12381G2 = 2,
     BLS12381GT = 3,
+    BLS12381UncompressedG1 = 4,
 }
 
 impl Groups {
@@ -118,6 +135,7 @@ impl Groups {
             1 => Some(Groups::BLS12381G1),
             2 => Some(Groups::BLS12381G2),
             3 => Some(Groups::BLS12381GT),
+            4 => Some(Groups::BLS12381UncompressedG1),
             _ => None,
         }
     }
@@ -748,6 +766,152 @@ pub fn internal_pairing(
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong.
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
+    }
+}
+
+/***************************************************************************************************
+ * native fun internal_convert
+ * Implementation of the Move native function `internal_convert(from_type:u8, to_type: u8, e: &vector<u8>): vector<u8>`
+ *   gas cost: group_ops_bls12381_g1_from_uncompressed_cost / group_ops_bls12381_g1_from_compressed_cost
+ **************************************************************************************************/
+pub fn internal_convert(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    let cost = context.gas_used();
+
+    if !(is_uncompressed_g1_supported(context)) {
+        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
+    }
+
+    let e_ref = pop_arg!(args, VectorRef);
+    let e = e_ref.as_bytes_ref();
+    let to_type = pop_arg!(args, u8);
+    let from_type = pop_arg!(args, u8);
+
+    let cost_params = &context
+        .extensions()
+        .get::<NativesCostTable>()
+        .group_ops_cost_params
+        .clone();
+
+    let result = match (Groups::from_u8(from_type), Groups::from_u8(to_type)) {
+        (Some(Groups::BLS12381UncompressedG1), Some(Groups::BLS12381G1)) => {
+            native_charge_gas_early_exit_option!(
+                context,
+                cost_params.bls12381_uncompressed_g1_to_g1_cost
+            );
+            e.to_vec()
+                .try_into()
+                .map_err(|_| FastCryptoError::InvalidInput)
+                .map(bls::G1ElementUncompressed::from_trusted_byte_array)
+                .and_then(|e| bls::G1Element::try_from(&e))
+                .map(|e| e.to_byte_array().to_vec())
+        }
+        (Some(Groups::BLS12381G1), Some(Groups::BLS12381UncompressedG1)) => {
+            native_charge_gas_early_exit_option!(
+                context,
+                cost_params.bls12381_g1_to_uncompressed_g1_cost
+            );
+            parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e)
+                .map(|e| bls::G1ElementUncompressed::from(&e))
+                .map(|e| e.into_byte_array().to_vec())
+        }
+        _ => Err(FastCryptoError::InvalidInput),
+    };
+
+    match result {
+        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
+        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong.
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
+    }
+}
+
+/***************************************************************************************************
+ * native fun internal_sum
+ * Implementation of the Move native function `internal_sum(type:u8, terms: &vector<vector<u8>>): vector<u8>`
+ *   gas cost: group_ops_bls12381_g1_sum_of_uncompressed_base_cost + len(terms) * group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term
+ **************************************************************************************************/
+pub fn internal_sum(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    let cost = context.gas_used();
+
+    if !(is_uncompressed_g1_supported(context)) {
+        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
+    }
+
+    let cost_params = &context
+        .extensions()
+        .get::<NativesCostTable>()
+        .group_ops_cost_params
+        .clone();
+
+    // The input is a reference to a vector of vector<u8>'s
+    let inputs = pop_arg!(args, VectorRef);
+    let group_type = pop_arg!(args, u8);
+
+    let length = inputs
+        .len(&Type::Vector(Box::new(Type::U8)))?
+        .value_as::<u64>()?;
+
+    let result = match Groups::from_u8(group_type) {
+        Some(Groups::BLS12381UncompressedG1) => {
+            let max_terms = cost_params
+                .bls12381_uncompressed_g1_sum_max_terms
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Max number of terms is not set".to_string())
+                })?;
+
+            if length > max_terms {
+                return Ok(NativeResult::err(cost, INPUT_TOO_LONG_ERROR));
+            }
+
+            native_charge_gas_early_exit_option!(
+                context,
+                cost_params
+                    .bls12381_uncompressed_g1_sum_base_cost
+                    .and_then(|base| cost_params
+                        .bls12381_uncompressed_g1_sum_cost_per_term
+                        .map(|per_term| base + per_term * length.into()))
+            );
+
+            // Read the input vector
+            (0..length)
+                .map(|i| {
+                    inputs
+                        .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
+                        .and_then(Value::value_as::<VectorRef>)
+                        .map_err(|_| FastCryptoError::InvalidInput)
+                        .and_then(|v| {
+                            v.as_bytes_ref()
+                                .to_vec()
+                                .try_into()
+                                .map_err(|_| FastCryptoError::InvalidInput)
+                        })
+                        .map(bls::G1ElementUncompressed::from_trusted_byte_array)
+                })
+                .collect::<FastCryptoResult<Vec<_>>>()
+                .and_then(|e| bls::G1ElementUncompressed::sum(&e))
+                .map(|e| bls::G1ElementUncompressed::from(&e))
+                .map(|e| e.into_byte_array().to_vec())
+        }
+        _ => Err(FastCryptoError::InvalidInput),
+    };
+
+    match result {
+        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }

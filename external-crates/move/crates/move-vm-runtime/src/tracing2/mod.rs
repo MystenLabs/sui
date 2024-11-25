@@ -1,9 +1,9 @@
 pub(crate) mod tracer;
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 pub(crate) const TRACING_ENABLED: bool = true;
 
-#[cfg(not(feature = "gas-profiler"))]
+#[cfg(not(feature = "tracing"))]
 pub(crate) const TRACING_ENABLED: bool = false;
 
 #[macro_export]
@@ -39,7 +39,7 @@ macro_rules! close_initial_frame {
 
 #[macro_export]
 macro_rules! close_frame {
-    ($tracer: expr, $frame: expr, $function: expr, $interp: expr, $loader: expr, $gas_meter: expr, $link_context: expr) => {
+    ($tracer: expr, $frame: expr, $function: expr, $interp: expr, $loader: expr, $gas_meter: expr, $link_context: expr, $call_err: expr) => {
         if $crate::tracing2::TRACING_ENABLED {
             $tracer.as_mut().map(|tracer| {
                 tracer.close_frame(
@@ -49,6 +49,7 @@ macro_rules! close_frame {
                     $loader,
                     $gas_meter.remaining_gas().into(),
                     $link_context,
+                    $call_err,
                 )
             });
             move_vm_profiler::profile_close_frame!($gas_meter, $function.pretty_string());

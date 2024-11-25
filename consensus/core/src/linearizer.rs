@@ -540,7 +540,9 @@ mod tests {
 
         let num_authorities = 4;
         let (mut context, _keys) = Context::new_for_test(num_authorities);
-        context.protocol_config.set_gc_depth_for_testing(gc_depth);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(gc_depth);
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),

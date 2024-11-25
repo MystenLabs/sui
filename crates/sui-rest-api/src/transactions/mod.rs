@@ -24,17 +24,20 @@ use sui_sdk_types::types::{
 };
 use tap::Pipe;
 
+use crate::accept::AcceptJsonProtobufBcs;
 use crate::openapi::ApiEndpoint;
 use crate::openapi::OperationBuilder;
 use crate::openapi::ResponseBuilder;
 use crate::openapi::RouteHandler;
+use crate::proto;
+use crate::proto::ListTransactionsResponse;
 use crate::reader::StateReader;
+use crate::response::JsonProtobufBcs;
 use crate::Direction;
-use crate::Page;
+use crate::PageCursor;
 use crate::RestError;
 use crate::RestService;
 use crate::Result;
-use crate::{accept::AcceptFormat, response::ResponseContent};
 
 pub struct GetTransaction;
 
@@ -59,6 +62,7 @@ impl ApiEndpoint<RestService> for GetTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -73,14 +77,16 @@ impl ApiEndpoint<RestService> for GetTransaction {
 
 async fn get_transaction(
     Path(transaction_digest): Path<TransactionDigest>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<TransactionResponse>> {
+) -> Result<JsonProtobufBcs<TransactionResponse, proto::GetTransactionResponse, TransactionResponse>>
+{
     let response = state.get_transaction_response(transaction_digest)?;
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
     }
     .pipe(Ok)
 }
@@ -145,6 +151,7 @@ impl ApiEndpoint<RestService> for ListTransactions {
                 200,
                 ResponseBuilder::new()
                     .json_content::<Vec<TransactionResponse>>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
@@ -160,9 +167,12 @@ impl ApiEndpoint<RestService> for ListTransactions {
 
 async fn list_transactions(
     Query(parameters): Query<ListTransactionsQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<Page<TransactionResponse, TransactionCursor>> {
+) -> Result<(
+    PageCursor<TransactionCursor>,
+    JsonProtobufBcs<Vec<TransactionResponse>, ListTransactionsResponse, Vec<TransactionResponse>>,
+)> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
     let limit = parameters.limit();
@@ -195,12 +205,7 @@ async fn list_transactions(
                     timestamp_ms: Some(cursor_info.timestamp_ms),
                 })
         })
-        .collect::<Result<_, _>>()?;
-
-    let entries = match accept {
-        AcceptFormat::Json => ResponseContent::Json(transactions),
-        AcceptFormat::Bcs => ResponseContent::Bcs(transactions),
-    };
+        .collect::<Result<Vec<_>, _>>()?;
 
     let cursor = next_cursor.and_then(|(checkpoint, index)| {
         if checkpoint < oldest_checkpoint {
@@ -210,7 +215,21 @@ async fn list_transactions(
         }
     });
 
-    Ok(Page { entries, cursor })
+    match accept {
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(transactions),
+        AcceptJsonProtobufBcs::Protobuf => {
+            let proto = ListTransactionsResponse {
+                transactions: transactions
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            };
+            JsonProtobufBcs::Protobuf(proto)
+        }
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(transactions),
+    }
+    .pipe(|entries| (PageCursor(cursor), entries))
+    .pipe(Ok)
 }
 
 /// A Cursor that points at a specific transaction in history.
@@ -278,7 +297,7 @@ impl serde::Serialize for TransactionCursor {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct ListTransactionsQueryParameters {
     pub limit: Option<u32>,
     #[schemars(with = "Option<String>")]

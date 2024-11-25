@@ -27,7 +27,6 @@ use errors::IndexerError;
 
 pub mod apis;
 pub mod backfill;
-pub mod benchmark;
 pub mod config;
 pub mod database;
 pub mod db;
@@ -41,7 +40,6 @@ pub mod restorer;
 pub mod schema;
 pub mod store;
 pub mod system_package_task;
-pub mod tempdb;
 pub mod test_utils;
 pub mod types;
 

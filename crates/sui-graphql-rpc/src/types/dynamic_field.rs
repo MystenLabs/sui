@@ -26,6 +26,9 @@ use crate::raw_query::RawQuery;
 
 pub(crate) struct DynamicField {
     pub super_: MoveObject,
+    /// The root version that this dynamic field was queried at. This can be a later version than
+    /// the version of the dynamic field's object (`super_`).
+    pub root_version: Option<u64>,
 }
 
 #[derive(Union)]
@@ -114,7 +117,11 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx,
                 df_object_id,
-                Object::under_parent(self.root_version(), self.super_.super_.checkpoint_viewed_at),
+                if let Some(root_version) = self.root_version {
+                    Object::under_parent(root_version, self.super_.super_.checkpoint_viewed_at)
+                } else {
+                    Object::latest_at(self.super_.super_.checkpoint_viewed_at)
+                },
             )
             .await
             .extend()?;
@@ -164,7 +171,9 @@ impl DynamicField {
         )
         .await?;
 
-        super_.map(Self::try_from).transpose()
+        super_
+            .map(|super_| Self::try_from(super_, parent_version))
+            .transpose()
     }
 
     /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`. The
@@ -231,22 +240,14 @@ impl DynamicField {
                 ))
             })?;
 
-            let dynamic_field = DynamicField::try_from(move_)?;
+            let dynamic_field = DynamicField::try_from(move_, parent_version)?;
             conn.edges.push(Edge::new(cursor, dynamic_field));
         }
 
         Ok(conn)
     }
 
-    pub(crate) fn root_version(&self) -> u64 {
-        self.super_.root_version()
-    }
-}
-
-impl TryFrom<MoveObject> for DynamicField {
-    type Error = Error;
-
-    fn try_from(stored: MoveObject) -> Result<Self, Error> {
+    fn try_from(stored: MoveObject, root_version: Option<u64>) -> Result<Self, Error> {
         let super_ = &stored.super_;
 
         let native = match &super_.kind {
@@ -267,7 +268,10 @@ impl TryFrom<MoveObject> for DynamicField {
             return Err(Error::Internal("Wrong type for DynamicField".to_string()));
         }
 
-        Ok(DynamicField { super_: stored })
+        Ok(DynamicField {
+            super_: stored,
+            root_version,
+        })
     }
 }
 

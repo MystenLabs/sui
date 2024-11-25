@@ -186,18 +186,18 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
 async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
     const pkgRoot = await findPkgRoot(editor.document.uri.fsPath);
     if (!pkgRoot) {
-        throw new Error("Cannot find package root for file: " + editor.document.uri.fsPath);
+        throw new Error(`Cannot find package root for file  '${editor.document.uri.fsPath}'`);
     }
 
     const pkgModules = findModules(editor.document.getText());
     if (pkgModules.length === 0) {
-        throw new Error("Cannot find any modules in file: " + editor.document.uri.fsPath);
+        throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
     }
 
     const tracedFunctions = findTracedFunctions(pkgRoot, pkgModules);
 
     if (tracedFunctions.length === 0) {
-        throw new Error("No traced functions found for package at: " + pkgRoot);
+        throw new Error(`No traced functions found for package at '${pkgRoot}'`);
     }
 
     const fun = tracedFunctions.length === 1
@@ -205,7 +205,7 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         : await pickFunctionToDebug(tracedFunctions);
 
     if (!fun) {
-        throw new Error("No function to be debugged selected from\n" + tracedFunctions.join('\n'));
+        throw new Error(`No function to be trace-debugged selected from\n` + tracedFunctions.join('\n'));
     }
 
     return fun;
@@ -261,35 +261,44 @@ function findModules(file_content: string): string[] {
 /**
  * Find all functions that have a corresponding trace file.
  *
- * @param pkg_root root directory of the package.
- * @param pkg_modules modules in the package of the form `<package>::<module>`.
+ * @param pkgRoot root directory of the package.
+ * @param pkgModules modules in the package of the form `<package>::<module>`.
  * @returns list of functions of the form `<package>::<module>::<function>`.
+ * @throws Error (containing a descriptive message) if no trace files are found for the package.
  */
-function findTracedFunctions(pkg_root: string, pkg_modules: string[]): string[] {
-    try {
-        const traces_dir = path.join(pkg_root, 'traces');
-        const files = fs.readdirSync(traces_dir);
-        const result: [string, string[]][] = [];
+function findTracedFunctions(pkgRoot: string, pkgModules: string[]): string[] {
 
-        pkg_modules.forEach((module) => {
-            const prefix = module.replace(/:/g, '_') + '__';
-            const prefixFiles = files.filter((file) => file.startsWith(prefix));
-            const suffixes = prefixFiles.map((file) => {
-                const suffix = file.substring(module.length);
-                if (suffix.startsWith('__') && suffix.endsWith('.json')) {
-                    return suffix.substring(2, suffix.length - 5);
-                }
-                return suffix;
-            });
-            result.push([module, suffixes]);
-        });
-
-        return result.map(([module, functionName]) => {
-            return functionName.map((func) => module + "::" + func);
-        }).flat();
-    } catch (err) {
-        return [];
+    function getFiles(tracesDir: string): string[] {
+        try {
+            return fs.readdirSync(tracesDir);
+        } catch (err) {
+            throw new Error(`Error accessing 'trace' directory for package at '${pkgRoot}'`);
+        }
     }
+    const tracesDir = path.join(pkgRoot, 'traces');
+
+    const filePaths = getFiles(tracesDir);
+    if (filePaths.length === 0) {
+        throw new Error(`No trace files for package at ${pkgRoot}`);
+    }
+    const result: [string, string[]][] = [];
+
+    pkgModules.forEach((module) => {
+        const prefix = module.replace(/:/g, '_') + '__';
+        const prefixFiles = filePaths.filter((filePath) => filePath.startsWith(prefix));
+        const suffixes = prefixFiles.map((file) => {
+            const suffix = file.substring(module.length);
+            if (suffix.startsWith('__') && suffix.endsWith('.json')) {
+                return suffix.substring(2, suffix.length - 5);
+            }
+            return suffix;
+        });
+        result.push([module, suffixes]);
+    });
+
+    return result.map(([module, functionName]) => {
+        return functionName.map((func) => module + "::" + func);
+    }).flat();
 }
 
 /**

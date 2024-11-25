@@ -10,11 +10,11 @@ use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
-use sui_indexer::tempdb::TempDb;
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_pg_temp_db::TempDb;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -238,6 +238,8 @@ impl Cluster for LocalNewCluster {
                 None,
                 Some(data_ingestion_path.path().to_path_buf()),
                 None, /* cancel */
+                None, /* start_checkpoint */
+                None, /* end_checkpoint */
             )
             .await;
             cancellation_tokens.push(writer_token.drop_guard());

@@ -15,24 +15,19 @@ use sui_types::{
 use crate::{
     db,
     models::transactions::{BalanceChange, StoredTxBalanceChange},
+    pipeline::concurrent::Handler,
+    pipeline::Processor,
     schema::tx_balance_changes,
 };
 
-use super::Handler;
-
 pub struct TxBalanceChanges;
 
-#[async_trait::async_trait]
-impl Handler for TxBalanceChanges {
+impl Processor for TxBalanceChanges {
     const NAME: &'static str = "tx_balance_changes";
-
-    const BATCH_SIZE: usize = 100;
-    const CHUNK_SIZE: usize = 1000;
-    const MAX_PENDING_SIZE: usize = 10000;
 
     type Value = StoredTxBalanceChange;
 
-    fn handle(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -58,6 +53,13 @@ impl Handler for TxBalanceChanges {
 
         Ok(values)
     }
+}
+
+#[async_trait::async_trait]
+impl Handler for TxBalanceChanges {
+    const MIN_EAGER_ROWS: usize = 100;
+    const MAX_CHUNK_ROWS: usize = 1000;
+    const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         Ok(diesel::insert_into(tx_balance_changes::table)

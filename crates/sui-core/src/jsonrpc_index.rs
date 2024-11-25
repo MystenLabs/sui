@@ -255,6 +255,7 @@ pub struct IndexStoreTables {
 
     #[default_options_override_fn = "coin_index_table_default_config"]
     #[deprecated]
+    #[allow(unused)]
     coin_index: DBMap<CoinIndexKey, CoinInfo>,
     #[default_options_override_fn = "coin_index_table_default_config"]
     coin_index_2: DBMap<CoinIndexKey2, CoinInfo>,
@@ -339,19 +340,6 @@ impl IndexStoreTables {
 
         // Commit to the DB that the indexes have been initialized
         self.meta.insert(&(), &metadata)?;
-
-        // Clear old, deprecated and unused column families
-        if !self.coin_index.is_empty() {
-            self.coin_index.unsafe_clear()?;
-        }
-
-        if !self.loaded_child_object_versions.is_empty() {
-            self.loaded_child_object_versions.unsafe_clear()?;
-        }
-
-        if !self.timestamps.is_empty() {
-            self.timestamps.unsafe_clear()?;
-        }
 
         Ok(())
     }

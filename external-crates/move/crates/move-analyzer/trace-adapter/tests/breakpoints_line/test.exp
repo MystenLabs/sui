@@ -1,0 +1,63 @@
+current frame stack:
+  function: test (m.move:27)
+    scope 0 :
+line breakpoints
+  m.move
+    12
+    18
+    20
+current frame stack:
+  function: test (m.move:27)
+    scope 0 :
+  function: foo (m.move:12)
+    scope 0 :
+      p : 1
+      type: u64
+
+line breakpoints
+  m.move
+    12
+    18
+    20
+current frame stack:
+  function: test (m.move:27)
+    scope 0 :
+  function: foo (m.move:18)
+    scope 0 :
+      p : 1
+      type: u64
+
+      res : 10
+      type: u64
+
+line breakpoints
+  m.move
+    12
+    18
+    20
+current frame stack:
+  function: test (m.move:27)
+    scope 0 :
+  function: foo (m.move:20)
+    scope 0 :
+      res : 11
+      type: u64
+
+line breakpoints
+  m.move
+    12
+    18
+    20
+current frame stack:
+  function: test (m.move:27)
+    scope 0 :
+  function: foo (m.move:20)
+    scope 0 :
+      res : 12
+      type: u64
+
+line breakpoints
+  m.move
+    12
+    18
+    20

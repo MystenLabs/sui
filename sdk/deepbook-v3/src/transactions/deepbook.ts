@@ -287,6 +287,24 @@ export class DeepBookContract {
 	};
 
 	/**
+	 * @description Prepares a transaction to retrieve multiple orders from a specified pool.
+	 * @param {string} poolKey - The identifier key for the pool to retrieve orders from.
+	 * @param {string[]} orderIds - Array of order IDs to retrieve.
+	 * @returns {Function} A function that takes a Transaction object
+	 */
+	getOrders = (poolKey: string, orderIds: string[]) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_orders`,
+			arguments: [tx.object(pool.address), tx.pure.vector('u128', orderIds)],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
+
+	/**
 	 * @description Burn DEEP tokens from the pool
 	 * @param {string} poolKey The key to identify the pool
 	 * @returns A function that takes a Transaction object
@@ -664,6 +682,23 @@ export class DeepBookContract {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::locked_balance`,
 			arguments: [tx.object(pool.address), tx.object(managerId)],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
+
+	/**
+	 * @description Get the DEEP price conversion for a pool
+	 * @param {string} poolKey The key to identify the pool
+	 * @returns A function that takes a Transaction object
+	 */
+	getPoolDeepPrice = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_order_deep_price`,
+			arguments: [tx.object(pool.address)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};

@@ -372,13 +372,12 @@ You can always borrow an asset from a kiosk immutably. You can use the `kiosk::b
 ### Immutably borrow an asset using Sui Move
 
 ```move
-module examples::immutable_borrow {
-    use sui::object::ID;
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+module examples::immutable_borrow;
 
-    public fun immutable_borrow_example<T>(self: &Kiosk, cap: &KioskOwnerCap, item_id: ID): &T {
-        kiosk::borrow(self, cap, item_id)
-    }
+use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+
+public fun immutable_borrow_example<T>(self: &Kiosk, cap: &KioskOwnerCap, item_id: ID): &T {
+    self.borrow(cap, item_id)
 }
 ```
 
@@ -389,15 +388,14 @@ You can mutably borrow an asset from a kiosk if it is not listed. You can use th
 ### Mutably borrow an asset using Sui Move
 
 ```move
-module examples::mutable_borrow
-    use sui::object::ID;
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+module examples::mutable_borrow;
 
-    public fun mutable_borrow_example<T>(
-        self: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID
-    ): &mut T {
-        kiosk::borrow_mut(self, cap, item_id)
-    }
+use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+
+public fun mutable_borrow_example<T>(
+    self: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID
+): &mut T {
+    self.borrow_mut(cap, item_id)
 }
 ```
 

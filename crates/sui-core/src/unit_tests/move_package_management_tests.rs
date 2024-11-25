@@ -56,7 +56,7 @@ async fn test_manage_package_update() {
 
         [move.toolchain-version]
         compiler-version = "0.0.1"
-        edition = "2024.beta"
+        edition = "2024"
         flavor = "sui"
 
         [env]
