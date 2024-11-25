@@ -40,9 +40,6 @@ pub struct CommitterConfig {
 
     /// Watermark task will check for pending watermarks this often, in milliseconds.
     watermark_interval_ms: u64,
-
-    /// Avoid writing to the watermark table
-    pub skip_watermark: bool,
 }
 
 /// Like a [CommitterConfig] but with all its fields optional. This type is accepted in configs
@@ -53,7 +50,6 @@ pub struct CommitterLayer {
     write_concurrency: Option<usize>,
     collect_interval_ms: Option<u64>,
     watermark_interval_ms: Option<u64>,
-    skip_watermark: Option<bool>,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
@@ -111,9 +107,6 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(committer_config.watermark_interval_ms),
-            skip_watermark: self
-                .skip_watermark
-                .unwrap_or(committer_config.skip_watermark),
         }
     }
 }
@@ -187,7 +180,6 @@ impl Default for CommitterConfig {
             write_concurrency: 5,
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
-            skip_watermark: false,
         }
     }
 }
