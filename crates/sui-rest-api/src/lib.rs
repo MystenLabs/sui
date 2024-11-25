@@ -102,7 +102,7 @@ impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for
     }
 }
 
-const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
+pub const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
@@ -228,7 +228,7 @@ impl RestService {
     }
 }
 
-fn info(version: &'static str) -> openapiv3::v3_1::Info {
+pub fn info(version: &'static str) -> openapiv3::v3_1::Info {
     use openapiv3::v3_1::Contact;
     use openapiv3::v3_1::License;
 
@@ -308,67 +308,5 @@ mod _schemars {
         fn is_referenceable() -> bool {
             false
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn openapi_spec() {
-        const OPENAPI_SPEC_FILE: &str =
-            concat!(env!("CARGO_MANIFEST_DIR"), "/openapi/openapi.json");
-
-        let openapi = {
-            let mut api = openapi::Api::new(info("unknown"));
-
-            api.register_endpoints(ENDPOINTS.iter().copied());
-            api.openapi()
-        };
-
-        let mut actual = serde_json::to_string_pretty(&openapi).unwrap();
-        actual.push('\n');
-
-        // Update the expected format
-        if std::env::var_os("UPDATE").is_some() {
-            std::fs::write(OPENAPI_SPEC_FILE, &actual).unwrap();
-        }
-
-        let expected = std::fs::read_to_string(OPENAPI_SPEC_FILE).unwrap();
-
-        let diff = diffy::create_patch(&expected, &actual);
-
-        if !diff.hunks().is_empty() {
-            let formatter = if std::io::IsTerminal::is_terminal(&std::io::stderr()) {
-                diffy::PatchFormatter::new().with_color()
-            } else {
-                diffy::PatchFormatter::new()
-            };
-            let header = "Generated and checked-in openapi spec does not match. \
-                          Re-run with `UPDATE=1` to update expected format";
-            panic!("{header}\n\n{}", formatter.fmt_patch(&diff));
-        }
-    }
-
-    #[tokio::test]
-    async fn openapi_explorer() {
-        // Unless env var is set, just early return
-        if std::env::var_os("OPENAPI_EXPLORER").is_none() {
-            return;
-        }
-
-        let openapi = {
-            let mut api = openapi::Api::new(info("unknown"));
-            api.register_endpoints(ENDPOINTS.to_owned());
-            api.openapi()
-        };
-
-        let router = openapi::OpenApiDocument::new(openapi).into_router();
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:8000")
-            .await
-            .unwrap();
-        axum::serve(listener, router).await.unwrap();
     }
 }
