@@ -16,6 +16,7 @@ const {
 	lineSuffix,
 	group,
 	indentIfBreak,
+	conditionalGroup,
 	hardlineWithoutBreakParent,
 	breakParent,
 	ifBreak,
@@ -122,6 +123,44 @@ export function printTrailingComment(path: AstPath<Node>, shouldBreak: boolean =
 	return [' ', comment.text];
 }
 
+export function emptyBlockOrList(
+	path: AstPath<Node>,
+	open: string,
+	close: string,
+	line: Doc = hardline,
+): Doc {
+	const length = path.node.nonFormattingChildren.length;
+	const comments = path.node.namedChildren.filter((e) => e.isComment);
+
+	if (length != 0) {
+		throw new Error('The list is not empty');
+	}
+
+	if (comments.length == 0) {
+		return [open, close];
+	}
+
+	if (comments.length == 1 && comments[0]!.type == 'block_comment') {
+		return group([open, indent(line), indent(comments[0]!.text), line, close]);
+	}
+
+	return group(
+		[
+			open,
+			indent(line),
+			indent(
+				join(
+					line,
+					comments.map((c) => c.text),
+				),
+			),
+			line,
+			close,
+		],
+		{ shouldBreak: true },
+	);
+}
+
 /**
  * TODO: use this type for the `block()` function.
  */
@@ -143,7 +182,7 @@ export function block({ path, print, options, shouldBreak, skipChildren }: Block
 	const length = path.node.nonFormattingChildren.length;
 
 	if (length == 0) {
-		return '{}';
+		return emptyBlockOrList(path, '{', '}', hardline);
 	}
 
 	return group(
@@ -170,7 +209,7 @@ export function nonBreakingBlock({
 	const length = path.node.nonFormattingChildren.length;
 
 	if (length == 0) {
-		return '{}';
+		return emptyBlockOrList(path, '{', '}', hardlineWithoutBreakParent);
 	}
 
 	return group([
