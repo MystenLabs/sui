@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::data_types::PgTimestamp;
-use diesel::{Identifiable, Insertable, Queryable, QueryableByName, Selectable};
+use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
 use serde::Serialize;
 use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 use crate::schema::{
-    balances, balances_summary, flashloans, order_fills, order_updates, pool_prices, pools,
-    progress_store, proposals, rebates, stakes, sui_error_transactions, trade_params_update, votes,
+    balances, flashloans, order_fills, order_updates, pool_prices, pools, progress_store,
+    proposals, rebates, stakes, sui_error_transactions, trade_params_update, votes,
 };
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
