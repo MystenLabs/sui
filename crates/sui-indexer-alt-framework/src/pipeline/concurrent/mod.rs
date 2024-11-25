@@ -103,6 +103,9 @@ pub struct PrunerConfig {
 
 /// Values ready to be written to the database. This is an internal type used to communicate
 /// between the collector and the committer parts of the pipeline.
+///
+/// Values inside each batch may or may not be from the same checkpoint. Values in the same
+/// checkpoint can also be split across multiple batches.
 struct Batched<H: Handler> {
     /// The rows to write
     values: Vec<H::Value>,
