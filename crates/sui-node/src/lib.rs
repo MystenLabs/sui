@@ -2099,7 +2099,7 @@ pub async fn build_http_server(
             software_version,
         );
 
-        if let Some(config) = config.rest.clone() {
+        if let Some(config) = config.rpc.clone() {
             rest_service.with_config(config);
         }
 
