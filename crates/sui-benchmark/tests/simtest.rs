@@ -554,7 +554,12 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(4, 5000)
+                .with_num_unpruned_validators(2)
+                .build()
+                .await,
+        );
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
