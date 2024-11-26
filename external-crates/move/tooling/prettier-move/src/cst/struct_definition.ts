@@ -8,6 +8,8 @@ import {
 	emptyBlockOrList,
 	list,
 	printIdentifier,
+	printLeadingComment,
+	printTrailingComment,
 	shouldBreakFirstChild,
 } from '../utilities';
 const { group, join } = doc.builders;
@@ -242,7 +244,11 @@ function formatAndSortAbilities(
 	const abilities: Ability[] = path.map(
 		(path) => ({
 			name: path.node.text as Ability['name'],
-			text: print(path),
+			text: [
+				printLeadingComment(path, options),
+				path.node.text,
+				printTrailingComment(path, true),
+			] as Doc,
 		}),
 		'nonFormattingChildren',
 	);

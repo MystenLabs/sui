@@ -29,7 +29,8 @@ public struct Cmt has /* please */ key /* don't */ , /* do */ store /* this */  
 // line comments are also possible, but
 // let's hope no one ever uses them
 public struct Cmt2 has copy, drop, // kill me
-store // trailing {}
+store // trailing
+ {}
 
 // empty struct can be with comemtns
 // both single and multi-line

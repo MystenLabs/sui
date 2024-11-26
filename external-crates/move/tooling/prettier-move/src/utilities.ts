@@ -16,7 +16,6 @@ const {
 	lineSuffix,
 	group,
 	indentIfBreak,
-	conditionalGroup,
 	hardlineWithoutBreakParent,
 	breakParent,
 	ifBreak,
@@ -116,8 +115,8 @@ export function printTrailingComment(path: AstPath<Node>, shouldBreak: boolean =
 	if (!path.node.enableTrailingComment) return '';
 	const comment = path.node.trailingComment;
 	if (!comment) return '';
-	if (comment.type == 'line_comment') {
-		// ...
+	if (comment.type == 'line_comment' && shouldBreak) {
+		return [' ', comment.text, hardline];
 	}
 
 	return [' ', comment.text];
@@ -325,7 +324,7 @@ export function list({
 			path
 				.map((path, i) => {
 					const leading = printLeadingComment(path, options);
-					const comment = printTrailingComment(path, true);
+					const comment = printTrailingComment(path, false);
 					let shouldBreak = false;
 
 					// if the node has a trailing comment, we should break
