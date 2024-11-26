@@ -7,10 +7,14 @@ const child_process = require('child_process');
 
 // command is prettier + plugin path + args passed to the script
 const args = process.argv.slice(2);
-const command = args.length == 0 ? 'prettier --help' : `prettier --plugin ${plugin_path} ${args.join(' ')}`;
+const command = args.length == 0 ? 'prettier --help' : `prettier  ${args.join(' ')}`;
 
 // run prettier, print the output and exit with correct code
-const prettier = child_process.exec(command);
+
+const prettier = child_process.execFile(
+	'prettier',
+	args.length ? ['--plugin', plugin_path, ...args] : ['--help'],
+);
 
 // additionally, exchange stdin/stdout/stderr with the prettier process
 process.stdin.pipe(prettier.stdin);
