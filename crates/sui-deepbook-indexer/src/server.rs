@@ -29,6 +29,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
+pub const GET_ALL_HISTORICAL_VOLUME_PATH: &str = "/get_all_historical_volume";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -42,6 +43,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route("/", get(health_check))
         .route(GET_POOLS_PATH, get(get_pools))
         .route(GET_HISTORICAL_VOLUME_PATH, get(get_historical_volume))
+        .route(GET_ALL_HISTORICAL_VOLUME_PATH, get(get_all_historical_volume))
         .route(
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL,
             get(get_historical_volume_by_balance_manager_id_with_interval),
@@ -78,7 +80,6 @@ async fn health_check() -> StatusCode {
 }
 
 /// Get all pools stored in database
-#[debug_handler]
 async fn get_pools(
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<Pools>>, DeepBookError> {
@@ -143,6 +144,33 @@ async fn get_historical_volume(
     }
 
     Ok(Json(volume_by_pool))
+}
+
+async fn get_all_historical_volume(
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
+    // Step 1: Clone `state.pool` into a separate variable to ensure it lives long enough
+    let pool = state.pool.clone();
+
+    // Step 2: Use the cloned pool to get a connection
+    let connection = &mut pool.get().await?;
+
+    // Step 3: Fetch all pool IDs
+    let pools: Vec<Pools> = schema::pools::table
+        .select(Pools::as_select())
+        .load(connection)
+        .await?;
+
+    // Extract all pool IDs
+    let pool_ids: String = pools
+        .into_iter()
+        .map(|pool| pool.pool_id)
+        .collect::<Vec<String>>()
+        .join(",");
+
+    // Step 4: Call `get_historical_volume` with the pool IDs and query parameters
+    get_historical_volume(Path(pool_ids), Query(params), State(state)).await
 }
 
 async fn get_historical_volume_by_balance_manager_id(
