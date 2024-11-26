@@ -57,6 +57,7 @@ use prometheus::Registry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
+use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
@@ -262,9 +263,6 @@ impl UncommittedData {
     }
 }
 
-// TODO: set this via the config
-static MAX_CACHE_SIZE: u64 = 10000;
-
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
@@ -294,39 +292,32 @@ struct CachedCommittedData {
 }
 
 impl CachedCommittedData {
-    fn new() -> Self {
+    fn new(config: &ExecutionCacheConfig) -> Self {
         let object_cache = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.object_cache_size())
             .build();
         let marker_cache = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.marker_cache_size())
             .build();
         let transactions = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.transaction_cache_size())
             .build();
         let transaction_effects = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.effect_cache_size())
             .build();
         let transaction_events = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.events_cache_size())
             .build();
         let executed_effects_digests = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.executed_effect_cache_size())
             .build();
         let transaction_objects = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.transaction_objects_cache_size())
             .build();
 
         Self {
             object_cache,
-            object_by_id_cache: MonotonicCache::new(MAX_CACHE_SIZE),
+            object_by_id_cache: MonotonicCache::new(config.object_by_id_cache_size()),
             marker_cache,
             transactions,
             transaction_effects,
@@ -428,14 +419,17 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
-    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
+    pub fn new(
+        config: &ExecutionCacheConfig,
+        store: Arc<AuthorityStore>,
+        metrics: Arc<ExecutionCacheMetrics>,
+    ) -> Self {
         let packages = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(config.package_cache_size())
             .build();
         Self {
             dirty: UncommittedData::new(),
-            cached: CachedCommittedData::new(),
+            cached: CachedCommittedData::new(config),
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
@@ -445,12 +439,20 @@ impl WritebackCache {
     }
 
     pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
-        Self::new(store, ExecutionCacheMetrics::new(registry).into())
+        Self::new(
+            &Default::default(),
+            store,
+            ExecutionCacheMetrics::new(registry).into(),
+        )
     }
 
     #[cfg(test)]
     pub fn reset_for_test(&mut self) {
-        let mut new = Self::new(self.store.clone(), self.metrics.clone());
+        let mut new = Self::new(
+            &Default::default(),
+            self.store.clone(),
+            self.metrics.clone(),
+        );
         std::mem::swap(self, &mut new);
     }
 
@@ -728,16 +730,12 @@ impl WritebackCache {
         )
     }
 
-    fn get_object_impl(
-        &self,
-        request_type: &'static str,
-        id: &ObjectID,
-    ) -> SuiResult<Option<Object>> {
+    fn get_object_impl(&self, request_type: &'static str, id: &ObjectID) -> Option<Object> {
         match self.get_object_by_id_cache_only(request_type, id) {
-            CacheResult::Hit((_, object)) => Ok(Some(object)),
-            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Hit((_, object)) => Some(object),
+            CacheResult::NegativeHit => None,
             CacheResult::Miss => {
-                let obj = self.store.get_object(id)?;
+                let obj = self.store.get_object(id);
                 if let Some(obj) = &obj {
                     self.cache_latest_object_by_id(
                         id,
@@ -746,7 +744,7 @@ impl WritebackCache {
                 } else {
                     self.cache_object_not_found(id);
                 }
-                Ok(obj)
+                obj
             }
         }
     }
@@ -767,7 +765,7 @@ impl WritebackCache {
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
-    ) -> SuiResult {
+    ) {
         trace!(digest = ?tx_outputs.transaction.digest(), "writing transaction outputs to cache");
 
         let TransactionOutputs {
@@ -862,17 +860,11 @@ impl WritebackCache {
         self.metrics
             .pending_notify_read
             .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-
-        Ok(())
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
     #[instrument(level = "debug", skip_all)]
-    async fn commit_transaction_outputs(
-        &self,
-        epoch: EpochId,
-        digests: &[TransactionDigest],
-    ) -> SuiResult {
+    async fn commit_transaction_outputs(&self, epoch: EpochId, digests: &[TransactionDigest]) {
         fail_point_async!("writeback-cache-commit");
         trace!(?digests);
 
@@ -900,7 +892,8 @@ impl WritebackCache {
         // cache before removing from the dirty set.
         self.store
             .write_transaction_outputs(epoch, &all_outputs)
-            .await?;
+            .await
+            .expect("db error");
 
         for outputs in all_outputs.iter() {
             let tx_digest = outputs.transaction.digest();
@@ -911,8 +904,6 @@ impl WritebackCache {
                 .is_some());
             self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
         }
-
-        Ok(())
     }
 
     fn flush_transactions_from_dirty_to_cached(
@@ -1017,7 +1008,7 @@ impl WritebackCache {
         }
     }
 
-    async fn persist_transactions(&self, digests: &[TransactionDigest]) -> SuiResult {
+    async fn persist_transactions(&self, digests: &[TransactionDigest]) {
         let mut txns = Vec::with_capacity(digests.len());
         for tx_digest in digests {
             let Some(tx) = self
@@ -1041,7 +1032,7 @@ impl WritebackCache {
             txns.push((*tx_digest, (*tx).clone()));
         }
 
-        self.store.commit_transactions(&txns)
+        self.store.commit_transactions(&txns).expect("db error");
     }
 
     // Move the oldest/least entry from the dirty queue to the cache queue.
@@ -1105,21 +1096,21 @@ impl WritebackCache {
         self.object_locks.clear();
     }
 
-    fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
+    fn revert_state_update_impl(&self, tx: &TransactionDigest) {
         // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
         // state when clear_state_end_of_epoch_impl is called.
         // Futher, once we do this, we can delay the insertion of the transaction into
         // pending_consensus_transactions until after the transaction has executed.
         let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
             assert!(
-                !self.is_tx_already_executed(tx).expect("read cannot fail"),
+                !self.is_tx_already_executed(tx),
                 "attempt to revert committed transaction"
             );
 
             // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
             // can happen before the transaction executes.
             info!("Not reverting {:?} as it was not executed", tx);
-            return Ok(());
+            return;
         };
 
         for (object_id, object) in outputs.written.iter() {
@@ -1137,22 +1128,22 @@ impl WritebackCache {
         }
 
         // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
-        Ok(())
     }
 
-    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) -> SuiResult {
-        self.store.bulk_insert_genesis_objects(objects)?;
+    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) {
+        self.store
+            .bulk_insert_genesis_objects(objects)
+            .expect("db error");
         for obj in objects {
             self.cached.object_cache.invalidate(&obj.id());
             self.cached.object_by_id_cache.invalidate(&obj.id());
         }
-        Ok(())
     }
 
-    fn insert_genesis_object_impl(&self, object: Object) -> SuiResult {
+    fn insert_genesis_object_impl(&self, object: Object) {
         self.cached.object_by_id_cache.invalidate(&object.id());
         self.cached.object_cache.invalidate(&object.id());
-        self.store.insert_genesis_object(object)
+        self.store.insert_genesis_object(object).expect("db error");
     }
 
     pub fn clear_caches_and_assert_empty(&self) {
@@ -1170,14 +1161,11 @@ impl ExecutionCacheCommit for WritebackCache {
         &'a self,
         epoch: EpochId,
         digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult> {
+    ) -> BoxFuture<'a, ()> {
         WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
     }
 
-    fn persist_transactions<'a>(
-        &'a self,
-        digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult> {
+    fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
         WritebackCache::persist_transactions(self, digests).boxed()
     }
 }
@@ -1188,7 +1176,7 @@ impl ObjectCacheRead for WritebackCache {
             .record_cache_request("package", "package_cache");
         if let Some(p) = self.packages.get(package_id) {
             if cfg!(debug_assertions) {
-                if let Some(store_package) = self.store.get_object(package_id).unwrap() {
+                if let Some(store_package) = self.store.get_object(package_id) {
                     assert_eq!(
                         store_package.digest(),
                         p.object().digest(),
@@ -1206,7 +1194,7 @@ impl ObjectCacheRead for WritebackCache {
         // We try the dirty objects cache as well before going to the database. This is necessary
         // because the package could be evicted from the package cache before it is committed
         // to the database.
-        if let Some(p) = self.get_object_impl("package", package_id)? {
+        if let Some(p) = self.get_object_impl("package", package_id) {
             if p.is_package() {
                 let p = PackageObject::new(p);
                 tracing::trace!(
@@ -1235,101 +1223,86 @@ impl ObjectCacheRead for WritebackCache {
 
     // get_object and variants.
 
-    fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_object(&self, id: &ObjectID) -> Option<Object> {
         self.get_object_impl("object_latest", id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         match self.get_object_by_key_cache_only(object_id, version) {
-            CacheResult::Hit(object) => Ok(Some(object)),
-            CacheResult::NegativeHit => Ok(None),
-            CacheResult::Miss => Ok(self
+            CacheResult::Hit(object) => Some(object),
+            CacheResult::NegativeHit => None,
+            CacheResult::Miss => self
                 .record_db_get("object_by_version")
-                .get_object_by_key(object_id, version)?),
+                .get_object_by_key(object_id, version),
         }
     }
 
-    fn multi_get_objects_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey]) -> Vec<Option<Object>> {
         do_fallback_lookup(
             object_keys,
-            |key| {
-                Ok(match self.get_object_by_key_cache_only(&key.0, key.1) {
-                    CacheResult::Hit(maybe_object) => CacheResult::Hit(Some(maybe_object)),
-                    CacheResult::NegativeHit => CacheResult::NegativeHit,
-                    CacheResult::Miss => CacheResult::Miss,
-                })
+            |key| match self.get_object_by_key_cache_only(&key.0, key.1) {
+                CacheResult::Hit(maybe_object) => CacheResult::Hit(Some(maybe_object)),
+                CacheResult::NegativeHit => CacheResult::NegativeHit,
+                CacheResult::Miss => CacheResult::Miss,
             },
             |remaining| {
                 self.record_db_multi_get("object_by_version", remaining.len())
                     .multi_get_objects_by_key(remaining)
-                    .map_err(Into::into)
+                    .expect("db error")
             },
         )
     }
 
-    fn object_exists_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<bool> {
+    fn object_exists_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> bool {
         match self.get_object_by_key_cache_only(object_id, version) {
-            CacheResult::Hit(_) => Ok(true),
-            CacheResult::NegativeHit => Ok(false),
+            CacheResult::Hit(_) => true,
+            CacheResult::NegativeHit => false,
             CacheResult::Miss => self
                 .record_db_get("object_by_version")
-                .object_exists_by_key(object_id, version),
+                .object_exists_by_key(object_id, version)
+                .expect("db error"),
         }
     }
 
-    fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<bool>> {
+    fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> Vec<bool> {
         do_fallback_lookup(
             object_keys,
-            |key| {
-                Ok(match self.get_object_by_key_cache_only(&key.0, key.1) {
-                    CacheResult::Hit(_) => CacheResult::Hit(true),
-                    CacheResult::NegativeHit => CacheResult::Hit(false),
-                    CacheResult::Miss => CacheResult::Miss,
-                })
+            |key| match self.get_object_by_key_cache_only(&key.0, key.1) {
+                CacheResult::Hit(_) => CacheResult::Hit(true),
+                CacheResult::NegativeHit => CacheResult::Hit(false),
+                CacheResult::Miss => CacheResult::Miss,
             },
             |remaining| {
                 self.record_db_multi_get("object_by_version", remaining.len())
                     .multi_object_exists_by_key(remaining)
+                    .expect("db error")
             },
         )
     }
 
-    fn get_latest_object_ref_or_tombstone(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_object_ref_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
         match self.get_object_entry_by_id_cache_only("latest_objref_or_tombstone", &object_id) {
-            CacheResult::Hit((version, entry)) => Ok(Some(match entry {
+            CacheResult::Hit((version, entry)) => Some(match entry {
                 ObjectEntry::Object(object) => object.compute_object_reference(),
                 ObjectEntry::Deleted => (object_id, version, ObjectDigest::OBJECT_DIGEST_DELETED),
                 ObjectEntry::Wrapped => (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED),
-            })),
-            CacheResult::NegativeHit => Ok(None),
+            }),
+            CacheResult::NegativeHit => None,
             CacheResult::Miss => self
                 .record_db_get("latest_objref_or_tombstone")
-                .get_latest_object_ref_or_tombstone(object_id),
+                .get_latest_object_ref_or_tombstone(object_id)
+                .expect("db error"),
         }
     }
 
     fn get_latest_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectKey, ObjectOrTombstone)>, SuiError> {
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
         match self.get_object_entry_by_id_cache_only("latest_object_or_tombstone", &object_id) {
             CacheResult::Hit((version, entry)) => {
                 let key = ObjectKey(object_id, version);
-                Ok(Some(match entry {
+                Some(match entry {
                     ObjectEntry::Object(object) => (key, object.into()),
                     ObjectEntry::Deleted => (
                         key,
@@ -1347,12 +1320,13 @@ impl ObjectCacheRead for WritebackCache {
                             ObjectDigest::OBJECT_DIGEST_WRAPPED,
                         )),
                     ),
-                }))
+                })
             }
-            CacheResult::NegativeHit => Ok(None),
+            CacheResult::NegativeHit => None,
             CacheResult::Miss => self
                 .record_db_get("latest_object_or_tombstone")
-                .get_latest_object_or_tombstone(object_id),
+                .get_latest_object_or_tombstone(object_id)
+                .expect("db error"),
         }
     }
 
@@ -1361,7 +1335,7 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_id: ObjectID,
         version_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> Option<Object> {
         macro_rules! check_cache_entry {
             ($level: expr, $objects: expr) => {
                 self.metrics
@@ -1374,12 +1348,12 @@ impl ObjectCacheRead for WritebackCache {
                         if let ObjectEntry::Object(object) = object {
                             self.metrics
                                 .record_cache_hit("object_lt_or_eq_version", $level);
-                            return Ok(Some(object.clone()));
+                            return Some(object.clone());
                         } else {
                             // if we find a tombstone, the object does not exist
                             self.metrics
                                 .record_cache_negative_hit("object_lt_or_eq_version", $level);
-                            return Ok(None);
+                            return None;
                         }
                     } else {
                         self.metrics
@@ -1400,14 +1374,14 @@ impl ObjectCacheRead for WritebackCache {
                         if let ObjectEntry::Object(object) = object {
                             self.metrics
                                 .record_cache_hit("object_lt_or_eq_version", "object_by_id");
-                            return Ok(Some(object.clone()));
+                            return Some(object.clone());
                         } else {
                             // object is a tombstone, but is still within the version bound
                             self.metrics.record_cache_negative_hit(
                                 "object_lt_or_eq_version",
                                 "object_by_id",
                             );
-                            return Ok(None);
+                            return None;
                         }
                     }
                     // latest object is not within the version bound. fall through.
@@ -1416,7 +1390,7 @@ impl ObjectCacheRead for WritebackCache {
                 LatestObjectCacheEntry::NonExistent => {
                     self.metrics
                         .record_cache_negative_hit("object_lt_or_eq_version", "object_by_id");
-                    return Ok(None);
+                    return None;
                 }
             }
         }
@@ -1459,7 +1433,8 @@ impl ObjectCacheRead for WritebackCache {
                             .tap_none(|| panic!("dirty set cannot be empty"))
                     } else {
                         self.record_db_get("object_lt_or_eq_version_latest")
-                            .get_latest_object_or_tombstone(object_id)?
+                            .get_latest_object_or_tombstone(object_id)
+                            .expect("db error")
                             .map(|(ObjectKey(_, version), obj_or_tombstone)| {
                                 (version, ObjectEntry::from(obj_or_tombstone))
                             })
@@ -1476,8 +1451,8 @@ impl ObjectCacheRead for WritebackCache {
 
                     if obj_version <= version_bound {
                         match obj_entry {
-                            ObjectEntry::Object(object) => Ok(Some(object)),
-                            ObjectEntry::Deleted | ObjectEntry::Wrapped => Ok(None),
+                            ObjectEntry::Object(object) => Some(object),
+                            ObjectEntry::Deleted | ObjectEntry::Wrapped => None,
                         }
                     } else {
                         // The latest object exceeded the bound, so now we have to do a scan
@@ -1485,6 +1460,7 @@ impl ObjectCacheRead for WritebackCache {
                         // so we go to the db.
                         self.record_db_get("object_lt_or_eq_version_scan")
                             .find_object_lt_or_eq_version(object_id, version_bound)
+                            .expect("db error")
                     }
                 } else {
                     // no object found in dirty set or db, object does not exist
@@ -1495,7 +1471,7 @@ impl ObjectCacheRead for WritebackCache {
                     let highest = cached_entry.and_then(|c| c.get_highest());
                     assert!(highest.is_none() || highest.unwrap().1.is_tombstone());
                     self.cache_object_not_found(&object_id);
-                    Ok(None)
+                    None
                 }
             },
         )
@@ -1514,13 +1490,14 @@ impl ObjectCacheRead for WritebackCache {
         object_id: &ObjectID,
         version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
+    ) -> Option<MarkerValue> {
         match self.get_marker_value_cache_only(object_id, version, epoch_id) {
-            CacheResult::Hit(marker) => Ok(Some(marker)),
-            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Hit(marker) => Some(marker),
+            CacheResult::NegativeHit => None,
             CacheResult::Miss => self
                 .record_db_get("marker_by_version")
-                .get_marker_value(object_id, &version, epoch_id),
+                .get_marker_value(object_id, &version, epoch_id)
+                .expect("db error"),
         }
     }
 
@@ -1528,15 +1505,16 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+    ) -> Option<(SequenceNumber, MarkerValue)> {
         match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
-            CacheResult::Hit((v, marker)) => Ok(Some((v, marker))),
+            CacheResult::Hit((v, marker)) => Some((v, marker)),
             CacheResult::NegativeHit => {
                 panic!("cannot have negative hit when getting latest marker")
             }
             CacheResult::Miss => self
                 .record_db_get("marker_latest")
-                .get_latest_marker(object_id, epoch_id),
+                .get_latest_marker(object_id, epoch_id)
+                .expect("db error"),
         }
     }
 
@@ -1580,7 +1558,7 @@ impl ObjectCacheRead for WritebackCache {
     }
 
     fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
-        let obj = self.get_object_impl("live_objref", &object_id)?.ok_or(
+        let obj = self.get_object_impl("live_objref", &object_id).ok_or(
             UserInputError::ObjectNotFound {
                 object_id,
                 version: None,
@@ -1590,7 +1568,7 @@ impl ObjectCacheRead for WritebackCache {
     }
 
     fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        do_fallback_lookup(
+        do_fallback_lookup_fallible(
             owned_object_refs,
             |obj_ref| match self.get_object_by_id_cache_only("object_is_live", &obj_ref.0) {
                 CacheResult::Hit((version, obj)) => {
@@ -1620,8 +1598,11 @@ impl ObjectCacheRead for WritebackCache {
         Ok(())
     }
 
-    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
-        self.store.perpetual_tables.get_highest_pruned_checkpoint()
+    fn get_highest_pruned_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.store
+            .perpetual_tables
+            .get_highest_pruned_checkpoint()
+            .expect("db error")
     }
 }
 
@@ -1629,7 +1610,7 @@ impl TransactionCacheRead for WritebackCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<Arc<VerifiedTransaction>>>> {
+    ) -> Vec<Option<Arc<VerifiedTransaction>>> {
         do_fallback_lookup(
             digests,
             |digest| {
@@ -1638,7 +1619,7 @@ impl TransactionCacheRead for WritebackCache {
                 if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
                     self.metrics
                         .record_cache_hit("transaction_block", "uncommitted");
-                    return Ok(CacheResult::Hit(Some(tx.transaction.clone())));
+                    return CacheResult::Hit(Some(tx.transaction.clone()));
                 }
                 self.metrics
                     .record_cache_miss("transaction_block", "uncommitted");
@@ -1648,17 +1629,20 @@ impl TransactionCacheRead for WritebackCache {
                 if let Some(tx) = self.cached.transactions.get(digest) {
                     self.metrics
                         .record_cache_hit("transaction_block", "committed");
-                    return Ok(CacheResult::Hit(Some(tx.clone())));
+                    return CacheResult::Hit(Some(tx.clone()));
                 }
                 self.metrics
                     .record_cache_miss("transaction_block", "committed");
 
-                Ok(CacheResult::Miss)
+                CacheResult::Miss
             },
             |remaining| {
                 self.record_db_multi_get("transaction_block", remaining.len())
                     .multi_get_transaction_blocks(remaining)
-                    .map(|v| v.into_iter().map(|o| o.map(Arc::new)).collect())
+                    .expect("db error")
+                    .into_iter()
+                    .map(|o| o.map(Arc::new))
+                    .collect()
             },
         )
     }
@@ -1666,7 +1650,7 @@ impl TransactionCacheRead for WritebackCache {
     fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+    ) -> Vec<Option<TransactionEffectsDigest>> {
         do_fallback_lookup(
             digests,
             |digest| {
@@ -1675,7 +1659,7 @@ impl TransactionCacheRead for WritebackCache {
                 if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
                     self.metrics
                         .record_cache_hit("executed_effects_digests", "uncommitted");
-                    return Ok(CacheResult::Hit(Some(*digest)));
+                    return CacheResult::Hit(Some(*digest));
                 }
                 self.metrics
                     .record_cache_miss("executed_effects_digests", "uncommitted");
@@ -1685,16 +1669,17 @@ impl TransactionCacheRead for WritebackCache {
                 if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
                     self.metrics
                         .record_cache_hit("executed_effects_digests", "committed");
-                    return Ok(CacheResult::Hit(Some(digest)));
+                    return CacheResult::Hit(Some(digest));
                 }
                 self.metrics
                     .record_cache_miss("executed_effects_digests", "committed");
 
-                Ok(CacheResult::Miss)
+                CacheResult::Miss
             },
             |remaining| {
                 self.record_db_multi_get("executed_effects_digests", remaining.len())
                     .multi_get_executed_effects_digests(remaining)
+                    .expect("db error")
             },
         )
     }
@@ -1702,7 +1687,7 @@ impl TransactionCacheRead for WritebackCache {
     fn multi_get_effects(
         &self,
         digests: &[TransactionEffectsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+    ) -> Vec<Option<TransactionEffects>> {
         do_fallback_lookup(
             digests,
             |digest| {
@@ -1711,7 +1696,7 @@ impl TransactionCacheRead for WritebackCache {
                 if let Some(effects) = self.dirty.transaction_effects.get(digest) {
                     self.metrics
                         .record_cache_hit("transaction_effects", "uncommitted");
-                    return Ok(CacheResult::Hit(Some(effects.clone())));
+                    return CacheResult::Hit(Some(effects.clone()));
                 }
                 self.metrics
                     .record_cache_miss("transaction_effects", "uncommitted");
@@ -1721,16 +1706,17 @@ impl TransactionCacheRead for WritebackCache {
                 if let Some(effects) = self.cached.transaction_effects.get(digest) {
                     self.metrics
                         .record_cache_hit("transaction_effects", "committed");
-                    return Ok(CacheResult::Hit(Some((*effects).clone())));
+                    return CacheResult::Hit(Some((*effects).clone()));
                 }
                 self.metrics
                     .record_cache_miss("transaction_effects", "committed");
 
-                Ok(CacheResult::Miss)
+                CacheResult::Miss
             },
             |remaining| {
                 self.record_db_multi_get("transaction_effects", remaining.len())
                     .multi_get_effects(remaining.iter())
+                    .expect("db error")
             },
         )
     }
@@ -1738,7 +1724,7 @@ impl TransactionCacheRead for WritebackCache {
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
+    ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>> {
         self.executed_effects_digests_notify_read
             .read(digests, |digests| {
                 self.multi_get_executed_effects_digests(digests)
@@ -1749,7 +1735,7 @@ impl TransactionCacheRead for WritebackCache {
     fn multi_get_events(
         &self,
         event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+    ) -> Vec<Option<TransactionEvents>> {
         fn map_events(events: TransactionEvents) -> Option<TransactionEvents> {
             if events.data.is_empty() {
                 None
@@ -1772,7 +1758,7 @@ impl TransactionCacheRead for WritebackCache {
                     self.metrics
                         .record_cache_hit("transaction_events", "uncommitted");
 
-                    return Ok(CacheResult::Hit(map_events(events)));
+                    return CacheResult::Hit(map_events(events));
                 }
                 self.metrics
                     .record_cache_miss("transaction_events", "uncommitted");
@@ -1787,15 +1773,15 @@ impl TransactionCacheRead for WritebackCache {
                 {
                     self.metrics
                         .record_cache_hit("transaction_events", "committed");
-                    return Ok(CacheResult::Hit(map_events(events)));
+                    return CacheResult::Hit(map_events(events));
                 }
 
                 self.metrics
                     .record_cache_miss("transaction_events", "committed");
 
-                Ok(CacheResult::Miss)
+                CacheResult::Miss
             },
-            |digests| self.store.multi_get_events(digests),
+            |digests| self.store.multi_get_events(digests).expect("db error"),
         )
     }
 }
@@ -1823,7 +1809,7 @@ impl ExecutionCacheWrite for WritebackCache {
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
-    ) -> BoxFuture<'_, SuiResult> {
+    ) -> BoxFuture<'_, ()> {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs).boxed()
     }
 }
@@ -1836,6 +1822,19 @@ impl ExecutionCacheWrite for WritebackCache {
 /// The "get from cache" and "get from store" behavior are implemented by the caller and provided
 /// via the get_cached_key and multiget_fallback functions.
 fn do_fallback_lookup<K: Copy, V: Default + Clone>(
+    keys: &[K],
+    get_cached_key: impl Fn(&K) -> CacheResult<V>,
+    multiget_fallback: impl Fn(&[K]) -> Vec<V>,
+) -> Vec<V> {
+    do_fallback_lookup_fallible(
+        keys,
+        |key| Ok(get_cached_key(key)),
+        |keys| Ok(multiget_fallback(keys)),
+    )
+    .expect("cannot fail")
+}
+
+fn do_fallback_lookup_fallible<K: Copy, V: Default + Clone>(
     keys: &[K],
     get_cached_key: impl Fn(&K) -> SuiResult<CacheResult<V>>,
     multiget_fallback: impl Fn(&[K]) -> SuiResult<Vec<V>>,

@@ -16,6 +16,7 @@ use url::{ParseError, Url};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID},
+    dynamic_field::Field,
     multiaddr::Multiaddr,
     object::Owner,
     sui_system_state::{
@@ -1090,15 +1091,15 @@ async fn get_pending_candidate_summary(
                 object_id
             )
         })?;
-        let val = bcs::from_bytes::<ValidatorV1>(bcs).map_err(|e| {
+        let field = bcs::from_bytes::<Field<u64, ValidatorV1>>(bcs).map_err(|e| {
             anyhow::anyhow!(
                 "Can't convert bcs bytes of object {} to ValidatorV1: {}",
                 object_id,
                 e,
             )
         })?;
-        if val.verified_metadata().sui_address == validator_address {
-            return Ok(Some(val));
+        if field.value.verified_metadata().sui_address == validator_address {
+            return Ok(Some(field.value));
         }
     }
     Ok(None)

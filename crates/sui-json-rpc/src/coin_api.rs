@@ -440,9 +440,7 @@ mod tests {
     use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
-    use sui_types::messages_checkpoint::{
-        CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    };
+    use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
     use sui_types::object::MoveObject;
     use sui_types::object::Object;
     use sui_types::object::Owner;
@@ -465,7 +463,6 @@ mod tests {
                 checkpoint_summaries: &[CheckpointSequenceNumber],
                 checkpoint_contents: &[CheckpointSequenceNumber],
                 checkpoint_summaries_by_digest: &[CheckpointDigest],
-                checkpoint_contents_by_digest: &[CheckpointContentsDigest],
             ) -> SuiResult<KVStoreCheckpointData>;
 
             async fn deprecated_get_transaction_checkpoint(

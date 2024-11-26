@@ -313,6 +313,8 @@ impl IndexStoreTables {
                             )?;
                         }
                         Owner::Shared { .. } | Owner::Immutable => {}
+                        // TODO: Implement support for ConsensusV2 objects.
+                        Owner::ConsensusV2 { .. } => todo!(),
                     }
                 }
 
@@ -334,6 +336,8 @@ impl IndexStoreTables {
                                 }
 
                                 Owner::Shared { .. } | Owner::Immutable => {}
+                                // TODO: Implement support for ConsensusV2 objects.
+                                Owner::ConsensusV2 { .. } => todo!(),
                             }
                         }
                     }
@@ -357,6 +361,8 @@ impl IndexStoreTables {
                             }
                         }
                         Owner::Shared { .. } | Owner::Immutable => {}
+                        // TODO: Implement support for ConsensusV2 objects.
+                        Owner::ConsensusV2 { .. } => todo!(),
                     }
                 }
 
@@ -676,6 +682,8 @@ impl<'a> LiveObjectIndexer for RestLiveObjectIndexer<'a> {
             }
 
             Owner::Shared { .. } | Owner::Immutable => {}
+            // TODO: Implement support for ConsensusV2 objects.
+            Owner::ConsensusV2 { .. } => todo!(),
         }
 
         // Look for CoinMetadata<T> and TreasuryCap<T> objects

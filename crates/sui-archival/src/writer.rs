@@ -7,8 +7,8 @@ use crate::{
     Manifest, CHECKPOINT_FILE_MAGIC, CHECKPOINT_FILE_SUFFIX, EPOCH_DIR_PREFIX, MAGIC_BYTES,
     SUMMARY_FILE_MAGIC, SUMMARY_FILE_SUFFIX,
 };
+use anyhow::Context;
 use anyhow::Result;
-use anyhow::{anyhow, Context};
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use object_store::DynObjectStore;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
@@ -408,13 +408,11 @@ impl ArchiveWriter {
         info!("Starting checkpoint tailing from sequence number: {checkpoint_sequence_number}");
 
         while kill.try_recv().is_err() {
-            if let Some(checkpoint_summary) = store
-                .get_checkpoint_by_sequence_number(checkpoint_sequence_number)
-                .map_err(|_| anyhow!("Failed to read checkpoint summary from store"))?
+            if let Some(checkpoint_summary) =
+                store.get_checkpoint_by_sequence_number(checkpoint_sequence_number)
             {
-                if let Some(checkpoint_contents) = store
-                    .get_full_checkpoint_contents(&checkpoint_summary.content_digest)
-                    .map_err(|_| anyhow!("Failed to read checkpoint content from store"))?
+                if let Some(checkpoint_contents) =
+                    store.get_full_checkpoint_contents(&checkpoint_summary.content_digest)
                 {
                     checkpoint_writer
                         .write(checkpoint_contents, checkpoint_summary.into_inner())?;

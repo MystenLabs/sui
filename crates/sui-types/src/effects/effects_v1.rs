@@ -252,7 +252,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn gas_object(&self) -> (ObjectRef, Owner) {
-        self.gas_object
+        self.gas_object.clone()
     }
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()

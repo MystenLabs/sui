@@ -3,7 +3,7 @@
 
 import { bcs, BcsType } from '@mysten/sui/bcs';
 import { SuiClient } from '@mysten/sui/client';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import pLimit from 'p-limit';
 
 const limit = pLimit(5);
@@ -127,9 +127,15 @@ async function retrieveAllPools() {
 		});
 		data.push(...page.data);
 	}
+
 	return data.map((event) => {
-		return PoolCreated.fromBase64(event.bcs);
-	});
+		try {
+			return PoolCreated.fromBase64(event.bcs);
+		} catch (err) {
+			console.error("Failed to parse event:", err, "Event:", event);
+			return null;
+		}
+	}).filter((pool) => pool !== null);
 }
 
 async function retrieveExpiredOrders(poolId: string) {
@@ -194,7 +200,7 @@ async function retrieveExpiredOrders(poolId: string) {
 }
 
 async function createCleanUpTransaction(poolOrders: { pool: any; expiredOrders: any[] }[]) {
-	let tx = new TransactionBlock();
+	let tx = new Transaction();
 
 	for (let poolOrder of poolOrders) {
 		let orderIds = poolOrder.expiredOrders.map((order) => tx.object(order.order_id));

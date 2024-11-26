@@ -1,0 +1,7 @@
+{
+  owner(
+    address: "0x931f293ce7f65fd5ebe9542653e1fd92fafa03dda563e13b83be35da8a2eecbe"
+  ) {
+    address
+  }
+}

@@ -59,7 +59,7 @@ export class Configuration {
     /** The path to the Sui binary. */
     get suiPath(): string {
         const suiBin = process.platform === 'win32' ? 'sui.exe' : 'sui';
-        const suiPath = this.configuration.get<string | null >(SUI_PATH_OPT) ?? suiBin;
+        const suiPath = this.configuration.get<string | null>(SUI_PATH_OPT) ?? suiBin;
 
         if (suiPath === suiBin) {
             return suiPath;

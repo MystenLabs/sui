@@ -124,6 +124,8 @@ as shorthand for creating the send transaction, signing it, and submitting it to
 ```ts
 await link.create({
 	signer: yourKeypair,
+	// Wait until the new link is ready to be indexed so it is claimable
+	waitForTransaction: true,
 });
 ```
 

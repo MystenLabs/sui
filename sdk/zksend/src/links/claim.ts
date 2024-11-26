@@ -31,7 +31,7 @@ import type { ZkBagContractOptions } from './zk-bag.js';
 import { getContractIds, ZkBag } from './zk-bag.js';
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
-	host: 'https://zksend.com',
+	host: 'https://getstashed.com',
 	path: '/claim',
 	network: 'mainnet' as const,
 };
@@ -209,6 +209,12 @@ export class ZkSendLink {
 			throw new Error('Assets have already been claimed');
 		}
 
+		if (!this.assets) {
+			throw new Error(
+				'Link assets could not be loaded.  Link has not been indexed or has already been claimed',
+			);
+		}
+
 		if (!this.#contract) {
 			const bytes = await this.createClaimTransaction(address).build({
 				client: this.#client,
@@ -369,7 +375,10 @@ export class ZkSendLink {
 		});
 
 		this.bagObject = bagField.data;
-		this.claimed = !bagField.data;
+
+		if (this.bagObject) {
+			this.claimed = false;
+		}
 	}
 
 	async #loadBag({
@@ -384,12 +393,6 @@ export class ZkSendLink {
 		if (!this.#contract) {
 			return;
 		}
-
-		this.assets = {
-			balances: [],
-			nfts: [],
-			coins: [],
-		};
 
 		if (!this.bagObject || !this.claimed) {
 			await this.#loadBagObject();
@@ -434,6 +437,12 @@ export class ZkSendLink {
 				showContent: true,
 			},
 		});
+
+		this.assets = {
+			balances: [],
+			nfts: [],
+			coins: [],
+		};
 
 		const balances = new Map<
 			string,
@@ -534,6 +543,7 @@ export class ZkSendLink {
 				? input.value
 				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
+		this.claimed = true;
 		this.claimedBy = receiver;
 		this.assets = getAssetsFromTransaction({
 			transaction: tx,

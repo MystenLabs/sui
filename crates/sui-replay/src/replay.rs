@@ -1881,7 +1881,7 @@ impl ChildObjectResolver for LocalExec {
                 return Err(SuiError::InvalidChildObjectAccess {
                     object: *child,
                     given_parent: parent,
-                    actual_owner: child_object.owner,
+                    actual_owner: child_object.owner.clone(),
                 });
             }
             Ok(Some(child_object))
@@ -1914,7 +1914,7 @@ impl ChildObjectResolver for LocalExec {
             receiving_object_id: &ObjectID,
             receive_object_at_version: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
-            let recv_object = match self_.get_object(receiving_object_id)? {
+            let recv_object = match self_.get_object(receiving_object_id) {
                 None => return Ok(None),
                 Some(o) => o,
             };
@@ -1947,11 +1947,8 @@ impl ChildObjectResolver for LocalExec {
 impl ParentSync for LocalExec {
     /// The objects here much already exist in the store because we downloaded them earlier
     /// No download from network
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
-        fn inner(self_: &LocalExec, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(&self, object_id: ObjectID) -> Option<ObjectRef> {
+        fn inner(self_: &LocalExec, object_id: ObjectID) -> Option<ObjectRef> {
             if let Some(v) = self_
                 .storage
                 .live_objects_store
@@ -1959,9 +1956,9 @@ impl ParentSync for LocalExec {
                 .expect("Can't lock")
                 .get(&object_id)
             {
-                return Ok(Some(v.compute_object_reference()));
+                return Some(v.compute_object_reference());
             }
-            Ok(None)
+            None
         }
         let res = inner(self, object_id);
         self.exec_store_events
@@ -1970,7 +1967,7 @@ impl ParentSync for LocalExec {
             .push(
                 ExecutionStoreEvent::ParentSyncStoreGetLatestParentEntryRef {
                     object_id,
-                    result: res.clone(),
+                    result: res,
                 },
             );
         res
@@ -2064,10 +2061,7 @@ impl ModuleResolver for &mut LocalExec {
 impl ObjectStore for LocalExec {
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         let res = self
             .storage
             .live_objects_store
@@ -2082,16 +2076,12 @@ impl ObjectStore for LocalExec {
                 object_id: *object_id,
                 result: Ok(res.clone()),
             });
-        Ok(res)
+        res
     }
 
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         let res = self
             .storage
             .live_objects_store
@@ -2115,24 +2105,17 @@ impl ObjectStore for LocalExec {
                 result: Ok(res.clone()),
             });
 
-        Ok(res)
+        res
     }
 }
 
 impl ObjectStore for &mut LocalExec {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }

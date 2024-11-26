@@ -264,7 +264,6 @@ pub async fn do_cert_with_shared_objects(
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[*cert.digest()])
         .await
-        .unwrap()
         .pop()
         .unwrap()
 }
@@ -350,7 +349,7 @@ async fn test_execution_with_dependencies() {
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
     executed_owned_certs.push(cert);
-    let (mut shared_counter_ref, owner) = effects2.created()[0];
+    let (mut shared_counter_ref, owner) = effects2.created()[0].clone();
     let shared_counter_initial_version = if let Owner::Shared {
         initial_shared_version,
     } = owner
@@ -448,8 +447,7 @@ async fn test_execution_with_dependencies() {
     authorities[3]
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
-        .await
-        .unwrap();
+        .await;
 }
 
 fn make_socket_addr() -> std::net::SocketAddr {
@@ -519,7 +517,6 @@ async fn test_per_object_overload() {
             .get_transaction_cache_reader()
             .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
-            .unwrap()
             .pop()
             .unwrap();
     }
@@ -534,10 +531,9 @@ async fn test_per_object_overload() {
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
-        .unwrap()
         .pop()
         .unwrap();
-    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0].clone();
     let Owner::Shared {
         initial_shared_version: shared_counter_initial_version,
     } = owner
@@ -654,7 +650,6 @@ async fn test_txn_age_overload() {
             .get_transaction_cache_reader()
             .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
-            .unwrap()
             .pop()
             .unwrap();
     }
@@ -669,10 +664,9 @@ async fn test_txn_age_overload() {
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
-        .unwrap()
         .pop()
         .unwrap();
-    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0].clone();
     let Owner::Shared {
         initial_shared_version: shared_counter_initial_version,
     } = owner

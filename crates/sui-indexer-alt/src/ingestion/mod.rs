@@ -49,21 +49,34 @@ pub struct IngestionConfig {
     pub local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
-    #[arg(long, default_value_t = 5000)]
+    #[arg(long, default_value_t = Self::DEFAULT_CHECKPOINT_BUFFER_SIZE)]
     pub checkpoint_buffer_size: usize,
 
     /// Maximum number of checkpoints to attempt to fetch concurrently.
-    #[arg(long, default_value_t = 200)]
+    #[arg(long, default_value_t = Self::DEFAULT_INGEST_CONCURRENCY)]
     pub ingest_concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
     #[arg(
         long,
-        default_value = "200",
+        default_value = Self::DEFAULT_RETRY_INTERVAL_MS,
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis)
     )]
     pub retry_interval: Duration,
+}
+
+impl IngestionConfig {
+    pub const DEFAULT_CHECKPOINT_BUFFER_SIZE: usize = 5000;
+    pub const DEFAULT_INGEST_CONCURRENCY: usize = 200;
+    const DEFAULT_RETRY_INTERVAL_MS: &'static str = "200";
+
+    pub fn default_retry_interval() -> Duration {
+        Self::DEFAULT_RETRY_INTERVAL_MS
+            .parse()
+            .map(Duration::from_millis)
+            .unwrap()
+    }
 }
 
 impl IngestionService {

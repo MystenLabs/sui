@@ -58,7 +58,7 @@ async fn test_get_owned_objects() -> Result<(), anyhow::Error> {
             .get_object(oref.object_id, Some(data_option.clone()))
             .await?;
         assert!(
-            matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && object.owner.unwrap().get_owner_address()? == address)
+            matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && object.owner.clone().unwrap().get_owner_address()? == address)
         );
     }
 

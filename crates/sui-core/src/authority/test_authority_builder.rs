@@ -229,8 +229,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let cache_traits =
-            build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
+        let cache_traits = build_execution_cache(
+            &Default::default(),
+            &epoch_start_configuration,
+            &registry,
+            &authority_store,
+        );
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,
@@ -366,8 +370,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         state
             .get_cache_commit()
             .commit_transaction_outputs(epoch_store.epoch(), &[*genesis.transaction().digest()])
-            .await
-            .unwrap();
+            .await;
 
         // We want to insert these objects directly instead of relying on genesis because
         // genesis process would set the previous transaction field for these objects, which would

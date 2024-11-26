@@ -238,7 +238,6 @@ pub enum Command {
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
-    Benchmark(BenchmarkConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]

@@ -25,7 +25,7 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::node::AuthorityOverloadConfig;
-    use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
+    use sui_config::{ExecutionCacheConfig, AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
     use sui_core::authority::AuthorityState;

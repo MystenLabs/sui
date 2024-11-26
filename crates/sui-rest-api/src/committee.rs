@@ -54,7 +54,7 @@ async fn get_latest_committee(
 ) -> Result<JsonProtobufBcs<ValidatorCommittee, proto::ValidatorCommittee, ValidatorCommittee>> {
     let current_epoch = state.inner().get_latest_checkpoint()?.epoch();
     let committee = state
-        .get_committee(current_epoch)?
+        .get_committee(current_epoch)
         .ok_or_else(|| CommitteeNotFoundError::new(current_epoch))?;
 
     match accept {
@@ -107,7 +107,7 @@ async fn get_committee(
     State(state): State<StateReader>,
 ) -> Result<JsonProtobufBcs<ValidatorCommittee, proto::ValidatorCommittee, ValidatorCommittee>> {
     let committee = state
-        .get_committee(epoch)?
+        .get_committee(epoch)
         .ok_or_else(|| CommitteeNotFoundError::new(epoch))?;
 
     match accept {

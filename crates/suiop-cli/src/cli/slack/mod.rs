@@ -15,6 +15,8 @@ use tracing::debug;
 /// Reexport for convenience
 pub use slack_api::*;
 
+use crate::LOCAL_CACHE_DIR;
+
 #[derive(Debug, Default)]
 pub struct Slack {
     client: Client,
@@ -25,7 +27,7 @@ pub struct Slack {
 fn get_serialize_filepath(subname: &str) -> PathBuf {
     dirs::home_dir()
         .expect("HOME env var not set")
-        .join(".suiop")
+        .join(LOCAL_CACHE_DIR)
         .join(subname)
 }
 

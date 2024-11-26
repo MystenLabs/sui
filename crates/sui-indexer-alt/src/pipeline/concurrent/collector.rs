@@ -73,7 +73,7 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 /// - If `H::BATCH_SIZE` rows are pending, it will immediately schedule a batch to be gathered.
 ///
 /// - If after sending one batch there is more data to be sent, it will immediately schedule the
-///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZ` rows).
+///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZE` rows).
 ///
 /// - Otherwise, it will check for any data to write out at a regular interval (controlled by
 ///   `config.collect_interval`).
@@ -166,9 +166,9 @@ pub(super) fn collector<H: Handler + 'static>(
                     metrics
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
-                        .inc_by(indexed.values.len() as u64);
+                        .inc_by(indexed.len() as u64);
 
-                    pending_rows += indexed.values.len();
+                    pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
 
                     if pending_rows >= H::MIN_EAGER_ROWS {

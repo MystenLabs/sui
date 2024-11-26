@@ -489,7 +489,12 @@ impl SimpleFaucet {
                 if let Some(ref balances) = result.balance_changes {
                     let sui_used = balances
                         .iter()
-                        .find(|balance| balance.owner == self.active_address)
+                        .find(|balance| {
+                            balance
+                                .owner
+                                .get_address_owner_address()
+                                .is_ok_and(|address| address == self.active_address)
+                        })
                         .map(|b| b.amount)
                         .unwrap_or_else(|| 0);
                     info!("SUI used in this tx {}: {}", tx_digest, sui_used);
@@ -718,9 +723,12 @@ impl SimpleFaucet {
                 number_of_coins, created
             )));
         }
-        assert!(created
-            .iter()
-            .all(|created_coin_owner_ref| created_coin_owner_ref.owner == recipient));
+        assert!(created.iter().all(|created_coin_owner_ref| {
+            created_coin_owner_ref
+                .owner
+                .get_address_owner_address()
+                .is_ok_and(|address| address == recipient)
+        }));
         let coin_ids: Vec<ObjectID> = created
             .iter()
             .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
@@ -775,7 +783,7 @@ impl SimpleFaucet {
 
         let mut address_coins_map: HashMap<SuiAddress, Vec<OwnedObjectRef>> = HashMap::new();
         created.iter().for_each(|created_coin_owner_ref| {
-            let owner = created_coin_owner_ref.owner;
+            let owner = created_coin_owner_ref.owner.clone();
             let coin_obj_ref = created_coin_owner_ref.clone();
 
             // Insert the coins into the map based on the destination address
