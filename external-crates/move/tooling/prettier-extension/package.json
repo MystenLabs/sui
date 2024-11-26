@@ -1,6 +1,6 @@
 {
 	"name": "prettier-move",
-	"publisher": "MystenLabs",
+	"publisher": "mysten",
 	"displayName": "Move Formatter Developer Preview",
 	"description": "Adds Move code formatting to VSCode using Prettier@v3",
 	"version": "0.1.0",
@@ -8,6 +8,8 @@
 	"preview": true,
 	"icon": "img/move.png",
 	"license": "Apache-2.0",
+	"browser": "./src/extension.js",
+	"main": "./src/extension.js",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/MystenLabs/sui.git",
@@ -64,11 +66,10 @@
 		},
 		"configurationDefaults": {
 			"[move]": {
-				"editor.defaultFormatter": "MystenLabs.prettier-move"
+				"editor.defaultFormatter": "mysten.prettier-move"
 			}
 		}
 	},
-	"main": "./src/extension.js",
 	"scripts": {
 		"package": "vsce package",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
