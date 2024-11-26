@@ -239,7 +239,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             &epoch_start_configuration,
             &registry,
             &authority_store,
-            backpressure_manager,
+            backpressure_manager.clone(),
         );
 
         let epoch_store = AuthorityPerEpochStore::new(
@@ -329,6 +329,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             usize::MAX,
             ArchiveReaderBalancer::default(),
             None,
+            backpressure_manager.subscribe(),
         )
         .await;
 

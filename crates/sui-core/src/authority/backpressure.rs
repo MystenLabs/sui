@@ -118,6 +118,10 @@ impl BackpressureManager {
 }
 
 impl BackpressureSubscriber {
+    pub fn is_backpressure_active(&self) -> bool {
+        *self.mgr.backpressure_sender.borrow()
+    }
+
     pub async fn await_backpressure(&self) {
         let mut watermarks_rx = self.mgr.watermarks_sender.subscribe();
         if watermarks_rx

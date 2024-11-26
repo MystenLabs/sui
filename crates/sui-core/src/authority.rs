@@ -13,6 +13,7 @@ use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
+use backpressure::BackpressureSubscriber;
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
@@ -820,6 +821,8 @@ pub struct AuthorityState {
     pub overload_info: AuthorityOverloadInfo,
 
     pub validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+
+    backpressure_subscriber: BackpressureSubscriber,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1097,6 +1100,13 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("consensus");
             })?;
+
+        if self.backpressure_subscriber.is_backpressure_active() {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 10,
+            });
+        }
+
         Ok(())
     }
 
@@ -2844,6 +2854,7 @@ impl AuthorityState {
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+        backpressure_subscriber: BackpressureSubscriber,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -2900,6 +2911,7 @@ impl AuthorityState {
             config,
             overload_info: AuthorityOverloadInfo::default(),
             validator_tx_finalizer,
+            backpressure_subscriber,
         });
 
         // Start a task to execute ready certificates.
