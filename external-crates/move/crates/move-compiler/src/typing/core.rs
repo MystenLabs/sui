@@ -936,6 +936,7 @@ impl TVarCounter {
         TVarCounter { next: 0 }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> TVar {
         let id = self.next;
         self.next += 1;
