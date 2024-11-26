@@ -53,3 +53,51 @@ module Test::M1 {
     }
   }
 }
+
+//# run-graphql
+{
+  availableRange {
+    first {
+      sequenceNumber
+    }
+    last {
+      sequenceNumber
+    }
+  }
+}
+
+//# run-graphql
+{
+    chainIdentifier
+}
+
+//# run-graphql
+{
+  epoch(id: 0) {
+    validatorSet {
+      totalStake
+      activeValidators {
+        nodes {
+          name
+        }
+      }
+      validatorCandidatesSize
+      inactivePoolsId
+    }
+    totalGasFees
+    totalStakeRewards
+    totalStakeSubsidies
+    fundSize
+    fundInflow
+    fundOutflow
+    netInflow
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
+  }
+}
