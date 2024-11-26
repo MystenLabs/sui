@@ -35,6 +35,8 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 # and `--dev` modes.
 # alice = "0xB0B"
 
+External Command `cat P1/.gitignore`:
+build/*
 Command `new P2 -p other_dir`:
 External Command `cat other_dir/Move.toml`:
 [package]
@@ -72,3 +74,5 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 # and `--dev` modes.
 # alice = "0xB0B"
 
+External Command `cat other_dir/.gitignore`:
+build/*
