@@ -17,7 +17,7 @@ use crate::response::{JsonProtobufBcs, ProtobufBcs};
 use crate::rest::accept::AcceptJsonProtobufBcs;
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
-use crate::{Direction, RestService};
+use crate::{Direction, RpcService};
 use crate::{RestError, Result};
 use documented::Documented;
 
@@ -38,7 +38,7 @@ pub struct CheckpointResponse {
 #[derive(Documented)]
 pub struct GetCheckpoint;
 
-impl ApiEndpoint<RestService> for GetCheckpoint {
+impl ApiEndpoint<RpcService> for GetCheckpoint {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -74,7 +74,7 @@ impl ApiEndpoint<RestService> for GetCheckpoint {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_checkpoint)
     }
 }
@@ -226,7 +226,7 @@ pub struct GetCheckpointQueryParameters {
 #[derive(Documented)]
 pub struct ListCheckpoints;
 
-impl ApiEndpoint<RestService> for ListCheckpoints {
+impl ApiEndpoint<RpcService> for ListCheckpoints {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -262,7 +262,7 @@ impl ApiEndpoint<RestService> for ListCheckpoints {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_checkpoints)
     }
 }
@@ -395,7 +395,7 @@ impl ListCheckpointsQueryParameters {
 #[derive(Documented)]
 pub struct GetFullCheckpoint;
 
-impl ApiEndpoint<RestService> for GetFullCheckpoint {
+impl ApiEndpoint<RpcService> for GetFullCheckpoint {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -427,7 +427,7 @@ impl ApiEndpoint<RestService> for GetFullCheckpoint {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_full_checkpoint)
     }
 }
