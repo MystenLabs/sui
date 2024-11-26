@@ -65,7 +65,15 @@ The Move extension autocompletes upon a dot operator, displaying the available m
 
 ![Code completion](./images/dot_completion.png)
 
+The Move extension will also autocomplete in types after a `::` operator.
 
-### Definition linking
+![Type completion](./images/colon_completion.png)
 
-The move extension supports `go-to-definition` linking for all Move symbols including types, functions, and macros, as long as the type was present when move-analyzer last built the file.
+Finally, the Move extension will complete "inlay hints," where the plugin will automatically insert the correct type after a variable declaration, unpack, function parameters, and other places.
+
+![Inlay hints](./images/inlay_hint.png)
+
+### Navigation
+
+The move extension supports `go-to-definition` navigation for all Move symbols including types, functions, and macros, as long as the type was present when move-analyzer last built the file. 
+It also supports `find-references` for functions, macros, constants, and types.
