@@ -402,6 +402,7 @@ pub async fn start_indexer(
         ingestion,
         consistency,
         committer,
+        pruner,
         pipeline:
             PipelineLayer {
                 sum_coin_balances,
@@ -439,6 +440,7 @@ pub async fn start_indexer(
     } = consistency.finish(ConsistencyConfig::default());
 
     let committer = committer.finish(CommitterConfig::default());
+    let pruner = pruner.finish(PrunerConfig::default());
 
     // Pipelines that are split up into a summary table, and a write-ahead log prune their
     // write-ahead log so it contains just enough information to overlap with the summary table.
@@ -493,7 +495,7 @@ pub async fn start_indexer(
                         $handler,
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
-                            ..Default::default()
+                            pruner: Some(pruner.clone()),
                         }),
                     )
                     .await?

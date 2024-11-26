@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-//
 
-use serde::{Deserialize, Serialize};
 use sui_default_config::DefaultConfig;
 
 use crate::{
@@ -26,6 +24,13 @@ pub struct IndexerConfig {
     /// Default configuration for committers that is shared by all pipelines. Pipelines can
     /// override individual settings in their own configuration sections.
     pub committer: CommitterLayer,
+
+    /// Default configuration for pruners that is shared by all concurrent pipelines. Pipelies can
+    /// override individual settings in their own configuration sections. Concurrent pipelines
+    /// still need to specify a pruner configuration (although it can be empty) to indicate that
+    /// they want to enable pruning, but when they do, any missing values will be filled in by this
+    /// config.
+    pub pruner: PrunerLayer,
 
     /// Per-pipeline configurations.
     pub pipeline: PipelineLayer,
@@ -90,16 +95,13 @@ pub struct CommitterLayer {
     watermark_interval_ms: Option<u64>,
 }
 
-/// PrunerLayer is special in that its fields are not optional -- a layer needs to specify all or
-/// none of the values, this means it has the same shape as [PrunerConfig], but we define it as its
-/// own type so that it can implement the deserialization logic necessary for being read from a
-/// TOML file.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
 pub struct PrunerLayer {
-    pub interval_ms: u64,
-    pub delay_ms: u64,
-    pub retention: u64,
-    pub max_chunk_size: u64,
+    pub interval_ms: Option<u64>,
+    pub delay_ms: Option<u64>,
+    pub retention: Option<u64>,
+    pub max_chunk_size: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -157,6 +159,7 @@ impl IndexerConfig {
             ingestion: self.ingestion.merge(other.ingestion),
             consistency: self.consistency.merge(other.consistency),
             committer: self.committer.merge(other.committer),
+            pruner: self.pruner.merge(other.pruner),
             pipeline: self.pipeline.merge(other.pipeline),
         }
     }
@@ -228,10 +231,12 @@ impl ConcurrentLayer {
     pub fn merge(self, other: ConcurrentLayer) -> ConcurrentLayer {
         ConcurrentLayer {
             committer: merge_recursive!(self.committer, other.committer),
-            pruner: other.pruner.or(self.pruner),
+            pruner: merge_recursive!(self.pruner, other.pruner),
         }
     }
 
+    /// Unlike other parameters, `pruner` will appear in the finished configuration only if they
+    /// appear in the layer *and* in the base.
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
         ConcurrentConfig {
             committer: if let Some(committer) = self.committer {
@@ -239,8 +244,10 @@ impl ConcurrentLayer {
             } else {
                 base.committer
             },
-            // If the layer defines a pruner config, it takes precedence.
-            pruner: self.pruner.map(Into::into).or(base.pruner),
+            pruner: match (self.pruner, base.pruner) {
+                (None, _) | (_, None) => None,
+                (Some(pruner), Some(base)) => Some(pruner.finish(base)),
+            },
         }
     }
 }
@@ -261,6 +268,32 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+        }
+    }
+}
+
+impl PrunerLayer {
+    /// Last write takes precedence for all fields except the `retention`, which takes the max of
+    /// all available values.
+    pub fn merge(self, other: PrunerLayer) -> PrunerLayer {
+        PrunerLayer {
+            interval_ms: other.interval_ms.or(self.interval_ms),
+            delay_ms: other.delay_ms.or(self.delay_ms),
+            retention: match (other.retention, self.retention) {
+                (Some(a), Some(b)) => Some(a.max(b)),
+                (Some(a), _) | (_, Some(a)) => Some(a),
+                (None, None) => None,
+            },
+            max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
+        }
+    }
+
+    pub fn finish(self, base: PrunerConfig) -> PrunerConfig {
+        PrunerConfig {
+            interval_ms: self.interval_ms.unwrap_or(base.interval_ms),
+            delay_ms: self.delay_ms.unwrap_or(base.delay_ms),
+            retention: self.retention.unwrap_or(base.retention),
+            max_chunk_size: self.max_chunk_size.unwrap_or(base.max_chunk_size),
         }
     }
 }
@@ -314,20 +347,6 @@ impl Default for ConsistencyConfig {
             consistent_pruning_interval_ms: 300_000,
             pruner_delay_ms: 120_000,
             consistent_range: None,
-        }
-    }
-}
-
-// Planning for these types to be in different crates from each other in the long-run, so use
-// `Into` rather than `From`.
-#[allow(clippy::from_over_into)]
-impl Into<PrunerConfig> for PrunerLayer {
-    fn into(self) -> PrunerConfig {
-        PrunerConfig {
-            interval_ms: self.interval_ms,
-            delay_ms: self.delay_ms,
-            retention: self.retention,
-            max_chunk_size: self.max_chunk_size,
         }
     }
 }
@@ -471,6 +490,146 @@ mod tests {
                     checkpoint_lag: Some(100),
                 }),
                 ..
+            },
+        );
+    }
+
+    #[test]
+    fn merge_pruner() {
+        let this = PrunerLayer {
+            interval_ms: None,
+            delay_ms: Some(100),
+            retention: Some(200),
+            max_chunk_size: Some(300),
+        };
+
+        let that = PrunerLayer {
+            interval_ms: Some(400),
+            delay_ms: None,
+            retention: Some(500),
+            max_chunk_size: Some(600),
+        };
+
+        let this_then_that = this.clone().merge(that.clone());
+        let that_then_this = that.clone().merge(this.clone());
+
+        assert_matches!(
+            this_then_that,
+            PrunerLayer {
+                interval_ms: Some(400),
+                delay_ms: Some(100),
+                retention: Some(500),
+                max_chunk_size: Some(600),
+            },
+        );
+
+        assert_matches!(
+            that_then_this,
+            PrunerLayer {
+                interval_ms: Some(400),
+                delay_ms: Some(100),
+                retention: Some(500),
+                max_chunk_size: Some(300),
+            },
+        );
+    }
+
+    #[test]
+    fn finish_concurrent_unpruned_override() {
+        let layer = ConcurrentLayer {
+            committer: None,
+            pruner: None,
+        };
+
+        let base = ConcurrentConfig {
+            committer: CommitterConfig {
+                write_concurrency: 5,
+                collect_interval_ms: 50,
+                watermark_interval_ms: 500,
+            },
+            pruner: Some(PrunerConfig::default()),
+        };
+
+        assert_matches!(
+            layer.finish(base),
+            ConcurrentConfig {
+                committer: CommitterConfig {
+                    write_concurrency: 5,
+                    collect_interval_ms: 50,
+                    watermark_interval_ms: 500,
+                },
+                pruner: None,
+            },
+        );
+    }
+
+    #[test]
+    fn finish_concurrent_no_pruner() {
+        let layer = ConcurrentLayer {
+            committer: None,
+            pruner: None,
+        };
+
+        let base = ConcurrentConfig {
+            committer: CommitterConfig {
+                write_concurrency: 5,
+                collect_interval_ms: 50,
+                watermark_interval_ms: 500,
+            },
+            pruner: None,
+        };
+
+        assert_matches!(
+            layer.finish(base),
+            ConcurrentConfig {
+                committer: CommitterConfig {
+                    write_concurrency: 5,
+                    collect_interval_ms: 50,
+                    watermark_interval_ms: 500,
+                },
+                pruner: None,
+            },
+        );
+    }
+
+    #[test]
+    fn finish_concurrent_pruner() {
+        let layer = ConcurrentLayer {
+            committer: None,
+            pruner: Some(PrunerLayer {
+                interval_ms: Some(1000),
+                ..Default::default()
+            }),
+        };
+
+        let base = ConcurrentConfig {
+            committer: CommitterConfig {
+                write_concurrency: 5,
+                collect_interval_ms: 50,
+                watermark_interval_ms: 500,
+            },
+            pruner: Some(PrunerConfig {
+                interval_ms: 100,
+                delay_ms: 200,
+                retention: 300,
+                max_chunk_size: 400,
+            }),
+        };
+
+        assert_matches!(
+            layer.finish(base),
+            ConcurrentConfig {
+                committer: CommitterConfig {
+                    write_concurrency: 5,
+                    collect_interval_ms: 50,
+                    watermark_interval_ms: 500,
+                },
+                pruner: Some(PrunerConfig {
+                    interval_ms: 1000,
+                    delay_ms: 200,
+                    retention: 300,
+                    max_chunk_size: 400,
+                }),
             },
         );
     }
