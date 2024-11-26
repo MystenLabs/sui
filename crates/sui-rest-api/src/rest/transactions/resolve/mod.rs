@@ -17,8 +17,8 @@ use crate::rest::openapi::RequestBodyBuilder;
 use crate::rest::openapi::ResponseBuilder;
 use crate::rest::openapi::RouteHandler;
 use crate::RestError;
-use crate::RestService;
 use crate::Result;
+use crate::RpcService;
 use axum::extract::Query;
 use axum::extract::State;
 use axum::Json;
@@ -50,7 +50,7 @@ mod literal;
 
 pub struct ResolveTransaction;
 
-impl ApiEndpoint<RestService> for ResolveTransaction {
+impl ApiEndpoint<RpcService> for ResolveTransaction {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::POST
     }
@@ -83,13 +83,13 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), resolve_transaction)
     }
 }
 
 async fn resolve_transaction(
-    State(state): State<RestService>,
+    State(state): State<RpcService>,
     Query(parameters): Query<ResolveTransactionQueryParameters>,
     accept: AcceptJsonProtobufBcs,
     Json(unresolved_transaction): Json<unresolved::Transaction>,

@@ -9,7 +9,7 @@ use axum::{
     Router,
 };
 
-use crate::{reader::StateReader, response, RestService};
+use crate::{reader::StateReader, response, RpcService};
 use openapi::ApiEndpoint;
 
 pub mod accept;
@@ -30,7 +30,7 @@ pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
 pub const APPLICATION_PROTOBUF: &str = "application/x-protobuf";
 
-pub const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
+pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
@@ -56,7 +56,7 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     &coins::GetCoinInfo,
 ];
 
-pub fn build_rest_router(service: RestService) -> axum::Router {
+pub fn build_rest_router(service: RpcService) -> axum::Router {
     let mut api = openapi::Api::new(info(service.software_version()));
 
     api.register_endpoints(
@@ -118,17 +118,17 @@ impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for
 }
 
 // Enable StateReader to be used as axum::extract::State
-impl axum::extract::FromRef<RestService> for StateReader {
-    fn from_ref(input: &RestService) -> Self {
+impl axum::extract::FromRef<RpcService> for StateReader {
+    fn from_ref(input: &RpcService) -> Self {
         input.reader.clone()
     }
 }
 
 // Enable TransactionExecutor to be used as axum::extract::State
-impl axum::extract::FromRef<RestService>
+impl axum::extract::FromRef<RpcService>
     for Option<Arc<dyn sui_types::transaction_executor::TransactionExecutor>>
 {
-    fn from_ref(input: &RestService) -> Self {
+    fn from_ref(input: &RpcService) -> Self {
         input.executor.clone()
     }
 }
