@@ -394,6 +394,7 @@ pub async fn start_indexer(
                 tx_calls,
                 tx_digests,
                 tx_kinds,
+                extra,
             },
     } = indexer_config;
 
@@ -414,6 +415,11 @@ pub async fn start_indexer(
         // Prune roughly five minutes of data in one go.
         max_chunk_size: 5 * 300,
     });
+
+    ensure!(
+        extra.is_empty(),
+        "Unexpected pipeline configurations (maybe a typo?):\n{extra}",
+    );
 
     let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();

@@ -93,6 +93,11 @@ pub struct PipelineConfig {
     pub tx_calls: Option<ConcurrentLayer>,
     pub tx_digests: Option<ConcurrentLayer>,
     pub tx_kinds: Option<ConcurrentLayer>,
+
+    /// A catch all value to detect incorrectly labelled pipelines. If this is not empty, we will
+    /// produce an error.
+    #[serde(flatten)]
+    pub extra: toml::Table,
 }
 
 impl SequentialLayer {
