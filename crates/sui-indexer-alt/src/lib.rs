@@ -17,7 +17,7 @@ use handlers::{
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
 };
-use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
+use ingestion::{client::IngestionClient, IngestionArgs, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{
@@ -110,6 +110,7 @@ impl Indexer {
     pub async fn new(
         db_args: DbArgs,
         indexer_args: IndexerArgs,
+        ingestion_args: IngestionArgs,
         ingestion_config: IngestionConfig,
         cancel: CancellationToken,
     ) -> Result<Self> {
@@ -131,8 +132,13 @@ impl Indexer {
 
         let (metrics, metrics_service) =
             MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
-        let ingestion_service =
-            IngestionService::new(ingestion_config, metrics.clone(), cancel.clone())?;
+
+        let ingestion_service = IngestionService::new(
+            ingestion_args,
+            ingestion_config,
+            metrics.clone(),
+            cancel.clone(),
+        )?;
 
         Ok(Self {
             db,
@@ -352,6 +358,7 @@ impl Default for IndexerArgs {
 pub async fn start_indexer(
     db_args: DbArgs,
     indexer_args: IndexerArgs,
+    ingestion_args: IngestionArgs,
     indexer_config: IndexerConfig,
     // If true, the indexer will bootstrap from genesis.
     // Otherwise it will skip the pipelines that rely on genesis data.
@@ -410,7 +417,15 @@ pub async fn start_indexer(
 
     let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();
-    let mut indexer = Indexer::new(db_args, indexer_args, ingestion, cancel.clone()).await?;
+
+    let mut indexer = Indexer::new(
+        db_args,
+        indexer_args,
+        ingestion_args,
+        ingestion,
+        cancel.clone(),
+    )
+    .await?;
 
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {

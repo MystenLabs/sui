@@ -22,6 +22,7 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Indexer {
+            ingestion_args,
             indexer_args,
             config,
         } => {
@@ -32,7 +33,14 @@ async fn main() -> Result<()> {
             let indexer_config: IndexerConfig = toml::from_str(&config_contents)
                 .context("Failed to parse configuration TOML file.")?;
 
-            start_indexer(args.db_args, indexer_args, indexer_config, true).await?;
+            start_indexer(
+                args.db_args,
+                indexer_args,
+                ingestion_args,
+                indexer_config,
+                true,
+            )
+            .await?;
         }
 
         Command::GenerateConfig => {

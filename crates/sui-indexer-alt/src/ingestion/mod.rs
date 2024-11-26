@@ -29,16 +29,21 @@ mod remote_client;
 #[cfg(test)]
 mod test_utils;
 
-#[DefaultConfig]
-#[derive(Clone)]
-pub struct IngestionConfig {
+#[derive(clap::Args, Clone, Debug)]
+pub struct IngestionArgs {
     /// Remote Store to fetch checkpoints from.
+    #[clap(long, required = true, group = "source")]
     pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
+    #[clap(long, required = true, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
+}
 
+#[DefaultConfig]
+#[derive(Clone)]
+pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
 
@@ -66,18 +71,20 @@ impl IngestionConfig {
 
 impl IngestionService {
     pub fn new(
+        args: IngestionArgs,
         config: IngestionConfig,
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
         // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
-        let client = if let Some(url) = config.remote_store_url.as_ref() {
+        let client = if let Some(url) = args.remote_store_url.as_ref() {
             IngestionClient::new_remote(url.clone(), metrics.clone())?
-        } else if let Some(path) = config.local_ingestion_path.as_ref() {
+        } else if let Some(path) = args.local_ingestion_path.as_ref() {
             IngestionClient::new_local(path.clone(), metrics.clone())
         } else {
             panic!("Either remote_store_url or local_ingestion_path must be provided");
         };
+
         let subscribers = Vec::new();
         let (ingest_hi_tx, ingest_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
@@ -166,8 +173,6 @@ impl IngestionService {
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            remote_store_url: None,
-            local_ingestion_path: None,
             checkpoint_buffer_size: 5000,
             ingest_concurrency: 200,
             retry_interval_ms: 200,
@@ -196,8 +201,11 @@ mod tests {
         cancel: CancellationToken,
     ) -> IngestionService {
         IngestionService::new(
-            IngestionConfig {
+            IngestionArgs {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
+                local_ingestion_path: None,
+            },
+            IngestionConfig {
                 checkpoint_buffer_size,
                 ingest_concurrency,
                 ..Default::default()
