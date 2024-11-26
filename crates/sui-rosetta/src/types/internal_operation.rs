@@ -30,7 +30,7 @@ mod withdraw_stake;
 pub const MAX_GAS_COINS: usize = 255;
 const MAX_COMMAND_ARGS: usize = 511;
 const MAX_GAS_BUDGET: u64 = 50_000_000_000;
-const START_BUDGET: u64 = 1_000_000;
+const START_GAS_UNITS: u64 = 1_000;
 
 pub struct TransactionAndObjectData {
     pub gas_coins: Vec<ObjectRef>,
@@ -54,7 +54,7 @@ pub trait TryConstructTransaction {
     ) -> Result<TransactionAndObjectData, Error>;
 }
 
-#[enum_dispatch(TryFetchNeededObjects)]
+#[enum_dispatch(TryConstructTransaction)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum InternalOperation {
     PaySui(PaySui),
