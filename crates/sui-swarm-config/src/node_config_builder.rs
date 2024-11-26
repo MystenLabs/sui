@@ -235,6 +235,7 @@ impl ValidatorConfigBuilder {
             enable_experimental_rest_api: true,
             rpc: Some(sui_rpc_api::Config {
                 enable_unstable_apis: Some(true),
+                enable_indexing: Some(true),
                 ..Default::default()
             }),
             jwk_fetch_interval_seconds: self
@@ -537,6 +538,7 @@ impl FullnodeConfigBuilder {
             enable_experimental_rest_api: true,
             rpc: Some(sui_rpc_api::Config {
                 enable_unstable_apis: Some(true),
+                enable_indexing: Some(true),
                 ..Default::default()
             }),
             // note: not used by fullnodes.
