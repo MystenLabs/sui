@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use sui_json_rpc::get_balance_changes_from_effect;
 use sui_json_rpc::get_object_changes;
 use sui_json_rpc::ObjectProvider;
-use sui_rest_api::CheckpointData;
+use sui_rpc_api::CheckpointData;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionDigest;

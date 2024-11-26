@@ -3,18 +3,33 @@
 
 use prost::Message;
 use sui_macros::sim_test;
-use sui_rest_api::client::sdk::Client;
-use sui_sdk_types::types::ValidatorCommittee;
+use sui_rpc_api::client::sdk::Client;
+use sui_rpc_api::client::Client as CoreClient;
+use sui_rpc_api::ObjectResponse;
+use sui_sdk_types::types::Object;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
-async fn get_committee() {
+async fn get_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let core_client = CoreClient::new(test_cluster.rpc_url());
 
-    let _committee = client.get_committee(0).await.unwrap();
-    let _committee = client.get_current_committee().await.unwrap();
+    let _object = client.get_object("0x5".parse().unwrap()).await.unwrap();
+    let _object = core_client
+        .get_object("0x5".parse().unwrap())
+        .await
+        .unwrap();
+
+    let _object = client
+        .get_object_with_version("0x5".parse().unwrap(), 1)
+        .await
+        .unwrap();
+    let _object = core_client
+        .get_object_with_version("0x5".parse().unwrap(), 1.into())
+        .await
+        .unwrap();
 
     async fn raw_request(url: &str) {
         let client = reqwest::Client::new();
@@ -22,14 +37,11 @@ async fn get_committee() {
         // Make sure list works with json
         let _object = client
             .get(url)
-            .header(
-                reqwest::header::ACCEPT,
-                sui_rest_api::rest::APPLICATION_JSON,
-            )
+            .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
             .send()
             .await
             .unwrap()
-            .json::<ValidatorCommittee>()
+            .json::<ObjectResponse>()
             .await
             .unwrap();
 
@@ -38,7 +50,7 @@ async fn get_committee() {
             .get(url)
             .header(
                 reqwest::header::ACCEPT,
-                sui_rest_api::rest::APPLICATION_PROTOBUF,
+                sui_rpc_api::rest::APPLICATION_PROTOBUF,
             )
             .send()
             .await
@@ -46,26 +58,25 @@ async fn get_committee() {
             .bytes()
             .await
             .unwrap();
-        let _object = sui_rest_api::proto::ValidatorCommittee::decode(bytes).unwrap();
+        let _object = sui_rpc_api::proto::GetObjectResponse::decode(bytes).unwrap();
 
         // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
         // protobuf version
         let bytes = client
             .get(url)
-            .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
+            .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
             .send()
             .await
             .unwrap()
             .bytes()
             .await
             .unwrap();
-        let _object = bcs::from_bytes::<ValidatorCommittee>(&bytes).unwrap();
+        let _object = bcs::from_bytes::<Object>(&bytes).unwrap();
     }
 
-    let url = format!("{}/v2/system/committee", test_cluster.rpc_url(),);
-
+    let url = format!("{}/v2/objects/0x5", test_cluster.rpc_url());
     raw_request(&url).await;
 
-    let url = format!("{}/v2/system/committee/0", test_cluster.rpc_url());
+    let url = format!("{}/v2/objects/0x5/version/1", test_cluster.rpc_url());
     raw_request(&url).await;
 }

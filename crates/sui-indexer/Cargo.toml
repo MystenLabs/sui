@@ -63,7 +63,7 @@ sui-types.workspace = true
 sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
 telemetry-subscribers.workspace = true
-sui-rest-api.workspace = true
+sui-rpc-api.workspace = true
 sui-transaction-builder.workspace = true
 sui-synthetic-ingestion.workspace = true
 
