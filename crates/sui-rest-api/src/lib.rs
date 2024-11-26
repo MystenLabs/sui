@@ -22,7 +22,7 @@ pub mod types;
 pub use client::Client;
 pub use config::Config;
 pub use error::{RestError, Result};
-pub use metrics::RestMetrics;
+pub use metrics::RpcMetrics;
 pub use rest::checkpoints::CheckpointResponse;
 pub use rest::checkpoints::ListCheckpointsQueryParameters;
 pub use rest::objects::ObjectResponse;
@@ -35,7 +35,7 @@ pub struct RestService {
     executor: Option<Arc<dyn TransactionExecutor>>,
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
-    metrics: Option<Arc<RestMetrics>>,
+    metrics: Option<Arc<RpcMetrics>>,
     config: Config,
 }
 
@@ -64,7 +64,7 @@ impl RestService {
         self.executor = Some(executor);
     }
 
-    pub fn with_metrics(&mut self, metrics: RestMetrics) {
+    pub fn with_metrics(&mut self, metrics: RpcMetrics) {
         self.metrics = Some(Arc::new(metrics));
     }
 
@@ -89,7 +89,7 @@ impl RestService {
             .pipe(|router| {
                 if let Some(metrics) = metrics {
                     router.layer(CallbackLayer::new(
-                        metrics::RestMetricsMakeCallbackHandler::new(metrics),
+                        metrics::RpcMetricsMakeCallbackHandler::new(metrics),
                     ))
                 } else {
                     router

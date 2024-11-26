@@ -38,7 +38,7 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rest_api::RestMetrics;
+use sui_rest_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -2103,7 +2103,7 @@ pub async fn build_http_server(
             rest_service.with_config(config);
         }
 
-        rest_service.with_metrics(RestMetrics::new(prometheus_registry));
+        rest_service.with_metrics(RpcMetrics::new(prometheus_registry));
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
             rest_service.with_executor(transaction_orchestrator.clone())
