@@ -51,7 +51,6 @@ impl Handler for ObjVersions {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
-    const WRITE_CONCURRENCY_OVERRIDE: Option<usize> = Some(20);
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         Ok(diesel::insert_into(obj_versions::table)

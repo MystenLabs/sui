@@ -64,11 +64,6 @@ pub trait Handler: Processor {
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
 
-    /// Provides a way for individual pipeline to override the write_concurrency parameter
-    /// from the PipelineConfig. This is used to determine the number of concurrent tasks
-    /// to commit data to the database.
-    const WRITE_CONCURRENCY_OVERRIDE: Option<usize> = None;
-
     /// Take a chunk of values and commit them to the database, returning the number of rows
     /// affected.
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)

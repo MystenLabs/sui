@@ -46,10 +46,9 @@ pub(super) fn committer<H: Handler + 'static>(
 ) -> JoinHandle<()> {
     spawn_monitored_task!(async move {
         info!(pipeline = H::NAME, "Starting committer");
-        let write_concurrency = H::WRITE_CONCURRENCY_OVERRIDE.unwrap_or(config.write_concurrency);
 
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(write_concurrency, |Batched { values, watermark }| {
+            .try_for_each_spawned(config.write_concurrency, |Batched { values, watermark }| {
                 let values = Arc::new(values);
                 let tx = tx.clone();
                 let db = db.clone();
