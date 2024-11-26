@@ -1,8 +1,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Detects excessive nesting of control flow structures (if/while/loop)
-//! Aims to improve code readability by encouraging flatter code structure
+//! Detects nested if conditions that can be combined using logical AND
+//! Aims to improve code readability by flattening nested if statements
+
 use crate::{
     diag,
     linters::StyleCodes,
@@ -11,58 +12,44 @@ use crate::{
         visitor::simple_visitor,
     },
 };
-const MAX_NESTING_LEVEL: u8 = 3;
 
 simple_visitor!(
     NestingExceed,
     fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
-        let nesting_level = calculate_nesting_level(&exp.exp.value, 0);
+        if !matches!(&exp.exp.value, H::UnannotatedExp_::IfElse(..)) {
+            return false;
+        }
+        let if_block = match &exp.exp.value {
+            H::UnannotatedExp_::IfElse(_, block, _) => block,
+            _ => unreachable!(),
+        };
 
-        if nesting_level > MAX_NESTING_LEVEL {
-            let msg = format!(
-                "Nesting level of {} exceeds maximum allowed ({})",
-                nesting_level, MAX_NESTING_LEVEL
-            );
+        let seq_items = match &if_block.exp.value {
+            H::UnannotatedExp_::Block((_, items)) => items,
+            _ => return false,
+        };
+        if seq_items.is_empty() {
+            return false;
+        }
+
+        let sp!(_, first_item) = &seq_items[0];
+
+        let inner_exp = match first_item {
+            H::SequenceItem_::Seq(e) => e,
+            _ => return false,
+        };
+
+        if matches!(&inner_exp.exp.value, H::UnannotatedExp_::IfElse(..)) {
+            let msg = "Nested if statements can be combined";
+            let help = "Consider combining conditions with && if possible".to_string();
+
             self.add_diag(diag!(
                 StyleCodes::ExcessiveNesting.diag_info(),
                 (exp.exp.loc, msg),
-                (exp.exp.loc, "Consider refactoring to reduce nesting"),
+                (exp.exp.loc, help),
             ));
         }
 
         false
     }
 );
-
-fn calculate_nesting_level(exp: &H::UnannotatedExp_, current_level: u8) -> u8 {
-    match exp {
-        H::UnannotatedExp_::Block(seq) => seq
-            .1
-            .iter()
-            .map(|sp!(_, item)| {
-                if let H::SequenceItem_::Seq(e) = item {
-                    calculate_nesting_level(&e.exp.value, current_level)
-                } else {
-                    current_level
-                }
-            })
-            .max()
-            .unwrap_or(current_level),
-        H::UnannotatedExp_::IfElse(_, if_block, else_block) => {
-            let next_level = current_level + 1;
-            let if_level = calculate_nesting_level(&if_block.exp.value, next_level);
-            let else_level = else_block
-                .as_ref()
-                .map(|e| calculate_nesting_level(&e.exp.value, next_level))
-                .unwrap_or(next_level);
-            if_level.max(else_level)
-        }
-        H::UnannotatedExp_::While(_, _, block) => {
-            calculate_nesting_level(&block.exp.value, current_level + 1)
-        }
-        H::UnannotatedExp_::Loop { body, .. } => {
-            calculate_nesting_level(&body.exp.value, current_level + 1)
-        }
-        _ => current_level,
-    }
-}

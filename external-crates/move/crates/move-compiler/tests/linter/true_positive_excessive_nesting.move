@@ -1,28 +1,30 @@
 module 0x42::excessive_nesting_true_positive {
 
     #[allow(unused_assignment)]
-    fun deeply_nested_if(x: u64) {
-        if (x > 0) {
-            if (x > 10) {
-                if (x > 20) {
-                    if (x > 30) { // This exceeds MAX_NESTING_LEVEL (3)
-                        x = x + 1;
-                    }
-                }
-            }
-        }
+    fun test_true_positive_direct_nesting() {
+        let value = 100;
+        
+        // Direct nesting that should be combined with &&
+        if (value > 50) {
+            if (value < 150) {  // Should trigger warning
+                if (value != 100) {  // Should trigger another warning
+                    value = 75;
+                };
+            };
+        };
+
     }
 
-    fun deeply_nested_loops(x: u64) {
-        while (x > 0) {
-            while (x > 10) {
-                while (x > 20) {
-                    loop { // This exceeds MAX_NESTING_LEVEL (3)
-                        if (x == 0) break;
-                        x = x - 1;
-                    }
-                }
-            }
-        }
+    #[allow(unused_assignment)]
+    fun test_true_positive_complex_nesting() {
+        let value = 100;
+        if (value > 0) {
+            let temp = value + 50;
+            if (temp > 100) {  // Should trigger warning - indirect nesting
+                if (value < 200) {  // Should trigger another warning
+                    value = temp;
+                };
+            };
+        };
     }
 }
