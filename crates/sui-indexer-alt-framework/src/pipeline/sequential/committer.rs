@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
-    pipeline::{Indexed, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
+    pipeline::{logging::WatermarkLogger, Indexed, WARN_PENDING_WATERMARKS},
     watermarks::CommitterWatermark,
 };
 
@@ -80,8 +80,11 @@ pub(super) fn committer<H: Handler + 'static>(
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
-        let mut next_loud_watermark_update =
-            watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
+        let mut logger = WatermarkLogger::new(
+            "Sequential Committer",
+            watermark.checkpoint_hi_inclusive,
+            Some(watermark.tx_hi),
+        );
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
@@ -259,12 +262,17 @@ pub(super) fn committer<H: Handler + 'static>(
 
                     debug!(
                         pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
                         attempt,
                         affected,
                         committed = batch_rows,
                         pending = pending_rows,
                         "Wrote batch",
+                    );
+
+                    logger.log::<H>(
+                        watermark.checkpoint_hi_inclusive,
+                        Some(watermark.tx_hi),
+                        elapsed,
                     );
 
                     metrics
@@ -306,28 +314,6 @@ pub(super) fn committer<H: Handler + 'static>(
                         .watermark_timestamp_in_db_ms
                         .with_label_values(&[H::NAME])
                         .set(watermark.timestamp_ms_hi_inclusive);
-
-                    if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
-                        next_loud_watermark_update = watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
-
-                        info!(
-                            pipeline = H::NAME,
-                            epoch = watermark.epoch_hi_inclusive,
-                            checkpoint = watermark.checkpoint_hi_inclusive,
-                            transaction = watermark.tx_hi,
-                            timestamp = %watermark.timestamp(),
-                            "Watermark",
-                        );
-                    } else {
-                        debug!(
-                            pipeline = H::NAME,
-                            epoch = watermark.epoch_hi_inclusive,
-                            checkpoint = watermark.checkpoint_hi_inclusive,
-                            transaction = watermark.tx_hi,
-                            timestamp = %watermark.timestamp(),
-                            "Watermark",
-                        );
-                    }
 
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
