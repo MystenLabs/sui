@@ -1,3 +1,4 @@
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -61,12 +62,6 @@ pub struct TrafficSketch {
     /// However, this should only lead to inaccuracy edge cases
     /// with very low traffic.
     highest_rates: HighestRates,
-    /// Unique salt to be added to all keys in the sketch. This
-    /// ensures that false positives are not correlated across
-    /// all nodes at the same time. For Sui validators for example,
-    /// this means that false positives should not prevent the network
-    /// from achieving quorum.
-    salt: u64,
 }
 
 impl TrafficSketch {
@@ -134,7 +129,6 @@ impl TrafficSketch {
                 proxied: BinaryHeap::with_capacity(highest_rates_capacity),
                 capacity: highest_rates_capacity,
             },
-            salt: rand::random(),
         }
     }
 
