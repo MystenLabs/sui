@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::PathBuf, time::Instant};
-
 use crate::{
     args::ConsistencyConfig,
     db::{reset_database, DbConfig},
-    ingestion::IngestionConfig,
     pipeline::PipelineConfig,
     start_indexer, IndexerConfig,
 };
+use std::{path::PathBuf, time::Instant};
+use sui_ingestion::IngestionConfig;
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
 
 #[derive(clap::Args, Debug, Clone)]
