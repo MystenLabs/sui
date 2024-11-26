@@ -233,7 +233,7 @@ impl ValidatorConfigBuilder {
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: None,
             enable_experimental_rest_api: true,
-            rpc: Some(sui_rest_api::Config {
+            rpc: Some(sui_rpc_api::Config {
                 enable_unstable_apis: Some(true),
                 ..Default::default()
             }),
@@ -535,7 +535,7 @@ impl FullnodeConfigBuilder {
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
             enable_experimental_rest_api: true,
-            rpc: Some(sui_rest_api::Config {
+            rpc: Some(sui_rpc_api::Config {
                 enable_unstable_apis: Some(true),
                 ..Default::default()
             }),

@@ -67,7 +67,7 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_experimental_rest_api: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc: Option<sui_rest_api::Config>,
+    pub rpc: Option<sui_rpc_api::Config>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,

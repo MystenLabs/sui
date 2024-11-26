@@ -16,7 +16,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
-use sui_rest_api::Client;
+use sui_rpc_api::Client;
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -71,8 +71,8 @@ impl Default for ReaderOptions {
 
 enum RemoteStore {
     ObjectStore(Box<dyn ObjectStore>),
-    Rest(sui_rest_api::Client),
-    Hybrid(Box<dyn ObjectStore>, sui_rest_api::Client),
+    Rest(sui_rpc_api::Client),
+    Hybrid(Box<dyn ObjectStore>, sui_rpc_api::Client),
 }
 
 impl CheckpointReader {
@@ -187,9 +187,9 @@ impl CheckpointReader {
                 self.options.timeout_secs,
             )
             .expect("failed to create remote store client");
-            RemoteStore::Hybrid(object_store, sui_rest_api::Client::new(fn_url))
+            RemoteStore::Hybrid(object_store, sui_rpc_api::Client::new(fn_url))
         } else if url.ends_with("/rest") {
-            RemoteStore::Rest(sui_rest_api::Client::new(url))
+            RemoteStore::Rest(sui_rpc_api::Client::new(url))
         } else {
             let object_store = create_remote_store_client(
                 url,

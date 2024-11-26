@@ -38,7 +38,7 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rest_api::RpcMetrics;
+use sui_rpc_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -2094,7 +2094,7 @@ pub async fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let mut rest_service = sui_rest_api::RpcService::new(
+        let mut rest_service = sui_rpc_api::RpcService::new(
             Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );
@@ -2112,7 +2112,7 @@ pub async fn build_http_server(
         router = router.merge(rest_service.into_router());
     }
     // TODO: Remove this health check when experimental REST API becomes default
-    // This is a copy of the health check in crates/sui-rest-api/src/health.rs
+    // This is a copy of the health check in crates/sui-rpc-api/src/health.rs
     router = router
         .route("/health", axum::routing::get(health_check_handler))
         .route_layer(axum::Extension(state));
