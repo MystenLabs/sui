@@ -79,7 +79,7 @@ const u128 = bcs.u128().serialize('100000010000001000000').toBytes();
 // Other types
 const str = bcs.string().serialize('this is an ascii string').toBytes();
 const hex = bcs.hex().serialize('C0FFEE').toBytes();
-const bytes = bcs.bytes(4).serialize([1, 2, 3, 4]).toBytes();
+const bytesArray = bcs.bytes(4).serialize(Uint8Array.from([1, 2, 3, 4]) ).toBytes(); 
 
 // Parsing data back into original types
 const parsedU8 = bcs.u8().parse(u8);
