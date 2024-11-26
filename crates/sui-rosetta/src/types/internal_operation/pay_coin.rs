@@ -1,11 +1,11 @@
-use std::future;
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::{Coin, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -17,8 +17,8 @@ use crate::types::internal_operation::MAX_GAS_COINS;
 use crate::{errors::Error, Currency};
 
 use super::{
-    insert_in_reverse_order, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
-    MAX_GAS_BUDGET,
+    gather_coins_in_balance_reverse_order, TransactionAndObjectData, TryConstructTransaction,
+    MAX_COMMAND_ARGS, MAX_GAS_BUDGET,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -88,34 +88,8 @@ impl TryConstructTransaction for PayCoin {
             }
         };
 
-        // The below logic should work exactly as select_coins if the first 255 coins
-        // are enough for budget. If they are not it continues iterating moving the smallest
-        // ones on the end of the vector and keeping the largest ones in the start, so we can
-        // satisfy the limit of max 255 gas-coins
-        // TODO move to super and test
-        let mut sum_largest_255 = 0;
-        let mut gathered_coins_reverse_sorted = vec![];
-        client
-            .coin_read_api()
-            .get_coins_stream(sender, None)
-            .take_while(|coin: &Coin| {
-                if gathered_coins_reverse_sorted.is_empty() {
-                    sum_largest_255 += coin.balance;
-                    gathered_coins_reverse_sorted.push(coin.clone());
-                } else {
-                    let pos =
-                        insert_in_reverse_order(&mut gathered_coins_reverse_sorted, coin.clone());
-                    if pos < MAX_GAS_COINS {
-                        sum_largest_255 += coin.balance;
-                        if gathered_coins_reverse_sorted.len() > MAX_GAS_COINS {
-                            sum_largest_255 -= gathered_coins_reverse_sorted[MAX_GAS_COINS].balance;
-                        }
-                    }
-                }
-                future::ready(budget < sum_largest_255)
-            })
-            .collect::<Vec<_>>()
-            .await;
+        let gathered_coins_reverse_sorted =
+            gather_coins_in_balance_reverse_order(client, sender, budget).await?;
 
         let gas_coins_iter = gathered_coins_reverse_sorted
             .into_iter()
