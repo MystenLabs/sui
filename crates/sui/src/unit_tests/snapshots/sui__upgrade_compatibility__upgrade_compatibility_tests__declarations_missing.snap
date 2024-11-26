@@ -8,7 +8,7 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::enum_ {
   │                  ^^^^^ enum 'EnumToBeRemoved' is missing
   │
-  = enums are part of a module's public interface and cannot be removed or changed during an upgrade.
+  = enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
 
 error[Compatibility E01001]: missing public declaration
@@ -17,7 +17,7 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::func_ {
   │                  ^^^^^ public function 'fun_to_be_removed' is missing
   │
-  = public functions are part of a module's public interface and cannot be removed or changed during an upgrade.
+  = public functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = add missing public function 'fun_to_be_removed' back to the module 'func_'.
 
 error[Compatibility E01001]: missing public declaration
@@ -26,7 +26,7 @@ error[Compatibility E01001]: missing public declaration
 7 │     fun fun_to_lose_public(): u64 {
   │         ^^^^^^^^^^^^^^^^^^ Function 'fun_to_lose_public' has lost its public visibility
   │
-  = Functions are part of a module's public interface and cannot be changed during an upgrade.
+  = Functions are part of a module's public interface and cannot be removed or changed during an upgrade.
   = Restore the original function's 'public' visibility for function 'fun_to_lose_public'.
 
 error[Compatibility E01001]: missing public declaration
@@ -35,7 +35,7 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::struct_ {
   │                  ^^^^^^^ struct 'StructToBeRemoved' is missing
   │
-  = structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+  = structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
 error[Compatibility E01007]: module missing
