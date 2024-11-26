@@ -140,6 +140,17 @@ impl<H: Handler> Batched<H> {
     }
 }
 
+impl Default for PrunerConfig {
+    fn default() -> Self {
+        Self {
+            interval_ms: 300_000,
+            delay_ms: 120_000,
+            retention: 4_000_000,
+            max_chunk_size: 2_000,
+        }
+    }
+}
+
 /// Start a new concurrent (out-of-order) indexing pipeline served by the handler, `H`. Starting
 /// strictly after the `watermark` (or from the beginning if no watermark was provided).
 ///
