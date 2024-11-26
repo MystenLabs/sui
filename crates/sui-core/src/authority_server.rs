@@ -1037,7 +1037,7 @@ impl ValidatorService {
         );
 
         // We set the soft bundle max size to be half of the consensus max transactions in block size. We do this to account for
-        // serialisation overheads and to ensure that the soft bundle is not too large when is attempted to be posted via consensus.
+        // serialization overheads and to ensure that the soft bundle is not too large when is attempted to be posted via consensus.
         // Although half the block size is on the extreme side, it's should be good enough for now.
         let soft_bundle_max_size_bytes =
             protocol_config.consensus_max_transactions_in_block_bytes() / 2;

@@ -1879,7 +1879,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                 None,
             )
             .await;
-        assert!(response.is_err());
+        assert!(!response.is_err());
         assert_matches!(
             response.unwrap_err(),
             SuiError::NoCertificateProvidedError { .. }
@@ -1888,7 +1888,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
 
     // Case 1: submit a soft bundle with more txs than the limit.
     // The bundle should be rejected.
-    print!("Case 1: submit a soft bundle with more txs than the limit.");
+    println!("Case 1: submit a soft bundle with more txs than the limit.");
     {
         let mut certificates: Vec<CertifiedTransaction> = vec![];
         for i in 0..5 {
