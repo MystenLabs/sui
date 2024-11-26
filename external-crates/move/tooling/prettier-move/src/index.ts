@@ -87,12 +87,6 @@ export const options: Record<string, SupportOption> = {
 		default: false,
 		description: 'Wrap comments to the next line if the line is too long.',
 	},
-	alwaysBreakFunctions: {
-		type: 'boolean',
-		category: 'Global',
-		default: true,
-		description: 'Always break function body into multiple lines.',
-	},
 	useModuleLabel: {
 		type: 'boolean',
 		category: 'Global',

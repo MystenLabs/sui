@@ -10,15 +10,10 @@ const args = process.argv.slice(2);
 const command = args.length == 0 ? 'prettier --help' : `prettier --plugin ${plugin_path} ${args.join(' ')}`;
 
 // run prettier, print the output and exit with correct code
-const prettier = child_process.exec(command, (error, stdout, stderr) => {
-    if (error) {
-        process.stderr.write(stderr);
-        process.exit(1);
-    }
+const prettier = child_process.exec(command);
 
-    process.stdout.write(stdout);
-    process.exit(0);
-});
-
-// additionally, if there's STDIN data, pass it to the command
+// additionally, exchange stdin/stdout/stderr with the prettier process
 process.stdin.pipe(prettier.stdin);
+prettier.stdout.pipe(process.stdout);
+prettier.stderr.pipe(process.stderr);
+prettier.on('exit', (code) => process.exit(code));
