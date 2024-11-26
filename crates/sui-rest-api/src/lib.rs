@@ -30,7 +30,7 @@ pub use rest::transactions::ExecuteTransactionQueryParameters;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 
 #[derive(Clone)]
-pub struct RestService {
+pub struct RpcService {
     reader: StateReader,
     executor: Option<Arc<dyn TransactionExecutor>>,
     chain_id: sui_types::digests::ChainIdentifier,
@@ -39,7 +39,7 @@ pub struct RestService {
     config: Config,
 }
 
-impl RestService {
+impl RpcService {
     pub fn new(reader: Arc<dyn RpcStateReader>, software_version: &'static str) -> Self {
         let chain_id = reader.get_chain_identifier().unwrap();
         Self {

@@ -3,7 +3,7 @@
 
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::RestError;
-use crate::RestService;
+use crate::RpcService;
 use crate::{reader::StateReader, Result};
 use axum::extract::{Path, State};
 use axum::Json;
@@ -14,7 +14,7 @@ use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 pub struct GetCoinInfo;
 
-impl ApiEndpoint<RestService> for GetCoinInfo {
+impl ApiEndpoint<RpcService> for GetCoinInfo {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -41,7 +41,7 @@ impl ApiEndpoint<RestService> for GetCoinInfo {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_coin_info)
     }
 }

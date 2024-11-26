@@ -4,7 +4,7 @@
 use std::borrow::Cow;
 
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
-use crate::{RestService, Result};
+use crate::{Result, RpcService};
 use axum::extract::State;
 use axum::Json;
 use documented::Documented;
@@ -15,7 +15,7 @@ use tap::Pipe;
 #[derive(Documented)]
 pub struct GetNodeInfo;
 
-impl ApiEndpoint<RestService> for GetNodeInfo {
+impl ApiEndpoint<RpcService> for GetNodeInfo {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -46,12 +46,12 @@ impl ApiEndpoint<RestService> for GetNodeInfo {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_node_info)
     }
 }
 
-async fn get_node_info(State(state): State<RestService>) -> Result<Json<NodeInfo>> {
+async fn get_node_info(State(state): State<RpcService>) -> Result<Json<NodeInfo>> {
     let latest_checkpoint = state.reader.inner().get_latest_checkpoint()?;
     let lowest_available_checkpoint = state
         .reader

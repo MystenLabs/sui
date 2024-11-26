@@ -18,7 +18,7 @@ use crate::{
         X_SUI_LOWEST_AVAILABLE_CHECKPOINT, X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
         X_SUI_TIMESTAMP_MS,
     },
-    RestService,
+    RpcService,
 };
 
 pub struct Bcs<T>(pub T);
@@ -171,7 +171,7 @@ where
 }
 
 pub async fn append_info_headers(
-    State(state): State<RestService>,
+    State(state): State<RpcService>,
     response: Response,
 ) -> impl IntoResponse {
     let mut headers = HeaderMap::new();

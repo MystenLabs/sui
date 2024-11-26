@@ -4,7 +4,7 @@
 use crate::reader::StateReader;
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::{response::ResponseContent, Result};
-use crate::{rest::Page, RestError, RestService};
+use crate::{rest::Page, RestError, RpcService};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use openapiv3::v3_1::Operation;
@@ -14,7 +14,7 @@ use tap::Pipe;
 
 pub struct ListAccountObjects;
 
-impl ApiEndpoint<RestService> for ListAccountObjects {
+impl ApiEndpoint<RpcService> for ListAccountObjects {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -39,7 +39,7 @@ impl ApiEndpoint<RestService> for ListAccountObjects {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_account_objects)
     }
 }

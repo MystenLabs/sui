@@ -6,7 +6,7 @@ use crate::rest::accept::AcceptJsonProtobufBcs;
 use crate::rest::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
-use crate::{proto, RestError, RestService, Result};
+use crate::{proto, RestError, Result, RpcService};
 use axum::extract::{Query, State};
 use schemars::JsonSchema;
 use std::net::SocketAddr;
@@ -21,7 +21,7 @@ use tap::Pipe;
 
 pub struct ExecuteTransaction;
 
-impl ApiEndpoint<RestService> for ExecuteTransaction {
+impl ApiEndpoint<RpcService> for ExecuteTransaction {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::POST
     }
@@ -50,7 +50,7 @@ impl ApiEndpoint<RestService> for ExecuteTransaction {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), execute_transaction)
     }
 }
@@ -373,7 +373,7 @@ fn derive_balance_changes(
 
 pub struct SimulateTransaction;
 
-impl ApiEndpoint<RestService> for SimulateTransaction {
+impl ApiEndpoint<RpcService> for SimulateTransaction {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::POST
     }
@@ -402,7 +402,7 @@ impl ApiEndpoint<RestService> for SimulateTransaction {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), simulate_transaction)
     }
 }

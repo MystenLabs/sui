@@ -7,7 +7,7 @@ use crate::{
     response::JsonProtobufBcs,
     rest::accept::AcceptJsonProtobufBcs,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    RestService, Result,
+    Result, RpcService,
 };
 use axum::extract::{Path, State};
 use sui_sdk_types::types::{EpochId, ValidatorCommittee};
@@ -16,7 +16,7 @@ use tap::Pipe;
 
 pub struct GetLatestCommittee;
 
-impl ApiEndpoint<RestService> for GetLatestCommittee {
+impl ApiEndpoint<RpcService> for GetLatestCommittee {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -43,7 +43,7 @@ impl ApiEndpoint<RestService> for GetLatestCommittee {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_latest_committee)
     }
 }
@@ -67,7 +67,7 @@ async fn get_latest_committee(
 
 pub struct GetCommittee;
 
-impl ApiEndpoint<RestService> for GetCommittee {
+impl ApiEndpoint<RpcService> for GetCommittee {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -96,7 +96,7 @@ impl ApiEndpoint<RestService> for GetCommittee {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_committee)
     }
 }
