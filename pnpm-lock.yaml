@@ -1739,6 +1739,9 @@ importers:
       '@scure/bip39':
         specifier: ^1.3.0
         version: 1.3.0
+      '@simplewebauthn/typescript-types':
+        specifier: ^7.4.0
+        version: 7.4.0
       '@suchipi/femver':
         specifier: ^1.0.0
         version: 1.0.0
@@ -6207,6 +6210,10 @@ packages:
 
   '@sideway/pinpoint@2.0.0':
     resolution: {integrity: sha512-RNiOoTPkptFtSVzQevY/yWtZwf/RxyVnPy/OcA9HBM3MlGDnBEYL5B41H0MTn0Uec8Hi+2qUtTfG2WWZBmMejQ==}
+
+  '@simplewebauthn/typescript-types@7.4.0':
+    resolution: {integrity: sha512-8/ZjHeUPe210Bt5oyaOIGx4h8lHdsQs19BiOT44gi/jBEgK7uBGA0Fy7NRsyh777al3m6WM0mBf0UR7xd4R7WQ==}
+    deprecated: This package has been renamed to @simplewebauthn/types. Please install @simplewebauthn/types instead to ensure you receive future updates.
 
   '@sinclair/typebox@0.27.8':
     resolution: {integrity: sha512-+Fj43pSMwJs4KRrH/938Uf+uAELIgVBmQzg/q1YG10djyfA3TnrU8N8XzqCh/okZdszqBQTZf96idMfE5lnwTA==}
@@ -20898,6 +20905,8 @@ snapshots:
   '@sideway/formula@3.0.1': {}
 
   '@sideway/pinpoint@2.0.0': {}
+
+  '@simplewebauthn/typescript-types@7.4.0': {}
 
   '@sinclair/typebox@0.27.8': {}
 
