@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
 use bootstrap::bootstrap;
-use config::{ConsistencyConfig, IndexerConfig, PipelineConfig};
+use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
 use db::{Db, DbArgs};
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
@@ -23,7 +23,7 @@ use models::watermarks::CommitterWatermark;
 use pipeline::{
     concurrent::{self, ConcurrentConfig, PrunerConfig},
     sequential::{self, SequentialConfig},
-    Processor,
+    CommitterConfig, Processor,
 };
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
@@ -371,7 +371,7 @@ pub async fn start_indexer(
         consistency,
         committer,
         pipeline:
-            PipelineConfig {
+            PipelineLayer {
                 sum_coin_balances,
                 wal_coin_balances,
                 sum_obj_types,
@@ -398,20 +398,25 @@ pub async fn start_indexer(
             },
     } = indexer_config;
 
+    let ingestion = ingestion.finish(IngestionConfig::default());
+
     let ConsistencyConfig {
         consistent_pruning_interval_ms,
         pruner_delay_ms,
-        consistent_range: checkpoint_lag,
-    } = consistency;
+        consistent_range,
+    } = consistency.finish(ConsistencyConfig::default());
+
+    let committer = committer.finish(CommitterConfig::default());
 
     // Pipelines that are split up into a summary table, and a write-ahead log prune their
     // write-ahead log so it contains just enough information to overlap with the summary table.
-    let pruner_config = checkpoint_lag.map(|l| PrunerConfig {
+    let consistent_range = consistent_range.unwrap_or_default();
+    let pruner_config = (consistent_range != 0).then(|| PrunerConfig {
         interval_ms: consistent_pruning_interval_ms,
         delay_ms: pruner_delay_ms,
         // Retain at least twice as much data as the lag, to guarantee overlap between the
         // summary table and the write-ahead log.
-        retention: l * 2,
+        retention: consistent_range * 2,
         // Prune roughly five minutes of data in one go.
         max_chunk_size: 5 * 300,
     });
@@ -437,7 +442,13 @@ pub async fn start_indexer(
         ($handler:expr, $config:expr) => {
             if let Some(layer) = $config {
                 indexer
-                    .concurrent_pipeline($handler, layer.finish(&committer))
+                    .concurrent_pipeline(
+                        $handler,
+                        layer.finish(ConcurrentConfig {
+                            committer: committer.clone(),
+                            ..Default::default()
+                        }),
+                    )
                     .await?
             }
         };
@@ -447,7 +458,13 @@ pub async fn start_indexer(
         ($handler:expr, $config:expr) => {
             if let Some(layer) = $config {
                 indexer
-                    .sequential_pipeline($handler, layer.finish(&committer))
+                    .sequential_pipeline(
+                        $handler,
+                        layer.finish(SequentialConfig {
+                            committer: committer.clone(),
+                            ..Default::default()
+                        }),
+                    )
                     .await?
             }
         };
@@ -460,8 +477,8 @@ pub async fn start_indexer(
                     .sequential_pipeline(
                         $sum_handler,
                         SequentialConfig {
-                            committer: sum_layer.finish(&committer),
-                            checkpoint_lag,
+                            committer: sum_layer.finish(committer.clone()),
+                            checkpoint_lag: consistent_range,
                         },
                     )
                     .await?;
@@ -471,7 +488,9 @@ pub async fn start_indexer(
                         .concurrent_pipeline(
                             $wal_handler,
                             ConcurrentConfig {
-                                committer: $wal_config.unwrap_or_default().finish(&committer),
+                                committer: $wal_config
+                                    .unwrap_or_default()
+                                    .finish(committer.clone()),
                                 pruner: Some(pruner_config),
                             },
                         )

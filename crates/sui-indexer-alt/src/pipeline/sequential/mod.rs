@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use sui_default_config::DefaultConfig;
+use serde::{Deserialize, Serialize};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -62,14 +62,13 @@ pub trait Handler: Processor {
 }
 
 /// Configuration for a sequential pipeline
-#[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct SequentialConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
 
-    /// Whether to hold back writes by a fixed number of checkpoints, and if so, by how many.
-    pub checkpoint_lag: Option<u64>,
+    /// How many checkpoints to hold back writes for.
+    pub checkpoint_lag: u64,
 }
 
 /// Start a new sequential (in-order) indexing pipeline, served by the handler, `H`. Starting

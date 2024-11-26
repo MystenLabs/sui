@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::models::watermarks::CommitterWatermark;
 
 pub use processor::Processor;
-use sui_default_config::DefaultConfig;
+use serde::{Deserialize, Serialize};
 
 pub mod concurrent;
 mod processor;
@@ -29,27 +29,16 @@ const PIPELINE_BUFFER: usize = 5;
 /// `--skip-watermarks` should be used.
 const WARN_PENDING_WATERMARKS: usize = 10000;
 
-#[DefaultConfig]
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CommitterConfig {
     /// Number of concurrent writers per pipeline.
-    write_concurrency: usize,
+    pub write_concurrency: usize,
 
     /// The collector will check for pending data at least this often, in milliseconds.
-    collect_interval_ms: u64,
+    pub collect_interval_ms: u64,
 
     /// Watermark task will check for pending watermarks this often, in milliseconds.
-    watermark_interval_ms: u64,
-}
-
-/// Like a [CommitterConfig] but with all its fields optional. This type is accepted in configs
-/// when we want to support layering overrides on top of a [CommitterConfig].
-#[DefaultConfig]
-#[derive(Clone, Default)]
-pub struct CommitterLayer {
-    write_concurrency: Option<usize>,
-    collect_interval_ms: Option<u64>,
-    watermark_interval_ms: Option<u64>,
+    pub watermark_interval_ms: u64,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
@@ -90,24 +79,6 @@ impl CommitterConfig {
 
     pub fn watermark_interval(&self) -> Duration {
         Duration::from_millis(self.watermark_interval_ms)
-    }
-}
-
-impl CommitterLayer {
-    /// Apply the overrides in this layer on top of the base `committer_config`, and return the
-    /// result.
-    pub fn finish(self, committer_config: &CommitterConfig) -> CommitterConfig {
-        CommitterConfig {
-            write_concurrency: self
-                .write_concurrency
-                .unwrap_or(committer_config.write_concurrency),
-            collect_interval_ms: self
-                .collect_interval_ms
-                .unwrap_or(committer_config.collect_interval_ms),
-            watermark_interval_ms: self
-                .watermark_interval_ms
-                .unwrap_or(committer_config.watermark_interval_ms),
-        }
     }
 }
 
