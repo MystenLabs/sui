@@ -59,12 +59,13 @@ impl New {
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(path.join(".gitignore"))
             .context("Unexpected error creating .gitignore")?;
 
-        for line in BufReader::new(&file).lines().flatten() {
+        for line in BufReader::new(&file).lines().map_while(Result::ok) {
             if line == gitignore_entry {
                 return Ok(());
             }
