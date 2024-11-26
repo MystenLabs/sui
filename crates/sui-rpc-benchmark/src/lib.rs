@@ -3,6 +3,8 @@
 
 pub mod direct;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
@@ -29,6 +31,11 @@ pub enum Command {
             default_value = "postgres://postgres:postgres@localhost:5432/sui"
         )]
         db_url: String,
+        #[clap(
+            long,
+            default_value = concat!(env!("CARGO_MANIFEST_DIR"), "/../sui-indexer-alt/migrations")
+        )]
+        migration_path: PathBuf,
     },
     /// Benchmark JSON RPC endpoints
     #[clap(name = "jsonrpc")]
@@ -48,9 +55,17 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
     let opts: Opts = Opts::parse();
 
     match opts.command {
-        Command::DirectQuery { db_url } => {
-            println!("Running direct query benchmark against {}", db_url);
-            let benchmark_queries = QueryGenerator::generate_benchmark_queries()?;
+        Command::DirectQuery {
+            db_url,
+            migration_path,
+        } => {
+            println!(
+                "Running direct query benchmark against DB {} and migrations {}",
+                db_url,
+                migration_path.display()
+            );
+            let query_generator = QueryGenerator { migration_path };
+            let benchmark_queries = query_generator.generate_benchmark_queries()?;
             println!("Generated {} benchmark queries", benchmark_queries.len());
             let query_executor = QueryExecutor::new(db_url.as_str(), benchmark_queries).await?;
             query_executor.run().await?;

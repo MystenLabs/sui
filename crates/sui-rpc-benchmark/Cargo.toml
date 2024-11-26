@@ -16,7 +16,7 @@ futures.workspace = true
 sqlparser = "0.52.0"
 tokio-postgres = "0.7.12"
 
-sui-pg-temp-db = { workspace = true }
+sui-pg-db = { workspace = true }
 
 [[bin]]
 name = "sui-rpc-benchmark"

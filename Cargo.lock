@@ -15130,6 +15130,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-benchmark"
+version = "1.40.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "futures",
+ "sqlparser",
+ "sui-pg-db",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+]
+
+[[package]]
 name = "sui-rpc-loadgen"
 version = "1.41.0"
 dependencies = [
