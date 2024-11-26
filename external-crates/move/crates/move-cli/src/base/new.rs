@@ -39,7 +39,7 @@ impl New {
         // TODO warn on build config flags
 
         ensure!(
-            !Identifier::is_valid(&self.name),
+            Identifier::is_valid(&self.name),
             "Invalid package name. Package name must start with a lowercase letter \
                      and consist only of lowercase letters, numbers, and underscores."
         );
