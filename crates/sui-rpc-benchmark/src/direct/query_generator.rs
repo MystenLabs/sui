@@ -4,8 +4,11 @@
 use sqlparser::ast::{ColumnOption, CreateIndex, CreateTable, Statement, TableConstraint};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
+use std::path::PathBuf;
 
-pub struct QueryGenerator;
+pub struct QueryGenerator {
+    pub migration_path: PathBuf,
+}
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkQuery {
@@ -15,28 +18,22 @@ pub struct BenchmarkQuery {
 }
 
 impl QueryGenerator {
-    fn read_sqls() -> Result<Vec<String>, anyhow::Error> {
-        let current_dir = std::env::current_dir()?;
-        let migration_path = current_dir
-            .parent() // up to crates/
-            .and_then(|p| p.parent()) // up to sui/
-            .map(|p| p.join("crates/sui-indexer-alt/migrations"))
-            .ok_or_else(|| anyhow::anyhow!("Could not find migrations directory"))?;
-        let migration_path = migration_path.to_str().unwrap();
-        let mut sqls = Vec::new();
-
-        Self::read_sql_impl(std::path::Path::new(migration_path), &mut sqls)?;
+    fn read_sqls(&self) -> Result<Vec<String>, anyhow::Error> {
+        let migration_path = self.migration_path.to_str().unwrap();
+        let sqls = Self::read_sql_impl(std::path::Path::new(migration_path))?;
         println!("Read {} up.sql files from migrations directory", sqls.len());
         Ok(sqls)
     }
 
-    fn read_sql_impl(dir: &std::path::Path, sqls: &mut Vec<String>) -> Result<(), anyhow::Error> {
+    fn read_sql_impl(dir: &std::path::Path) -> Result<Vec<String>, anyhow::Error> {
+        let mut sqls: Vec<String> = Vec::new();
         if dir.is_dir() {
             for entry in std::fs::read_dir(dir)? {
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_dir() {
-                    Self::read_sql_impl(&path, sqls)?;
+                    let inner_sqls = Self::read_sql_impl(&path)?;
+                    sqls.extend(inner_sqls);
                 } else if path.is_file()
                     && path
                         .file_name()
@@ -49,11 +46,11 @@ impl QueryGenerator {
                 }
             }
         }
-        Ok(())
+        Ok(sqls)
     }
 
-    pub fn generate_benchmark_queries() -> Result<Vec<BenchmarkQuery>, anyhow::Error> {
-        let sqls = Self::read_sqls()?;
+    pub fn generate_benchmark_queries(&self) -> Result<Vec<BenchmarkQuery>, anyhow::Error> {
+        let sqls = self.read_sqls()?;
         let mut benchmark_queries = Vec::new();
         for sql in sqls {
             let queries = sql_to_benchmark_queries(&sql)?;
