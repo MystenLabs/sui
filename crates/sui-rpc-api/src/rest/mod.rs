@@ -159,7 +159,7 @@ async fn redirect(axum::extract::Path(path): axum::extract::Path<String>) -> Red
     Redirect::permanent(&format!("/v2/{path}"))
 }
 
-mod _schemars {
+pub(crate) mod _schemars {
     use schemars::schema::InstanceType;
     use schemars::schema::Metadata;
     use schemars::schema::SchemaObject;

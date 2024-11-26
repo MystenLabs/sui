@@ -17,6 +17,7 @@ pub mod proto;
 mod reader;
 mod response;
 pub mod rest;
+mod service;
 pub mod types;
 
 pub use client::Client;
