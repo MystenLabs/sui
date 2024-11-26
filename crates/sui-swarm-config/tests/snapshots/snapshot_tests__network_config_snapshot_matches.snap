@@ -17,6 +17,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -198,6 +199,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -379,6 +381,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -560,6 +563,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -741,6 +745,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -922,6 +927,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -1103,6 +1109,7 @@ validator_configs:
     enable-experimental-rest-api: true
     rpc:
       enable-unstable-apis: true
+      enable-indexing: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
