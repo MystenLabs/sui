@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -9,12 +8,11 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
-use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{Coin, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
+use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
 use sui_sdk::rpc_types::SuiExecutionStatus;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
@@ -24,8 +22,7 @@ use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
 use crate::types::internal_operation::{
-    PayCoin, PaySui, Stake, TransactionAndObjectData, TryConstructTransaction, WithdrawStake,
-    MAX_GAS_COINS,
+    PayCoin, TransactionAndObjectData, TryConstructTransaction,
 };
 use crate::types::{
     Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
@@ -253,176 +250,27 @@ pub async fn metadata(
     // make sure it works over epoch changes
     gas_price += 100;
 
-    if let InternalOperation::PaySui(pay_sui) = option.internal_operation {
-        let TransactionAndObjectData {
-            gas_coins,
-            extra_gas_coins,
-            objects,
-            pt: _,
-            total_sui_balance,
-            budget,
-        } = pay_sui
-            .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
-            .await?;
-
-        return Ok(ConstructionMetadataResponse {
-            metadata: ConstructionMetadata {
-                sender,
-                gas_coins,
-                extra_gas_coins,
-                objects,
-                total_coin_value: total_sui_balance,
-                gas_price,
-                // TODO: Check whether we indeed want to fill the budget in the case the budget passed
-                // was None, and we have calculated it here,
-                budget,
-                currency,
-            },
-            suggested_fee: vec![Amount::new(budget as i128, None)],
-        });
-    } else if let InternalOperation::PayCoin(pay_coin) = option.internal_operation {
-        let TransactionAndObjectData {
-            gas_coins,
-            extra_gas_coins,
-            objects,
-            pt: _,
-            total_sui_balance,
-            budget,
-        } = pay_coin
-            .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
-            .await?;
-        return Ok(ConstructionMetadataResponse {
-            metadata: ConstructionMetadata {
-                sender,
-                gas_coins,
-                extra_gas_coins,
-                objects,
-                total_coin_value: total_sui_balance,
-                gas_price,
-                // TODO: Check whether we indeed want to fill the budget in the case the budget passed
-                // was None, and we have calculated it here,
-                budget,
-                currency,
-            },
-            suggested_fee: vec![Amount::new(budget as i128, None)],
-        });
-    } else if let InternalOperation::WithdrawStake(withdraw_stake) = option.internal_operation {
-        let TransactionAndObjectData {
-            gas_coins,
-            extra_gas_coins,
-            objects,
-            pt: _,
-            total_sui_balance,
-            budget,
-        } = withdraw_stake
-            .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
-            .await?;
-        return Ok(ConstructionMetadataResponse {
-            metadata: ConstructionMetadata {
-                sender,
-                gas_coins,
-                extra_gas_coins,
-                objects,
-                total_coin_value: total_sui_balance,
-                gas_price,
-                // TODO: Check whether we indeed want to fill the budget in the case the budget passed
-                // was None, and we have calculated it here,
-                budget,
-                currency,
-            },
-            suggested_fee: vec![Amount::new(budget as i128, None)],
-        });
-    }
-
-    // Get amount, objects, for the operation
-    let (total_required_amount, objects) = match &option.internal_operation {
-        InternalOperation::PaySui(PaySui { .. }) => {
-            unreachable!("PaySui is already handled explicitly")
-        }
-        InternalOperation::PayCoin(PayCoin { .. }) => {
-            unreachable!("PayCoin is already handled explicitly")
-        }
-        InternalOperation::Stake(Stake { amount, .. }) => (*amount, vec![]),
-        InternalOperation::WithdrawStake(WithdrawStake { .. }) => {
-            unreachable!("WithdrawStake is already handled explicitly")
-        }
-    };
-
-    // Get budget for suggested_fee and metadata.budget
-    let budget = match budget {
-        Some(budget) => budget,
-        None => {
-            // Dry run the transaction to get the gas used, amount doesn't really matter here when using mock coins.
-            // get gas estimation from dry-run, this will also return any tx error.
-            let data = option
-                .internal_operation
-                .try_into_data(ConstructionMetadata {
-                    sender,
-                    gas_coins: vec![],
-                    extra_gas_coins: vec![],
-                    objects: objects.clone(),
-                    // Mock coin have 1B SUI
-                    total_coin_value: 1_000_000_000 * 1_000_000_000,
-                    gas_price,
-                    // MAX BUDGET
-                    budget: 50_000_000_000,
-                    currency: currency.clone(),
-                })?;
-
-            let dry_run = context
-                .client
-                .read_api()
-                .dry_run_transaction_block(data)
-                .await?;
-            let effects = dry_run.effects;
-
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
-                return Err(Error::TransactionDryRunError(error.to_string()));
-            }
-            effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost
-        }
-    };
-
-    // Try select gas coins for required amounts
-    let exclude_ids: Vec<ObjectID> = objects.iter().map(|obj| obj.0).collect();
-    let maybe_coins = if let Some(amount) = total_required_amount {
-        let total_amount = amount + budget;
-        context
-            .client
-            .coin_read_api()
-            .select_coins(sender, None, total_amount as u128, exclude_ids.clone())
-            .await
-            .ok()
-    } else {
-        None
-    };
-
-    let coins = if let Some(coins) = maybe_coins {
-        coins
-    } else {
-        context
-            .client
-            .coin_read_api()
-            .get_coins_stream(sender, None)
-            .filter(|coin: &Coin| future::ready(!exclude_ids.contains(&coin.coin_object_id)))
-            .collect::<Vec<_>>()
-            .await
-    };
-
-    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
-
-    let mut iter = coins.into_iter().map(|c| c.object_ref());
-    let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
-    let extra_gas_coins: Vec<_> = iter.collect();
-
+    let TransactionAndObjectData {
+        gas_coins,
+        extra_gas_coins,
+        objects,
+        pt: _,
+        total_sui_balance,
+        budget,
+    } = option
+        .internal_operation
+        .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
+        .await?;
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
             sender,
             gas_coins,
             extra_gas_coins,
             objects,
-            total_coin_value: total_coin_value.into(),
+            total_coin_value: total_sui_balance,
             gas_price,
+            // TODO: Check whether we indeed want to fill the budget in the case the budget passed
+            // was None, and we have calculated it here,
             budget,
             currency,
         },

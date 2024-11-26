@@ -14,7 +14,7 @@ use crate::errors::Error;
 
 use super::{
     TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, MAX_GAS_BUDGET,
-    MAX_GAS_COINS, START_BUDGET,
+    MAX_GAS_COINS, START_GAS_UNITS,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -75,7 +75,7 @@ impl TryConstructTransaction for PaySui {
         let mut extra_gas_coins: Vec<_>;
         let total_amount = amounts.iter().sum::<u64>();
         let mut gathered = 0;
-        let mut budget = START_BUDGET;
+        let mut budget = START_GAS_UNITS * gas_price;
         let mut pt;
         // We need to dry-run in a loop, because depending on the amount of coins used the tx might
         // differ slightly: (merge / no merge / number of merge-coins)
