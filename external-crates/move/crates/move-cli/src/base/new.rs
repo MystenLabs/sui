@@ -5,6 +5,7 @@ use anyhow::{self, ensure, Context};
 use clap::*;
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
+use std::io::{BufRead, BufReader};
 use std::{fmt::Display, fs::create_dir_all, io::Write, path::Path};
 
 pub const MOVE_STDLIB_ADDR_NAME: &str = "std";
@@ -52,15 +53,24 @@ impl New {
         Ok(())
     }
 
-    /// add `build/*` to `{path}/.gitignore`
+    /// add `build/*` to `{path}/.gitignore` if it doesn't already have it
     fn write_gitignore(&self, path: &Path) -> anyhow::Result<()> {
-        let mut w = std::fs::OpenOptions::new()
+        let gitignore_entry = "build/*";
+
+        let mut file = std::fs::OpenOptions::new()
             .create(true)
-            .append(true)
+            .read(true)
+            .write(true)
             .open(path.join(".gitignore"))
             .context("Unexpected error creating .gitignore")?;
 
-        writeln!(w, "build/*")?;
+        for line in BufReader::new(&file).lines().flatten() {
+            if line == gitignore_entry {
+                return Ok(());
+            }
+        }
+
+        writeln!(file, "{gitignore_entry}")?;
         Ok(())
     }
 
