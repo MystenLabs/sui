@@ -5,6 +5,7 @@ use std::{path::PathBuf, time::Instant};
 
 use crate::{
     db::{reset_database, DbArgs},
+    ingestion::IngestionArgs,
     start_indexer, IndexerArgs, IndexerConfig,
 };
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
@@ -19,7 +20,7 @@ pub struct BenchmarkArgs {
 pub async fn run_benchmark(
     db_args: DbArgs,
     benchmark_args: BenchmarkArgs,
-    mut indexer_config: IndexerConfig,
+    indexer_config: IndexerConfig,
 ) -> anyhow::Result<()> {
     let BenchmarkArgs { ingestion_path } = benchmark_args;
 
@@ -36,14 +37,17 @@ pub async fn run_benchmark(
         ..Default::default()
     };
 
-    indexer_config.ingestion.remote_store_url = None;
-    indexer_config.ingestion.local_ingestion_path = Some(ingestion_path);
+    let ingestion_args = IngestionArgs {
+        remote_store_url: None,
+        local_ingestion_path: Some(ingestion_path.clone()),
+    };
 
     let cur_time = Instant::now();
 
     start_indexer(
         db_args,
         indexer_args,
+        ingestion_args,
         indexer_config,
         false, /* with_genesis */
     )
