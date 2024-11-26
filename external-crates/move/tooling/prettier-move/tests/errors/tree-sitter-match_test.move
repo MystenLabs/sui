@@ -49,6 +49,7 @@ fun test_var(x: u64): u64 {
 }
 
 const MyConstant: u64 = 10;
+
 fun test_constant(x: u64): u64 {
     match (x) {
         MyConstant => 1,
@@ -67,8 +68,8 @@ fun test_or_pattern(x: u64): u64 {
 // ERROR
 fun test_or_at_pattern(x: u64): u64 {
     match (x) {
-        x @ (1 | 2 | 3) => x + 1,
-        y @ (4 | 5 | 6) => y + 2,
+        x @ 1 | 2 | 3 => x + 1,
+        y @ 4 | 5 | 6 => y + 2,
         z => z + 3,
     }
 }
@@ -96,7 +97,7 @@ public struct NonDrop(u64)
 fun drop_nondrop(x: NonDrop) {
     match (x) {
         NonDrop(1) => 1,
-        _ => 2
+        _ => 2,
         // ERROR: cannot wildcard match on a non-droppable value
     }
 }
@@ -104,7 +105,7 @@ fun drop_nondrop(x: NonDrop) {
 fun destructure_nondrop(x: NonDrop) {
     match (x) {
         NonDrop(1) => 1,
-        NonDrop(_) => 2
+        NonDrop(_) => 2,
         // OK!
     }
 }
@@ -112,7 +113,7 @@ fun destructure_nondrop(x: NonDrop) {
 fun use_nondrop(x: NonDrop): NonDrop {
     match (x) {
         NonDrop(1) => NonDrop(8),
-        x => x
+        x => x,
     }
 }
 
@@ -130,7 +131,6 @@ fun f(x: MyEnum): u8 {
         MyEnum::OtherVariant(_, 3) => 2,
         // Now exhaustive since this will match all values of MyEnum::OtherVariant
         MyEnum::OtherVariant(..) => 2,
-
     }
 }
 
@@ -160,13 +160,13 @@ fun mut_on_immut(x: &MyStruct): u64 {
         MyStruct(mut y) => {
             y = &(*y + 1);
             *y
-        }
+        },
     }
 }
 
 fun mut_on_value(x: MyStruct): u64 {
     match (x) {
-        MyStruct(mut y) =>  {
+        MyStruct(mut y) => {
             *y = *y + 1;
             *y
         },
@@ -175,7 +175,7 @@ fun mut_on_value(x: MyStruct): u64 {
 
 fun mut_on_mut(x: &mut MyStruct): u64 {
     match (x) {
-        MyStruct(mut y) =>  {
+        MyStruct(mut y) => {
             *y = *y + 1;
             *y
         },
@@ -192,16 +192,16 @@ public struct MyStruct2 {
 }
 
 fun wild_match(x: MyStruct) {
-   match (x) {
-       MyStruct(.., 1) => 1,
-       // OK! The `..` pattern can be used at the beginning of the constructor pattern
-       MyStruct(1, ..) => 2,
-       // OK! The `..` pattern can be used at the end of the constructor pattern
-       MyStruct(1, .., 1) => 3,
-       // OK! The `..` pattern can be used at the middle of the constructor pattern
-       MyStruct(1, .., 1, 1) => 4,
-       MyStruct(..) => 5,
-   }
+    match (x) {
+        MyStruct(.., 1) => 1,
+        // OK! The `..` pattern can be used at the beginning of the constructor pattern
+        MyStruct(1, ..) => 2,
+        // OK! The `..` pattern can be used at the end of the constructor pattern
+        MyStruct(1, .., 1) => 3,
+        // OK! The `..` pattern can be used at the middle of the constructor pattern
+        MyStruct(1, .., 1, 1) => 4,
+        MyStruct(..) => 5,
+    }
 }
 
 fun wild_match2(x: MyStruct2) {

@@ -69,14 +69,8 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 			[
 				trueBranch?.isList // || trueBranch?.isControlFlow
 					? [' ', path.call(print, 'nonFormattingChildren', 1)]
-					: [
-							ifBreak([' {'], ' '),
-							indent(softline),
-							indentIfBreak(path.call(print, 'nonFormattingChildren', 1), {
-								groupId,
-							}),
-							ifBreak([softline, '}']),
-						],
+					: [indent(line), (path.call(print, 'nonFormattingChildren', 1))],
+
 			],
 			{ id: groupId },
 		),

@@ -9,6 +9,9 @@
 		"move",
 		"plugin"
 	],
+	"bin": {
+		"prettier-move": "./bin/prettier-move.js"
+	},
 	"main": "./out/index.js",
 	"scripts": {
 		"prepublishOnly": "pnpm build",
