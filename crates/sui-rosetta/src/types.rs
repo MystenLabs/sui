@@ -664,9 +664,9 @@ pub struct ConstructionMetadataResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionMetadata {
     pub sender: SuiAddress,
-    /// Coin<SUI> objects to be used as gas
+    /// `Coin<SUI>` objects to be used as gas
     pub gas_coins: Vec<ObjectRef>,
-    /// Coin<SUI> objects to be merged to GasCoin
+    /// `Coin<SUI>` objects to be merged to GasCoin
     pub extra_gas_coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
     #[serde(with = "str_format")]
