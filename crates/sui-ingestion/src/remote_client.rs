@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
-use crate::ingestion::Result as IngestionResult;
+use crate::client::{FetchError, FetchResult, IngestionClientTrait};
+use crate::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
 use tracing::{debug, error};
 use url::Url;
@@ -108,10 +108,10 @@ impl IngestionClientTrait for RemoteIngestionClient {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::ingestion::client::IngestionClient;
-    use crate::ingestion::error::Error;
-    use crate::ingestion::test_utils::test_checkpoint_data;
+    use crate::client::IngestionClient;
+    use crate::error::Error;
     use crate::metrics::tests::test_metrics;
+    use crate::test_utils::test_checkpoint_data;
     use axum::http::StatusCode;
     use std::sync::{Arc, Mutex};
     use tokio_util::sync::CancellationToken;

@@ -10,7 +10,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::{ingestion::error::Error, task::TrySpawnStreamExt};
+use crate::{error::Error, utils::TrySpawnStreamExt};
 
 use super::{client::IngestionClient, IngestionConfig};
 

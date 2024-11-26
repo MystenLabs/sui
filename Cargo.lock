@@ -14101,6 +14101,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "sui-field-count",
+ "sui-ingestion",
  "sui-pg-temp-db",
  "sui-protocol-config",
  "sui-storage",
@@ -14134,6 +14135,34 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sui-ingestion"
+version = "1.39.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.7.5",
+ "backoff",
+ "chrono",
+ "clap",
+ "futures",
+ "mysten-metrics",
+ "prometheus",
+ "rand 0.8.5",
+ "reqwest 0.12.5",
+ "sui-storage",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.10",
+ "tracing",
+ "url",
+ "wiremock",
 ]
 
 [[package]]

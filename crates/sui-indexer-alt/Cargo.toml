@@ -43,6 +43,7 @@ sui-protocol-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-synthetic-ingestion = { workspace = true, optional = true }
+sui-ingestion.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

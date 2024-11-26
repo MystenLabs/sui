@@ -3,19 +3,18 @@
 
 use std::{sync::Arc, time::Duration};
 
-use backoff::ExponentialBackoff;
-use mysten_metrics::spawn_monitored_task;
-use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
-
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
     pipeline::{Break, PipelineConfig, WatermarkPart},
-    task::TrySpawnStreamExt,
 };
+use backoff::ExponentialBackoff;
+use mysten_metrics::spawn_monitored_task;
+use sui_ingestion::utils::TrySpawnStreamExt;
+use tokio::{sync::mpsc, task::JoinHandle};
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 
 use super::{Batched, Handler};
 
