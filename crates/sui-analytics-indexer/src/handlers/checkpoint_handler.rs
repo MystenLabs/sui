@@ -6,7 +6,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use tokio::sync::Mutex;
 
 use sui_data_ingestion_core::Worker;
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary};
 use sui_types::transaction::TransactionDataAPI;

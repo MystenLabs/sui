@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rest_api::client::BalanceChange;
-use sui_rest_api::Client;
-use sui_rest_api::ExecuteTransactionQueryParameters;
+use sui_rpc_api::client::BalanceChange;
+use sui_rpc_api::Client;
+use sui_rpc_api::ExecuteTransactionQueryParameters;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;

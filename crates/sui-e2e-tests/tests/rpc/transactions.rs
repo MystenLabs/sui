@@ -3,8 +3,8 @@
 
 use prost::Message;
 use sui_macros::sim_test;
-use sui_rest_api::client::sdk::Client;
-use sui_rest_api::rest::transactions::{ListTransactionsQueryParameters, TransactionResponse};
+use sui_rpc_api::client::sdk::Client;
+use sui_rpc_api::rest::transactions::{ListTransactionsQueryParameters, TransactionResponse};
 use test_cluster::TestClusterBuilder;
 
 use crate::transfer_coin;
@@ -28,10 +28,7 @@ async fn get_transaction() {
     // Make sure it works with json
     let _transaction = client
         .get(&url)
-        .header(
-            reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_JSON,
-        )
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
         .send()
         .await
         .unwrap()
@@ -44,7 +41,7 @@ async fn get_transaction() {
         .get(&url)
         .header(
             reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_PROTOBUF,
+            sui_rpc_api::rest::APPLICATION_PROTOBUF,
         )
         .send()
         .await
@@ -52,13 +49,13 @@ async fn get_transaction() {
         .bytes()
         .await
         .unwrap();
-    let _transaction = sui_rest_api::proto::GetTransactionResponse::decode(bytes).unwrap();
+    let _transaction = sui_rpc_api::proto::GetTransactionResponse::decode(bytes).unwrap();
 
     // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()
@@ -89,10 +86,7 @@ async fn list_checkpoint() {
     // Make sure it works with json
     let _transactions = client
         .get(&url)
-        .header(
-            reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_JSON,
-        )
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
         .send()
         .await
         .unwrap()
@@ -105,7 +99,7 @@ async fn list_checkpoint() {
         .get(&url)
         .header(
             reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_PROTOBUF,
+            sui_rpc_api::rest::APPLICATION_PROTOBUF,
         )
         .send()
         .await
@@ -113,13 +107,13 @@ async fn list_checkpoint() {
         .bytes()
         .await
         .unwrap();
-    let _transactions = sui_rest_api::proto::ListTransactionsResponse::decode(bytes).unwrap();
+    let _transactions = sui_rpc_api::proto::ListTransactionsResponse::decode(bytes).unwrap();
 
     // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()

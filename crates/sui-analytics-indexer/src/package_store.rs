@@ -9,7 +9,7 @@ use move_core_types::account_address::AccountAddress;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
-use sui_rest_api::Client;
+use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 use thiserror::Error;
