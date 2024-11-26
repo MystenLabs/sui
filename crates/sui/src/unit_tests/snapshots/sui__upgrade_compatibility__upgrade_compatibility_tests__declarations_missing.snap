@@ -17,8 +17,8 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::func_ {
   │                  ^^^^^ public function 'fun_to_be_removed' is missing
   │
-  = public functions are part of a module's public interface and cannot be removed or changed during an upgrade.
-  = add missing public function 'fun_to_be_removed' back to the module 'func_'.
+  = functions are part of a module's public interface and cannot be removed or changed during an upgrade.
+  = add missing function 'fun_to_be_removed' back to the module 'func_'.
 
 error[Compatibility E01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:7:9
@@ -38,6 +38,5 @@ error[Compatibility E01001]: missing public declaration
   = structs are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
-The following modules are missing from the new package: 'missing_module'
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.

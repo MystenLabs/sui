@@ -90,4 +90,4 @@ error[Compatibility E01002]: type mismatch
    = Restore the original struct's fields for struct 'ChangeFieldType' including the ordering.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.

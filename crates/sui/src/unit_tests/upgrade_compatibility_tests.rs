@@ -27,6 +27,20 @@ fn test_declarations_missing() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_snapshot!(normalize_path(err.to_string()));
+
+    // let (pkg_v1, pkg_v2) = get_packages("declaration_errors");
+    // let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Additive);
+    //
+    // assert!(result.is_err());
+    // let err = result.unwrap_err();
+    // assert_snapshot!(normalize_path(err.to_string()));
+    //
+    // let (pkg_v1, pkg_v2) = get_packages("declaration_errors");
+    // let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::DepOnly);
+    //
+    // assert!(result.is_err());
+    // let err = result.unwrap_err();
+    // assert_snapshot!(normalize_path(err.to_string()));
 }
 
 #[test]
@@ -63,6 +77,26 @@ fn test_enum() {
 fn test_type_param() {
     let (pkg_v1, pkg_v2) = get_packages("type_param_errors");
     let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Compatible);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(normalize_path(err.to_string()));
+}
+
+#[test]
+fn test_additive() {
+    let (pkg_v1, pkg_v2) = get_packages("additive_errors");
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Additive);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(normalize_path(err.to_string()));
+}
+
+#[test]
+fn test_deponly() {
+    let (pkg_v1, pkg_v2) = get_packages("deponly_errors");
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::DepOnly);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
