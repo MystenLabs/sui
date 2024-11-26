@@ -4,7 +4,7 @@
 use crate::{
     reader::StateReader,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    RestService, Result,
+    Result, RpcService,
 };
 use axum::{
     extract::{Query, State},
@@ -24,7 +24,7 @@ use tap::Pipe;
 #[derive(Documented)]
 pub struct HealthCheck;
 
-impl ApiEndpoint<RestService> for HealthCheck {
+impl ApiEndpoint<RpcService> for HealthCheck {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -51,7 +51,7 @@ impl ApiEndpoint<RestService> for HealthCheck {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), health)
     }
 }

@@ -36,12 +36,12 @@ use crate::rest::openapi::RouteHandler;
 use crate::rest::PageCursor;
 use crate::Direction;
 use crate::RestError;
-use crate::RestService;
 use crate::Result;
+use crate::RpcService;
 
 pub struct GetTransaction;
 
-impl ApiEndpoint<RestService> for GetTransaction {
+impl ApiEndpoint<RpcService> for GetTransaction {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -70,7 +70,7 @@ impl ApiEndpoint<RestService> for GetTransaction {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_transaction)
     }
 }
@@ -130,7 +130,7 @@ impl From<TransactionNotFoundError> for crate::RestError {
 
 pub struct ListTransactions;
 
-impl ApiEndpoint<RestService> for ListTransactions {
+impl ApiEndpoint<RpcService> for ListTransactions {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -160,7 +160,7 @@ impl ApiEndpoint<RestService> for ListTransactions {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_transactions)
     }
 }
