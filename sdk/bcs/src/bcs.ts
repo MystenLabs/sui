@@ -155,13 +155,14 @@ export const bcs = {
 	 * bcs.bytes(3).serialize(new Uint8Array([1, 2, 3])).toBytes() // Uint8Array [1, 2, 3]
 	 */
 	bytes<T extends number>(size: T, options?: BcsTypeOptions<Uint8Array, Iterable<number>>) {
-		return fixedSizeBcsType<Uint8Array>({
+		return fixedSizeBcsType<Uint8Array, Iterable<number>>({
 			name: `bytes[${size}]`,
 			size,
 			read: (reader) => reader.readBytes(size),
 			write: (value, writer) => {
+				const array = new Uint8Array(value);
 				for (let i = 0; i < size; i++) {
-					writer.write8(value[i] ?? 0);
+					writer.write8(array[i] ?? 0);
 				}
 			},
 			...options,
