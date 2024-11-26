@@ -86,6 +86,10 @@ the plugin automatically.
 
 Alternatively, if you follow the per-project installation, [regular Pretter extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) should work as well.
 
+## Known Integrations
+
+- Neovim: see [this commit](https://github.com/amnn/nvim/commit/26236dc08162b61f95f689e232a5df2418708339) for configuration
+
 ## Contribute
 
 See [CONTRIBUTING](./CONTRIBUTING.md).
