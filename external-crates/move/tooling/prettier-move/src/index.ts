@@ -34,7 +34,7 @@ export const languages: SupportLanguage[] = [
 	{
 		name: 'move',
 		extensions: ['.move'],
-		parsers: ['move-parse'],
+		parsers: ['move'],
 	},
 ];
 
