@@ -6,9 +6,29 @@ import Admonition from '@theme/Admonition';
 
 {@include: ../snippets/deepbook.mdx}
 
-Some overview content here
+DeepBook Indexer provides streamlined, real-time access to order book and trading data from the DeepBook protocol. It acts as a centralized service to aggregate and expose critical data points for developers, traders, and analysts who interact with DeepBook.
 
-## Public DeepBook indexer
+DeepBook Indexer simplifies data retrieval by offering endpoints that enable:
+
+-	**Viewing pool information:** Retrieve detailed metadata about all available trading pools, including base and quote assets, tick sizes, and lot sizes.
+-	**Historical volume analysis:** Fetch volume metrics for specific pools or balance managers over custom time ranges, with support for interval-based breakdowns.
+-	**User-specific volume tracking:** Provide insights into individual trader activities by querying their balance manager-specific volumes.
+
+You can either use a publicly available indexer or spin up your own service. The choice you make depends on a few factors.
+
+Use the public service if:
+
+-	You have standard data needs.
+-	Latency and availability provided by the public endpoint meet your requirements.
+-	You want to avoid the operational overhead of running your own service.
+
+Run your own indexer if:
+
+-	You require guaranteed uptime and low latency.
+-	You have specific customization needs.
+-	Your application depends on proprietary features or extended data sets.
+
+## Public DeepBook Indexer
 
 [Mysten Labs](https://www.mystenlabs.com/) provides a public indexer for DeepBook. You can access this indexer at the following URL:
 
@@ -16,7 +36,28 @@ Some overview content here
 https://deepbook-indexer.mainnet.mystenlabs.com/
 ```
 
-## Available endpoints
+## Asset conversions
+
+All volumes that the indexer returns are expressed in the smallest unit of the corresponding asset. Following are the decimal places (scalars) used to determine the base unit for each asset.
+
+| Asset | Scalar |
+| --- | --- |
+| **Deepbook Token (DEEP)** | 6 |
+| **SUI** | 9 |
+| **Native USDC** | 6 |
+| **Wrapped USDC (wUSDC)** | 6 |
+| **Bridged Eth (bETH)** | 8 |
+| **Wrapped USDT (wUSDT)** | 6 |
+| **SuiNS Token (NS)** | 6 |
+| **TYPUS** | 9 |
+
+To convert the returned volume to the standard asset unit, divide the value by 10^SCALAR. For example:
+
+If the volume returned in the base asset for the SUI/USDC pool is 1,000,000,000 SUI UNIT, the correct volume in SUI is 1,000,000,000 / 10^(SUI_SCALAR) = 1 SUI. Similarly, if the volume returned in the quote asset for the SUI/USDC pool is 1,000,000,000 USDC UNIT, the correct volume is  1,000,000,000 / 10^(USDC_SCALAR) = 1,000 USDC.
+
+Use these conversions to interpret the volumes correctly across all pools and assets.
+
+## API endpoints
 
 You can perform the following tasks using the endpoints that the indexer API for DeepBook provides.
 
