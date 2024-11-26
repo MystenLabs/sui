@@ -3006,9 +3006,12 @@ async fn check_protocol_version_and_warn(client: &SuiClient) -> Result<(), anyho
         eprintln!(
             "{}",
             format!(
-                "[warning] CLI is aware protocol version {cli_protocol_version}, but the active \
-                network's protocol version is {on_chain_protocol_version}.\nPlease consider \
-                updating the CLI: https://docs.sui.io/guides/developer/getting-started/sui-install"
+                "[warning] CLI's protocol version is {cli_protocol_version}, but the active \
+                network's protocol version is {on_chain_protocol_version}. \
+                \n Consider installing the latest version of the CLI - \
+                https://docs.sui.io/guides/developer/getting-started/sui-install \n\n \
+                If publishing/upgrading returns a dependency verification error, then install the \
+                latest CLI version."
             )
             .yellow()
             .bold()
