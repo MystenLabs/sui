@@ -2094,7 +2094,7 @@ pub async fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let mut rest_service = sui_rest_api::RestService::new(
+        let mut rest_service = sui_rest_api::RpcService::new(
             Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );

@@ -291,7 +291,7 @@ pub async fn set_up_on_mvr_mode(
         .unwrap();
 
     let server_handle = tokio::spawn(async move {
-        sui_rest_api::RestService::new_without_version(sim)
+        sui_rest_api::RpcService::new_without_version(sim)
             .start_service(server_url)
             .await;
     });
@@ -326,7 +326,7 @@ pub async fn set_up_with_start_and_end_checkpoints(
         .parse()
         .unwrap();
     let server_handle = tokio::spawn(async move {
-        sui_rest_api::RestService::new_without_version(sim)
+        sui_rest_api::RpcService::new_without_version(sim)
             .start_service(server_url)
             .await;
     });

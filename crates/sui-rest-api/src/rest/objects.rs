@@ -8,7 +8,7 @@ use crate::{
     rest::accept::{AcceptFormat, AcceptJsonProtobufBcs},
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     rest::Page,
-    RestError, RestService, Result,
+    RestError, Result, RpcService,
 };
 use axum::extract::Query;
 use axum::extract::{Path, State};
@@ -29,7 +29,7 @@ pub struct ObjectResponse {
 
 pub struct GetObject;
 
-impl ApiEndpoint<RestService> for GetObject {
+impl ApiEndpoint<RpcService> for GetObject {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -58,7 +58,7 @@ impl ApiEndpoint<RestService> for GetObject {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_object)
     }
 }
@@ -89,7 +89,7 @@ pub async fn get_object(
 
 pub struct GetObjectWithVersion;
 
-impl ApiEndpoint<RestService> for GetObjectWithVersion {
+impl ApiEndpoint<RpcService> for GetObjectWithVersion {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -119,7 +119,7 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_object_with_version)
     }
 }
@@ -192,7 +192,7 @@ impl From<ObjectNotFoundError> for crate::RestError {
 
 pub struct ListDynamicFields;
 
-impl ApiEndpoint<RestService> for ListDynamicFields {
+impl ApiEndpoint<RpcService> for ListDynamicFields {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -220,7 +220,7 @@ impl ApiEndpoint<RestService> for ListDynamicFields {
             .build()
     }
 
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RestService> {
+    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_dynamic_fields)
     }
 }

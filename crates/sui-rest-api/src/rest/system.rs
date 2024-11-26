@@ -6,7 +6,7 @@ use crate::{
     rest::_schemars::U64,
     rest::accept::AcceptFormat,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    RestError, RestService, Result,
+    RestError, Result, RpcService,
 };
 use axum::{
     extract::{Path, State},
@@ -20,7 +20,7 @@ use sui_sdk_types::types::{Address, ObjectId};
 
 pub struct GetSystemStateSummary;
 
-impl ApiEndpoint<RestService> for GetSystemStateSummary {
+impl ApiEndpoint<RpcService> for GetSystemStateSummary {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -45,7 +45,7 @@ impl ApiEndpoint<RestService> for GetSystemStateSummary {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_system_state_summary)
     }
 }
@@ -530,7 +530,7 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateS
 
 pub struct GetCurrentProtocolConfig;
 
-impl ApiEndpoint<RestService> for GetCurrentProtocolConfig {
+impl ApiEndpoint<RpcService> for GetCurrentProtocolConfig {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -557,7 +557,7 @@ impl ApiEndpoint<RestService> for GetCurrentProtocolConfig {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_current_protocol_config)
     }
 }
@@ -589,7 +589,7 @@ async fn get_current_protocol_config(
 
 pub struct GetProtocolConfig;
 
-impl ApiEndpoint<RestService> for GetProtocolConfig {
+impl ApiEndpoint<RpcService> for GetProtocolConfig {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -618,7 +618,7 @@ impl ApiEndpoint<RestService> for GetProtocolConfig {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_protocol_config)
     }
 }
@@ -729,7 +729,7 @@ impl From<ProtocolConfig> for ProtocolConfigResponse {
 
 pub struct GetGasInfo;
 
-impl ApiEndpoint<RestService> for GetGasInfo {
+impl ApiEndpoint<RpcService> for GetGasInfo {
     fn method(&self) -> axum::http::Method {
         axum::http::Method::GET
     }
@@ -754,7 +754,7 @@ impl ApiEndpoint<RestService> for GetGasInfo {
             .build()
     }
 
-    fn handler(&self) -> RouteHandler<RestService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_gas_info)
     }
 }
