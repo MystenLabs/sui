@@ -20,52 +20,54 @@ using Prettier's VSCode
 [extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode). When the
 plugin is complete, we will make it available directly from Move's VSCode extension.
 
-## Installation
+## Usage (with Npm)
 
-The plugin can be installed via npm:
+1. To use the plugin, you can install it as a development dependency in your Move package:
 
-```
-npm i @mysten/prettier-plugin-move
-```
+> This will install both the prettier formatter and the plugin in the `./node_modules` directory.
 
-## Usage
-
-Go to the root directory of the Move package whose files you'd like to format (i.e., the directory
-containing the Move.toml manifest file for this package) and run the following command:
-
-```bash
-npm install prettier@3.1.1 "$SUI"/external-crates/move/crates/move-analyzer/prettier-plugin
+```sh
+npm install -D prettier @mysten/prettier-plugin-move
 ```
 
-This will install both the prettier formatter and the plugin in the `./node_modules` directory.
+1. Create a `.prettierrc` file containing the following configuration:
 
-# Command-line Usage
+```json
+{
+  "plugins": ["@mysten/prettier-plugin-move"]
+}
+```
 
-You can format Move files in the package where you completed the installation [step](#installation) by running the
-following command:
+3. Add a script in your `package.json` file to format Move files:
 
-```bash
-./node_modules/.bin/prettier --plugin=prettier-plugin-move "$PATH_TO_MOVE_FILE"
+```json
+"scripts": {
+  "prettier": "prettier --write ."
+}
+```
+
+Now you can format all Move files in your package by running:
+
+```sh
+npm run prettier
+```
+
+## Usage (with Npx)
+
+This will require having the prettier-move plugin built (`tsc`) locally in the SUI repository.
+
+```sh
+npx --yes prettier@3.3.2 --plugin "$SUI/external-crates/move/tooling/prettier-move/out/index.js" --write "path/to/move/folder/**/*.move"
 ```
 
 # VSCode integration
 
-In order to use the plugin in VSCode you first need to install Prettier's VSCode
-[extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode).
+In order to use the plugin in VSCode you first need to install
 
-Then, in the root directory of the package where you completed the installation [step](#installation) you need to place the `.prettierrc` file containing the following configuration:
+-   Prettier's VSCode [extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode).
+-   Move's formatter [extension](https://marketplace.visualstudio.com/items?itemName=mysten.prettier-move).
 
-```
-{
-"plugins": [
-    "prettier-plugin-move"
-  ]
-}
-```
-
-After completing these steps, if you open the root directory of the package where you completed the
-installation [step](#installation) and choose any of the Move source files in this package, you will
-be able to format them by choosing `Format Code` command from VSCode's command palette.
+After completing these steps, you will be able to format move files by choosing `Format Code` command from VSCode's command palette.
 
 ## Contribute
 
