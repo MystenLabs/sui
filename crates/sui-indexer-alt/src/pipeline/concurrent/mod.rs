@@ -3,9 +3,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use reader_watermark::reader_watermark;
 use serde::{Deserialize, Serialize};
-use sui_default_config::DefaultConfig;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -20,6 +18,7 @@ use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIP
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
+    reader_watermark::reader_watermark,
 };
 
 mod collector;
@@ -77,8 +76,7 @@ pub trait Handler: Processor {
 }
 
 /// Configuration for a concurrent pipeline
-#[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ConcurrentConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,

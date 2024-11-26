@@ -33,8 +33,8 @@ use super::{Handler, SequentialConfig};
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
 ///
-/// The committer can optionally be configured to lag behind the ingestion service by a fixed
-/// number of checkpoints (configured by `checkpoint_lag`).
+/// The committer can be configured to lag behind the ingestion serice by a fixed number of
+/// checkpoints (configured by `checkpoint_lag`). A value of `0` means no lag.
 ///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
 /// unblock its regulator.
@@ -55,8 +55,7 @@ pub(super) fn committer<H: Handler + 'static>(
         let mut poll = interval(config.committer.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // If no checkpoint lag is specified, we default it to `0` (no lag).
-        let checkpoint_lag = config.checkpoint_lag.unwrap_or_default();
+        let checkpoint_lag = config.checkpoint_lag;
 
         // Buffer to gather the next batch to write. A checkpoint's data is only added to the batch
         // when it is known to come from the next checkpoint after `watermark` (the current tip of

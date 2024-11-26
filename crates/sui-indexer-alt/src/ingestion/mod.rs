@@ -8,7 +8,7 @@
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use sui_default_config::DefaultConfig;
+use serde::{Deserialize, Serialize};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -41,8 +41,7 @@ pub struct ClientArgs {
     pub local_ingestion_path: Option<PathBuf>,
 }
 
-#[DefaultConfig]
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
