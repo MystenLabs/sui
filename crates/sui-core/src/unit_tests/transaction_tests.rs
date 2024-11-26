@@ -1879,7 +1879,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                 None,
             )
             .await;
-        assert!(!response.is_err());
+        assert!(response.is_err());
         assert_matches!(
             response.unwrap_err(),
             SuiError::NoCertificateProvidedError { .. }
