@@ -140,3 +140,117 @@ fn insert_in_reverse_order(vec: &mut Vec<Coin>, coin: Coin) -> usize {
         }
     }
 }
+
+#[cfg(test)]
+mod internal_operation_tests {
+    use super::insert_in_reverse_order;
+    use rand::rngs::StdRng;
+    use rand::seq::SliceRandom;
+    use rand::{Rng, SeedableRng};
+    use sui_json_rpc_types::Coin;
+    use sui_sdk::SUI_COIN_TYPE;
+    use sui_types::base_types::random_object_ref;
+    use sui_types::digests::TransactionDigest;
+
+    #[test]
+    fn test_insert_in_reverse_order() {
+        const N_COINS: u64 = 10;
+        let mut coins = (0..N_COINS)
+            .map(|i| {
+                let obj_ref = random_object_ref();
+                Coin {
+                    coin_type: SUI_COIN_TYPE.to_string(),
+                    coin_object_id: obj_ref.0,
+                    version: obj_ref.1,
+                    digest: obj_ref.2,
+                    balance: i,
+                    previous_transaction: TransactionDigest::default(),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Specify a seed for reproducible tests
+        let mut rng = StdRng::from_seed([42; 32]);
+        for _ in 0..5 {
+            coins.shuffle(&mut rng);
+            // Check the test-cases if necessary
+            // println!("[");
+            // coins.iter().for_each(|c| print!("{}, ", c.balance));
+            // println!("");
+            // println!("]");
+
+            let mut ordered = Vec::with_capacity(N_COINS as usize);
+            for coin in coins {
+                insert_in_reverse_order(&mut ordered, coin);
+            }
+
+            let mut expected_balance = N_COINS;
+            ordered.iter().for_each(|coin| {
+                expected_balance -= 1;
+                assert!(coin.balance == expected_balance);
+            });
+            coins = ordered;
+        }
+
+        // try adding some duplicate values
+        let mut dupls: Vec<u64> = (0..5).map(|_| rng.gen::<u64>() % 10).collect();
+        for &balance in &dupls {
+            let obj_ref = random_object_ref();
+            coins.push(Coin {
+                coin_type: SUI_COIN_TYPE.to_string(),
+                coin_object_id: obj_ref.0,
+                version: obj_ref.1,
+                digest: obj_ref.2,
+                balance,
+                previous_transaction: TransactionDigest::default(),
+            });
+        }
+        // push duplicates to the edges too
+        let obj_ref = random_object_ref();
+        coins.push(Coin {
+            coin_type: SUI_COIN_TYPE.to_string(),
+            coin_object_id: obj_ref.0,
+            version: obj_ref.1,
+            digest: obj_ref.2,
+            balance: 9,
+            previous_transaction: TransactionDigest::default(),
+        });
+        dupls.push(9);
+        let obj_ref = random_object_ref();
+        coins.push(Coin {
+            coin_type: SUI_COIN_TYPE.to_string(),
+            coin_object_id: obj_ref.0,
+            version: obj_ref.1,
+            digest: obj_ref.2,
+            balance: 0,
+            previous_transaction: TransactionDigest::default(),
+        });
+        dupls.push(0);
+        let mut dupls_to_find = dupls.clone();
+        for _ in 0..5 {
+            coins.shuffle(&mut rng);
+            // Check the test-cases if necessary
+            // println!("[");
+            // coins.iter().for_each(|c| print!("{}, ", c.balance));
+            // println!("");
+            // println!("]");
+
+            let mut ordered = Vec::with_capacity(N_COINS as usize + 5);
+            for coin in coins {
+                insert_in_reverse_order(&mut ordered, coin);
+            }
+
+            let mut expected_balance = N_COINS;
+            ordered.iter().for_each(|coin| {
+                if let Some(pos) = dupls_to_find.iter().position(|&x| x == expected_balance) {
+                    dupls_to_find.remove(pos);
+                } else {
+                    expected_balance -= 1;
+                };
+                assert!(coin.balance == expected_balance);
+            });
+            coins = ordered;
+            dupls_to_find = dupls.clone();
+        }
+    }
+}
