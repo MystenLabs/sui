@@ -229,8 +229,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let cache_traits =
-            build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
+        let cache_traits = build_execution_cache(
+            &Default::default(),
+            &epoch_start_configuration,
+            &registry,
+            &authority_store,
+        );
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,
