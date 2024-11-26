@@ -119,6 +119,10 @@ impl ConsensusHandlerInitializer {
     pub(crate) fn metrics(&self) -> &Arc<AuthorityMetrics> {
         &self.state.metrics
     }
+
+    pub(crate) fn backpressure_subscriber(&self) -> BackpressureSubscriber {
+        self.backpressure_manager.subscribe()
+    }
 }
 
 pub struct ConsensusHandler<C> {
@@ -870,6 +874,8 @@ pub(crate) struct ConsensusTransactionHandler {
     epoch_store: Arc<AuthorityPerEpochStore>,
     /// Enqueues transactions to the transaction manager via a separate task.
     transaction_manager_sender: TransactionManagerSender,
+    /// Backpressure subscriber to wait for backpressure to be resolved.
+    backpressure_subscriber: BackpressureSubscriber,
     /// Metrics for consensus transaction handling.
     metrics: Arc<AuthorityMetrics>,
 }
@@ -878,12 +884,14 @@ impl ConsensusTransactionHandler {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         transaction_manager_sender: TransactionManagerSender,
+        backpressure_subscriber: BackpressureSubscriber,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
             enabled: epoch_store.protocol_config().mysticeti_fastpath(),
             epoch_store,
             transaction_manager_sender,
+            backpressure_subscriber,
             metrics,
         }
     }
@@ -1255,9 +1263,12 @@ mod tests {
             state.transaction_manager().clone(),
             epoch_store.clone(),
         );
+
+        let backpressure_manager = BackpressureManager::new_for_tests();
         let transaction_handler = ConsensusTransactionHandler::new(
             epoch_store,
             transaction_manager_sender,
+            backpressure_manager.subscribe(),
             state.metrics.clone(),
         );
 
