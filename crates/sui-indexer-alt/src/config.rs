@@ -53,7 +53,7 @@ pub struct ConsistencyConfig {
 // configuration files can be combined into one final configuration.
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<usize>,
@@ -61,7 +61,7 @@ pub struct IngestionLayer {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ConsistencyLayer {
     consistent_pruning_interval_ms: Option<u64>,
     pruner_delay_ms: Option<u64>,
@@ -69,21 +69,21 @@ pub struct ConsistencyLayer {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct SequentialLayer {
     committer: Option<CommitterLayer>,
     checkpoint_lag: Option<u64>,
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     committer: Option<CommitterLayer>,
     pruner: Option<PrunerLayer>,
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct CommitterLayer {
     write_concurrency: Option<usize>,
     collect_interval_ms: Option<u64>,
@@ -103,7 +103,7 @@ pub struct PrunerLayer {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct PipelineLayer {
     // Consistent pipelines (a sequential pipeline with a write-ahead log)
@@ -140,7 +140,37 @@ pub struct PipelineLayer {
     pub extra: toml::Table,
 }
 
+macro_rules! merge_recursive {
+    ($self:expr, $other:expr) => {
+        match ($self, $other) {
+            (Some(a), Some(b)) => Some(a.merge(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        }
+    };
+}
+
+impl IndexerConfig {
+    pub fn merge(self, other: IndexerConfig) -> IndexerConfig {
+        IndexerConfig {
+            ingestion: self.ingestion.merge(other.ingestion),
+            consistency: self.consistency.merge(other.consistency),
+            committer: self.committer.merge(other.committer),
+            pipeline: self.pipeline.merge(other.pipeline),
+        }
+    }
+}
+
 impl IngestionLayer {
+    pub fn merge(self, other: IngestionLayer) -> IngestionLayer {
+        IngestionLayer {
+            checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
+            ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
+            retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
+        }
+    }
+
     pub fn finish(self, base: IngestionConfig) -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: self
@@ -153,6 +183,16 @@ impl IngestionLayer {
 }
 
 impl ConsistencyLayer {
+    pub fn merge(self, other: ConsistencyLayer) -> ConsistencyLayer {
+        ConsistencyLayer {
+            consistent_pruning_interval_ms: other
+                .consistent_pruning_interval_ms
+                .or(self.consistent_pruning_interval_ms),
+            pruner_delay_ms: other.pruner_delay_ms.or(self.pruner_delay_ms),
+            consistent_range: other.consistent_range.or(self.consistent_range),
+        }
+    }
+
     pub fn finish(self, base: ConsistencyConfig) -> ConsistencyConfig {
         ConsistencyConfig {
             consistent_pruning_interval_ms: self
@@ -165,6 +205,13 @@ impl ConsistencyLayer {
 }
 
 impl SequentialLayer {
+    pub fn merge(self, other: SequentialLayer) -> SequentialLayer {
+        SequentialLayer {
+            committer: merge_recursive!(self.committer, other.committer),
+            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
+        }
+    }
+
     pub fn finish(self, base: SequentialConfig) -> SequentialConfig {
         SequentialConfig {
             committer: if let Some(committer) = self.committer {
@@ -178,6 +225,13 @@ impl SequentialLayer {
 }
 
 impl ConcurrentLayer {
+    pub fn merge(self, other: ConcurrentLayer) -> ConcurrentLayer {
+        ConcurrentLayer {
+            committer: merge_recursive!(self.committer, other.committer),
+            pruner: other.pruner.or(self.pruner),
+        }
+    }
+
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
         ConcurrentConfig {
             committer: if let Some(committer) = self.committer {
@@ -192,6 +246,14 @@ impl ConcurrentLayer {
 }
 
 impl CommitterLayer {
+    pub fn merge(self, other: CommitterLayer) -> CommitterLayer {
+        CommitterLayer {
+            write_concurrency: other.write_concurrency.or(self.write_concurrency),
+            collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
+            watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
+        }
+    }
+
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
         CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
@@ -199,6 +261,49 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+        }
+    }
+}
+
+impl PipelineLayer {
+    pub fn merge(self, other: PipelineLayer) -> PipelineLayer {
+        PipelineLayer {
+            sum_coin_balances: merge_recursive!(self.sum_coin_balances, other.sum_coin_balances),
+            wal_coin_balances: merge_recursive!(self.wal_coin_balances, other.wal_coin_balances),
+            sum_obj_types: merge_recursive!(self.sum_obj_types, other.sum_obj_types),
+            wal_obj_types: merge_recursive!(self.wal_obj_types, other.wal_obj_types),
+            sum_displays: merge_recursive!(self.sum_displays, other.sum_displays),
+            sum_packages: merge_recursive!(self.sum_packages, other.sum_packages),
+            ev_emit_mod: merge_recursive!(self.ev_emit_mod, other.ev_emit_mod),
+            ev_struct_inst: merge_recursive!(self.ev_struct_inst, other.ev_struct_inst),
+            kv_checkpoints: merge_recursive!(self.kv_checkpoints, other.kv_checkpoints),
+            kv_epoch_ends: merge_recursive!(self.kv_epoch_ends, other.kv_epoch_ends),
+            kv_epoch_starts: merge_recursive!(self.kv_epoch_starts, other.kv_epoch_starts),
+            kv_feature_flags: merge_recursive!(self.kv_feature_flags, other.kv_feature_flags),
+            kv_objects: merge_recursive!(self.kv_objects, other.kv_objects),
+            kv_protocol_configs: merge_recursive!(
+                self.kv_protocol_configs,
+                other.kv_protocol_configs
+            ),
+            kv_transactions: merge_recursive!(self.kv_transactions, other.kv_transactions),
+            obj_versions: merge_recursive!(self.obj_versions, other.obj_versions),
+            tx_affected_addresses: merge_recursive!(
+                self.tx_affected_addresses,
+                other.tx_affected_addresses
+            ),
+            tx_affected_objects: merge_recursive!(
+                self.tx_affected_objects,
+                other.tx_affected_objects
+            ),
+            tx_balance_changes: merge_recursive!(self.tx_balance_changes, other.tx_balance_changes),
+            tx_calls: merge_recursive!(self.tx_calls, other.tx_calls),
+            tx_digests: merge_recursive!(self.tx_digests, other.tx_digests),
+            tx_kinds: merge_recursive!(self.tx_kinds, other.tx_kinds),
+            extra: if self.extra.is_empty() {
+                other.extra
+            } else {
+                self.extra
+            },
         }
     }
 }
@@ -224,5 +329,149 @@ impl Into<PrunerConfig> for PrunerLayer {
             retention: self.retention,
             max_chunk_size: self.max_chunk_size,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! assert_matches {
+        ($value:expr, $pattern:pat $(,)?) => {
+            let value = $value;
+            assert!(
+                matches!(value, $pattern),
+                "Did not match pattern:\nexpected: {}\nactual: {value:#?}",
+                stringify!($pattern)
+            );
+        };
+    }
+
+    #[test]
+    fn merge_simple() {
+        let this = ConsistencyLayer {
+            consistent_pruning_interval_ms: None,
+            pruner_delay_ms: Some(2000),
+            consistent_range: Some(3000),
+        };
+
+        let that = ConsistencyLayer {
+            consistent_pruning_interval_ms: Some(1000),
+            pruner_delay_ms: None,
+            consistent_range: Some(4000),
+        };
+
+        let this_then_that = this.clone().merge(that.clone());
+        let that_then_this = that.clone().merge(this.clone());
+
+        assert_matches!(
+            this_then_that,
+            ConsistencyLayer {
+                consistent_pruning_interval_ms: Some(1000),
+                pruner_delay_ms: Some(2000),
+                consistent_range: Some(4000),
+            }
+        );
+
+        assert_matches!(
+            that_then_this,
+            ConsistencyLayer {
+                consistent_pruning_interval_ms: Some(1000),
+                pruner_delay_ms: Some(2000),
+                consistent_range: Some(3000),
+            }
+        );
+    }
+
+    #[test]
+    fn merge_recursive() {
+        let this = PipelineLayer {
+            sum_coin_balances: None,
+            sum_obj_types: Some(CommitterLayer {
+                write_concurrency: Some(5),
+                collect_interval_ms: Some(500),
+                watermark_interval_ms: None,
+            }),
+            sum_displays: Some(SequentialLayer {
+                committer: Some(CommitterLayer {
+                    write_concurrency: Some(10),
+                    collect_interval_ms: Some(1000),
+                    watermark_interval_ms: None,
+                }),
+                checkpoint_lag: Some(100),
+            }),
+            ..Default::default()
+        };
+
+        let that = PipelineLayer {
+            sum_coin_balances: Some(CommitterLayer {
+                write_concurrency: Some(10),
+                collect_interval_ms: None,
+                watermark_interval_ms: Some(1000),
+            }),
+            sum_obj_types: None,
+            sum_displays: Some(SequentialLayer {
+                committer: Some(CommitterLayer {
+                    write_concurrency: Some(5),
+                    collect_interval_ms: None,
+                    watermark_interval_ms: Some(500),
+                }),
+                checkpoint_lag: Some(200),
+            }),
+            ..Default::default()
+        };
+
+        let this_then_that = this.clone().merge(that.clone());
+        let that_then_this = that.clone().merge(this.clone());
+
+        assert_matches!(
+            this_then_that,
+            PipelineLayer {
+                sum_coin_balances: Some(CommitterLayer {
+                    write_concurrency: Some(10),
+                    collect_interval_ms: None,
+                    watermark_interval_ms: Some(1000),
+                }),
+                sum_obj_types: Some(CommitterLayer {
+                    write_concurrency: Some(5),
+                    collect_interval_ms: Some(500),
+                    watermark_interval_ms: None,
+                }),
+                sum_displays: Some(SequentialLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(5),
+                        collect_interval_ms: Some(1000),
+                        watermark_interval_ms: Some(500),
+                    }),
+                    checkpoint_lag: Some(200),
+                }),
+                ..
+            },
+        );
+
+        assert_matches!(
+            that_then_this,
+            PipelineLayer {
+                sum_coin_balances: Some(CommitterLayer {
+                    write_concurrency: Some(10),
+                    collect_interval_ms: None,
+                    watermark_interval_ms: Some(1000),
+                }),
+                sum_obj_types: Some(CommitterLayer {
+                    write_concurrency: Some(5),
+                    collect_interval_ms: Some(500),
+                    watermark_interval_ms: None,
+                }),
+                sum_displays: Some(SequentialLayer {
+                    committer: Some(CommitterLayer {
+                        write_concurrency: Some(10),
+                        collect_interval_ms: Some(1000),
+                        watermark_interval_ms: Some(500),
+                    }),
+                    checkpoint_lag: Some(100),
+                }),
+                ..
+            },
+        );
     }
 }

@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -26,12 +29,7 @@ async fn main() -> Result<()> {
             indexer_args,
             config,
         } => {
-            let config_contents = fs::read_to_string(config)
-                .await
-                .context("failed to read configuration TOML file")?;
-
-            let indexer_config: IndexerConfig = toml::from_str(&config_contents)
-                .context("Failed to parse configuration TOML file.")?;
+            let indexer_config = read_config(&config).await?;
 
             start_indexer(
                 args.db_args,
@@ -48,7 +46,28 @@ async fn main() -> Result<()> {
             let config_toml = toml::to_string_pretty(&config)
                 .context("Failed to serialize default configuration to TOML.")?;
 
-            println!("{}", config_toml);
+            println!("{config_toml}");
+        }
+
+        Command::MergeConfigs { config } => {
+            let mut files = config.into_iter();
+
+            let Some(file) = files.next() else {
+                bail!("At least one configuration file must be provided.");
+            };
+
+            let mut indexer_config = read_config(&file).await?;
+            for file in files {
+                indexer_config =
+                    indexer_config.merge(read_config(&file).await.with_context(|| {
+                        format!("Failed to read configuration file: {}", file.display())
+                    })?);
+            }
+
+            let config_toml = toml::to_string_pretty(&indexer_config)
+                .context("Failed to serialize merged configuration to TOML.")?;
+
+            println!("{config_toml}");
         }
 
         Command::ResetDatabase { skip_migrations } => {
@@ -73,4 +92,12 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn read_config(path: &Path) -> Result<IndexerConfig> {
+    let config_contents = fs::read_to_string(path)
+        .await
+        .context("Failed to read configuration TOML file")?;
+
+    toml::from_str(&config_contents).context("Failed to parse configuration TOML file.")
 }
