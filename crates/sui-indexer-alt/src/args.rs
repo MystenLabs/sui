@@ -38,6 +38,14 @@ pub enum Command {
     /// Output the contents of the default configuration to STDOUT.
     GenerateConfig,
 
+    /// Combine the configuration held across multiple files into one and output it to STDOUT. When
+    /// two configurations set the same field, the last write wins.
+    MergeConfigs {
+        /// Path to a TOML file to be merged
+        #[arg(long, required = true, action = clap::ArgAction::Append)]
+        config: Vec<PathBuf>,
+    },
+
     /// Wipe the database of its contents
     ResetDatabase {
         /// If true, only drop all tables but do not run the migrations.
