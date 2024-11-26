@@ -42,14 +42,14 @@ All volumes that the indexer returns are expressed in the smallest unit of the c
 
 | Asset | Scalar |
 | --- | --- |
-| **Deepbook Token (DEEP)** | 6 |
-| **SUI** | 9 |
-| **Native USDC** | 6 |
-| **Wrapped USDC (wUSDC)** | 6 |
-| **Bridged Eth (bETH)** | 8 |
-| **Wrapped USDT (wUSDT)** | 6 |
-| **SuiNS Token (NS)** | 6 |
-| **TYPUS** | 9 |
+| Deepbook Token (DEEP) | 6 |
+| SUI | 9 |
+| Native USDC | 6 |
+| Wrapped USDC (wUSDC) | 6 |
+| Bridged Eth (bETH) | 8 |
+| Wrapped USDT (wUSDT) | 6 |
+| SuiNS Token (NS) | 6 |
+| TYPUS | 9 |
 
 To convert the returned volume to the standard asset unit, divide the value by 10^SCALAR. For example:
 
@@ -74,21 +74,21 @@ Returns a list of all available pools, each containing detailed information abou
 ```json
 [
 	{
-	“pool_id”: “string”,
-	“pool_name”: “string”,
-	“base_asset_id”: “string”,
-	“base_asset_decimals”: integer,
-	“base_asset_symbol”: “string”,
-	“base_asset_name”: “string”,
-	“quote_asset_id”: “string”,
-	“quote_asset_decimals”: integer,
-	“quote_asset_symbol”: “string”,
-	“quote_asset_name”: “string”,
-	“min_size”: integer,
-	“lot_size”: integer,
-	“tick_size”: integer
+	  "pool_id": "string",
+	  "pool_name": "string",
+	  "base_asset_id": "string",
+	  "base_asset_decimals": integer,
+	  "base_asset_symbol": "string",
+	  "base_asset_name": "string",
+	  "quote_asset_id": "string",
+	  "quote_asset_decimals": integer,
+	  "quote_asset_symbol": "string",
+	  "quote_asset_name": "string",
+	  "min_size": integer,
+	  "lot_size": integer,
+	  "tick_size": integer
 	},
-	…
+	...
 ]
 ```
 
@@ -169,8 +169,8 @@ Returns the historical volume for each specified pool within the given time rang
 
 ```json
 {
-	“pool_id_1”: total_pool1_volume,
-	“pool_id_2”: total_pool2_volume,
+	"pool_id_1": total_pool1_volume,
+	"pool_id_2": total_pool2_volume,
 	...
 }
 ```
@@ -206,8 +206,8 @@ By default, this endpoint retrieves the last 24-hour trading volume for the bala
 
 ```json
 {
-	“pool_id_1”: [maker_volume, taker_volume],
-	“pool_id_2”: …
+	"pool_id_1": [maker_volume, taker_volume],
+	"pool_id_2": …
 }
 ```
 
@@ -248,13 +248,13 @@ By default, this endpoint retrieves the last 24-hour trading volume for the bala
 
 ```json
 {
-“time_1”: {
-		“pool_id_1”: [maker_volume, taker_volume],
-		“pool_id_2”: …
+"time_1": {
+		"pool_id_1": [maker_volume, taker_volume],
+		"pool_id_2": …
 	},
-“time_2”: {
-	“pool_id_1”: [maker_volume, taker_volume],
-	“pool_id_2”: …
+"time_2": {
+	"pool_id_1": [maker_volume, taker_volume],
+	"pool_id_2": …
 	}
 }
 ```
