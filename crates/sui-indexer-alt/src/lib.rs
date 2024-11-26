@@ -17,7 +17,7 @@ use handlers::{
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
 };
-use ingestion::{client::IngestionClient, IngestionArgs, IngestionConfig, IngestionService};
+use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{
@@ -110,7 +110,7 @@ impl Indexer {
     pub async fn new(
         db_args: DbArgs,
         indexer_args: IndexerArgs,
-        ingestion_args: IngestionArgs,
+        client_args: ClientArgs,
         ingestion_config: IngestionConfig,
         cancel: CancellationToken,
     ) -> Result<Self> {
@@ -134,7 +134,7 @@ impl Indexer {
             MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
 
         let ingestion_service = IngestionService::new(
-            ingestion_args,
+            client_args,
             ingestion_config,
             metrics.clone(),
             cancel.clone(),
@@ -358,7 +358,7 @@ impl Default for IndexerArgs {
 pub async fn start_indexer(
     db_args: DbArgs,
     indexer_args: IndexerArgs,
-    ingestion_args: IngestionArgs,
+    client_args: ClientArgs,
     indexer_config: IndexerConfig,
     // If true, the indexer will bootstrap from genesis.
     // Otherwise it will skip the pipelines that rely on genesis data.
@@ -427,7 +427,7 @@ pub async fn start_indexer(
     let mut indexer = Indexer::new(
         db_args,
         indexer_args,
-        ingestion_args,
+        client_args,
         ingestion,
         cancel.clone(),
     )
