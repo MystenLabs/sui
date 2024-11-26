@@ -43,8 +43,9 @@ prettier --plugin /path/to/local/npm/node_modules/@mysten/prettier-plugin-move/o
 If you decide to use the plugin per-project, you can install it in the project's directory. This way,
 the plugin will be available via `prettier` call in the project's directory.
 
-```
-npm i prettier @mysten/prettier-plugin-move
+```bash
+# install as a dev-dependency
+npm i -D prettier @mysten/prettier-plugin-move
 ```
 
 Add the `.prettierrc` or a similar configuration file (see [all supported formats](https://prettier.io/docs/en/configuration.html)):
