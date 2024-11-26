@@ -24,7 +24,7 @@ RUN cargo build --profile ${PROFILE} \
     --bin deepbook-indexer \
     --bin sui-bridge-cli \
     --bin sui-analytics-indexer \
-    --bin sui-proxy \
+    --bin sui-edge-proxy \
     --bin sui \
     --bin sui-faucet \
     --bin sui-cluster-test \
