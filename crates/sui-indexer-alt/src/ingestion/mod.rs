@@ -30,7 +30,7 @@ mod remote_client;
 mod test_utils;
 
 #[derive(clap::Args, Clone, Debug)]
-pub struct IngestionArgs {
+pub struct ClientArgs {
     /// Remote Store to fetch checkpoints from.
     #[clap(long, required = true, group = "source")]
     pub remote_store_url: Option<Url>,
@@ -71,7 +71,7 @@ impl IngestionConfig {
 
 impl IngestionService {
     pub fn new(
-        args: IngestionArgs,
+        args: ClientArgs,
         config: IngestionConfig,
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
@@ -201,7 +201,7 @@ mod tests {
         cancel: CancellationToken,
     ) -> IngestionService {
         IngestionService::new(
-            IngestionArgs {
+            ClientArgs {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
                 local_ingestion_path: None,
             },

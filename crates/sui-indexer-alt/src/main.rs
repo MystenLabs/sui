@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Indexer {
-            ingestion_args,
+            client_args,
             indexer_args,
             config,
         } => {
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
             start_indexer(
                 args.db_args,
                 indexer_args,
-                ingestion_args,
+                client_args,
                 indexer_config,
                 true,
             )

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[cfg(feature = "benchmark")]
 use crate::benchmark::BenchmarkArgs;
 use crate::db::DbArgs;
-use crate::ingestion::IngestionArgs;
+use crate::ingestion::ClientArgs;
 use crate::IndexerArgs;
 use clap::Subcommand;
 
@@ -25,7 +25,7 @@ pub enum Command {
     /// Run the indexer.
     Indexer {
         #[command(flatten)]
-        ingestion_args: IngestionArgs,
+        client_args: ClientArgs,
 
         #[command(flatten)]
         indexer_args: IndexerArgs,
