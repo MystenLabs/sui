@@ -2,19 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    reader::StateReader,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     Result, RpcService,
 };
-use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::extract::{Query, State};
 use documented::Documented;
-use std::time::{Duration, SystemTime};
-use sui_types::storage::ReadStore;
-use tap::Pipe;
 
 /// Perform a service health check
 ///
@@ -68,23 +60,7 @@ pub struct Threshold {
 
 async fn health(
     Query(Threshold { threshold_seconds }): Query<Threshold>,
-    State(state): State<StateReader>,
-) -> Result<impl IntoResponse> {
-    let summary = state.inner().get_latest_checkpoint()?;
-
-    // If we have a provided threshold, check that it's close to the current time
-    if let Some(threshold_seconds) = threshold_seconds {
-        let latest_chain_time = summary.timestamp();
-
-        let threshold = SystemTime::now() - Duration::from_secs(threshold_seconds as u64);
-
-        if latest_chain_time < threshold {
-            return Err(anyhow::anyhow!(
-                "The latest checkpoint timestamp is less than the provided threshold"
-            )
-            .into());
-        }
-    }
-
-    StatusCode::OK.pipe(Ok)
+    State(state): State<RpcService>,
+) -> Result<()> {
+    state.health_check(threshold_seconds)
 }
