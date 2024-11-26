@@ -4,6 +4,7 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
+use futures::{future, StreamExt};
 use serde::{Deserialize, Serialize};
 
 use sui_json_rpc_types::Coin;
@@ -122,6 +123,43 @@ impl InternalOperation {
             metadata.gas_price,
         ))
     }
+}
+
+/// When an address is spammed with a lot of dust gas-coins, we cannot merge the coins before
+/// paying for gas. The only thing we can do is try to choose a subset of 255 coins which sum up to
+/// more than the budget.
+/// This function iterates over the coin-stream and it populates a vector of coins sorted by
+/// balance descending. The iteration ends when the first 255 coins in this vector sum up to more
+/// than the amount passed, or the coin-stream ends.
+// TODO: test
+async fn gather_coins_in_balance_reverse_order(
+    client: &SuiClient,
+    owner: SuiAddress,
+    amount: u64,
+) -> anyhow::Result<Vec<Coin>> {
+    let mut sum_largest_255 = 0;
+    let mut gathered_coins_reverse_sorted = vec![];
+    client
+        .coin_read_api()
+        .get_coins_stream(owner, None)
+        .take_while(|coin: &Coin| {
+            if gathered_coins_reverse_sorted.is_empty() {
+                sum_largest_255 += coin.balance;
+                gathered_coins_reverse_sorted.push(coin.clone());
+            } else {
+                let pos = insert_in_reverse_order(&mut gathered_coins_reverse_sorted, coin.clone());
+                if pos < MAX_GAS_COINS {
+                    sum_largest_255 += coin.balance;
+                    if gathered_coins_reverse_sorted.len() > MAX_GAS_COINS {
+                        sum_largest_255 -= gathered_coins_reverse_sorted[MAX_GAS_COINS].balance;
+                    }
+                }
+            }
+            future::ready(amount < sum_largest_255)
+        })
+        .collect::<Vec<_>>()
+        .await;
+    Ok(gathered_coins_reverse_sorted)
 }
 
 fn insert_in_reverse_order(vec: &mut Vec<Coin>, coin: Coin) -> usize {
