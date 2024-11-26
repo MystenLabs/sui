@@ -5,7 +5,7 @@ use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::transaction::TransactionDataAPI;

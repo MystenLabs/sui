@@ -3,9 +3,9 @@
 
 use prost::Message;
 use sui_macros::sim_test;
-use sui_rest_api::client::sdk::Client;
-use sui_rest_api::client::Client as CoreClient;
-use sui_rest_api::{CheckpointResponse, ListCheckpointsQueryParameters};
+use sui_rpc_api::client::sdk::Client;
+use sui_rpc_api::client::Client as CoreClient;
+use sui_rpc_api::{CheckpointResponse, ListCheckpointsQueryParameters};
 use sui_sdk_types::types::SignedCheckpointSummary;
 use test_cluster::TestClusterBuilder;
 
@@ -37,10 +37,7 @@ async fn list_checkpoint() {
     // Make sure list works with json
     let _checkpoints = client
         .get(&url)
-        .header(
-            reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_JSON,
-        )
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
         .send()
         .await
         .unwrap()
@@ -53,7 +50,7 @@ async fn list_checkpoint() {
         .get(&url)
         .header(
             reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_PROTOBUF,
+            sui_rpc_api::rest::APPLICATION_PROTOBUF,
         )
         .send()
         .await
@@ -61,14 +58,14 @@ async fn list_checkpoint() {
         .bytes()
         .await
         .unwrap();
-    let _checkpoints = sui_rest_api::proto::ListCheckpointResponse::decode(bytes).unwrap();
+    let _checkpoints = sui_rpc_api::proto::ListCheckpointResponse::decode(bytes).unwrap();
 
     // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
     // protobuf version
     // Make sure list works with BCS and the old format of only a SignedCheckpoint with no contents
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()
@@ -101,10 +98,7 @@ async fn get_checkpoint() {
     // Make sure list works with json
     let _checkpoints = client
         .get(&url)
-        .header(
-            reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_JSON,
-        )
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
         .send()
         .await
         .unwrap()
@@ -117,7 +111,7 @@ async fn get_checkpoint() {
         .get(&url)
         .header(
             reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_PROTOBUF,
+            sui_rpc_api::rest::APPLICATION_PROTOBUF,
         )
         .send()
         .await
@@ -125,13 +119,13 @@ async fn get_checkpoint() {
         .bytes()
         .await
         .unwrap();
-    let _checkpoints = sui_rest_api::proto::GetCheckpointResponse::decode(bytes).unwrap();
+    let _checkpoints = sui_rpc_api::proto::GetCheckpointResponse::decode(bytes).unwrap();
 
     // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()
@@ -171,7 +165,7 @@ async fn get_full_checkpoint() {
         .get(&url)
         .header(
             reqwest::header::ACCEPT,
-            sui_rest_api::rest::APPLICATION_PROTOBUF,
+            sui_rpc_api::rest::APPLICATION_PROTOBUF,
         )
         .send()
         .await
@@ -179,13 +173,13 @@ async fn get_full_checkpoint() {
         .bytes()
         .await
         .unwrap();
-    let _checkpoints = sui_rest_api::proto::FullCheckpoint::decode(bytes).unwrap();
+    let _checkpoints = sui_rpc_api::proto::FullCheckpoint::decode(bytes).unwrap();
 
     // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
     // protobuf version
     let bytes = client
         .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rest_api::rest::APPLICATION_BCS)
+        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
         .send()
         .await
         .unwrap()

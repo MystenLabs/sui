@@ -4,10 +4,10 @@
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_rest_api::client::reqwest::StatusCode;
-use sui_rest_api::rest::transactions::ResolveTransactionQueryParameters;
-use sui_rest_api::Client;
-use sui_rest_api::ExecuteTransactionQueryParameters;
+use sui_rpc_api::client::reqwest::StatusCode;
+use sui_rpc_api::rest::transactions::ResolveTransactionQueryParameters;
+use sui_rpc_api::Client;
+use sui_rpc_api::ExecuteTransactionQueryParameters;
 use sui_sdk_types::types::unresolved;
 use sui_sdk_types::types::Argument;
 use sui_sdk_types::types::Command;
