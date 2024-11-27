@@ -13,9 +13,9 @@ use crate::rest::openapi::OperationBuilder;
 use crate::rest::openapi::RequestBodyBuilder;
 use crate::rest::openapi::ResponseBuilder;
 use crate::rest::openapi::RouteHandler;
-use crate::RestError;
 use crate::Result;
 use crate::RpcService;
+use crate::RpcServiceError;
 use axum::extract::Query;
 use axum::extract::State;
 use axum::Json;
@@ -102,7 +102,7 @@ async fn resolve_transaction(
             state.reader.inner().get_chain_identifier()?.chain(),
         )
         .ok_or_else(|| {
-            RestError::new(
+            RpcServiceError::new(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 "unable to get current protocol config",
             )
@@ -227,7 +227,7 @@ fn called_packages(
             .data
             .try_as_package()
             .ok_or_else(|| {
-                RestError::new(
+                RpcServiceError::new(
                     axum::http::StatusCode::BAD_REQUEST,
                     format!("object {} is not a package", move_call.package),
                 )
@@ -241,7 +241,7 @@ fn called_packages(
         // Despite the above this is safe given we are only using the signature information (and in
         // particular the reference kind) from the normalized package.
         let normalized_modules = package.normalize(&binary_config).map_err(|e| {
-            RestError::new(
+            RpcServiceError::new(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("unable to normalize package {}: {e}", move_call.package),
             )
@@ -333,7 +333,7 @@ fn resolve_object_reference_with_object(
     match object.owner() {
         sui_types::object::Owner::AddressOwner(_) | sui_types::object::Owner::Immutable => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 format!("object {object_id} is not Immutable or AddressOwned"),
             ))
@@ -346,21 +346,21 @@ fn resolve_object_reference_with_object(
 
     // This really should be an assert
     if object_id.inner() != &id.into_bytes() {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             "provided object and object_id should match",
         ));
     }
 
     if version.is_some_and(|version| version != v.value()) {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             format!("provided version doesn't match, provided: {version:?} actual: {v}"),
         ));
     }
 
     if digest.is_some_and(|digest| digest.inner() != d.inner()) {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             format!("provided digest doesn't match, provided: {digest:?} actual: {d}"),
         ));
@@ -424,7 +424,7 @@ fn resolve_arg(
         // pre serialized BCS input encoded as a base64 string
         (Some(Pure), Some(unresolved::Value::String(v)), None, None, None, None) => {
             let value = Base64::decode(&v).map_err(|e| {
-                RestError::new(
+                RpcServiceError::new(
                     axum::http::StatusCode::BAD_REQUEST,
                     format!("argument is an invalid pure arguement: {e}"),
                 )
@@ -434,7 +434,7 @@ fn resolve_arg(
         // pre serialized BCS input encoded as a a JSON array of u8s
         (Some(Pure), Some(array @ unresolved::Value::Array(_)), None, None, None, None) => {
             let value = serde_json::from_value(serde_json::Value::from(array)).map_err(|e| {
-                RestError::new(
+                RpcServiceError::new(
                     axum::http::StatusCode::BAD_REQUEST,
                     format!("argument is an invalid pure arguement: {e}"),
                 )
@@ -493,7 +493,7 @@ fn resolve_arg(
         )?),
 
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid unresolved input argument",
             ))
@@ -549,7 +549,7 @@ fn resolve_object(
         sui_types::object::Owner::Shared { .. } | sui_types::object::Owner::ConsensusV2 { .. } => {
             resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
         }
-        sui_types::object::Owner::ObjectOwner(_) => Err(RestError::new(
+        sui_types::object::Owner::ObjectOwner(_) => Err(RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             format!("object {object_id} is object owned and cannot be used as an input"),
         )),
@@ -625,7 +625,7 @@ fn arg_type_of_move_call_input<'a>(
         // Find the function
         .and_then(|module| module.functions.get(move_call.function.as_str()))
         .ok_or_else(|| {
-            RestError::new(
+            RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 format!(
                     "unable to find function {package}::{module}::{function}",
@@ -636,7 +636,7 @@ fn arg_type_of_move_call_input<'a>(
             )
         })?;
     function.parameters.get(idx).ok_or_else(|| {
-        RestError::new(
+        RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "invalid input parameter",
         )
@@ -660,7 +660,7 @@ fn resolve_shared_input_with_object(
     {
         *initial_shared_version
     } else {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             format!("object {object_id} is not a shared or consensus object"),
         ));
@@ -794,7 +794,7 @@ fn select_gas(
     let gas_coins = reader
         .inner()
         .indexes()
-        .ok_or_else(RestError::not_found)?
+        .ok_or_else(RpcServiceError::not_found)?
         .account_owned_objects_info_iter(owner, None)?
         .filter(|info| info.type_.is_gas_coin())
         .filter(|info| !input_objects.contains(&info.object_id))
@@ -817,7 +817,7 @@ fn select_gas(
     if selected_gas_value >= budget {
         Ok(selected_gas)
     } else {
-        Err(RestError::new(
+        Err(RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             format!(
                 "unable to select sufficient gas coins from account {owner} \
