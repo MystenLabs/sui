@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
         }
 
         Command::GenerateConfig => {
-            let config = IndexerConfig::default();
+            let config = IndexerConfig::example();
             let config_toml = toml::to_string_pretty(&config)
                 .context("Failed to serialize default configuration to TOML.")?;
 
