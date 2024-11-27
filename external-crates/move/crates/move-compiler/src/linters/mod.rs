@@ -206,6 +206,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 self_assignment::SelfAssignment.visitor(),
                 redundant_ref_deref::RedundantRefDeref.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
+                equal_operands::EqualOperands.visitor(),
             ]
         }
     }
