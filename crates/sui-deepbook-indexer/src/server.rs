@@ -7,13 +7,13 @@ use crate::{
     schema::{self},
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
+use anyhow::anyhow;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     routing::get,
     Json, Router,
 };
-use anyhow::anyhow;
 use diesel::dsl::sql;
 use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
@@ -23,11 +23,16 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
 
+use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
 use sui_sdk::SuiClientBuilder;
-use std::str::FromStr;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress}, digests::ObjectDigest, programmable_transaction_builder::ProgrammableTransactionBuilder, transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, TransactionKind}, type_input::TypeInput, TypeTag
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    digests::ObjectDigest,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, TransactionKind},
+    type_input::TypeInput,
+    TypeTag,
 };
 
 pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
@@ -52,7 +57,10 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route("/", get(health_check))
         .route(GET_POOLS_PATH, get(get_pools))
         .route(GET_HISTORICAL_VOLUME_PATH, get(get_historical_volume))
-        .route(GET_ALL_HISTORICAL_VOLUME_PATH, get(get_all_historical_volume))
+        .route(
+            GET_ALL_HISTORICAL_VOLUME_PATH,
+            get(get_all_historical_volume),
+        )
         .route(
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL,
             get(get_historical_volume_by_balance_manager_id_with_interval),
@@ -355,9 +363,7 @@ async fn get_level2_ticks_from_mid(
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
-    let pool_address = ObjectID::from_hex_literal(
-        &pool_id,
-    )?;
+    let pool_address = ObjectID::from_hex_literal(&pool_id)?;
     // get the latest pool object version
     let pool_object: SuiObjectResponse = sui_client
         .read_api()
@@ -465,27 +471,44 @@ async fn get_level2_ticks_from_mid(
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(&ask_quantities).unwrap();
 
     let mut result = HashMap::new();
-    result.insert("bid_parsed_prices".to_string(), bid_parsed_prices.into_iter().map(|quantity| quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap()))
-    .collect());
-    result.insert("bid_parsed_quantities".to_string(), bid_parsed_quantities
-    .into_iter()
-    .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
-    .collect());
-    result.insert("ask_parsed_prices".to_string(), ask_parsed_prices.into_iter()
-    .map(|quantity| quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap()))
-    .collect());
-    result.insert("ask_parsed_quantities".to_string(), ask_parsed_quantities
-    .into_iter()
-    .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
-    .collect());
+    result.insert(
+        "bid_parsed_prices".to_string(),
+        bid_parsed_prices
+            .into_iter()
+            .map(|quantity| {
+                quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap())
+            })
+            .collect(),
+    );
+    result.insert(
+        "bid_parsed_quantities".to_string(),
+        bid_parsed_quantities
+            .into_iter()
+            .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
+            .collect(),
+    );
+    result.insert(
+        "ask_parsed_prices".to_string(),
+        ask_parsed_prices
+            .into_iter()
+            .map(|quantity| {
+                quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap())
+            })
+            .collect(),
+    );
+    result.insert(
+        "ask_parsed_quantities".to_string(),
+        ask_parsed_quantities
+            .into_iter()
+            .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
+            .collect(),
+    );
 
     Ok(Json(result))
 }
 
 /// Helper function to normalize pool addresses
-fn normalize_pool_addresses(
-    raw_response: HashMap<String, u64>,
-) -> HashMap<String, u64> {
+fn normalize_pool_addresses(raw_response: HashMap<String, u64>) -> HashMap<String, u64> {
     let pool_map = get_pool_name_mapping();
 
     raw_response
@@ -503,15 +526,42 @@ fn normalize_pool_addresses(
 /// This function can return what's in the pool table when stable
 fn get_pool_name_mapping() -> HashMap<String, String> {
     [
-        ("0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22", "DEEP_SUI"),
-        ("0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce", "DEEP_USDC"),
-        ("0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407", "SUI_USDC"),
-        ("0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c", "BWETH_USDC"),
-        ("0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545", "WUSDC_USDC"),
-        ("0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f", "WUSDT_USDC"),
-        ("0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8", "NS_SUI"),
-        ("0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060", "NS_USDC"),
-        ("0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec", "TYPUS_SUI"),
+        (
+            "0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22",
+            "DEEP_SUI",
+        ),
+        (
+            "0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce",
+            "DEEP_USDC",
+        ),
+        (
+            "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407",
+            "SUI_USDC",
+        ),
+        (
+            "0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c",
+            "BWETH_USDC",
+        ),
+        (
+            "0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545",
+            "WUSDC_USDC",
+        ),
+        (
+            "0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f",
+            "WUSDT_USDC",
+        ),
+        (
+            "0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8",
+            "NS_SUI",
+        ),
+        (
+            "0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060",
+            "NS_USDC",
+        ),
+        (
+            "0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec",
+            "TYPUS_SUI",
+        ),
     ]
     .iter()
     .map(|&(id, name)| (id.to_string(), name.to_string()))
