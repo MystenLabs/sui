@@ -72,7 +72,7 @@ describe('passkey signer E2E testing', () => {
 	});
 
 	it('should retrieve the correct sui address', async () => {
-		let signer = await PasskeyKeypair.getPasskeyInstance();
+		const signer = await PasskeyKeypair.getPasskeyInstance();
 		const publicKey = signer.getPublicKey();
 		expect(publicKey.toSuiAddress()).toEqual(
 			'0x05d52348e3e3a785e1e458ebe74d71e21dd4db2ba3088484cab22eca5a07da02',
@@ -95,7 +95,7 @@ describe('passkey signer E2E testing', () => {
 					getClientExtensionResults: () => ({}),
 				}) as unknown as Credential,
 		);
-		let signer = await PasskeyKeypair.getPasskeyInstance();
+		const signer = await PasskeyKeypair.getPasskeyInstance();
 
 		const testMessage = new TextEncoder().encode('Hello world!');
 		const intentMessage = messageWithIntent(
@@ -167,7 +167,7 @@ describe('passkey signer E2E testing', () => {
 					getClientExtensionResults: () => ({}),
 				}) as unknown as Credential,
 		);
-		let signer = await PasskeyKeypair.getPasskeyInstance();
+		const signer = await PasskeyKeypair.getPasskeyInstance();
 		const messageBytes = fromBase64(
 			'AAABACACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQABAABnEUWt6SNz7OPa4hXLyCw9tI5Y7rNxhh5DFljH1jLT6QEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAIMqiyOLCIblSqii0TkS8PjMoj3tmA7S24hBMyonz2Op/ZxFFrekjc+zj2uIVy8gsPbSOWO6zcYYeQxZYx9Yy0+noAwAAAAAAAICWmAAAAAAAAA==',
 		);

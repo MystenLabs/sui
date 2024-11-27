@@ -114,7 +114,7 @@ export class PasskeyKeypair extends Signer {
 
 		// parse the signature from DER format, normalize and convert to compressed format (33 bytes).
 		const sig = secp256r1.Signature.fromDER(new Uint8Array(credential.response.signature));
-		let normalized = sig.normalizeS().toCompactRawBytes();
+		const normalized = sig.normalizeS().toCompactRawBytes();
 		const compressedPubkey = secp256r1.ProjectivePoint.fromHex(toHex(this.publicKey)).toRawBytes(
 			true,
 		);

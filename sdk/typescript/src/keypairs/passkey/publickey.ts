@@ -125,13 +125,13 @@ export class PasskeyPublicKey extends PublicKey {
 			return false;
 		}
 
-		let pk = parsed.userSignature.slice(1 + PASSKEY_SIGNATURE_SIZE);
+		const pk = parsed.userSignature.slice(1 + PASSKEY_SIGNATURE_SIZE);
 		if (!bytesEqual(this.toRawBytes(), pk)) {
 			return false;
 		}
 
 		const payload = new Uint8Array([...parsed.authenticatorData, ...sha256(parsed.clientDataJson)]);
-		let sig = parsed.userSignature.slice(1, PASSKEY_SIGNATURE_SIZE + 1);
+		const sig = parsed.userSignature.slice(1, PASSKEY_SIGNATURE_SIZE + 1);
 		return secp256r1.verify(sig, sha256(payload), pk);
 	}
 }
