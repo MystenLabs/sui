@@ -259,14 +259,6 @@ impl Client {
         let request = self.inner.get(url).query(parameters);
 
         self.bcs(request).await
-        // self.protobuf::<crate::proto::ListCheckpointResponse>(request)
-        //     .await?
-        //     .try_map(|page| {
-        //         page.checkpoints
-        //             .into_iter()
-        //             .map(TryInto::try_into)
-        //             .collect()
-        //     })
     }
 
     pub async fn get_full_checkpoint(
@@ -280,13 +272,6 @@ impl Client {
         let request = self.inner.get(url);
 
         self.bcs(request).await
-        // self.protobuf::<crate::proto::FullCheckpoint>(request)
-        //     .await?
-        //     // TODO make this more efficient and convert directly into the sui-sdk-types version
-        //     .try_map(|proto| {
-        //         sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
-        //             .and_then(TryInto::try_into)
-        //     })
     }
 
     pub async fn get_transaction(
@@ -427,25 +412,6 @@ impl Client {
         let bytes = response.bytes().await?;
         match bcs::from_bytes(&bytes) {
             Ok(bcs) => Ok(Response::new(bcs, parts)),
-            Err(e) => Err(Error::from_error(e).with_parts(parts)),
-        }
-    }
-
-    #[allow(unused)]
-    pub(super) async fn protobuf<T: prost::Message + std::default::Default>(
-        &self,
-        request: reqwest::RequestBuilder,
-    ) -> Result<Response<T>> {
-        let response = request
-            .header(reqwest::header::ACCEPT, crate::rest::APPLICATION_PROTOBUF)
-            .send()
-            .await?;
-
-        let (response, parts) = self.check_response(response).await?;
-
-        let bytes = response.bytes().await?;
-        match T::decode(bytes) {
-            Ok(v) => Ok(Response::new(v, parts)),
             Err(e) => Err(Error::from_error(e).with_parts(parts)),
         }
     }

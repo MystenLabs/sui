@@ -6,10 +6,9 @@ use std::collections::HashMap;
 
 use super::execution::SimulateTransactionQueryParameters;
 use super::TransactionSimulationResponse;
-use crate::proto;
 use crate::reader::StateReader;
-use crate::response::JsonProtobufBcs;
-use crate::rest::accept::AcceptJsonProtobufBcs;
+use crate::response::ResponseContent;
+use crate::rest::accept::AcceptFormat;
 use crate::rest::objects::ObjectNotFoundError;
 use crate::rest::openapi::ApiEndpoint;
 use crate::rest::openapi::OperationBuilder;
@@ -76,7 +75,6 @@ impl ApiEndpoint<RpcService> for ResolveTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ResolveTransactionResponse>(generator)
-                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -91,15 +89,9 @@ impl ApiEndpoint<RpcService> for ResolveTransaction {
 async fn resolve_transaction(
     State(state): State<RpcService>,
     Query(parameters): Query<ResolveTransactionQueryParameters>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     Json(unresolved_transaction): Json<unresolved::Transaction>,
-) -> Result<
-    JsonProtobufBcs<
-        ResolveTransactionResponse,
-        proto::ResolveTransactionResponse,
-        ResolveTransactionResponse,
-    >,
-> {
+) -> Result<ResponseContent<ResolveTransactionResponse>> {
     let executor = state
         .executor
         .as_ref()
@@ -193,9 +185,8 @@ async fn resolve_transaction(
     };
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
-        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
-        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
+        AcceptFormat::Json => ResponseContent::Json(response),
+        AcceptFormat::Bcs => ResponseContent::Bcs(response),
     }
     .pipe(Ok)
 }

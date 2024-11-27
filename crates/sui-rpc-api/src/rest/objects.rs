@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    proto::GetObjectResponse,
     reader::StateReader,
-    response::{JsonProtobufBcs, ResponseContent},
-    rest::accept::{AcceptFormat, AcceptJsonProtobufBcs},
+    response::ResponseContent,
+    rest::accept::AcceptFormat,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     rest::Page,
     RestError, Result, RpcService,
@@ -50,7 +49,6 @@ impl ApiEndpoint<RpcService> for GetObject {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ObjectResponse>(generator)
-                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -65,9 +63,9 @@ impl ApiEndpoint<RpcService> for GetObject {
 
 pub async fn get_object(
     Path(object_id): Path<ObjectId>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<JsonProtobufBcs<ObjectResponse, GetObjectResponse, Object>> {
+) -> Result<ResponseContent<Object, ObjectResponse>> {
     let object = state
         .get_object(object_id)?
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
@@ -78,11 +76,8 @@ pub async fn get_object(
     };
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(object),
-        AcceptJsonProtobufBcs::Protobuf => {
-            JsonProtobufBcs::Protobuf(GetObjectResponse::try_from(object)?)
-        }
-        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(object.object),
+        AcceptFormat::Json => ResponseContent::Json(object),
+        AcceptFormat::Bcs => ResponseContent::Bcs(object.object),
     }
     .pipe(Ok)
 }
@@ -111,7 +106,6 @@ impl ApiEndpoint<RpcService> for GetObjectWithVersion {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ObjectResponse>(generator)
-                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -126,9 +120,9 @@ impl ApiEndpoint<RpcService> for GetObjectWithVersion {
 
 pub async fn get_object_with_version(
     Path((object_id, version)): Path<(ObjectId, Version)>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<JsonProtobufBcs<ObjectResponse, GetObjectResponse, Object>> {
+) -> Result<ResponseContent<Object, ObjectResponse>> {
     let object = state
         .get_object_with_version(object_id, version)?
         .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
@@ -139,11 +133,8 @@ pub async fn get_object_with_version(
     };
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(object),
-        AcceptJsonProtobufBcs::Protobuf => {
-            JsonProtobufBcs::Protobuf(GetObjectResponse::try_from(object)?)
-        }
-        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(object.object),
+        AcceptFormat::Json => ResponseContent::Json(object),
+        AcceptFormat::Bcs => ResponseContent::Bcs(object.object),
     }
     .pipe(Ok)
 }
