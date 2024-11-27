@@ -5,7 +5,7 @@ use crate::response::Bcs;
 use crate::rest::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
-use crate::{RestError, Result, RpcService};
+use crate::{Result, RpcService, RpcServiceError};
 use axum::extract::{Query, State};
 use axum::Json;
 use schemars::JsonSchema;
@@ -406,7 +406,7 @@ pub(super) fn simulate_transaction_impl(
     transaction: Transaction,
 ) -> Result<TransactionSimulationResponse> {
     if transaction.gas_payment.objects.is_empty() {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "no gas payment provided",
         ));
@@ -423,7 +423,7 @@ pub(super) fn simulate_transaction_impl(
         .map_err(anyhow::Error::from)?;
 
     if mock_gas_id.is_some() {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             "simulate unexpectedly used a mock gas payment",
         ));
