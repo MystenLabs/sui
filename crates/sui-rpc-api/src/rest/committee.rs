@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    response::ResponseContent,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     Result, RpcService,
 };
-use axum::extract::{Path, State};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use sui_sdk_types::types::{EpochId, ValidatorCommittee};
-use tap::Pipe;
-
-use super::accept::AcceptFormat;
 
 pub struct GetLatestCommittee;
 
@@ -34,7 +33,6 @@ impl ApiEndpoint<RpcService> for GetLatestCommittee {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ValidatorCommittee>(generator)
-                    .bcs_content()
                     .build(),
             )
             .build()
@@ -45,17 +43,8 @@ impl ApiEndpoint<RpcService> for GetLatestCommittee {
     }
 }
 
-async fn get_latest_committee(
-    accept: AcceptFormat,
-    State(state): State<RpcService>,
-) -> Result<ResponseContent<ValidatorCommittee, ValidatorCommittee>> {
-    let committee = state.get_committee(None)?;
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(committee),
-        AcceptFormat::Bcs => ResponseContent::Bcs(committee),
-    }
-    .pipe(Ok)
+async fn get_latest_committee(State(state): State<RpcService>) -> Result<Json<ValidatorCommittee>> {
+    state.get_committee(None).map(Json)
 }
 
 pub struct GetCommittee;
@@ -81,7 +70,6 @@ impl ApiEndpoint<RpcService> for GetCommittee {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ValidatorCommittee>(generator)
-                    .bcs_content()
                     .build(),
             )
             .response(404, ResponseBuilder::new().build())
@@ -95,14 +83,7 @@ impl ApiEndpoint<RpcService> for GetCommittee {
 
 async fn get_committee(
     Path(epoch): Path<EpochId>,
-    accept: AcceptFormat,
     State(state): State<RpcService>,
-) -> Result<ResponseContent<ValidatorCommittee, ValidatorCommittee>> {
-    let committee = state.get_committee(Some(epoch))?;
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(committee),
-        AcceptFormat::Bcs => ResponseContent::Bcs(committee),
-    }
-    .pipe(Ok)
+) -> Result<Json<ValidatorCommittee>> {
+    state.get_committee(Some(epoch)).map(Json)
 }
