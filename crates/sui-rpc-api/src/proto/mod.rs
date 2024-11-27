@@ -338,36 +338,6 @@ impl TryFrom<&UserSignature> for sui_types::signature::GenericSignature {
 }
 
 //
-// GetObjectResponse
-//
-
-impl TryFrom<crate::rest::objects::ObjectResponse> for GetObjectResponse {
-    type Error = bcs::Error;
-
-    fn try_from(value: crate::rest::objects::ObjectResponse) -> Result<Self, Self::Error> {
-        Ok(Self {
-            digest: value.digest.as_bytes().to_vec().into(),
-            object: Some(Object::try_from(&value.object)?),
-        })
-    }
-}
-
-impl TryFrom<GetObjectResponse> for crate::rest::objects::ObjectResponse {
-    type Error = bcs::Error;
-
-    fn try_from(value: GetObjectResponse) -> Result<Self, Self::Error> {
-        Ok(Self {
-            digest: sui_sdk_types::types::ObjectDigest::from_bytes(&value.digest)
-                .map_err(|e| bcs::Error::Custom(e.to_string()))?,
-            object: value
-                .object
-                .ok_or_else(|| bcs::Error::Custom("missing object".into()))?
-                .pipe_ref(TryInto::try_into)?,
-        })
-    }
-}
-
-//
 // GetCheckpointResponse
 //
 
