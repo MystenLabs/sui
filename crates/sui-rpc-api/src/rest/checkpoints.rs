@@ -3,6 +3,7 @@
 
 use axum::extract::Query;
 use axum::extract::{Path, State};
+use axum::Json;
 use sui_sdk_types::types::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
     SignedCheckpointSummary, ValidatorAggregatedSignature,
@@ -64,7 +65,6 @@ impl ApiEndpoint<RpcService> for GetCheckpoint {
                 200,
                 ResponseBuilder::new()
                     .json_content::<CheckpointResponse>(generator)
-                    .bcs_content()
                     .build(),
             )
             .response(404, ResponseBuilder::new().build())
@@ -81,9 +81,8 @@ impl ApiEndpoint<RpcService> for GetCheckpoint {
 async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     Query(parameters): Query<GetCheckpointQueryParameters>,
-    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<CheckpointResponse, CheckpointResponse>> {
+) -> Result<Json<CheckpointResponse>> {
     let SignedCheckpointSummary {
         checkpoint,
         signature,
@@ -117,17 +116,13 @@ async fn get_checkpoint(
         None
     };
 
-    let response = CheckpointResponse {
+    CheckpointResponse {
         digest: checkpoint.digest(),
         summary: checkpoint,
         signature,
         contents,
-    };
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
     }
+    .pipe(Json)
     .pipe(Ok)
 }
 
