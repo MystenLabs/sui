@@ -143,7 +143,7 @@ async fn get_historical_volume(
         *volume_by_pool.entry(pool_id).or_insert(0) += volume as u64;
     }
 
-    Ok(Json(volume_by_pool))
+    Ok(Json(normalize_pool_addresses(volume_by_pool)))
 }
 
 async fn get_all_historical_volume(
@@ -337,4 +337,32 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     }
 
     Ok(Json(metrics_by_interval))
+}
+
+/// Helper function to normalize pool addresses
+fn normalize_pool_addresses(
+    raw_response: HashMap<String, u64>,
+) -> HashMap<String, u64> {
+    let pool_map = HashMap::from([
+        ("0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22", "DEEP_SUI"),
+        ("0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce", "DEEP_USDC"),
+        ("0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407", "SUI_USDC"),
+        ("0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c", "BWETH_USDC"),
+        ("0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545", "WUSDC_USDC"),
+        ("0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f", "WUSDT_USDC"),
+        ("0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8", "NS_SUI"),
+        ("0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060", "NS_USDC"),
+        ("0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec", "TYPUS_SUI")
+    ]);
+
+    raw_response
+        .into_iter()
+        .map(|(address, volume)| {
+            let pool_name = pool_map
+                .get(address.as_str())
+                .unwrap_or(&"Unknown Pool")
+                .to_string();
+            (pool_name, volume)
+        })
+        .collect()
 }
