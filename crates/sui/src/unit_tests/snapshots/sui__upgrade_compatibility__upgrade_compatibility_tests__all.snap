@@ -51,7 +51,7 @@ error[Compatibility E01005]: type parameter mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:20:19
    │
 20 │     public struct StructTypeParamMismatch<T> { a: T } // changed S to T
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, have 1
+   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's type parameters for struct 'StructTypeParamMismatch' including the ordering.
@@ -147,7 +147,7 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:82:16
    │
 82 │     public fun function_add_arg(a: u64) {}
-   │                ^^^^^^^^^^^^^^^^ Expected 0 parameters, have 1
+   │                ^^^^^^^^^^^^^^^^ Expected 0 parameters, found 1
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's parameters for function 'function_add_arg', expected 0 parameters.
@@ -156,10 +156,10 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:85:16
    │
 85 │     public fun function_remove_arg() {}
-   │                ^^^^^^^^^^^^^^^^^^^ Expected 1 parameters, have 0
+   │                ^^^^^^^^^^^^^^^^^^^ Expected 1 parameter, found 0
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original function's parameters for function 'function_remove_arg', expected 1 parameters.
+   = Restore the original function's parameter for function 'function_remove_arg', expected 1 parameter.
 
 error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:88:36
@@ -168,7 +168,7 @@ error[Compatibility E03001]: function signature mismatch
    │                                    ^ Unexpected parameter u8, expected u64
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original function's parameters for function 'function_change_arg'.
+   = Restore the original function's parameter for function 'function_change_arg'.
 
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

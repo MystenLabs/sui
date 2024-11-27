@@ -54,7 +54,7 @@ error[Compatibility E01002]: type mismatch
    │                   ^^^^^^^^ Incorrect number of fields: expected 1, found 2
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's fields for struct 'AddField' including the ordering.
+   = Restore the original struct's field for struct 'AddField' including the ordering.
 
 error[Compatibility E01002]: type mismatch
    ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:22:19

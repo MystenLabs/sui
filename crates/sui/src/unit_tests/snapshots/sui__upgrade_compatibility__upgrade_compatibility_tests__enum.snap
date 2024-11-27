@@ -39,7 +39,7 @@ error[Compatibility E02001]: variant mismatch
    │         ^ New unexpected variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's variants for enum 'EnumAddVariant' including the ordering.
+   = Restore the original enum's variant for enum 'EnumAddVariant' including the ordering.
 
 error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:26:17
@@ -147,7 +147,7 @@ error[Compatibility E02001]: variant mismatch
    │         ^^^^^^^^^^^ New unexpected variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original enum's variants for enum 'EnumAddVariantWithTypes' including the ordering.
+   = Restore the original enum's variant for enum 'EnumAddVariantWithTypes' including the ordering.
 
 error[Compatibility E02001]: variant mismatch
    ┌─ /fixtures/upgrade_errors/enum_errors_v2/sources/UpgradeErrors.move:62:17

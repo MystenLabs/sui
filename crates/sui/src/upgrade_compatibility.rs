@@ -928,9 +928,10 @@ fn function_signature_mismatch_diag(
             (
                 def_loc,
                 format!(
-                    "Expected {} parameters, have {}",
+                    "Expected {} {}, found {}",
                     old_function.parameters.len(),
-                    new_function.parameters.len()
+                    singular_or_plural(old_function.parameters.len(), "parameter", "parameters"),
+                    new_function.parameters.len(),
                 ),
             ),
             Vec::<(Loc, String)>::new(),
@@ -939,9 +940,11 @@ fn function_signature_mismatch_diag(
                 changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original function's parameters for \
-                    function '{function_name}', expected {} parameters.",
-                    old_function.parameters.len()
+                    "Restore the original function's {} for \
+                    function '{function_name}', expected {} {}.",
+                    singular_or_plural(old_function.parameters.len(), "parameter", "parameters"),
+                    old_function.parameters.len(),
+                    singular_or_plural(old_function.parameters.len(), "parameter", "parameters"),
                 ),
             ],
         ));
@@ -971,8 +974,13 @@ fn function_signature_mismatch_diag(
                         and cannot be changed during an upgrade."
                             .to_string(),
                         format!(
-                            "Restore the original function's parameters \
-                            for function '{function_name}'."
+                            "Restore the original function's {} \
+                            for function '{function_name}'.",
+                            singular_or_plural(
+                                old_function.parameters.len(),
+                                "parameter",
+                                "parameters"
+                            )
                         ),
                     ],
                 ));
@@ -986,8 +994,13 @@ fn function_signature_mismatch_diag(
             (
                 def_loc,
                 format!(
-                    "Expected {} type parameters, have {}",
+                    "Expected {} type {}, found {}",
                     old_function.type_parameters.len(),
+                    singular_or_plural(
+                        old_function.type_parameters.len(),
+                        "parameter",
+                        "parameters"
+                    ),
                     new_function.type_parameters.len()
                 ),
             ),
@@ -997,9 +1010,19 @@ fn function_signature_mismatch_diag(
                 and cannot be changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original function's type parameters for \
-                    function '{function_name}', expected {} type parameters.",
-                    old_function.type_parameters.len()
+                    "Restore the original function's type {} for \
+                    function '{function_name}', expected {} type {}.",
+                    singular_or_plural(
+                        old_function.type_parameters.len(),
+                        "parameter",
+                        "parameters"
+                    ),
+                    old_function.type_parameters.len(),
+                    singular_or_plural(
+                        old_function.type_parameters.len(),
+                        "parameter",
+                        "parameters"
+                    ),
                 ),
             ],
         ));
@@ -1043,8 +1066,13 @@ fn function_signature_mismatch_diag(
                         and cannot be changed during an upgrade."
                             .to_string(),
                         format!(
-                            "Restore the original function's type parameters \
-                            for function '{function_name}'."
+                            "Restore the original function's type {} \
+                            for function '{function_name}'.",
+                            singular_or_plural(
+                                old_function.type_parameters.len(),
+                                "parameter",
+                                "parameters"
+                            )
                         ),
                     ],
                 ));
@@ -1059,8 +1087,9 @@ fn function_signature_mismatch_diag(
             (
                 def_loc,
                 format!(
-                    "Expected to have {} return type(s), have {}",
+                    "Expected {} return {}, found {}",
                     old_function.return_.len(),
+                    singular_or_plural(old_function.return_.len(), "type", "types"),
                     new_function.return_.len()
                 ),
             ),
@@ -1070,8 +1099,9 @@ fn function_signature_mismatch_diag(
                 and cannot be changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original function's return types \
-                    for function '{function_name}'."
+                    "Restore the original function's return {} \
+                    for function '{function_name}'.",
+                    singular_or_plural(old_function.return_.len(), "type", "types")
                 ),
             ],
         ));
@@ -1111,7 +1141,8 @@ fn function_signature_mismatch_diag(
                             .to_string(),
                         format!(
                             "Restore the original function's return \
-                            types for function '{function_name}'."
+                            {} for function '{function_name}'.",
+                            singular_or_plural(old_function.return_.len(), "type", "types")
                         ),
                     ],
                 ));
@@ -1169,11 +1200,11 @@ fn function_entry_mismatch(
 fn ability_mismatch_label(
     old_abilities: AbilitySet,
     new_abilities: AbilitySet,
-) -> Result<String, Error> {
-    let missing_abilities = AbilitySet::from_u8(old_abilities.into_u8() & !new_abilities.into_u8())
-        .context("Unable to get missing abilities")?;
-    let extra_abilities = AbilitySet::from_u8(new_abilities.into_u8() & !old_abilities.into_u8())
-        .context("Unable to get extra abilities")?;
+    singular_noun: &str,
+    plural_noun: &str,
+) -> String {
+    let missing_abilities = old_abilities.difference(new_abilities);
+    let extra_abilities = new_abilities.difference(old_abilities);
 
     let missing_abilities_list: Vec<String> = missing_abilities
         .into_iter()
@@ -1184,29 +1215,27 @@ fn ability_mismatch_label(
         .map(|a| format!("'{:?}'", a).to_lowercase())
         .collect();
 
-    Ok(
-        match (
-            missing_abilities != AbilitySet::EMPTY,
-            extra_abilities != AbilitySet::EMPTY,
-        ) {
-            (true, true) => format!(
-                "Mismatched abilities: missing {}, unexpected {}",
-                format_list(missing_abilities_list, None),
-                format_list(extra_abilities_list, None),
-            ),
-            (true, false) => format!(
-                "Missing {}: {}",
-                singular_or_plural(missing_abilities_list.len(), "ability", "abilities"),
-                format_list(missing_abilities_list, None)
-            ),
-            (false, true) => format!(
-                "Unexpected {}: {}",
-                singular_or_plural(extra_abilities_list.len(), "ability", "abilities"),
-                format_list(extra_abilities_list, None)
-            ),
-            (false, false) => unreachable!("Abilities should not be the same"),
-        },
-    )
+    match (
+        missing_abilities != AbilitySet::EMPTY,
+        extra_abilities != AbilitySet::EMPTY,
+    ) {
+        (true, true) => format!(
+            "Mismatched {plural_noun}: missing {}, unexpected {}",
+            format_list(missing_abilities_list, None),
+            format_list(extra_abilities_list, None),
+        ),
+        (true, false) => format!(
+            "Missing {}: {}",
+            singular_or_plural(missing_abilities_list.len(), singular_noun, plural_noun),
+            format_list(missing_abilities_list, None)
+        ),
+        (false, true) => format!(
+            "Unexpected {}: {}",
+            singular_or_plural(extra_abilities_list.len(), singular_noun, plural_noun),
+            format_list(extra_abilities_list, None)
+        ),
+        (false, false) => unreachable!("{plural_noun} should not be the same"),
+    }
 }
 
 /// Return a diagnostic for an ability mismatch.
@@ -1243,7 +1272,12 @@ fn struct_ability_mismatch_diag(
             Declarations::AbilityMismatch,
             (
                 def_loc,
-                ability_mismatch_label(old_struct.abilities, new_struct.abilities)?,
+                ability_mismatch_label(
+                    old_struct.abilities,
+                    new_struct.abilities,
+                    "ability",
+                    "abilities",
+                ),
             ),
             Vec::<(Loc, String)>::new(),
             vec![
@@ -1311,8 +1345,9 @@ fn struct_field_mismatch_diag(
                 cannot be changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original struct's fields \
-                    for struct '{struct_name}' including the ordering."
+                    "Restore the original struct's {} \
+                    for struct '{struct_name}' including the ordering.",
+                    singular_or_plural(old_struct.fields.len(), "field", "fields")
                 ),
             ],
         ));
@@ -1354,7 +1389,7 @@ fn struct_field_mismatch_diag(
                             new_field.type_, old_field.type_
                         ),
                     ),
-                    (false, false) => unreachable!("Fields should no be the same"),
+                    (false, false) => unreachable!("Fields should not be the same"),
                 };
 
                 diags.add(Diagnostic::new(
@@ -1366,8 +1401,9 @@ fn struct_field_mismatch_diag(
                         and cannot be changed during an upgrade."
                             .to_string(),
                         format!(
-                            "Restore the original struct's fields for \
-                            struct '{struct_name}' including the ordering."
+                            "Restore the original struct's {} for \
+                            struct '{struct_name}' including the ordering.",
+                            singular_or_plural(old_struct.fields.len(), "field", "fields")
                         ),
                     ],
                 ));
@@ -1445,7 +1481,12 @@ fn enum_ability_mismatch_diag(
             Declarations::AbilityMismatch,
             (
                 def_loc,
-                ability_mismatch_label(old_enum.abilities, new_enum.abilities)?,
+                ability_mismatch_label(
+                    old_enum.abilities,
+                    new_enum.abilities,
+                    "ability",
+                    "abilities",
+                ),
             ),
             Vec::<(Loc, String)>::new(),
             vec![
@@ -1562,8 +1603,9 @@ fn enum_variant_mismatch_diag(
                     and cannot be changed during an upgrade."
                         .to_string(),
                     format!(
-                        "Restore the original enum's variants for \
-                        enum '{enum_name}' including the ordering."
+                        "Restore the original enum's {} for \
+                        enum '{enum_name}' including the ordering.",
+                        singular_or_plural(old_enum.variants.len(), "variant", "variants")
                     ),
                 ],
             ));
@@ -1623,8 +1665,9 @@ fn enum_new_variant_diag(
                     changed during an upgrade."
                         .to_string(),
                     format!(
-                        "Restore the original enum's variants for enum \
-                        '{enum_name}' including the ordering."
+                        "Restore the original enum's {} for enum \
+                        '{enum_name}' including the ordering.",
+                        singular_or_plural(old_enum.variants.len(), "variant", "variants")
                     ),
                 ],
             ))
@@ -1743,7 +1786,7 @@ fn type_parameter_diag(
             (
                 def_loc,
                 format!(
-                    "Incorrect number of type parameters: expected {}, have {}",
+                    "Incorrect number of type parameters: expected {}, found {}",
                     old_type_parameters.len(),
                     new_type_parameters.len()
                 ),
@@ -1755,8 +1798,9 @@ fn type_parameter_diag(
                 cannot be changed during an upgrade."
                 ),
                 format!(
-                    "Restore the original {declaration_kind}'s type parameters \
-                    for {declaration_kind} '{name}' including the ordering."
+                    "Restore the original {declaration_kind}'s type {} \
+                    for {declaration_kind} '{name}' including the ordering.",
+                    singular_or_plural(old_type_parameters.len(), "parameter", "parameters"),
                 ),
             ],
         ));
@@ -1766,15 +1810,15 @@ fn type_parameter_diag(
             .zip(new_type_parameters.iter())
             .enumerate()
         {
-            if old_type_param != new_type_param {
-                let type_param_loc = type_parameter_locs
-                    .get(i)
-                    .context("Unable to get type parameter location")?;
+            let type_param_loc = type_parameter_locs
+                .get(i)
+                .context("Unable to get type parameter location")?;
 
-                let (code, label) = type_parameter_code_and_error(old_type_param, new_type_param);
-
+            if let Some((label, fix_note)) =
+                type_param_constraint_labels(old_type_param.constraints, new_type_param.constraints)
+            {
                 diags.add(Diagnostic::new(
-                    code,
+                    Declarations::TypeParamMismatch,
                     (type_param_loc.1, label),
                     vec![(def_loc, format!("{capital_declaration_kind} definition"))],
                     vec![
@@ -1782,10 +1826,24 @@ fn type_parameter_diag(
                             "{capital_declaration_kind}s are part of a module's public interface \
                         and cannot be changed during an upgrade."
                         ),
+                        fix_note,
+                    ],
+                ));
+            }
+
+            if let Some((label, fix_note)) =
+                type_param_phantom_labels(old_type_param.is_phantom, new_type_param.is_phantom)
+            {
+                diags.add(Diagnostic::new(
+                    Declarations::TypeParamMismatch,
+                    (type_param_loc.1, label),
+                    vec![(def_loc, format!("{capital_declaration_kind} definition"))],
+                    vec![
                         format!(
-                            "Restore the original {declaration_kind}'s type parameters \
-                            for {declaration_kind} '{name}' including the ordering."
+                            "{capital_declaration_kind}s are part of a module's public interface \
+                        and cannot be changed during an upgrade."
                         ),
+                        fix_note,
                     ],
                 ));
             }
@@ -1794,49 +1852,49 @@ fn type_parameter_diag(
     Ok(diags)
 }
 
-/// Generic type parameter mismatch error message, used for structs and enums
-fn type_parameter_code_and_error(
-    old_type_param: &DatatypeTyParameter,
-    new_type_param: &DatatypeTyParameter,
-) -> (DiagnosticInfo, String) {
-    // check the constraints
-    match (
-        old_type_param.constraints != new_type_param.constraints,
-        old_type_param.is_phantom != new_type_param.is_phantom,
-    ) {
-        (true, true) | (true, false) => (
-            Declarations::TypeParamMismatch.into(),
-            format!(
-                // type parameter constraints
-                "Expected {} type parameter with {}.",
-                if new_type_param.is_phantom {
-                    "phantom "
-                } else {
-                    ""
-                },
-                format_list(
-                    old_type_param
-                        .constraints
-                        .into_iter()
-                        .map(|c| format!("'{:?}'", c).to_lowercase()),
-                    None,
-                ),
-            ),
-        ),
-        // phantom is different
-        (false, true) => (
-            Declarations::TypeParamMismatch.into(),
-            format!(
-                "Expected {} type parameter.",
-                if old_type_param.is_phantom {
-                    "phantom"
-                } else {
-                    "non-phantom"
-                },
-            ),
-        ),
-        (false, false) => unreachable!("Type parameters should not be the same"),
+fn type_param_constraint_labels(
+    old_constraints: AbilitySet,
+    new_constraints: AbilitySet,
+) -> Option<(String, String)> {
+    if old_constraints == new_constraints {
+        return None;
     }
+
+    let old_abilities_list: Vec<String> = old_constraints
+        .into_iter()
+        .map(|a| format!("'{}'", a).to_lowercase())
+        .collect();
+
+    Some((
+        ability_mismatch_label(
+            old_constraints,
+            new_constraints,
+            "constraint",
+            "constraints",
+        ),
+        format!(
+            "Restore the original type parameter {}",
+            format_list(old_abilities_list, Some(("constraint", "constraints"))),
+        ),
+    ))
+}
+
+fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(String, String)> {
+    if old_phantom == new_phantom {
+        return None;
+    }
+
+    Some(if old_phantom {
+        (
+            "Missing 'phantom' modifier".to_string(),
+            "Restore the original 'phantom' modifier".to_string(),
+        )
+    } else {
+        (
+            "Unexpected 'phantom' modifier".to_string(),
+            "Remove the 'phantom' modifier".to_string(),
+        )
+    })
 }
 
 fn format_list(
