@@ -206,6 +206,26 @@
               "$ref": "#/components/schemas/ObjectId"
             },
             "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "object",
+            "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "object_bcs",
+            "description": "Request that `Object` formated as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request that `Object` formated as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
           }
         ],
         "responses": {
@@ -253,6 +273,26 @@
               "minimum": 0.0
             },
             "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "object",
+            "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "object_bcs",
+            "description": "Request that `Object` formated as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request that `Object` formated as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
           }
         ],
         "responses": {
@@ -3873,7 +3913,8 @@
         "type": "object",
         "required": [
           "digest",
-          "object"
+          "object_id",
+          "version"
         ],
         "properties": {
           "digest": {
@@ -3881,6 +3922,17 @@
           },
           "object": {
             "$ref": "#/components/schemas/Object"
+          },
+          "object_bcs": {
+            "type": "string"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           }
         }
       },
