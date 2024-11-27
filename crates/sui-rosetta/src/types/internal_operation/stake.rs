@@ -62,6 +62,7 @@ impl TryConstructTransaction for Stake {
 
             // For some reason dry run fails if we use a total_sui_balance - big-budget and also
             // provide the gas-coins. Not using gas_coins should not matter in the dry-run.
+            // This seems like a bug of the dry-run implementation?
             let pt = stake_pt(validator, total_sui_balance as u64, true, &extra_gas_coins)?;
             let tx_data = TransactionData::new_programmable(
                 sender,
@@ -147,7 +148,7 @@ impl TryConstructTransaction for Stake {
             }
             if gathered < amount + budget {
                 return Err(Error::InvalidInput(format!(
-                    "Address {sender} does not have enough Sui balance to stake {amount} with budget {budget}. Sui balance: {gathered}."
+                    "Address {sender} does not have enough Sui balance to stake {amount} with needed budget: {budget}. Sui balance: {gathered}."
                 )));
             }
 
