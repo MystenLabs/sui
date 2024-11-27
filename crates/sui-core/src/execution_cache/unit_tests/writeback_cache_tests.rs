@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::default_registry;
-use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
     collections::BTreeMap,
     future::Future,
