@@ -42,7 +42,6 @@ pub struct IndexerConfig {
     pub extra: toml::Table,
 }
 
-#[DefaultConfig]
 #[derive(Clone)]
 pub struct ConsistencyConfig {
     /// How often to check whether write-ahead logs related to the consistent range can be
@@ -177,6 +176,20 @@ macro_rules! merge_recursive {
 }
 
 impl IndexerConfig {
+    /// Generate an example configuration, suitable for demonstrating the fields available to
+    /// configure.
+    pub fn example() -> Self {
+        let mut example: Self = Default::default();
+
+        example.ingestion = IngestionConfig::default().into();
+        example.consistency = ConsistencyConfig::default().into();
+        example.committer = CommitterConfig::default().into();
+        example.pruner = PrunerConfig::default().into();
+        example.pipeline = PipelineLayer::example();
+
+        example
+    }
+
     pub fn merge(self, other: IndexerConfig) -> IndexerConfig {
         check_extra("top-level", self.extra);
         check_extra("top-level", other.extra);
@@ -354,6 +367,36 @@ impl PrunerLayer {
 }
 
 impl PipelineLayer {
+    /// Generate an example configuration, suitable for demonstrating the fields available to
+    /// configure.
+    pub fn example() -> Self {
+        PipelineLayer {
+            sum_coin_balances: Some(Default::default()),
+            wal_coin_balances: Some(Default::default()),
+            sum_obj_types: Some(Default::default()),
+            wal_obj_types: Some(Default::default()),
+            sum_displays: Some(Default::default()),
+            sum_packages: Some(Default::default()),
+            ev_emit_mod: Some(Default::default()),
+            ev_struct_inst: Some(Default::default()),
+            kv_checkpoints: Some(Default::default()),
+            kv_epoch_ends: Some(Default::default()),
+            kv_epoch_starts: Some(Default::default()),
+            kv_feature_flags: Some(Default::default()),
+            kv_objects: Some(Default::default()),
+            kv_protocol_configs: Some(Default::default()),
+            kv_transactions: Some(Default::default()),
+            obj_versions: Some(Default::default()),
+            tx_affected_addresses: Some(Default::default()),
+            tx_affected_objects: Some(Default::default()),
+            tx_balance_changes: Some(Default::default()),
+            tx_calls: Some(Default::default()),
+            tx_digests: Some(Default::default()),
+            tx_kinds: Some(Default::default()),
+            extra: Default::default(),
+        }
+    }
+
     pub fn merge(self, other: PipelineLayer) -> PipelineLayer {
         check_extra("pipeline", self.extra);
         check_extra("pipeline", other.extra);
@@ -405,6 +448,71 @@ impl Default for ConsistencyConfig {
             consistent_pruning_interval_ms: 300_000,
             pruner_delay_ms: 120_000,
             consistent_range: None,
+        }
+    }
+}
+
+impl From<IngestionConfig> for IngestionLayer {
+    fn from(config: IngestionConfig) -> Self {
+        Self {
+            checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
+            ingest_concurrency: Some(config.ingest_concurrency),
+            retry_interval_ms: Some(config.retry_interval_ms),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<ConsistencyConfig> for ConsistencyLayer {
+    fn from(config: ConsistencyConfig) -> Self {
+        Self {
+            consistent_pruning_interval_ms: Some(config.consistent_pruning_interval_ms),
+            pruner_delay_ms: Some(config.pruner_delay_ms),
+            consistent_range: config.consistent_range,
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<SequentialConfig> for SequentialLayer {
+    fn from(config: SequentialConfig) -> Self {
+        Self {
+            committer: Some(config.committer.into()),
+            checkpoint_lag: Some(config.checkpoint_lag),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<ConcurrentConfig> for ConcurrentLayer {
+    fn from(config: ConcurrentConfig) -> Self {
+        Self {
+            committer: Some(config.committer.into()),
+            pruner: config.pruner.map(Into::into),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<CommitterConfig> for CommitterLayer {
+    fn from(config: CommitterConfig) -> Self {
+        Self {
+            write_concurrency: Some(config.write_concurrency),
+            collect_interval_ms: Some(config.collect_interval_ms),
+            watermark_interval_ms: Some(config.watermark_interval_ms),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<PrunerConfig> for PrunerLayer {
+    fn from(config: PrunerConfig) -> Self {
+        Self {
+            interval_ms: Some(config.interval_ms),
+            delay_ms: Some(config.delay_ms),
+            retention: Some(config.retention),
+            max_chunk_size: Some(config.max_chunk_size),
+            extra: Default::default(),
         }
     }
 }
