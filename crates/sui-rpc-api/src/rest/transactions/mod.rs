@@ -32,9 +32,9 @@ use crate::rest::openapi::ResponseBuilder;
 use crate::rest::openapi::RouteHandler;
 use crate::rest::PageCursor;
 use crate::Direction;
-use crate::RestError;
 use crate::Result;
 use crate::RpcService;
+use crate::RpcServiceError;
 
 pub struct GetTransaction;
 
@@ -108,7 +108,7 @@ impl std::fmt::Display for TransactionNotFoundError {
 
 impl std::error::Error for TransactionNotFoundError {}
 
-impl From<TransactionNotFoundError> for crate::RestError {
+impl From<TransactionNotFoundError> for crate::RpcServiceError {
     fn from(value: TransactionNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
@@ -163,7 +163,7 @@ async fn list_transactions(
     let direction = parameters.direction();
 
     if start.checkpoint < oldest_checkpoint {
-        return Err(RestError::new(
+        return Err(RpcServiceError::new(
             StatusCode::GONE,
             "Old transactions have been pruned",
         ));

@@ -6,7 +6,7 @@ use crate::{
     rest::_schemars::U64,
     rest::accept::AcceptFormat,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    RestError, Result, RpcService,
+    Result, RpcService, RpcServiceError,
 };
 use axum::{
     extract::{Path, State},
@@ -57,7 +57,7 @@ async fn get_system_state_summary(
     match accept {
         AcceptFormat::Json => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid accept type",
             ))
@@ -569,7 +569,7 @@ async fn get_current_protocol_config(
     match accept {
         AcceptFormat::Json => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid accept type",
             ))
@@ -631,7 +631,7 @@ async fn get_protocol_config(
     match accept {
         AcceptFormat::Json => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid accept type",
             ))
@@ -666,7 +666,7 @@ impl std::fmt::Display for ProtocolNotFoundError {
 
 impl std::error::Error for ProtocolNotFoundError {}
 
-impl From<ProtocolNotFoundError> for crate::RestError {
+impl From<ProtocolNotFoundError> for crate::RpcServiceError {
     fn from(value: ProtocolNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
@@ -766,7 +766,7 @@ async fn get_gas_info(
     match accept {
         AcceptFormat::Json => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid accept type",
             ))

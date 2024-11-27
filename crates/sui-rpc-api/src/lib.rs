@@ -22,7 +22,7 @@ pub mod types;
 
 pub use client::Client;
 pub use config::Config;
-pub use error::{RestError, Result};
+pub use error::{Result, RpcServiceError};
 pub use metrics::RpcMetrics;
 pub use rest::checkpoints::CheckpointResponse;
 pub use rest::checkpoints::ListCheckpointsQueryParameters;

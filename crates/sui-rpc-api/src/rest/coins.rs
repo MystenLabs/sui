@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
-use crate::RestError;
 use crate::RpcService;
+use crate::RpcServiceError;
 use crate::{reader::StateReader, Result};
 use axum::extract::{Path, State};
 use axum::Json;
@@ -50,7 +50,10 @@ async fn get_coin_info(
     Path(coin_type): Path<StructTag>,
     State(state): State<StateReader>,
 ) -> Result<Json<CoinInfo>> {
-    let indexes = state.inner().indexes().ok_or_else(RestError::not_found)?;
+    let indexes = state
+        .inner()
+        .indexes()
+        .ok_or_else(RpcServiceError::not_found)?;
 
     let core_coin_type = struct_tag_sdk_to_core(coin_type.clone())?;
 
@@ -68,7 +71,7 @@ async fn get_coin_info(
             .map(sui_types::coin::CoinMetadata::try_from)
             .transpose()
             .map_err(|_| {
-                RestError::new(
+                RpcServiceError::new(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                     format!("Unable to read object {coin_metadata_object_id} for coin type {core_coin_type} as CoinMetadata"),
                 )
@@ -85,7 +88,7 @@ async fn get_coin_info(
             .map(sui_types::coin::TreasuryCap::try_from)
             .transpose()
             .map_err(|_| {
-                RestError::new(
+                RpcServiceError::new(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                     format!("Unable to read object {treasury_object_id} for coin type {core_coin_type} as TreasuryCap"),
                 )
@@ -118,7 +121,7 @@ impl std::fmt::Display for CoinNotFoundError {
 
 impl std::error::Error for CoinNotFoundError {}
 
-impl From<CoinNotFoundError> for crate::RestError {
+impl From<CoinNotFoundError> for crate::RpcServiceError {
     fn from(value: CoinNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }

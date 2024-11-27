@@ -7,7 +7,7 @@ use crate::{
     rest::accept::AcceptFormat,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     rest::Page,
-    RestError, Result, RpcService,
+    Result, RpcService, RpcServiceError,
 };
 use axum::extract::Query;
 use axum::extract::{Path, State};
@@ -175,7 +175,7 @@ impl std::fmt::Display for ObjectNotFoundError {
 
 impl std::error::Error for ObjectNotFoundError {}
 
-impl From<ObjectNotFoundError> for crate::RestError {
+impl From<ObjectNotFoundError> for crate::RpcServiceError {
     fn from(value: ObjectNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
@@ -222,11 +222,14 @@ async fn list_dynamic_fields(
     accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<Page<DynamicFieldInfo, ObjectId>> {
-    let indexes = state.inner().indexes().ok_or_else(RestError::not_found)?;
+    let indexes = state
+        .inner()
+        .indexes()
+        .ok_or_else(RpcServiceError::not_found)?;
     match accept {
         AcceptFormat::Json => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid accept type",
             ))

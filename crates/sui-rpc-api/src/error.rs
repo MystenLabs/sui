@@ -3,15 +3,21 @@
 
 use axum::http::StatusCode;
 
-pub type Result<T, E = RestError> = std::result::Result<T, E>;
+pub type Result<T, E = RpcServiceError> = std::result::Result<T, E>;
 
+/// An internal RPC service error
+///
+/// General error type used by top-level RPC service methods. The main purpose of this error type
+/// is to provide a convenient type for converting between internal errors and a response that
+/// needs to be sent to a calling client. This is done by converting this type into either an
+/// `axum::Response` or a `tonic::Status`.
 #[derive(Debug)]
-pub struct RestError {
+pub struct RpcServiceError {
     status: StatusCode,
     message: Option<String>,
 }
 
-impl RestError {
+impl RpcServiceError {
     pub fn new<T: Into<String>>(status: StatusCode, message: T) -> Self {
         Self {
             status,
@@ -28,7 +34,7 @@ impl RestError {
 }
 
 // Tell axum how to convert `AppError` into a response.
-impl axum::response::IntoResponse for RestError {
+impl axum::response::IntoResponse for RpcServiceError {
     fn into_response(self) -> axum::response::Response {
         match self.message {
             Some(message) => (self.status, message).into_response(),
@@ -37,7 +43,7 @@ impl axum::response::IntoResponse for RestError {
     }
 }
 
-impl From<sui_types::storage::error::Error> for RestError {
+impl From<sui_types::storage::error::Error> for RpcServiceError {
     fn from(value: sui_types::storage::error::Error) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -46,7 +52,7 @@ impl From<sui_types::storage::error::Error> for RestError {
     }
 }
 
-impl From<anyhow::Error> for RestError {
+impl From<anyhow::Error> for RpcServiceError {
     fn from(value: anyhow::Error) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -55,7 +61,7 @@ impl From<anyhow::Error> for RestError {
     }
 }
 
-impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for RestError {
+impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for RpcServiceError {
     fn from(value: sui_types::sui_sdk_types_conversions::SdkTypeConversionError) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -64,7 +70,7 @@ impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for Rest
     }
 }
 
-impl From<bcs::Error> for RestError {
+impl From<bcs::Error> for RpcServiceError {
     fn from(value: bcs::Error) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -73,7 +79,7 @@ impl From<bcs::Error> for RestError {
     }
 }
 
-impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
+impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcServiceError {
     fn from(error: sui_types::quorum_driver_types::QuorumDriverError) -> Self {
         use itertools::Itertools;
         use sui_types::error::SuiError;
@@ -89,10 +95,10 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
                     format!("Invalid user signature: {err}")
                 };
 
-                RestError::new(StatusCode::BAD_REQUEST, message)
+                RpcServiceError::new(StatusCode::BAD_REQUEST, message)
             }
             QuorumDriverInternalError(err) => {
-                RestError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+                RpcServiceError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
             }
             ObjectsDoubleUsed {
                 conflicting_txes,
@@ -115,11 +121,11 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
                         new_map,
                     );
 
-                RestError::new(StatusCode::CONFLICT, message)
+                RpcServiceError::new(StatusCode::CONFLICT, message)
             }
             TimeoutBeforeFinality | FailedWithTransientErrorAfterMaximumAttempts { .. } => {
                 // TODO add a Retry-After header
-                RestError::new(
+                RpcServiceError::new(
                     StatusCode::SERVICE_UNAVAILABLE,
                     "timed-out before finality could be reached",
                 )
@@ -161,15 +167,15 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
                 let error_list = new_errors.join(", ");
                 let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
 
-                RestError::new(StatusCode::BAD_REQUEST, error_msg)
+                RpcServiceError::new(StatusCode::BAD_REQUEST, error_msg)
             }
-            TxAlreadyFinalizedWithDifferentUserSignatures => RestError::new(
+            TxAlreadyFinalizedWithDifferentUserSignatures => RpcServiceError::new(
                 StatusCode::CONFLICT,
                 "The transaction is already finalized but with different user signatures",
             ),
             SystemOverload { .. } | SystemOverloadRetryAfter { .. } => {
                 // TODO add a Retry-After header
-                RestError::new(StatusCode::SERVICE_UNAVAILABLE, "system is overloaded")
+                RpcServiceError::new(StatusCode::SERVICE_UNAVAILABLE, "system is overloaded")
             }
         }
     }

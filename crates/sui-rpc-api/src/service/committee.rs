@@ -41,7 +41,7 @@ impl std::fmt::Display for CommitteeNotFoundError {
 
 impl std::error::Error for CommitteeNotFoundError {}
 
-impl From<CommitteeNotFoundError> for crate::RestError {
+impl From<CommitteeNotFoundError> for crate::RpcServiceError {
     fn from(value: CommitteeNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
