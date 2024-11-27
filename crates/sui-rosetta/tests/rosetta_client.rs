@@ -21,7 +21,8 @@ use sui_rosetta::types::{
     ConstructionCombineResponse, ConstructionMetadataRequest, ConstructionMetadataResponse,
     ConstructionPayloadsRequest, ConstructionPayloadsResponse, ConstructionPreprocessRequest,
     ConstructionPreprocessResponse, ConstructionSubmitRequest, Currencies, NetworkIdentifier,
-    Signature, SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
+    PreprocessMetadata, Signature, SignatureType, SubAccount, SubAccountType, SuiEnv,
+    TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
 use sui_sdk::SuiClient;
@@ -107,6 +108,7 @@ impl RosettaClient {
         &self,
         operations: &Operations,
         keystore: &Keystore,
+        metadata: Option<PreprocessMetadata>,
     ) -> TransactionIdentifierResponse {
         let network_identifier = NetworkIdentifier {
             blockchain: "sui".to_string(),
@@ -119,7 +121,7 @@ impl RosettaClient {
                 &ConstructionPreprocessRequest {
                     network_identifier: network_identifier.clone(),
                     operations: operations.clone(),
-                    metadata: None,
+                    metadata,
                 },
             )
             .await;

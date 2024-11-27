@@ -90,6 +90,11 @@ impl TryConstructTransaction for PaySui {
                     break;
                 }
             }
+            if gathered < total_amount + budget {
+                return Err(Error::InvalidInput(
+                    format!("Address {sender} does not have enough Sui balance to transfer {total_amount} with budget {budget}. Sui balance: {gathered}.")
+                ));
+            }
 
             // The coins to merge should be used as transaction object inputs, as
             // `TransactionData::new_programmable` used in `InternalOperation::try_into_data`,

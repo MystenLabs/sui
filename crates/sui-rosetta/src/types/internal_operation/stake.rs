@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -147,10 +146,9 @@ impl TryConstructTransaction for Stake {
                 }
             }
             if gathered < amount + budget {
-                return Err(anyhow!(
-                    "Not enough Sui balance to transfer {amount} with budget {budget}"
-                )
-                .into());
+                return Err(Error::InvalidInput(format!(
+                    "Address {sender} does not have enough Sui balance to stake {amount} with budget {budget}. Sui balance: {gathered}."
+                )));
             }
 
             // The coins to merge should be used as transaction object inputs, as

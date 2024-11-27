@@ -218,7 +218,7 @@ async fn test_custom_coin_transfer() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
     let tx = client
         .read_api()
