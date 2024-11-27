@@ -4,3 +4,4 @@
 mod committee;
 mod health;
 mod info;
+pub(crate) mod objects;

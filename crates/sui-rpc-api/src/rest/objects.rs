@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::{GetObjectOptions, ObjectResponse};
 use crate::{
     reader::StateReader,
     response::ResponseContent,
@@ -12,19 +13,13 @@ use crate::{
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
-use sui_sdk_types::types::{Object, ObjectDigest, ObjectId, TypeTag, Version};
+use sui_sdk_types::types::{Object, ObjectId, TypeTag, Version};
 use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
 use sui_types::{
     storage::{DynamicFieldIndexInfo, DynamicFieldKey},
     sui_sdk_types_conversions::SdkTypeConversionError,
 };
 use tap::Pipe;
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct ObjectResponse {
-    pub digest: ObjectDigest,
-    pub object: Object,
-}
 
 pub struct GetObject;
 
@@ -45,6 +40,7 @@ impl ApiEndpoint<RpcService> for GetObject {
             .tag("Objects")
             .operation_id("GetObject")
             .path_parameter::<ObjectId>("object_id", generator)
+            .query_parameters::<GetObjectOptions>(generator)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -63,21 +59,15 @@ impl ApiEndpoint<RpcService> for GetObject {
 
 pub async fn get_object(
     Path(object_id): Path<ObjectId>,
+    Query(options): Query<GetObjectOptions>,
     accept: AcceptFormat,
-    State(state): State<StateReader>,
+    State(state): State<RpcService>,
 ) -> Result<ResponseContent<Object, ObjectResponse>> {
-    let object = state
-        .get_object(object_id)?
-        .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
-
-    let object = ObjectResponse {
-        digest: object.digest(),
-        object,
-    };
+    let object = state.get_object(object_id, None, options)?;
 
     match accept {
         AcceptFormat::Json => ResponseContent::Json(object),
-        AcceptFormat::Bcs => ResponseContent::Bcs(object.object),
+        AcceptFormat::Bcs => ResponseContent::Bcs(object.object.unwrap()),
     }
     .pipe(Ok)
 }
@@ -102,6 +92,7 @@ impl ApiEndpoint<RpcService> for GetObjectWithVersion {
             .operation_id("GetObjectWithVersion")
             .path_parameter::<ObjectId>("object_id", generator)
             .path_parameter::<Version>("version", generator)
+            .query_parameters::<GetObjectOptions>(generator)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -120,65 +111,17 @@ impl ApiEndpoint<RpcService> for GetObjectWithVersion {
 
 pub async fn get_object_with_version(
     Path((object_id, version)): Path<(ObjectId, Version)>,
+    Query(options): Query<GetObjectOptions>,
     accept: AcceptFormat,
-    State(state): State<StateReader>,
+    State(state): State<RpcService>,
 ) -> Result<ResponseContent<Object, ObjectResponse>> {
-    let object = state
-        .get_object_with_version(object_id, version)?
-        .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
-
-    let object = ObjectResponse {
-        digest: object.digest(),
-        object,
-    };
+    let object = state.get_object(object_id, Some(version), options)?;
 
     match accept {
         AcceptFormat::Json => ResponseContent::Json(object),
-        AcceptFormat::Bcs => ResponseContent::Bcs(object.object),
+        AcceptFormat::Bcs => ResponseContent::Bcs(object.object.unwrap()),
     }
     .pipe(Ok)
-}
-
-#[derive(Debug)]
-pub struct ObjectNotFoundError {
-    object_id: ObjectId,
-    version: Option<Version>,
-}
-
-impl ObjectNotFoundError {
-    pub fn new(object_id: ObjectId) -> Self {
-        Self {
-            object_id,
-            version: None,
-        }
-    }
-
-    pub fn new_with_version(object_id: ObjectId, version: Version) -> Self {
-        Self {
-            object_id,
-            version: Some(version),
-        }
-    }
-}
-
-impl std::fmt::Display for ObjectNotFoundError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Object {}", self.object_id)?;
-
-        if let Some(version) = self.version {
-            write!(f, " with version {version}")?;
-        }
-
-        write!(f, " not found")
-    }
-}
-
-impl std::error::Error for ObjectNotFoundError {}
-
-impl From<ObjectNotFoundError> for crate::RpcServiceError {
-    fn from(value: ObjectNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
-    }
 }
 
 pub struct ListDynamicFields;
