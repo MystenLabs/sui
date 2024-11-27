@@ -16,7 +16,7 @@ use crate::response::{Bcs, ResponseContent};
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
 use crate::{Direction, RpcService};
-use crate::{RestError, Result};
+use crate::{Result, RpcServiceError};
 use documented::Documented;
 
 use super::accept::AcceptFormat;
@@ -90,7 +90,7 @@ async fn get_checkpoint(
         CheckpointId::SequenceNumber(s) => {
             let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
             if s < oldest_checkpoint {
-                return Err(crate::RestError::new(
+                return Err(crate::RpcServiceError::new(
                     axum::http::StatusCode::GONE,
                     "Old checkpoints have been pruned",
                 ));
@@ -195,7 +195,7 @@ impl std::fmt::Display for CheckpointNotFoundError {
 
 impl std::error::Error for CheckpointNotFoundError {}
 
-impl From<CheckpointNotFoundError> for crate::RestError {
+impl From<CheckpointNotFoundError> for crate::RpcServiceError {
     fn from(value: CheckpointNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
     }
@@ -274,7 +274,7 @@ async fn list_checkpoints(
     let direction = parameters.direction();
 
     if start < oldest_checkpoint {
-        return Err(crate::RestError::new(
+        return Err(crate::RpcServiceError::new(
             axum::http::StatusCode::GONE,
             "Old checkpoints have been pruned",
         ));
@@ -431,7 +431,7 @@ async fn get_full_checkpoint(
     match accept {
         AcceptFormat::Bcs => {}
         _ => {
-            return Err(RestError::new(
+            return Err(RpcServiceError::new(
                 axum::http::StatusCode::BAD_REQUEST,
                 "invalid accept type; only 'application/bcs' is supported",
             ))
@@ -444,7 +444,7 @@ async fn get_full_checkpoint(
             // with objects that hasn't been pruned
             let oldest_checkpoint = state.inner().get_lowest_available_checkpoint_objects()?;
             if s < oldest_checkpoint {
-                return Err(crate::RestError::new(
+                return Err(crate::RpcServiceError::new(
                     axum::http::StatusCode::GONE,
                     "Old checkpoints have been pruned",
                 ));
