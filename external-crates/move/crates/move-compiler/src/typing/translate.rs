@@ -178,8 +178,14 @@ fn modules(
     let all_new_friends = Mutex::new(BTreeMap::new());
     let used_module_members = Mutex::new(BTreeMap::new());
     modules.into_par_iter().for_each(|(ident, mdef)| {
-        let (typed_mdef, new_friends, used_members) =
-            module(compilation_env, &info, all_macro_definitions, ident, mdef);
+        let (typed_mdef, new_friends, used_members) = module(
+            compilation_env,
+            &info,
+            &global_use_funs,
+            all_macro_definitions,
+            ident,
+            mdef,
+        );
         typed_modules
             .lock()
             .unwrap()
@@ -243,33 +249,6 @@ fn module<'env>(
         Constant(C),
         Function(F),
     }
-    struct Collected<S, E, C, F> {
-        members: Vec<Member<S, E, C, F>>,
-        new_friends: BTreeSet<(ModuleIdent, Loc)>,
-        used_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
-        used_methods: BTreeSet<(TypeName, Name)>,
-    }
-    impl<S, E, C, F> Collected<S, E, C, F> {
-        fn new() -> Self {
-            Self {
-                members: vec![],
-                new_friends: BTreeSet::new(),
-                used_members: BTreeMap::new(),
-                used_methods: BTreeSet::new(),
-            }
-        }
-        fn extend(&mut self, other: Self) {
-            self.members.extend(other.members);
-            self.new_friends.extend(other.new_friends);
-            for (mident, members) in other.used_members {
-                self.used_members
-                    .entry(mident)
-                    .or_insert_with(BTreeSet::new)
-                    .extend(members);
-            }
-            self.used_methods.extend(other.used_methods);
-        }
-    }
 
     let mut context = ModuleContext::new(env, info, global_use_funs, macros);
 
@@ -295,13 +274,13 @@ fn module<'env>(
     context.push_warning_filter_scope(warning_filter);
     context.add_use_funs_scope(use_funs);
     process_module_attributes(&mut context, &attributes);
-    let mut structs = Mutex::new(UniqueMap::new());
-    let mut enums = Mutex::new(UniqueMap::new());
-    let mut constants = Mutex::new(UniqueMap::new());
-    let mut functions = Mutex::new(UniqueMap::new());
-    let mut new_friends = Mutex::new(BTreeSet::new());
-    let mut used_members = Mutex::new(BTreeMap::new());
-    let mut used_methods = Mutex::new(BTreeSet::new());
+    let structs = Mutex::new(UniqueMap::new());
+    let enums = Mutex::new(UniqueMap::new());
+    let constants = Mutex::new(UniqueMap::new());
+    let functions = Mutex::new(UniqueMap::new());
+    let new_friends = Mutex::new(BTreeSet::new());
+    let used_members = Mutex::new(BTreeMap::new());
+    let used_methods = Mutex::new(BTreeSet::new());
     nstructs
         .into_par_iter()
         .map(Member::Struct)
@@ -310,7 +289,7 @@ fn module<'env>(
         .chain(nfunctions.into_par_iter().map(Member::Function))
         .for_each(|member| {
             let mut context = context.new_module_member();
-            let member = match member {
+            match member {
                 Member::Struct((name, mut s)) => {
                     struct_def(&mut context, name.loc(), &mut s);
                     structs.lock().unwrap().add(name, s).unwrap();
