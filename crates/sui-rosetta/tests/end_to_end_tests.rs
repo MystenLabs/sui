@@ -154,7 +154,7 @@ async fn test_stake() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
     let tx = client
         .read_api()
@@ -217,7 +217,7 @@ async fn test_stake_all() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
     let tx = client
         .read_api()
@@ -287,7 +287,7 @@ async fn test_withdraw_stake() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
     let tx = client
         .read_api()
@@ -337,7 +337,7 @@ async fn test_withdraw_stake() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
     let tx = client
         .read_api()
@@ -408,7 +408,7 @@ async fn test_pay_sui() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
     let tx = client
         .read_api()
@@ -471,7 +471,7 @@ async fn test_pay_sui_multiple_times() {
         ))
         .unwrap();
 
-        let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+        let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
         let tx = client
             .read_api()

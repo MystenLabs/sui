@@ -31,6 +31,7 @@ mod withdraw_stake;
 pub const MAX_GAS_COINS: usize = 255;
 const MAX_COMMAND_ARGS: usize = 511;
 const MAX_GAS_BUDGET: u64 = 50_000_000_000;
+/// Minimum gas-units a tx might need
 const START_GAS_UNITS: u64 = 1_000;
 
 pub struct TransactionAndObjectData {

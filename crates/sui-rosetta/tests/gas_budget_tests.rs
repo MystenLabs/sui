@@ -84,6 +84,7 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
     ))
     .unwrap();
 
+    // We manually use rosetta-flow here to check the intermediate results.
     let metadata = Some(PreprocessMetadata {
         budget: Some(budget),
     });
