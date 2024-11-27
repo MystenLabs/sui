@@ -3,7 +3,6 @@
 
 use crate::{
     proto,
-    reader::StateReader,
     response::JsonProtobufBcs,
     rest::accept::AcceptJsonProtobufBcs,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
@@ -11,7 +10,6 @@ use crate::{
 };
 use axum::extract::{Path, State};
 use sui_sdk_types::types::{EpochId, ValidatorCommittee};
-use sui_types::storage::ReadStore;
 use tap::Pipe;
 
 pub struct GetLatestCommittee;
@@ -50,12 +48,9 @@ impl ApiEndpoint<RpcService> for GetLatestCommittee {
 
 async fn get_latest_committee(
     accept: AcceptJsonProtobufBcs,
-    State(state): State<StateReader>,
+    State(state): State<RpcService>,
 ) -> Result<JsonProtobufBcs<ValidatorCommittee, proto::ValidatorCommittee, ValidatorCommittee>> {
-    let current_epoch = state.inner().get_latest_checkpoint()?.epoch();
-    let committee = state
-        .get_committee(current_epoch)
-        .ok_or_else(|| CommitteeNotFoundError::new(current_epoch))?;
+    let committee = state.get_committee(None)?;
 
     match accept {
         AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(committee),
@@ -104,11 +99,9 @@ impl ApiEndpoint<RpcService> for GetCommittee {
 async fn get_committee(
     Path(epoch): Path<EpochId>,
     accept: AcceptJsonProtobufBcs,
-    State(state): State<StateReader>,
+    State(state): State<RpcService>,
 ) -> Result<JsonProtobufBcs<ValidatorCommittee, proto::ValidatorCommittee, ValidatorCommittee>> {
-    let committee = state
-        .get_committee(epoch)
-        .ok_or_else(|| CommitteeNotFoundError::new(epoch))?;
+    let committee = state.get_committee(Some(epoch))?;
 
     match accept {
         AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(committee),
@@ -116,29 +109,4 @@ async fn get_committee(
         AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(committee),
     }
     .pipe(Ok)
-}
-
-#[derive(Debug)]
-pub struct CommitteeNotFoundError {
-    epoch: EpochId,
-}
-
-impl CommitteeNotFoundError {
-    pub fn new(epoch: EpochId) -> Self {
-        Self { epoch }
-    }
-}
-
-impl std::fmt::Display for CommitteeNotFoundError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Committee for epoch {} not found", self.epoch)
-    }
-}
-
-impl std::error::Error for CommitteeNotFoundError {}
-
-impl From<CommitteeNotFoundError> for crate::RestError {
-    fn from(value: CommitteeNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
-    }
 }
