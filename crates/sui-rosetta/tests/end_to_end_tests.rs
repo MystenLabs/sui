@@ -501,4 +501,3 @@ async fn test_pay_sui_multiple_times() {
         );
     }
 }
-
