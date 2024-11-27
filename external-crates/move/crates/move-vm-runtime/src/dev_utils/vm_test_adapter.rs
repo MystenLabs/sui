@@ -21,11 +21,11 @@ use std::collections::HashMap;
 pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
     /// Perform a publication, including package verification and updating the relevant storage in
     /// the test adapter so that it is available for subsequent calls.
-    fn publish_package(
+    fn publish_package<'extensions>(
         &mut self,
         runtime_id: RuntimePackageId,
         package: SerializedPackage,
-    ) -> VMResult<()>;
+    ) -> VMResult<MoveVM<'extensions>>;
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
     /// context.

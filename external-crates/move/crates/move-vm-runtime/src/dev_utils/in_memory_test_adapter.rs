@@ -113,27 +113,28 @@ impl InMemoryTestAdapter {
 }
 
 impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
-    fn publish_package(
+    fn publish_package<'extensions>(
         &mut self,
         runtime_id: RuntimePackageId,
         package: SerializedPackage,
-    ) -> VMResult<()> {
+    ) -> VMResult<MoveVM<'extensions>> {
         let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
             // TODO: VM error instead?
             panic!("Did not find runtime ID {runtime_id} in linkage context.");
         };
         assert!(storage_id == package.storage_id);
         let mut gas_meter = GasStatus::new_unmetered();
-        let (changeset, _) = self.runtime.validate_package(
+        let (changeset_and_vm, _) = self.runtime.validate_package(
             &self.storage,
             runtime_id,
             package.clone(),
             &mut gas_meter,
+            NativeContextExtensions::default(),
         );
-        changeset?;
+        let (_changeset, vm) = changeset_and_vm?;
         self.storage
             .publish_package(StoredPackage::from_serialized_package(package));
-        Ok(())
+        Ok(vm)
     }
 
     fn make_vm<'extensions>(

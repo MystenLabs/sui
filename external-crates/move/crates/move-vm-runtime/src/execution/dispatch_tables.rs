@@ -50,7 +50,7 @@ use tracing::error;
 ///
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct VMDispatchTables {
     pub(crate) loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
 }

@@ -33,9 +33,12 @@ use move_vm_runtime::{
         storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
+    execution::vm::MoveVM,
     natives::move_stdlib::{stdlib_native_functions, GasParameters},
     runtime::MoveRuntime,
-    shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
+    shared::{
+        gas::GasMeter, linkage_context::LinkageContext, serialization::SerializedReturnValues,
+    },
 };
 use once_cell::sync::Lazy;
 
@@ -297,6 +300,68 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
         }
     }
 
+    async fn publish_modules_with_calls(
+        &mut self,
+        modules: Vec<MaybeNamedCompiledModule>,
+        calls: Vec<(ModuleId, Identifier, Vec<MoveValue>)>,
+        signers: Vec<ParsedAddress>,
+        gas_budget: Option<u64>,
+        extra_args: Self::ExtraPublishArgs,
+    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
+        println!("---- PUBLISHING MODULE --------------------------------------------------------");
+        let pub_modules = modules
+            .iter()
+            .map(|module| module.module.clone())
+            .collect::<Vec<_>>();
+        println!("collecting ID");
+        let id = pub_modules.first().unwrap().self_id();
+        println!("computing sender");
+        let sender = *id.address();
+        println!("performing publish for {sender}");
+        println!("generating linkage");
+        let linkage_context = extra_args.overlay(self.adapter.generate_linkage_context(
+            sender,
+            sender,
+            &pub_modules,
+        )?)?;
+        println!("linkage: {linkage_context:#?}");
+        let mut gas_meter = Self::make_gas_status(gas_budget);
+        println!("doing publish");
+        let pkg = StoredPackage::from_module_for_testing_with_linkage(
+            sender,
+            linkage_context,
+            pub_modules.clone(),
+        )?;
+        let mut publish_vm = self.perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
+            inner_adapter.publish_package(sender, pkg.into_serialized_package())
+        })?;
+
+        println!("doing calls");
+        let signers: Vec<_> = signers
+            .into_iter()
+            .map(|addr| self.compiled_state().resolve_address(&addr))
+            .collect();
+        for (module, function, txn_args) in calls {
+                call_vm_function(
+                    &mut publish_vm,
+                    &module,
+                    &function,
+                    vec![],
+                    signers.clone(),
+                    txn_args,
+                    &mut gas_meter,
+                )?;
+        }
+        match publish_result {
+            Ok(()) => Ok((None, modules)),
+            Err(e) => Err(anyhow!(
+                "Unable to publish module '{}'. Got VMError: {}",
+                id,
+                format_vm_error(&e)
+            )),
+        }
+    }
+
     async fn call_function(
         &mut self,
         module: &ModuleId,
@@ -312,17 +377,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
             .collect();
-
-        let args = txn_args
-            .iter()
-            .map(|arg| arg.simple_serialize().unwrap())
-            .collect::<Vec<_>>();
-        // TODO rethink testing signer args
-        let args = signers
-            .iter()
-            .map(|a| MoveValue::Signer(*a).simple_serialize().unwrap())
-            .chain(args)
-            .collect();
         let serialized_return_values = self
             .perform_action(gas_budget, |inner_adapter, gas_status| {
                 let runtime_id = *module.address();
@@ -334,15 +388,14 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
 
                 println!("generating vm instance");
                 let mut vm_instance = inner_adapter.make_vm(linkage)?;
-                println!("Creating type arguments");
-                let type_args: Vec<_> = type_arg_tags
-                    .into_iter()
-                    .map(|tag| vm_instance.load_type(&tag))
-                    .collect::<VMResult<_>>()?;
-
-                println!("Doing call");
-                vm_instance.execute_function_bypass_visibility(
-                    module, function, type_args, args, gas_status,
+                call_vm_function(
+                    &mut vm_instance,
+                    module,
+                    function,
+                    type_arg_tags,
+                    signers,
+                    txn_args,
+                    gas_status,
                 )
             })
             .map_err(|e| {
@@ -397,26 +450,60 @@ impl SimpleRuntimeTestAdapter {
         gas_budget: Option<u64>,
         f: impl FnOnce(&mut dyn VMTestAdapter<InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
     ) -> VMResult<Ret> {
-        println!("creating natives");
-        // start session
-        // let natives =
-        //     stdlib_native_functions(STD_ADDR, GasParameters::zeros(), /* silent */ false)
-        //         .map_err(|e| e.finish(Location::Undefined))?;
-        // println!("creating VM");
-        // let mut vm = VirtualMachine::new(natives, vm_config);
+        let mut gas_status = Self::make_gas_status(gas_budget);
+        self.perform_action_with_gas(&mut gas_status, f)
+    }
+
+    fn make_gas_status<'gas>(gas_budget: Option<u64>) -> GasStatus<'gas> {
         println!("creating gas_status");
-        let mut gas_status = move_cli::sandbox::utils::get_gas_status(
+        move_cli::sandbox::utils::get_gas_status(
             &gas_schedule::INITIAL_COST_SCHEDULE,
             gas_budget,
         )
-        .unwrap();
+        .unwrap()
+    }
 
+    fn perform_action_with_gas<Ret>(
+        &mut self,
+        gas_status: &mut GasStatus,
+        f: impl FnOnce(&mut dyn VMTestAdapter<InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
+    ) -> VMResult<Ret> {
         // perform op
         println!("performing operation");
-        let res = f(&mut self.adapter, &mut gas_status)?;
-
+        let res = f(&mut self.adapter, gas_status)?;
         Ok(res)
     }
+}
+
+fn call_vm_function(
+    vm_instance: &mut MoveVM<'_>,
+    module: &ModuleId,
+    function: &IdentStr,
+    type_arg_tags: Vec<TypeTag>,
+    signers: Vec<AccountAddress>,
+    txn_args: Vec<MoveValue>,
+    gas_meter: &mut impl GasMeter,
+) -> VMResult<SerializedReturnValues> {
+    println!("Creating type arguments");
+    let type_args: Vec<_> = type_arg_tags
+        .into_iter()
+        .map(|tag| vm_instance.load_type(&tag))
+        .collect::<VMResult<_>>()?;
+
+    println!("Creaing args");
+    let args = txn_args
+        .iter()
+        .map(|arg| arg.simple_serialize().unwrap())
+        .collect::<Vec<_>>();
+    // TODO rethink testing signer args
+    let args = signers
+        .iter()
+        .map(|a| MoveValue::Signer(*a).simple_serialize().unwrap())
+        .chain(args)
+        .collect();
+
+    println!("Doing call");
+    vm_instance.execute_function_bypass_visibility(module, function, type_args, args, gas_meter)
 }
 
 pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
