@@ -24,11 +24,9 @@ use sui_sdk_types::types::{
 };
 use tap::Pipe;
 
-use crate::proto;
-use crate::proto::ListTransactionsResponse;
 use crate::reader::StateReader;
-use crate::response::JsonProtobufBcs;
-use crate::rest::accept::AcceptJsonProtobufBcs;
+use crate::response::ResponseContent;
+use crate::rest::accept::AcceptFormat;
 use crate::rest::openapi::ApiEndpoint;
 use crate::rest::openapi::OperationBuilder;
 use crate::rest::openapi::ResponseBuilder;
@@ -62,7 +60,6 @@ impl ApiEndpoint<RpcService> for GetTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionResponse>(generator)
-                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -77,16 +74,14 @@ impl ApiEndpoint<RpcService> for GetTransaction {
 
 async fn get_transaction(
     Path(transaction_digest): Path<TransactionDigest>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<JsonProtobufBcs<TransactionResponse, proto::GetTransactionResponse, TransactionResponse>>
-{
+) -> Result<ResponseContent<TransactionResponse>> {
     let response = state.get_transaction_response(transaction_digest)?;
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
-        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
-        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
+        AcceptFormat::Json => ResponseContent::Json(response),
+        AcceptFormat::Bcs => ResponseContent::Bcs(response),
     }
     .pipe(Ok)
 }
@@ -151,7 +146,6 @@ impl ApiEndpoint<RpcService> for ListTransactions {
                 200,
                 ResponseBuilder::new()
                     .json_content::<Vec<TransactionResponse>>(generator)
-                    .protobuf_content()
                     .bcs_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
@@ -167,11 +161,11 @@ impl ApiEndpoint<RpcService> for ListTransactions {
 
 async fn list_transactions(
     Query(parameters): Query<ListTransactionsQueryParameters>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<(
     PageCursor<TransactionCursor>,
-    JsonProtobufBcs<Vec<TransactionResponse>, ListTransactionsResponse, Vec<TransactionResponse>>,
+    ResponseContent<Vec<TransactionResponse>>,
 )> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
@@ -216,17 +210,8 @@ async fn list_transactions(
     });
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(transactions),
-        AcceptJsonProtobufBcs::Protobuf => {
-            let proto = ListTransactionsResponse {
-                transactions: transactions
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<_, _>>()?,
-            };
-            JsonProtobufBcs::Protobuf(proto)
-        }
-        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(transactions),
+        AcceptFormat::Json => ResponseContent::Json(transactions),
+        AcceptFormat::Bcs => ResponseContent::Bcs(transactions),
     }
     .pipe(|entries| (PageCursor(cursor), entries))
     .pipe(Ok)

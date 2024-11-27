@@ -10,16 +10,15 @@ use sui_sdk_types::types::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::proto;
-use crate::proto::ListCheckpointResponse;
 use crate::reader::StateReader;
-use crate::response::{JsonProtobufBcs, ProtobufBcs};
-use crate::rest::accept::AcceptJsonProtobufBcs;
+use crate::response::{Bcs, ResponseContent};
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
 use crate::{Direction, RpcService};
 use crate::{RestError, Result};
 use documented::Documented;
+
+use super::accept::AcceptFormat;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct CheckpointResponse {
@@ -82,9 +81,9 @@ impl ApiEndpoint<RpcService> for GetCheckpoint {
 async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     Query(parameters): Query<GetCheckpointQueryParameters>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<JsonProtobufBcs<CheckpointResponse, proto::GetCheckpointResponse, CheckpointResponse>> {
+) -> Result<ResponseContent<CheckpointResponse, CheckpointResponse>> {
     let SignedCheckpointSummary {
         checkpoint,
         signature,
@@ -126,9 +125,8 @@ async fn get_checkpoint(
     };
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
-        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
-        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
+        AcceptFormat::Json => ResponseContent::Json(response),
+        AcceptFormat::Bcs => ResponseContent::Bcs(response),
     }
     .pipe(Ok)
 }
@@ -253,7 +251,6 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
                 ResponseBuilder::new()
                     .json_content::<Vec<CheckpointResponse>>(generator)
                     .bcs_content()
-                    .protobuf_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
             )
@@ -269,11 +266,11 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
 
 async fn list_checkpoints(
     Query(parameters): Query<ListCheckpointsQueryParameters>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<(
     PageCursor<CheckpointSequenceNumber>,
-    JsonProtobufBcs<Vec<CheckpointResponse>, ListCheckpointResponse, Vec<SignedCheckpointSummary>>,
+    ResponseContent<Vec<SignedCheckpointSummary>, Vec<CheckpointResponse>>,
 )> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
@@ -328,11 +325,10 @@ async fn list_checkpoints(
     });
 
     match accept {
-        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(checkpoints),
-        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(checkpoints.try_into()?),
+        AcceptFormat::Json => ResponseContent::Json(checkpoints),
         // In order to work around compatibility issues with existing clients, keep the BCS form as
         // the old format without contents
-        AcceptJsonProtobufBcs::Bcs => {
+        AcceptFormat::Bcs => {
             let checkpoints = checkpoints
                 .into_iter()
                 .map(|c| SignedCheckpointSummary {
@@ -340,7 +336,7 @@ async fn list_checkpoints(
                     signature: c.signature,
                 })
                 .collect();
-            JsonProtobufBcs::Bcs(checkpoints)
+            ResponseContent::Bcs(checkpoints)
         }
     }
     .pipe(|entries| (PageCursor(cursor), entries))
@@ -434,17 +430,15 @@ impl ApiEndpoint<RpcService> for GetFullCheckpoint {
 
 async fn get_full_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
-    accept: AcceptJsonProtobufBcs,
+    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<ProtobufBcs<proto::FullCheckpoint, sui_types::full_checkpoint_content::CheckpointData>>
-{
+) -> Result<Bcs<sui_types::full_checkpoint_content::CheckpointData>> {
     match accept {
-        AcceptJsonProtobufBcs::Protobuf => {}
-        AcceptJsonProtobufBcs::Bcs => {}
+        AcceptFormat::Bcs => {}
         _ => {
             return Err(RestError::new(
                 axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/x-protobuf' is supported",
+                "invalid accept type; only 'application/bcs' is supported",
             ))
         }
     }
@@ -476,15 +470,5 @@ async fn get_full_checkpoint(
         .inner()
         .get_checkpoint_data(verified_summary, checkpoint_contents)?;
 
-    match accept {
-        AcceptJsonProtobufBcs::Protobuf => ProtobufBcs::Protobuf(checkpoint_data.try_into()?),
-        AcceptJsonProtobufBcs::Bcs => ProtobufBcs::Bcs(checkpoint_data),
-        _ => {
-            return Err(RestError::new(
-                axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/x-protobuf' is supported",
-            ))
-        }
-    }
-    .pipe(Ok)
+    Ok(Bcs(checkpoint_data))
 }
