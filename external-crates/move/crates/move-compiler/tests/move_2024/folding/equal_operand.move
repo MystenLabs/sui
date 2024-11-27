@@ -2,25 +2,12 @@
 // in a constant value
 module a::m;
 
-fun test_equal_operands_comparison(x: u64) {
+fun test_equal_operands_comparison() {
     1 == 1;
-    x == x;
     {1} == 1;
-
-    x % x;
-    x ^ x;
-    x / x;
-
-    x | x;
-    x & x;
-
-    x != x;
-    x < x;
-    x > x;
-
-    x == x;
-    x <= x;
-    x >= x;
+    1 == {1};
+    {1} == {1};
+    {{{1}}} == {{{{1}}}};
 }
 
 fun test_equal_operands_values() {

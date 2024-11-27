@@ -1,3 +1,4 @@
+#[allow(equal_operands)]
 module 0x8675309::M {
     struct R {
         f: u64

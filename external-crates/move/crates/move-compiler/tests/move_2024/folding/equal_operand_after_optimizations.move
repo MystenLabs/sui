@@ -13,7 +13,7 @@ fun equal_operands_inline(): bool {
     x == y
 }
 
-fun equal_operands_beofre_and_after_inline() {
+fun equal_operands_before_and_after_inline() {
     let mut x;
     let mut y;
     loop {

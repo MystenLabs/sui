@@ -22,6 +22,7 @@ module 0x42::M {
         1 % x;
     }
 
+    #[allow(equal_operands)]
     public fun ast_fold(x: u64) {
         let y = 1;
         x * y;

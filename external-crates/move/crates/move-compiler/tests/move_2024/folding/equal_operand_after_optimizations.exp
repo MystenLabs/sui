@@ -12,18 +12,6 @@ warning[W08002]: redundant equal operands for binary operatiop
    = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W08002]: redundant equal operands for binary operatiop
-   ┌─ tests/move_2024/folding/equal_operand_after_optimizations.move:22:9
-   │
-22 │         x == x;
-   │         ^^^^^^
-   │         │    │
-   │         │    Evaluates to the same value as this expression
-   │         Equal operands detected in binary operation, which always evaluates to 'true'
-   │         This expression
-   │
-   = This warning can be suppressed with '#[allow(equal_operands)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W08002]: redundant equal operands for binary operatiop
    ┌─ tests/move_2024/folding/equal_operand_after_optimizations.move:23:9
    │
 21 │         y = 0;
