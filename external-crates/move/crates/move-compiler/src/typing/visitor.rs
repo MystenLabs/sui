@@ -3,9 +3,8 @@
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::{warning_filters::WarningFilters, DiagnosticReporter},
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::ModuleIdent,
-    ice,
     naming::ast::{self as N, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
     shared::CompilationEnv,
@@ -1285,31 +1284,5 @@ fn same_local_(lhs: &Var, rhs: &T::UnannotatedExp_) -> bool {
     match &rhs {
         E::Copy { var: r, .. } | E::Move { var: r, .. } | E::BorrowLocal(_, r) => lhs == r,
         _ => false,
-    }
-}
-
-#[growing_stack]
-pub fn is_unit(diags: &DiagnosticReporter, e: &T::Exp) -> bool {
-    is_unit_(diags, e.exp.loc, &e.exp.value)
-}
-
-fn is_unit_(diags: &DiagnosticReporter, loc: Loc, e: &T::UnannotatedExp_) -> bool {
-    use T::UnannotatedExp_ as E;
-    match &e {
-        E::Unit { .. } => true,
-        E::Annotate(inner, _) => is_unit(diags, inner),
-        E::Block((_, seq)) if seq.is_empty() => {
-            diags.add_diag(ice!((loc, "Unexpected empty block without a value")));
-            false
-        }
-        E::Block((_, seq)) if seq.len() == 1 => is_unit_seq(diags, &seq[0]),
-        _ => false,
-    }
-}
-
-pub fn is_unit_seq(diags: &DiagnosticReporter, s: &T::SequenceItem) -> bool {
-    match &s.value {
-        T::SequenceItem_::Seq(e) => is_unit(diags, e),
-        T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => false,
     }
 }

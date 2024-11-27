@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{
-        cfg::MutForwardCFG,
-        visitor::{is_zero, same_value_exp},
-    },
+    cfgir::cfg::MutForwardCFG,
     diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
@@ -164,8 +161,20 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
-            check_equal_operands(context, e.exp.loc, e1, op, e2);
-            if let (Some(v1), Some(v2)) = (foldable_exp(e1), foldable_exp(e2)) {
+            let v1_opt = foldable_exp(e1);
+            let v2_opt = foldable_exp(e2);
+            // check operands for warnings before folding
+            // TODO warn on operations that always fail
+            check_operands(
+                context,
+                e.exp.loc,
+                e1.exp.loc,
+                v1_opt.as_ref(),
+                op,
+                e2.exp.loc,
+                v2_opt.as_ref(),
+            );
+            if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
                     true
@@ -183,6 +192,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(e);
+            // TODO warn on operations that always fail
             let v = match foldable_exp(e) {
                 Some(v) => v,
                 None => return changed,
@@ -477,8 +487,18 @@ fn ignorable_exp(e: &Exp) -> bool {
 // Warnings
 //**************************************************************************************************
 
-fn check_equal_operands(context: &Context, loc: Loc, lhs: &Exp, op: &BinOp, rhs: &Exp) {
-    let Some(resulting_value) = equal_operands(lhs, op.value, rhs) else {
+fn check_operands(
+    context: &Context,
+    loc: Loc,
+    lhs_loc: Loc,
+    lhs: Option<&Value_>,
+    op: &BinOp,
+    rhs_loc: Loc,
+    rhs: Option<&Value_>,
+) {
+    let Some(resulting_value) =
+        lhs.and_then(|lhs| rhs.and_then(|rhs| equal_operands(lhs, op.value, rhs)))
+    else {
         return;
     };
     let msg = format!(
@@ -490,14 +510,15 @@ fn check_equal_operands(context: &Context, loc: Loc, lhs: &Exp, op: &BinOp, rhs:
     context.reporter.add_diag(diag!(
         CodeGeneration::EqualOperands,
         (loc, msg),
-        (lhs.exp.loc, lhs_msg),
-        (rhs.exp.loc, rhs_msg)
+        (lhs_loc, lhs_msg),
+        (rhs_loc, rhs_msg)
     ));
 }
 
-fn equal_operands(lhs: &Exp, op: BinOp_, rhs: &Exp) -> Option<&'static str> {
+fn equal_operands(lhs: &Value_, op: BinOp_, rhs: &Value_) -> Option<&'static str> {
     let resulting_value = match op {
-        BinOp_::Div | BinOp_::Mod if is_zero(rhs) => return None, // warning reported elsewhere
+        // warning reported elsewhere
+        BinOp_::Div | BinOp_::Mod if rhs.is_zero() => return None,
         BinOp_::Sub | BinOp_::Mod | BinOp_::Xor => "'0'",
         BinOp_::Div => "'1'",
         BinOp_::BitOr | BinOp_::BitAnd | BinOp_::And | BinOp_::Or => "the same value",
@@ -511,7 +532,7 @@ fn equal_operands(lhs: &Exp, op: BinOp_, rhs: &Exp) -> Option<&'static str> {
         | BinOp_::Implies
         | BinOp_::Iff => return None,
     };
-    if same_value_exp(lhs, rhs) {
+    if lhs == rhs {
         Some(resulting_value)
     } else {
         None

@@ -445,6 +445,20 @@ impl FunctionSignature {
     }
 }
 
+impl Value_ {
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::U8(v) => *v == 0,
+            Self::U16(v) => *v == 0,
+            Self::U32(v) => *v == 0,
+            Self::U64(v) => *v == 0,
+            Self::U128(v) => *v == 0,
+            Self::U256(v) => *v == move_core_types::u256::U256::zero(),
+            Self::Address(_) | Self::Bool(_) | Self::Vector(_, _) => false,
+        }
+    }
+}
+
 impl Var {
     pub fn loc(&self) -> Loc {
         self.0.loc

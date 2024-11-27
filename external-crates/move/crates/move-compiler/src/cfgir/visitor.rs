@@ -1011,20 +1011,3 @@ fn same_local_(lhs: &Var, rhs: &H::UnannotatedExp_) -> bool {
         _ => false,
     }
 }
-
-pub fn is_zero(e: &H::Exp) -> bool {
-    use H::UnannotatedExp_ as E;
-    match &e.exp.value {
-        E::Value(v) => match &v.value {
-            H::Value_::U8(u) => *u == 0,
-            H::Value_::U16(u) => *u == 0,
-            H::Value_::U32(u) => *u == 0,
-            H::Value_::U64(u) => *u == 0,
-            H::Value_::U128(u) => *u == 0,
-            H::Value_::U256(u) => *u == move_core_types::u256::U256::zero(),
-            H::Value_::Address(_) | H::Value_::Bool(_) | H::Value_::Vector(_, _) => false,
-        },
-        E::Dereference(e) | E::Freeze(e) | E::Cast(e, _) => is_zero(e),
-        _ => false,
-    }
-}

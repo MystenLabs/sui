@@ -5,7 +5,7 @@ use crate::{
     linters::StyleCodes,
     typing::{
         ast::{self as T, UnannotatedExp_},
-        visitor::{is_unit, is_unit_seq, simple_visitor},
+        visitor::simple_visitor,
     },
 };
 use move_ir_types::location::Loc;
@@ -30,7 +30,7 @@ simple_visitor!(
             n => {
                 let last = n - 1;
                 for (i, stmt) in seq_.iter().enumerate() {
-                    if i != last && is_unit_seq(&self.reporter, stmt) {
+                    if i != last && stmt.value.is_unit(&self.reporter) {
                         let msg = "Unnecessary unit in sequence '();'. Consider removing";
                         self.add_diag(diag!(
                             StyleCodes::UnnecessaryUnit.diag_info(),
@@ -47,7 +47,7 @@ simple_visitor!(
         let TE::IfElse(e_cond, e_true, e_false_opt) = &e.exp.value else {
             return false;
         };
-        if is_unit(&self.reporter, e_true) {
+        if e_true.is_unit(&self.reporter) {
             let u_msg = "Unnecessary unit '()'";
             let if_msg = "Consider negating the 'if' condition and simplifying";
             let mut diag = diag!(
@@ -59,7 +59,7 @@ simple_visitor!(
             self.add_diag(diag);
         }
         if let Some(e_false) = e_false_opt {
-            if is_unit(&self.reporter, e_false) {
+            if e_false.is_unit(&self.reporter) {
                 let u_msg = "Unnecessary 'else ()'.";
                 let if_msg = "An 'if' without an 'else' has an implicit 'else ()'. \
                             Consider removing the 'else' branch";
