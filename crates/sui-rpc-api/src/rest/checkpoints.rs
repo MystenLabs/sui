@@ -229,7 +229,7 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
     }
 
     fn stable(&self) -> bool {
-        true
+        false
     }
 
     fn operation(

@@ -77,96 +77,6 @@
         }
       }
     },
-    "/checkpoints": {
-      "get": {
-        "tags": [
-          "Checkpoint"
-        ],
-        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nList Checkpoints\n\nRequest a page of checkpoints, and optionally their contents, ordered by\n`CheckpointSequenceNumber`.\n\nIf the requested page is below the Node's `lowest_available_checkpoint`, a 410 will be\nreturned.",
-        "operationId": "List Checkpoints",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "contents",
-            "description": "Request `CheckpointContents` be included in the response",
-            "schema": {
-              "description": "Request `CheckpointContents` be included in the response",
-              "default": false,
-              "type": "boolean"
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "direction",
-            "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
-            "schema": {
-              "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Direction"
-                }
-              ]
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "description": "Page size limit for the response.\n\nDefaults to `50` if not provided with a maximum page size of `100`.",
-            "schema": {
-              "description": "Page size limit for the response.\n\nDefaults to `50` if not provided with a maximum page size of `100`.",
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "start",
-            "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
-            "schema": {
-              "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "style": "form"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "headers": {
-              "x-sui-cursor": {
-                "style": "simple",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CheckpointResponse"
-                  }
-                }
-              },
-              "application/bcs": {}
-            }
-          },
-          "410": {
-            "description": ""
-          },
-          "500": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/checkpoints/{checkpoint}": {
       "get": {
         "tags": [
@@ -420,6 +330,96 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/checkpoints": {
+      "get": {
+        "tags": [
+          "Checkpoint"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nList Checkpoints\n\nRequest a page of checkpoints, and optionally their contents, ordered by\n`CheckpointSequenceNumber`.\n\nIf the requested page is below the Node's `lowest_available_checkpoint`, a 410 will be\nreturned.",
+        "operationId": "List Checkpoints",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "contents",
+            "description": "Request `CheckpointContents` be included in the response",
+            "schema": {
+              "description": "Request `CheckpointContents` be included in the response",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "direction",
+            "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
+            "schema": {
+              "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Direction"
+                }
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "Page size limit for the response.\n\nDefaults to `50` if not provided with a maximum page size of `100`.",
+            "schema": {
+              "description": "Page size limit for the response.\n\nDefaults to `50` if not provided with a maximum page size of `100`.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
+            "schema": {
+              "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "x-sui-cursor": {
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CheckpointResponse"
+                  }
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "410": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
           }
         }
       }
