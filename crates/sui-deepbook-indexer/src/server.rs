@@ -30,6 +30,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress}, digests::ObjectDigest, programmable_transaction_builder::ProgrammableTransactionBuilder, transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, TransactionKind}, type_input::TypeInput, TypeTag
 };
 
+pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
     "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id";
@@ -351,7 +352,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 async fn get_level2_ticks_from_mid(
     Path(pool_id): Path<String>,
 ) -> Result<Json<HashMap<String, Vec<u64>>>, DeepBookError> {
-    let sui_client = SuiClientBuilder::default().build_testnet().await?;
+    let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
     let pool_address = ObjectID::from_hex_literal(
@@ -407,11 +408,11 @@ async fn get_level2_ticks_from_mid(
     ptb.input(clock_input)?;
 
     // Correctly use TypeTag for base_coin_type and quote_coin_type
-    let base_coin_type = parse_type_input("0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP")?;
+    let base_coin_type = parse_type_input("0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP")?;
     let quote_coin_type = parse_type_input("0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI")?;
 
     // Add the Move call to the PTB
-    let pkg_id = "0xc89b2bd6172c077aec6e8d7ba201e99c32f9770cdae7be6dac9d95132fff8e8e";
+    let pkg_id = "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809"; // Mainnet package
     let package = ObjectID::from_hex_literal(pkg_id).map_err(|e| anyhow!(e))?;
     let module = "pool".to_string();
     let function = "get_level2_ticks_from_mid".to_string();
