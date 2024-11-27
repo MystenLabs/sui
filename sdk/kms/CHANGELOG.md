@@ -1,5 +1,11 @@
 # @mysten/kms
 
+## 0.0.9
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+
 ## 0.0.8
 
 ### Patch Changes
