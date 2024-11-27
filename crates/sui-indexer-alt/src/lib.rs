@@ -403,33 +403,35 @@ pub async fn start_indexer(
         consistency,
         committer,
         pruner,
-        pipeline:
-            PipelineLayer {
-                sum_coin_balances,
-                wal_coin_balances,
-                sum_obj_types,
-                wal_obj_types,
-                sum_displays,
-                sum_packages,
-                ev_emit_mod,
-                ev_struct_inst,
-                kv_checkpoints,
-                kv_epoch_ends,
-                kv_epoch_starts,
-                kv_feature_flags,
-                kv_objects,
-                kv_protocol_configs,
-                kv_transactions,
-                obj_versions,
-                tx_affected_addresses,
-                tx_affected_objects,
-                tx_balance_changes,
-                tx_calls,
-                tx_digests,
-                tx_kinds,
-                extra,
-            },
-    } = indexer_config;
+        pipeline,
+        ..
+    } = indexer_config.finish();
+
+    let PipelineLayer {
+        sum_coin_balances,
+        wal_coin_balances,
+        sum_obj_types,
+        wal_obj_types,
+        sum_displays,
+        sum_packages,
+        ev_emit_mod,
+        ev_struct_inst,
+        kv_checkpoints,
+        kv_epoch_ends,
+        kv_epoch_starts,
+        kv_feature_flags,
+        kv_objects,
+        kv_protocol_configs,
+        kv_transactions,
+        obj_versions,
+        tx_affected_addresses,
+        tx_affected_objects,
+        tx_balance_changes,
+        tx_calls,
+        tx_digests,
+        tx_kinds,
+        ..
+    } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
 
@@ -454,11 +456,6 @@ pub async fn start_indexer(
         // Prune roughly five minutes of data in one go.
         max_chunk_size: 5 * 300,
     });
-
-    ensure!(
-        extra.is_empty(),
-        "Unexpected pipeline configurations (maybe a typo?):\n{extra}",
-    );
 
     let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();
