@@ -1851,7 +1851,7 @@ mod test {
             .set_consensus_gc_depth_for_testing(GC_DEPTH);
         context
             .protocol_config
-            .set_consensus_linearizer_collect_subdag_v2_for_testing(true);
+            .set_consensus_linearize_subdag_v2_for_testing(true);
 
         let context = Arc::new(context);
 
