@@ -133,7 +133,9 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.json::<crate::ObjectResponse>(request)
+            .await
+            .map(|response| response.map(|response| response.object))
     }
 
     pub async fn get_object_with_version(
@@ -147,7 +149,9 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.json::<crate::ObjectResponse>(request)
+            .await
+            .map(|response| response.map(|response| response.object))
     }
 
     pub async fn list_dynamic_fields(
@@ -209,7 +213,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn get_committee(&self, epoch: EpochId) -> Result<Response<ValidatorCommittee>> {
@@ -217,7 +221,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn get_checkpoint(
@@ -230,7 +234,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
@@ -247,18 +251,24 @@ impl Client {
             .pop()
             .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
 
-        Ok(Response::new(checkpoint, parts))
+        Ok(Response::new(
+            SignedCheckpointSummary {
+                checkpoint: checkpoint.summary,
+                signature: checkpoint.signature,
+            },
+            parts,
+        ))
     }
 
     pub async fn list_checkpoints(
         &self,
         parameters: &ListCheckpointsQueryParameters,
-    ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
+    ) -> Result<Response<Vec<CheckpointResponse>>> {
         let url = self.url().join("checkpoints")?;
 
         let request = self.inner.get(url).query(parameters);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn get_full_checkpoint(
@@ -282,7 +292,7 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn list_transactions(
@@ -293,7 +303,7 @@ impl Client {
 
         let request = self.inner.get(url).query(parameters);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn execute_transaction(
@@ -312,7 +322,7 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
             .body(body);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn simulate_transaction(
@@ -329,7 +339,7 @@ impl Client {
             .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
             .body(body);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn resolve_transaction(
@@ -340,7 +350,7 @@ impl Client {
 
         let request = self.inner.post(url).json(unresolved_transaction);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     pub async fn resolve_transaction_with_parameters(
@@ -356,7 +366,7 @@ impl Client {
             .query(&parameters)
             .json(unresolved_transaction);
 
-        self.bcs(request).await
+        self.json(request).await
     }
 
     async fn check_response(

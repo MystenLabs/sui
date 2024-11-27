@@ -204,8 +204,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/CheckpointResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "404": {
@@ -488,8 +487,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/TransactionResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "404": {
@@ -552,8 +550,7 @@
                     "$ref": "#/components/schemas/TransactionResponse"
                   }
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "410": {
@@ -626,8 +623,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/TransactionExecutionResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           }
         }
@@ -661,8 +657,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "404": {
@@ -686,8 +681,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           }
         }
@@ -876,8 +870,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/TransactionSimulationResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           }
         }
@@ -953,8 +946,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/ResolveTransactionResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           }
         }

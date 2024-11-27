@@ -73,36 +73,6 @@ async fn get_checkpoint() {
         .get_checkpoint(latest.checkpoint.sequence_number)
         .await
         .unwrap();
-
-    let client = reqwest::Client::new();
-    let url = format!(
-        "{}/v2/checkpoints/{}",
-        test_cluster.rpc_url(),
-        latest.checkpoint.sequence_number
-    );
-    // Make sure list works with json
-    let _checkpoints = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
-        .send()
-        .await
-        .unwrap()
-        .json::<CheckpointResponse>()
-        .await
-        .unwrap();
-
-    // TODO remove this once the BCS format is no longer supported by the rest endpoint and clients
-    // wanting binary have migrated to grpc
-    let bytes = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
-        .send()
-        .await
-        .unwrap()
-        .bytes()
-        .await
-        .unwrap();
-    let _checkpoints = bcs::from_bytes::<CheckpointResponse>(&bytes).unwrap();
 }
 
 #[sim_test]

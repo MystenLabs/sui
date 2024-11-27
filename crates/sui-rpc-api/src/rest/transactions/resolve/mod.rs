@@ -7,8 +7,6 @@ use std::collections::HashMap;
 use super::execution::SimulateTransactionQueryParameters;
 use super::TransactionSimulationResponse;
 use crate::reader::StateReader;
-use crate::response::ResponseContent;
-use crate::rest::accept::AcceptFormat;
 use crate::rest::objects::ObjectNotFoundError;
 use crate::rest::openapi::ApiEndpoint;
 use crate::rest::openapi::OperationBuilder;
@@ -75,7 +73,6 @@ impl ApiEndpoint<RpcService> for ResolveTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ResolveTransactionResponse>(generator)
-                    .bcs_content()
                     .build(),
             )
             .build()
@@ -89,9 +86,8 @@ impl ApiEndpoint<RpcService> for ResolveTransaction {
 async fn resolve_transaction(
     State(state): State<RpcService>,
     Query(parameters): Query<ResolveTransactionQueryParameters>,
-    accept: AcceptFormat,
     Json(unresolved_transaction): Json<unresolved::Transaction>,
-) -> Result<ResponseContent<ResolveTransactionResponse>> {
+) -> Result<Json<ResolveTransactionResponse>> {
     let executor = state
         .executor
         .as_ref()
@@ -179,15 +175,11 @@ async fn resolve_transaction(
         None
     };
 
-    let response = ResolveTransactionResponse {
+    ResolveTransactionResponse {
         transaction: resolved_transaction.try_into()?,
         simulation,
-    };
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
     }
+    .pipe(Json)
     .pipe(Ok)
 }
 
