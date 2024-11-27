@@ -1,5 +1,11 @@
 # @mysten/kiosk
 
+## 0.9.29
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+
 ## 0.9.28
 
 ### Patch Changes

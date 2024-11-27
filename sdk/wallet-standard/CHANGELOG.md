@@ -1,5 +1,11 @@
 # @mysten/wallet-standard
 
+## 0.13.15
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+
 ## 0.13.14
 
 ### Patch Changes
