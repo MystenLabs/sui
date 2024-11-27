@@ -107,15 +107,24 @@ pub fn generate_bridge_client_key_and_write_to_file(
 pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 'static>(
     bridge_proxy_address: EthAddress,
     provider: &Arc<Provider<P>>,
-) -> anyhow::Result<(EthAddress, EthAddress, EthAddress, EthAddress, EthAddress)> {
+) -> anyhow::Result<(
+    EthAddress,
+    EthAddress,
+    EthAddress,
+    EthAddress,
+    EthAddress,
+    EthAddress,
+)> {
     let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
+    let committee = EthBridgeCommittee::new(committee_address, provider.clone());
+    let config_address: EthAddress = committee.config().call().await?;
+    let bridge_config = EthBridgeConfig::new(config_address, provider.clone());
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
     let vault = EthBridgeVault::new(vault_address, provider.clone());
     let weth_address: EthAddress = vault.w_eth().call().await?;
-    let committee = EthBridgeCommittee::new(committee_address, provider.clone());
-    let config_address: EthAddress = committee.config().call().await?;
+    let usdt_address: EthAddress = bridge_config.token_address_of(4).call().await?;
 
     Ok((
         committee_address,
@@ -123,6 +132,7 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
         vault_address,
         config_address,
         weth_address,
+        usdt_address,
     ))
 }
 

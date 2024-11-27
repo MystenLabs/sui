@@ -5,7 +5,7 @@ use crate::config::WatchdogConfig;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::metered_eth_provider::MeteredEthHttpProvier;
 use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
-use crate::sui_bridge_watchdog::eth_vault_balance::EthVaultBalance;
+use crate::sui_bridge_watchdog::eth_vault_balance::{EthereumVaultBalance, VaultAsset};
 use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
 use crate::sui_bridge_watchdog::sui_bridge_status::SuiBridgeStatus;
 use crate::sui_bridge_watchdog::total_supplies::TotalSupplies;
@@ -158,17 +158,35 @@ async fn start_watchdog(
     sui_client: Arc<SuiBridgeClient>,
 ) {
     let watchdog_metrics = WatchdogMetrics::new(registry);
-    let (_committee_address, _limiter_address, vault_address, _config_address, weth_address) =
-        get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider)
-            .await
-            .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
+    let (
+        _committee_address,
+        _limiter_address,
+        vault_address,
+        _config_address,
+        weth_address,
+        usdt_address,
+    ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider)
+        .await
+        .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
 
-    let eth_vault_balance = EthVaultBalance::new(
+    let eth_vault_balance = EthereumVaultBalance::new(
         eth_provider.clone(),
         vault_address,
         weth_address,
+        VaultAsset::WETH,
         watchdog_metrics.eth_vault_balance.clone(),
-    );
+    )
+    .await
+    .unwrap_or_else(|e| panic!("Failed to create eth vault balance: {}", e));
+    let usdt_vault_balance = EthereumVaultBalance::new(
+        eth_provider.clone(),
+        vault_address,
+        usdt_address,
+        VaultAsset::USDT,
+        watchdog_metrics.usdt_vault_balance.clone(),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("Failed to create usdt vault balance: {}", e));
 
     let eth_bridge_status = EthBridgeStatus::new(
         eth_provider,
@@ -183,6 +201,7 @@ async fn start_watchdog(
 
     let mut observables: Vec<Box<dyn Observable + Send + Sync>> = vec![
         Box::new(eth_vault_balance),
+        Box::new(usdt_vault_balance),
         Box::new(eth_bridge_status),
         Box::new(sui_bridge_status),
     ];
