@@ -134,8 +134,8 @@ impl Client {
         let request = self.inner.get(url);
 
         self.json::<crate::ObjectResponse>(request)
-            .await
-            .map(|response| response.map(|response| response.object))
+            .await?
+            .try_map(|response| response.object.ok_or("object missing from response"))
     }
 
     pub async fn get_object_with_version(
@@ -150,8 +150,8 @@ impl Client {
         let request = self.inner.get(url);
 
         self.json::<crate::ObjectResponse>(request)
-            .await
-            .map(|response| response.map(|response| response.object))
+            .await?
+            .try_map(|response| response.object.ok_or("object missing from response"))
     }
 
     pub async fn list_dynamic_fields(
