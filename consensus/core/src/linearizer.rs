@@ -155,7 +155,7 @@ impl Linearizer {
         // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
         if context
             .protocol_config
-            .consensus_linearizer_collect_subdag_v2()
+            .consensus_linearize_subdag_v2()
         {
             assert!(
                 dag_state.set_committed(&leader_block_ref),
@@ -622,7 +622,7 @@ mod tests {
         if gc_depth > 0 {
             context
                 .protocol_config
-                .set_consensus_linearizer_collect_subdag_v2_for_testing(true);
+                .set_consensus_linearize_subdag_v2_for_testing(true);
         }
 
         let context = Arc::new(context);
@@ -737,7 +737,7 @@ mod tests {
             .set_consensus_gc_depth_for_testing(gc_depth);
         context
             .protocol_config
-            .set_consensus_linearizer_collect_subdag_v2_for_testing(true);
+            .set_consensus_linearize_subdag_v2_for_testing(true);
 
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
