@@ -407,9 +407,22 @@ async fn get_level2_ticks_from_mid(
     let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref));
     ptb.input(clock_input)?;
 
-    // Correctly use TypeTag for base_coin_type and quote_coin_type
-    let base_coin_type = parse_type_input("0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP")?;
-    let quote_coin_type = parse_type_input("0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI")?;
+    let pool_name_map = get_pool_name_mapping();
+    let pool_name = pool_name_map
+        .get(&pool_id)
+        .ok_or_else(|| anyhow!("Pool ID not found"))?;
+    let (base_asset, quote_asset) = parse_pool_name(pool_name)?;
+
+    let asset_type_map = get_asset_type_mapping();
+    let base_coin_type = asset_type_map
+        .get(&base_asset)
+        .ok_or_else(|| anyhow!("Base asset type not found"))?;
+    let quote_coin_type = asset_type_map
+        .get(&quote_asset)
+        .ok_or_else(|| anyhow!("Quote asset type not found"))?;
+
+    let base_coin_type = parse_type_input(base_coin_type)?;
+    let quote_coin_type = parse_type_input(quote_coin_type)?;
 
     // Add the Move call to the PTB
     let pkg_id = "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809"; // Mainnet package
@@ -464,7 +477,23 @@ async fn get_level2_ticks_from_mid(
 fn normalize_pool_addresses(
     raw_response: HashMap<String, u64>,
 ) -> HashMap<String, u64> {
-    let pool_map = HashMap::from([
+    let pool_map = get_pool_name_mapping();
+
+    raw_response
+        .into_iter()
+        .map(|(address, volume)| {
+            let pool_name = pool_map
+                .get(&address)
+                .unwrap_or(&"Unknown Pool".to_string())
+                .to_string();
+            (pool_name, volume)
+        })
+        .collect()
+}
+
+/// This function can return what's in the pool table when stable
+fn get_pool_name_mapping() -> HashMap<String, String> {
+    [
         ("0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22", "DEEP_SUI"),
         ("0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce", "DEEP_USDC"),
         ("0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407", "SUI_USDC"),
@@ -473,19 +502,36 @@ fn normalize_pool_addresses(
         ("0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f", "WUSDT_USDC"),
         ("0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8", "NS_SUI"),
         ("0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060", "NS_USDC"),
-        ("0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec", "TYPUS_SUI")
-    ]);
+        ("0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec", "TYPUS_SUI"),
+    ]
+    .iter()
+    .map(|&(id, name)| (id.to_string(), name.to_string()))
+    .collect()
+}
 
-    raw_response
-        .into_iter()
-        .map(|(address, volume)| {
-            let pool_name = pool_map
-                .get(address.as_str())
-                .unwrap_or(&"Unknown Pool")
-                .to_string();
-            (pool_name, volume)
-        })
-        .collect()
+/// This function can return what's in the pool table when stable
+fn get_asset_type_mapping() -> HashMap<String, String> {
+    [
+        ("SUI", "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"),
+        ("DEEP", "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP"),
+        ("USDC", "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC"),
+        ("BETH", "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH"),
+        ("WUSDC", "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN"),
+        ("WUSDT", "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN"),
+        ("NS", "0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS"),
+        ("TYPUS", "0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS"),
+    ]
+    .iter()
+    .map(|&(name, type_str)| (name.to_string(), type_str.to_string()))
+    .collect()
+}
+
+fn parse_pool_name(pool_name: &str) -> Result<(String, String), anyhow::Error> {
+    let parts: Vec<&str> = pool_name.split('_').collect();
+    if parts.len() != 2 {
+        return Err(anyhow::anyhow!("Invalid pool name format"));
+    }
+    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 fn parse_type_input(type_str: &str) -> Result<TypeInput, DeepBookError> {
