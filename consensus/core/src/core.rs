@@ -246,11 +246,13 @@ impl Core {
     }
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
-    /// The method returns the references of parents that are unknown and need to be fetched.
+    /// The method returns:
+    /// - The references of accepted blocks in a BTreeSet for efficient lookup
+    /// - The references of parents that are unknown and need to be fetched
     pub(crate) fn add_blocks(
         &mut self,
         blocks: Vec<VerifiedBlock>,
-    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+    ) -> ConsensusResult<(BTreeSet<BlockRef>, BTreeSet<BlockRef>)> {
         let _scope = monitored_scope("Core::add_blocks");
         let _s = self
             .context
@@ -266,9 +268,9 @@ impl Core {
             .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
-        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
+        let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
 
-        if !accepted_blocks.is_empty() {
+        let accepted_block_refs = if !accepted_blocks.is_empty() {
             debug!(
                 "Accepted blocks: {}",
                 accepted_blocks
@@ -277,6 +279,11 @@ impl Core {
                     .join(",")
             );
 
+            let refs: BTreeSet<BlockRef> = accepted_blocks
+                .iter()
+                .map(|block| block.reference())
+                .collect();
+
             // Now add accepted blocks to the threshold clock and pending ancestors list.
             self.add_accepted_blocks(accepted_blocks);
 
@@ -284,13 +291,17 @@ impl Core {
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
+
+            refs
+        } else {
+            BTreeSet::new()
+        };
+
+        if !missing_block_refs.is_empty() {
+            debug!("Missing block refs: {:?}", missing_block_refs);
         }
 
-        if !missing_blocks.is_empty() {
-            debug!("Missing blocks: {:?}", missing_blocks);
-        }
-
-        Ok(missing_blocks)
+        Ok((accepted_block_refs, missing_block_refs))
     }
 
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
@@ -1829,7 +1840,7 @@ mod test {
         let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
 
         // Process all the blocks
-        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert!(core.add_blocks(blocks).unwrap().1.is_empty());
 
         // Try to propose - no block should be produced.
         assert!(core.try_propose(true).unwrap().is_none());
@@ -2131,7 +2142,7 @@ mod test {
             .build();
         let blocks = builder.blocks(1..=12);
         // Process all the blocks
-        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert!(core.add_blocks(blocks).unwrap().1.is_empty());
         core.set_last_known_proposed_round(12);
 
         let block = core.try_propose(true).expect("No error").unwrap();
@@ -2145,7 +2156,7 @@ mod test {
             .skip_block()
             .build();
         let blocks = builder.blocks(13..=14);
-        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert!(core.add_blocks(blocks).unwrap().1.is_empty());
 
         // We now have triggered a leader schedule change so we should have
         // one EXCLUDE ancestor when we go to select ancestors for the next proposal
@@ -2168,7 +2179,7 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
-        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert!(core.add_blocks(blocks).unwrap().1.is_empty());
         assert_eq!(core.last_proposed_block().round(), 15);
 
         builder
@@ -2184,7 +2195,7 @@ mod test {
             .build();
         let blocks = builder.blocks(15..=15);
         // Have enough ancestor blocks to propose now.
-        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert!(core.add_blocks(blocks).unwrap().1.is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
 
         // Build blocks for a quorum of the network including the EXCLUDE ancestor
@@ -2204,7 +2215,7 @@ mod test {
         // Wait for leader timeout to force blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
-        assert!(core.add_blocks(blocks).unwrap().is_empty());
+        assert!(core.add_blocks(blocks).unwrap().1.is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
 
         // Simulate a leader timeout and a force proposal where we will include

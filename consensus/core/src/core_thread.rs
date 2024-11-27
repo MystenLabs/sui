@@ -35,7 +35,10 @@ const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
-    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
+    AddBlocks(
+        Vec<VerifiedBlock>,
+        oneshot::Sender<(BTreeSet<BlockRef>, BTreeSet<BlockRef>)>,
+    ),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
@@ -122,8 +125,8 @@ impl CoreThread {
                     match command {
                         CoreThreadCommand::AddBlocks(blocks, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::add_blocks");
-                            let missing_blocks = self.core.add_blocks(blocks)?;
-                            sender.send(missing_blocks).ok();
+                            let (accepted_block_refs, missing_block_refs) = self.core.add_blocks(blocks)?;
+                            sender.send((accepted_block_refs, missing_block_refs)).ok();
                         }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
                             let _scope = monitored_scope("CoreThread::loop::new_block");
@@ -288,18 +291,19 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks.clone(), sender))
             .await;
-        let missing_blocks = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
+        let (accepted_block_refs, missing_block_refs) =
+            receiver.await.map_err(|e| Shutdown(e.to_string()))?;
 
         for block in blocks {
             let block_ref = block.reference();
-            if !missing_blocks.contains(&block_ref) {
+            if accepted_block_refs.contains(&block_ref) {
                 // Block was accepted, update the highest accepted round for author
                 self.highest_accepted_rounds[block.author()]
                     .fetch_max(block.round(), Ordering::AcqRel);
             }
         }
 
-        Ok(missing_blocks)
+        Ok(missing_block_refs)
     }
 
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
