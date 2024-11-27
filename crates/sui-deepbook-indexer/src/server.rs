@@ -413,13 +413,13 @@ async fn get_level2_ticks_from_mid(
         .ok_or_else(|| anyhow!("Pool ID not found"))?;
     let (base_asset, quote_asset) = parse_pool_name(pool_name)?;
 
-    let asset_type_map = get_asset_type_mapping();
-    let base_coin_type = asset_type_map
+    let asset_info_map = get_asset_info_mapping();
+    let (base_coin_type, base_decimals) = asset_info_map
         .get(&base_asset)
-        .ok_or_else(|| anyhow!("Base asset type not found"))?;
-    let quote_coin_type = asset_type_map
+        .ok_or_else(|| anyhow!("Base asset info not found"))?;
+    let (quote_coin_type, quote_decimals) = asset_info_map
         .get(&quote_asset)
-        .ok_or_else(|| anyhow!("Quote asset type not found"))?;
+        .ok_or_else(|| anyhow!("Quote asset info not found"))?;
 
     let base_coin_type = parse_type_input(base_coin_type)?;
     let quote_coin_type = parse_type_input(quote_coin_type)?;
@@ -465,10 +465,19 @@ async fn get_level2_ticks_from_mid(
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(&ask_quantities).unwrap();
 
     let mut result = HashMap::new();
-    result.insert("bid_parsed_prices".to_string(), bid_parsed_prices);
-    result.insert("bid_parsed_quantities".to_string(), bid_parsed_quantities);
-    result.insert("ask_parsed_prices".to_string(), ask_parsed_prices);
-    result.insert("ask_parsed_quantities".to_string(), ask_parsed_quantities);
+    result.insert("bid_parsed_prices".to_string(), bid_parsed_prices.into_iter().map(|quantity| quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap()))
+    .collect());
+    result.insert("bid_parsed_quantities".to_string(), bid_parsed_quantities
+    .into_iter()
+    .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
+    .collect());
+    result.insert("ask_parsed_prices".to_string(), ask_parsed_prices.into_iter()
+    .map(|quantity| quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap()))
+    .collect());
+    result.insert("ask_parsed_quantities".to_string(), ask_parsed_quantities
+    .into_iter()
+    .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
+    .collect());
 
     Ok(Json(result))
 }
@@ -510,19 +519,67 @@ fn get_pool_name_mapping() -> HashMap<String, String> {
 }
 
 /// This function can return what's in the pool table when stable
-fn get_asset_type_mapping() -> HashMap<String, String> {
+fn get_asset_info_mapping() -> HashMap<String, (String, u64)> {
     [
-        ("SUI", "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"),
-        ("DEEP", "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP"),
-        ("USDC", "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC"),
-        ("BETH", "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH"),
-        ("WUSDC", "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN"),
-        ("WUSDT", "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN"),
-        ("NS", "0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS"),
-        ("TYPUS", "0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS"),
+        (
+            "SUI",
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+                9,
+            ),
+        ),
+        (
+            "DEEP",
+            (
+                "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+                6,
+            ),
+        ),
+        (
+            "USDC",
+            (
+                "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+                6,
+            ),
+        ),
+        (
+            "BETH",
+            (
+                "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH",
+                8,
+            ),
+        ),
+        (
+            "WUSDC",
+            (
+                "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN",
+                6,
+            ),
+        ),
+        (
+            "WUSDT",
+            (
+                "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN",
+                6,
+            ),
+        ),
+        (
+            "NS",
+            (
+                "0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS",
+                6,
+            ),
+        ),
+        (
+            "TYPUS",
+            (
+                "0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS",
+                9,
+            ),
+        ),
     ]
     .iter()
-    .map(|&(name, type_str)| (name.to_string(), type_str.to_string()))
+    .map(|&(name, (type_str, decimals))| (name.to_string(), (type_str.to_string(), decimals)))
     .collect()
 }
 
