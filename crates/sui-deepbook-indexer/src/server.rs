@@ -8,7 +8,6 @@ use crate::{
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
 use axum::{
-    debug_handler,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::get,
@@ -38,7 +37,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
 pub const GET_ALL_HISTORICAL_VOLUME_PATH: &str = "/get_all_historical_volume";
-pub const TESTING_PATH: &str = "/testing";
+pub const LEVEL2_PATH: &str = "/get_level2_ticks_from_mid/:pool_id";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -61,7 +60,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID,
             get(get_historical_volume_by_balance_manager_id),
         )
-        .route(TESTING_PATH, get(testing))
+        .route(LEVEL2_PATH, get(get_level2_ticks_from_mid))
         .with_state(state)
 }
 
@@ -349,12 +348,14 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     Ok(Json(metrics_by_interval))
 }
 
-async fn testing() -> Result<Json<HashMap<String, Vec<u64>>>, DeepBookError> {
+async fn get_level2_ticks_from_mid(
+    Path(pool_id): Path<String>,
+) -> Result<Json<HashMap<String, Vec<u64>>>, DeepBookError> {
     let sui_client = SuiClientBuilder::default().build_testnet().await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
     let pool_address = ObjectID::from_hex_literal(
-        "0x2decc59a6f05c5800e5c8a1135f9d133d1746f562bf56673e6e81ef4f7ccd3b7",
+        &pool_id,
     )?;
     // get the latest pool object version
     let pool_object: SuiObjectResponse = sui_client
