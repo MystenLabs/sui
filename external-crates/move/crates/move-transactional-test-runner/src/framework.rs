@@ -5,8 +5,8 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    taskify, InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice,
-    TaskCommand, TaskInput,
+    taskify, InitCommand, PrintBytecodeCommand, PublishAndCallsCommand, PublishCommand, RunCommand,
+    SyntaxChoice, TaskCommand, TaskInput,
 };
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -130,6 +130,14 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>;
+    async fn publish_modules_with_calls(
+        &mut self,
+        modules: Vec<MaybeNamedCompiledModule>,
+        calls: Vec<(ModuleId, Identifier, Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>)>,
+        signers: Vec<ParsedAddress>,
+        gas_budget: Option<u64>,
+        extra_args: Self::ExtraPublishArgs,
+    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>;
     async fn call_function(
         &mut self,
         module: &ModuleId,
@@ -226,6 +234,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 });
                 Ok(output)
             }
+
             TaskCommand::Publish(PublishCommand { gas_budget, syntax }, extra_args) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let (warnings_opt, output, data, modules) = compile_any(
@@ -244,6 +253,42 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
             }
+
+            TaskCommand::PublishAndCall(
+                PublishAndCallsCommand {
+                    gas_budget,
+                    syntax,
+                    signers,
+                    calls,
+                },
+                extra_args,
+            ) => {
+                let syntax = syntax.unwrap_or_else(|| self.default_syntax());
+                let calls = calls.into_iter().map(|((raw_addr, module_name, function), args)| {
+                    let addr = self.compiled_state().resolve_address(&raw_addr);
+                    let module_id = ModuleId::new(addr, module_name);
+                    let function = function.as_ident_str().to_owned();
+                    let args = self.compiled_state().resolve_args(args)?;
+                    let result: anyhow::Result<_> = Ok((module_id, function, args));
+                    result
+                }).collect::<anyhow::Result<Vec<_>>>()?;
+                let (warnings_opt, output, data, modules) = compile_any(
+                    self,
+                    "publish",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |adapter, modules| adapter.publish_modules_with_calls(modules, calls, signers, gas_budget, extra_args),
+                )
+                .await?;
+                store_modules(self, syntax, data, modules);
+                Ok(merge_output(warnings_opt, output))
+            }
+
             TaskCommand::Run(
                 RunCommand {
                     signers,

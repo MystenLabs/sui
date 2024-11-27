@@ -99,6 +99,13 @@ impl MoveCache {
 }
 
 impl Package {
+    pub(crate) fn new(
+        verified: Arc<verification::ast::Package>,
+        runtime: Arc<jit::execution::ast::Package>,
+    ) -> Self {
+        Self { verified, runtime }
+    }
+
     /// Used for testing that the correct number of types are loaded
     #[allow(dead_code)]
     pub(crate) fn loaded_types_len(&self) -> usize {

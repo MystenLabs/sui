@@ -12,7 +12,7 @@ use anyhow::{bail, Result};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
-    natives::functions::NativeFunctions,
+    natives::{functions::NativeFunctions, extensions::NativeContextExtensions},
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
@@ -92,8 +92,8 @@ pub fn publish(
     let ser_pkg = pkg.into_serialized_package();
     // Publish the package using the VM
     let (publish_result, _) =
-        runtime.validate_package(state, package_runtime_id, ser_pkg.clone(), &mut gas_status);
-    let changeset = publish_result?;
+        runtime.validate_package(state, package_runtime_id, ser_pkg.clone(), &mut gas_status, NativeContextExtensions::default());
+    let (changeset, _vm) = publish_result?;
     if verbose {
         explain_publish_changeset(&changeset);
     }

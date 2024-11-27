@@ -259,6 +259,34 @@ pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     pub name: Option<(ParsedAddress, Identifier, Identifier)>,
 }
 
+#[derive(Debug, Parser)]
+#[command(group = ArgGroup::new("calls").multiple(true))]
+pub struct PublishAndCallsCommand<ExtraValueArgs: ParsableValue> {
+    #[clap(long = "gas-budget")]
+    pub gas_budget: Option<u64>,
+
+    #[clap(long = "syntax")]
+    pub syntax: Option<SyntaxChoice>,
+
+    #[clap(
+        long = "signers",
+        value_parser = ParsedAddress::parse,
+        num_args(1..),
+    )]
+    pub signers: Vec<ParsedAddress>,
+
+    #[clap(
+        long = "call",
+        value_parser = ParsedValue::<ExtraValueArgs>::parse,
+        num_args(1..),
+    )]
+    pub calls:
+        Vec<(
+            (ParsedAddress, Identifier, Identifier),
+            Vec<ParsedValue<ExtraValueArgs>>,
+        )>,
+}
+
 #[derive(Debug)]
 pub enum TaskCommand<
     ExtraInitArgs: Parser,
@@ -270,6 +298,7 @@ pub enum TaskCommand<
     Init(InitCommand, ExtraInitArgs),
     PrintBytecode(PrintBytecodeCommand),
     Publish(PublishCommand, ExtraPublishArgs),
+    PublishAndCall(PublishAndCallsCommand<ExtraValueArgs>, ExtraPublishArgs),
     Run(RunCommand<ExtraValueArgs>, ExtraRunArgs),
     Subcommand(SubCommands),
 }
@@ -293,6 +322,10 @@ impl<
                 TaskCommand::PrintBytecode(FromArgMatches::from_arg_matches(matches)?)
             }
             Some(("publish", matches)) => TaskCommand::Publish(
+                FromArgMatches::from_arg_matches(matches)?,
+                FromArgMatches::from_arg_matches(matches)?,
+            ),
+            Some(("publish-and-call", matches)) => TaskCommand::PublishAndCall(
                 FromArgMatches::from_arg_matches(matches)?,
                 FromArgMatches::from_arg_matches(matches)?,
             ),

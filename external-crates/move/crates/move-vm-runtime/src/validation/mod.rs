@@ -39,10 +39,10 @@ pub fn validate_for_publish(
         package.type_origin_table,
     );
 
-    let loading_package = validate_package(natives, vm_config, package)?;
+    let validated_package = validate_package(natives, vm_config, package)?;
 
     // Make sure all modules' self addresses match the `runtime_package_id`.
-    for module in loading_package.as_modules().into_iter() {
+    for module in validated_package.as_modules().into_iter() {
         if module.value.address() != &runtime_package_id {
             return Err(verification_error(
                 StatusCode::MISMATCHED_MODULE_IDS_IN_PACKAGE,
@@ -55,8 +55,8 @@ pub fn validate_for_publish(
 
     // Now verify linking on-the-spot to make sure that the current package links correctly in
     // the supplied linking context.
-    verify_linkage_and_cyclic_checks_for_publication(&loading_package, &dependencies)?;
-    Ok(loading_package)
+    verify_linkage_and_cyclic_checks_for_publication(&validated_package, &dependencies)?;
+    Ok(validated_package)
 }
 
 pub fn validate_for_upgrade(

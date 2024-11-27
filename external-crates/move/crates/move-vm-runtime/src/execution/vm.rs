@@ -333,3 +333,16 @@ impl<'extensions> MoveVM<'extensions> {
         self.native_extensions
     }
 }
+
+
+impl<'extensions> std::fmt::Debug for MoveVM<'extensions> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MoveVM")
+            .field("virtual_tables", &self.virtual_tables)
+            .field("link_context", &self.link_context)
+            .field("vm_config", &self.vm_config)
+            .field("base_heap", &self.base_heap)
+            // Note: native_extensions is intentionally omitted
+            .finish()
+    }
+}
