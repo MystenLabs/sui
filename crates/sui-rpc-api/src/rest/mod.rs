@@ -33,13 +33,13 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
-    &checkpoints::ListCheckpoints,
     &checkpoints::GetCheckpoint,
     // unstable APIs
     &accounts::ListAccountObjects,
     &objects::GetObject,
     &objects::GetObjectWithVersion,
     &objects::ListDynamicFields,
+    &checkpoints::ListCheckpoints,
     &checkpoints::GetFullCheckpoint,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
