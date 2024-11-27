@@ -584,6 +584,10 @@ impl Exp {
     pub fn is_unreachable(&self) -> bool {
         self.exp.value.is_unreachable()
     }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        self.exp.value.as_value()
+    }
 }
 
 impl UnannotatedExp_ {
@@ -593,6 +597,13 @@ impl UnannotatedExp_ {
 
     pub fn is_unreachable(&self) -> bool {
         matches!(self, UnannotatedExp_::Unreachable)
+    }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        match self {
+            UnannotatedExp_::Value(v) => Some(v),
+            _ => None,
+        }
     }
 }
 

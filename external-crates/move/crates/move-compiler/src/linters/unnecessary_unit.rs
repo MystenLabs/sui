@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Detects an unnecessary unit expression in a block, sequence, if, or else.
 
 use crate::{

@@ -15,6 +15,7 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
+pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
@@ -23,6 +24,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
     // No linters
@@ -160,6 +162,12 @@ lints!(
         LinterDiagnosticCategory::Style,
         "unnecessary_unit",
         "unit `()` expression can be removed or simplified"
+    ),
+    (
+        EqualOperands,
+        LinterDiagnosticCategory::Suspicious,
+        "always_equal_operands",
+        "redundant, always-equal operands for binary operation"
     ),
 );
 
