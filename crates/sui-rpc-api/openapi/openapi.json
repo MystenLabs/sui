@@ -155,8 +155,7 @@
                   }
                 }
               },
-              "application/bcs": {},
-              "application/x-protobuf": {}
+              "application/bcs": {}
             }
           },
           "410": {
@@ -309,7 +308,6 @@
                   "$ref": "#/components/schemas/ObjectResponse"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -357,7 +355,6 @@
                   "$ref": "#/components/schemas/ObjectResponse"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -492,7 +489,6 @@
                   "$ref": "#/components/schemas/TransactionResponse"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -557,7 +553,6 @@
                   }
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -632,7 +627,6 @@
                   "$ref": "#/components/schemas/TransactionExecutionResponse"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -668,7 +662,6 @@
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           },
@@ -694,7 +687,6 @@
                   "$ref": "#/components/schemas/ValidatorCommittee"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -885,7 +877,6 @@
                   "$ref": "#/components/schemas/TransactionSimulationResponse"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
@@ -963,7 +954,6 @@
                   "$ref": "#/components/schemas/ResolveTransactionResponse"
                 }
               },
-              "application/x-protobuf": {},
               "application/bcs": {}
             }
           }
