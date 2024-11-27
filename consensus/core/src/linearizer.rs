@@ -153,10 +153,7 @@ impl Linearizer {
 
         // The new logic will perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
         // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
-        if context
-            .protocol_config
-            .consensus_linearize_subdag_v2()
-        {
+        if context.protocol_config.consensus_linearize_subdag_v2() {
             assert!(
                 dag_state.set_committed(&leader_block_ref),
                 "Leader block with reference {:?} attempted to be committed twice",
