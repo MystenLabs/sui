@@ -92,7 +92,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 1000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -127,21 +127,21 @@ mod test {
         // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
-        let test_cluster = build_test_cluster(4, 10000).await;
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(7, 0).await;
+        let test_cluster = build_test_cluster(7, 0, 1).await;
         test_simulated_load(test_cluster, 15).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 0).await;
+        let test_cluster = build_test_cluster(4, 0, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -153,7 +153,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_rolling_restarts_all_validators() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 330_000).await;
+        let test_cluster = build_test_cluster(4, 330_000, 1).await;
 
         let validators = test_cluster.get_validator_pubkeys();
         let test_cluster_clone = test_cluster.clone();
@@ -179,7 +179,7 @@ mod test {
         // TODO added to invalidate a failing test seed in CI. Remove me
         tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 1000, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -304,7 +304,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_prune_and_compact() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 1000, 0).await;
 
         let node_state = test_cluster.fullnode_handle.sui_node.clone().state();
         register_fail_point_async("prune-and-compact", move || {
@@ -426,7 +426,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes_during_epoch_change() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 10000).await;
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
@@ -444,7 +444,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
-        let test_cluster = build_test_cluster(10, 1000).await;
+        let test_cluster = build_test_cluster(10, 1000, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
@@ -554,7 +554,7 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = build_test_cluster(4, 5000, 2).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
@@ -639,7 +639,7 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 30_000).await;
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -678,7 +678,7 @@ mod test {
     // simtest has low timeout tolerance and it is not designed to test performance.
     #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 5_000).await;
+        let test_cluster = build_test_cluster(4, 5_000, 1).await;
 
         let mut additional_cancelled_txns = Vec::new();
         let num_txns = thread_rng().gen_range(500..2000);
@@ -708,7 +708,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
-        let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
+        let test_cluster = build_test_cluster(4, epoch_duration_ms, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
@@ -835,7 +835,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_randomness_partial_sig_failures() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(6, 20_000).await;
+        let test_cluster = build_test_cluster(6, 20_000, 1).await;
 
         // Network should continue as long as f+1 nodes (in this case 3/6) are sending partial signatures.
         let eligible_nodes: HashSet<_> = test_cluster
@@ -855,7 +855,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_randomness_dkg_failures() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(6, 20_000).await;
+        let test_cluster = build_test_cluster(6, 20_000, 1).await;
 
         // Network should continue as long as nodes are participating in DKG representing
         // stake equal to 2f+1 PLUS proportion of stake represented by the
@@ -893,7 +893,12 @@ mod test {
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
+        default_num_of_unpruned_validators: usize,
     ) -> Arc<TestCluster> {
+        assert!(
+            default_num_of_unpruned_validators <= default_num_validators,
+            "Provided number of unpruned validators is greater than the total number of validators"
+        );
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 // Disable system overload checks for the test - during tests with crashes,
@@ -904,6 +909,7 @@ mod test {
                 ..Default::default()
             })
             .with_submit_delay_step_override_millis(3000)
+            .with_num_unpruned_validators(default_num_of_unpruned_validators)
             .build()
             .await
             .into()
