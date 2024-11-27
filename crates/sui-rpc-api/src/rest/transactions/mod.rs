@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod execution;
+use axum::Json;
 pub use execution::EffectsFinality;
 pub use execution::ExecuteTransaction;
 pub use execution::ExecuteTransactionQueryParameters;
@@ -25,8 +26,6 @@ use sui_sdk_types::types::{
 use tap::Pipe;
 
 use crate::reader::StateReader;
-use crate::response::ResponseContent;
-use crate::rest::accept::AcceptFormat;
 use crate::rest::openapi::ApiEndpoint;
 use crate::rest::openapi::OperationBuilder;
 use crate::rest::openapi::ResponseBuilder;
@@ -60,7 +59,6 @@ impl ApiEndpoint<RpcService> for GetTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionResponse>(generator)
-                    .bcs_content()
                     .build(),
             )
             .response(404, ResponseBuilder::new().build())
@@ -74,16 +72,9 @@ impl ApiEndpoint<RpcService> for GetTransaction {
 
 async fn get_transaction(
     Path(transaction_digest): Path<TransactionDigest>,
-    accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<TransactionResponse>> {
-    let response = state.get_transaction_response(transaction_digest)?;
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
-    }
-    .pipe(Ok)
+) -> Result<Json<TransactionResponse>> {
+    state.get_transaction_response(transaction_digest).map(Json)
 }
 
 #[serde_with::serde_as]
@@ -146,7 +137,6 @@ impl ApiEndpoint<RpcService> for ListTransactions {
                 200,
                 ResponseBuilder::new()
                     .json_content::<Vec<TransactionResponse>>(generator)
-                    .bcs_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
             )
@@ -161,11 +151,10 @@ impl ApiEndpoint<RpcService> for ListTransactions {
 
 async fn list_transactions(
     Query(parameters): Query<ListTransactionsQueryParameters>,
-    accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<(
     PageCursor<TransactionCursor>,
-    ResponseContent<Vec<TransactionResponse>>,
+    Json<Vec<TransactionResponse>>,
 )> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
@@ -201,20 +190,17 @@ async fn list_transactions(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let cursor = next_cursor.and_then(|(checkpoint, index)| {
-        if checkpoint < oldest_checkpoint {
-            None
-        } else {
-            Some(TransactionCursor { checkpoint, index })
-        }
-    });
+    let cursor = next_cursor
+        .and_then(|(checkpoint, index)| {
+            if checkpoint < oldest_checkpoint {
+                None
+            } else {
+                Some(TransactionCursor { checkpoint, index })
+            }
+        })
+        .pipe(PageCursor);
 
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(transactions),
-        AcceptFormat::Bcs => ResponseContent::Bcs(transactions),
-    }
-    .pipe(|entries| (PageCursor(cursor), entries))
-    .pipe(Ok)
+    Ok((cursor, Json(transactions)))
 }
 
 /// A Cursor that points at a specific transaction in history.

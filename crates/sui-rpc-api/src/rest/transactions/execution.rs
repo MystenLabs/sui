@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::response::{Bcs, ResponseContent};
-use crate::rest::accept::AcceptFormat;
+use crate::response::Bcs;
 use crate::rest::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
 use crate::{RestError, Result, RpcService};
 use axum::extract::{Query, State};
+use axum::Json;
 use schemars::JsonSchema;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -43,7 +43,6 @@ impl ApiEndpoint<RpcService> for ExecuteTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionExecutionResponse>(generator)
-                    .bcs_content()
                     .build(),
             )
             .build()
@@ -59,15 +58,12 @@ impl ApiEndpoint<RpcService> for ExecuteTransaction {
 /// Handles client transaction submission request by passing off the provided signed transaction to
 /// an internal QuorumDriver which drives execution of the transaction with the current validator
 /// set.
-///
-/// A client can signal, using the `Accept` header, the response format as either JSON or BCS.
 async fn execute_transaction(
     State(state): State<Option<Arc<dyn TransactionExecutor>>>,
     Query(parameters): Query<ExecuteTransactionQueryParameters>,
     client_address: Option<axum::extract::ConnectInfo<SocketAddr>>,
-    accept: AcceptFormat,
     Bcs(transaction): Bcs<SignedTransaction>,
-) -> Result<ResponseContent<TransactionExecutionResponse>> {
+) -> Result<Json<TransactionExecutionResponse>> {
     let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
     let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
         transaction: transaction.try_into()?,
@@ -154,19 +150,15 @@ async fn execute_transaction(
         None
     };
 
-    let response = TransactionExecutionResponse {
+    TransactionExecutionResponse {
         effects,
         finality,
         events,
         balance_changes,
         input_objects,
         output_objects,
-    };
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
     }
+    .pipe(Json)
     .pipe(Ok)
 }
 
@@ -387,7 +379,6 @@ impl ApiEndpoint<RpcService> for SimulateTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<TransactionSimulationResponse>(generator)
-                    .bcs_content()
                     .build(),
             )
             .build()
@@ -401,19 +392,12 @@ impl ApiEndpoint<RpcService> for SimulateTransaction {
 async fn simulate_transaction(
     State(state): State<Option<Arc<dyn TransactionExecutor>>>,
     Query(parameters): Query<SimulateTransactionQueryParameters>,
-    accept: AcceptFormat,
     //TODO allow accepting JSON as well as BCS
     Bcs(transaction): Bcs<Transaction>,
-) -> Result<ResponseContent<TransactionSimulationResponse>> {
+) -> Result<Json<TransactionSimulationResponse>> {
     let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
 
-    let response = simulate_transaction_impl(&executor, &parameters, transaction)?;
-
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
-    }
-    .pipe(Ok)
+    simulate_transaction_impl(&executor, &parameters, transaction).map(Json)
 }
 
 pub(super) fn simulate_transaction_impl(

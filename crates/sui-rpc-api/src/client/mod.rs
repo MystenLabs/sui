@@ -54,12 +54,6 @@ impl Client {
         let request = self.inner.client().get(url);
 
         self.inner.bcs(request).await.map(Response::into_inner)
-        // let proto = self
-        //     .inner
-        //     .protobuf::<crate::proto::FullCheckpoint>(request)
-        //     .await?
-        //     .into_inner();
-        // proto.try_into().map_err(Into::into)
     }
 
     pub async fn get_checkpoint_summary(
@@ -105,27 +99,28 @@ impl Client {
         parameters: &ExecuteTransactionQueryParameters,
         transaction: &Transaction,
     ) -> Result<TransactionExecutionResponse> {
-        #[derive(serde::Serialize)]
-        struct SignedTransaction<'a> {
-            transaction: &'a sui_types::transaction::TransactionData,
-            signatures: &'a [sui_types::signature::GenericSignature],
-        }
+        let signed_transaction = sui_sdk_types::types::SignedTransaction {
+            transaction: transaction
+                .inner()
+                .intent_message
+                .value
+                .clone()
+                .try_into()?,
+            signatures: transaction
+                .inner()
+                .tx_signatures
+                .clone()
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        };
 
-        let url = self.inner.url().join("transactions")?;
-        let body = bcs::to_bytes(&SignedTransaction {
-            transaction: &transaction.inner().intent_message.value,
-            signatures: &transaction.inner().tx_signatures,
-        })?;
-
-        let request = self
+        let response = self
             .inner
-            .client()
-            .post(url)
-            .query(parameters)
-            .header(reqwest::header::CONTENT_TYPE, crate::rest::APPLICATION_BCS)
-            .body(body);
-
-        self.inner.bcs(request).await.map(Response::into_inner)
+            .execute_transaction(parameters, &signed_transaction)
+            .await?
+            .into_inner();
+        bcs::from_bytes(&bcs::to_bytes(&response)?).map_err(Into::into)
     }
 }
 
