@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prost::Message;
 use sui_macros::sim_test;
 use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::rest::transactions::{ListTransactionsQueryParameters, TransactionResponse};
@@ -36,23 +35,8 @@ async fn get_transaction() {
         .await
         .unwrap();
 
-    // Make sure it works with protobuf
-    let bytes = client
-        .get(&url)
-        .header(
-            reqwest::header::ACCEPT,
-            sui_rpc_api::rest::APPLICATION_PROTOBUF,
-        )
-        .send()
-        .await
-        .unwrap()
-        .bytes()
-        .await
-        .unwrap();
-    let _transaction = sui_rpc_api::proto::GetTransactionResponse::decode(bytes).unwrap();
-
-    // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
-    // protobuf version
+    // TODO remove this once the BCS format is no longer supported by the rest endpoint and clients
+    // wanting binary have migrated to grpc
     let bytes = client
         .get(&url)
         .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
@@ -94,23 +78,8 @@ async fn list_checkpoint() {
         .await
         .unwrap();
 
-    // Make sure it works with protobuf
-    let bytes = client
-        .get(&url)
-        .header(
-            reqwest::header::ACCEPT,
-            sui_rpc_api::rest::APPLICATION_PROTOBUF,
-        )
-        .send()
-        .await
-        .unwrap()
-        .bytes()
-        .await
-        .unwrap();
-    let _transactions = sui_rpc_api::proto::ListTransactionsResponse::decode(bytes).unwrap();
-
-    // TODO remove this once the BCS format is no longer accepted and clients have migrated to the
-    // protobuf version
+    // TODO remove this once the BCS format is no longer supported by the rest endpoint and clients
+    // wanting binary have migrated to grpc
     let bytes = client
         .get(&url)
         .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
