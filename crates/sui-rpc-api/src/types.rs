@@ -72,5 +72,47 @@ pub struct NodeInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lowest_available_checkpoint_objects: Option<u64>,
     pub software_version: std::borrow::Cow<'static, str>,
-    //TODO include current protocol version
+}
+
+#[serde_with::serde_as]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct ObjectResponse {
+    pub object_id: sui_sdk_types::types::ObjectId,
+    #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
+    pub version: sui_sdk_types::types::Version,
+    pub digest: sui_sdk_types::types::ObjectDigest,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object: Option<sui_sdk_types::types::Object>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_bcs: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct GetObjectOptions {
+    /// Request that `Object` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object: Option<bool>,
+    /// Request that `Object` formated as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_bcs: Option<bool>,
+}
+
+impl GetObjectOptions {
+    pub fn include_object(&self) -> bool {
+        self.object.unwrap_or(true)
+    }
+
+    pub fn include_object_bcs(&self) -> bool {
+        self.object_bcs.unwrap_or(false)
+    }
+
 }
