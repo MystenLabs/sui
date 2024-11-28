@@ -30,15 +30,24 @@ pub struct StoredObjVersion {
     pub cp_sequence_number: i64,
 }
 
-/// An insert/update or deletion of an object record, keyed on a particular Object ID and version.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+/// An insert, update or deletion of an object record, keyed on a particular Object ID and version.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StoredObjectUpdate<T> {
+    pub kind: UpdateKind,
     pub object_id: ObjectID,
     pub object_version: u64,
     pub cp_sequence_number: u64,
-    /// `None` means the object was deleted or wrapped at this version, `Some(x)` means it was
-    /// changed to `x`.
-    pub update: Option<T>,
+    pub value: Option<T>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum UpdateKind {
+    /// Object was created or unwrapped at this version.
+    Insert,
+    /// Object existed before but was modified at this version.
+    Update,
+    /// Object was deleted or wrapped at this version.
+    Delete,
 }
 
 #[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -61,6 +70,7 @@ pub enum StoredCoinOwnerKind {
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = sum_coin_balances, primary_key(object_id))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredSumCoinBalance {
     pub object_id: Vec<u8>,
     pub object_version: i64,
@@ -71,6 +81,7 @@ pub struct StoredSumCoinBalance {
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = sum_obj_types, primary_key(object_id))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredSumObjType {
     pub object_id: Vec<u8>,
     pub object_version: i64,
