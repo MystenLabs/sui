@@ -76,7 +76,7 @@ pub(super) fn resolve_syntax_attributes(
         return None;
     }
 
-    let method_entry = syntax_methods.entry(type_name.clone()).or_default();
+    let method_entry = syntax_methods.entry(type_name).or_default();
 
     for prekind in syntax_method_prekinds {
         let Some(kind) = determine_valid_kind(context, prekind, &param_ty) else {
@@ -96,7 +96,7 @@ pub(super) fn resolve_syntax_attributes(
                 loc: function_name.0.loc,
                 visibility: function.visibility,
                 kind,
-                tname: type_name.clone(),
+                tname: type_name,
                 target_function: (*module_name, *function_name),
             };
             let method_opt: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
@@ -290,7 +290,7 @@ fn determine_subject_type_name(
                 N::TypeName_::ModuleType(m, _) => Some(m),
             };
             if Some(cur_module) == defining_module {
-                Some(type_name.clone())
+                Some(*type_name)
             } else {
                 context.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,

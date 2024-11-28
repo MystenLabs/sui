@@ -200,7 +200,7 @@ pub fn global_use_funs(info: &NamingProgramInfo) -> ResolvedUseFuns {
                 debug_display!((tn, (global_use_funs.get(tn).unwrap()))),
                 debug_display!((tn, &public_methods))
             );
-            global_use_funs.insert(tn.clone(), public_methods);
+            global_use_funs.insert(*tn, public_methods);
         }
     }
     global_use_funs
@@ -362,8 +362,8 @@ fn report_unused_use_funs(reporter: &mut DiagnosticReporter, use_funs: &N::UseFu
     }
 }
 
-fn use_funs_find_method<'env, 'outer, 'local>(
-    use_funs: &'local mut Vec<UseFunsScope<'env, 'outer>>,
+fn use_funs_find_method<'local>(
+    use_funs: &'local mut [UseFunsScope],
     tn: &TypeName,
     method_name: &Name,
     mut fmap_use_fun: impl FnMut(FoundMethod<'_, '_>),
@@ -403,8 +403,8 @@ impl<'env> ModuleContext<'env> {
         global_use_funs: &'env ResolvedUseFuns,
         macros: &'env UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     ) -> Box<Self> {
-        let global_use_funs = UseFunsScope::global(&global_use_funs);
-        let deprecations = Deprecations::new(env, &info);
+        let global_use_funs = UseFunsScope::global(global_use_funs);
+        let deprecations = Deprecations::new(env, info);
         let debug = TypingDebugFlags {
             match_counterexample: false,
             autocomplete_resolution: false,
@@ -479,7 +479,7 @@ impl<'env> ModuleContext<'env> {
         method: &Name,
         fmap_use_fun: impl FnMut(FoundMethod<'_, '_>),
     ) -> Option<&UseFun> {
-        use_funs_find_method(&mut self.use_funs, tn, &method, fmap_use_fun)
+        use_funs_find_method(&mut self.use_funs, tn, method, fmap_use_fun)
     }
 
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
@@ -831,7 +831,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
         method: &Name,
         fmap_use_fun: impl FnMut(FoundMethod<'_, '_>),
     ) -> Option<&UseFun> {
-        use_funs_find_method(&mut self.use_funs, tn, &method, fmap_use_fun)
+        use_funs_find_method(&mut self.use_funs, tn, method, fmap_use_fun)
     }
 
     pub fn find_method_and_mark_used(
@@ -1994,7 +1994,7 @@ fn check_function_visibility(
                     .unwrap_or("<unknown addr>".to_string()),
                 &context
                     .current_module()
-                    .and_then(|cur_module| context.module_info(&cur_module).package)
+                    .and_then(|cur_module| context.module_info(cur_module).package)
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
             );
@@ -2200,7 +2200,7 @@ fn solve_ability_constraint(
     constraints: AbilitySet,
 ) {
     let ty = unfold_type(&context.subst, ty);
-    let ty_abilities = infer_abilities(&context.info(), &context.subst, ty.clone());
+    let ty_abilities = infer_abilities(context.info(), &context.subst, ty.clone());
 
     let (declared_loc_opt, declared_abilities, ty_args) = debug_abilities_info(context, &ty);
     for constraint in constraints {
@@ -2221,7 +2221,7 @@ fn solve_ability_constraint(
             declared_loc_opt,
             &declared_abilities,
             ty_args.iter().map(|ty_arg| {
-                let abilities = infer_abilities(&context.info(), &context.subst, ty_arg.clone());
+                let abilities = infer_abilities(context.info(), &context.subst, ty_arg.clone());
                 (ty_arg, abilities)
             }),
         );
@@ -2913,7 +2913,7 @@ fn join_impl(
                 k2
             );
             let (subst, tys) = join_impl_types(counter, subst, case, tys1, tys2)?;
-            Ok((subst, sp(*loc, Apply(k2.clone(), n2.clone(), tys))))
+            Ok((subst, sp(*loc, Apply(k2.clone(), *n2, tys))))
         }
         (sp!(_, Fun(a1, _)), sp!(_, Fun(a2, _))) if a1.len() != a2.len() => {
             Err(TypingError::FunArityMismatch(

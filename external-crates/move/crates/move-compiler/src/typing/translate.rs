@@ -104,7 +104,7 @@ fn extract_macros(
             implicit_candidates,
         } = module_use_funs;
         for (tn, module_methods) in resolved {
-            let macro_methods = macro_use_funs.resolved.entry(tn.clone()).or_default();
+            let macro_methods = macro_use_funs.resolved.entry(*tn).or_default();
             for (name, method) in module_methods.key_cloned_iter() {
                 if !macro_methods.contains_key(&name) {
                     macro_methods.add(name, method.clone()).unwrap();
@@ -165,7 +165,7 @@ fn modules(
     for (mident, mdef) in modules.key_cloned_iter_mut() {
         let context = ModuleContext::new(
             compilation_env,
-            &info,
+            info,
             &global_use_funs,
             all_macro_definitions,
         );
@@ -180,7 +180,7 @@ fn modules(
     modules.into_par_iter().for_each(|(ident, mdef)| {
         let (typed_mdef, new_friends, used_members) = module(
             compilation_env,
-            &info,
+            info,
             &global_use_funs,
             all_macro_definitions,
             ident,
@@ -3927,7 +3927,7 @@ fn type_to_type_name_(
     use TypeName_ as TN;
     use Type_ as Ty;
     match &ty.value {
-        Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(tn.clone()),
+        Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {
             let msg = match t {
                 Ty::Anything => {
