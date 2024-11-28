@@ -3800,7 +3800,7 @@ dependencies = [
 
 [[package]]
 name = "diesel-update-from"
-version = "1.39.0"
+version = "1.40.0"
 dependencies = [
  "diesel",
  "diesel-async",
@@ -14327,6 +14327,7 @@ dependencies = [
  "clap",
  "diesel",
  "diesel-async",
+ "diesel-update-from",
  "diesel_migrations",
  "futures",
  "itertools 0.13.0",

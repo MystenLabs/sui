@@ -40,13 +40,13 @@ impl Handler for WalObjTypes {
                 object_id: value.object_id.to_vec(),
                 object_version: value.object_version as i64,
 
-                owner_kind: value.update.as_ref().map(|o| o.owner_kind),
-                owner_id: value.update.as_ref().and_then(|o| o.owner_id.clone()),
+                owner_kind: value.value.as_ref().map(|o| o.owner_kind),
+                owner_id: value.value.as_ref().and_then(|o| o.owner_id.clone()),
 
-                package: value.update.as_ref().and_then(|o| o.package.clone()),
-                module: value.update.as_ref().and_then(|o| o.module.clone()),
-                name: value.update.as_ref().and_then(|o| o.name.clone()),
-                instantiation: value.update.as_ref().and_then(|o| o.instantiation.clone()),
+                package: value.value.as_ref().and_then(|o| o.package.clone()),
+                module: value.value.as_ref().and_then(|o| o.module.clone()),
+                name: value.value.as_ref().and_then(|o| o.name.clone()),
+                instantiation: value.value.as_ref().and_then(|o| o.instantiation.clone()),
 
                 cp_sequence_number: value.cp_sequence_number as i64,
             })

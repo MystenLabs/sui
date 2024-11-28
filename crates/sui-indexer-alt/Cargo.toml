@@ -27,6 +27,7 @@ tokio-util.workspace = true
 toml.workspace = true
 tracing.workspace = true
 
+diesel-update-from.workspace = true
 sui-default-config.workspace = true
 sui-field-count.workspace = true
 sui-indexer-alt-framework.workspace = true

@@ -613,6 +613,7 @@ sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
 bin-version = { path = "crates/bin-version" }
+diesel-update-from = { path = "crates/diesel-update-from" }
 mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
