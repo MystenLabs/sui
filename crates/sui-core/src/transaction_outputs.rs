@@ -50,8 +50,7 @@ impl TransactionOutputs {
         let modified_at: HashSet<_> = effects.modified_at_versions().into_iter().collect();
         let possible_to_receive = transaction.transaction_data().receiving_objects();
         let received_objects = possible_to_receive
-            .iter()
-            .cloned()
+            .into_iter()
             .filter(|obj_ref| modified_at.contains(&(obj_ref.0, obj_ref.1)));
 
         // We record any received or deleted objects since they could be pruned, and smear shared
@@ -94,7 +93,7 @@ impl TransactionOutputs {
             .filter_map(|(id, ((version, digest), owner))| {
                 owner.is_address_owned().then_some((id, version, digest))
             })
-            .chain(received_objects)
+            .chain(received_objects.into_iter())
             .collect();
 
         let new_locks_to_init: Vec<_> = written
