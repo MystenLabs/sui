@@ -53,9 +53,7 @@ impl TryConstructTransaction for PayCoin {
                 amount.into(),
                 vec![],
             )
-            .await
-            .ok()
-            .unwrap_or_default()
+            .await?
             .iter()
             .map(|coin| coin.object_ref())
             .collect();
@@ -120,6 +118,9 @@ pub fn pay_coin_pt(
     if recipients.len() != amounts.len() {
         return Err(anyhow!("Amounts length does not match recipients"));
     }
+    if coins.is_empty() {
+        return Err(anyhow!("Cannot PayCoin without any coins"));
+    }
 
     let mut commands = 0;
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -131,9 +132,6 @@ pub fn pay_coin_pt(
                 .iter()
                 .map(|&o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
                 .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
-            if to_merge.is_empty() {
-                return Err(anyhow!("Tried to pay with no coins"));
-            }
             let merge_into = to_merge.pop().expect("Already checked for non-zero length");
             if !to_merge.is_empty() {
                 builder.command(Command::MergeCoins(merge_into, to_merge));
@@ -151,6 +149,7 @@ pub fn pay_coin_pt(
         commands += 1;
     }
 
+    // TODO: Optimally do not split last coin if the remaining balance is 0
     let amount_args = amounts
         .into_iter()
         .map(|v| builder.pure(v))
