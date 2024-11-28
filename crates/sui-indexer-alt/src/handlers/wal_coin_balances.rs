@@ -40,10 +40,10 @@ impl Handler for WalCoinBalances {
                 object_id: value.object_id.to_vec(),
                 object_version: value.object_version as i64,
 
-                owner_id: value.update.as_ref().map(|o| o.owner_id.clone()),
+                owner_id: value.value.as_ref().map(|o| o.owner_id.clone()),
 
-                coin_type: value.update.as_ref().map(|o| o.coin_type.clone()),
-                coin_balance: value.update.as_ref().map(|o| o.coin_balance),
+                coin_type: value.value.as_ref().map(|o| o.coin_type.clone()),
+                coin_balance: value.value.as_ref().map(|o| o.coin_balance),
 
                 cp_sequence_number: value.cp_sequence_number as i64,
             })
