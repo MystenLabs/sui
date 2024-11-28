@@ -14122,6 +14122,7 @@ dependencies = [
  "clap",
  "diesel",
  "diesel-async",
+ "diesel-update-from",
  "diesel_migrations",
  "futures",
  "itertools 0.13.0",
