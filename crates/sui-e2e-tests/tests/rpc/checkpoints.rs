@@ -4,7 +4,7 @@
 use sui_macros::sim_test;
 use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::client::Client as CoreClient;
-use sui_rpc_api::{CheckpointResponse, ListCheckpointsQueryParameters};
+use sui_rpc_api::CheckpointResponse;
 use sui_sdk_types::types::SignedCheckpointSummary;
 use test_cluster::TestClusterBuilder;
 
@@ -20,7 +20,7 @@ async fn list_checkpoint() {
     let core_client = CoreClient::new(test_cluster.rpc_url());
 
     let checkpoints = client
-        .list_checkpoints(&ListCheckpointsQueryParameters::default())
+        .list_checkpoints(&Default::default())
         .await
         .unwrap()
         .into_inner();
