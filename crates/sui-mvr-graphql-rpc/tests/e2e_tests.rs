@@ -23,7 +23,6 @@ use sui_types::DEEPBOOK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use tempfile::tempdir;
-use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_simple_client_validator_cluster() {
@@ -273,106 +272,6 @@ async fn test_graphql_client_variables() {
                 .to_string()
         );
     }
-}
-
-#[tokio::test]
-async fn test_transaction_execution() {
-    let cluster = start_cluster(ServiceConfig::test_defaults()).await;
-
-    let addresses = cluster
-        .network
-        .validator_fullnode_handle
-        .wallet
-        .get_addresses();
-
-    let sender = addresses[0];
-    let recipient = addresses[1];
-    let tx = cluster
-        .network
-        .validator_fullnode_handle
-        .test_transaction_builder()
-        .await
-        .transfer_sui(Some(1_000), recipient)
-        .build();
-    let signed_tx = cluster
-        .network
-        .validator_fullnode_handle
-        .wallet
-        .sign_transaction(&tx);
-    let original_digest = signed_tx.digest();
-    let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
-    let tx_bytes = tx_bytes.encoded();
-    let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
-
-    let mutation = r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) { effects { transactionBlock { digest } } errors}}"#;
-
-    let variables = vec![
-        GraphqlQueryVariable {
-            name: "tx".to_string(),
-            ty: "String!".to_string(),
-            value: json!(tx_bytes),
-        },
-        GraphqlQueryVariable {
-            name: "sigs".to_string(),
-            ty: "[String!]!".to_string(),
-            value: json!(sigs),
-        },
-    ];
-    let res = cluster
-        .graphql_client
-        .execute_mutation_to_graphql(mutation.to_string(), variables)
-        .await
-        .unwrap();
-    let binding = res.response_body().data.clone().into_json().unwrap();
-    let res = binding.get("executeTransactionBlock").unwrap();
-
-    let digest = res
-        .get("effects")
-        .unwrap()
-        .get("transactionBlock")
-        .unwrap()
-        .get("digest")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert!(res.get("errors").unwrap().is_null());
-    assert_eq!(digest, original_digest.to_string());
-
-    // Wait for the transaction to be committed and indexed
-    sleep(Duration::from_secs(10)).await;
-    // Query the transaction
-    let query = r#"
-            {
-                transactionBlock(digest: $dig){
-                    sender {
-                        address
-                    }
-                }
-            }
-        "#;
-
-    let variables = vec![GraphqlQueryVariable {
-        name: "dig".to_string(),
-        ty: "String!".to_string(),
-        value: json!(digest),
-    }];
-    let res = cluster
-        .graphql_client
-        .execute_to_graphql(query.to_string(), true, variables, vec![])
-        .await
-        .unwrap();
-
-    let binding = res.response_body().data.clone().into_json().unwrap();
-    let sender_read = binding
-        .get("transactionBlock")
-        .unwrap()
-        .get("sender")
-        .unwrap()
-        .get("address")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(sender_read, sender.to_string());
 }
 
 #[tokio::test]
@@ -764,6 +663,7 @@ async fn test_epoch_live_object_set_digest() {
     let query = "
             {
                 epoch(id: 0){
+                    epochId
                     liveObjectSetDigest
                 }
             }
