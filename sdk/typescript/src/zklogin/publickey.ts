@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromBase64, toBase64 } from '@mysten/bcs';
+import { fromBase64, toBase64, toHex } from '@mysten/bcs';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bytesToHex } from '@noble/hashes/utils';
 
 import { PublicKey } from '../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
 import { SuiGraphQLClient } from '../graphql/client.js';
 import { graphql } from '../graphql/schemas/2024.4/index.js';
+import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 import { extractClaimValue } from './jwt-utils.js';
 import { parseZkLoginSignature } from './signature.js';
-import { toPaddedBigEndianBytes } from './utils.js';
+import { toBigEndianBytes, toPaddedBigEndianBytes } from './utils.js';
 
 /**
  * A zkLogin public identifier
@@ -18,6 +21,7 @@ import { toPaddedBigEndianBytes } from './utils.js';
 export class ZkLoginPublicIdentifier extends PublicKey {
 	#data: Uint8Array;
 	#client?: SuiGraphQLClient;
+	#legacyAddress: boolean;
 
 	/**
 	 * Create a new ZkLoginPublicIdentifier object
@@ -35,6 +39,11 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 		} else {
 			this.#data = Uint8Array.from(value);
 		}
+		this.#legacyAddress = this.#data.length !== this.#data[0] + 1 + 32;
+
+		if (this.#legacyAddress) {
+			this.#data = normalizeZkLoginPublicKeyBytes(this.#data);
+		}
 	}
 
 	/**
@@ -42,6 +51,20 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	 */
 	override equals(publicKey: ZkLoginPublicIdentifier): boolean {
 		return super.equals(publicKey);
+	}
+
+	override toSuiAddress(): string {
+		if (this.#legacyAddress) {
+			const legacyBytes = normalizeZkLoginPublicKeyBytes(this.#data, true);
+			const addressBytes = new Uint8Array(legacyBytes.length + 1);
+			addressBytes[0] = this.flag();
+			addressBytes.set(legacyBytes, 1);
+			return normalizeSuiAddress(
+				bytesToHex(blake2b(addressBytes, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+			);
+		}
+
+		return super.toSuiAddress();
 	}
 
 	/**
@@ -101,10 +124,13 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 export function toZkLoginPublicIdentifier(
 	addressSeed: bigint,
 	iss: string,
-	options?: { client?: SuiGraphQLClient },
+	options?: { client?: SuiGraphQLClient; legacyAddress?: boolean },
 ): ZkLoginPublicIdentifier {
 	// Consists of iss_bytes_len || iss_bytes || padded_32_byte_address_seed.
-	const addressSeedBytesBigEndian = toPaddedBigEndianBytes(addressSeed, 32);
+	const addressSeedBytesBigEndian = options?.legacyAddress
+		? toBigEndianBytes(addressSeed, 32)
+		: toPaddedBigEndianBytes(addressSeed, 32);
+
 	const issBytes = new TextEncoder().encode(iss);
 	const tmp = new Uint8Array(1 + issBytes.length + addressSeedBytesBigEndian.length);
 	tmp.set([issBytes.length], 0);
@@ -131,6 +157,18 @@ const VerifyZkLoginSignatureQuery = graphql(`
 		}
 	}
 `);
+
+function normalizeZkLoginPublicKeyBytes(bytes: Uint8Array, legacyAddress = false) {
+	const issByteLength = bytes[0] + 1;
+	const addressSeed = BigInt(`0x${toHex(bytes.slice(issByteLength))}`);
+	const seedBytes = legacyAddress
+		? toBigEndianBytes(addressSeed, 32)
+		: toPaddedBigEndianBytes(addressSeed, 32);
+	const data = new Uint8Array(issByteLength + seedBytes.length);
+	data.set(bytes.slice(0, issByteLength), 0);
+	data.set(seedBytes, issByteLength);
+	return data;
+}
 
 async function graphqlVerifyZkLoginSignature({
 	address,
