@@ -57,7 +57,7 @@ pub trait TryConstructTransaction {
 }
 
 #[enum_dispatch(TryConstructTransaction)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum InternalOperation {
     PaySui(PaySui),
     PayCoin(PayCoin),
