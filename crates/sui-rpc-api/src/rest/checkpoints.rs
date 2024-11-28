@@ -4,10 +4,7 @@
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::Json;
-use sui_sdk_types::types::{
-    CheckpointContents, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
-    SignedCheckpointSummary, ValidatorAggregatedSignature,
-};
+use sui_sdk_types::types::{CheckpointSequenceNumber, SignedCheckpointSummary};
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
@@ -15,19 +12,13 @@ use crate::reader::StateReader;
 use crate::response::{Bcs, ResponseContent};
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
+use crate::service::checkpoints::{CheckpointId, CheckpointNotFoundError};
+use crate::types::{CheckpointResponse, GetCheckpointOptions};
 use crate::{Direction, RpcService};
 use crate::{Result, RpcServiceError};
 use documented::Documented;
 
 use super::accept::AcceptFormat;
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct CheckpointResponse {
-    pub digest: CheckpointDigest,
-    pub summary: CheckpointSummary,
-    pub signature: ValidatorAggregatedSignature,
-    pub contents: Option<CheckpointContents>,
-}
 
 /// Fetch a Checkpoint
 ///
@@ -60,7 +51,7 @@ impl ApiEndpoint<RpcService> for GetCheckpoint {
             .operation_id("Get Checkpoint")
             .description(Self::DOCS)
             .path_parameter::<CheckpointId>("checkpoint", generator)
-            .query_parameters::<GetCheckpointQueryParameters>(generator)
+            .query_parameters::<GetCheckpointOptions>(generator)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -80,125 +71,10 @@ impl ApiEndpoint<RpcService> for GetCheckpoint {
 
 async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
-    Query(parameters): Query<GetCheckpointQueryParameters>,
-    State(state): State<StateReader>,
+    Query(options): Query<GetCheckpointOptions>,
+    State(state): State<RpcService>,
 ) -> Result<Json<CheckpointResponse>> {
-    let SignedCheckpointSummary {
-        checkpoint,
-        signature,
-    } = match checkpoint_id {
-        CheckpointId::SequenceNumber(s) => {
-            let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
-            if s < oldest_checkpoint {
-                return Err(crate::RpcServiceError::new(
-                    axum::http::StatusCode::GONE,
-                    "Old checkpoints have been pruned",
-                ));
-            }
-
-            state.inner().get_checkpoint_by_sequence_number(s)
-        }
-        CheckpointId::Digest(d) => state.inner().get_checkpoint_by_digest(&d.into()),
-    }
-    .ok_or(CheckpointNotFoundError(checkpoint_id))?
-    .into_inner()
-    .try_into()?;
-
-    let contents = if parameters.contents {
-        Some(
-            state
-                .inner()
-                .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)
-                .ok_or(CheckpointNotFoundError(checkpoint_id))?
-                .try_into()?,
-        )
-    } else {
-        None
-    };
-
-    CheckpointResponse {
-        digest: checkpoint.digest(),
-        summary: checkpoint,
-        signature,
-        contents,
-    }
-    .pipe(Json)
-    .pipe(Ok)
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, schemars::JsonSchema)]
-#[schemars(untagged)]
-pub enum CheckpointId {
-    #[schemars(
-        title = "SequenceNumber",
-        example = "CheckpointSequenceNumber::default"
-    )]
-    /// Sequence number or height of a Checkpoint
-    SequenceNumber(#[schemars(with = "crate::rest::_schemars::U64")] CheckpointSequenceNumber),
-    #[schemars(title = "Digest", example = "example_digest")]
-    /// Base58 encoded 32-byte digest of a Checkpoint
-    Digest(CheckpointDigest),
-}
-
-fn example_digest() -> CheckpointDigest {
-    "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S"
-        .parse()
-        .unwrap()
-}
-
-impl<'de> serde::Deserialize<'de> for CheckpointId {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let raw = String::deserialize(deserializer)?;
-
-        if let Ok(s) = raw.parse::<CheckpointSequenceNumber>() {
-            Ok(Self::SequenceNumber(s))
-        } else if let Ok(d) = raw.parse::<CheckpointDigest>() {
-            Ok(Self::Digest(d))
-        } else {
-            Err(serde::de::Error::custom(format!(
-                "unrecognized checkpoint-id {raw}"
-            )))
-        }
-    }
-}
-
-impl serde::Serialize for CheckpointId {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self {
-            CheckpointId::SequenceNumber(s) => serializer.serialize_str(&s.to_string()),
-            CheckpointId::Digest(d) => serializer.serialize_str(&d.to_string()),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct CheckpointNotFoundError(CheckpointId);
-
-impl std::fmt::Display for CheckpointNotFoundError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Checkpoint ")?;
-
-        match self.0 {
-            CheckpointId::SequenceNumber(n) => write!(f, "{n}")?,
-            CheckpointId::Digest(d) => write!(f, "{d}")?,
-        }
-
-        write!(f, " not found")
-    }
-}
-
-impl std::error::Error for CheckpointNotFoundError {}
-
-impl From<CheckpointNotFoundError> for crate::RpcServiceError {
-    fn from(value: CheckpointNotFoundError) -> Self {
-        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
-    }
+    state.get_checkpoint(Some(checkpoint_id), options).map(Json)
 }
 
 /// Query parameters for the GetCheckpoint endpoint
@@ -229,6 +105,8 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
     }
 
     fn stable(&self) -> bool {
+        // Before making this api stable we'll need to properly handle the options that can be
+        // provided as inputs.
         false
     }
 
@@ -240,7 +118,8 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
             .tag("Checkpoint")
             .operation_id("List Checkpoints")
             .description(Self::DOCS)
-            .query_parameters::<ListCheckpointsQueryParameters>(generator)
+            .query_parameters::<ListCheckpointsPaginationParameters>(generator)
+            .query_parameters::<GetCheckpointOptions>(generator)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -260,7 +139,8 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
 }
 
 async fn list_checkpoints(
-    Query(parameters): Query<ListCheckpointsQueryParameters>,
+    Query(parameters): Query<ListCheckpointsPaginationParameters>,
+    Query(options): Query<GetCheckpointOptions>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<(
@@ -291,25 +171,28 @@ async fn list_checkpoints(
                         checkpoint,
                         signature,
                     } = checkpoint.try_into()?;
-                    let contents = if parameters.contents {
+                    let contents = if options.include_contents() {
                         Some(contents.try_into()?)
                     } else {
                         None
                     };
                     Ok(CheckpointResponse {
+                        sequence_number: checkpoint.sequence_number,
                         digest: checkpoint.digest(),
-                        summary: checkpoint,
-                        signature,
+                        summary: Some(checkpoint),
+                        signature: Some(signature),
                         contents,
+                        summary_bcs: None,
+                        contents_bcs: None,
                     })
                 })
         })
         .collect::<Result<Vec<_>>>()?;
 
     let cursor = checkpoints.last().and_then(|checkpoint| match direction {
-        Direction::Ascending => checkpoint.summary.sequence_number.checked_add(1),
+        Direction::Ascending => checkpoint.sequence_number.checked_add(1),
         Direction::Descending => {
-            let cursor = checkpoint.summary.sequence_number.checked_sub(1);
+            let cursor = checkpoint.sequence_number.checked_sub(1);
             // If we've exhausted our available checkpoint range then there are no more pages left
             if cursor < Some(oldest_checkpoint) {
                 None
@@ -327,8 +210,8 @@ async fn list_checkpoints(
             let checkpoints = checkpoints
                 .into_iter()
                 .map(|c| SignedCheckpointSummary {
-                    checkpoint: c.summary,
-                    signature: c.signature,
+                    checkpoint: c.summary.unwrap(),
+                    signature: c.signature.unwrap(),
                 })
                 .collect();
             ResponseContent::Bcs(checkpoints)
@@ -339,7 +222,7 @@ async fn list_checkpoints(
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct ListCheckpointsQueryParameters {
+pub struct ListCheckpointsPaginationParameters {
     /// Page size limit for the response.
     ///
     /// Defaults to `50` if not provided with a maximum page size of `100`.
@@ -352,12 +235,9 @@ pub struct ListCheckpointsQueryParameters {
     ///
     /// Defaults to `descending` if not provided.
     pub direction: Option<Direction>,
-    /// Request `CheckpointContents` be included in the response
-    #[serde(default)]
-    pub contents: bool,
 }
 
-impl ListCheckpointsQueryParameters {
+impl ListCheckpointsPaginationParameters {
     pub fn limit(&self) -> usize {
         self.limit
             .map(|l| (l as usize).clamp(1, crate::rest::MAX_PAGE_SIZE))

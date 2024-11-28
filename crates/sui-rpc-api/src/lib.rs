@@ -24,10 +24,9 @@ pub use client::Client;
 pub use config::Config;
 pub use error::{Result, RpcServiceError};
 pub use metrics::RpcMetrics;
-pub use rest::checkpoints::CheckpointResponse;
-pub use rest::checkpoints::ListCheckpointsQueryParameters;
 pub use rest::transactions::ExecuteTransactionQueryParameters;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+pub use types::CheckpointResponse;
 pub use types::ObjectResponse;
 
 #[derive(Clone)]
