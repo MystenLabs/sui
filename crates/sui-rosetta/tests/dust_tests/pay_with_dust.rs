@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use once_cell::sync::Lazy;
-use rosetta_client::{start_rosetta_test_server, RosettaError};
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{
@@ -19,14 +18,11 @@ use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
 
+use super::rosetta_client::{start_rosetta_test_server, RosettaError};
 use super::split_coin::{make_change, DEFAULT_GAS_BUDGET};
 
 static MAX_GAS_BUDGET: Lazy<u64> =
     Lazy::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
-
-#[allow(dead_code)]
-#[path = "../rosetta_client.rs"]
-mod rosetta_client;
 
 #[tokio::test]
 async fn test_pay_with_many_small_coins() -> Result<()> {
