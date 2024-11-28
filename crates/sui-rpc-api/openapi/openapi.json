@@ -97,10 +97,49 @@
           {
             "in": "query",
             "name": "contents",
-            "description": "Request `CheckpointContents` be included in the response",
+            "description": "Request `CheckpointContents` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `CheckpointContents` be included in the response",
-              "default": false,
+              "description": "Request `CheckpointContents` be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "contents_bcs",
+            "description": "Request `CheckpointContents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointContents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "signature",
+            "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "summary",
+            "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "summary_bcs",
+            "description": "Request `CheckpointSummary` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointSummary` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -384,17 +423,6 @@
         "parameters": [
           {
             "in": "query",
-            "name": "contents",
-            "description": "Request `CheckpointContents` be included in the response",
-            "schema": {
-              "description": "Request `CheckpointContents` be included in the response",
-              "default": false,
-              "type": "boolean"
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
             "name": "direction",
             "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
             "schema": {
@@ -428,6 +456,56 @@
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "contents",
+            "description": "Request `CheckpointContents` be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointContents` be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "contents_bcs",
+            "description": "Request `CheckpointContents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointContents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "signature",
+            "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "summary",
+            "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "summary_bcs",
+            "description": "Request `CheckpointSummary` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `CheckpointSummary` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
             },
             "style": "form"
           }
@@ -1368,21 +1446,31 @@
         "type": "object",
         "required": [
           "digest",
-          "signature",
-          "summary"
+          "sequence_number"
         ],
         "properties": {
           "contents": {
             "$ref": "#/components/schemas/CheckpointContents"
           },
+          "contents_bcs": {
+            "type": "string"
+          },
           "digest": {
             "$ref": "#/components/schemas/CheckpointDigest"
+          },
+          "sequence_number": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           },
           "signature": {
             "$ref": "#/components/schemas/ValidatorAggregatedSignature"
           },
           "summary": {
             "$ref": "#/components/schemas/CheckpointSummary"
+          },
+          "summary_bcs": {
+            "type": "string"
           }
         }
       },
