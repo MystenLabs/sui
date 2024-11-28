@@ -23,8 +23,7 @@ use tap::Pipe;
 
 use crate::rest::accounts::AccountOwnedObjectInfo;
 use crate::rest::accounts::ListAccountOwnedObjectsQueryParameters;
-use crate::rest::checkpoints::CheckpointResponse;
-use crate::rest::checkpoints::ListCheckpointsQueryParameters;
+use crate::rest::checkpoints::ListCheckpointsPaginationParameters;
 use crate::rest::coins::CoinInfo;
 use crate::rest::health::Threshold;
 use crate::rest::objects::DynamicFieldInfo;
@@ -40,6 +39,7 @@ use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionExecutionResponse;
 use crate::rest::transactions::TransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
+use crate::types::CheckpointResponse;
 use crate::types::NodeInfo;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
@@ -238,11 +238,10 @@ impl Client {
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
-        let parameters = ListCheckpointsQueryParameters {
+        let parameters = ListCheckpointsPaginationParameters {
             limit: Some(1),
             start: None,
             direction: None,
-            contents: false,
         };
 
         let (mut page, parts) = self.list_checkpoints(&parameters).await?.into_parts();
@@ -253,8 +252,8 @@ impl Client {
 
         Ok(Response::new(
             SignedCheckpointSummary {
-                checkpoint: checkpoint.summary,
-                signature: checkpoint.signature,
+                checkpoint: checkpoint.summary.unwrap(),
+                signature: checkpoint.signature.unwrap(),
             },
             parts,
         ))
@@ -262,7 +261,7 @@ impl Client {
 
     pub async fn list_checkpoints(
         &self,
-        parameters: &ListCheckpointsQueryParameters,
+        parameters: &ListCheckpointsPaginationParameters,
     ) -> Result<Response<Vec<CheckpointResponse>>> {
         let url = self.url().join("checkpoints")?;
 
