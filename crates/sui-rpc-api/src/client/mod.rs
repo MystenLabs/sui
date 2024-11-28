@@ -66,8 +66,8 @@ impl Client {
             .map(Response::into_inner)
             .and_then(|checkpoint| {
                 sui_sdk_types::types::SignedCheckpointSummary {
-                    checkpoint: checkpoint.summary,
-                    signature: checkpoint.signature,
+                    checkpoint: checkpoint.summary.unwrap(),
+                    signature: checkpoint.signature.unwrap(),
                 }
                 .try_into()
                 .map_err(Into::into)

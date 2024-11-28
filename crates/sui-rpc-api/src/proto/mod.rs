@@ -338,66 +338,6 @@ impl TryFrom<&UserSignature> for sui_types::signature::GenericSignature {
 }
 
 //
-// GetCheckpointResponse
-//
-
-impl TryFrom<crate::rest::checkpoints::CheckpointResponse> for GetCheckpointResponse {
-    type Error = bcs::Error;
-
-    fn try_from(c: crate::rest::checkpoints::CheckpointResponse) -> Result<Self, Self::Error> {
-        Ok(Self {
-            digest: c.digest.as_bytes().to_vec().into(),
-            summary: Some(CheckpointSummary::try_from(&c.summary)?),
-            signature: Some(ValidatorAggregatedSignature::try_from(&c.signature)?),
-            contents: c
-                .contents
-                .as_ref()
-                .map(CheckpointContents::try_from)
-                .transpose()?,
-        })
-    }
-}
-
-impl TryFrom<GetCheckpointResponse> for crate::rest::checkpoints::CheckpointResponse {
-    type Error = bcs::Error;
-
-    fn try_from(value: GetCheckpointResponse) -> Result<Self, Self::Error> {
-        let summary = value
-            .summary
-            .ok_or_else(|| bcs::Error::Custom("missing summary".into()))?
-            .pipe_ref(TryInto::try_into)?;
-        let signature = value
-            .signature
-            .ok_or_else(|| bcs::Error::Custom("missing signature".into()))?
-            .pipe_ref(TryInto::try_into)?;
-
-        let contents = value.contents.as_ref().map(TryInto::try_into).transpose()?;
-
-        Ok(Self {
-            digest: sui_sdk_types::types::CheckpointDigest::from_bytes(&value.digest)
-                .map_err(|e| bcs::Error::Custom(e.to_string()))?,
-            summary,
-            signature,
-            contents,
-        })
-    }
-}
-
-impl TryFrom<Vec<crate::rest::checkpoints::CheckpointResponse>> for ListCheckpointResponse {
-    type Error = bcs::Error;
-    fn try_from(
-        value: Vec<crate::rest::checkpoints::CheckpointResponse>,
-    ) -> Result<Self, Self::Error> {
-        let checkpoints = value
-            .into_iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        Ok(Self { checkpoints })
-    }
-}
-
-//
 // GetTransactionResponse
 //
 

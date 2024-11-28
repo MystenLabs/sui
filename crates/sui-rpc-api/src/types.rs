@@ -114,5 +114,88 @@ impl GetObjectOptions {
     pub fn include_object_bcs(&self) -> bool {
         self.object_bcs.unwrap_or(false)
     }
+}
 
+#[serde_with::serde_as]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct CheckpointResponse {
+    #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
+    #[schemars(with = "crate::rest::_schemars::U64")]
+    pub sequence_number: sui_sdk_types::types::CheckpointSequenceNumber,
+
+    pub digest: sui_sdk_types::types::CheckpointDigest,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<sui_sdk_types::types::CheckpointSummary>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary_bcs: Option<Vec<u8>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<sui_sdk_types::types::ValidatorAggregatedSignature>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents: Option<sui_sdk_types::types::CheckpointContents>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents_bcs: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct GetCheckpointOptions {
+    /// Request `CheckpointSummary` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<bool>,
+
+    /// Request `CheckpointSummary` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary_bcs: Option<bool>,
+
+    /// Request `ValidatorAggregatedSignature` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<bool>,
+
+    /// Request `CheckpointContents` be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents: Option<bool>,
+
+    /// Request `CheckpointContents` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents_bcs: Option<bool>,
+}
+
+impl GetCheckpointOptions {
+    pub fn include_summary(&self) -> bool {
+        self.summary.unwrap_or(true)
+    }
+
+    pub fn include_summary_bcs(&self) -> bool {
+        self.summary_bcs.unwrap_or(false)
+    }
+
+    pub fn include_signature(&self) -> bool {
+        self.signature.unwrap_or(true)
+    }
+
+    pub fn include_contents(&self) -> bool {
+        self.contents.unwrap_or(false)
+    }
+
+    pub fn include_contents_bcs(&self) -> bool {
+        self.contents_bcs.unwrap_or(false)
+    }
 }
