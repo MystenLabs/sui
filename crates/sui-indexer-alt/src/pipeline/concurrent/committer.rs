@@ -72,77 +72,75 @@ pub(super) fn committer<H: Handler + 'static>(
                     let db = db.clone();
                     let metrics = metrics.clone();
                     async move {
+                        if values.is_empty() {
+                            return Ok(());
+                        }
+
                         metrics
                             .total_committer_batches_attempted
                             .with_label_values(&[H::NAME])
                             .inc();
 
-                        let affected = if values.is_empty() {
-                            0
-                        } else {
-                            let guard = metrics
-                                .committer_commit_latency
-                                .with_label_values(&[H::NAME])
-                                .start_timer();
+                        let guard = metrics
+                            .committer_commit_latency
+                            .with_label_values(&[H::NAME])
+                            .start_timer();
 
-                            let mut conn = db.connect().await.map_err(|e| {
+                        let mut conn = db.connect().await.map_err(|e| {
+                            warn!(
+                                pipeline = H::NAME,
+                                "Committed failed to get connection for DB"
+                            );
+                            BE::transient(Break::Err(e.into()))
+                        })?;
+
+                        let affected = H::commit(values.as_slice(), &mut conn).await;
+                        let elapsed = guard.stop_and_record();
+
+                        match affected {
+                            Ok(affected) => {
+                                debug!(
+                                    pipeline = H::NAME,
+                                    elapsed_ms = elapsed * 1000.0,
+                                    affected,
+                                    committed = values.len(),
+                                    "Wrote batch",
+                                );
+
+                                metrics
+                                    .total_committer_batches_succeeded
+                                    .with_label_values(&[H::NAME])
+                                    .inc();
+
+                                metrics
+                                    .total_committer_rows_committed
+                                    .with_label_values(&[H::NAME])
+                                    .inc_by(values.len() as u64);
+
+                                metrics
+                                    .total_committer_rows_affected
+                                    .with_label_values(&[H::NAME])
+                                    .inc_by(affected as u64);
+
+                                metrics
+                                    .committer_tx_rows
+                                    .with_label_values(&[H::NAME])
+                                    .observe(affected as f64);
+
+                                Ok(())
+                            }
+
+                            Err(e) => {
                                 warn!(
                                     pipeline = H::NAME,
-                                    "Committed failed to get connection for DB"
+                                    elapsed_ms = elapsed * 1000.0,
+                                    committed = values.len(),
+                                    "Error writing batch: {e}",
                                 );
-                                BE::transient(Break::Err(e.into()))
-                            })?;
 
-                            let affected = H::commit(values.as_slice(), &mut conn).await;
-                            let elapsed = guard.stop_and_record();
-
-                            match affected {
-                                Ok(affected) => {
-                                    debug!(
-                                        pipeline = H::NAME,
-                                        elapsed_ms = elapsed * 1000.0,
-                                        affected,
-                                        committed = values.len(),
-                                        "Wrote batch",
-                                    );
-
-                                    affected
-                                }
-
-                                Err(e) => {
-                                    warn!(
-                                        pipeline = H::NAME,
-                                        elapsed_ms = elapsed * 1000.0,
-                                        committed = values.len(),
-                                        "Error writing batch: {e}",
-                                    );
-
-                                    return Err(BE::transient(Break::Err(e)));
-                                }
+                                Err(BE::transient(Break::Err(e)))
                             }
-                        };
-
-                        metrics
-                            .total_committer_batches_succeeded
-                            .with_label_values(&[H::NAME])
-                            .inc();
-
-                        metrics
-                            .total_committer_rows_committed
-                            .with_label_values(&[H::NAME])
-                            .inc_by(values.len() as u64);
-
-                        metrics
-                            .total_committer_rows_affected
-                            .with_label_values(&[H::NAME])
-                            .inc_by(affected as u64);
-
-                        metrics
-                            .committer_tx_rows
-                            .with_label_values(&[H::NAME])
-                            .observe(affected as f64);
-
-                        Ok(())
+                        }
                     }
                 };
 
