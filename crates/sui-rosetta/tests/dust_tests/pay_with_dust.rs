@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use std::collections::HashMap;
 
-use futures::FutureExt;
+use anyhow::Result;
 use once_cell::sync::Lazy;
-use rosetta_client::start_rosetta_test_server;
+use rosetta_client::{start_rosetta_test_server, RosettaError};
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{
@@ -159,7 +159,12 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let response = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
 
     let tx = client
         .read_api()
@@ -317,7 +322,12 @@ async fn test_limit_many_small_coins() -> Result<()> {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let response = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
 
     let tx = client
         .read_api()
@@ -480,7 +490,10 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
                 budget: Some(budget),
             }),
         )
-        .await;
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
 
     let tx = client
         .read_api()
@@ -684,29 +697,28 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
     ))
     .unwrap();
 
-    let result = std::panic::AssertUnwindSafe(async {
-        rosetta_client.rosetta_flow(&ops, keystore, None).await;
-    })
-    .catch_unwind()
-    .await;
+    let resps = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
-    match result {
-        Ok(_) => panic!("Expected rosetta_flow to panic at failed deserialization"),
-        Err(e) => {
-            let panic_message = e.downcast_ref::<String>().unwrap();
-            assert!(panic_message.contains(&format!(
-                r#"Failed to deserialize json value: Object {{
-    "code": Number(2),
-    "message": String("Invalid input"),
-    "retriable": Bool(false),
-    "details": Object {{
-        "error": String("Invalid input: Address {sender} does not have enough Sui balance to transfer {recipient_change} with needed budget: {expected_budget}. Sui balance: {}."),
-    }},
-}}"#,
-                recipient_change + expected_budget - 1
-            )));
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&resps.preprocess.as_ref().unwrap().as_ref().unwrap())?
+    );
+    let Some(Err(err)) = resps.metadata else {
+        panic!("Expected metadata to exists and error");
+    };
+
+    let mut expected_details = HashMap::new();
+    expected_details.insert("error", format!("Invalid input: Address {sender} does not have enough Sui balance to transfer {recipient_change} with needed budget: {expected_budget}. Sui balance: {}.", recipient_change + expected_budget - 1));
+    assert_eq!(
+        err,
+        RosettaError {
+            code: 2,
+            message: "Invalid input".to_string(),
+            description: None,
+            retriable: false,
+            details: Some(serde_json::to_value(expected_details).unwrap())
         }
-    }
+    );
 
     Ok(())
 }
@@ -891,37 +903,39 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
     ))
     .unwrap();
 
-    let result = std::panic::AssertUnwindSafe(async {
-        rosetta_client
-            .rosetta_flow(
-                &ops,
-                keystore,
-                Some(PreprocessMetadata {
-                    budget: Some(budget as u64 + 1), // add 1 to fail
-                }),
-            )
-            .await;
-    })
-    .catch_unwind()
-    .await;
+    let resps = rosetta_client
+        .rosetta_flow(
+            &ops,
+            keystore,
+            Some(PreprocessMetadata {
+                budget: Some(budget as u64 + 1), // add 1 to fail
+            }),
+        )
+        .await;
 
-    match result {
-        Ok(_) => panic!("Expected rosetta_flow to panic at failed deserialization"),
-        Err(e) => {
-            let panic_message = e.downcast_ref::<String>().unwrap();
-            assert!(panic_message.contains(&format!(
-                r#"Failed to deserialize json value: Object {{
-    "code": Number(16),
-    "message": String("Sui rpc error"),
-    "retriable": Bool(false),
-    "details": Object {{
-        "error": String("Insufficient fund for address [{sender}], requested amount: {}"),
-    }},
-}}"#,
+    let details = Some(
+        serde_json::to_value(HashMap::from([(
+            "error",
+            format!(
+                "Insufficient fund for address [{sender}], requested amount: {}",
                 recipient_change + budget + 1
-            )));
-        }
-    }
+            ),
+        )]))
+        .unwrap(),
+    );
+    let Some(Err(e)) = resps.metadata else {
+        panic!("Expected metadata to exist and error")
+    };
+    assert_eq!(
+        e,
+        RosettaError {
+            code: 16,
+            message: "Sui rpc error".to_string(),
+            description: None,
+            retriable: false,
+            details,
+        },
+    );
 
     Ok(())
 }
@@ -1106,7 +1120,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
     ))
     .unwrap();
 
-    let rosetta_resp = rosetta_client
+    let _rosetta_resp = rosetta_client
         .rosetta_flow(
             &ops,
             keystore,
@@ -1116,10 +1130,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         )
         .await;
 
-    println!(
-        "rosetta_resp: {}",
-        serde_json::to_string_pretty(&rosetta_resp)?
-    );
-
+    // TODO: Actually budget required is max(computation_cost, computation_cost + storage_cost - storage_rebate)
     panic!("This should have failed as gas budget is smaller than what the tx requires");
 }

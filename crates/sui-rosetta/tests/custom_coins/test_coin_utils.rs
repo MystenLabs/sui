@@ -30,6 +30,7 @@ use sui_types::{Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID};
 use tracing::debug;
 
 const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
+pub const TEST_COIN_DECIMALS: u64 = 6;
 
 pub struct GasRet {
     pub object: ObjectRef,

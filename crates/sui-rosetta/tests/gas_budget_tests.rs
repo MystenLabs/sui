@@ -75,9 +75,7 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
             "account": { "address" : sender.to_string() },
             "amount" : {
                 "value": "-1000000000",
-                "currency": {
-                    "symbol": "SUI",
-                    "decimals": 9,
+                "currency": { "symbol": "SUI", "decimals": 9,
                 }
             },
         }]
@@ -98,7 +96,8 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
                 metadata,
             },
         )
-        .await;
+        .await
+        .unwrap();
     println!("Preprocess : {preprocess:?}");
     assert_eq!(preprocess.options.as_ref().unwrap().budget.unwrap(), budget);
 
@@ -111,7 +110,8 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
                 public_keys: vec![],
             },
         )
-        .await;
+        .await
+        .unwrap();
     println!("Metadata : {metadata:?}");
     assert_eq!(metadata.metadata.budget, budget);
 
@@ -125,7 +125,8 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
                 public_keys: vec![],
             },
         )
-        .await;
+        .await
+        .unwrap();
     println!("Payload : {payloads:?}");
 
     // Combine
@@ -149,7 +150,8 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
                 }],
             },
         )
-        .await;
+        .await
+        .unwrap();
     println!("Combine : {combine:?}");
 
     // Submit
@@ -161,7 +163,8 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
                 signed_transaction: combine.signed_transaction,
             },
         )
-        .await;
+        .await
+        .unwrap();
     println!("Submit : {submit:?}");
     submit
 }

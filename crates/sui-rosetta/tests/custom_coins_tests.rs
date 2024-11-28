@@ -11,7 +11,8 @@ use sui_types::object::Owner;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use sui_json_rpc_types::{
-    ObjectChange, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions
+    ObjectChange, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
@@ -22,7 +23,7 @@ use sui_rosetta::types::{Currencies, OperationType};
 use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
-use test_coin_utils::{init_package, mint};
+use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
 
 use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
 
@@ -112,7 +113,7 @@ async fn test_custom_coin_balance() {
     let sui_currency = SUI.clone();
     let test_coin_currency = Currency {
         symbol: "TEST_COIN".to_string(),
-        decimals: 6,
+        decimals: TEST_COIN_DECIMALS,
         metadata: CurrencyMetadata {
             coin_type: coin_type.clone(),
         },
@@ -135,7 +136,8 @@ async fn test_custom_coin_balance() {
     );
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
-        .await;
+        .await
+        .unwrap();
     println!(
         "response: {}",
         serde_json::to_string_pretty(&response).unwrap()
@@ -176,7 +178,8 @@ async fn test_default_balance() {
     .unwrap();
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
-        .await;
+        .await
+        .unwrap();
     println!(
         "response: {}",
         serde_json::to_string_pretty(&response).unwrap()
@@ -240,7 +243,7 @@ async fn test_custom_coin_transfer() {
                 "value": "30000000",
                 "currency": {
                     "symbol": "TEST_COIN",
-                    "decimals": 6,
+                    "decimals": TEST_COIN_DECIMALS,
                     "metadata": {
                         "coin_type": coin_type.clone(),
                     }
@@ -255,7 +258,7 @@ async fn test_custom_coin_transfer() {
                 "value": "-30000000",
                 "currency": {
                     "symbol": "TEST_COIN",
-                    "decimals": 6,
+                    "decimals": TEST_COIN_DECIMALS,
                     "metadata": {
                         "coin_type": coin_type.clone(),
                     }
@@ -265,7 +268,12 @@ async fn test_custom_coin_transfer() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let response = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
 
     let tx = client
         .read_api()

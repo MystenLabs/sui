@@ -8,7 +8,7 @@ use std::str::FromStr;
 use fastcrypto::encoding::{Encoding, Hex};
 use reqwest::Client;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::task::JoinHandle;
 
@@ -56,6 +56,41 @@ pub async fn start_rosetta_test_server(client: SuiClient) -> (RosettaClient, Vec
     )
 }
 
+#[derive(Deserialize, PartialEq, Debug)]
+pub struct RosettaError {
+    pub code: i32,
+    pub message: String,
+    pub description: Option<String>,
+    pub retriable: bool,
+    pub details: Option<serde_json::Value>,
+}
+
+#[derive(Default, Debug)]
+pub struct FlowResponses {
+    pub preprocess: Option<Result<ConstructionPreprocessResponse, RosettaError>>,
+    pub metadata: Option<Result<ConstructionMetadataResponse, RosettaError>>,
+    pub payloads: Option<Result<ConstructionPayloadsResponse, RosettaError>>,
+    pub combine: Option<Result<ConstructionCombineResponse, RosettaError>>,
+    pub submit: Option<Result<TransactionIdentifierResponse, RosettaError>>,
+}
+
+#[derive(Deserialize, Debug)]
+enum RosettaAPIResult<T> {
+    #[serde(untagged)]
+    Ok(T),
+    #[serde(untagged)]
+    Err(RosettaError),
+}
+
+impl<T> From<RosettaAPIResult<T>> for Result<T, RosettaError> {
+    fn from(val: RosettaAPIResult<T>) -> Self {
+        match val {
+            RosettaAPIResult::Ok(ok) => Ok(ok),
+            RosettaAPIResult::Err(e) => Err(e),
+        }
+    }
+}
+
 pub struct RosettaClient {
     client: Client,
     online_port: u16,
@@ -82,7 +117,7 @@ impl RosettaClient {
         &self,
         endpoint: RosettaEndpoint,
         request: &R,
-    ) -> T {
+    ) -> Result<T, RosettaError> {
         let port = if endpoint.online() {
             self.online_port
         } else {
@@ -96,8 +131,8 @@ impl RosettaClient {
             .await
             .unwrap();
         let json: Value = response.json().await.unwrap();
-        if let Ok(v) = serde_json::from_value(json.clone()) {
-            v
+        if let Ok(v) = serde_json::from_value::<RosettaAPIResult<T>>(json.clone()) {
+            v.into()
         } else {
             panic!("Failed to deserialize json value: {json:#?}")
         }
@@ -109,13 +144,14 @@ impl RosettaClient {
         operations: &Operations,
         keystore: &Keystore,
         metadata: Option<PreprocessMetadata>,
-    ) -> TransactionIdentifierResponse {
+    ) -> FlowResponses {
         let network_identifier = NetworkIdentifier {
             blockchain: "sui".to_string(),
             network: SuiEnv::LocalNet,
         };
+        let mut resps = FlowResponses::default();
         // Preprocess
-        let preprocess: ConstructionPreprocessResponse = self
+        let preprocess = self
             .call(
                 RosettaEndpoint::Preprocess,
                 &ConstructionPreprocessRequest {
@@ -125,31 +161,44 @@ impl RosettaClient {
                 },
             )
             .await;
+        resps.preprocess = Some(preprocess);
+        let Ok(preprocess) = &resps.preprocess.as_ref().unwrap() else {
+            return resps;
+        };
         println!("Preprocess : {preprocess:?}");
         // Metadata
-        let metadata: ConstructionMetadataResponse = self
+        let metadata = self
             .call(
                 RosettaEndpoint::Metadata,
                 &ConstructionMetadataRequest {
                     network_identifier: network_identifier.clone(),
-                    options: preprocess.options,
+                    options: preprocess.options.clone(),
                     public_keys: vec![],
                 },
             )
             .await;
+        resps.metadata = Some(metadata);
+        let Ok(metadata) = &resps.metadata.as_ref().unwrap() else {
+            return resps;
+        };
+
         println!("Metadata : {metadata:?}");
         // Payload
-        let payloads: ConstructionPayloadsResponse = self
+        let payloads = self
             .call(
                 RosettaEndpoint::Payloads,
                 &ConstructionPayloadsRequest {
                     network_identifier: network_identifier.clone(),
                     operations: operations.clone(),
-                    metadata: Some(metadata.metadata),
+                    metadata: Some(metadata.metadata.clone()),
                     public_keys: vec![],
                 },
             )
             .await;
+        resps.payloads = Some(payloads);
+        let Ok(payloads) = resps.payloads.as_ref().unwrap() else {
+            return resps;
+        };
         println!("Payload : {payloads:?}");
         // Combine
         let signing_payload = payloads.payloads.first().unwrap();
@@ -162,7 +211,7 @@ impl RosettaClient {
                 RosettaEndpoint::Combine,
                 &ConstructionCombineRequest {
                     network_identifier: network_identifier.clone(),
-                    unsigned_transaction: payloads.unsigned_transaction,
+                    unsigned_transaction: payloads.unsigned_transaction.clone(),
                     signatures: vec![Signature {
                         signing_payload: signing_payload.clone(),
                         public_key: public_key.into(),
@@ -172,6 +221,10 @@ impl RosettaClient {
                 },
             )
             .await;
+        resps.combine = Some(combine);
+        let Ok(combine) = resps.combine.as_ref().unwrap() else {
+            return resps;
+        };
         println!("Combine : {combine:?}");
         // Submit
         let submit = self
@@ -179,12 +232,12 @@ impl RosettaClient {
                 RosettaEndpoint::Submit,
                 &ConstructionSubmitRequest {
                     network_identifier,
-                    signed_transaction: combine.signed_transaction,
+                    signed_transaction: combine.signed_transaction.clone(),
                 },
             )
             .await;
-        println!("Submit : {submit:?}");
-        submit
+        resps.submit = Some(submit);
+        resps
     }
 
     pub async fn get_balance(
@@ -203,7 +256,7 @@ impl RosettaClient {
             block_identifier: Default::default(),
             currencies: Currencies(vec![]),
         };
-        self.call(RosettaEndpoint::Balance, &request).await
+        self.call(RosettaEndpoint::Balance, &request).await.unwrap()
     }
 }
 

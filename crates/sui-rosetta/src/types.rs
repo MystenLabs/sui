@@ -627,7 +627,7 @@ pub struct ConstructionPreprocessResponse {
     pub required_public_keys: Vec<AccountIdentifier>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -661,7 +661,7 @@ pub struct ConstructionMetadataResponse {
     pub suggested_fee: Vec<Amount>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConstructionMetadata {
     pub sender: SuiAddress,
     /// `Coin<SUI>` objects to be used as gas
