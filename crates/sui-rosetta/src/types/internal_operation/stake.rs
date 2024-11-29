@@ -161,6 +161,7 @@ impl TryConstructTransaction for Stake {
             pt = stake_pt(validator, amount, false, &extra_gas_coins)?;
             let tx_data = TransactionData::new_programmable(
                 sender,
+                // TODO: sort out whether we should pass or not pass gas_coins here.
                 gas_coins.clone(),
                 pt.clone(),
                 // We don't want dry run to fail due to budget, because

@@ -269,8 +269,6 @@ pub async fn metadata(
             objects,
             total_coin_value: total_sui_balance,
             gas_price,
-            // TODO: Check whether we indeed want to fill the budget in the case the budget passed
-            // was None, and we have calculated it here,
             budget,
             currency,
         },

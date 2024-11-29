@@ -1094,7 +1094,15 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
     );
     let tx_cost_summary = resp.effects.unwrap().gas_cost_summary().net_gas_usage();
     let total_amount = initial_balance as i128 - tx_cost_summary as i128;
-    let budget = 3_000_000; // This is actually less than what the tx requires
+
+    // Actually budget needed is somewhere between
+    // - computation_cost
+    // - computation_cost + storage_cost
+    // even if rebate is larger than storage_cost.
+    // When dry-running to calculate budget, we use computation_cost + storage_cost to be on the safe side,
+    // but when using an explicit budget for the transaction, this is skipped and less budget can
+    // lead to a succesfull tx.
+    let budget = 1_100_000; // This is exactly computation_cost
     let recipient_change = total_amount - budget;
     let sender_change = budget - total_amount;
 
@@ -1116,7 +1124,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
     ))
     .unwrap();
 
-    let _rosetta_resp = rosetta_client
+    let rosetta_resp = rosetta_client
         .rosetta_flow(
             &ops,
             keystore,
@@ -1126,6 +1134,21 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         )
         .await;
 
-    // TODO: Actually budget required is max(computation_cost, computation_cost + storage_cost - storage_rebate)
-    panic!("This should have failed as gas budget is smaller than what the tx requires");
+    let Some(Err(err)) = rosetta_resp.submit else {
+        panic!("Expected submit to error with dry-run: InsufficientGas");
+    };
+
+    assert_eq!(
+        err,
+        RosettaError {
+            code: 11,
+            message: "Transaction dry run error".to_string(),
+            description: None,
+            retriable: false,
+            details: Some(
+                serde_json::to_value(HashMap::from([("error", "InsufficientGas")])).unwrap()
+            )
+        }
+    );
+    Ok(())
 }
