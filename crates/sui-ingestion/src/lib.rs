@@ -13,20 +13,22 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::ingestion::broadcaster::broadcaster;
-use crate::ingestion::client::IngestionClient;
-use crate::ingestion::error::{Error, Result};
-use crate::ingestion::regulator::regulator;
-use crate::metrics::IndexerMetrics;
+use crate::broadcaster::broadcaster;
+use crate::client::IngestionClient;
+use crate::error::{Error, Result};
+use crate::metrics::IngestionMetrics;
+use crate::regulator::regulator;
 
 mod broadcaster;
 pub mod client;
 pub mod error;
 mod local_client;
+pub mod metrics;
 mod regulator;
 mod remote_client;
 #[cfg(test)]
 mod test_utils;
+pub mod utils;
 
 pub struct IngestionService {
     config: IngestionConfig,
@@ -82,7 +84,7 @@ impl IngestionConfig {
 impl IngestionService {
     pub fn new(
         config: IngestionConfig,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
         // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
@@ -186,9 +188,9 @@ mod tests {
     use reqwest::StatusCode;
     use wiremock::{MockServer, Request};
 
-    use crate::ingestion::remote_client::tests::{respond_with, status};
-    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
+    use crate::remote_client::tests::{respond_with, status};
+    use crate::test_utils::test_checkpoint_data;
 
     use super::*;
 

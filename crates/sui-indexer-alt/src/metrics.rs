@@ -3,27 +3,20 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
+use crate::db::Db;
 use anyhow::Result;
 use axum::{extract::Extension, routing::get, Router};
 use mysten_metrics::RegistryService;
 use prometheus::{
     core::{Collector, Desc},
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
 };
+use sui_ingestion::metrics::IngestionMetrics;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
-
-use crate::{db::Db, ingestion::error::Error};
-
-/// Histogram buckets for the distribution of checkpoint fetching latencies.
-const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
-];
+use tracing::info;
 
 /// Histogram buckets for the distribution of checkpoint lag (difference between the system time and
 /// the timestamp in the checkpoint).
@@ -58,22 +51,6 @@ pub struct MetricsService {
 
 #[derive(Clone)]
 pub struct IndexerMetrics {
-    // Statistics related to fetching data from the remote store.
-    pub total_ingested_checkpoints: IntCounter,
-    pub total_ingested_transactions: IntCounter,
-    pub total_ingested_events: IntCounter,
-    pub total_ingested_inputs: IntCounter,
-    pub total_ingested_outputs: IntCounter,
-    pub total_ingested_bytes: IntCounter,
-    pub total_ingested_transient_retries: IntCounterVec,
-    pub total_ingested_not_found_retries: IntCounter,
-
-    pub latest_ingested_checkpoint: IntGauge,
-    pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
-    pub ingested_checkpoint_timestamp_lag: Histogram,
-
-    pub ingested_checkpoint_latency: Histogram,
-
     // Statistics related to individual ingestion pipelines' handlers.
     pub total_handler_checkpoints_received: IntCounterVec,
     pub total_handler_checkpoints_processed: IntCounterVec,
@@ -136,10 +113,11 @@ impl MetricsService {
         addr: SocketAddr,
         db: Db,
         cancel: CancellationToken,
-    ) -> Result<(Arc<IndexerMetrics>, MetricsService)> {
+    ) -> Result<(Arc<IndexerMetrics>, Arc<IngestionMetrics>, MetricsService)> {
         let registry = Registry::new_custom(Some("indexer_alt".to_string()), None)?;
 
         let metrics = IndexerMetrics::new(&registry);
+        let ingestion_metrics = IngestionMetrics::new(&registry);
         mysten_metrics::init_metrics(&registry);
         registry.register(Box::new(DbConnectionStatsCollector::new(db)))?;
 
@@ -149,7 +127,7 @@ impl MetricsService {
             cancel,
         };
 
-        Ok((Arc::new(metrics), service))
+        Ok((Arc::new(metrics), Arc::new(ingestion_metrics), service))
     }
 
     /// Start the service. The service will run until the cancellation token is triggered.
@@ -175,85 +153,6 @@ impl MetricsService {
 impl IndexerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            total_ingested_checkpoints: register_int_counter_with_registry!(
-                "indexer_total_ingested_checkpoints",
-                "Total number of checkpoints fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_transactions: register_int_counter_with_registry!(
-                "indexer_total_ingested_transactions",
-                "Total number of transactions fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_events: register_int_counter_with_registry!(
-                "indexer_total_ingested_events",
-                "Total number of events fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_inputs: register_int_counter_with_registry!(
-                "indexer_total_ingested_inputs",
-                "Total number of input objects fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_outputs: register_int_counter_with_registry!(
-                "indexer_total_ingested_outputs",
-                "Total number of output objects fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_bytes: register_int_counter_with_registry!(
-                "indexer_total_ingested_bytes",
-                "Total number of bytes fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_transient_retries: register_int_counter_vec_with_registry!(
-                "indexer_total_ingested_retries",
-                "Total number of retries due to transient errors while fetching data from the \
-                 remote store",
-                &["reason"],
-                registry,
-            )
-            .unwrap(),
-            total_ingested_not_found_retries: register_int_counter_with_registry!(
-                "indexer_total_ingested_not_found_retries",
-                "Total number of retries due to the not found errors while fetching data from the \
-                 remote store",
-                registry,
-            )
-            .unwrap(),
-            latest_ingested_checkpoint: register_int_gauge_with_registry!(
-                "indexer_latest_ingested_checkpoint",
-                "Latest checkpoint sequence number fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            latest_ingested_checkpoint_timestamp_lag_ms: register_int_gauge_with_registry!(
-                "latest_ingested_checkpoint_timestamp_lag_ms",
-                "Difference between the system timestamp when the latest checkpoint was fetched and the \
-                 timestamp in the checkpoint, in milliseconds",
-                registry,
-            )
-            .unwrap(),
-            ingested_checkpoint_timestamp_lag: register_histogram_with_registry!(
-                "indexer_ingested_checkpoint_timestamp_lag",
-                "Difference between the system timestamp when a checkpoint was fetched and the \
-                 timestamp in each checkpoint, in seconds",
-                LAG_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            ingested_checkpoint_latency: register_histogram_with_registry!(
-                "indexer_ingested_checkpoint_latency",
-                "Time taken to fetch a checkpoint from the remote store, including retries",
-                INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
             total_handler_checkpoints_received: register_int_counter_vec_with_registry!(
                 "indexer_total_handler_checkpoints_received",
                 "Total number of checkpoints received by this handler",
@@ -535,23 +434,6 @@ impl IndexerMetrics {
             .unwrap(),
         }
     }
-
-    /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
-    /// reason and error.
-    pub(crate) fn inc_retry(
-        &self,
-        checkpoint: u64,
-        reason: &str,
-        error: Error,
-    ) -> backoff::Error<Error> {
-        warn!(checkpoint, reason, "Retrying due to error: {error}");
-
-        self.total_ingested_transient_retries
-            .with_label_values(&[reason])
-            .inc();
-
-        backoff::Error::transient(error)
-    }
 }
 
 impl DbConnectionStatsCollector {
@@ -729,16 +611,4 @@ fn summary(desc: &Desc, sum: f64, count: u64) -> MetricFamily {
     mf.set_help(desc.help.clone());
     mf.set_field_type(MetricType::SUMMARY);
     mf
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use prometheus::Registry;
-
-    use super::IndexerMetrics;
-
-    /// Construct metrics for test purposes.
-    pub fn test_metrics() -> IndexerMetrics {
-        IndexerMetrics::new(&Registry::new())
-    }
 }

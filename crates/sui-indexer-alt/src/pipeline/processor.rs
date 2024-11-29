@@ -4,14 +4,14 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use crate::{metrics::IndexerMetrics, pipeline::Break};
 use mysten_metrics::spawn_monitored_task;
+use sui_ingestion::utils::TrySpawnStreamExt;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
-
-use crate::{metrics::IndexerMetrics, pipeline::Break, task::TrySpawnStreamExt};
 
 use super::Indexed;
 

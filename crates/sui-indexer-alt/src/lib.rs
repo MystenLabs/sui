@@ -17,13 +17,13 @@ use handlers::{
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
 };
-use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{
     concurrent::{self, PrunerConfig},
     sequential, PipelineConfig, Processor,
 };
+use sui_ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -33,7 +33,6 @@ pub mod args;
 pub mod bootstrap;
 pub mod db;
 pub mod handlers;
-pub mod ingestion;
 pub mod metrics;
 pub mod models;
 pub mod pipeline;
@@ -145,10 +144,10 @@ impl Indexer {
             .await
             .context("Failed to run pending migrations")?;
 
-        let (metrics, metrics_service) =
+        let (metrics, ingestion_metrics, metrics_service) =
             MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
         let ingestion_service =
-            IngestionService::new(ingestion_config, metrics.clone(), cancel.clone())?;
+            IngestionService::new(ingestion_config, ingestion_metrics, cancel.clone())?;
 
         let enabled_pipelines: BTreeSet<_> = pipeline.into_iter().collect();
 

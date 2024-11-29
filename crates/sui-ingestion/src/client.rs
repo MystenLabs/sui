@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::local_client::LocalIngestionClient;
-use crate::ingestion::remote_client::RemoteIngestionClient;
-use crate::ingestion::Error as IngestionError;
-use crate::ingestion::Result as IngestionResult;
-use crate::metrics::IndexerMetrics;
+use crate::local_client::LocalIngestionClient;
+use crate::metrics::IngestionMetrics;
+use crate::remote_client::RemoteIngestionClient;
+use crate::Error as IngestionError;
+use crate::Result as IngestionResult;
 use backoff::backoff::Constant;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
@@ -48,12 +48,12 @@ pub type FetchResult = Result<Bytes, FetchError>;
 pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
-    metrics: Arc<IndexerMetrics>,
+    metrics: Arc<IngestionMetrics>,
     latest_ingested_checkpoint: Arc<AtomicU64>,
 }
 
 impl IngestionClient {
-    pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+    pub(crate) fn new_remote(url: Url, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
         let latest_ingested_checkpoint = Arc::new(AtomicU64::new(0));
         Ok(IngestionClient {
@@ -63,7 +63,7 @@ impl IngestionClient {
         })
     }
 
-    pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
+    pub(crate) fn new_local(path: PathBuf, metrics: Arc<IngestionMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
         let latest_ingested_checkpoint = Arc::new(AtomicU64::new(0));
         IngestionClient {
