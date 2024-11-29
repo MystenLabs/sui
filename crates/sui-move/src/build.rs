@@ -22,6 +22,11 @@ pub struct Build {
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
+    #[clap(long, global = true, requires = "dump_bytecode_as_base64")]
+    /// Ignore the chain ID when dumping bytecode as base64. This is mostly used to automate `sui
+    /// move build` such that it does not require a `client.yaml` file. Do not use in normal
+    /// production workflows as it will break automated address management feature!
+    pub ignore_chain: bool,
     /// If true, generate struct layout schemas for
     /// all struct types passed into `entry` functions declared by modules in this package
     /// These layout schemas can be consumed by clients (e.g.,
