@@ -69,6 +69,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Start network without authorities
     let start = SuiCommand::Start {
+        data_ingestion_dir: None,
         config_dir: Some(config),
         force_regenesis: false,
         with_faucet: None,
