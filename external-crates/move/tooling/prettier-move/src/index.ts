@@ -39,7 +39,7 @@ export const languages: SupportLanguage[] = [
 ];
 
 export const parsers: { [key: string]: PrettierParser } = {
-	'move-parse': {
+	move: {
 		parse: (text: string): Promise<Node> => {
 			return (async (): Promise<Node> => {
 				await Parser.init();
