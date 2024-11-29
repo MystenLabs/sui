@@ -8,12 +8,9 @@ use crate::models::watermarks::CommitterWatermark;
 pub use processor::Processor;
 
 pub mod concurrent;
+mod logging;
 mod processor;
 pub(crate) mod sequential;
-
-/// Tracing message for the watermark update will be logged at info level at least this many
-/// checkpoints.
-const LOUD_WATERMARK_UPDATE_INTERVAL: i64 = 5 * 10;
 
 /// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
 /// capacity here because tasks already buffer rows to insert internally.
