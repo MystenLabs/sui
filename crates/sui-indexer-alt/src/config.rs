@@ -15,6 +15,11 @@ use crate::{
     },
 };
 
+/// Trait for merging configuration structs together.
+pub trait Merge {
+    fn merge(self, other: Self) -> Self;
+}
+
 #[DefaultConfig]
 #[derive(Clone, Default)]
 pub struct IndexerConfig {
@@ -164,17 +169,6 @@ pub struct PipelineLayer {
     pub extra: toml::Table,
 }
 
-macro_rules! merge_recursive {
-    ($self:expr, $other:expr) => {
-        match ($self, $other) {
-            (Some(a), Some(b)) => Some(a.merge(b)),
-            (Some(a), None) => Some(a),
-            (None, Some(b)) => Some(b),
-            (None, None) => None,
-        }
-    };
-}
-
 impl IndexerConfig {
     /// Generate an example configuration, suitable for demonstrating the fields available to
     /// configure.
@@ -190,20 +184,6 @@ impl IndexerConfig {
         example
     }
 
-    pub fn merge(self, other: IndexerConfig) -> IndexerConfig {
-        check_extra("top-level", self.extra);
-        check_extra("top-level", other.extra);
-
-        IndexerConfig {
-            ingestion: self.ingestion.merge(other.ingestion),
-            consistency: self.consistency.merge(other.consistency),
-            committer: self.committer.merge(other.committer),
-            pruner: self.pruner.merge(other.pruner),
-            pipeline: self.pipeline.merge(other.pipeline),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(mut self) -> IndexerConfig {
         check_extra("top-level", mem::take(&mut self.extra));
         self
@@ -211,17 +191,6 @@ impl IndexerConfig {
 }
 
 impl IngestionLayer {
-    pub fn merge(self, other: IngestionLayer) -> IngestionLayer {
-        check_extra("ingestion", self.extra);
-        check_extra("ingestion", other.extra);
-        IngestionLayer {
-            checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
-            ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
-            retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(self, base: IngestionConfig) -> IngestionConfig {
         check_extra("ingestion", self.extra);
         IngestionConfig {
@@ -235,19 +204,6 @@ impl IngestionLayer {
 }
 
 impl ConsistencyLayer {
-    pub fn merge(self, other: ConsistencyLayer) -> ConsistencyLayer {
-        check_extra("consistency", self.extra);
-        check_extra("consistency", other.extra);
-        ConsistencyLayer {
-            consistent_pruning_interval_ms: other
-                .consistent_pruning_interval_ms
-                .or(self.consistent_pruning_interval_ms),
-            pruner_delay_ms: other.pruner_delay_ms.or(self.pruner_delay_ms),
-            consistent_range: other.consistent_range.or(self.consistent_range),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(self, base: ConsistencyConfig) -> ConsistencyConfig {
         check_extra("consistency", self.extra);
         ConsistencyConfig {
@@ -261,16 +217,6 @@ impl ConsistencyLayer {
 }
 
 impl SequentialLayer {
-    pub fn merge(self, other: SequentialLayer) -> SequentialLayer {
-        check_extra("sequential pipeline", self.extra);
-        check_extra("sequential pipeline", other.extra);
-        SequentialLayer {
-            committer: merge_recursive!(self.committer, other.committer),
-            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(self, base: SequentialConfig) -> SequentialConfig {
         check_extra("sequential pipeline", self.extra);
         SequentialConfig {
@@ -285,16 +231,6 @@ impl SequentialLayer {
 }
 
 impl ConcurrentLayer {
-    pub fn merge(self, other: ConcurrentLayer) -> ConcurrentLayer {
-        check_extra("concurrent pipeline", self.extra);
-        check_extra("concurrent pipeline", other.extra);
-        ConcurrentLayer {
-            committer: merge_recursive!(self.committer, other.committer),
-            pruner: merge_recursive!(self.pruner, other.pruner),
-            extra: Default::default(),
-        }
-    }
-
     /// Unlike other parameters, `pruner` will appear in the finished configuration only if they
     /// appear in the layer *and* in the base.
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
@@ -314,17 +250,6 @@ impl ConcurrentLayer {
 }
 
 impl CommitterLayer {
-    pub fn merge(self, other: CommitterLayer) -> CommitterLayer {
-        check_extra("committer", self.extra);
-        check_extra("committer", other.extra);
-        CommitterLayer {
-            write_concurrency: other.write_concurrency.or(self.write_concurrency),
-            collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
-            watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
         check_extra("committer", self.extra);
         CommitterConfig {
@@ -338,24 +263,6 @@ impl CommitterLayer {
 }
 
 impl PrunerLayer {
-    /// Last write takes precedence for all fields except the `retention`, which takes the max of
-    /// all available values.
-    pub fn merge(self, other: PrunerLayer) -> PrunerLayer {
-        check_extra("pruner", self.extra);
-        check_extra("pruner", other.extra);
-        PrunerLayer {
-            interval_ms: other.interval_ms.or(self.interval_ms),
-            delay_ms: other.delay_ms.or(self.delay_ms),
-            retention: match (other.retention, self.retention) {
-                (Some(a), Some(b)) => Some(a.max(b)),
-                (Some(a), _) | (_, Some(a)) => Some(a),
-                (None, None) => None,
-            },
-            max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(self, base: PrunerConfig) -> PrunerConfig {
         PrunerConfig {
             interval_ms: self.interval_ms.unwrap_or(base.interval_ms),
@@ -397,48 +304,153 @@ impl PipelineLayer {
         }
     }
 
-    pub fn merge(self, other: PipelineLayer) -> PipelineLayer {
-        check_extra("pipeline", self.extra);
-        check_extra("pipeline", other.extra);
-        PipelineLayer {
-            sum_coin_balances: merge_recursive!(self.sum_coin_balances, other.sum_coin_balances),
-            wal_coin_balances: merge_recursive!(self.wal_coin_balances, other.wal_coin_balances),
-            sum_obj_types: merge_recursive!(self.sum_obj_types, other.sum_obj_types),
-            wal_obj_types: merge_recursive!(self.wal_obj_types, other.wal_obj_types),
-            sum_displays: merge_recursive!(self.sum_displays, other.sum_displays),
-            sum_packages: merge_recursive!(self.sum_packages, other.sum_packages),
-            ev_emit_mod: merge_recursive!(self.ev_emit_mod, other.ev_emit_mod),
-            ev_struct_inst: merge_recursive!(self.ev_struct_inst, other.ev_struct_inst),
-            kv_checkpoints: merge_recursive!(self.kv_checkpoints, other.kv_checkpoints),
-            kv_epoch_ends: merge_recursive!(self.kv_epoch_ends, other.kv_epoch_ends),
-            kv_epoch_starts: merge_recursive!(self.kv_epoch_starts, other.kv_epoch_starts),
-            kv_feature_flags: merge_recursive!(self.kv_feature_flags, other.kv_feature_flags),
-            kv_objects: merge_recursive!(self.kv_objects, other.kv_objects),
-            kv_protocol_configs: merge_recursive!(
-                self.kv_protocol_configs,
-                other.kv_protocol_configs
-            ),
-            kv_transactions: merge_recursive!(self.kv_transactions, other.kv_transactions),
-            obj_versions: merge_recursive!(self.obj_versions, other.obj_versions),
-            tx_affected_addresses: merge_recursive!(
-                self.tx_affected_addresses,
-                other.tx_affected_addresses
-            ),
-            tx_affected_objects: merge_recursive!(
-                self.tx_affected_objects,
-                other.tx_affected_objects
-            ),
-            tx_balance_changes: merge_recursive!(self.tx_balance_changes, other.tx_balance_changes),
-            tx_calls: merge_recursive!(self.tx_calls, other.tx_calls),
-            tx_digests: merge_recursive!(self.tx_digests, other.tx_digests),
-            tx_kinds: merge_recursive!(self.tx_kinds, other.tx_kinds),
-            extra: Default::default(),
-        }
-    }
-
     pub fn finish(mut self) -> PipelineLayer {
         check_extra("pipeline", mem::take(&mut self.extra));
         self
+    }
+}
+
+impl Merge for IndexerConfig {
+    fn merge(self, other: IndexerConfig) -> IndexerConfig {
+        check_extra("top-level", self.extra);
+        check_extra("top-level", other.extra);
+        IndexerConfig {
+            ingestion: self.ingestion.merge(other.ingestion),
+            consistency: self.consistency.merge(other.consistency),
+            committer: self.committer.merge(other.committer),
+            pruner: self.pruner.merge(other.pruner),
+            pipeline: self.pipeline.merge(other.pipeline),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for IngestionLayer {
+    fn merge(self, other: IngestionLayer) -> IngestionLayer {
+        check_extra("ingestion", self.extra);
+        check_extra("ingestion", other.extra);
+        IngestionLayer {
+            checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
+            ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
+            retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for ConsistencyLayer {
+    fn merge(self, other: ConsistencyLayer) -> ConsistencyLayer {
+        check_extra("consistency", self.extra);
+        check_extra("consistency", other.extra);
+        ConsistencyLayer {
+            consistent_pruning_interval_ms: other
+                .consistent_pruning_interval_ms
+                .or(self.consistent_pruning_interval_ms),
+            pruner_delay_ms: other.pruner_delay_ms.or(self.pruner_delay_ms),
+            consistent_range: other.consistent_range.or(self.consistent_range),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for SequentialLayer {
+    fn merge(self, other: SequentialLayer) -> SequentialLayer {
+        check_extra("sequential pipeline", self.extra);
+        check_extra("sequential pipeline", other.extra);
+        SequentialLayer {
+            committer: self.committer.merge(other.committer),
+            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for ConcurrentLayer {
+    fn merge(self, other: ConcurrentLayer) -> ConcurrentLayer {
+        check_extra("concurrent pipeline", self.extra);
+        check_extra("concurrent pipeline", other.extra);
+        ConcurrentLayer {
+            committer: self.committer.merge(other.committer),
+            pruner: self.pruner.merge(other.pruner),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for CommitterLayer {
+    fn merge(self, other: CommitterLayer) -> CommitterLayer {
+        check_extra("committer", self.extra);
+        check_extra("committer", other.extra);
+        CommitterLayer {
+            write_concurrency: other.write_concurrency.or(self.write_concurrency),
+            collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
+            watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for PrunerLayer {
+    /// Last write takes precedence for all fields except the `retention`, which takes the max of
+    /// all available values.
+    fn merge(self, other: PrunerLayer) -> PrunerLayer {
+        check_extra("pruner", self.extra);
+        check_extra("pruner", other.extra);
+        PrunerLayer {
+            interval_ms: other.interval_ms.or(self.interval_ms),
+            delay_ms: other.delay_ms.or(self.delay_ms),
+            retention: match (other.retention, self.retention) {
+                (Some(a), Some(b)) => Some(a.max(b)),
+                (Some(a), _) | (_, Some(a)) => Some(a),
+                (None, None) => None,
+            },
+            max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Merge for PipelineLayer {
+    fn merge(self, other: PipelineLayer) -> PipelineLayer {
+        check_extra("pipeline", self.extra);
+        check_extra("pipeline", other.extra);
+        PipelineLayer {
+            sum_coin_balances: self.sum_coin_balances.merge(other.sum_coin_balances),
+            wal_coin_balances: self.wal_coin_balances.merge(other.wal_coin_balances),
+            sum_obj_types: self.sum_obj_types.merge(other.sum_obj_types),
+            wal_obj_types: self.wal_obj_types.merge(other.wal_obj_types),
+            sum_displays: self.sum_displays.merge(other.sum_displays),
+            sum_packages: self.sum_packages.merge(other.sum_packages),
+            ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
+            ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
+            kv_checkpoints: self.kv_checkpoints.merge(other.kv_checkpoints),
+            kv_epoch_ends: self.kv_epoch_ends.merge(other.kv_epoch_ends),
+            kv_epoch_starts: self.kv_epoch_starts.merge(other.kv_epoch_starts),
+            kv_feature_flags: self.kv_feature_flags.merge(other.kv_feature_flags),
+            kv_objects: self.kv_objects.merge(other.kv_objects),
+            kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
+            kv_transactions: self.kv_transactions.merge(other.kv_transactions),
+            obj_versions: self.obj_versions.merge(other.obj_versions),
+            tx_affected_addresses: self
+                .tx_affected_addresses
+                .merge(other.tx_affected_addresses),
+            tx_affected_objects: self.tx_affected_objects.merge(other.tx_affected_objects),
+            tx_balance_changes: self.tx_balance_changes.merge(other.tx_balance_changes),
+            tx_calls: self.tx_calls.merge(other.tx_calls),
+            tx_digests: self.tx_digests.merge(other.tx_digests),
+            tx_kinds: self.tx_kinds.merge(other.tx_kinds),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl<T: Merge> Merge for Option<T> {
+    fn merge(self, other: Option<T>) -> Option<T> {
+        match (self, other) {
+            (Some(a), Some(b)) => Some(a.merge(b)),
+            (Some(a), _) | (_, Some(a)) => Some(a),
+            (None, None) => None,
+        }
     }
 }
 

@@ -10,6 +10,7 @@ use clap::Parser;
 use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
 use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::db::reset_database;
 use sui_indexer_alt::start_indexer;
 use tokio::fs;
