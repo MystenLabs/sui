@@ -38,10 +38,10 @@
 					"default": 100,
 					"description": "Set `printWidth` in prettier"
 				},
-				"prettierMove.tabSize": {
+				"prettierMove.tabWidth": {
 					"type": "number",
 					"default": 4,
-					"description": "Set `tabSize` in prettier"
+					"description": "Set `tabWidth` in prettier"
 				},
 				"prettierMove.useModuleLabel": {
 					"type": "boolean",
