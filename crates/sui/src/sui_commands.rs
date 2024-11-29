@@ -203,16 +203,15 @@ pub enum SuiCommand {
         #[clap(long)]
         epoch_duration_ms: Option<u64>,
 
-        /// Make the fullnode dump executed checkpoints as files to a local directory. This is
+        /// Make the fullnode dump executed checkpoints as files to this directory. This is
         /// incompatible with --no-full-node.
+        ///
+        /// If --with-indexer is set, this defaults to a temporary directory.
         #[clap(
             long,
-            default_missing_value_os = tempdir().unwrap().path().as_os_str().to_owned(),
-            num_args = 0..=1,
-            require_equals = true,
             value_name = "DATA_INGESTION_DIR",
         )]
-        with_data_ingestion: Option<PathBuf>,
+        data_ingestion_dir: Option<PathBuf>,
 
         /// Start the network without a fullnode
         #[clap(long = "no-full-node")]
@@ -379,7 +378,7 @@ impl SuiCommand {
 
                 indexer_feature_args,
                 fullnode_rpc_port,
-                with_data_ingestion,
+                data_ingestion_dir,
                 no_full_node,
                 epoch_duration_ms,
             } => {
@@ -390,7 +389,7 @@ impl SuiCommand {
                     force_regenesis,
                     epoch_duration_ms,
                     fullnode_rpc_port,
-                    with_data_ingestion,
+                    data_ingestion_dir,
                     no_full_node,
                 )
                 .await?;
@@ -610,7 +609,7 @@ async fn start(
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
-    with_data_ingestion: Option<PathBuf>,
+    mut data_ingestion_dir: Option<PathBuf>,
     no_full_node: bool,
 ) -> Result<(), anyhow::Error> {
     if force_regenesis {
@@ -640,13 +639,6 @@ async fn start(
         ensure!(
             !no_full_node,
             "Cannot start the indexer without a fullnode."
-        );
-        // the indexer requires to set the fullnode's data ingestion directory
-        // note that this overrides the default configuration that is set when running the genesis
-        // command, which sets data_ingestion_dir to None.
-        ensure!(
-            with_data_ingestion.is_some(),
-            "Cannot start the indexer without --with-data-ingestion."
         );
     }
 
@@ -707,7 +699,14 @@ async fn start(
             .with_network_config(network_config);
     }
 
-    if let Some(ref dir) = with_data_ingestion {
+    // the indexer requires to set the fullnode's data ingestion directory
+    // note that this overrides the default configuration that is set when running the genesis
+    // command, which sets data_ingestion_dir to None.
+    if with_indexer.is_some() && data_ingestion_dir.is_none() {
+        data_ingestion_dir = Some(tempdir()?.into_path())
+    }
+
+    if let Some(ref dir) = data_ingestion_dir {
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
@@ -749,8 +748,8 @@ async fn start(
             pg_address.clone(),
             None,
             None,
-            // We checked above that --with-data-ingestion is set if --with-indexer is
-            with_data_ingestion,
+            // We ensured above that this is set to something if --with-indexer is set
+            data_ingestion_dir,
             None,
             None, /* start_checkpoint */
             None, /* end_checkpoint */
