@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::json;
@@ -703,8 +701,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         panic!("Expected metadata to exists and error");
     };
 
-    let mut expected_details = HashMap::new();
-    expected_details.insert("error", format!("Invalid input: Address {sender} does not have enough Sui balance to transfer {recipient_change} with needed budget: {expected_budget}. Sui balance: {}.", recipient_change + expected_budget - 1));
+    let details = Some(json!({
+    "error": format!("Invalid input: Address {sender} does not have enough Sui balance to transfer {recipient_change} with needed budget: {expected_budget}. Sui balance: {}.", recipient_change + expected_budget - 1)
+    }));
     assert_eq!(
         err,
         RosettaError {
@@ -712,7 +711,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
             message: "Invalid input".to_string(),
             description: None,
             retriable: false,
-            details: Some(serde_json::to_value(expected_details).unwrap())
+            details
         }
     );
 
@@ -909,16 +908,13 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         )
         .await;
 
-    let details = Some(
-        serde_json::to_value(HashMap::from([(
-            "error",
-            format!(
-                "Insufficient fund for address [{sender}], requested amount: {}",
-                recipient_change + budget + 1
-            ),
-        )]))
-        .unwrap(),
-    );
+    let details = Some(json!({
+        "error":
+        format!(
+            "Insufficient fund for address [{sender}], requested amount: {}",
+            recipient_change + budget + 1
+        ),
+    }));
     let Some(Err(e)) = resps.metadata else {
         panic!("Expected metadata to exist and error")
     };
@@ -1145,9 +1141,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
             message: "Transaction dry run error".to_string(),
             description: None,
             retriable: false,
-            details: Some(
-                serde_json::to_value(HashMap::from([("error", "InsufficientGas")])).unwrap()
-            )
+            details: Some(json!({"error": "InsufficientGas"}))
         }
     );
     Ok(())
