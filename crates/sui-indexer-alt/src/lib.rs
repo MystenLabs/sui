@@ -404,7 +404,7 @@ pub async fn start_indexer(
         committer,
         pruner,
         pipeline,
-        ..
+        extra: _,
     } = indexer_config.finish();
 
     let PipelineLayer {
@@ -430,7 +430,7 @@ pub async fn start_indexer(
         tx_calls,
         tx_digests,
         tx_kinds,
-        ..
+        extra: _,
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());

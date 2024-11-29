@@ -581,7 +581,7 @@ mod tests {
                 consistent_pruning_interval_ms: Some(1000),
                 pruner_delay_ms: Some(2000),
                 consistent_range: Some(4000),
-                ..
+                extra: _,
             }
         );
 
@@ -591,7 +591,7 @@ mod tests {
                 consistent_pruning_interval_ms: Some(1000),
                 pruner_delay_ms: Some(2000),
                 consistent_range: Some(3000),
-                ..
+                extra: _,
             }
         );
     }
@@ -650,23 +650,23 @@ mod tests {
                     write_concurrency: Some(10),
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(1000),
-                    ..
+                    extra: _,
                 }),
                 sum_obj_types: Some(CommitterLayer {
                     write_concurrency: Some(5),
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
-                    ..
+                    extra: _,
                 }),
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
-                        ..
+                        extra: _,
                     }),
                     checkpoint_lag: Some(200),
-                    ..
+                    extra: _,
                 }),
                 ..
             },
@@ -679,23 +679,23 @@ mod tests {
                     write_concurrency: Some(10),
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(1000),
-                    ..
+                    extra: _,
                 }),
                 sum_obj_types: Some(CommitterLayer {
                     write_concurrency: Some(5),
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
-                    ..
+                    extra: _,
                 }),
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(10),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
-                        ..
+                        extra: _,
                     }),
                     checkpoint_lag: Some(100),
-                    ..
+                    extra: _,
                 }),
                 ..
             },
@@ -730,7 +730,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(600),
-                ..
+                extra: _,
             },
         );
 
@@ -741,7 +741,7 @@ mod tests {
                 delay_ms: Some(100),
                 retention: Some(500),
                 max_chunk_size: Some(300),
-                ..
+                extra: _,
             },
         );
     }
