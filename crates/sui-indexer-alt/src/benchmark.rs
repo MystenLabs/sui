@@ -15,6 +15,11 @@ pub struct BenchmarkArgs {
     /// Path to the local ingestion directory to read checkpoints data from.
     #[arg(long)]
     ingestion_path: PathBuf,
+
+    /// Only run the following pipelines. If not provided, all pipelines found in the
+    /// configuration file will be run.
+    #[arg(long, action = clap::ArgAction::Append)]
+    pipeline: Vec<String>,
 }
 
 pub async fn run_benchmark(
@@ -22,7 +27,10 @@ pub async fn run_benchmark(
     benchmark_args: BenchmarkArgs,
     indexer_config: IndexerConfig,
 ) -> anyhow::Result<()> {
-    let BenchmarkArgs { ingestion_path } = benchmark_args;
+    let BenchmarkArgs {
+        ingestion_path,
+        pipeline,
+    } = benchmark_args;
 
     let ingestion_data = read_ingestion_data(&ingestion_path).await?;
     let first_checkpoint = *ingestion_data.keys().next().unwrap();
@@ -34,6 +42,7 @@ pub async fn run_benchmark(
     let indexer_args = IndexerArgs {
         first_checkpoint: Some(first_checkpoint),
         last_checkpoint: Some(last_checkpoint),
+        pipeline,
         ..Default::default()
     };
 
