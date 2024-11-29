@@ -39,7 +39,7 @@ export const languages: SupportLanguage[] = [
 ];
 
 export const parsers: { [key: string]: PrettierParser } = {
-	'move-parse': {
+	move: {
 		parse: (text: string): Promise<Node> => {
 			return (async (): Promise<Node> => {
 				await Parser.init();
@@ -52,14 +52,14 @@ export const parsers: { [key: string]: PrettierParser } = {
 			})();
 		},
 
-		astFormat: 'move-format',
+		astFormat: 'move',
 		locStart: () => -1,
 		locEnd: () => -1,
 	},
 };
 
 export const printers: { [key: string]: Printer } = {
-	'move-format': { print },
+	'move': { print },
 };
 
 export const options: Record<string, SupportOption> = {
