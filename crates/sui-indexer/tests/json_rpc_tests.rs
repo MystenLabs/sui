@@ -241,3 +241,61 @@ async fn test_events() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_event_type_filter() {
+    let cluster = TestClusterBuilder::new()
+        .with_indexer_backed_rpc()
+        .build()
+        .await;
+
+    let client = cluster.rpc_client();
+
+    cluster.trigger_reconfiguration().await;
+
+    let result = client.query_events(EventFilter::MoveEventType("0x0000000000000000000000000000000000000000000000000000000000000003::validator_set::ValidatorEpochInfoEventV2".parse().unwrap()), None, None, None).await;
+    assert!(result.is_ok());
+    assert!(!result.unwrap().data.is_empty());
+    let result = client
+        .query_events(
+            EventFilter::MoveEventType(
+                "0x3::validator_set::ValidatorEpochInfoEventV2"
+                    .parse()
+                    .unwrap(),
+            ),
+            None,
+            None,
+            None,
+        )
+        .await;
+    assert!(result.is_ok());
+    assert!(!result.unwrap().data.is_empty());
+    let result = client
+        .query_events(
+            EventFilter::MoveEventType(
+                "0x0003::validator_set::ValidatorEpochInfoEventV2"
+                    .parse()
+                    .unwrap(),
+            ),
+            None,
+            None,
+            None,
+        )
+        .await;
+    assert!(result.is_ok());
+    assert!(!result.unwrap().data.is_empty());
+    let result = client
+        .query_events(
+            EventFilter::MoveEventType(
+                "0x1::validator_set::ValidatorEpochInfoEventV2"
+                    .parse()
+                    .unwrap(),
+            ),
+            None,
+            None,
+            None,
+        )
+        .await;
+    assert!(result.is_ok());
+    assert!(result.unwrap().data.is_empty());
+}
