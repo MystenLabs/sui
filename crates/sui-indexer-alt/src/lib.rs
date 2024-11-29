@@ -470,6 +470,21 @@ pub async fn start_indexer(
     )
     .await?;
 
+    // These macros are responsible for registering pipelines with the indexer. It is responsible
+    // for:
+    //
+    //  - Checking whether the pipeline is enabled in the file-based configuration.
+    //  - Checking for unexpected parameters in the config.
+    //  - Combining shared and per-pipeline configurations.
+    //  - Registering the pipeline with the indexer.
+    //
+    // There are three kinds of pipeline, each with their own macro: `add_concurrent`,
+    // `add_sequential`, and `add_consistent`. `add_concurrent` and `add_sequential` map directly
+    // to `Indexer::concurrent_pipeline` and `Indexer::sequential_pipeline` respectively while
+    // `add_consistent` is a special case that generates both a sequential "summary" pipeline and a
+    // `concurrent` "write-ahead log" pipeline, with their configuration based on the supplied
+    // ConsistencyConfig.
+
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {
             if let Some(layer) = $config {
