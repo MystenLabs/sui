@@ -17,7 +17,9 @@ use crate::{
     db::Db,
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
-    pipeline::{Indexed, PipelineConfig, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
+    pipeline::{
+        IndexedCheckpoint, PipelineConfig, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
+    },
 };
 
 use super::Handler;
@@ -44,7 +46,7 @@ pub(super) fn committer<H: Handler + 'static>(
     config: PipelineConfig,
     checkpoint_lag: Option<u64>,
     watermark: Option<CommitterWatermark<'static>>,
-    mut rx: mpsc::Receiver<Indexed<H>>,
+    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
@@ -88,7 +90,7 @@ pub(super) fn committer<H: Handler + 'static>(
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
-        let mut pending: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
+        let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         info!(pipeline = H::NAME, ?watermark, "Starting committer");

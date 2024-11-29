@@ -14,21 +14,21 @@ use tracing::{debug, info};
 
 use crate::{
     metrics::IndexerMetrics,
-    pipeline::{Indexed, PipelineConfig, WatermarkPart},
+    pipeline::{IndexedCheckpoint, PipelineConfig, WatermarkPart},
 };
 
 use super::{Batched, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
-struct Pending<H: Handler> {
+struct PendingCheckpoint<H: Handler> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<H::Value>,
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
 }
 
-impl<H: Handler> Pending<H> {
+impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
     fn is_empty(&self) -> bool {
         debug_assert!(self.watermark.batch_rows == 0);
@@ -53,8 +53,8 @@ impl<H: Handler> Pending<H> {
     }
 }
 
-impl<H: Handler> From<Indexed<H>> for Pending<H> {
-    fn from(indexed: Indexed<H>) -> Self {
+impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
+    fn from(indexed: IndexedCheckpoint<H>) -> Self {
         Self {
             watermark: WatermarkPart {
                 watermark: indexed.watermark,
@@ -82,7 +82,7 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
     config: PipelineConfig,
-    mut rx: mpsc::Receiver<Indexed<H>>,
+    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<Batched<H>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -94,7 +94,7 @@ pub(super) fn collector<H: Handler + 'static>(
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Data for checkpoints that haven't been written yet.
-        let mut pending: BTreeMap<u64, Pending<H>> = BTreeMap::new();
+        let mut pending_checkpoints: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         info!(pipeline = H::NAME, "Starting collector");
@@ -115,7 +115,7 @@ pub(super) fn collector<H: Handler + 'static>(
 
                     let mut batch = Batched::new();
                     while !batch.is_full() {
-                        let Some(mut entry) = pending.first_entry() else {
+                        let Some(mut entry) = pending_checkpoints.first_entry() else {
                             break;
                         };
 
@@ -162,14 +162,14 @@ pub(super) fn collector<H: Handler + 'static>(
                     }
                 }
 
-                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
+                Some(indexed_checkpoint) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
                     metrics
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
-                        .inc_by(indexed.len() as u64);
+                        .inc_by(indexed_checkpoint.len() as u64);
 
-                    pending_rows += indexed.len();
-                    pending.insert(indexed.checkpoint(), indexed.into());
+                    pending_rows += indexed_checkpoint.len();
+                    pending_checkpoints.insert(indexed_checkpoint.checkpoint(), indexed_checkpoint.into());
 
                     if pending_rows >= H::MIN_EAGER_ROWS {
                         poll.reset_immediately()

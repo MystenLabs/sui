@@ -59,7 +59,7 @@ pub struct PipelineConfig {
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
 /// communicate between the processor and the collector parts of the pipeline.
-struct Indexed<P: Processor> {
+struct IndexedCheckpoint<P: Processor> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<P::Value>,
     /// The watermark associated with this checkpoint
@@ -88,7 +88,7 @@ enum Break {
     Err(#[from] anyhow::Error),
 }
 
-impl<P: Processor> Indexed<P> {
+impl<P: Processor> IndexedCheckpoint<P> {
     fn new(
         epoch: u64,
         cp_sequence_number: u64,
