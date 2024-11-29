@@ -59,6 +59,11 @@ pub struct IndexerArgs {
     #[arg(long)]
     pub last_checkpoint: Option<u64>,
 
+    /// Only run the following pipelines. If not provided, all pipelines found in the
+    /// configuration file will be run.
+    #[arg(long, action = clap::ArgAction::Append)]
+    pipeline: Vec<String>,
+
     /// Don't write to the watermark tables for concurrent pipelines.
     #[arg(long)]
     pub skip_watermark: bool,
@@ -90,6 +95,11 @@ pub struct Indexer {
     /// Don't write to the watermark tables for concurrent pipelines.
     skip_watermark: bool,
 
+    /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
+    /// run. Any pipelines that are present in this filter but not added to the indexer will yield
+    /// a warning when the indexer is run.
+    enabled_pipelines: Option<BTreeSet<String>>,
+
     /// Pipelines that have already been registered with the indexer. Used to make sure a pipeline
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
@@ -117,6 +127,7 @@ impl Indexer {
         let IndexerArgs {
             first_checkpoint,
             last_checkpoint,
+            pipeline,
             skip_watermark,
             metrics_address,
         } = indexer_args;
@@ -148,6 +159,11 @@ impl Indexer {
             first_checkpoint,
             last_checkpoint,
             skip_watermark,
+            enabled_pipelines: if pipeline.is_empty() {
+                None
+            } else {
+                Some(pipeline.into_iter().collect())
+            },
             added_pipelines: BTreeSet::new(),
             cancel,
             first_checkpoint_from_watermark: u64::MAX,
@@ -274,6 +290,14 @@ impl Indexer {
     /// Ingestion will stop after consuming the configured `last_checkpoint`, if one is provided,
     /// or will continue until it tracks the tip of the network.
     pub async fn run(mut self) -> Result<JoinHandle<()>> {
+        if let Some(enabled_pipelines) = self.enabled_pipelines {
+            ensure!(
+                enabled_pipelines.is_empty(),
+                "Tried to enable pipelines that this indexer does not know about: \
+                {enabled_pipelines:#?}",
+            );
+        }
+
         let metrics_handle = self
             .metrics_service
             .run()
@@ -328,6 +352,13 @@ impl Indexer {
             P::NAME,
         );
 
+        if let Some(enabled_pipelines) = &mut self.enabled_pipelines {
+            if !enabled_pipelines.remove(P::NAME) {
+                info!(pipeline = P::NAME, "Skipping");
+                return Ok(None);
+            }
+        }
+
         let mut conn = self.db.connect().await.context("Failed DB connection")?;
 
         let watermark = CommitterWatermark::get(&mut conn, P::NAME)
@@ -349,6 +380,7 @@ impl Default for IndexerArgs {
         Self {
             first_checkpoint: None,
             last_checkpoint: None,
+            pipeline: vec![],
             skip_watermark: false,
             metrics_address: "0.0.0.0:9184".parse().unwrap(),
         }
