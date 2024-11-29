@@ -1,5 +1,43 @@
 # @mysten/zklogin
 
+## 0.8.0
+
+### Minor Changes
+
+- ec2dc7f: All functionality from `@mysten/zklogin` has been moved to `@mysten/sui/zklogin`
+
+  For most methods, simply replace the `@mysten/zklogin` import with `@mysten/sui/zklogin`
+
+  2 Methods require one small additional change:
+
+  `computeZkLoginAddress` and `jwtToAddress` have new `legacyAddress` flags which must be set to
+  true for backwards compatibility:
+
+  ```diff
+  - import { computeZkLoginAddress, jwtToAddress } from '@mysten/zklogin';
+  + import { computeZkLoginAddress, jwtToAddress } from '@mysten/sui/zklogin';
+
+    const address = jwtToAddress(
+     jwtAsString,
+     salt,
+  +  true
+    );
+    const address = computeZkLoginAddress({
+  	claimName,
+  	claimValue,
+  	iss,
+  	aud,
+  	userSalt: BigInt(salt),
+  +	legacyAddress: true,
+    });
+  ```
+
+### Patch Changes
+
+- Updated dependencies [ec2dc7f]
+- Updated dependencies [ec2dc7f]
+  - @mysten/sui@1.16.0
+
 ## 0.7.30
 
 ### Patch Changes
