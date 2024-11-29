@@ -44,6 +44,7 @@ pub(super) fn committer<H: Handler + 'static>(
     config: PipelineConfig,
     checkpoint_lag: Option<u64>,
     watermark: Option<CommitterWatermark<'static>>,
+    first_checkpoint: Option<u64>,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     db: Db,
@@ -74,12 +75,21 @@ pub(super) fn committer<H: Handler + 'static>(
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch,
         // and whether that batch needs to be written out. By extension it also knows the next
         // checkpoint to expect and add to the batch.
-        let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive as u64 + 1;
-            (watermark, next)
-        } else {
-            (CommitterWatermark::initial(H::NAME.into()), 0)
-        };
+        let (mut watermark, mut next_checkpoint) =
+            if config.skip_watermark && first_checkpoint.is_some() {
+                // If skip_watermark is set, and we have a first_checkpoint, we no longer care about
+                // the initial watermark. We want to make sure that we process checkpoints based on
+                // the first checkpoint.
+                let first_checkpoint = first_checkpoint.unwrap();
+                let mut w = CommitterWatermark::initial(H::NAME.into());
+                w.checkpoint_hi_inclusive = (first_checkpoint as i64).saturating_sub(1);
+                (w, first_checkpoint)
+            } else if let Some(watermark) = watermark {
+                let next = watermark.checkpoint_hi_inclusive as u64 + 1;
+                (watermark, next)
+            } else {
+                (CommitterWatermark::initial(H::NAME.into()), 0)
+            };
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
@@ -232,7 +242,9 @@ pub(super) fn committer<H: Handler + 'static>(
                     let affected = conn.transaction::<_, anyhow::Error, _>(|conn| async {
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
-                        watermark.update(conn).await?;
+                        if !config.skip_watermark {
+                            watermark.update(conn).await?;
+                        }
                         H::commit(&batch, conn).await
                     }.scope_boxed()).await;
 

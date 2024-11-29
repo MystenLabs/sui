@@ -52,7 +52,9 @@ pub struct PipelineConfig {
     )]
     watermark_interval: Duration,
 
-    /// Avoid writing to the watermark table
+    /// Avoid writing to the watermark table. Note that when this is set, for sequential pipelines,
+    /// the data in the table will become inconsistent from the point of view of the watermark.
+    /// This is useful when we need to benchmark using checkpoints that are not continuous from the watarmerk.
     #[arg(long)]
     pub skip_watermark: bool,
 }

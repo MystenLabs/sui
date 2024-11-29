@@ -89,6 +89,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
+    first_checkpoint: Option<u64>,
     checkpoint_lag: Option<u64>,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
@@ -107,9 +108,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
-        config.clone(),
+        config,
         checkpoint_lag,
         initial_watermark,
+        first_checkpoint,
         committer_rx,
         watermark_tx,
         db.clone(),

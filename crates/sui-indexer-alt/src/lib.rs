@@ -196,13 +196,7 @@ impl Indexer {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
-
-        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
-        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
-        // and writes should be idempotent.
-        if !self.pipeline_config.skip_watermark {
-            self.check_first_checkpoint_consistency::<H>(&watermark)?;
-        }
+        self.check_first_checkpoint_consistency::<H>(&watermark)?;
 
         self.handles.push(concurrent::pipeline(
             handler,
@@ -237,8 +231,6 @@ impl Indexer {
             return Ok(());
         };
 
-        // For a sequential pipeline, data must be written in the order of checkpoints.
-        // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
         self.check_first_checkpoint_consistency::<H>(&watermark)?;
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
@@ -247,6 +239,7 @@ impl Indexer {
             handler,
             watermark,
             self.pipeline_config.clone(),
+            self.first_checkpoint,
             checkpoint_lag,
             self.db.clone(),
             checkpoint_rx,
@@ -266,10 +259,13 @@ impl Indexer {
         &self,
         watermark: &Option<CommitterWatermark>,
     ) -> Result<()> {
+        if self.pipeline_config.skip_watermark {
+            return Ok(());
+        }
         if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
             ensure!(
                 first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
+                "For pipeline {}, first checkpoint override {} is inconsistently ahead of watermark {}. This could create gaps in the data.",
                 P::NAME,
                 first_checkpoint,
                 watermark.checkpoint_hi_inclusive,
