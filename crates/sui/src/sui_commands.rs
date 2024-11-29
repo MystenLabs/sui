@@ -208,7 +208,6 @@ pub enum SuiCommand {
         ///
         /// If --with-indexer is set, this defaults to a temporary directory.
         #[clap(long, value_name = "DATA_INGESTION_DIR")]
-
         data_ingestion_dir: Option<PathBuf>,
 
         /// Start the network without a fullnode
