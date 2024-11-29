@@ -9,6 +9,7 @@ use crate::verifier_signing_config::VerifierSigningConfig;
 use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
+use mysten_common::fatal;
 use narwhal_config::Parameters as NarwhalParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
@@ -215,7 +216,21 @@ pub enum ExecutionCacheConfig {
     WritebackCache {
         /// Maximum number of entries in each cache. (There are several different caches).
         /// If None, the default of 10000 is used.
-        max_cache_size: Option<usize>,
+        max_cache_size: Option<u64>,
+
+        package_cache_size: Option<u64>, // defaults to 1000
+
+        object_cache_size: Option<u64>, // defaults to max_cache_size
+        marker_cache_size: Option<u64>, // defaults to object_cache_size
+        object_by_id_cache_size: Option<u64>, // defaults to object_cache_size
+
+        transaction_cache_size: Option<u64>, // defaults to max_cache_size
+        executed_effect_cache_size: Option<u64>, // defaults to transaction_cache_size
+        effect_cache_size: Option<u64>,      // defaults to executed_effect_cache_size
+
+        events_cache_size: Option<u64>, // defaults to transaction_cache_size
+
+        transaction_objects_cache_size: Option<u64>, // defaults to 1000
     },
 }
 
@@ -223,7 +238,142 @@ impl Default for ExecutionCacheConfig {
     fn default() -> Self {
         ExecutionCacheConfig::WritebackCache {
             max_cache_size: None,
+            package_cache_size: None,
+            object_cache_size: None,
+            marker_cache_size: None,
+            object_by_id_cache_size: None,
+            transaction_cache_size: None,
+            executed_effect_cache_size: None,
+            effect_cache_size: None,
+            events_cache_size: None,
+            transaction_objects_cache_size: None,
         }
+    }
+}
+
+impl ExecutionCacheConfig {
+    pub fn max_cache_size(&self) -> u64 {
+        std::env::var("SUI_MAX_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache { max_cache_size, .. } => {
+                    max_cache_size.unwrap_or(100000)
+                }
+            })
+    }
+
+    pub fn package_cache_size(&self) -> u64 {
+        std::env::var("SUI_PACKAGE_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    package_cache_size, ..
+                } => package_cache_size.unwrap_or(1000),
+            })
+    }
+
+    pub fn object_cache_size(&self) -> u64 {
+        std::env::var("SUI_OBJECT_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    object_cache_size, ..
+                } => object_cache_size.unwrap_or(self.max_cache_size()),
+            })
+    }
+
+    pub fn marker_cache_size(&self) -> u64 {
+        std::env::var("SUI_MARKER_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    marker_cache_size, ..
+                } => marker_cache_size.unwrap_or(self.object_cache_size()),
+            })
+    }
+
+    pub fn object_by_id_cache_size(&self) -> u64 {
+        std::env::var("SUI_OBJECT_BY_ID_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    object_by_id_cache_size,
+                    ..
+                } => object_by_id_cache_size.unwrap_or(self.object_cache_size()),
+            })
+    }
+
+    pub fn transaction_cache_size(&self) -> u64 {
+        std::env::var("SUI_TRANSACTION_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    transaction_cache_size,
+                    ..
+                } => transaction_cache_size.unwrap_or(self.max_cache_size()),
+            })
+    }
+
+    pub fn executed_effect_cache_size(&self) -> u64 {
+        std::env::var("SUI_EXECUTED_EFFECT_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    executed_effect_cache_size,
+                    ..
+                } => executed_effect_cache_size.unwrap_or(self.transaction_cache_size()),
+            })
+    }
+
+    pub fn effect_cache_size(&self) -> u64 {
+        std::env::var("SUI_EFFECT_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    effect_cache_size, ..
+                } => effect_cache_size.unwrap_or(self.executed_effect_cache_size()),
+            })
+    }
+
+    pub fn events_cache_size(&self) -> u64 {
+        std::env::var("SUI_EVENTS_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    events_cache_size, ..
+                } => events_cache_size.unwrap_or(self.transaction_cache_size()),
+            })
+    }
+
+    pub fn transaction_objects_cache_size(&self) -> u64 {
+        std::env::var("SUI_TRANSACTION_OBJECTS_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    transaction_objects_cache_size,
+                    ..
+                } => transaction_objects_cache_size.unwrap_or(1000),
+            })
     }
 }
 

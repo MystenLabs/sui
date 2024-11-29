@@ -3,17 +3,18 @@
 
 use crate::{
     error::DeepBookError,
-    models::{BalancesSummary, OrderFillSummary, Pools},
+    models::{OrderFillSummary, Pools},
     schema::{self},
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
 use axum::{
     debug_handler,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     routing::get,
     Json, Router,
 };
+use diesel::dsl::sql;
 use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
@@ -23,16 +24,11 @@ use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
 
 pub const GET_POOLS_PATH: &str = "/get_pools";
-pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_ids";
-pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
-    "/get_24hr_volume_by_balance_manager_id/:pool_id/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
-    "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id/:start_time/:end_time/:interval";
+    "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
-    "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id/:start_time/:end_time";
-pub const GET_HISTORICAL_VOLUME_PATH: &str =
-    "/get_historical_volume/:pool_ids/:start_time/:end_time";
-pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
+    "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
+pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -45,12 +41,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
     Router::new()
         .route("/", get(health_check))
         .route(GET_POOLS_PATH, get(get_pools))
-        .route(GET_24HR_VOLUME_PATH, get(get_24hr_volume))
         .route(GET_HISTORICAL_VOLUME_PATH, get(get_historical_volume))
-        .route(
-            GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID,
-            get(get_24hr_volume_by_balance_manager_id),
-        )
         .route(
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL,
             get(get_historical_volume_by_balance_manager_id_with_interval),
@@ -59,7 +50,6 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID,
             get(get_historical_volume_by_balance_manager_id),
         )
-        .route(GET_NET_DEPOSITS, get(get_net_deposits))
         .with_state(state)
 }
 
@@ -101,50 +91,46 @@ async fn get_pools(
     Ok(Json(results))
 }
 
-async fn get_24hr_volume(
-    Path(pool_ids): Path<String>,
-    State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
-    let connection = &mut state.pool.get().await?;
-    let unix_ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
-    let day_ago = unix_ts - 24 * 60 * 60 * 1000;
-
-    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
-
-    let results: Vec<(String, i64)> = schema::order_fills::table
-        .select((
-            schema::order_fills::pool_id,
-            schema::order_fills::base_quantity,
-        ))
-        .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
-        .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
-        .load(connection)
-        .await?;
-
-    let mut volume_by_pool = HashMap::new();
-    for (pool_id, volume) in results {
-        *volume_by_pool.entry(pool_id).or_insert(0) += volume as u64;
-    }
-
-    Ok(Json(volume_by_pool))
-}
-
 async fn get_historical_volume(
-    Path((pool_ids, start_time, end_time)): Path<(String, i64, i64)>,
+    Path(pool_ids): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
 
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
 
+    // Get start_time and end_time from query parameters (in seconds)
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
+
+    // Determine whether to query volume in base or quote
+    let volume_in_base = params
+        .get("volume_in_base")
+        .map(|v| v == "true")
+        .unwrap_or(true);
+    let column_to_query = if volume_in_base {
+        sql::<diesel::sql_types::BigInt>("base_quantity")
+    } else {
+        sql::<diesel::sql_types::BigInt>("quote_quantity")
+    };
+
     let results: Vec<(String, i64)> = schema::order_fills::table
-        .select((
-            schema::order_fills::pool_id,
-            schema::order_fills::base_quantity,
-        ))
+        .select((schema::order_fills::pool_id, column_to_query))
         .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
         .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
         .load(connection)
@@ -159,25 +145,51 @@ async fn get_historical_volume(
     Ok(Json(volume_by_pool))
 }
 
-async fn get_24hr_volume_by_balance_manager_id(
-    Path((pool_id, balance_manager_id)): Path<(String, String)>,
+async fn get_historical_volume_by_balance_manager_id(
+    Path((pool_ids, balance_manager_id)): Path<(String, String)>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<Vec<i64>>, DeepBookError> {
+) -> Result<Json<HashMap<String, Vec<i64>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
-    let unix_ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
-    let day_ago = unix_ts - 24 * 60 * 60 * 1000;
+    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+
+    // Get start_time and end_time from query parameters (in seconds)
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
+
+    let volume_in_base = params
+        .get("volume_in_base")
+        .map(|v| v == "true")
+        .unwrap_or(true);
+    let column_to_query = if volume_in_base {
+        sql::<diesel::sql_types::BigInt>("base_quantity")
+    } else {
+        sql::<diesel::sql_types::BigInt>("quote_quantity")
+    };
+
     let results: Vec<OrderFillSummary> = schema::order_fills::table
         .select((
             schema::order_fills::pool_id,
             schema::order_fills::maker_balance_manager_id,
             schema::order_fills::taker_balance_manager_id,
-            schema::order_fills::base_quantity,
+            column_to_query,
         ))
-        .filter(schema::order_fills::pool_id.eq(pool_id))
-        .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
+        .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
+        .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
         .filter(
             schema::order_fills::maker_balance_manager_id
                 .eq(&balance_manager_id)
@@ -186,32 +198,35 @@ async fn get_24hr_volume_by_balance_manager_id(
         .load(connection)
         .await?;
 
-    let mut maker_vol = 0;
-    let mut taker_vol = 0;
+    let mut volume_by_pool: HashMap<String, Vec<i64>> = HashMap::new();
     for order_fill in results {
+        let entry = volume_by_pool
+            .entry(order_fill.pool_id.clone())
+            .or_insert(vec![0, 0]);
         if order_fill.maker_balance_manager_id == balance_manager_id {
-            maker_vol += order_fill.base_quantity;
-        };
+            entry[0] += order_fill.quantity;
+        }
         if order_fill.taker_balance_manager_id == balance_manager_id {
-            taker_vol += order_fill.base_quantity;
-        };
+            entry[1] += order_fill.quantity;
+        }
     }
 
-    Ok(Json(vec![maker_vol, taker_vol]))
+    Ok(Json(volume_by_pool))
 }
 
 async fn get_historical_volume_by_balance_manager_id_with_interval(
-    Path((pool_ids, balance_manager_id, start_time, end_time, interval)): Path<(
-        String,
-        String,
-        i64,
-        i64,
-        i64,
-    )>,
+    Path((pool_ids, balance_manager_id)): Path<(String, String)>,
+    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, HashMap<String, Vec<i64>>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+
+    // Parse interval from query parameters (in seconds), default to 1 hour (3600 seconds)
+    let interval = params
+        .get("interval")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(3600); // Default interval: 1 hour
 
     if interval <= 0 {
         return Err(DeepBookError::InternalError(
@@ -219,18 +234,48 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
         ));
     }
 
-    let mut metrics_by_interval: HashMap<String, HashMap<String, Vec<i64>>> = HashMap::new();
-    let mut current_start = start_time * 1000;
     let interval_ms = interval * 1000;
-    while current_start + interval_ms <= end_time * 1000 {
+
+    // Parse start_time and end_time (in seconds) and convert to milliseconds
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
+
+    let mut metrics_by_interval: HashMap<String, HashMap<String, Vec<i64>>> = HashMap::new();
+
+    let mut current_start = start_time;
+    while current_start + interval_ms <= end_time {
         let current_end = current_start + interval_ms;
+
+        let volume_in_base = params
+            .get("volume_in_base")
+            .map(|v| v == "true")
+            .unwrap_or(true);
+        let column_to_query = if volume_in_base {
+            sql::<diesel::sql_types::BigInt>("base_quantity")
+        } else {
+            sql::<diesel::sql_types::BigInt>("quote_quantity")
+        };
 
         let results: Vec<OrderFillSummary> = schema::order_fills::table
             .select((
                 schema::order_fills::pool_id,
                 schema::order_fills::maker_balance_manager_id,
                 schema::order_fills::taker_balance_manager_id,
-                schema::order_fills::base_quantity,
+                column_to_query,
             ))
             .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
             .filter(schema::order_fills::onchain_timestamp.between(current_start, current_end))
@@ -248,97 +293,20 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
                 .entry(order_fill.pool_id.clone())
                 .or_insert(vec![0, 0]);
             if order_fill.maker_balance_manager_id == balance_manager_id {
-                entry[0] += order_fill.base_quantity;
+                entry[0] += order_fill.quantity;
             }
             if order_fill.taker_balance_manager_id == balance_manager_id {
-                entry[1] += order_fill.base_quantity;
+                entry[1] += order_fill.quantity;
             }
         }
 
-        metrics_by_interval.insert(current_start.to_string(), volume_by_pool);
+        metrics_by_interval.insert(
+            format!("[{}, {}]", current_start / 1000, current_end / 1000),
+            volume_by_pool,
+        );
 
         current_start = current_end;
     }
 
     Ok(Json(metrics_by_interval))
-}
-
-async fn get_historical_volume_by_balance_manager_id(
-    Path((pool_ids, balance_manager_id, start_time, end_time)): Path<(String, String, i64, i64)>,
-    State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, Vec<i64>>>, DeepBookError> {
-    let connection = &mut state.pool.get().await?;
-    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
-
-    let results: Vec<OrderFillSummary> = schema::order_fills::table
-        .select((
-            schema::order_fills::pool_id,
-            schema::order_fills::maker_balance_manager_id,
-            schema::order_fills::taker_balance_manager_id,
-            schema::order_fills::base_quantity,
-        ))
-        .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
-        .filter(schema::order_fills::onchain_timestamp.between(start_time * 1000, end_time * 1000))
-        .filter(
-            schema::order_fills::maker_balance_manager_id
-                .eq(&balance_manager_id)
-                .or(schema::order_fills::taker_balance_manager_id.eq(&balance_manager_id)),
-        )
-        .load(connection)
-        .await?;
-
-    let mut volume_by_pool: HashMap<String, Vec<i64>> = HashMap::new();
-    for order_fill in results {
-        let entry = volume_by_pool
-            .entry(order_fill.pool_id.clone())
-            .or_insert(vec![0, 0]);
-        if order_fill.maker_balance_manager_id == balance_manager_id {
-            entry[0] += order_fill.base_quantity;
-        }
-        if order_fill.taker_balance_manager_id == balance_manager_id {
-            entry[1] += order_fill.base_quantity;
-        }
-    }
-
-    Ok(Json(volume_by_pool))
-}
-
-#[debug_handler]
-async fn get_net_deposits(
-    Path((asset_ids, timestamp)): Path<(String, String)>,
-    State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, i64>>, DeepBookError> {
-    let connection = &mut state.pool.get().await?;
-    let mut query =
-        "SELECT asset, SUM(amount)::bigint AS amount, deposit FROM balances WHERE checkpoint_timestamp_ms < "
-            .to_string();
-    query.push_str(&timestamp);
-    query.push_str("000 AND asset in (");
-    for asset in asset_ids.split(",") {
-        if asset.starts_with("0x") {
-            let len = asset.len();
-            query.push_str(&format!("'{}',", &asset[2..len]));
-        } else {
-            query.push_str(&format!("'{}',", asset));
-        }
-    }
-    query.pop();
-    query.push_str(") GROUP BY asset, deposit");
-
-    let results: Vec<BalancesSummary> = diesel::sql_query(query).load(connection).await?;
-    let mut net_deposits = HashMap::new();
-    for result in results {
-        let mut asset = result.asset;
-        if !asset.starts_with("0x") {
-            asset.insert_str(0, "0x");
-        }
-        let amount = result.amount;
-        if result.deposit {
-            *net_deposits.entry(asset).or_insert(0) += amount;
-        } else {
-            *net_deposits.entry(asset).or_insert(0) -= amount;
-        }
-    }
-
-    Ok(Json(net_deposits))
 }

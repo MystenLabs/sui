@@ -111,7 +111,7 @@ impl<'a> Inner<'a> {
                 version,
                 digest: object.digest(),
                 storage_rebate: object.storage_rebate,
-                owner: object.owner,
+                owner: object.owner.clone(),
                 previous_transaction: object.previous_transaction,
             };
 
@@ -187,6 +187,9 @@ impl<'a> Inner<'a> {
                             format!("Bad owner for {child}. \
                             Expected an id owner {parent} but found an address, immutable, or shared owner")
                         ))
+                    }
+                    Owner::ConsensusV2 { .. } => {
+                        unimplemented!("ConsensusV2 does not exist for this execution version")
                     }
                 };
                 match object.data {

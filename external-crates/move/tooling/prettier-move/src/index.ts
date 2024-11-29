@@ -34,7 +34,7 @@ export const languages: SupportLanguage[] = [
 	{
 		name: 'move',
 		extensions: ['.move'],
-		parsers: ['move-parse'],
+		parsers: ['move'],
 	},
 ];
 
@@ -86,12 +86,6 @@ export const options: Record<string, SupportOption> = {
 		category: 'Global',
 		default: false,
 		description: 'Wrap comments to the next line if the line is too long.',
-	},
-	alwaysBreakFunctions: {
-		type: 'boolean',
-		category: 'Global',
-		default: true,
-		description: 'Always break function body into multiple lines.',
 	},
 	useModuleLabel: {
 		type: 'boolean',

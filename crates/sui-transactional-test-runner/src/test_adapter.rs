@@ -1774,14 +1774,16 @@ impl<'a> SuiTestAdapter {
             return format!("{}", objs.len());
         }
         objs.iter()
-            .map(|id| match self.real_to_fake_object_id(id) {
-                None => "object(_)".to_string(),
-                Some(FakeID::Known(id)) => {
-                    let id: AccountAddress = id.into();
-                    format!("0x{id:x}")
-                }
-                Some(fake) => format!("object({})", fake),
-            })
+            .map(
+                |id| /*id.to_string(), */match self.real_to_fake_object_id(id) {
+                                         None => "object(_)".to_string(),
+                                         Some(FakeID::Known(id)) => {
+                                             let id: AccountAddress = id.into();
+                                             format!("0x{id:x}")
+                                         }
+                                         Some(fake) => format!("object({})", fake),
+                                     },
+            )
             .collect::<Vec<_>>()
             .join(", ")
     }

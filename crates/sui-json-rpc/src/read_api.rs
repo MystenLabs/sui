@@ -40,7 +40,6 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::AggregateAuthoritySignature;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiObjectResponseError};
@@ -314,77 +313,44 @@ impl ReadApi {
 
         if opts.show_events {
             trace!("getting events");
-            let events_digests_list = temp_response
-                .values()
-                .filter_map(|cache_entry| match &cache_entry.effects {
-                    Some(eff) => eff.events_digest().cloned(),
-                    None => None,
-                })
-                .collect::<Vec<TransactionEventsDigest>>();
-            // filter out empty events digest, as they do not have to be read from the DB
-            let empty_events_digest = TransactionEvents::default().digest();
-            let events_digests_list = events_digests_list
-                .into_iter()
-                .filter(|d| d != &empty_events_digest)
-                .collect::<Vec<_>>();
-
-            let mut events_digest_to_events = if events_digests_list.is_empty() {
-                HashMap::new()
-            } else {
-                // fetch events from the DB with retry, retry each 0.5s for 3s
-                let backoff = ExponentialBackoff {
-                    max_elapsed_time: Some(Duration::from_secs(3)),
-                    multiplier: 1.0,
-                    ..ExponentialBackoff::default()
-                };
-                let events = retry(backoff, || async {
-                    match self
-                        .transaction_kv_store
-                        .multi_get_events(&events_digests_list)
-                        .await
-                    {
-                        // Only return Ok when all the queried transaction events are found, otherwise retry
-                        // until timeout, then return Err.
-                        Ok(events) if !events.contains(&None) => Ok(events),
-                        Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
-                            "Events not found, transaction execution may be incomplete.".into(),
-                        ))),
-                        Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
-                            "Failed to call multi_get_events: {e:?}"
-                        )))),
-                    }
-                })
-                .await
-                .map_err(|e| {
-                    Error::UnexpectedError(format!(
-                    "Retrieving events with retry failed for events digests {events_digests_list:?}: {e:?}"
-                ))
-                })?
-                .into_iter();
-
-                // construct a hashmap of events digests -> events for fast lookup
-                let events_map = events_digests_list
-                    .into_iter()
-                    .zip(events)
-                    .collect::<HashMap<_, _>>();
-                // Double check that all events are `Some` and their digests match the key
-                for (events_digest, events) in events_map.iter() {
-                    if let Some(events) = events {
-                        if &events.digest() != events_digest {
-                            return Err(Error::UnexpectedError(format!(
-                                "Events digest {events_digest:?} does not match the key {:?}",
-                                events.digest()
-                            )));
-                        }
-                    } else {
-                        return Err(Error::UnexpectedError(format!(
-                            "Events of digest {events_digest:?} is None, but it should not be"
-                        )));
+            let mut non_empty_digests = vec![];
+            for cache_entry in temp_response.values() {
+                if let Some(effects) = &cache_entry.effects {
+                    if effects.events_digest().is_some() {
+                        non_empty_digests.push(cache_entry.digest);
                     }
                 }
-                events_map
+            }
+            // fetch events from the DB with retry, retry each 0.5s for 3s
+            let backoff = ExponentialBackoff {
+                max_elapsed_time: Some(Duration::from_secs(3)),
+                multiplier: 1.0,
+                ..ExponentialBackoff::default()
             };
-            events_digest_to_events.insert(empty_events_digest, Some(TransactionEvents::default()));
+            let mut events = retry(backoff, || async {
+                match self
+                    .transaction_kv_store
+                    .multi_get_events_by_tx_digests(&non_empty_digests)
+                    .await
+                {
+                    // Only return Ok when all the queried transaction events are found, otherwise retry
+                    // until timeout, then return Err.
+                    Ok(events) if !events.contains(&None) => Ok(events),
+                    Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
+                        "Events not found, transaction execution may be incomplete.".into(),
+                    ))),
+                    Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
+                        "Failed to call multi_get_events: {e:?}"
+                    )))),
+                }
+            })
+            .await
+            .map_err(|e| {
+                Error::UnexpectedError(format!(
+                "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
+            ))
+            })?
+            .into_iter();
 
             // fill cache with the events
             for (_, cache_entry) in temp_response.iter_mut() {
@@ -392,15 +358,12 @@ impl ReadApi {
                 if let Some(events_digest) =
                     cache_entry.effects.as_ref().and_then(|e| e.events_digest())
                 {
-                    let events = events_digest_to_events
-                        .get(events_digest)
-                        .cloned()
-                        .unwrap_or_else(|| panic!("Expect event digest {events_digest:?} to be found in cache for transaction {transaction_digest}"))
-                        .map(|events| to_sui_transaction_events(self, cache_entry.digest, events));
-                    match events {
-                        Some(Ok(e)) => cache_entry.events = Some(e),
-                        Some(Err(e)) => cache_entry.errors.push(e.to_string()),
-                        None => {
+                    match events.next() {
+                        Some(Some(ev)) => {
+                            cache_entry.events =
+                                Some(to_sui_transaction_events(self, cache_entry.digest, ev)?)
+                        }
+                        None | Some(None) => {
                             error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
                             cache_entry.errors.push(format!(
                                 "Failed to fetch events with event digest {events_digest:?}",
@@ -830,30 +793,26 @@ impl ReadApiServer for ReadApi {
             }
 
             if opts.show_events && temp_response.effects.is_some() {
-                // safe to unwrap because we have checked is_some
-                if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest()
-                {
-                    let transaction_kv_store = self.transaction_kv_store.clone();
-                    let event_digest = *event_digest;
-                    let events = spawn_monitored_task!(async move {
-                        transaction_kv_store
-                            .get_events(event_digest)
-                            .await
-                            .map_err(|e| {
-                                error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
-                                Error::from(e)
-                            })
-                        })
+                let transaction_kv_store = self.transaction_kv_store.clone();
+                let events = spawn_monitored_task!(async move {
+                    transaction_kv_store
+                        .multi_get_events_by_tx_digests(&[digest])
                         .await
-                        .map_err(Error::from)??;
-                    match to_sui_transaction_events(self, digest, events) {
+                        .map_err(|e| {
+                            error!("Failed to call get transaction events for transaction: {digest:?} with error {e:?}");
+                            Error::from(e)
+                        })
+                    })
+                    .await
+                    .map_err(Error::from)??
+                    .pop()
+                    .flatten();
+                match events {
+                    None => temp_response.events = Some(SuiTransactionBlockEvents::default()),
+                    Some(events) => match to_sui_transaction_events(self, digest, events) {
                         Ok(e) => temp_response.events = Some(e),
                         Err(e) => temp_response.errors.push(e.to_string()),
-                    };
-                } else {
-                    // events field will be Some if and only if `show_events` is true and
-                    // there is no error in converting fetching events
-                    temp_response.events = Some(SuiTransactionBlockEvents::default());
+                    },
                 }
             }
 
@@ -935,38 +894,29 @@ impl ReadApiServer for ReadApi {
             let transaction_kv_store = self.transaction_kv_store.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = transaction_kv_store
-                .get_fx_by_tx_digest(transaction_digest)
-                .await
-                .map_err(Error::from)?;
-            let events = if let Some(event_digest) = effect.events_digest() {
-            transaction_kv_store
-                .get_events(*event_digest)
+            let events = transaction_kv_store
+                .multi_get_events_by_tx_digests(&[transaction_digest])
                 .await
                 .map_err(
                     |e| {
-                        error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
+                        error!("Failed to get transaction events for transaction {transaction_digest:?} with error: {e:?}");
                         Error::StateReadError(e.into())
                     })?
-                .data
-                .into_iter()
-                .enumerate()
-                .map(|(seq, e)| {
-                    let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
-                    SuiEvent::try_from(
-                        e,
-                        *effect.transaction_digest(),
-                        seq as u64,
-                        None,
-                        layout,
-                    )
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(Error::SuiError)?
-        } else {
-            vec![]
-        };
-        Ok(events)
+                .pop()
+                .flatten();
+            Ok(match events {
+                Some(events) => events
+                    .data
+                    .into_iter()
+                    .enumerate()
+                    .map(|(seq, e)| {
+                        let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
+                        SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(Error::SuiError)?,
+                None => vec![],
+            })
         }).await.map_err(Error::from)?
         })
     }

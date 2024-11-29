@@ -472,7 +472,7 @@ impl<'a> ObjectRuntime<'a> {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
-                            owner: obj.owner,
+                            owner: obj.owner.clone(),
                             previous_transaction: obj.previous_transaction,
                         },
                     )
@@ -575,7 +575,11 @@ impl ObjectRuntimeState {
 
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
-        check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)))?;
+        check_circular_ownership(
+            transfers
+                .iter()
+                .map(|(id, (owner, _, _))| (*id, owner.clone())),
+        )?;
         // For both written_objects and deleted_ids, we need to mark the loaded child object as modified.
         // These may not be covered in the child object effects if they are taken out in one PT command and then
         // transferred/deleted in a different command. Marking them as modified will allow us properly determine their
@@ -655,6 +659,9 @@ fn check_circular_ownership(
                     }
                 }
                 object_owner_map.insert(id, new_owner);
+            }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
             }
         }
     }

@@ -186,7 +186,7 @@ impl GroupedObjectOutput {
                 Ok(r) => {
                     let obj_digest = r.object.compute_object_reference().2;
                     let parent_tx_digest = r.object.previous_transaction;
-                    let owner = r.object.owner;
+                    let owner = r.object.owner.clone();
                     let lock = r.lock_for_debugging.as_ref().map(|lock| *lock.digest());
                     if lock.is_none() {
                         available_voting_power += stake;
@@ -195,7 +195,7 @@ impl GroupedObjectOutput {
                 }
                 Err(_) => None,
             };
-            let entry = grouped_results.entry(key).or_insert_with(Vec::new);
+            let entry = grouped_results.entry(key.clone()).or_insert_with(Vec::new);
             entry.push(*name);
             let entry: &mut u64 = voting_power.entry(key).or_default();
             *entry += stake;
@@ -281,7 +281,7 @@ impl std::fmt::Display for ConciseObjectOutput {
                 Ok(resp) => {
                     let obj_digest = resp.object.compute_object_reference().2;
                     let parent = resp.object.previous_transaction;
-                    let owner = resp.object.owner;
+                    let owner = resp.object.owner.clone();
                     write!(f, " {:<66} {:<45} {:<51}", obj_digest, parent, owner)?;
                 }
             }

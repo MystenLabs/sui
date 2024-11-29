@@ -588,9 +588,9 @@ impl ObjectImpl<'_> {
 
         let native = self.0.native_impl()?;
 
-        match native.owner {
+        match &native.owner {
             O::AddressOwner(address) => {
-                let address = SuiAddress::from(address);
+                let address = SuiAddress::from(*address);
                 Some(ObjectOwner::Address(AddressOwner {
                     owner: Some(Owner {
                         address,
@@ -601,7 +601,7 @@ impl ObjectImpl<'_> {
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
             O::ObjectOwner(address) => {
-                let address = SuiAddress::from(address);
+                let address = SuiAddress::from(*address);
                 Some(ObjectOwner::Parent(Parent {
                     parent: Some(Owner {
                         address,
@@ -615,6 +615,8 @@ impl ObjectImpl<'_> {
             } => Some(ObjectOwner::Shared(Shared {
                 initial_shared_version: initial_shared_version.value().into(),
             })),
+            // TODO: Implement support for ConsensusV2 objects.
+            O::ConsensusV2 { .. } => todo!(),
         }
     }
 

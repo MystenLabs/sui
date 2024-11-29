@@ -436,7 +436,7 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
-    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
@@ -476,6 +476,8 @@ mod tests {
                 &self,
                 digests: &[TransactionDigest],
             ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
+
+            async fn multi_get_events_by_tx_digests(&self,digests: &[TransactionDigest]) -> SuiResult<Vec<Option<TransactionEvents>>>;
         }
     }
 

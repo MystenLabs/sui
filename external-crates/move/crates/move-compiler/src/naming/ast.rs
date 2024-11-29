@@ -305,7 +305,7 @@ pub struct TParam {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone)]
-pub struct TVar(u64);
+pub struct TVar(pub u64);
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -717,12 +717,6 @@ impl BuiltinTypeName_ {
 impl TParamID {
     pub fn next() -> TParamID {
         TParamID(Counter::next())
-    }
-}
-
-impl TVar {
-    pub fn next() -> TVar {
-        TVar(Counter::next())
     }
 }
 

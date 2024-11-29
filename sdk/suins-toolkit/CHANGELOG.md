@@ -1,5 +1,11 @@
 # @mysten/suins-toolkit
 
+## 0.5.29
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+
 ## 0.5.28
 
 ### Patch Changes
