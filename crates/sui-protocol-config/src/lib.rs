@@ -202,6 +202,7 @@ const MAX_PROTOCOL_VERSION: u64 = 70;
 //             Enable probing for accepted rounds in round prober in testnet
 //             Add new gas model version to update charging of native functions.
 //             Add std::uq64_64 module to Move stdlib.
+//             Improve gas/wall time efficiency of some Move stdlib vector functions
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
