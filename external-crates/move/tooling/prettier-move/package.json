@@ -2,7 +2,7 @@
 	"name": "@mysten/prettier-plugin-move",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Move Plugin for Prettier",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"license": "Apache-2.0",
 	"keywords": [
 		"prettier",

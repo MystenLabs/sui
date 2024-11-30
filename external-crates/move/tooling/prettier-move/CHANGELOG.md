@@ -1,5 +1,11 @@
 # @mysten/prettier-plugin-move
 
+## 0.2.1
+
+### Patch Changes
+
+-   360e9a2: Fixes missing parser for move-parser error
+
 ## 0.2.0
 
 ### Minor Changes
