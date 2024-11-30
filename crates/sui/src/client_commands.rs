@@ -9,7 +9,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -1802,17 +1802,46 @@ pub(crate) async fn compile_package(
         chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
-    let (package_id, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
+    let (package_id, mut dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
     };
-    let compiled_package = build_from_resolution_graph(
+
+    let mut compiled_package = build_from_resolution_graph(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id,
     )?;
+
+    // iterate through the modules in the package and collect all the immediate dependencies for
+    // each module. The immediate dependency is the ground truth of which deps are actually used
+    // and called in this package.
+    // We will use this to filter out the dependencies that are potentially imported but not used
+    // in the package.
+    let mut deps = BTreeSet::new();
+    for m in compiled_package.get_modules_and_deps() {
+        for d in m.immediate_dependencies() {
+            deps.insert(d.address().clone());
+        }
+    }
+
+    // Only store in the CompiledPackage the actual dependencies that are used!
+    compiled_package
+        .package
+        .deps_compiled_units
+        .retain(|b| deps.contains(b.1.unit.module.address()));
+    compiled_package
+        .bytecode_deps
+        .retain(|(_, c)| deps.contains(c.address()));
+
+    compiled_package
+        .dependency_ids
+        .published
+        .retain(|_, b| deps.contains(&(*b).into()));
+    dependencies = compiled_package.dependency_ids.clone();
+
     let protocol_config = read_api.get_protocol_config(None).await?;
 
     // Check that the package's Move version is compatible with the chain's
