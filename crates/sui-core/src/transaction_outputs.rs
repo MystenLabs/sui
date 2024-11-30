@@ -93,7 +93,7 @@ impl TransactionOutputs {
             .filter_map(|(id, ((version, digest), owner))| {
                 owner.is_address_owned().then_some((id, version, digest))
             })
-            .chain(received_objects.into_iter())
+            .chain(received_objects)
             .collect();
 
         let new_locks_to_init: Vec<_> = written
