@@ -595,6 +595,76 @@
               "$ref": "#/components/schemas/TransactionDigest"
             },
             "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "effects",
+            "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "effects_bcs",
+            "description": "Request `TransactionEffects` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEffects` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "events",
+            "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "events_bcs",
+            "description": "Request `TransactionEvents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEvents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "signatures",
+            "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "transaction",
+            "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "transaction_bcs",
+            "description": "Request `Transaction` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `Transaction` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
           }
         ],
         "responses": {
@@ -645,6 +715,76 @@
             "name": "start",
             "schema": {
               "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "effects",
+            "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "effects_bcs",
+            "description": "Request `TransactionEffects` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEffects` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "events",
+            "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "events_bcs",
+            "description": "Request `TransactionEvents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEvents` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "signatures",
+            "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "transaction",
+            "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "transaction_bcs",
+            "description": "Request `Transaction` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `Transaction` encoded as BCS be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
             },
             "style": "form"
           }
@@ -5362,15 +5502,11 @@
       "TransactionResponse": {
         "type": "object",
         "required": [
-          "digest",
-          "effects",
-          "signatures",
-          "transaction"
+          "digest"
         ],
         "properties": {
           "checkpoint": {
             "description": "Radix-10 encoded 64-bit unsigned integer",
-            "default": null,
             "type": "string",
             "format": "u64"
           },
@@ -5380,8 +5516,14 @@
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
           },
+          "effects_bcs": {
+            "type": "string"
+          },
           "events": {
             "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "events_bcs": {
+            "type": "string"
           },
           "signatures": {
             "type": "array",
@@ -5391,12 +5533,14 @@
           },
           "timestamp_ms": {
             "description": "Radix-10 encoded 64-bit unsigned integer",
-            "default": null,
             "type": "string",
             "format": "u64"
           },
           "transaction": {
             "$ref": "#/components/schemas/Transaction"
+          },
+          "transaction_bcs": {
+            "type": "string"
           }
         }
       },
