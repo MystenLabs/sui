@@ -113,10 +113,10 @@ impl StateReader {
             .ok()?
     }
 
-    pub fn get_transaction_response(
+    pub fn get_transaction_read(
         &self,
         digest: sui_sdk_types::types::TransactionDigest,
-    ) -> crate::Result<super::rest::transactions::TransactionResponse> {
+    ) -> crate::Result<TransactionRead> {
         let (
             SignedTransaction {
                 transaction,
@@ -135,7 +135,7 @@ impl StateReader {
             None
         };
 
-        Ok(crate::rest::transactions::TransactionResponse {
+        Ok(TransactionRead {
             digest: transaction.digest(),
             transaction,
             signatures,
@@ -161,6 +161,17 @@ impl StateReader {
     ) -> CheckpointTransactionsIter {
         CheckpointTransactionsIter::new(self.clone(), direction, cursor)
     }
+}
+
+#[derive(Debug)]
+pub struct TransactionRead {
+    pub digest: sui_sdk_types::types::TransactionDigest,
+    pub transaction: sui_sdk_types::types::Transaction,
+    pub signatures: Vec<sui_sdk_types::types::UserSignature>,
+    pub effects: sui_sdk_types::types::TransactionEffects,
+    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+    pub checkpoint: Option<u64>,
+    pub timestamp_ms: Option<u64>,
 }
 
 pub struct CheckpointTransactionsIter {
