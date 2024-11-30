@@ -338,63 +338,6 @@ impl TryFrom<&UserSignature> for sui_types::signature::GenericSignature {
 }
 
 //
-// GetTransactionResponse
-//
-
-impl TryFrom<crate::rest::transactions::TransactionResponse> for GetTransactionResponse {
-    type Error = bcs::Error;
-
-    fn try_from(
-        value: crate::rest::transactions::TransactionResponse,
-    ) -> Result<Self, Self::Error> {
-        Ok(Self {
-            digest: value.digest.as_bytes().to_vec().into(),
-            transaction: Some(Transaction::try_from(&value.transaction)?),
-            signatures: value
-                .signatures
-                .iter()
-                .map(UserSignature::try_from)
-                .collect::<Result<_, _>>()?,
-            effects: Some(TransactionEffects::try_from(&value.effects)?),
-            events: value
-                .events
-                .as_ref()
-                .map(TransactionEvents::try_from)
-                .transpose()?,
-            checkpoint: value.checkpoint,
-            timestamp_ms: value.timestamp_ms,
-        })
-    }
-}
-
-impl TryFrom<GetTransactionResponse> for crate::rest::transactions::TransactionResponse {
-    type Error = bcs::Error;
-
-    fn try_from(value: GetTransactionResponse) -> Result<Self, Self::Error> {
-        Ok(Self {
-            digest: sui_sdk_types::types::TransactionDigest::from_bytes(&value.digest)
-                .map_err(|e| bcs::Error::Custom(e.to_string()))?,
-            transaction: value
-                .transaction
-                .ok_or_else(|| bcs::Error::Custom("missing transaction".into()))?
-                .pipe_ref(TryInto::try_into)?,
-            signatures: value
-                .signatures
-                .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-            effects: value
-                .effects
-                .ok_or_else(|| bcs::Error::Custom("missing effects".into()))?
-                .pipe_ref(TryInto::try_into)?,
-            events: value.events.as_ref().map(TryInto::try_into).transpose()?,
-            checkpoint: value.checkpoint,
-            timestamp_ms: value.timestamp_ms,
-        })
-    }
-}
-
-//
 // CheckpointTransaction
 //
 

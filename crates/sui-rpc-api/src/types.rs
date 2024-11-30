@@ -199,3 +199,125 @@ impl GetCheckpointOptions {
         self.contents_bcs.unwrap_or(false)
     }
 }
+
+#[serde_with::serde_as]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct TransactionResponse {
+    pub digest: sui_sdk_types::types::TransactionDigest,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<sui_sdk_types::types::Transaction>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_bcs: Option<Vec<u8>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signatures: Option<Vec<sui_sdk_types::types::UserSignature>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<sui_sdk_types::types::TransactionEffects>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects_bcs: Option<Vec<u8>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events_bcs: Option<Vec<u8>>,
+
+    #[serde_as(
+        as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
+    )]
+    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint: Option<u64>,
+
+    #[serde_as(
+        as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
+    )]
+    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct GetTransactionOptions {
+    /// Request `Transaction` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<bool>,
+
+    /// Request `Transaction` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_bcs: Option<bool>,
+
+    /// Request `Vec<UserSignature>` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signatures: Option<bool>,
+
+    /// Request `TransactionEffects` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<bool>,
+
+    /// Request `TransactionEffects` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects_bcs: Option<bool>,
+
+    /// Request `TransactionEvents` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<bool>,
+
+    /// Request `TransactionEvents` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events_bcs: Option<bool>,
+}
+
+impl GetTransactionOptions {
+    pub fn include_transaction(&self) -> bool {
+        self.transaction.unwrap_or(true)
+    }
+
+    pub fn include_transaction_bcs(&self) -> bool {
+        self.transaction_bcs.unwrap_or(false)
+    }
+
+    pub fn include_signatures(&self) -> bool {
+        self.signatures.unwrap_or(true)
+    }
+
+    pub fn include_effects(&self) -> bool {
+        self.effects.unwrap_or(true)
+    }
+
+    pub fn include_effects_bcs(&self) -> bool {
+        self.effects_bcs.unwrap_or(false)
+    }
+
+    pub fn include_events(&self) -> bool {
+        self.events.unwrap_or(true)
+    }
+
+    pub fn include_events_bcs(&self) -> bool {
+        self.events_bcs.unwrap_or(false)
+    }
+}

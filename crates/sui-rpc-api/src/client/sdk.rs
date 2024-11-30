@@ -33,14 +33,14 @@ use crate::rest::system::ProtocolConfigResponse;
 use crate::rest::system::SystemStateSummary;
 use crate::rest::system::X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION;
 use crate::rest::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
-use crate::rest::transactions::ListTransactionsQueryParameters;
+use crate::rest::transactions::ListTransactionsCursorParameters;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
 use crate::rest::transactions::TransactionExecutionResponse;
-use crate::rest::transactions::TransactionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::CheckpointResponse;
 use crate::types::NodeInfo;
+use crate::types::TransactionResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
 use crate::types::X_SUI_CHECKPOINT_HEIGHT;
@@ -296,7 +296,7 @@ impl Client {
 
     pub async fn list_transactions(
         &self,
-        parameters: &ListTransactionsQueryParameters,
+        parameters: &ListTransactionsCursorParameters,
     ) -> Result<Response<Vec<TransactionResponse>>> {
         let url = self.url().join("transactions")?;
 
