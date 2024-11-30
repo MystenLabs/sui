@@ -136,6 +136,11 @@ public fun increment_epoch_number(self: &mut TxContext) {
 }
 
 #[test_only]
+public fun set_epoch_number_for_testing(self: &mut TxContext, epoch: u64) {
+    self.epoch = epoch
+}
+
+#[test_only]
 public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
     self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
 }

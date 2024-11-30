@@ -140,7 +140,6 @@ module sui_system::validator {
         extra_fields: Bag,
     }
 
-    /// Event emitted when a new stake request is received.
     public struct StakingRequestEvent has copy, drop {
         pool_id: ID,
         validator_address: address,

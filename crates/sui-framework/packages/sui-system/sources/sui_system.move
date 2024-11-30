@@ -699,6 +699,12 @@ module sui_system::sui_system {
     }
 
     #[test_only]
+    public(package) fun increment_epoch_for_testing(wrapper: &mut SuiSystemState) {
+        let self = load_system_state_mut(wrapper);
+        self.increment_epoch_for_testing()
+    }
+
+    #[test_only]
     public fun request_add_validator_for_testing(
         wrapper: &mut SuiSystemState,
         min_joining_stake_for_testing: u64,
