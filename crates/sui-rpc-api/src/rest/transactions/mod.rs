@@ -19,18 +19,16 @@ pub use resolve::ResolveTransactionResponse;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use sui_sdk_types::types::CheckpointSequenceNumber;
-use sui_sdk_types::types::Transaction;
-use sui_sdk_types::types::{
-    TransactionDigest, TransactionEffects, TransactionEvents, UserSignature,
-};
+use sui_sdk_types::types::TransactionDigest;
 use tap::Pipe;
 
-use crate::reader::StateReader;
 use crate::rest::openapi::ApiEndpoint;
 use crate::rest::openapi::OperationBuilder;
 use crate::rest::openapi::ResponseBuilder;
 use crate::rest::openapi::RouteHandler;
 use crate::rest::PageCursor;
+use crate::types::GetTransactionOptions;
+use crate::types::TransactionResponse;
 use crate::Direction;
 use crate::Result;
 use crate::RpcService;
@@ -55,6 +53,7 @@ impl ApiEndpoint<RpcService> for GetTransaction {
             .tag("Transactions")
             .operation_id("GetTransaction")
             .path_parameter::<TransactionDigest>("transaction", generator)
+            .query_parameters::<GetTransactionOptions>(generator)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -72,29 +71,12 @@ impl ApiEndpoint<RpcService> for GetTransaction {
 
 async fn get_transaction(
     Path(transaction_digest): Path<TransactionDigest>,
-    State(state): State<StateReader>,
+    Query(options): Query<GetTransactionOptions>,
+    State(state): State<RpcService>,
 ) -> Result<Json<TransactionResponse>> {
-    state.get_transaction_response(transaction_digest).map(Json)
-}
-
-#[serde_with::serde_as]
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct TransactionResponse {
-    pub digest: TransactionDigest,
-    pub transaction: Transaction,
-    pub signatures: Vec<UserSignature>,
-    pub effects: TransactionEffects,
-    pub events: Option<TransactionEvents>,
-    #[serde_as(
-        as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
-    )]
-    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
-    pub checkpoint: Option<u64>,
-    #[serde_as(
-        as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
-    )]
-    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
-    pub timestamp_ms: Option<u64>,
+    state
+        .get_transaction(transaction_digest, &options)
+        .map(Json)
 }
 
 #[derive(Debug)]
@@ -132,7 +114,8 @@ impl ApiEndpoint<RpcService> for ListTransactions {
         OperationBuilder::new()
             .tag("Transactions")
             .operation_id("ListTransactions")
-            .query_parameters::<ListTransactionsQueryParameters>(generator)
+            .query_parameters::<ListTransactionsCursorParameters>(generator)
+            .query_parameters::<GetTransactionOptions>(generator)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -150,17 +133,22 @@ impl ApiEndpoint<RpcService> for ListTransactions {
 }
 
 async fn list_transactions(
-    Query(parameters): Query<ListTransactionsQueryParameters>,
-    State(state): State<StateReader>,
+    Query(cursor): Query<ListTransactionsCursorParameters>,
+    Query(options): Query<GetTransactionOptions>,
+    State(state): State<RpcService>,
 ) -> Result<(
     PageCursor<TransactionCursor>,
     Json<Vec<TransactionResponse>>,
 )> {
-    let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
-    let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
-    let limit = parameters.limit();
-    let start = parameters.start(latest_checkpoint);
-    let direction = parameters.direction();
+    let latest_checkpoint = state
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
+    let oldest_checkpoint = state.reader.inner().get_lowest_available_checkpoint()?;
+    let limit = cursor.limit();
+    let start = cursor.start(latest_checkpoint);
+    let direction = cursor.direction();
 
     if start.checkpoint < oldest_checkpoint {
         return Err(RpcServiceError::new(
@@ -171,21 +159,18 @@ async fn list_transactions(
 
     let mut next_cursor = None;
     let transactions = state
+        .reader
         .transaction_iter(direction, (start.checkpoint, start.index))
         .take(limit)
         .map(|entry| {
             let (cursor_info, digest) = entry?;
             next_cursor = cursor_info.next_cursor;
             state
-                .get_transaction(digest.into())
-                .map(|(transaction, effects, events)| TransactionResponse {
-                    digest: transaction.transaction.digest(),
-                    transaction: transaction.transaction,
-                    signatures: transaction.signatures,
-                    effects,
-                    events,
-                    checkpoint: Some(cursor_info.checkpoint),
-                    timestamp_ms: Some(cursor_info.timestamp_ms),
+                .get_transaction(digest.into(), &options)
+                .map(|mut response| {
+                    response.checkpoint = Some(cursor_info.checkpoint);
+                    response.timestamp_ms = Some(cursor_info.timestamp_ms);
+                    response
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -269,14 +254,14 @@ impl serde::Serialize for TransactionCursor {
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct ListTransactionsQueryParameters {
+pub struct ListTransactionsCursorParameters {
     pub limit: Option<u32>,
     #[schemars(with = "Option<String>")]
     pub start: Option<TransactionCursor>,
     pub direction: Option<Direction>,
 }
 
-impl ListTransactionsQueryParameters {
+impl ListTransactionsCursorParameters {
     pub fn limit(&self) -> usize {
         self.limit
             .map(|l| (l as usize).clamp(1, crate::rest::MAX_PAGE_SIZE))
