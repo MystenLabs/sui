@@ -442,3 +442,210 @@ pub enum EffectsFinality {
     },
     QuorumExecuted,
 }
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct GetFullCheckpointOptions {
+    /// Request `CheckpointSummary` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<bool>,
+
+    /// Request `CheckpointSummary` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary_bcs: Option<bool>,
+
+    /// Request `ValidatorAggregatedSignature` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<bool>,
+
+    /// Request `CheckpointContents` be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents: Option<bool>,
+
+    /// Request `CheckpointContents` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents_bcs: Option<bool>,
+
+    /// Request `Transaction` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<bool>,
+
+    /// Request `Transaction` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_bcs: Option<bool>,
+
+    /// Request `TransactionEffects` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<bool>,
+
+    /// Request `TransactionEffects` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects_bcs: Option<bool>,
+
+    /// Request `TransactionEvents` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<bool>,
+
+    /// Request `TransactionEvents` encoded as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events_bcs: Option<bool>,
+
+    /// Request that input objects be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_objects: Option<bool>,
+
+    /// Request that output objects be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_objects: Option<bool>,
+
+    /// Request that `Object` be included in the response
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object: Option<bool>,
+
+    /// Request that `Object` formated as BCS be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_bcs: Option<bool>,
+}
+
+impl GetFullCheckpointOptions {
+    pub fn include_summary(&self) -> bool {
+        self.summary.unwrap_or(true)
+    }
+
+    pub fn include_summary_bcs(&self) -> bool {
+        self.summary_bcs.unwrap_or(false)
+    }
+
+    pub fn include_signature(&self) -> bool {
+        self.signature.unwrap_or(true)
+    }
+
+    pub fn include_contents(&self) -> bool {
+        self.contents.unwrap_or(false)
+    }
+
+    pub fn include_contents_bcs(&self) -> bool {
+        self.contents_bcs.unwrap_or(false)
+    }
+
+    pub fn include_transaction(&self) -> bool {
+        self.transaction.unwrap_or(true)
+    }
+
+    pub fn include_transaction_bcs(&self) -> bool {
+        self.transaction_bcs.unwrap_or(false)
+    }
+
+    pub fn include_effects(&self) -> bool {
+        self.effects.unwrap_or(true)
+    }
+
+    pub fn include_effects_bcs(&self) -> bool {
+        self.effects_bcs.unwrap_or(false)
+    }
+
+    pub fn include_events(&self) -> bool {
+        self.events.unwrap_or(true)
+    }
+
+    pub fn include_events_bcs(&self) -> bool {
+        self.events_bcs.unwrap_or(false)
+    }
+
+    pub fn include_input_objects(&self) -> bool {
+        self.input_objects.unwrap_or(true)
+    }
+
+    pub fn include_output_objects(&self) -> bool {
+        self.output_objects.unwrap_or(true)
+    }
+
+    pub fn include_object(&self) -> bool {
+        self.object.unwrap_or(true)
+    }
+
+    pub fn include_object_bcs(&self) -> bool {
+        self.object_bcs.unwrap_or(false)
+    }
+
+    pub fn include_any_transaction_info(&self) -> bool {
+        self.include_transaction()
+            || self.include_transaction_bcs()
+            || self.include_effects()
+            || self.include_effects_bcs()
+            || self.include_events()
+            || self.include_events_bcs()
+            || self.include_input_objects()
+            || self.include_output_objects()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FullCheckpointResponse {
+    pub sequence_number: sui_sdk_types::types::CheckpointSequenceNumber,
+    pub digest: sui_sdk_types::types::CheckpointDigest,
+
+    pub summary: Option<sui_sdk_types::types::CheckpointSummary>,
+    pub summary_bcs: Option<Vec<u8>>,
+    pub signature: Option<sui_sdk_types::types::ValidatorAggregatedSignature>,
+    pub contents: Option<sui_sdk_types::types::CheckpointContents>,
+    pub contents_bcs: Option<Vec<u8>>,
+
+    pub transactions: Vec<FullCheckpointTransaction>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FullCheckpointTransaction {
+    pub digest: sui_sdk_types::types::TransactionDigest,
+
+    pub transaction: Option<sui_sdk_types::types::Transaction>,
+    pub transaction_bcs: Option<Vec<u8>>,
+
+    pub effects: Option<sui_sdk_types::types::TransactionEffects>,
+    pub effects_bcs: Option<Vec<u8>>,
+
+    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+    pub events_bcs: Option<Vec<u8>>,
+
+    pub input_objects: Option<Vec<FullCheckpointObject>>,
+    pub output_objects: Option<Vec<FullCheckpointObject>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FullCheckpointObject {
+    pub object_id: sui_sdk_types::types::ObjectId,
+    pub version: sui_sdk_types::types::Version,
+    pub digest: sui_sdk_types::types::ObjectDigest,
+
+    pub object: Option<sui_sdk_types::types::Object>,
+    pub object_bcs: Option<Vec<u8>>,
+}
