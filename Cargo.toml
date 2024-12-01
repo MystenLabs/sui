@@ -73,6 +73,7 @@ members = [
     "consensus/core",
     "crates/anemo-benchmark",
     "crates/bin-version",
+    "crates/diesel-update-from",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
