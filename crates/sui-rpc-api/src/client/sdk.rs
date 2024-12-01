@@ -36,9 +36,10 @@ use crate::rest::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
 use crate::rest::transactions::ListTransactionsCursorParameters;
 use crate::rest::transactions::ResolveTransactionQueryParameters;
 use crate::rest::transactions::ResolveTransactionResponse;
-use crate::rest::transactions::TransactionExecutionResponse;
 use crate::rest::transactions::TransactionSimulationResponse;
 use crate::types::CheckpointResponse;
+use crate::types::ExecuteTransactionOptions;
+use crate::types::ExecuteTransactionResponse;
 use crate::types::NodeInfo;
 use crate::types::TransactionResponse;
 use crate::types::X_SUI_CHAIN;
@@ -49,7 +50,6 @@ use crate::types::X_SUI_EPOCH;
 use crate::types::X_SUI_LOWEST_AVAILABLE_CHECKPOINT;
 use crate::types::X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS;
 use crate::types::X_SUI_TIMESTAMP_MS;
-use crate::ExecuteTransactionQueryParameters;
 
 static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -307,9 +307,9 @@ impl Client {
 
     pub async fn execute_transaction(
         &self,
-        parameters: &ExecuteTransactionQueryParameters,
+        parameters: &ExecuteTransactionOptions,
         transaction: &SignedTransaction,
-    ) -> Result<Response<TransactionExecutionResponse>> {
+    ) -> Result<Response<ExecuteTransactionResponse>> {
         let url = self.url().join("transactions")?;
 
         let body = bcs::to_bytes(transaction)?;
@@ -578,7 +578,7 @@ impl Error {
         }
     }
 
-    fn from_error<E: Into<BoxError>>(error: E) -> Self {
+    pub(super) fn from_error<E: Into<BoxError>>(error: E) -> Self {
         Self::empty().with_error(error.into())
     }
 
