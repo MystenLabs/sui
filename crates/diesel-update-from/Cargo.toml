@@ -1,0 +1,18 @@
+[package]
+name = "diesel-update-from"
+edition = "2021"
+version.workspace = true
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# Opting in to breaking changes to gain access to types and traits related to
+# insertion statements: BatchInsert, ValuesClause. Diesel's codegen builds
+# conversions from collections of model types into these types.
+diesel = { workspace = true, features = ["postgres_backend", "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
+
+[dev-dependencies]
+diesel-async = { workspace = true, features = ["postgres"] }
+insta.workspace = true
+sui-pg-db.workspace = true
+tokio.workspace = true
