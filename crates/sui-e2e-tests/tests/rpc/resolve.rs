@@ -7,7 +7,6 @@ use sui_macros::sim_test;
 use sui_rpc_api::client::reqwest::StatusCode;
 use sui_rpc_api::rest::transactions::ResolveTransactionQueryParameters;
 use sui_rpc_api::Client;
-use sui_rpc_api::ExecuteTransactionQueryParameters;
 use sui_sdk_types::types::unresolved;
 use sui_sdk_types::types::Argument;
 use sui_sdk_types::types::Command;
@@ -68,10 +67,7 @@ async fn resolve_transaction_simple_transfer() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(
-            &ExecuteTransactionQueryParameters::default(),
-            &signed_transaction,
-        )
+        .execute_transaction(&Default::default(), &signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -155,10 +151,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
         vec![sender_sig, sponsor_sig],
     );
     let effects = client
-        .execute_transaction(
-            &ExecuteTransactionQueryParameters::default(),
-            &signed_transaction,
-        )
+        .execute_transaction(&Default::default(), &signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -214,10 +207,7 @@ async fn resolve_transaction_borrowed_shared_object() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(
-            &ExecuteTransactionQueryParameters::default(),
-            &signed_transaction,
-        )
+        .execute_transaction(&Default::default(), &signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -291,10 +281,7 @@ async fn resolve_transaction_mutable_shared_object() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(
-            &ExecuteTransactionQueryParameters::default(),
-            &signed_transaction,
-        )
+        .execute_transaction(&Default::default(), &signed_transaction)
         .await
         .unwrap()
         .effects;
@@ -417,10 +404,7 @@ async fn resolve_transaction_with_raw_json() {
         .wallet
         .sign_transaction(&resolved.transaction.try_into().unwrap());
     let effects = client
-        .execute_transaction(
-            &ExecuteTransactionQueryParameters::default(),
-            &signed_transaction,
-        )
+        .execute_transaction(&Default::default(), &signed_transaction)
         .await
         .unwrap()
         .effects;

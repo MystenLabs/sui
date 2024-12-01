@@ -8,6 +8,8 @@ use crate::RpcService;
 use sui_sdk_types::types::TransactionDigest;
 use tap::Pipe;
 
+mod execution;
+
 impl RpcService {
     pub fn get_transaction(
         &self,

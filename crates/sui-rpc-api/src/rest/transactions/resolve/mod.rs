@@ -165,12 +165,12 @@ async fn resolve_transaction(
     }
 
     let simulation = if parameters.simulate {
-        super::execution::simulate_transaction_impl(
-            executor,
-            &parameters.simulate_transaction_parameters,
-            resolved_transaction.clone().try_into()?,
-        )?
-        .pipe(Some)
+        state
+            .simulate_transaction(
+                &parameters.simulate_transaction_parameters,
+                resolved_transaction.clone().try_into()?,
+            )?
+            .pipe(Some)
     } else {
         None
     };

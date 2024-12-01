@@ -321,3 +321,124 @@ impl GetTransactionOptions {
         self.events_bcs.unwrap_or(false)
     }
 }
+
+/// Options for the execute transaction endpoint
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct ExecuteTransactionOptions {
+    /// Request `TransactionEffects` be included in the Response.
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<bool>,
+
+    /// Request `TransactionEffects` encoded as BCS be included in the Response.
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects_bcs: Option<bool>,
+
+    /// Request `TransactionEvents` be included in the Response.
+    ///
+    /// Defaults to `true` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<bool>,
+
+    /// Request `TransactionEvents` encoded as BCS be included in the Response.
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events_bcs: Option<bool>,
+
+    /// Request `BalanceChanges` be included in the Response.
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance_changes: Option<bool>,
+    // TODO determine if we want to provide the same level of options for Objects here as we do in
+    // the get_object apis
+    // /// Request input `Object`s be included in the Response.
+    // ///
+    // /// Defaults to `false` if not provided.
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub input_objects: Option<bool>,
+
+    // /// Request output `Object`s be included in the Response.
+    // ///
+    // /// Defaults to `false` if not provided.
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub output_objects: Option<bool>,
+}
+
+impl ExecuteTransactionOptions {
+    pub fn include_effects(&self) -> bool {
+        self.effects.unwrap_or(true)
+    }
+
+    pub fn include_effects_bcs(&self) -> bool {
+        self.effects_bcs.unwrap_or(false)
+    }
+
+    pub fn include_events(&self) -> bool {
+        self.events.unwrap_or(true)
+    }
+
+    pub fn include_events_bcs(&self) -> bool {
+        self.events_bcs.unwrap_or(false)
+    }
+
+    pub fn include_balance_changes(&self) -> bool {
+        self.balance_changes.unwrap_or(false)
+    }
+
+    pub fn include_input_objects(&self) -> bool {
+        false
+    }
+
+    pub fn include_output_objects(&self) -> bool {
+        false
+    }
+}
+
+/// Response type for the execute transaction endpoint
+#[serde_with::serde_as]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct ExecuteTransactionResponse {
+    pub finality: EffectsFinality,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<sui_sdk_types::types::TransactionEffects>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects_bcs: Option<Vec<u8>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+
+    #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events_bcs: Option<Vec<u8>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance_changes: Option<Vec<sui_sdk_types::types::BalanceChange>>,
+    // pub input_objects: Option<Vec<sui_sdk_types::types::Object>>,
+    // pub output_objects: Option<Vec<sui_sdk_types::types::Object>>,
+}
+
+#[serde_with::serde_as]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(tag = "finality", rename_all = "snake_case")]
+pub enum EffectsFinality {
+    Certified {
+        /// Validator aggregated signature
+        signature: sui_sdk_types::types::ValidatorAggregatedSignature,
+    },
+    Checkpointed {
+        #[serde_as(as = "sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>")]
+        #[schemars(with = "crate::rest::_schemars::U64")]
+        checkpoint: sui_sdk_types::types::CheckpointSequenceNumber,
+    },
+    QuorumExecuted,
+}
