@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::types::CheckpointResponse;
+use crate::types::FullCheckpointObject;
+use crate::types::FullCheckpointResponse;
+use crate::types::FullCheckpointTransaction;
 use crate::types::GetCheckpointOptions;
+use crate::types::GetFullCheckpointOptions;
 use crate::Result;
 use crate::RpcService;
 use sui_sdk_types::types::CheckpointContents;
@@ -82,6 +86,187 @@ impl RpcService {
         }
         .pipe(Ok)
     }
+
+    pub fn get_full_checkpoint(
+        &self,
+        checkpoint: CheckpointId,
+        options: &GetFullCheckpointOptions,
+    ) -> Result<FullCheckpointResponse> {
+        let verified_summary = match checkpoint {
+            CheckpointId::SequenceNumber(s) => {
+                let oldest_checkpoint = self
+                    .reader
+                    .inner()
+                    .get_lowest_available_checkpoint_objects()?;
+                if s < oldest_checkpoint {
+                    return Err(crate::RpcServiceError::new(
+                        axum::http::StatusCode::GONE,
+                        "Old checkpoints have been pruned",
+                    ));
+                }
+
+                self.reader
+                    .inner()
+                    .get_checkpoint_by_sequence_number(s)
+                    .ok_or(CheckpointNotFoundError(checkpoint))?
+            }
+            CheckpointId::Digest(d) => self
+                .reader
+                .inner()
+                .get_checkpoint_by_digest(&d.into())
+                .ok_or(CheckpointNotFoundError(checkpoint))?,
+        };
+
+        let checkpoint_contents = self
+            .reader
+            .inner()
+            .get_checkpoint_contents_by_digest(&verified_summary.content_digest)
+            .ok_or(CheckpointNotFoundError(checkpoint))?;
+
+        let sui_types::full_checkpoint_content::CheckpointData {
+            checkpoint_summary,
+            checkpoint_contents,
+            transactions,
+        } = self
+            .reader
+            .inner()
+            .get_checkpoint_data(verified_summary, checkpoint_contents)?;
+
+        let sequence_number = checkpoint_summary.sequence_number;
+        let digest = checkpoint_summary.digest().to_owned().into();
+        let (summary, signature) = checkpoint_summary.into_data_and_sig();
+
+        let summary_bcs = options
+            .include_summary_bcs()
+            .then(|| bcs::to_bytes(&summary))
+            .transpose()?;
+        let contents_bcs = options
+            .include_contents_bcs()
+            .then(|| bcs::to_bytes(&checkpoint_contents))
+            .transpose()?;
+
+        let transactions = transactions
+            .into_iter()
+            .map(|transaction| transaction_to_checkpoint_transaction(transaction, options))
+            .collect::<Result<_>>()?;
+
+        FullCheckpointResponse {
+            sequence_number,
+            digest,
+            summary: options
+                .include_summary()
+                .then(|| summary.try_into())
+                .transpose()?,
+            summary_bcs,
+            signature: options.include_signature().then(|| signature.into()),
+            contents: options
+                .include_contents()
+                .then(|| checkpoint_contents.try_into())
+                .transpose()?,
+            contents_bcs,
+            transactions,
+        }
+        .pipe(Ok)
+    }
+}
+
+fn transaction_to_checkpoint_transaction(
+    sui_types::full_checkpoint_content::CheckpointTransaction {
+        transaction,
+        effects,
+        events,
+        input_objects,
+        output_objects,
+    }: sui_types::full_checkpoint_content::CheckpointTransaction,
+    options: &GetFullCheckpointOptions,
+) -> Result<FullCheckpointTransaction> {
+    let digest = transaction.digest().to_owned().into();
+    let transaction = transaction.into_data().into_inner().intent_message.value;
+    let transaction_bcs = options
+        .include_transaction_bcs()
+        .then(|| bcs::to_bytes(&transaction))
+        .transpose()?;
+    let transaction = options
+        .include_transaction()
+        .then(|| transaction.try_into())
+        .transpose()?;
+    let effects_bcs = options
+        .include_effects_bcs()
+        .then(|| bcs::to_bytes(&effects))
+        .transpose()?;
+    let effects = options
+        .include_effects()
+        .then(|| effects.try_into())
+        .transpose()?;
+    let events_bcs = options
+        .include_events_bcs()
+        .then(|| events.as_ref().map(bcs::to_bytes))
+        .flatten()
+        .transpose()?;
+    let events = options
+        .include_events()
+        .then(|| events.map(TryInto::try_into))
+        .flatten()
+        .transpose()?;
+
+    let input_objects = options
+        .include_input_objects()
+        .then(|| {
+            input_objects
+                .into_iter()
+                .map(|object| object_to_object_response(object, options))
+                .collect::<Result<_>>()
+        })
+        .transpose()?;
+    let output_objects = options
+        .include_output_objects()
+        .then(|| {
+            output_objects
+                .into_iter()
+                .map(|object| object_to_object_response(object, options))
+                .collect::<Result<_>>()
+        })
+        .transpose()?;
+
+    FullCheckpointTransaction {
+        digest,
+        transaction,
+        transaction_bcs,
+        effects,
+        effects_bcs,
+        events,
+        events_bcs,
+        input_objects,
+        output_objects,
+    }
+    .pipe(Ok)
+}
+
+fn object_to_object_response(
+    object: sui_types::object::Object,
+    options: &GetFullCheckpointOptions,
+) -> Result<FullCheckpointObject> {
+    let object_id = object.id().into();
+    let version = object.version().value();
+    let digest = object.digest().into();
+
+    let object_bcs = options
+        .include_object_bcs()
+        .then(|| bcs::to_bytes(&object))
+        .transpose()?;
+    let object = options
+        .include_object()
+        .then(|| object.try_into())
+        .transpose()?;
+
+    FullCheckpointObject {
+        object_id,
+        version,
+        digest,
+        object,
+        object_bcs,
+    }
+    .pipe(Ok)
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, schemars::JsonSchema)]
