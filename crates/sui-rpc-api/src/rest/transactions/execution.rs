@@ -5,19 +5,16 @@ use crate::response::Bcs;
 use crate::rest::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
-use crate::{Result, RpcService, RpcServiceError};
+use crate::types::ExecuteTransactionOptions;
+use crate::types::ExecuteTransactionResponse;
+use crate::{Result, RpcService};
 use axum::extract::{Query, State};
 use axum::Json;
 use schemars::JsonSchema;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use sui_sdk_types::types::framework::Coin;
 use sui_sdk_types::types::{
-    Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
-    Transaction, TransactionEffects, TransactionEvents, ValidatorAggregatedSignature,
+    BalanceChange, Object, SignedTransaction, Transaction, TransactionEffects, TransactionEvents,
 };
-use sui_types::transaction_executor::{SimulateTransactionResult, TransactionExecutor};
-use tap::Pipe;
 
 pub struct ExecuteTransaction;
 
@@ -37,12 +34,12 @@ impl ApiEndpoint<RpcService> for ExecuteTransaction {
         OperationBuilder::new()
             .tag("Transactions")
             .operation_id("ExecuteTransaction")
-            .query_parameters::<ExecuteTransactionQueryParameters>(generator)
+            .query_parameters::<ExecuteTransactionOptions>(generator)
             .request_body(RequestBodyBuilder::new().bcs_content().build())
             .response(
                 200,
                 ResponseBuilder::new()
-                    .json_content::<TransactionExecutionResponse>(generator)
+                    .json_content::<ExecuteTransactionResponse>(generator)
                     .build(),
             )
             .build()
@@ -59,300 +56,15 @@ impl ApiEndpoint<RpcService> for ExecuteTransaction {
 /// an internal QuorumDriver which drives execution of the transaction with the current validator
 /// set.
 async fn execute_transaction(
-    State(state): State<Option<Arc<dyn TransactionExecutor>>>,
-    Query(parameters): Query<ExecuteTransactionQueryParameters>,
+    State(state): State<RpcService>,
+    Query(options): Query<ExecuteTransactionOptions>,
     client_address: Option<axum::extract::ConnectInfo<SocketAddr>>,
     Bcs(transaction): Bcs<SignedTransaction>,
-) -> Result<Json<TransactionExecutionResponse>> {
-    let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
-    let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
-        transaction: transaction.try_into()?,
-        include_events: parameters.events,
-        include_input_objects: parameters.input_objects || parameters.balance_changes,
-        include_output_objects: parameters.output_objects || parameters.balance_changes,
-        include_auxiliary_data: false,
-    };
-
-    let sui_types::quorum_driver_types::ExecuteTransactionResponseV3 {
-        effects,
-        events,
-        input_objects,
-        output_objects,
-        auxiliary_data: _,
-    } = executor
-        .execute_transaction(request, client_address.map(|a| a.0))
-        .await?;
-
-    let (effects, finality) = {
-        let sui_types::quorum_driver_types::FinalizedEffects {
-            effects,
-            finality_info,
-        } = effects;
-        let finality = match finality_info {
-            sui_types::quorum_driver_types::EffectsFinalityInfo::Certified(sig) => {
-                EffectsFinality::Certified {
-                    signature: sig.into(),
-                }
-            }
-            sui_types::quorum_driver_types::EffectsFinalityInfo::Checkpointed(
-                _epoch,
-                checkpoint,
-            ) => EffectsFinality::Checkpointed { checkpoint },
-            sui_types::quorum_driver_types::EffectsFinalityInfo::QuorumExecuted(_) => {
-                EffectsFinality::QuorumExecuted
-            }
-        };
-
-        (effects.try_into()?, finality)
-    };
-
-    let events = if parameters.events {
-        events.map(TryInto::try_into).transpose()?
-    } else {
-        None
-    };
-
-    let input_objects = input_objects
-        .map(|objects| {
-            objects
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .transpose()?;
-    let output_objects = output_objects
-        .map(|objects| {
-            objects
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .transpose()?;
-
-    let balance_changes = match (parameters.balance_changes, &input_objects, &output_objects) {
-        (true, Some(input_objects), Some(output_objects)) => Some(derive_balance_changes(
-            &effects,
-            input_objects,
-            output_objects,
-        )),
-        _ => None,
-    };
-
-    let input_objects = if parameters.input_objects {
-        input_objects
-    } else {
-        None
-    };
-
-    let output_objects = if parameters.output_objects {
-        output_objects
-    } else {
-        None
-    };
-
-    TransactionExecutionResponse {
-        effects,
-        finality,
-        events,
-        balance_changes,
-        input_objects,
-        output_objects,
-    }
-    .pipe(Json)
-    .pipe(Ok)
-}
-
-/// Query parameters for the execute transaction endpoint
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
-pub struct ExecuteTransactionQueryParameters {
-    // TODO once transaction finality support is more fully implemented up and down the stack, add
-    // back in this parameter, which will be mutally-exclusive with the other parameters. When
-    // `true` will submit the txn and return a `202 Accepted` response with no payload.
-    // effects: Option<bool>,
-    /// Request `TransactionEvents` be included in the Response.
-    #[serde(default)]
-    pub events: bool,
-    /// Request `BalanceChanges` be included in the Response.
-    #[serde(default)]
-    pub balance_changes: bool,
-    /// Request input `Object`s be included in the Response.
-    #[serde(default)]
-    pub input_objects: bool,
-    /// Request output `Object`s be included in the Response.
-    #[serde(default)]
-    pub output_objects: bool,
-}
-
-/// Response type for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
-pub struct TransactionExecutionResponse {
-    pub effects: TransactionEffects,
-
-    pub finality: EffectsFinality,
-    pub events: Option<TransactionEvents>,
-    pub balance_changes: Option<Vec<BalanceChange>>,
-    pub input_objects: Option<Vec<Object>>,
-    pub output_objects: Option<Vec<Object>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum EffectsFinality {
-    Certified {
-        /// Validator aggregated signature
-        signature: ValidatorAggregatedSignature,
-    },
-    Checkpointed {
-        checkpoint: CheckpointSequenceNumber,
-    },
-    QuorumExecuted,
-}
-
-impl serde::Serialize for EffectsFinality {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        if serializer.is_human_readable() {
-            let readable = match self.clone() {
-                EffectsFinality::Certified { signature } => {
-                    ReadableEffectsFinality::Certified { signature }
-                }
-                EffectsFinality::Checkpointed { checkpoint } => {
-                    ReadableEffectsFinality::Checkpointed { checkpoint }
-                }
-                EffectsFinality::QuorumExecuted => ReadableEffectsFinality::QuorumExecuted,
-            };
-            readable.serialize(serializer)
-        } else {
-            let binary = match self.clone() {
-                EffectsFinality::Certified { signature } => {
-                    BinaryEffectsFinality::Certified { signature }
-                }
-                EffectsFinality::Checkpointed { checkpoint } => {
-                    BinaryEffectsFinality::Checkpointed { checkpoint }
-                }
-                EffectsFinality::QuorumExecuted => BinaryEffectsFinality::QuorumExecuted,
-            };
-            binary.serialize(serializer)
-        }
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for EffectsFinality {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            ReadableEffectsFinality::deserialize(deserializer).map(|readable| match readable {
-                ReadableEffectsFinality::Certified { signature } => {
-                    EffectsFinality::Certified { signature }
-                }
-                ReadableEffectsFinality::Checkpointed { checkpoint } => {
-                    EffectsFinality::Checkpointed { checkpoint }
-                }
-                ReadableEffectsFinality::QuorumExecuted => EffectsFinality::QuorumExecuted,
-            })
-        } else {
-            BinaryEffectsFinality::deserialize(deserializer).map(|binary| match binary {
-                BinaryEffectsFinality::Certified { signature } => {
-                    EffectsFinality::Certified { signature }
-                }
-                BinaryEffectsFinality::Checkpointed { checkpoint } => {
-                    EffectsFinality::Checkpointed { checkpoint }
-                }
-                BinaryEffectsFinality::QuorumExecuted => EffectsFinality::QuorumExecuted,
-            })
-        }
-    }
-}
-
-impl JsonSchema for EffectsFinality {
-    fn schema_name() -> String {
-        ReadableEffectsFinality::schema_name()
-    }
-
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        ReadableEffectsFinality::json_schema(gen)
-    }
-}
-
-#[serde_with::serde_as]
-#[derive(serde::Serialize, serde::Deserialize, JsonSchema)]
-#[serde(rename = "EffectsFinality", untagged)]
-enum ReadableEffectsFinality {
-    Certified {
-        /// Validator aggregated signature
-        signature: ValidatorAggregatedSignature,
-    },
-    Checkpointed {
-        #[serde_as(as = "sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>")]
-        #[schemars(with = "crate::rest::_schemars::U64")]
-        checkpoint: CheckpointSequenceNumber,
-    },
-    QuorumExecuted,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-enum BinaryEffectsFinality {
-    Certified {
-        /// Validator aggregated signature
-        signature: ValidatorAggregatedSignature,
-    },
-    Checkpointed {
-        checkpoint: CheckpointSequenceNumber,
-    },
-    QuorumExecuted,
-}
-
-fn coins(objects: &[Object]) -> impl Iterator<Item = (&Address, Coin<'_>)> + '_ {
-    objects.iter().filter_map(|object| {
-        let address = match object.owner() {
-            Owner::Address(address) => address,
-            Owner::Object(object_id) => object_id.as_address(),
-            Owner::Shared { .. } | Owner::Immutable => return None,
-        };
-        let coin = Coin::try_from_object(object)?;
-        Some((address, coin))
-    })
-}
-
-fn derive_balance_changes(
-    _effects: &TransactionEffects,
-    input_objects: &[Object],
-    output_objects: &[Object],
-) -> Vec<BalanceChange> {
-    // 1. subtract all input coins
-    let balances = coins(input_objects).fold(
-        std::collections::BTreeMap::<_, i128>::new(),
-        |mut acc, (address, coin)| {
-            *acc.entry((address, coin.coin_type().to_owned()))
-                .or_default() -= coin.balance() as i128;
-            acc
-        },
-    );
-
-    // 2. add all mutated coins
-    let balances = coins(output_objects).fold(balances, |mut acc, (address, coin)| {
-        *acc.entry((address, coin.coin_type().to_owned()))
-            .or_default() += coin.balance() as i128;
-        acc
-    });
-
-    balances
-        .into_iter()
-        .filter_map(|((address, coin_type), amount)| {
-            if amount == 0 {
-                return None;
-            }
-
-            Some(BalanceChange {
-                address: *address,
-                coin_type,
-                amount,
-            })
-        })
-        .collect()
+) -> Result<Json<ExecuteTransactionResponse>> {
+    state
+        .execute_transaction(transaction, client_address.map(|a| a.0), &options)
+        .await
+        .map(Json)
 }
 
 pub struct SimulateTransaction;
@@ -390,66 +102,14 @@ impl ApiEndpoint<RpcService> for SimulateTransaction {
 }
 
 async fn simulate_transaction(
-    State(state): State<Option<Arc<dyn TransactionExecutor>>>,
+    State(state): State<RpcService>,
     Query(parameters): Query<SimulateTransactionQueryParameters>,
     //TODO allow accepting JSON as well as BCS
     Bcs(transaction): Bcs<Transaction>,
 ) -> Result<Json<TransactionSimulationResponse>> {
-    let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
-
-    simulate_transaction_impl(&executor, &parameters, transaction).map(Json)
-}
-
-pub(super) fn simulate_transaction_impl(
-    executor: &Arc<dyn TransactionExecutor>,
-    parameters: &SimulateTransactionQueryParameters,
-    transaction: Transaction,
-) -> Result<TransactionSimulationResponse> {
-    if transaction.gas_payment.objects.is_empty() {
-        return Err(RpcServiceError::new(
-            axum::http::StatusCode::BAD_REQUEST,
-            "no gas payment provided",
-        ));
-    }
-
-    let SimulateTransactionResult {
-        input_objects,
-        output_objects,
-        events,
-        effects,
-        mock_gas_id,
-    } = executor
-        .simulate_transaction(transaction.try_into()?)
-        .map_err(anyhow::Error::from)?;
-
-    if mock_gas_id.is_some() {
-        return Err(RpcServiceError::new(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "simulate unexpectedly used a mock gas payment",
-        ));
-    }
-
-    let events = events.map(TryInto::try_into).transpose()?;
-    let effects = effects.try_into()?;
-
-    let input_objects = input_objects
-        .into_values()
-        .map(TryInto::try_into)
-        .collect::<Result<Vec<_>, _>>()?;
-    let output_objects = output_objects
-        .into_values()
-        .map(TryInto::try_into)
-        .collect::<Result<Vec<_>, _>>()?;
-    let balance_changes = derive_balance_changes(&effects, &input_objects, &output_objects);
-
-    TransactionSimulationResponse {
-        events,
-        effects,
-        balance_changes: parameters.balance_changes.then_some(balance_changes),
-        input_objects: parameters.input_objects.then_some(input_objects),
-        output_objects: parameters.output_objects.then_some(output_objects),
-    }
-    .pipe(Ok)
+    state
+        .simulate_transaction(&parameters, transaction)
+        .map(Json)
 }
 
 /// Response type for the transaction simulation endpoint

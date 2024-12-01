@@ -5,16 +5,15 @@ pub mod sdk;
 use sdk::Result;
 
 pub use reqwest;
+use tap::Pipe;
 
-use crate::rest::transactions::ExecuteTransactionQueryParameters;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use crate::types::ExecuteTransactionOptions;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
-use sui_types::TypeTag;
 
 use self::sdk::Response;
 
@@ -96,7 +95,7 @@ impl Client {
 
     pub async fn execute_transaction(
         &self,
-        parameters: &ExecuteTransactionQueryParameters,
+        parameters: &ExecuteTransactionOptions,
         transaction: &Transaction,
     ) -> Result<TransactionExecutionResponse> {
         let signed_transaction = sui_sdk_types::types::SignedTransaction {
@@ -115,43 +114,44 @@ impl Client {
                 .collect::<Result<_, _>>()?,
         };
 
-        let response = self
+        let options = ExecuteTransactionOptions {
+            effects_bcs: Some(true),
+            events_bcs: Some(true),
+            ..(parameters.to_owned())
+        };
+
+        let crate::types::ExecuteTransactionResponse {
+            finality,
+            effects: _,
+            effects_bcs,
+            events: _,
+            events_bcs,
+            balance_changes,
+        } = self
             .inner
-            .execute_transaction(parameters, &signed_transaction)
+            .execute_transaction(&options, &signed_transaction)
             .await?
             .into_inner();
-        bcs::from_bytes(&bcs::to_bytes(&response)?).map_err(Into::into)
+
+        TransactionExecutionResponse {
+            finality,
+            effects: bcs::from_bytes(
+                effects_bcs
+                    .as_deref()
+                    .ok_or_else(|| sdk::Error::from_error("missing effects"))?,
+            )?,
+            events: events_bcs.as_deref().map(bcs::from_bytes).transpose()?,
+            balance_changes,
+        }
+        .pipe(Ok)
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug)]
 pub struct TransactionExecutionResponse {
+    pub finality: crate::types::EffectsFinality,
+
     pub effects: TransactionEffects,
-
-    pub finality: EffectsFinality,
     pub events: Option<TransactionEvents>,
-    pub balance_changes: Option<Vec<BalanceChange>>,
-    pub input_objects: Option<Vec<Object>>,
-    pub output_objects: Option<Vec<Object>>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum EffectsFinality {
-    Certified {
-        signature: AuthorityStrongQuorumSignInfo,
-    },
-    Checkpointed {
-        checkpoint: CheckpointSequenceNumber,
-    },
-}
-
-#[derive(PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
-pub struct BalanceChange {
-    /// Owner of the balance change
-    pub address: SuiAddress,
-    /// Type of the Coin
-    pub coin_type: TypeTag,
-    /// The amount indicate the balance value changes,
-    /// negative amount means spending coin value and positive means receiving coin value.
-    pub amount: i128,
+    pub balance_changes: Option<Vec<sui_sdk_types::types::BalanceChange>>,
 }

@@ -826,10 +826,29 @@
           {
             "in": "query",
             "name": "balance_changes",
-            "description": "Request `BalanceChanges` be included in the Response.",
+            "description": "Request `BalanceChanges` be included in the Response.\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `BalanceChanges` be included in the Response.",
-              "default": false,
+              "description": "Request `BalanceChanges` be included in the Response.\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "effects",
+            "description": "Request `TransactionEffects` be included in the Response.\n\nDefaults to `true` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEffects` be included in the Response.\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "effects_bcs",
+            "description": "Request `TransactionEffects` encoded as BCS be included in the Response.\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `TransactionEffects` encoded as BCS be included in the Response.\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -837,32 +856,19 @@
           {
             "in": "query",
             "name": "events",
-            "description": "Request `TransactionEvents` be included in the Response.",
+            "description": "Request `TransactionEvents` be included in the Response.\n\nDefaults to `true` if not provided.",
             "schema": {
-              "description": "Request `TransactionEvents` be included in the Response.",
-              "default": false,
+              "description": "Request `TransactionEvents` be included in the Response.\n\nDefaults to `true` if not provided.",
               "type": "boolean"
             },
             "style": "form"
           },
           {
             "in": "query",
-            "name": "input_objects",
-            "description": "Request input `Object`s be included in the Response.",
+            "name": "events_bcs",
+            "description": "Request `TransactionEvents` encoded as BCS be included in the Response.\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request input `Object`s be included in the Response.",
-              "default": false,
-              "type": "boolean"
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "output_objects",
-            "description": "Request output `Object`s be included in the Response.",
-            "schema": {
-              "description": "Request output `Object`s be included in the Response.",
-              "default": false,
+              "description": "Request `TransactionEvents` encoded as BCS be included in the Response.\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -879,7 +885,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TransactionExecutionResponse"
+                  "$ref": "#/components/schemas/ExecuteTransactionResponse"
                 }
               }
             }
@@ -2361,13 +2367,20 @@
         "$ref": "#/components/schemas/Digest"
       },
       "EffectsFinality": {
-        "anyOf": [
+        "oneOf": [
           {
             "type": "object",
             "required": [
+              "finality",
               "signature"
             ],
             "properties": {
+              "finality": {
+                "type": "string",
+                "enum": [
+                  "certified"
+                ]
+              },
               "signature": {
                 "description": "Validator aggregated signature",
                 "allOf": [
@@ -2381,18 +2394,36 @@
           {
             "type": "object",
             "required": [
-              "checkpoint"
+              "checkpoint",
+              "finality"
             ],
             "properties": {
               "checkpoint": {
                 "description": "Radix-10 encoded 64-bit unsigned integer",
                 "type": "string",
                 "format": "u64"
+              },
+              "finality": {
+                "type": "string",
+                "enum": [
+                  "checkpointed"
+                ]
               }
             }
           },
           {
-            "type": "null"
+            "type": "object",
+            "required": [
+              "finality"
+            ],
+            "properties": {
+              "finality": {
+                "type": "string",
+                "enum": [
+                  "quorum_executed"
+                ]
+              }
+            }
           }
         ]
       },
@@ -2627,6 +2658,36 @@
           },
           "type": {
             "$ref": "#/components/schemas/StructTag"
+          }
+        }
+      },
+      "ExecuteTransactionResponse": {
+        "description": "Response type for the execute transaction endpoint",
+        "type": "object",
+        "required": [
+          "finality"
+        ],
+        "properties": {
+          "balance_changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "effects_bcs": {
+            "type": "string"
+          },
+          "events": {
+            "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "events_bcs": {
+            "type": "string"
+          },
+          "finality": {
+            "$ref": "#/components/schemas/EffectsFinality"
           }
         }
       },
@@ -5091,43 +5152,6 @@
       },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Digest"
-      },
-      "TransactionExecutionResponse": {
-        "description": "Response type for the execute transaction endpoint",
-        "type": "object",
-        "required": [
-          "effects",
-          "finality"
-        ],
-        "properties": {
-          "balance_changes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BalanceChange"
-            }
-          },
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
-          },
-          "events": {
-            "$ref": "#/components/schemas/TransactionEvents"
-          },
-          "finality": {
-            "$ref": "#/components/schemas/EffectsFinality"
-          },
-          "input_objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "output_objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          }
-        }
       },
       "TransactionExpiration": {
         "oneOf": [
