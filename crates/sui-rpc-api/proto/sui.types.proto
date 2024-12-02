@@ -1,0 +1,1038 @@
+// Protobuf definitions of public Sui core types
+//
+// This file contains a complete set of protobuf definitions for all of the
+// public sui core types. All sui types are intended to have a 1:1 mapping to a
+// protobuf message defined in this file and be able to roundtrip to/from their
+// rust and protobuf definitions assuming a sufficiently up-to-date version of
+// both these definitions.
+
+syntax = "proto3";
+
+package sui.types;
+
+import "google/protobuf/empty.proto";
+
+message Address {
+  optional bytes address = 1;
+}
+
+message ObjectId {
+  optional bytes object_id = 1;
+}
+
+message Digest {
+  optional bytes digest = 1;
+}
+
+message Bcs {
+  optional bytes bcs = 1;
+}
+
+// Primitives {{{
+
+// Little-endian encoded u128
+message U128 {
+  optional bytes bytes = 1;
+}
+
+// Little-endian encoded i128
+message I128 {
+  optional bytes bytes = 1;
+}
+
+// Little-endian encoded u256
+message U256 {
+  optional bytes bytes = 1;
+}
+
+// End Primitives }}}
+
+// Checkpoint {{{
+
+message CheckpointSummary {
+  optional uint64 epoch = 1;
+  optional uint64 sequence_number = 2;
+  optional uint64 total_network_transactions = 3;
+  optional Digest content_digest = 4;
+  optional Digest previous_digest = 5;
+
+  optional GasCostSummary epoch_rolling_gas_cost_summary = 6;
+
+  optional uint64 timestamp_ms = 7;
+
+  repeated CheckpointCommitment commitments = 8;
+  optional EndOfEpochData end_of_epoch_data = 9;
+  optional bytes version_specific_data = 10;
+}
+
+message CheckpointCommitment {
+  oneof commitment {
+    Digest ecmh_live_object_set = 1;
+  }
+}
+
+message EndOfEpochData {
+  repeated ValidatorCommitteeMember next_epoch_committee = 1;
+  optional uint64 next_epoch_protocol_version = 2;
+  repeated CheckpointCommitment epoch_commitments = 3;
+}
+
+message CheckpointedTransactionInfo {
+  // TransactionDigest
+  optional Digest transaction = 1;
+  // EffectsDigest
+  optional Digest effects = 2;
+  repeated UserSignature signatures = 3;
+}
+
+message CheckpointContents {
+  message V1 {
+    repeated CheckpointedTransactionInfo transactions = 1;
+  }
+
+  oneof contents {
+    V1 v1 = 1;
+  }
+}
+
+// End Checkpoint }}}
+
+// TransactionEvents {{{
+
+message TransactionEvents {
+  repeated Event events = 1;
+}
+
+message Event {
+  optional ObjectId package_id = 1;
+  optional Identifier module = 2;
+  optional Address sender = 3;
+  optional StructTag event_type = 4;
+  optional bytes contents = 5;
+}
+
+// End TransactionEvents }}}
+
+// Object {{{
+
+message ObjectReference {
+  optional ObjectId object_id = 1;
+  optional uint64 version = 2;
+  optional Digest digest = 3;
+}
+
+message MovePackage {
+  optional ObjectId id = 1;
+  optional uint64 version = 2;
+  repeated MoveModule modules = 3;
+  repeated TypeOrigin type_origin_table = 4;
+  repeated UpgradeInfo linkage_table = 5;
+}
+
+message MoveModule {
+  optional Identifier name = 1;
+  optional bytes contents = 2;
+}
+
+message TypeOrigin {
+  optional Identifier module_name = 1;
+  optional Identifier struct_name = 2;
+  optional ObjectId package_id = 3;
+}
+
+message UpgradeInfo {
+  optional ObjectId original_id = 1;
+  optional ObjectId upgraded_id = 2;
+  optional uint64 upgraded_version = 3;
+}
+
+message Owner {
+  oneof kind {
+    Address address = 1;
+    ObjectId object = 2;
+    uint64 shared = 3;
+    google.protobuf.Empty immutable = 4;
+  }
+}
+
+message MoveStruct {
+  optional ObjectId object_id = 1;
+  optional StructTag object_type = 2;
+  optional bool has_public_transfer = 3;
+  optional uint64 version = 4;
+  optional bytes contents = 5;
+}
+
+message Object {
+  optional ObjectId object_id = 1;
+  optional uint64 version = 2;
+  optional Owner owner = 3;
+
+  optional ObjectData object = 4;
+
+  optional Digest previous_transaction = 5;
+  optional uint64 storage_rebate = 6;
+}
+
+message ObjectData {
+  oneof kind {
+    MoveStruct struct = 1;
+    MovePackage package = 2;
+  }
+}
+
+message GenesisObject {
+  optional ObjectId object_id = 1;
+  optional uint64 version = 2;
+  optional Owner owner = 3;
+  optional ObjectData object = 4;
+}
+
+// End Object }}}
+
+// GasCostSummary {{{
+
+message GasCostSummary {
+  optional uint64 computation_cost = 1;
+  optional uint64 storage_cost = 2;
+  optional uint64 storage_rebate = 3;
+  optional uint64 non_refundable_storage_fee = 4;
+}
+
+// End GasCostSummary }}}
+
+// Move {{{
+
+message Identifier {
+  optional bytes identifier = 1;
+}
+
+message StructTag {
+  optional Address address = 1;
+  optional Identifier module = 2;
+  optional Identifier name = 3;
+  repeated TypeTag type_parameters = 4;
+}
+
+message TypeTag {
+  oneof tag {
+    google.protobuf.Empty U8 = 1;
+    google.protobuf.Empty U16 = 2;
+    google.protobuf.Empty U32 = 3;
+    google.protobuf.Empty U64 = 4;
+    google.protobuf.Empty U128 = 5;
+    google.protobuf.Empty U256 = 6;
+    google.protobuf.Empty Bool = 7;
+    google.protobuf.Empty Address = 8;
+    google.protobuf.Empty Signer = 9;
+    TypeTag vector = 10;
+    StructTag struct = 11;
+  }
+}
+
+message MoveStructValue {
+  optional StructTag struct_type = 1;
+  repeated MoveField fields = 2;
+}
+
+message MoveField {
+  optional Identifier name = 1;
+  optional MoveValue value = 2;
+}
+
+message MoveVariant {
+  optional StructTag enum_type = 1;
+  optional Identifier variant_name = 2;
+  optional uint32 tag = 3;
+  repeated MoveField fields = 4;
+}
+
+message MoveValue {
+  oneof kind {
+    bool bool = 2;
+    uint32 u8 = 3;
+    uint32 u16 = 4;
+    uint32 u32 = 5;
+    uint64 u64 = 6;
+    U128 u128 = 7;
+    U256 u256 = 8;
+    Address address = 9;
+    MoveVector vector = 10;
+    MoveStructValue struct = 11;
+    Address signer = 12;
+    MoveVariant variant = 13;
+  }
+}
+
+message MoveVector {
+  repeated MoveValue values = 1;
+}
+
+// End Move }}}
+
+// Transaction {{{
+
+message Transaction {
+  message TransactionV1 {
+    optional TransactionKind kind = 1;
+    optional Address sender = 2;
+    optional GasPayment gas_payment = 3;
+    optional TransactionExpiration expiration = 4;
+  }
+
+  oneof version {
+    TransactionV1 v1 = 1;
+  }
+}
+
+message GasPayment {
+  repeated ObjectReference objects = 1;
+  optional Address owner = 2;
+  optional uint64 price = 3;
+  optional uint64 budget = 4;
+}
+
+message TransactionExpiration {
+  oneof expiration {
+    google.protobuf.Empty none = 1;
+    uint64 epoch = 2;
+  }
+}
+
+message RandomnessStateUpdate {
+  optional uint64 epoch = 1;
+  optional uint64 randomness_round = 2;
+  optional bytes random_bytes = 3;
+  optional uint64 randomness_object_initial_shared_version = 4;
+}
+
+message TransactionKind {
+  oneof kind {
+    ProgrammableTransaction programmable_transaction = 1;
+    ChangeEpoch change_epoch = 2;
+    GenesisTransaction genesis = 200;
+    ConsensusCommitPrologue consensus_commit_prologue_v1 = 201;
+    AuthenticatorStateUpdate authenticator_state_update = 3;
+    EndOfEpochTransaction end_of_epoch = 4;
+    RandomnessStateUpdate randomness_state_update = 5;
+    ConsensusCommitPrologue consensus_commit_prologue_v2 = 202;
+    ConsensusCommitPrologue consensus_commit_prologue_v3 = 6;
+  }
+}
+
+message ProgrammableTransaction {
+  repeated Input inputs = 1;
+  repeated Command commands = 2;
+}
+
+message Input {
+  oneof kind {
+    bytes pure = 1;
+    ObjectReference immutable_or_owned = 2;
+    SharedObjectInput shared = 3;
+    ObjectReference receiving = 4;
+  }
+}
+
+message SharedObjectInput {
+  optional ObjectId object_id = 1;
+  optional uint64 initial_shared_version = 2;
+  optional bool mutable = 3;
+}
+
+message Command {
+  oneof command {
+    MoveCall move_call = 1;
+    TransferObjects transfer_objects = 2;
+    SplitCoins split_coins = 3;
+    MergeCoins merge_coins = 4;
+    Publish publish = 5;
+    MakeMoveVector make_move_vector = 6;
+    Upgrade upgrade = 7;
+  }
+}
+
+message MoveCall {
+  optional ObjectId package = 1;
+  optional Identifier module = 2;
+  optional Identifier function = 3;
+  repeated TypeTag type_arguments = 4;
+  repeated Argument arguments = 5;
+}
+
+message TransferObjects {
+  repeated Argument objects = 1;
+  optional Argument address = 2;
+}
+
+message SplitCoins {
+  optional Argument coin = 1;
+  repeated Argument amounts = 2;
+}
+
+message MergeCoins {
+  optional Argument coin = 1;
+  repeated Argument coins_to_merge = 2;
+}
+
+message Publish {
+  repeated bytes modules = 1;
+  repeated ObjectId dependencies = 2;
+}
+
+message MakeMoveVector {
+  optional TypeTag element_type = 1;
+  repeated Argument elements = 2;
+}
+
+message Upgrade {
+  repeated bytes modules = 1;
+  repeated ObjectId dependencies = 2;
+  optional ObjectId package = 3;
+  optional Argument ticket = 4;
+}
+
+message Argument {
+  oneof kind {
+    google.protobuf.Empty gas = 1;
+    uint32 input = 2;
+    uint32 result = 3;
+    NestedResult nested_result = 4;
+  }
+}
+
+message NestedResult {
+  optional uint32 result = 1;
+  optional uint32 subresult = 2;
+}
+
+message ChangeEpoch {
+  // The next (to become) epoch ID.
+  optional uint64 epoch = 1;
+  // The protocol version in effect in the new epoch.
+  optional uint64 protocol_version = 2;
+  // The total amount of gas charged for storage during the epoch.
+  optional uint64 storage_charge = 3;
+  // The total amount of gas charged for computation during the epoch.
+  optional uint64 computation_charge = 4;
+  // The amount of storage rebate refunded to the txn senders.
+  optional uint64 storage_rebate = 5;
+  // The non-refundable storage fee.
+  optional uint64 non_refundable_storage_fee = 6;
+  // Unix timestamp when epoch started
+  optional uint64 epoch_start_timestamp_ms = 7;
+  // System packages (specifically framework and move stdlib) that are written before the new
+  // epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
+  // the validator must write out the modules below.  Modules are provided with the version they
+  // will be upgraded to, their modules in serialized form (which include their package ID), and
+  // a list of their transitive dependencies.
+  repeated SystemPackage system_packages = 8;
+}
+
+message SystemPackage {
+  optional uint64 version = 1;
+  repeated bytes modules = 2;
+  repeated ObjectId dependencies = 3;
+}
+
+message GenesisTransaction {
+  repeated GenesisObject objects = 1;
+}
+
+message ConsensusCommitPrologue {
+  optional uint64 epoch = 1;
+  optional uint64 round = 2;
+  optional uint64 commit_timestamp_ms = 3;
+  optional Digest consensus_commit_digest = 4;
+  optional uint64 sub_dag_index = 5;
+  optional ConsensusDeterminedVersionAssignments consensus_determined_version_assignments = 6;
+}
+
+message VersionAssignment {
+  optional ObjectId object_id = 1;
+  optional uint64 version = 2;
+}
+
+message CancelledTransaction {
+  optional Digest digest = 1;
+  repeated VersionAssignment version_assignments = 2;
+}
+
+message CancelledTransactions {
+  repeated CancelledTransaction cancelled_transactions = 1;
+}
+
+message ConsensusDeterminedVersionAssignments {
+  oneof kind {
+    CancelledTransactions cancelled_transactions = 1;
+  }
+}
+
+message AuthenticatorStateUpdate {
+  optional uint64 epoch = 1;
+  optional uint64 round = 2;
+  repeated ActiveJwk new_active_jwks = 3;
+  optional uint64 authenticator_object_initial_shared_version = 4;
+}
+
+message ActiveJwk {
+  optional JwkId id = 1;
+  optional Jwk jwk = 2;
+  optional uint64 epoch = 3;
+}
+
+message JwkId {
+  optional bytes iss = 1;
+  optional bytes kid = 2;
+}
+
+message Jwk {
+  // Key type parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.1>
+  optional bytes kty = 1;
+  // RSA public exponent, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>
+  optional bytes e = 2;
+  // RSA modulus, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>
+  optional bytes n = 3;
+  // Algorithm parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.4>
+  optional bytes alg = 4;
+}
+
+message EndOfEpochTransaction {
+  repeated EndOfEpochTransactionKind transactions = 1;
+}
+
+message EndOfEpochTransactionKind {
+  oneof kind {
+    ChangeEpoch change_epoch = 1;
+    AuthenticatorStateExpire authenticator_state_expire = 2;
+
+    // Use higher field numbers for kinds which happen infrequently
+    google.protobuf.Empty authenticator_state_create = 200;
+    google.protobuf.Empty randomness_state_create = 201;
+    google.protobuf.Empty deny_list_state_create = 202;
+    Digest bridge_state_create = 203;
+    uint64 bridge_committee_init = 204;
+  }
+}
+
+message AuthenticatorStateExpire {
+  optional uint64 min_epoch = 1;
+  optional uint64 authenticator_object_initial_shared_version = 2;
+}
+
+// End Transaction }}}
+
+// TransactionEffects {{{
+
+message TransactionEffects {
+  oneof version {
+    TransactionEffectsV1 v1 = 1;
+    TransactionEffectsV2 v2 = 2;
+  }
+}
+
+message TransactionEffectsV1 {
+  /// The status of the execution
+  optional ExecutionStatus status = 1;
+  /// The epoch when this transaction was executed.
+  optional uint64 epoch = 2;
+  optional GasCostSummary gas_used = 3;
+  /// The version that every modified (mutated or deleted) object had before it was modified by
+  /// this transaction.
+  repeated ModifiedAtVersion modified_at_versions = 4;
+  /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+  repeated ObjectReference shared_objects = 5;
+  /// The transaction digest
+  optional Digest transaction_digest = 6;
+
+  /// ObjectReference and owner of new objects created.
+  repeated ObjectReferenceWithOwner created = 7;
+  /// ObjectReference and owner of mutated objects, including gas object.
+  repeated ObjectReferenceWithOwner mutated = 8;
+  /// ObjectReference and owner of objects that are unwrapped in this transaction.
+  /// Unwrapped objects are objects that were wrapped into other objects in the past,
+  /// and just got extracted out.
+  repeated ObjectReferenceWithOwner unwrapped = 9;
+  /// Object Refs of objects now deleted (the new refs).
+  repeated ObjectReference deleted = 10;
+  /// Object refs of objects previously wrapped in other objects but now deleted.
+  repeated ObjectReference unwrapped_then_deleted = 11;
+  /// Object refs of objects now wrapped in other objects.
+  repeated ObjectReference wrapped = 12;
+  /// The updated gas object reference. Have a dedicated field for convenient access.
+  /// It's also included in mutated.
+  optional ObjectReferenceWithOwner gas_object = 13;
+  /// The digest of the events emitted during execution,
+  /// can be None if the transaction does not emit any event.
+  optional Digest events_digest = 14;
+  /// The set of transaction digests this transaction depends on.
+  repeated Digest dependencies = 15;
+}
+
+message ObjectReferenceWithOwner {
+  optional ObjectReference reference = 1;
+  optional Owner owner = 2;
+}
+
+message ModifiedAtVersion {
+  optional ObjectId object_id = 1;
+  optional uint64 version = 2;
+}
+
+message TransactionEffectsV2 {
+  /// The status of the execution
+  optional ExecutionStatus status = 1;
+  /// The epoch when this transaction was executed.
+  optional uint64 epoch = 2;
+  optional GasCostSummary gas_used = 3;
+  /// The transaction digest
+  optional Digest transaction_digest = 4;
+  /// The updated gas object reference, as an index into the `changed_objects` vector.
+  /// Having a dedicated field for convenient access.
+  /// System transaction that don't require gas will leave this as None.
+  optional uint32 gas_object_index = 5;
+
+  /// The digest of the events emitted during execution,
+  /// can be None if the transaction does not emit any event.
+  optional Digest events_digest = 6;
+
+  /// The set of transaction digests this transaction depends on.
+  repeated Digest dependencies = 7;
+
+  /// The version number of all the written Move objects by this transaction.
+  optional uint64 lamport_version = 8;
+
+  /// Objects whose state are changed in the object store.
+  repeated ChangedObject changed_objects = 9;
+
+  /// Shared objects that are not mutated in this transaction. Unlike owned objects,
+  /// read-only shared objects' version are not committed in the transaction,
+  /// and in order for a node to catch up and execute it without consensus sequencing,
+  /// the version needs to be committed in the effects.
+  repeated UnchangedSharedObject unchanged_shared_objects = 10;
+
+  /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
+  /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
+  /// It also provides more flexibility on the format and type of the data.
+  optional Digest auxiliary_data_digest = 11;
+}
+
+message ChangedObject {
+  optional ObjectId object_id = 1;
+
+  oneof input_state {
+    google.protobuf.Empty not_exist = 2;
+    ObjectExist exist = 3;
+  }
+
+  oneof output_state {
+    google.protobuf.Empty removed = 4;
+    ObjectWrite object_write = 5;
+    PackageWrite package_write = 6;
+  }
+
+  oneof id_operation {
+    google.protobuf.Empty none = 7;
+    google.protobuf.Empty created = 8;
+    google.protobuf.Empty deleted = 9;
+  }
+}
+
+message ObjectExist {
+  optional uint64 version = 1;
+  optional Digest digest = 2;
+  optional Owner owner = 3;
+}
+
+message ObjectWrite {
+  optional Digest digest = 2;
+  optional Owner owner = 3;
+}
+
+message PackageWrite {
+  optional uint64 version = 1;
+  optional Digest digest = 2;
+}
+
+message UnchangedSharedObject {
+  optional ObjectId object_id = 1;
+
+  oneof kind {
+    ReadOnlyRoot read_only_root = 2;
+    uint64 mutate_deleted = 3;
+    uint64 read_deleted = 4;
+    uint64 cancelled = 5;
+    google.protobuf.Empty per_epoch_config = 6;
+  }
+}
+
+message ReadOnlyRoot {
+  optional uint64 version = 1;
+  optional Digest digest = 2;
+}
+
+// End TransactionEffects }}}
+
+// ExecutionStatus {{{
+
+message ExecutionStatus {
+  optional bool success = 1;
+  optional FailureStatus status = 2;
+}
+
+message SizeError {
+  optional uint64 size = 1;
+  optional uint64 max_size = 2;
+}
+
+message MoveError {
+  optional MoveLocation location = 1;
+  optional uint64 abort_code = 2;
+}
+
+message FailureStatus {
+  optional uint64 command = 1;
+  oneof execution_error {
+    /// Insufficient Gas
+    google.protobuf.Empty insufficient_gas = 2;
+    /// Invalid Gas Object.
+    google.protobuf.Empty invalid_gas_object = 3;
+    /// Invariant Violation
+    google.protobuf.Empty invariant_violation = 4;
+    /// Attempted to used feature that is not supported yet
+    google.protobuf.Empty feature_not_yet_supported = 5;
+    /// Move object is larger than the maximum allowed size
+    SizeError object_too_big = 6;
+    /// Package is larger than the maximum allowed size
+    SizeError package_too_big = 7;
+    /// Circular Object Ownership
+    ObjectId circular_object_ownership = 8;
+
+    //
+    // Coin errors
+    //
+    /// Insufficient coin balance for requested operation
+    google.protobuf.Empty insufficient_coin_balance = 9;
+    /// Coin balance overflowed an u64
+    google.protobuf.Empty coin_balance_overflow = 10;
+
+    //
+    // Publish/Upgrade errors
+    //
+    /// Publish Error, Non-zero Address.
+    /// The modules in the package must have their self-addresses set to zero.
+    google.protobuf.Empty publish_error_non_zero_address = 11;
+
+    /// Sui Move Bytecode Verification Error.
+    google.protobuf.Empty sui_move_verification_error = 12;
+
+    //
+    // MoveVm Errors
+    //
+    /// Error from a non-abort instruction.
+    /// Possible causes:
+    ///     Arithmetic error, stack overflow, max value depth, etc."
+    MoveError move_primitive_runtime_error = 13;
+    /// Move runtime abort
+    MoveError move_abort = 14;
+    /// Bytecode verification error.
+    google.protobuf.Empty vm_verification_or_deserialization_error = 15;
+    /// MoveVm invariant violation
+    google.protobuf.Empty vm_invariant_violation = 16;
+
+    //
+    // Programmable Transaction Errors
+    //
+    /// Function not found
+    google.protobuf.Empty function_not_found = 17;
+    /// Arity mismatch for Move function.
+    /// The number of arguments does not match the number of parameters
+    google.protobuf.Empty arity_mismatch = 18;
+    /// Type arity mismatch for Move function.
+    /// Mismatch between the number of actual versus expected type arguments.
+    google.protobuf.Empty type_arity_mismatch = 19;
+    /// Non Entry Function Invoked. Move Call must start with an entry function.
+    google.protobuf.Empty non_entry_function_invoked = 20;
+    /// Invalid command argument
+    CommandArgumentError command_argument_error = 21;
+    /// Type argument error
+    TypeArgumentError type_argument_error = 22;
+    /// Unused result without the drop ability.
+    NestedResult unused_value_without_drop = 23;
+    /// Invalid public Move function signature.
+    /// Unsupported return type for return value
+    uint32 invalid_public_function_return_type = 24;
+    /// Invalid Transfer Object, object does not have public transfer.
+    google.protobuf.Empty invalid_transfer_object = 25;
+
+    //
+    // Post-execution errors
+    //
+    /// Effects from the transaction are too large
+    SizeError effects_too_large = 26;
+
+    /// Publish or Upgrade is missing dependency
+    google.protobuf.Empty publish_upgrade_missing_dependency = 27;
+
+    /// Publish or Upgrade dependency downgrade.
+    ///
+    /// Indirect (transitive) dependency of published or upgraded package has been assigned an
+    /// on-chain version that is less than the version required by one of the package's
+    /// transitive dependencies.
+    google.protobuf.Empty publish_upgrade_dependency_downgrade = 28;
+
+    /// Invalid package upgrade
+    PackageUpgradeError package_upgrade_error = 29;
+
+    /// Indicates the transaction tried to write objects too large to storage
+    SizeError written_objects_too_large = 30;
+
+    /// Certificate is on the deny list
+    google.protobuf.Empty certificate_denied = 31;
+
+    /// Sui Move Bytecode verification timed out.
+    google.protobuf.Empty sui_move_verification_timedout = 32;
+
+    /// The requested shared object operation is not allowed
+    google.protobuf.Empty shared_object_operation_not_allowed = 33;
+
+    /// Requested shared object has been deleted
+    google.protobuf.Empty input_object_deleted = 34;
+
+    /// Certificate is cancelled due to congestion on shared objects
+    CongestedObjectsError execution_cancelled_due_to_shared_object_congestion = 35;
+
+    /// Address is denied for this coin type
+    AddressDeniedForCoinError address_denied_for_coin = 36;
+
+    /// Coin type is globally paused for use
+    string coin_type_global_pause = 37;
+
+    /// Certificate is cancelled because randomness could not be generated this epoch
+    google.protobuf.Empty execution_cancelled_due_to_randomness_unavailable = 38;
+  }
+}
+
+message AddressDeniedForCoinError {
+  optional Address address = 1;
+  optional string coin_type = 2;
+}
+
+message CongestedObjectsError {
+  repeated ObjectId congested_objects = 1;
+}
+
+message MoveLocation {
+  optional ObjectId package = 1;
+  optional Identifier module = 2;
+  optional uint32 function = 3;
+  optional uint32 instruction = 4;
+  optional Identifier function_name = 5;
+}
+
+message CommandArgumentError {
+  optional uint32 argument = 1;
+
+  oneof kind {
+    /// The type of the value does not match the expected type
+    google.protobuf.Empty type_mismatch = 2;
+    /// The argument cannot be deserialized into a value of the specified type
+    google.protobuf.Empty invalid_bcs_bytes = 3;
+    /// The argument cannot be instantiated from raw bytes
+    google.protobuf.Empty invalid_usage_of_pure_argument = 4;
+    /// Invalid argument to private entry function.
+    /// Private entry functions cannot take arguments from other Move functions.
+    google.protobuf.Empty invalid_argument_to_private_entry_function = 5;
+    /// Out of bounds access to input or results
+    uint32 index_out_of_bounds = 6;
+    /// Out of bounds access to subresult
+    NestedResult secondary_index_out_of_bounds = 7;
+    /// Invalid usage of result.
+    /// Expected a single result but found either no return value or multiple.
+    uint32 invalid_result_arity = 8;
+    /// Invalid usage of Gas coin.
+    /// The Gas coin can only be used by-value with a TransferObjects command.
+    google.protobuf.Empty invalid_gas_coin_usage = 9;
+    /// Invalid usage of move value.
+    //     Mutably borrowed values require unique usage.
+    //     Immutably borrowed values cannot be taken or borrowed mutably.
+    //     Taken values cannot be used again.
+    google.protobuf.Empty invalid_value_usage = 10;
+    /// Immutable objects cannot be passed by-value.
+    google.protobuf.Empty invalid_object_by_value = 11;
+    /// Immutable objects cannot be passed by mutable reference, &mut.
+    google.protobuf.Empty invalid_object_by_mut_ref = 12;
+    /// Shared object operations such a wrapping, freezing, or converting to owned are not
+    /// allowed.
+    google.protobuf.Empty shared_object_operation_not_allowed = 13;
+  }
+}
+
+message PackageUpgradeError {
+  oneof kind {
+    ObjectId unable_to_fetch_package = 2;
+    ObjectId not_a_package = 3;
+    google.protobuf.Empty incompatible_upgrade = 4;
+    Digest digets_does_not_match = 5;
+    uint32 unknown_upgrade_policy = 6;
+    PackageIdDoesNotMatch package_id_does_not_match = 7;
+  }
+}
+
+message PackageIdDoesNotMatch {
+  optional ObjectId package_id = 1;
+  optional ObjectId object_id = 2;
+}
+
+message TypeArgumentError {
+  optional uint32 type_argument = 1;
+
+  oneof kind {
+    google.protobuf.Empty type_not_found = 2;
+    google.protobuf.Empty constraint_not_satisfied = 3;
+  }
+}
+
+// End ExecutionStatus }}}
+
+// Signatures {{{
+
+message UserSignature {
+  oneof signature {
+    SimpleSignature simple = 1;
+    MultisigAggregatedSignature multisig = 2;
+    ZkLoginAuthenticator zklogin = 3;
+    PasskeyAuthenticator passkey = 4;
+  }
+}
+
+// note: values do not match their bcs serialized values
+enum SignatureScheme {
+  SIGNATURE_SCHEME_UNKNOWN = 0;
+  SIGNATURE_SCHEME_ED25519 = 1;
+  SIGNATURE_SCHEME_SECP256K1 = 2;
+  SIGNATURE_SCHEME_SECP256R1 = 3;
+  SIGNATURE_SCHEME_MULTISIG = 4;
+  SIGNATURE_SCHEME_BLS12381 = 5;
+  SIGNATURE_SCHEME_ZKLOGIN = 6;
+  SIGNATURE_SCHEME_PASSKEY = 7;
+}
+
+message SimpleSignature {
+  optional SignatureScheme scheme = 1;
+  optional bytes signature = 2;
+  optional bytes public_key = 3;
+}
+
+message ZkLoginPublicIdentifier {
+  optional bytes iss = 1;
+  optional Bn254FieldElement address_seed = 2;
+}
+
+message MultisigMemberPublicKey {
+  oneof scheme {
+    bytes ed25519 = 1;
+    bytes secp256k1 = 2;
+    bytes secp256r1 = 3;
+    ZkLoginPublicIdentifier zklogin = 4;
+  }
+}
+
+message MultisigMember {
+  optional MultisigMemberPublicKey public_key = 1;
+  optional uint32 weight = 2;
+}
+
+message MultisigCommittee {
+  repeated MultisigMember members = 1;
+  optional uint32 threshold = 2;
+}
+
+message MultisigAggregatedSignature {
+  repeated MultisigMemberSignature signatures = 1;
+  optional uint32 bitmap = 2;
+  optional RoaringBitmap legacy_bitmap = 3;
+  optional MultisigCommittee committee = 4;
+}
+
+message MultisigMemberSignature {
+  oneof signature {
+    bytes ed25519 = 1;
+    bytes secp256k1 = 2;
+    bytes secp256r1 = 3;
+    ZkLoginAuthenticator zklogin = 4;
+  }
+}
+
+message ZkLoginAuthenticator {
+  optional ZkLoginInputs inputs = 1;
+  optional uint64 max_epoch = 2;
+  optional SimpleSignature signature = 3;
+}
+
+message ZkLoginInputs {
+  optional ZkLoginProof proof_points = 1;
+  optional ZkLoginClaim iss_base64_details = 2;
+  optional bytes header_base64 = 3;
+  optional Bn254FieldElement address_seed = 4;
+}
+
+message ZkLoginProof {
+  optional CircomG1 a = 1;
+  optional CircomG2 b = 2;
+  optional CircomG1 c = 3;
+}
+
+message ZkLoginClaim {
+  optional bytes value = 1;
+  optional uint32 index_mod_4 = 2;
+}
+
+message CircomG1 {
+  optional Bn254FieldElement e0 = 1;
+  optional Bn254FieldElement e1 = 2;
+  optional Bn254FieldElement e2 = 3;
+}
+
+message CircomG2 {
+  optional Bn254FieldElement e00 = 1;
+  optional Bn254FieldElement e01 = 2;
+
+  optional Bn254FieldElement e10 = 3;
+  optional Bn254FieldElement e11 = 4;
+
+  optional Bn254FieldElement e20 = 5;
+  optional Bn254FieldElement e21 = 6;
+}
+
+message Bn254FieldElement {
+  optional bytes element = 1;
+}
+
+message PasskeyAuthenticator {
+  optional bytes authenticator_data = 1;
+  optional bytes client_data_json = 2;
+  optional SimpleSignature signature = 3;
+}
+
+message ValidatorCommittee {
+  optional uint64 epoch = 1;
+  repeated ValidatorCommitteeMember members = 2;
+}
+
+message ValidatorCommitteeMember {
+  optional bytes public_key = 1;
+  optional uint64 stake = 2;
+}
+
+message ValidatorAggregatedSignature {
+  optional uint64 epoch = 1;
+  optional bytes signature = 2;
+  optional RoaringBitmap bitmap = 3;
+}
+
+message RoaringBitmap {
+  optional bytes bitmap = 1;
+}
+
+// End Signatures }}}

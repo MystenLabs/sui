@@ -27,7 +27,6 @@ prometheus.workspace = true
 openapiv3 = { git = "https://github.com/bmwill/openapiv3.git", rev = "ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963" }
 schemars.workspace = true
 documented = "0.6.0"
-prost.workspace = true
 
 fastcrypto.workspace = true
 sui-types.workspace = true
@@ -36,6 +35,14 @@ sui-protocol-config.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 
+# dependencies for the protobuf definitions
+roaring.workspace = true
+tonic.workspace = true
+prost.workspace = true
+prost-types = "0.13.3"
+bytes.workspace = true
+
 [dev-dependencies]
 diffy = "0.3"
 prost-build = "0.13.3"
+tonic-build = "0.12.3"
