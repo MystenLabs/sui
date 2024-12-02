@@ -22,6 +22,7 @@ use diesel_async::RunQueryDsl;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
+use serde_json::Value;
 
 use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
@@ -359,7 +360,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
 async fn get_level2_ticks_from_mid(
     Path(pool_id): Path<String>,
-) -> Result<Json<HashMap<String, Vec<f64>>>, DeepBookError> {
+) -> Result<Json<HashMap<String, Value>>, DeepBookError> {
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -471,46 +472,54 @@ async fn get_level2_ticks_from_mid(
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(&ask_quantities).unwrap();
 
     let mut result = HashMap::new();
-    result.insert(
-        "bid_parsed_prices".to_string(),
-        bid_parsed_prices
-            .into_iter()
-            .map(|quantity| {
-                let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
-                quantity as f64 / factor as f64
-            })
-            .collect::<Vec<f64>>(),
-    );
+    // Insert bid parsed quantities
     result.insert(
         "bid_parsed_quantities".to_string(),
-        bid_parsed_quantities
-            .into_iter()
-            .map(|quantity| {
-                let factor = 10u64.pow((*base_decimals).try_into().unwrap());
-                quantity as f64 / factor as f64
-            })
-            .collect::<Vec<f64>>(),
+        Value::Array(
+            bid_parsed_quantities
+                .into_iter()
+                .map(|quantity| {
+                    let factor = 10u64.pow((*base_decimals).try_into().unwrap());
+                    Value::from(quantity as f64 / factor as f64)
+                })
+                .collect(),
+        ),
     );
+
+    // Insert ask parsed prices
     result.insert(
         "ask_parsed_prices".to_string(),
-        ask_parsed_prices
-            .into_iter()
-            .map(|quantity| {
-                let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
-                quantity as f64 / factor as f64
-            })
-            .collect::<Vec<f64>>(),
+        Value::Array(
+            ask_parsed_prices
+                .into_iter()
+                .map(|quantity| {
+                    let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+                    Value::from(quantity as f64 / factor as f64)
+                })
+                .collect(),
+        ),
     );
+
+    // Insert ask parsed quantities
     result.insert(
         "ask_parsed_quantities".to_string(),
-        ask_parsed_quantities
-            .into_iter()
-            .map(|quantity| {
-                let factor = 10u64.pow((*base_decimals).try_into().unwrap());
-                quantity as f64 / factor as f64
-            })
-            .collect::<Vec<f64>>(),
+        Value::Array(
+            ask_parsed_quantities
+                .into_iter()
+                .map(|quantity| {
+                    let factor = 10u64.pow((*base_decimals).try_into().unwrap());
+                    Value::from(quantity as f64 / factor as f64)
+                })
+                .collect(),
+        ),
     );
+
+    // Insert timestamp
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    result.insert("timestamp".to_string(), Value::from(timestamp));
 
     Ok(Json(result))
 }
