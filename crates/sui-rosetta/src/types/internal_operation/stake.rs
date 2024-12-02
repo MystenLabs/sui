@@ -78,7 +78,6 @@ impl TryConstructTransaction for Stake {
             let effects = dry_run.effects;
 
             if let SuiExecutionStatus::Failure { error } = effects.status() {
-                println!("amount is none. dry run error");
                 return Err(Error::TransactionDryRunError(error.to_string()));
             }
 
