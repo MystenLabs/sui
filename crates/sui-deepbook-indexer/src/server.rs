@@ -44,7 +44,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
 pub const GET_ALL_HISTORICAL_VOLUME_PATH: &str = "/get_all_historical_volume";
-pub const LEVEL2_PATH: &str = "/get_level2_ticks_from_mid/:pool_id";
+pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const DEEPBOOK_PACKAGE_ID: &str =
     "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
 
@@ -362,7 +362,25 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
 async fn get_level2_ticks_from_mid(
     Path(pool_name): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<HashMap<String, Value>>, DeepBookError> {
+    let depth = params
+        .get("depth")
+        .map(|v| v.parse::<i64>())
+        .transpose()
+        .map_err(|_| anyhow!("Depth must be a non-negative integer"))?;
+
+    if let Some(depth) = depth {
+        if depth <= 0 {
+            return Err(anyhow!("Depth must be a positive number").into());
+        }
+    }
+
+    let ticks_from_mid = match depth {
+        Some(depth) => (depth / 2) as u64,
+        None => 10u64,
+    };
+
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -392,7 +410,6 @@ async fn get_level2_ticks_from_mid(
     let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref));
     ptb.input(pool_input)?;
 
-    let ticks_from_mid = 10u64;
     let input_argument = CallArg::Pure(bcs::to_bytes(&ticks_from_mid).unwrap());
     ptb.input(input_argument)?;
 
@@ -480,6 +497,7 @@ async fn get_level2_ticks_from_mid(
     let bids: Vec<Value> = bid_parsed_prices
         .into_iter()
         .zip(bid_parsed_quantities.into_iter())
+        .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
             let price_factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
             let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
@@ -494,6 +512,7 @@ async fn get_level2_ticks_from_mid(
     let asks: Vec<Value> = ask_parsed_prices
         .into_iter()
         .zip(ask_parsed_quantities.into_iter())
+        .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
             let price_factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
             let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
