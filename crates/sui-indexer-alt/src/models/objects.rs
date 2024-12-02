@@ -14,6 +14,7 @@ use crate::schema::{
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
@@ -61,7 +62,6 @@ pub enum StoredOwnerKind {
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = sum_coin_balances, primary_key(object_id))]
-#[diesel(treat_none_as_default_value = false)]
 pub struct StoredSumCoinBalance {
     pub object_id: Vec<u8>,
     pub object_version: i64,
@@ -86,6 +86,7 @@ pub struct StoredSumObjType {
 
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = wal_coin_balances, primary_key(object_id, object_version))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredWalCoinBalance {
     pub object_id: Vec<u8>,
     pub object_version: i64,
@@ -97,6 +98,7 @@ pub struct StoredWalCoinBalance {
 
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = wal_obj_types, primary_key(object_id, object_version))]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredWalObjType {
     pub object_id: Vec<u8>,
     pub object_version: i64,

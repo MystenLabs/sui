@@ -8,6 +8,7 @@ use crate::schema::{kv_epoch_ends, kv_epoch_starts, kv_feature_flags, kv_protoco
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_epoch_ends)]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredEpochEnd {
     pub epoch: i64,
     pub cp_hi: i64,
@@ -47,6 +48,7 @@ pub struct StoredFeatureFlag {
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_protocol_configs)]
+#[diesel(treat_none_as_default_value = false)]
 pub struct StoredProtocolConfig {
     pub protocol_version: i64,
     pub config_name: String,
