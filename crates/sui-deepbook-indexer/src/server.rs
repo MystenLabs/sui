@@ -359,7 +359,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
 async fn get_level2_ticks_from_mid(
     Path(pool_id): Path<String>,
-) -> Result<Json<HashMap<String, Vec<u64>>>, DeepBookError> {
+) -> Result<Json<HashMap<String, Vec<f64>>>, DeepBookError> {
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -476,32 +476,40 @@ async fn get_level2_ticks_from_mid(
         bid_parsed_prices
             .into_iter()
             .map(|quantity| {
-                quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap())
+                let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+                quantity as f64 / factor as f64
             })
-            .collect(),
+            .collect::<Vec<f64>>(),
     );
     result.insert(
         "bid_parsed_quantities".to_string(),
         bid_parsed_quantities
             .into_iter()
-            .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
-            .collect(),
+            .map(|quantity| {
+                let factor = 10u64.pow((*base_decimals).try_into().unwrap());
+                quantity as f64 / factor as f64
+            })
+            .collect::<Vec<f64>>(),
     );
     result.insert(
         "ask_parsed_prices".to_string(),
         ask_parsed_prices
             .into_iter()
             .map(|quantity| {
-                quantity / 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap())
+                let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+                quantity as f64 / factor as f64
             })
-            .collect(),
+            .collect::<Vec<f64>>(),
     );
     result.insert(
         "ask_parsed_quantities".to_string(),
         ask_parsed_quantities
             .into_iter()
-            .map(|quantity| quantity / 10u64.pow((*base_decimals).try_into().unwrap()))
-            .collect(),
+            .map(|quantity| {
+                let factor = 10u64.pow((*base_decimals).try_into().unwrap());
+                quantity as f64 / factor as f64
+            })
+            .collect::<Vec<f64>>(),
     );
 
     Ok(Json(result))
