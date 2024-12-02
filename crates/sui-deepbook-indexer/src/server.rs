@@ -378,7 +378,7 @@ async fn get_level2_ticks_from_mid(
 
     let ticks_from_mid = match depth {
         Some(depth) => (depth / 2) as u64,
-        None => 10u64,
+        None => 100u64,
     };
 
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
