@@ -17,7 +17,7 @@ use sui_types::{
 
 use crate::{
     db,
-    models::objects::{StoredObjectUpdate, StoredSumCoinBalance},
+    models::objects::{StoredObjectUpdate, StoredOwnerKind, StoredSumCoinBalance},
     pipeline::{sequential::Handler, Processor},
     schema::sum_coin_balances,
 };
@@ -99,9 +99,17 @@ impl Processor for SumCoinBalances {
                     continue;
                 };
 
-                // Coin balance only tracks address-owned objects
-                let Owner::AddressOwner(owner_id) = object.owner() else {
-                    continue;
+                // Coin balance only tracks address-owned or ConsensusV2 objects
+                let (owner_kind, owner_id) = match object.owner() {
+                    Owner::AddressOwner(owner_id) => (StoredOwnerKind::Address, owner_id),
+                    // ConsensusV2 objects are treated as address-owned for now in indexers.
+                    // This will need to be updated if additional Authenticators are added.
+                    Owner::ConsensusV2 { authenticator, .. } => (
+                        StoredOwnerKind::ConsensusV2,
+                        authenticator.as_single_owner(),
+                    ),
+
+                    Owner::Immutable | Owner::ObjectOwner(_) | Owner::Shared { .. } => continue,
                 };
 
                 let Some(coin) = object.as_coin_maybe() else {
@@ -124,6 +132,7 @@ impl Processor for SumCoinBalances {
                                 owner_id: owner_id.to_vec(),
                                 coin_type: coin_type.clone(),
                                 coin_balance: coin.balance.value() as i64,
+                                owner_kind,
                             }),
                         });
                     }

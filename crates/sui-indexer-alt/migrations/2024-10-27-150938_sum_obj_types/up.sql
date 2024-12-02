@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS sum_obj_types
 (
     object_id                   BYTEA         PRIMARY KEY,
     object_version              BIGINT        NOT NULL,
+    -- TODO-DNS Question for reviewers: what do I do about updating 
+    -- now-invalid comments on existing columns, like below? Just change here?
     -- An enum describing the object's ownership model:
     --
     --   Immutable = 0,

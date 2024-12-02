@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS sum_coin_balances
 (
     object_id                   BYTEA         PRIMARY KEY,
     object_version              BIGINT        NOT NULL,
+    -- TODO-DNS Question for reviewers: what do I do about updating 
+    -- now-invalid comments on existing columns, like below? Just change here?
     -- The address that owns this version of the coin (it is guaranteed to be
     -- address-owned).
     owner_id                    BYTEA         NOT NULL,
