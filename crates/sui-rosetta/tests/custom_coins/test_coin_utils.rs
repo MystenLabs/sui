@@ -121,7 +121,7 @@ pub async fn select_gas(
     Err(anyhow!("Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InitRet {
     pub owner: SuiAddress,
     pub treasury_cap: ObjectRef,
