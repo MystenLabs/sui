@@ -192,14 +192,24 @@ public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
 /// Perform an action `f` on each element of the vector `v`. The vector is not modified.
 public macro fun do_ref<$T>($v: &vector<$T>, $f: |&$T|) {
     let v = $v;
-    v.length().do!(|i| $f(&v[i]))
+    let mut i = 0;
+    let len = v.length();
+    while (i < len) {
+        $f(&v[i]);
+        i = i + 1;
+    }
 }
 
 /// Perform an action `f` on each element of the vector `v`.
 /// The function `f` takes a mutable reference to the element.
 public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
     let v = $v;
-    v.length().do!(|i| $f(&mut v[i]))
+    let mut i = 0;
+    let len = v.length();
+    while (i < len) {
+        $f(&mut v[i]);
+        i = i + 1;
+    }
 }
 
 /// Map the vector `v` to a new vector by applying the function `f` to each element.
@@ -326,7 +336,11 @@ public macro fun zip_do_ref<$T1, $T2>($v1: &vector<$T1>, $v2: &vector<$T2>, $f: 
     let v2 = $v2;
     let len = v1.length();
     assert!(len == v2.length());
-    len.do!(|i| $f(&v1[i], &v2[i]));
+    let mut i = 0;
+    while (i < len) {
+        $f(&v1[i], &v2[i]);
+        i = i + 1;
+    }
 }
 
 /// Iterate through `v1` and `v2` and apply the function `f` to mutable references of each pair
