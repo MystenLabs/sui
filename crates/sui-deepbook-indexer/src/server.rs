@@ -472,6 +472,20 @@ async fn get_level2_ticks_from_mid(
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(&ask_quantities).unwrap();
 
     let mut result = HashMap::new();
+    // Insert bid parsed prices
+    result.insert(
+        "bid_parsed_prices".to_string(),
+        Value::Array(
+            bid_parsed_prices
+                .into_iter()
+                .map(|quantity| {
+                    let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+                    Value::from(quantity as f64 / factor as f64)
+                })
+                .collect(),
+        ),
+    );
+
     // Insert bid parsed quantities
     result.insert(
         "bid_parsed_quantities".to_string(),
