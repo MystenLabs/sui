@@ -540,7 +540,7 @@ impl<'backing> TemporaryStore<'backing> {
                         assert!(sender == a, "Input object must be owned by sender");
                         Some(id)
                     }
-                    Owner::Shared { .. } => Some(id),
+                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => Some(id),
                     Owner::Immutable => {
                         // object is authenticated, but it cannot own other objects,
                         // so we should not add it to `authenticated_objs`
@@ -559,8 +559,6 @@ impl<'backing> TemporaryStore<'backing> {
                             "Input objects must be address owned, shared, consensus, or immutable"
                         )
                     }
-                    // TODO: Implement support for ConsensusV2 objects.
-                    Owner::ConsensusV2 { .. } => todo!(),
                 }
             })
             .filter(|id| {
