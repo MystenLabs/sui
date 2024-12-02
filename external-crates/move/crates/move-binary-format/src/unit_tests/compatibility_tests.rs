@@ -1,14 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, convert::TryFrom};
-
 use crate::{
     compatibility::{Compatibility, InclusionCheck},
     file_format::*,
     normalized::{self, Type},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
+use std::{collections::BTreeMap, convert::TryFrom};
 
 // A way to permute pools, and index into them still.
 pub struct Permutation {
@@ -535,6 +534,121 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
     normalized::Module::new(&m)
 }
 
+fn mk_module_with_defs(
+    struct_defs: Vec<(Identifier, StructDefinition)>,
+    enum_defs: Vec<(Identifier, EnumDefinition)>,
+    function_defs: Vec<(Identifier, FunctionDefinition)>,
+) -> normalized::Module {
+    let mut identifiers = vec![
+        Identifier::new("M").unwrap(), // Module name
+    ];
+
+    let mut datatype_handles = vec![];
+
+    let struct_defs: Vec<StructDefinition> = struct_defs
+        .into_iter()
+        .map(|(name, def)| {
+            identifiers.push(name);
+            let i = identifiers.len() - 1;
+            datatype_handles.push(DatatypeHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(i as TableIndex),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+            });
+            def
+        })
+        .collect();
+
+    let enum_defs: Vec<EnumDefinition> = enum_defs
+        .into_iter()
+        .map(|(name, def)| {
+            identifiers.push(name);
+            let i = identifiers.len() - 1;
+            datatype_handles.push(DatatypeHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(i as TableIndex),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+            });
+            def
+        })
+        .collect();
+
+    let function_defs: Vec<FunctionDefinition> = function_defs
+        .into_iter()
+        .map(|(name, def)| {
+            identifiers.push(name);
+            let i = identifiers.len() - 1;
+            datatype_handles.push(DatatypeHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(i as TableIndex),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+            });
+            def
+        })
+        .collect();
+
+    let m = CompiledModule {
+        version: crate::file_format_common::VERSION_MAX,
+        module_handles: vec![
+            // only self module
+            ModuleHandle {
+                address: AddressIdentifierIndex(0),
+                name: IdentifierIndex(0),
+            },
+        ],
+        self_module_handle_idx: ModuleHandleIndex(0),
+        identifiers,
+        address_identifiers: vec![
+            AccountAddress::ZERO, // Module address
+        ],
+        function_handles: vec![
+            // fun fn()
+            FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(1),
+                parameters: SignatureIndex(0),
+                return_: SignatureIndex(0),
+                type_parameters: vec![],
+            },
+        ],
+        function_defs,
+        signatures: vec![
+            Signature(vec![]),                    // void
+            Signature(vec![SignatureToken::U64]), // u64
+        ],
+        struct_defs,
+        datatype_handles,
+        constant_pool: vec![
+            Constant {
+                type_: SignatureToken::U8,
+                data: vec![0],
+            },
+            Constant {
+                type_: SignatureToken::U8,
+                data: vec![1],
+            },
+            Constant {
+                type_: SignatureToken::Bool,
+                data: vec![1],
+            },
+        ],
+        metadata: vec![],
+        field_handles: vec![],
+        friend_decls: vec![],
+        struct_def_instantiations: vec![],
+        function_instantiations: vec![],
+        field_instantiations: vec![],
+        enum_defs,
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
+    };
+    normalized::Module::new(&m)
+}
+
 #[test]
 fn deprecated_unchanged_script_visibility() {
     let script_module = mk_module(Visibility::DEPRECATED_SCRIPT);
@@ -885,4 +999,203 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
             assert!(InclusionCheck::Subset.check(m1, m0).is_ok());
         }
     }
+}
+
+#[test]
+fn check_new_changed_missing_declarations() {
+    let empty = mk_module_with_defs(vec![], vec![], vec![]);
+    // struct
+    let m1 = mk_module_with_defs(
+        vec![(
+            Identifier::new("S1").unwrap(),
+            StructDefinition {
+                struct_handle: DatatypeHandleIndex(0),
+                field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                    name: IdentifierIndex(1),
+                    signature: TypeSignature(SignatureToken::U64),
+                }]),
+            },
+        )],
+        vec![],
+        vec![],
+    );
+
+    // change struct S1 to S2
+    let m2 = mk_module_with_defs(
+        vec![(
+            Identifier::new("S2").unwrap(),
+            StructDefinition {
+                struct_handle: DatatypeHandleIndex(0),
+                field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                    name: IdentifierIndex(1),
+                    signature: TypeSignature(SignatureToken::U64),
+                }]),
+            },
+        )],
+        vec![],
+        vec![],
+    );
+
+    // same name different type
+    let m3 = mk_module_with_defs(
+        vec![(
+            Identifier::new("S1").unwrap(),
+            StructDefinition {
+                struct_handle: DatatypeHandleIndex(0),
+                field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                    name: IdentifierIndex(1),
+                    // changed to U32
+                    signature: TypeSignature(SignatureToken::U32),
+                }]),
+            },
+        )],
+        vec![],
+        vec![],
+    );
+
+    assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
+    assert!(InclusionCheck::Subset.check(&m1, &empty).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_err());
+
+    assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+
+    //enums
+    let m1 = mk_module_with_defs(
+        vec![],
+        vec![(
+            Identifier::new("E1").unwrap(),
+            EnumDefinition {
+                enum_handle: DatatypeHandleIndex(0),
+                variants: vec![VariantDefinition {
+                    variant_name: IdentifierIndex(1),
+                    fields: vec![FieldDefinition {
+                        name: IdentifierIndex(1),
+                        signature: TypeSignature(SignatureToken::U64),
+                    }],
+                }],
+            },
+        )],
+        vec![],
+    );
+
+    // change enum E1 to E2
+    let m2 = mk_module_with_defs(
+        vec![],
+        vec![(
+            Identifier::new("E2").unwrap(),
+            EnumDefinition {
+                enum_handle: DatatypeHandleIndex(0),
+                variants: vec![VariantDefinition {
+                    variant_name: IdentifierIndex(1),
+                    fields: vec![FieldDefinition {
+                        name: IdentifierIndex(1),
+                        signature: TypeSignature(SignatureToken::U64),
+                    }],
+                }],
+            },
+        )],
+        vec![],
+    );
+
+    // same name different type
+    let m3 = mk_module_with_defs(
+        vec![],
+        vec![(
+            Identifier::new("E1").unwrap(),
+            EnumDefinition {
+                enum_handle: DatatypeHandleIndex(0),
+                variants: vec![VariantDefinition {
+                    variant_name: IdentifierIndex(1),
+                    fields: vec![FieldDefinition {
+                        name: IdentifierIndex(1),
+                        // changed to U32
+                        signature: TypeSignature(SignatureToken::U32),
+                    }],
+                }],
+            },
+        )],
+        vec![],
+    );
+
+    assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&m1, &m1).is_ok());
+
+    assert!(InclusionCheck::Subset.check(&m1, &empty).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_err());
+
+    assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+
+    //functions
+    let m1 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![(
+            Identifier::new("fn1").unwrap(),
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        )],
+    );
+
+    // change function fn1 to fn2
+    let m2 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![(
+            Identifier::new("fn2").unwrap(),
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        )],
+    );
+
+    // change fn1 bytecode to abort from return
+    let m3 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![(
+            Identifier::new("fn1").unwrap(),
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![Bytecode::Abort],
+                    jump_tables: vec![],
+                }),
+            },
+        )],
+    );
+
+    assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&m1, &m1).is_ok());
+
+    assert!(InclusionCheck::Subset.check(&m1, &empty).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_err());
+
+    assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
 }
