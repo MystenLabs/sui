@@ -10,8 +10,8 @@ use crate::{
     file_format_common::VERSION_5,
     normalized::Module,
 };
+use move_core_types::identifier::Identifier;
 use move_core_types::vm_status::StatusCode;
-use std::collections::HashSet;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
 // ***************************************************************************
@@ -393,121 +393,134 @@ impl InclusionCheck {
             );
         }
 
-        let mut new_structs_set: HashSet<_> = new_module.structs.keys().collect();
-        // Struct checks
-        for (name, old_struct) in &old_module.structs {
-            match new_module.structs.get(name) {
-                Some(new_struct) => {
-                    new_structs_set.remove(name);
-                    if old_struct == new_struct {
-                        continue;
-                    } else {
+        // Since the structs are sorted we can iterate through each list to find the differences using two pointers
+        for mark in compare_identifiers(old_module.structs.keys(), new_module.structs.keys()) {
+            match mark {
+                Mark::New(name) => context.struct_new(name, new_module.structs.get(name).unwrap()),
+                Mark::Missing(name) => context.struct_missing(name),
+                Mark::Existing(name) => {
+                    let old_struct = old_module.structs.get(name).unwrap();
+                    let new_struct = new_module.structs.get(name).unwrap();
+                    if old_struct != new_struct {
                         context.struct_change(name, old_struct, new_struct);
                     }
                 }
-                _ => {
-                    context.struct_missing(name);
-                }
-            };
-        }
-
-        for name in new_structs_set {
-            let new_struct = new_module.structs.get(name).unwrap();
-            context.struct_new(name, new_struct);
-        }
-
-        let mut new_enums_set: HashSet<_> = new_module.enums.keys().collect();
-
-        // Enum checks
-        for (name, old_enum) in &old_module.enums {
-            let Some(new_enum) = new_module.enums.get(name) else {
-                context.enum_missing(name);
-                continue;
-            };
-
-            new_enums_set.remove(name);
-
-            if old_enum.abilities != new_enum.abilities {
-                context.enum_change(name, new_enum);
-            }
-            if old_enum.type_parameters != new_enum.type_parameters {
-                context.enum_change(name, new_enum);
-            }
-            if old_enum.variants.len() > new_enum.variants.len() {
-                context.enum_change(name, new_enum);
-            }
-
-            // NB: In the future if we allow adding new variants to enums in subset mode
-            // remove this if statement. This check is somewhat redundant with the one
-            // below, the one below should be kept if we allow adding variants in subset
-            // mode.
-            if old_enum.variants.len() != new_enum.variants.len() {
-                context.enum_change(name, new_enum);
-            }
-
-            // TODO remove?
-            if self == &Self::Equal && old_enum.variants.len() != new_enum.variants.len() {
-                context.enum_change(name, new_enum);
-            }
-            // NB: We are using the fact that the variants are sorted by tag, that we've
-            // already ensured that the old variants are >= new variants, and the fact
-            // that zip will truncate the second iterator if there are extra there to allow
-            // adding new variants to enums in `Self::Subset` compatibility mode.
-            if !old_enum
-                .variants
-                .iter()
-                .zip(&new_enum.variants)
-                .all(|(old, new)| old == new)
-            {
-                context.enum_change(name, new_enum);
             }
         }
-
-        for name in new_enums_set {
-            let new_enum = new_module.enums.get(name).unwrap();
-            context.enum_new(name, new_enum);
-        }
-
-        let mut new_functions_set: HashSet<_> = new_module.functions.keys().collect();
-        // Function checks
-        for (name, old_func) in &old_module.functions {
-            match new_module
-                .functions
-                .get(name)
-                .or_else(|| new_module.functions.get(name))
-            {
-                Some(new_func) => {
-                    new_functions_set.remove(name);
-                    if old_func == new_func {
-                        continue;
-                    } else {
-                        context.function_change(name, new_func);
+        // enum checks
+        compare_identifiers(old_module.enums.keys(), new_module.enums.keys()).for_each(|mark| {
+            match mark {
+                Mark::New(name) => context.enum_new(name, new_module.enums.get(name).unwrap()),
+                Mark::Missing(name) => context.enum_missing(name),
+                Mark::Existing(name) => {
+                    let old_enum = old_module.enums.get(name).unwrap();
+                    let new_enum = new_module.enums.get(name).unwrap();
+                    if old_enum != new_enum {
+                        context.enum_change(name, old_enum);
                     }
                 }
-                _ => {
-                    context.function_missing(name);
+            }
+        });
+
+        // function checks
+
+        compare_identifiers(old_module.functions.keys(), new_module.functions.keys()).for_each(
+            |mark| match mark {
+                Mark::New(name) => {
+                    context.function_new(name, new_module.functions.get(name).unwrap())
+                }
+                Mark::Missing(name) => context.function_missing(name),
+                Mark::Existing(name) => {
+                    let old_function = old_module.functions.get(name).unwrap();
+                    let new_function = new_module.functions.get(name).unwrap();
+                    if old_function != new_function {
+                        context.function_change(name, old_function);
+                    }
+                }
+            },
+        );
+
+        // use iters for friends
+        let mut old_friend_iter = old_module.friends.iter().peekable();
+        let mut new_friend_iter = new_module.friends.iter().peekable();
+        loop {
+            let old_friend = old_friend_iter.peek();
+            let new_friend = new_friend_iter.peek();
+            match (old_friend, new_friend) {
+                (Some(old_friend), Some(new_friend)) => {
+                    if old_friend != new_friend {
+                        if old_friend.lt(new_friend) {
+                            context.friend_missing(old_friend);
+                            old_friend_iter.next();
+                        } else {
+                            context.friend_new(new_friend);
+                            new_friend_iter.next();
+                        }
+                    } else {
+                        old_friend_iter.next();
+                        new_friend_iter.next();
+                    }
+                }
+                (Some(old_friend), None) => {
+                    context.friend_missing(old_friend);
+                    old_friend_iter.next();
+                }
+                (None, Some(new_friend)) => {
+                    context.friend_new(new_friend);
+                    new_friend_iter.next();
+                }
+                (None, None) => {
+                    break;
                 }
             }
-        }
-
-        for name in new_functions_set {
-            let new_func = new_module.functions.get(name).unwrap();
-            context.function_new(name, new_func);
-        }
-
-        let mut new_friends_set: HashSet<_> = new_module.friends.iter().collect();
-
-        for friend in &old_module.friends {
-            if !new_module.friends.contains(friend) {
-                context.friend_missing(friend);
-            }
-            new_friends_set.remove(friend);
-        }
-
-        for friend in new_friends_set {
-            context.friend_new(friend);
         }
 
         context.finish(self)
     }
+}
+
+enum Mark<'a> {
+    New(&'a Identifier),
+    Missing(&'a Identifier),
+    Existing(&'a Identifier),
+}
+
+fn compare_identifiers<'c, I, J>(old: I, new: J) -> impl Iterator<Item = Mark<'c>> + 'c
+where
+    I: Iterator<Item = &'c Identifier> + 'c,
+    J: Iterator<Item = &'c Identifier> + 'c,
+{
+    let mut old = old.peekable();
+    let mut new = new.peekable();
+    std::iter::from_fn(move || match (old.peek(), new.peek()) {
+        (Some(old_name), Some(new_name)) => match old_name.cmp(new_name) {
+            std::cmp::Ordering::Equal => {
+                let old_name = *old_name;
+                old.next();
+                new.next();
+                Some(Mark::Existing(old_name))
+            }
+            std::cmp::Ordering::Less => {
+                let old_name = *old_name;
+                old.next();
+                Some(Mark::Missing(old_name))
+            }
+            std::cmp::Ordering::Greater => {
+                let new_name = *new_name;
+                new.next();
+                Some(Mark::New(new_name))
+            }
+        },
+        (Some(old_name), None) => {
+            let name = *old_name;
+            old.next();
+            Some(Mark::Missing(name))
+        }
+        (None, Some(new_name)) => {
+            let name = *new_name;
+            new.next();
+            Some(Mark::New(name))
+        }
+        (None, None) => None,
+    })
 }
