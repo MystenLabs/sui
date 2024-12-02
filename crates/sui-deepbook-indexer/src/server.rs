@@ -472,68 +472,43 @@ async fn get_level2_ticks_from_mid(
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(&ask_quantities).unwrap();
 
     let mut result = HashMap::new();
-    // Insert bid parsed prices
-    result.insert(
-        "bid_parsed_prices".to_string(),
-        Value::Array(
-            bid_parsed_prices
-                .into_iter()
-                .map(|quantity| {
-                    let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
-                    Value::from(quantity as f64 / factor as f64)
-                })
-                .collect(),
-        ),
-    );
-
-    // Insert bid parsed quantities
-    result.insert(
-        "bid_parsed_quantities".to_string(),
-        Value::Array(
-            bid_parsed_quantities
-                .into_iter()
-                .map(|quantity| {
-                    let factor = 10u64.pow((*base_decimals).try_into().unwrap());
-                    Value::from(quantity as f64 / factor as f64)
-                })
-                .collect(),
-        ),
-    );
-
-    // Insert ask parsed prices
-    result.insert(
-        "ask_parsed_prices".to_string(),
-        Value::Array(
-            ask_parsed_prices
-                .into_iter()
-                .map(|quantity| {
-                    let factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
-                    Value::from(quantity as f64 / factor as f64)
-                })
-                .collect(),
-        ),
-    );
-
-    // Insert ask parsed quantities
-    result.insert(
-        "ask_parsed_quantities".to_string(),
-        Value::Array(
-            ask_parsed_quantities
-                .into_iter()
-                .map(|quantity| {
-                    let factor = 10u64.pow((*base_decimals).try_into().unwrap());
-                    Value::from(quantity as f64 / factor as f64)
-                })
-                .collect(),
-        ),
-    );
 
     // Insert timestamp
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    result.insert("timestamp".to_string(), Value::from(timestamp));
+    result.insert("timestamp".to_string(), Value::from(timestamp.to_string()));
+
+    // Generate bids
+    let bids: Vec<Value> = bid_parsed_prices
+        .into_iter()
+        .zip(bid_parsed_quantities.into_iter())
+        .map(|(price, quantity)| {
+            let price_factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+            let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
+            Value::Array(vec![
+                Value::from((price as f64 / price_factor as f64).to_string()),
+                Value::from((quantity as f64 / quantity_factor as f64).to_string()),
+            ])
+        })
+        .collect();
+    result.insert("bids".to_string(), Value::Array(bids));
+
+    // Generate asks
+    let asks: Vec<Value> = ask_parsed_prices
+        .into_iter()
+        .zip(ask_parsed_quantities.into_iter())
+        .map(|(price, quantity)| {
+            let price_factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+            let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
+            Value::Array(vec![
+                Value::from((price as f64 / price_factor as f64).to_string()),
+                Value::from((quantity as f64 / quantity_factor as f64).to_string()),
+            ])
+        })
+        .collect();
+    result.insert("asks".to_string(), Value::Array(asks));
 
     Ok(Json(result))
 }
