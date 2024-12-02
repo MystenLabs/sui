@@ -9,7 +9,7 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::governance::WITHDRAW_STAKE_FUN_NAME;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -20,10 +20,7 @@ use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::Error;
 
-use super::{
-    gather_coins_in_balance_reverse_order, TransactionAndObjectData, TryConstructTransaction,
-    MAX_GAS_BUDGET, MAX_GAS_COINS,
-};
+use super::{TransactionAndObjectData, TryConstructTransaction, MAX_GAS_BUDGET, MAX_GAS_COINS};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WithdrawStake {
@@ -109,12 +106,21 @@ impl TryConstructTransaction for WithdrawStake {
             }
         };
 
-        let gathered_coins_reverse_sorted =
-            gather_coins_in_balance_reverse_order(client, sender, budget).await?;
+        let gas_coins = client
+            .coin_read_api()
+            .select_coins(sender, None, budget as u128, vec![])
+            .await?;
+        if gas_coins.len() > MAX_GAS_COINS {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: "maximum number of gas payment objects".to_string(),
+                    value: MAX_GAS_COINS.to_string(),
+                },
+            }
+            .into());
+        }
 
-        let gas_coins_iter = gathered_coins_reverse_sorted
-            .into_iter()
-            .take(MAX_GAS_COINS);
+        let gas_coins_iter = gas_coins.into_iter();
         let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
         let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
 

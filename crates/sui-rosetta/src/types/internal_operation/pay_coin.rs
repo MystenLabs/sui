@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData,
@@ -16,10 +17,7 @@ use sui_types::transaction::{
 use crate::types::internal_operation::MAX_GAS_COINS;
 use crate::{errors::Error, Currency};
 
-use super::{
-    gather_coins_in_balance_reverse_order, TransactionAndObjectData, TryConstructTransaction,
-    MAX_COMMAND_ARGS, MAX_GAS_BUDGET,
-};
+use super::{TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, MAX_GAS_BUDGET};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PayCoin {
@@ -86,12 +84,21 @@ impl TryConstructTransaction for PayCoin {
             }
         };
 
-        let gathered_coins_reverse_sorted =
-            gather_coins_in_balance_reverse_order(client, sender, budget).await?;
+        let gas_coins = client
+            .coin_read_api()
+            .select_coins(sender, None, budget as u128, vec![])
+            .await?;
+        if gas_coins.len() > MAX_GAS_COINS {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: "maximum number of gas payment objects".to_string(),
+                    value: MAX_GAS_COINS.to_string(),
+                },
+            }
+            .into());
+        }
 
-        let gas_coins_iter = gathered_coins_reverse_sorted
-            .into_iter()
-            .take(MAX_GAS_COINS);
+        let gas_coins_iter = gas_coins.into_iter();
         let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
         let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
 
