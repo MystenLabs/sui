@@ -976,11 +976,21 @@ export interface SuiMoveNormalizedModule {
 	structs: {
 		[key: string]: SuiMoveNormalizedStruct;
 	};
+	enums: {
+		[key: string]: SuiMoveNormalizedEnum;
+	};
 }
 export interface SuiMoveNormalizedStruct {
 	abilities: SuiMoveAbilitySet;
 	fields: SuiMoveNormalizedField[];
 	typeParameters: SuiMoveStructTypeParameter[];
+}
+export interface SuiMoveNormalizedEnum {
+	abilities: SuiMoveAbilitySet;
+	typeParameters: SuiMoveStructTypeParameter[];
+	variants: {
+		[key: string]: SuiMoveNormalizedField[];
+	};
 }
 export type SuiMoveNormalizedType =
 	| 'Bool'
