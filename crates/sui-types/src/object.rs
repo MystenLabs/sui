@@ -505,6 +505,8 @@ pub enum Authenticator {
 
 impl Authenticator {
     pub fn as_single_owner(&self) -> &SuiAddress {
+        // When additional variants are added, the return type of this function should be changed
+        // so that existing callers can be audited for correct handling of multiple Authenticators.
         match self {
             Self::SingleOwner(address) => address,
         }
