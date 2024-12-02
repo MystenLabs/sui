@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail, ensure};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
+use sui_field_count::FieldCount;
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
@@ -22,6 +23,8 @@ use crate::{
     schema::sum_coin_balances,
 };
 
+const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumCoinBalance::FIELD_COUNT;
+const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 pub struct SumCoinBalances;
 
 impl Processor for SumCoinBalances {
@@ -151,8 +154,8 @@ impl Handler for SumCoinBalances {
                 deletes.push(update.object_id.to_vec());
             }
         }
-        let update_chunks = updates.chunks(Self::INSERT_CHUNK_ROWS).map(Either::Left);
-        let delete_chunks = deletes.chunks(Self::DELETE_CHUNK_ROWS).map(Either::Right);
+        let update_chunks = updates.chunks(MAX_INSERT_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(MAX_DELETE_CHUNK_ROWS).map(Either::Right);
 
         let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
             Either::Left(update) => Either::Left(

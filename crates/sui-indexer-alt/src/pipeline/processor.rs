@@ -5,7 +5,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use mysten_metrics::spawn_monitored_task;
-use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
@@ -27,7 +26,7 @@ pub trait Processor {
     const FANOUT: usize = 10;
 
     /// The type of value being inserted by the handler.
-    type Value: Send + Sync + 'static + FieldCount;
+    type Value: Send + Sync + 'static;
 
     /// The processing logic for turning a checkpoint into rows of the table.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;

@@ -53,13 +53,9 @@ const MAX_WATERMARK_UPDATES: usize = 10_000;
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
 #[async_trait::async_trait]
-pub trait Handler: Processor {
+pub trait Handler: Processor<Value: FieldCount> {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
-
-    /// If there are more than this many rows pending, the committer will only commit this many in
-    /// one operation. The size is chosen to maximize the rows without hitting the limit on bind parameters.
-    const MAX_CHUNK_ROWS: usize = i16::MAX as usize / Self::Value::FIELD_COUNT;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
@@ -137,7 +133,8 @@ impl<H: Handler> Batched<H> {
     /// The batch is full if it has more than enough values to write to the database, or more than
     /// enough watermarks to update.
     fn is_full(&self) -> bool {
-        self.values.len() >= H::MAX_CHUNK_ROWS || self.watermark.len() >= MAX_WATERMARK_UPDATES
+        let max_chunk_rows = i16::MAX as usize / H::Value::FIELD_COUNT;
+        self.values.len() >= max_chunk_rows || self.watermark.len() >= MAX_WATERMARK_UPDATES
     }
 }
 

@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -42,13 +41,6 @@ mod committer;
 pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
-
-    /// If there are more than this many rows pending, the committer will only commit this many in
-    /// one operation. The size is chosen to maximize the rows without hitting the limit on bind parameters.
-    const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / Self::Value::FIELD_COUNT;
-
-    /// Each deletion will include at most this many rows without hitting the limit on bind parameters.
-    const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
