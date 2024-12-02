@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::{
-    debug_query, upsert::excluded, BoolExpressionMethods, Connection, ExpressionMethods,
-    PgConnection, QueryDsl, Queryable, RunQueryDsl,
+    debug_query, upsert::excluded, BoolExpressionMethods, ExpressionMethods, QueryDsl, Queryable,
 };
+use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use insta::assert_display_snapshot;
 use sui_pg_temp_db::TempDb;
 
@@ -77,10 +77,10 @@ fn test_update_from_empty() {
 }
 
 /// Update all the columns from the model type.
-#[test]
-fn test_bulk_update() {
+#[tokio::test]
+async fn test_bulk_update() {
     let temp_db = TempDb::new().unwrap();
-    setup_objects_table(&temp_db);
+    setup_objects_table(&temp_db).await;
 
     update_from(objects::table)
         .set((
@@ -106,12 +106,14 @@ fn test_bulk_update() {
                 type_: Some("qux".to_string()),
             },
         ])
-        .execute(&mut conn(&temp_db))
+        .execute(&mut conn(&temp_db).await)
+        .await
         .unwrap();
 
     let objects: Vec<StoredObject> = objects::table
         .order_by(objects::dsl::object_id)
-        .load(&mut conn(&temp_db))
+        .load(&mut conn(&temp_db).await)
+        .await
         .unwrap();
 
     assert_eq!(
@@ -157,10 +159,10 @@ fn test_bulk_update() {
 }
 
 /// Only update certain columns from the model type.
-#[test]
-fn test_bulk_update_partial_rows() {
+#[tokio::test]
+async fn test_bulk_update_partial_rows() {
     let temp_db = TempDb::new().unwrap();
-    setup_objects_table(&temp_db);
+    setup_objects_table(&temp_db).await;
 
     update_from(objects::table)
         .set((
@@ -184,12 +186,14 @@ fn test_bulk_update_partial_rows() {
                 type_: Some("qux".to_string()),
             },
         ])
-        .execute(&mut conn(&temp_db))
+        .execute(&mut conn(&temp_db).await)
+        .await
         .unwrap();
 
     let objects: Vec<StoredObject> = objects::table
         .order_by(objects::dsl::object_id)
-        .load(&mut conn(&temp_db))
+        .load(&mut conn(&temp_db).await)
+        .await
         .unwrap();
 
     assert_eq!(
@@ -234,10 +238,10 @@ fn test_bulk_update_partial_rows() {
     );
 }
 
-#[test]
-fn test_bulk_update_filtered() {
+#[tokio::test]
+async fn test_bulk_update_filtered() {
     let temp_db = TempDb::new().unwrap();
-    setup_objects_table(&temp_db);
+    setup_objects_table(&temp_db).await;
 
     update_from(objects::table)
         .set((
@@ -281,12 +285,14 @@ fn test_bulk_update_filtered() {
                 type_: Some("quy".to_string()),
             },
         ])
-        .execute(&mut conn(&temp_db))
+        .execute(&mut conn(&temp_db).await)
+        .await
         .unwrap();
 
     let objects: Vec<StoredObject> = objects::table
         .order_by(objects::dsl::object_id)
-        .load(&mut conn(&temp_db))
+        .load(&mut conn(&temp_db).await)
+        .await
         .unwrap();
 
     assert_eq!(
@@ -331,13 +337,14 @@ fn test_bulk_update_filtered() {
     );
 }
 
-fn conn(temp_db: &TempDb) -> PgConnection {
-    PgConnection::establish(temp_db.database().url().as_str())
+async fn conn(temp_db: &TempDb) -> AsyncPgConnection {
+    AsyncPgConnection::establish(temp_db.database().url().as_str())
+        .await
         .expect("Failed to establish connection")
 }
 
-fn setup_objects_table(temp_db: &TempDb) {
-    let mut conn = conn(temp_db);
+async fn setup_objects_table(temp_db: &TempDb) {
+    let mut conn = conn(temp_db).await;
 
     diesel::sql_query(
         r#"
@@ -351,6 +358,7 @@ fn setup_objects_table(temp_db: &TempDb) {
         "#,
     )
     .execute(&mut conn)
+    .await
     .unwrap();
 
     diesel::insert_into(objects::table)
@@ -392,5 +400,6 @@ fn setup_objects_table(temp_db: &TempDb) {
             },
         ])
         .execute(&mut conn)
+        .await
         .unwrap();
 }
