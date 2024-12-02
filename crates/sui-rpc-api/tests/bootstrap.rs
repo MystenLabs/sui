@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fs, path::PathBuf, process::Command};
+use std::fs;
+use std::path::PathBuf;
 
 #[test]
 fn bootstrap() {
@@ -34,15 +35,17 @@ fn bootstrap() {
 
     let out_dir = root_dir.join("src").join("proto").join("generated");
 
-    if let Err(error) = prost_build::Config::new()
+    if let Err(error) = tonic_build::configure()
+        .build_client(true)
+        .build_server(true)
         .bytes(["."])
         .out_dir(&out_dir)
         .compile_protos(&proto_files[..], &[proto_dir])
     {
-        panic!("failed to compile `rest` protobuf: {}", error);
+        panic!("failed to compile `sui` protos: {}", error);
     }
 
-    let status = Command::new("git")
+    let status = std::process::Command::new("git")
         .arg("diff")
         .arg("--exit-code")
         .arg("--")
