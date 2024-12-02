@@ -3023,7 +3023,7 @@ impl ProtocolConfig {
                     }
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.consensus_gc_depth = Some(60);
+                        cfg.consensus_gc_depth = Some(5);
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
                 }
