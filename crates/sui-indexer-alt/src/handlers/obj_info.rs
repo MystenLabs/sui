@@ -100,6 +100,8 @@ impl Processor for ObjInfo {
 
 #[async_trait::async_trait]
 impl Handler for ObjInfo {
+    const WRITE_CONCURRENCY_OVERRIDE: Option<usize> = Some(20);
+
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         Ok(diesel::insert_into(obj_info::table)
             .values(values)
