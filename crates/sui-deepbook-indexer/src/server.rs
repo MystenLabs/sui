@@ -45,6 +45,8 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
 pub const GET_ALL_HISTORICAL_VOLUME_PATH: &str = "/get_all_historical_volume";
 pub const LEVEL2_PATH: &str = "/get_level2_ticks_from_mid/:pool_id";
+pub const DEEPBOOK_PACKAGE_ID: &str =
+    "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -431,8 +433,7 @@ async fn get_level2_ticks_from_mid(
     let base_coin_type = parse_type_input(base_coin_type)?;
     let quote_coin_type = parse_type_input(quote_coin_type)?;
 
-    let pkg_id = "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
-    let package = ObjectID::from_hex_literal(pkg_id).map_err(|e| anyhow!(e))?;
+    let package = ObjectID::from_hex_literal(DEEPBOOK_PACKAGE_ID).map_err(|e| anyhow!(e))?;
     let module = "pool".to_string();
     let function = "get_level2_ticks_from_mid".to_string();
 
