@@ -564,8 +564,6 @@ impl<'backing> TemporaryStore<'backing> {
             .filter(|id| {
                 // remove any non-mutable inputs. This will remove deleted or readonly shared
                 // objects
-                // TODO: Do we want to treat ConsensusV2 objects taken immutably as authenticated?
-                // If so this will have to be changed.
                 mutable_inputs.contains(id)
             })
             .copied()
