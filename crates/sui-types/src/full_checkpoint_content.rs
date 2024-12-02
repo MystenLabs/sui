@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use crate::base_types::{ObjectID, ObjectRef};
 use crate::effects::{
@@ -11,7 +11,6 @@ use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents}
 use crate::object::Object;
 use crate::storage::BackingPackageStore;
 use crate::transaction::Transaction;
-use im::HashSet;
 use itertools::Either;
 use serde::{Deserialize, Serialize};
 use tap::Pipe;
