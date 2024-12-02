@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ampli } from '_src/shared/analytics/ampli';
-import { Collapsible } from '_src/ui/app/shared/collapse';
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
+import { ampli } from '_src/shared/analytics/ampli';
+import { Collapsible } from '_src/ui/app/shared/collapse';
 import cn from 'clsx';
 import { useMemo, useState } from 'react';
 
@@ -59,14 +59,7 @@ export function AccountsList() {
 				onValueChange={handleSelectAccount}
 			>
 				<>
-					<Collapsible defaultOpen title="Current" shade="darker">
-						<ToggleGroup.Item asChild value={activeAccount.id}>
-							<div>
-								<AccountListItem account={activeAccount} editable showLock />
-							</div>
-						</ToggleGroup.Item>
-					</Collapsible>
-
+					<AccountListItem account={activeAccount} editable showLock />
 					{otherAccounts.length ? (
 						<Collapsible
 							isOpen={isSwitchToAccountOpen}
