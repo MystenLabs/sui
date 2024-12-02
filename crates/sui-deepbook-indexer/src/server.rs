@@ -359,13 +359,20 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 }
 
 async fn get_level2_ticks_from_mid(
-    Path(pool_id): Path<String>,
+    Path(pool_name): Path<String>,
 ) -> Result<Json<HashMap<String, Value>>, DeepBookError> {
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
-    let pool_address = ObjectID::from_hex_literal(&pool_id)?;
-    // get the latest pool object version
+    let pool_name_map = get_pool_name_mapping();
+    let pool_id = pool_name_map
+        .iter()
+        .find(|(_, name)| name == &&pool_name)
+        .map(|(address, _)| address)
+        .ok_or_else(|| anyhow!("Pool name '{}' not found", pool_name))?;
+
+    let pool_address = ObjectID::from_hex_literal(pool_id)?;
+
     let pool_object: SuiObjectResponse = sui_client
         .read_api()
         .get_object_with_options(pool_address, SuiObjectDataOptions::full_content())
@@ -373,28 +380,23 @@ async fn get_level2_ticks_from_mid(
     let pool_data: &SuiObjectData = pool_object
         .data
         .as_ref()
-        .ok_or(anyhow!("Missing data in pool object response"))?;
-
+        .ok_or(anyhow!("Missing data in pool object response for '{}'", pool_name))?;
     let pool_object_ref: ObjectRef = (
         pool_data.object_id.clone(),
         SequenceNumber::from(pool_data.version),
         ObjectDigest::from(pool_data.digest.clone()),
     );
 
-    // mark pool_object_ref as the first input. Later used as Argument::Input(0)
     let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref));
     ptb.input(pool_input)?;
 
-    // mark ticks_from_mid as the second input. Later used as Argument::Input(1)
     let ticks_from_mid = 10u64;
     let input_argument = CallArg::Pure(bcs::to_bytes(&ticks_from_mid).unwrap());
     ptb.input(input_argument)?;
 
-    // Convert the sui_clock_object_id string to ObjectID
     let sui_clock_object_id = ObjectID::from_hex_literal(
         "0x0000000000000000000000000000000000000000000000000000000000000006",
     )?;
-    // get the latest clock object version
     let sui_clock_object: SuiObjectResponse = sui_client
         .read_api()
         .get_object_with_options(sui_clock_object_id, SuiObjectDataOptions::full_content())
@@ -410,15 +412,13 @@ async fn get_level2_ticks_from_mid(
         ObjectDigest::from(clock_data.digest.clone()),
     );
 
-    // mark sui_clock_object_ref as the third input. Later used as Argument::Input(2)
     let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref));
     ptb.input(clock_input)?;
 
-    let pool_name_map = get_pool_name_mapping();
-    let pool_name = pool_name_map
-        .get(&pool_id)
+    let pool_full_name = pool_name_map
+        .get(pool_id)
         .ok_or_else(|| anyhow!("Pool ID not found"))?;
-    let (base_asset, quote_asset) = parse_pool_name(pool_name)?;
+    let (base_asset, quote_asset) = parse_pool_name(pool_full_name)?;
 
     let asset_info_map = get_asset_info_mapping();
     let (base_coin_type, base_decimals) = asset_info_map
@@ -431,8 +431,7 @@ async fn get_level2_ticks_from_mid(
     let base_coin_type = parse_type_input(base_coin_type)?;
     let quote_coin_type = parse_type_input(quote_coin_type)?;
 
-    // Add the Move call to the PTB
-    let pkg_id = "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809"; // Mainnet package
+    let pkg_id = "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
     let package = ObjectID::from_hex_literal(pkg_id).map_err(|e| anyhow!(e))?;
     let module = "pool".to_string();
     let function = "get_level2_ticks_from_mid".to_string();
@@ -443,22 +442,20 @@ async fn get_level2_ticks_from_mid(
         function,
         type_arguments: vec![base_coin_type, quote_coin_type],
         arguments: vec![
-            Argument::Input(0), // pool.address
-            Argument::Input(1), // tickFromMid
-            Argument::Input(2), // SUI_CLOCK_OBJECT_ID
+            Argument::Input(0),
+            Argument::Input(1),
+            Argument::Input(2),
         ],
     })));
 
     let builder = ptb.finish();
     let tx = TransactionKind::ProgrammableTransaction(builder);
-    // use the read_api() to get the dev_inspect_transaction_block function.
-    // this does not require you to input any gas coins.
+
     let result = sui_client
         .read_api()
         .dev_inspect_transaction_block(SuiAddress::default(), tx, None, None, None)
         .await?;
 
-    // parse the results.
     let binding = result.results.unwrap();
 
     let bid_prices = &binding.get(0).unwrap().return_values.get(0).unwrap().0;
@@ -473,14 +470,12 @@ async fn get_level2_ticks_from_mid(
 
     let mut result = HashMap::new();
 
-    // Insert timestamp
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
     result.insert("timestamp".to_string(), Value::from(timestamp.to_string()));
 
-    // Generate bids
     let bids: Vec<Value> = bid_parsed_prices
         .into_iter()
         .zip(bid_parsed_quantities.into_iter())
@@ -495,7 +490,6 @@ async fn get_level2_ticks_from_mid(
         .collect();
     result.insert("bids".to_string(), Value::Array(bids));
 
-    // Generate asks
     let asks: Vec<Value> = ask_parsed_prices
         .into_iter()
         .zip(ask_parsed_quantities.into_iter())
