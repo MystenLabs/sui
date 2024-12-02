@@ -11,8 +11,8 @@ use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
-    obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays,
-    sum_obj_types::SumObjTypes, sum_packages::SumPackages,
+    obj_info::ObjInfo, obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances,
+    sum_displays::SumDisplays, sum_obj_types::SumObjTypes, sum_packages::SumPackages,
     tx_affected_addresses::TxAffectedAddress, tx_affected_objects::TxAffectedObjects,
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
@@ -409,6 +409,7 @@ pub async fn start_indexer(
     indexer.concurrent_pipeline(KvEpochStarts, None).await?;
     indexer.concurrent_pipeline(KvObjects, None).await?;
     indexer.concurrent_pipeline(KvTransactions, None).await?;
+    indexer.concurrent_pipeline(ObjInfo, None).await?;
     indexer.concurrent_pipeline(ObjVersions, None).await?;
     indexer.concurrent_pipeline(TxAffectedAddress, None).await?;
     indexer.concurrent_pipeline(TxAffectedObjects, None).await?;
