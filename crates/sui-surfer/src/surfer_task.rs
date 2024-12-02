@@ -3,6 +3,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use parking_lot::RwLock;
+
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sui_core::authority::authority_store_tables::LiveObject;
 use sui_types::{
@@ -10,26 +12,26 @@ use sui_types::{
     object::Owner,
 };
 use test_cluster::TestCluster;
-use tokio::sync::{watch, RwLock};
+use tracing::{info, instrument};
 
 use crate::{
     surf_strategy::SurfStrategy,
     surfer_state::{ImmObjects, OwnedObjects, SharedObjects, SurfStatistics, SurferState},
+    EntryFunctionFilterFn,
 };
 
 pub struct SurferTask {
     pub state: SurferState,
     pub surf_strategy: SurfStrategy,
-    pub exit_rcv: watch::Receiver<()>,
 }
 
 impl SurferTask {
     pub async fn create_surfer_tasks(
         cluster: Arc<TestCluster>,
         seed: u64,
-        exit_rcv: watch::Receiver<()>,
         skip_accounts: usize,
         surf_strategy: SurfStrategy,
+        entry_function_filter: Option<EntryFunctionFilterFn>,
     ) -> Vec<SurferTask> {
         let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
@@ -62,7 +64,6 @@ impl SurferTask {
                             Owner::Immutable => {
                                 immutable_objects
                                     .write()
-                                    .await
                                     .entry(struct_tag)
                                     .or_default()
                                     .push(obj_ref);
@@ -77,7 +78,6 @@ impl SurferTask {
                             } => {
                                 shared_objects
                                     .write()
-                                    .await
                                     .entry(struct_tag)
                                     .or_default()
                                     .push((obj_ref.0, initial_shared_version));
@@ -120,28 +120,35 @@ impl SurferTask {
                     immutable_objects.clone(),
                     shared_objects.clone(),
                     entry_functions.clone(),
+                    entry_function_filter.clone(),
                 );
                 SurferTask {
                     state,
                     surf_strategy: surf_strategy.clone(),
-                    exit_rcv: exit_rcv.clone(),
                 }
             })
             .collect()
     }
 
+    #[instrument(skip(self), fields(id = self.state.id))]
     pub async fn surf(mut self) -> SurfStatistics {
+        let mut finished = Box::pin(self.surf_strategy.finished(&self.state));
+
         loop {
-            let entry_functions = self.state.entry_functions.read().await.clone();
+            let entry_functions = self.state.entry_functions.read().clone();
 
             tokio::select! {
                 _ = self.surf_strategy
                 .surf_for_a_while(&mut self.state, entry_functions) => {
+                    if self.state.entry_functions.read().is_empty() {
+                        info!("Exiting early because there are no more entry functions to run");
+                        return self.state.stats.borrow().clone();
+                    }
                     continue;
                 }
 
-                _ = self.exit_rcv.changed() => {
-                    return self.state.stats;
+                _ = &mut finished => {
+                    return self.state.stats.borrow().clone();
                 }
             }
         }
