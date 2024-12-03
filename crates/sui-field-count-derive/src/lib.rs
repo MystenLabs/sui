@@ -19,9 +19,7 @@ pub fn field_count_derive(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics FieldCount for #name #ty_generics #where_clause {
-            fn field_count() -> usize {
-                #fields_count
-            }
+            const FIELD_COUNT: usize = #fields_count;
         }
     };
 

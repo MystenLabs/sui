@@ -38,10 +38,9 @@ impl<H: Handler> Pending<H> {
     /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
     /// chunk size.
     fn batch_into(&mut self, batch: &mut Batched<H>) {
-        if batch.values.len() + self.values.len() > H::MAX_CHUNK_ROWS {
-            let mut for_batch = self
-                .values
-                .split_off(H::MAX_CHUNK_ROWS - batch.values.len());
+        let max_chunk_rows = super::max_chunk_rows::<H>();
+        if batch.values.len() + self.values.len() > max_chunk_rows {
+            let mut for_batch = self.values.split_off(max_chunk_rows - batch.values.len());
 
             std::mem::swap(&mut self.values, &mut for_batch);
             batch.watermark.push(self.watermark.take(for_batch.len()));

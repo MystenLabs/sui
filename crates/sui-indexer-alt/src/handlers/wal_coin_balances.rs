@@ -32,7 +32,6 @@ impl Processor for WalCoinBalances {
 #[async_trait::async_trait]
 impl Handler for WalCoinBalances {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

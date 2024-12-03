@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -52,13 +53,9 @@ const MAX_WATERMARK_UPDATES: usize = 10_000;
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
 #[async_trait::async_trait]
-pub trait Handler: Processor {
+pub trait Handler: Processor<Value: FieldCount> {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
-
-    /// If there are more than this many rows pending, the committer will only commit this many in
-    /// one operation.
-    const MAX_CHUNK_ROWS: usize = 1000;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
@@ -136,7 +133,7 @@ impl<H: Handler> Batched<H> {
     /// The batch is full if it has more than enough values to write to the database, or more than
     /// enough watermarks to update.
     fn is_full(&self) -> bool {
-        self.values.len() >= H::MAX_CHUNK_ROWS || self.watermark.len() >= MAX_WATERMARK_UPDATES
+        self.values.len() >= max_chunk_rows::<H>() || self.watermark.len() >= MAX_WATERMARK_UPDATES
     }
 }
 
@@ -249,4 +246,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
     })
+}
+
+const fn max_chunk_rows<H: Handler>() -> usize {
+    i16::MAX as usize / H::Value::FIELD_COUNT
 }

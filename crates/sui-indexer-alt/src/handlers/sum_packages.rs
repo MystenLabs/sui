@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
+use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
     schema::sum_packages,
 };
 
-const CHUNK_ROWS: usize = i16::MAX as usize / 5;
+const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredPackage::FIELD_COUNT;
 
 pub struct SumPackages;
 
@@ -67,7 +68,7 @@ impl Handler for SumPackages {
 
     async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
-        let updates = values.chunks(CHUNK_ROWS).map(|chunk| {
+        let updates = values.chunks(MAX_INSERT_CHUNK_ROWS).map(|chunk| {
             diesel::insert_into(sum_packages::table)
                 .values(chunk)
                 .on_conflict(sum_packages::package_id)
