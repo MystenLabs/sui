@@ -10,6 +10,11 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
+export type Authenticator =
+	/** The contained SuiAddress exclusively has all permissions: read, write, delete, transfer */
+	{
+		SingleOwner: string;
+	};
 export interface Balance {
 	coinObjectCount: number;
 	coinType: string;
@@ -223,15 +228,18 @@ export interface SuiEvent {
 	type: string;
 }
 export type SuiEventFilter =
-	/** Query by sender address. */
+	/** Return all events. */
+	| {
+			All: [];
+	  } /** Return events that match any of the given filters. Only supported on event subscriptions. */
+	| {
+			Any: SuiEventFilter[];
+	  } /** Query by sender address. */
 	| {
 			Sender: string;
 	  } /** Return events emitted by the given transaction. */
 	| {
 			Transaction: string;
-	  } /** Return events emitted in a specified Package. */
-	| {
-			Package: string;
 	  } /**
 	 * Return events emitted in a specified Move module. If the event is defined in Module A but emitted in
 	 * a tx with Module B, query `MoveModule` by module B returns the event. Query `MoveEventModule` by
@@ -262,12 +270,6 @@ export type SuiEventFilter =
 				/** the Move package ID */
 				package: string;
 			};
-	  }
-	| {
-			MoveEventField: {
-				path: string;
-				value: unknown;
-			};
 	  } /** Return events emitted in [start_time, end_time] interval */
 	| {
 			TimeRange: {
@@ -276,22 +278,8 @@ export type SuiEventFilter =
 				/** left endpoint of time interval, milliseconds since epoch, inclusive */
 				startTime: string;
 			};
-	  }
-	| {
-			All: SuiEventFilter[];
-	  }
-	| {
-			Any: SuiEventFilter[];
-	  }
-	| {
-			And: [SuiEventFilter, SuiEventFilter];
-	  }
-	| {
-			Or: [SuiEventFilter, SuiEventFilter];
 	  };
-/**
- * Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number.
- */
+/** Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number. */
 export interface EventId {
 	eventSeq: string;
 	txDigest: string;
@@ -648,7 +636,22 @@ export type ObjectOwner =
 				initial_shared_version: string;
 			};
 	  }
-	| 'Immutable';
+	| 'Immutable' /**
+	 * Object is sequenced via consensus. Ownership is managed by the configured authenticator.
+	 *
+	 * Note: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.
+	 */
+	| {
+			ConsensusV2: {
+				/** The authentication mode of the object */
+				authenticator: Authenticator;
+				/**
+				 * The version at which the object most recently became a consensus object. This serves the same
+				 * function as `initial_shared_version`, except it may change if the object's Owner type changes.
+				 */
+				start_version: string;
+			};
+	  };
 /**
  * `next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the
  * next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first
@@ -954,6 +957,13 @@ export interface SuiMoveModuleId {
 	address: string;
 	name: string;
 }
+export interface SuiMoveNormalizedEnum {
+	abilities: SuiMoveAbilitySet;
+	typeParameters: SuiMoveStructTypeParameter[];
+	variants: {
+		[key: string]: SuiMoveNormalizedField[];
+	};
+}
 export interface SuiMoveNormalizedField {
 	name: string;
 	type: SuiMoveNormalizedType;
@@ -967,6 +977,9 @@ export interface SuiMoveNormalizedFunction {
 }
 export interface SuiMoveNormalizedModule {
 	address: string;
+	enums?: {
+		[key: string]: SuiMoveNormalizedEnum;
+	};
 	exposedFunctions: {
 		[key: string]: SuiMoveNormalizedFunction;
 	};
@@ -976,21 +989,11 @@ export interface SuiMoveNormalizedModule {
 	structs: {
 		[key: string]: SuiMoveNormalizedStruct;
 	};
-	enums: {
-		[key: string]: SuiMoveNormalizedEnum;
-	};
 }
 export interface SuiMoveNormalizedStruct {
 	abilities: SuiMoveAbilitySet;
 	fields: SuiMoveNormalizedField[];
 	typeParameters: SuiMoveStructTypeParameter[];
-}
-export interface SuiMoveNormalizedEnum {
-	abilities: SuiMoveAbilitySet;
-	typeParameters: SuiMoveStructTypeParameter[];
-	variants: {
-		[key: string]: SuiMoveNormalizedField[];
-	};
 }
 export type SuiMoveNormalizedType =
 	| 'Bool'
@@ -1475,7 +1478,7 @@ export interface SuiTransactionBlockResponseQuery {
 	options?: SuiTransactionBlockResponseOptions | null;
 }
 export type TransactionFilter =
-	/** Query by checkpoint. */
+	/** CURRENTLY NOT SUPPORTED. Query by checkpoint. */
 	| {
 			Checkpoint: string;
 	  } /** Query by move function. */
@@ -1491,6 +1494,9 @@ export type TransactionFilter =
 	  } /** Query by changed object, including created, mutated and unwrapped objects. */
 	| {
 			ChangedObject: string;
+	  } /** Query for transactions that touch this object. */
+	| {
+			AffectedObject: string;
 	  } /** Query by sender address. */
 	| {
 			FromAddress: string;
@@ -1503,7 +1509,7 @@ export type TransactionFilter =
 				from: string;
 				to: string;
 			};
-	  } /** Query txs that have a given address as sender or recipient. */
+	  } /** CURRENTLY NOT SUPPORTED. Query txs that have a given address as sender or recipient. */
 	| {
 			FromOrToAddress: {
 				addr: string;
