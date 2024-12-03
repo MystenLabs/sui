@@ -10,7 +10,6 @@ use crate::{
     file_format_common::VERSION_5,
     normalized::Module,
 };
-use move_core_types::identifier::Identifier;
 use move_core_types::vm_status::StatusCode;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
@@ -394,7 +393,7 @@ impl InclusionCheck {
         }
 
         // Since the structs are sorted we can iterate through each list to find the differences using two pointers
-        for mark in compare_identifiers(old_module.structs.keys(), new_module.structs.keys()) {
+        for mark in compare_ord_iters(old_module.structs.keys(), new_module.structs.keys()) {
             match mark {
                 Mark::New(name) => context.struct_new(name, new_module.structs.get(name).unwrap()),
                 Mark::Missing(name) => context.struct_missing(name),
@@ -407,8 +406,9 @@ impl InclusionCheck {
                 }
             }
         }
+
         // enum checks
-        compare_identifiers(old_module.enums.keys(), new_module.enums.keys()).for_each(|mark| {
+        for mark in compare_ord_iters(old_module.enums.keys(), new_module.enums.keys()) {
             match mark {
                 Mark::New(name) => context.enum_new(name, new_module.enums.get(name).unwrap()),
                 Mark::Missing(name) => context.enum_missing(name),
@@ -420,12 +420,11 @@ impl InclusionCheck {
                     }
                 }
             }
-        });
+        }
 
         // function checks
-
-        compare_identifiers(old_module.functions.keys(), new_module.functions.keys()).for_each(
-            |mark| match mark {
+        for mark in compare_ord_iters(old_module.functions.keys(), new_module.functions.keys()) {
+            match mark {
                 Mark::New(name) => {
                     context.function_new(name, new_module.functions.get(name).unwrap())
                 }
@@ -437,41 +436,15 @@ impl InclusionCheck {
                         context.function_change(name, old_function);
                     }
                 }
-            },
-        );
+            }
+        }
 
-        // use iters for friends
-        let mut old_friend_iter = old_module.friends.iter().peekable();
-        let mut new_friend_iter = new_module.friends.iter().peekable();
-        loop {
-            let old_friend = old_friend_iter.peek();
-            let new_friend = new_friend_iter.peek();
-            match (old_friend, new_friend) {
-                (Some(old_friend), Some(new_friend)) => {
-                    if old_friend != new_friend {
-                        if old_friend.lt(new_friend) {
-                            context.friend_missing(old_friend);
-                            old_friend_iter.next();
-                        } else {
-                            context.friend_new(new_friend);
-                            new_friend_iter.next();
-                        }
-                    } else {
-                        old_friend_iter.next();
-                        new_friend_iter.next();
-                    }
-                }
-                (Some(old_friend), None) => {
-                    context.friend_missing(old_friend);
-                    old_friend_iter.next();
-                }
-                (None, Some(new_friend)) => {
-                    context.friend_new(new_friend);
-                    new_friend_iter.next();
-                }
-                (None, None) => {
-                    break;
-                }
+        // compare friends
+        for mark in compare_ord_iters(old_module.friends.iter(), new_module.friends.iter()) {
+            match mark {
+                Mark::New(name) => context.friend_new(name),
+                Mark::Missing(name) => context.friend_missing(name),
+                Mark::Existing(_) => {}
             }
         }
 
@@ -479,16 +452,25 @@ impl InclusionCheck {
     }
 }
 
-enum Mark<'a> {
-    New(&'a Identifier),
-    Missing(&'a Identifier),
-    Existing(&'a Identifier),
+/// A marker for the differences between two iterators
+#[derive(PartialEq, Debug)]
+enum Mark<'a, T>
+where
+    T: Ord,
+{
+    New(&'a T),
+    Missing(&'a T),
+    Existing(&'a T),
 }
 
-fn compare_identifiers<'c, I, J>(old: I, new: J) -> impl Iterator<Item = Mark<'c>> + 'c
+/// Compare two sorted iterators of identifiers and return an iterator providing the
+/// differences between the two input iterators. The iterators are assumed to be sorted in ascending
+/// no duplicates are allowed.
+fn compare_ord_iters<'c, I, J, T>(old: I, new: J) -> impl Iterator<Item = Mark<'c, T>> + 'c
 where
-    I: Iterator<Item = &'c Identifier> + 'c,
-    J: Iterator<Item = &'c Identifier> + 'c,
+    T: Ord + 'c,
+    I: Iterator<Item = &'c T> + 'c,
+    J: Iterator<Item = &'c T> + 'c,
 {
     let mut old = old.peekable();
     let mut new = new.peekable();
@@ -523,4 +505,85 @@ where
         }
         (None, None) => None,
     })
+}
+
+#[test]
+fn test_compare_ord_iters() {
+    let a = Identifier::new("a").unwrap();
+    let b = Identifier::new("b").unwrap();
+    let c = Identifier::new("c").unwrap();
+    let d = Identifier::new("d").unwrap();
+    let e = Identifier::new("e").unwrap();
+    let f = Identifier::new("f").unwrap();
+
+    // (old, new, expected, name)
+    let tests = vec![
+        ("empty", vec![], vec![], vec![]),
+        (
+            "existing",
+            vec![a.clone()],
+            vec![a.clone()],
+            vec![Mark::Existing(&a)],
+        ),
+        ("missing", vec![a.clone()], vec![], vec![Mark::Missing(&a)]),
+        ("new", vec![], vec![a.clone()], vec![Mark::New(&a)]),
+        (
+            "missing new",
+            vec![a.clone()],
+            vec![b.clone()],
+            vec![Mark::Missing(&a), Mark::New(&b)],
+        ),
+        (
+            "existing new",
+            vec![a.clone()],
+            vec![a.clone(), b.clone()],
+            vec![Mark::Existing(&a), Mark::New(&b)],
+        ),
+        (
+            "existing missing",
+            vec![a.clone(), b.clone()],
+            vec![a.clone()],
+            vec![Mark::Existing(&a), Mark::Missing(&b)],
+        ),
+        (
+            "missing existing",
+            vec![a.clone(), b.clone()],
+            vec![b.clone()],
+            vec![Mark::Missing(&a), Mark::Existing(&b)],
+        ),
+        (
+            "existing new missing",
+            vec![a.clone(), e.clone()],
+            vec![a.clone(), b.clone()],
+            vec![Mark::Existing(&a), Mark::New(&b), Mark::Missing(&e)],
+        ),
+        (
+            "new existing missing",
+            vec![b.clone(), f.clone()],
+            vec![a.clone(), b.clone()],
+            vec![Mark::New(&a), Mark::Existing(&b), Mark::Missing(&f)],
+        ),
+        (
+            "new missing existing",
+            vec![d.clone(), e.clone()],
+            vec![a.clone(), e.clone()],
+            vec![Mark::New(&a), Mark::Missing(&d), Mark::Existing(&e)],
+        ),
+        (
+            "missing existing new",
+            vec![a.clone(), b.clone()],
+            vec![b.clone(), c.clone()],
+            vec![Mark::Missing(&a), Mark::Existing(&b), Mark::New(&c)],
+        ),
+    ];
+
+    for (name, old, new, expected) in tests {
+        let iter = compare_ord_iters(old.iter(), new.iter());
+        let result: Vec<_> = iter.collect();
+        assert_eq!(
+            result, expected,
+            "failed: {}. Result: {:?}, Expected: {:?}",
+            name, result, expected
+        );
+    }
 }
