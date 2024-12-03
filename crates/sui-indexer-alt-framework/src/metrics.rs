@@ -49,14 +49,14 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 ];
 
 /// Service to expose prometheus metrics from the indexer.
-pub struct MetricsService {
+pub(crate) struct MetricsService {
     addr: SocketAddr,
     registry: Registry,
     cancel: CancellationToken,
 }
 
 #[derive(Clone)]
-pub struct IndexerMetrics {
+pub(crate) struct IndexerMetrics {
     // Statistics related to fetching data from the remote store.
     pub total_ingested_checkpoints: IntCounter,
     pub total_ingested_transactions: IntCounter,
@@ -131,7 +131,7 @@ impl MetricsService {
     /// Create a new metrics service, exposing Mysten-wide metrics, and Indexer-specific metrics.
     /// Returns the Indexer-specific metrics and the service itself (which must be run with
     /// [Self::run]).
-    pub fn new(
+    pub(crate) fn new(
         addr: SocketAddr,
         db: Db,
         cancel: CancellationToken,
@@ -151,7 +151,7 @@ impl MetricsService {
     }
 
     /// Start the service. The service will run until the cancellation token is triggered.
-    pub async fn run(self) -> Result<JoinHandle<()>> {
+    pub(crate) async fn run(self) -> Result<JoinHandle<()>> {
         let listener = TcpListener::bind(&self.addr).await?;
         let app = Router::new()
             .route("/metrics", get(metrics))
@@ -171,7 +171,7 @@ impl MetricsService {
 }
 
 impl IndexerMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             total_ingested_checkpoints: register_int_counter_with_registry!(
                 "indexer_total_ingested_checkpoints",

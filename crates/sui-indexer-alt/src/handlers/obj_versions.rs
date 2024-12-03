@@ -5,16 +5,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    db,
-    models::objects::StoredObjVersion,
-    pipeline::{concurrent::Handler, Processor},
-    schema::obj_versions,
-};
+use crate::{models::objects::StoredObjVersion, schema::obj_versions};
 
-pub struct ObjVersions;
+pub(crate) struct ObjVersions;
 
 impl Processor for ObjVersions {
     const NAME: &'static str = "obj_versions";

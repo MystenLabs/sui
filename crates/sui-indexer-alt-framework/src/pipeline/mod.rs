@@ -3,14 +3,14 @@
 
 use std::time::Duration;
 
-use crate::models::watermarks::CommitterWatermark;
+use crate::watermarks::CommitterWatermark;
 
 pub use processor::Processor;
 use serde::{Deserialize, Serialize};
 
 pub mod concurrent;
 mod processor;
-pub(crate) mod sequential;
+pub mod sequential;
 
 /// Tracing message for the watermark update will be logged at info level at least this many
 /// checkpoints.

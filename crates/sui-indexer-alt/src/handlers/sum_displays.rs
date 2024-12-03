@@ -8,17 +8,17 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{sequential::Handler, Processor},
+};
 use sui_types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData};
 
-use crate::{
-    db,
-    models::displays::StoredDisplay,
-    pipeline::{sequential::Handler, Processor},
-    schema::sum_displays,
-};
+use crate::{models::displays::StoredDisplay, schema::sum_displays};
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredDisplay::FIELD_COUNT;
-pub struct SumDisplays;
+
+pub(crate) struct SumDisplays;
 
 impl Processor for SumDisplays {
     const NAME: &'static str = "sum_displays";

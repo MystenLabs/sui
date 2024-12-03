@@ -5,16 +5,18 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Owner};
 
 use crate::{
-    db,
     models::objects::{StoredObjInfo, StoredOwnerKind},
-    pipeline::{concurrent::Handler, Processor},
     schema::obj_info,
 };
 
-pub struct ObjInfo;
+pub(crate) struct ObjInfo;
 
 impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";

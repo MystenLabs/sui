@@ -18,10 +18,10 @@ use tracing::{debug, error, info, warn};
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
     pipeline::{
         CommitterConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
     },
+    watermarks::CommitterWatermark,
 };
 
 use super::Handler;

@@ -5,18 +5,19 @@ use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::{
     full_checkpoint_content::CheckpointData,
     sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
     transaction::{TransactionDataAPI, TransactionKind},
 };
 
-use crate::{
-    db, models::epochs::StoredEpochStart, pipeline::concurrent::Handler, pipeline::Processor,
-    schema::kv_epoch_starts,
-};
+use crate::{models::epochs::StoredEpochStart, schema::kv_epoch_starts};
 
-pub struct KvEpochStarts;
+pub(crate) struct KvEpochStarts;
 
 impl Processor for KvEpochStarts {
     const NAME: &'static str = "kv_epoch_starts";

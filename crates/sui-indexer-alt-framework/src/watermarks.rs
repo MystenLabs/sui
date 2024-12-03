@@ -12,7 +12,7 @@ use crate::{db::Connection, schema::watermarks};
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub struct StoredWatermark {
+pub(crate) struct StoredWatermark {
     pub pipeline: String,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
@@ -26,7 +26,7 @@ pub struct StoredWatermark {
 /// Fields that the committer is responsible for setting.
 #[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub struct CommitterWatermark<'p> {
+pub(crate) struct CommitterWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
@@ -36,14 +36,14 @@ pub struct CommitterWatermark<'p> {
 
 #[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub struct ReaderWatermark<'p> {
+pub(crate) struct ReaderWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub reader_lo: i64,
 }
 
 #[derive(Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub struct PrunerWatermark<'p> {
+pub(crate) struct PrunerWatermark<'p> {
     /// The pipeline in question
     pub pipeline: Cow<'p, str>,
 
@@ -60,7 +60,7 @@ pub struct PrunerWatermark<'p> {
 }
 
 impl StoredWatermark {
-    pub async fn get(
+    pub(crate) async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
     ) -> QueryResult<Option<Self>> {
@@ -75,7 +75,7 @@ impl StoredWatermark {
 
 impl CommitterWatermark<'static> {
     /// Get the current high watermark for the pipeline.
-    pub async fn get(
+    pub(crate) async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
     ) -> QueryResult<Option<Self>> {
@@ -90,7 +90,7 @@ impl CommitterWatermark<'static> {
 
 impl<'p> CommitterWatermark<'p> {
     /// A new watermark with the given pipeline name indicating zero progress.
-    pub fn initial(pipeline: Cow<'p, str>) -> Self {
+    pub(crate) fn initial(pipeline: Cow<'p, str>) -> Self {
         CommitterWatermark {
             pipeline,
             epoch_hi_inclusive: 0,
@@ -101,7 +101,7 @@ impl<'p> CommitterWatermark<'p> {
     }
 
     /// The consensus timestamp associated with this checkpoint.
-    pub fn timestamp(&self) -> DateTime<Utc> {
+    pub(crate) fn timestamp(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
     }
 
@@ -109,7 +109,7 @@ impl<'p> CommitterWatermark<'p> {
     /// Returns a boolean indicating whether the watermark was actually updated or not.
     ///
     /// TODO(amnn): Test this (depends on supporting migrations and tempdb).
-    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+    pub(crate) async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
         use diesel::query_dsl::methods::FilterDsl;
         Ok(diesel::insert_into(watermarks::table)
             .values(StoredWatermark::from(self.clone()))
@@ -124,7 +124,7 @@ impl<'p> CommitterWatermark<'p> {
 }
 
 impl<'p> ReaderWatermark<'p> {
-    pub fn new(pipeline: impl Into<Cow<'p, str>>, reader_lo: u64) -> Self {
+    pub(crate) fn new(pipeline: impl Into<Cow<'p, str>>, reader_lo: u64) -> Self {
         ReaderWatermark {
             pipeline: pipeline.into(),
             reader_lo: reader_lo as i64,
@@ -135,7 +135,7 @@ impl<'p> ReaderWatermark<'p> {
     /// watermark, and updates the timestamp this update happened to the database's current time.
     ///
     /// Returns a boolean indicating whether the watermark was actually updated or not.
-    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+    pub(crate) async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
         Ok(diesel::update(watermarks::table)
             .set((self, watermarks::pruner_timestamp.eq(diesel::dsl::now)))
             .filter(watermarks::pipeline.eq(&self.pipeline))
@@ -154,7 +154,7 @@ impl PrunerWatermark<'static> {
     /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
     /// `reader_lo` (exclusive) after `wait_for` milliseconds have passed since this response was
     /// returned.
-    pub async fn get(
+    pub(crate) async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
         delay: Duration,
@@ -186,17 +186,17 @@ impl PrunerWatermark<'static> {
 impl<'p> PrunerWatermark<'p> {
     /// How long to wait before the pruner can act on this information, or `None`, if there is no
     /// need to wait.
-    pub fn wait_for(&self) -> Option<Duration> {
+    pub(crate) fn wait_for(&self) -> Option<Duration> {
         (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
     }
 
     /// Whether the pruner has any work left to do on the range in this watermark.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.pruner_hi >= self.reader_lo
     }
 
     /// The next chunk that the pruner should work on, to advance the watermark.
-    pub fn next_chunk(&mut self, size: u64) -> (u64, u64) {
+    pub(crate) fn next_chunk(&mut self, size: u64) -> (u64, u64) {
         let from = self.pruner_hi as u64;
         let to = (from + size).min(self.reader_lo as u64);
         (from, to)
@@ -206,7 +206,7 @@ impl<'p> PrunerWatermark<'p> {
     /// raises the watermark.
     ///
     /// Returns a boolean indicating whether the watermark was actually updated or not.
-    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+    pub(crate) async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
         Ok(diesel::update(watermarks::table)
             .set(watermarks::pruner_hi.eq(self.pruner_hi))
             .filter(watermarks::pipeline.eq(&self.pipeline))

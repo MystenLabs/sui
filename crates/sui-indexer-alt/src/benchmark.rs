@@ -3,12 +3,14 @@
 
 use std::{path::PathBuf, time::Instant};
 
-use crate::{
+use sui_indexer_alt_framework::{
     db::{reset_database, DbArgs},
     ingestion::ClientArgs,
-    start_indexer, IndexerArgs, IndexerConfig,
+    IndexerArgs,
 };
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
+
+use crate::{config::IndexerConfig, models::MIGRATIONS, start_indexer};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct BenchmarkArgs {
@@ -37,7 +39,7 @@ pub async fn run_benchmark(
     let last_checkpoint = *ingestion_data.keys().last().unwrap();
     let num_transactions: usize = ingestion_data.values().map(|c| c.transactions.len()).sum();
 
-    reset_database(db_args.clone(), false /* do not skip migrations */).await?;
+    reset_database(db_args.clone(), Some(&MIGRATIONS)).await?;
 
     let indexer_args = IndexerArgs {
         first_checkpoint: Some(first_checkpoint),

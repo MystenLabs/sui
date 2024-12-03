@@ -6,18 +6,20 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::{
-    db,
     models::objects::{StoredObjectUpdate, StoredSumCoinBalance, StoredWalCoinBalance},
-    pipeline::{concurrent::Handler, Processor},
     schema::wal_coin_balances,
 };
 
 use super::sum_coin_balances::SumCoinBalances;
 
-pub struct WalCoinBalances;
+pub(crate) struct WalCoinBalances;
 
 impl Processor for WalCoinBalances {
     const NAME: &'static str = "wal_coin_balances";

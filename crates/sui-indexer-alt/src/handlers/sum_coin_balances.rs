@@ -11,21 +11,24 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
 use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{sequential::Handler, Processor},
+};
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
 };
 
 use crate::{
-    db,
     models::objects::{StoredObjectUpdate, StoredSumCoinBalance},
-    pipeline::{sequential::Handler, Processor},
     schema::sum_coin_balances,
 };
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumCoinBalance::FIELD_COUNT;
 const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-pub struct SumCoinBalances;
+
+pub(crate) struct SumCoinBalances;
 
 impl Processor for SumCoinBalances {
     const NAME: &'static str = "sum_coin_balances";

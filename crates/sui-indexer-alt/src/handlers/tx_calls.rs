@@ -5,15 +5,16 @@ use std::sync::Arc;
 
 use anyhow::{Ok, Result};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::{
-    db, models::transactions::StoredTxCalls, pipeline::concurrent::Handler, pipeline::Processor,
-    schema::tx_calls,
-};
+use crate::{models::transactions::StoredTxCalls, schema::tx_calls};
 
-pub struct TxCalls;
+pub(crate) struct TxCalls;
 
 impl Processor for TxCalls {
     const NAME: &'static str = "tx_calls";
