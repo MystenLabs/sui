@@ -73,38 +73,6 @@ impl PgDeepbookPersistent {
     }
 }
 
-enum Table {
-    OrderUpdates,
-    OrderFills,
-    Flashloans,
-    PoolPrices,
-    Balances,
-    Proposals,
-    Rebates,
-    Stakes,
-    TradeParamsUpdate,
-    Votes,
-    ErrorTransactions,
-}
-
-impl Table {
-    fn table_name(&self) -> diesel::Table {
-        match self {
-            Table::OrderUpdates => order_updates::table,
-            Table::OrderFills => order_fills::table,
-            Table::Flashloans => flashloans::table,
-            Table::PoolPrices => pool_prices::table,
-            Table::Balances => balances::table,
-            Table::Proposals => proposals::table,
-            Table::Rebates => rebates::table,
-            Table::Stakes => stakes::table,
-            Table::TradeParamsUpdate => trade_params_update::table,
-            Table::Votes => votes::table,
-            Table::ErrorTransactions => sui_error_transactions::table,
-        }
-    }
-}
-
 #[async_trait]
 impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
     async fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
