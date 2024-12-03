@@ -13,7 +13,7 @@ async fn get_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let core_client = CoreClient::new(test_cluster.rpc_url());
+    let core_client = CoreClient::new(test_cluster.rpc_url()).unwrap();
 
     let _object = client.get_object("0x5".parse().unwrap()).await.unwrap();
     let _object = core_client

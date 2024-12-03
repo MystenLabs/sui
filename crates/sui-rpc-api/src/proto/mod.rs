@@ -25,6 +25,8 @@ impl std::fmt::Display for TryFromProtoError {
     }
 }
 
+impl std::error::Error for TryFromProtoError {}
+
 impl TryFromProtoError {
     pub fn missing(field: &'static str) -> Self {
         Self {

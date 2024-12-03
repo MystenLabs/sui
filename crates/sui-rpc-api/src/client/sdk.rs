@@ -83,10 +83,6 @@ impl Client {
         .pipe(Ok)
     }
 
-    pub(super) fn client(&self) -> &reqwest::Client {
-        &self.inner
-    }
-
     pub fn url(&self) -> &Url {
         &self.url
     }
@@ -553,7 +549,7 @@ impl<T> Response<T> {
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub(super) type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 #[derive(Debug)]
 pub struct Error {
