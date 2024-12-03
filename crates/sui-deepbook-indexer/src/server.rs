@@ -366,7 +366,7 @@ async fn get_level2_ticks_from_mid(
 ) -> Result<Json<HashMap<String, Value>>, DeepBookError> {
     let depth = params
         .get("depth")
-        .map(|v| v.parse::<i64>())
+        .map(|v| v.parse::<u64>())
         .transpose()
         .map_err(|_| anyhow!("Depth must be a non-negative integer"))?;
 
@@ -380,6 +380,12 @@ async fn get_level2_ticks_from_mid(
         Some(depth) => (depth / 2) as u64,
         None => 100u64,
     };
+
+    let level = params
+        .get("level")
+        .map(|v| v.parse::<u64>())
+        .transpose()
+        .map_err(|_| anyhow!("Level must be between 1 and 3"))?;
 
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
