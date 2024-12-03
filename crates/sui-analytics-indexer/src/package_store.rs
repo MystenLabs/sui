@@ -76,7 +76,7 @@ impl LocalDBPackageStore {
     pub fn new(path: &Path, rest_url: &str) -> Self {
         Self {
             package_store_tables: PackageStoreTables::new(path),
-            fallback_client: Client::new(rest_url),
+            fallback_client: Client::new(rest_url).unwrap(),
         }
     }
 
