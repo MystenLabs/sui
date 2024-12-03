@@ -119,81 +119,92 @@ impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
                     let mut tasks = Vec::new();
 
                     if !order_updates_batch.is_empty() {
-                        let task = diesel::insert_into(order_updates::table)
-                            .values(&order_updates_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(order_updates::table)
+                                .values(&order_updates_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !order_fills_batch.is_empty() {
-                        let task = diesel::insert_into(order_fills::table)
-                            .values(&order_fills_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(order_fills::table)
+                                .values(&order_fills_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !flashloans_batch.is_empty() {
-                        let task = diesel::insert_into(flashloans::table)
-                            .values(&flashloans_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(flashloans::table)
+                                .values(&flashloans_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !pool_prices_batch.is_empty() {
-                        let task = diesel::insert_into(pool_prices::table)
-                            .values(&pool_prices_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(pool_prices::table)
+                                .values(&pool_prices_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !balances_batch.is_empty() {
-                        let task = diesel::insert_into(balances::table)
-                            .values(&balances_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(balances::table)
+                                .values(&balances_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !proposals_batch.is_empty() {
-                        let task = diesel::insert_into(proposals::table)
-                            .values(&proposals_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(proposals::table)
+                                .values(&proposals_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !rebates_batch.is_empty() {
-                        let task = diesel::insert_into(rebates::table)
-                            .values(&rebates_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(rebates::table)
+                                .values(&rebates_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !stakes_batch.is_empty() {
-                        let task = diesel::insert_into(stakes::table)
-                            .values(&stakes_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(stakes::table)
+                                .values(&stakes_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !trade_params_update_batch.is_empty() {
-                        let task = diesel::insert_into(trade_params_update::table)
-                            .values(&trade_params_update_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(trade_params_update::table)
+                                .values(&trade_params_update_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !votes_batch.is_empty() {
-                        let task = diesel::insert_into(votes::table)
-                            .values(&votes_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(votes::table)
+                                .values(&votes_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
                     if !error_transactions_batch.is_empty() {
-                        let task = diesel::insert_into(sui_error_transactions::table)
-                            .values(&error_transactions_batch)
-                            .on_conflict_do_nothing()
-                            .execute(conn);
-                        tasks.push(task);
+                        tasks.push(
+                            diesel::insert_into(sui_error_transactions::table)
+                                .values(&error_transactions_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
 
                     // Execute all tasks concurrently
