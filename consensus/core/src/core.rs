@@ -264,7 +264,7 @@ impl Core {
         let (mut accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
-            info!(
+            debug!(
                 "Accepted blocks: {}",
                 accepted_blocks
                     .iter()
@@ -297,7 +297,7 @@ impl Core {
             .threshold_clock
             .add_blocks(accepted_blocks.iter().map(|b| b.reference()).collect())
         {
-            info!("Threshold clock advanced to {new_round}");
+            debug!("Threshold clocked advanced to {new_round}");
             // notify that threshold clock advanced to new round
             self.signals.new_round(new_round);
         }
@@ -409,7 +409,7 @@ impl Core {
 
             // If we did not find enough good ancestors to propose, continue to wait before proposing.
             if ancestors.is_empty() {
-                info!("No smart ancestors found to propose for {clock_round}");
+                debug!("No smart ancestors found to propose for {clock_round}");
                 assert!(
                     !force,
                     "Ancestors should have been returned if force is true!"
@@ -681,7 +681,7 @@ impl Core {
                     .add_unscored_committed_subdags(subdags.clone());
             }
 
-            info!("Advance gc_round to {}", self.dag_state.read().gc_round());
+            debug!("Advance gc_round to {}", self.dag_state.read().gc_round());
 
             // Try to unsuspend blocks if gc_round has advanced.
             let accepted_blocks = self
