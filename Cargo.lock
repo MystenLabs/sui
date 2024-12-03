@@ -15137,6 +15137,7 @@ dependencies = [
  "diffy",
  "documented",
  "fastcrypto",
+ "http 1.1.0",
  "itertools 0.13.0",
  "mime",
  "move-binary-format",
@@ -15163,6 +15164,7 @@ dependencies = [
  "tokio",
  "tonic 0.12.3",
  "tonic-build",
+ "tower 0.4.13",
  "url",
 ]
 
