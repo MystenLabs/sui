@@ -515,7 +515,16 @@ mod tests {
             config
         });
 
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _keys) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
+        context
+            .protocol_config
+            .set_consensus_linearize_subdag_v2_for_testing(false);
+
+        let context = Arc::new(context);
+
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
