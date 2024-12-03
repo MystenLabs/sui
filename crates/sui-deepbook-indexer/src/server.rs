@@ -19,10 +19,10 @@ use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
 use diesel_async::RunQueryDsl;
+use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
-use serde_json::Value;
 
 use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
@@ -373,9 +373,12 @@ async fn get_level2_ticks_from_mid(
 
     if let Some(depth) = depth {
         if depth == 1 {
-            return Err(anyhow!("Depth cannot be 1. Use a value greater than 1 or 0 for the entire orderbook").into());
+            return Err(anyhow!(
+                "Depth cannot be 1. Use a value greater than 1 or 0 for the entire orderbook"
+            )
+            .into());
         }
-}
+    }
 
     let level = params
         .get("level")
@@ -394,7 +397,7 @@ async fn get_level2_ticks_from_mid(
         (Some(depth), Some(2)) | (Some(depth), None) => (depth / 2) as u64, // Depth + Level 2 → Use depth
         (None, Some(1)) => 1u64, // Only Level 1 → Best bid and ask
         (None, Some(2)) | (None, None) => 100u64, // Level 2 or default → 100 ticks
-        _ => 100u64, // Fallback to default
+        _ => 100u64,             // Fallback to default
     };
 
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
@@ -413,10 +416,10 @@ async fn get_level2_ticks_from_mid(
         .read_api()
         .get_object_with_options(pool_address, SuiObjectDataOptions::full_content())
         .await?;
-    let pool_data: &SuiObjectData = pool_object
-        .data
-        .as_ref()
-        .ok_or(anyhow!("Missing data in pool object response for '{}'", pool_name))?;
+    let pool_data: &SuiObjectData = pool_object.data.as_ref().ok_or(anyhow!(
+        "Missing data in pool object response for '{}'",
+        pool_name
+    ))?;
     let pool_object_ref: ObjectRef = (
         pool_data.object_id.clone(),
         SequenceNumber::from(pool_data.version),
@@ -475,11 +478,7 @@ async fn get_level2_ticks_from_mid(
         module,
         function,
         type_arguments: vec![base_coin_type, quote_coin_type],
-        arguments: vec![
-            Argument::Input(0),
-            Argument::Input(1),
-            Argument::Input(2),
-        ],
+        arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
     })));
 
     let builder = ptb.finish();
@@ -515,7 +514,8 @@ async fn get_level2_ticks_from_mid(
         .zip(bid_parsed_quantities.into_iter())
         .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
-            let price_factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+            let price_factor =
+                10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
             let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
             Value::Array(vec![
                 Value::from((price as f64 / price_factor as f64).to_string()),
@@ -530,7 +530,8 @@ async fn get_level2_ticks_from_mid(
         .zip(ask_parsed_quantities.into_iter())
         .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
-            let price_factor = 10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
+            let price_factor =
+                10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
             let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
             Value::Array(vec![
                 Value::from((price as f64 / price_factor as f64).to_string()),
