@@ -599,6 +599,14 @@ fn get_pool_name_mapping() -> HashMap<String, String> {
             "0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec",
             "TYPUS_SUI",
         ),
+        (
+            "0x183df694ebc852a5f90a959f0f563b82ac9691e42357e9a9fe961d71a1b809c8",
+            "SUI_AUSD",
+        ),
+        (
+            "0x5661fc7f88fbeb8cb881150a810758cf13700bb4e1f31274a244581b37c303c3",
+            "AUSD_USDC",
+        ),
     ]
     .iter()
     .map(|&(id, name)| (id.to_string(), name.to_string()))
@@ -662,6 +670,13 @@ fn get_asset_info_mapping() -> HashMap<String, (String, u64)> {
             (
                 "0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS",
                 9,
+            ),
+        ),
+        (
+            "AUSD",
+            (
+                "0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD",
+                6,
             ),
         ),
     ]
