@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.16
+
+### Patch Changes
+
+- f78d42a: AUSD pool support
+
 ## 0.12.15
 
 ### Patch Changes
