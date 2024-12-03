@@ -1,0 +1,51 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/ide_mode/let_after_incomplete.move:7:9
+  │
+7 │         let _tmp1 = 42;
+  │         ^^^
+  │         │
+  │         Unexpected 'let'
+  │         Expected a variable or struct name
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/let_after_incomplete.move:13:9
+   │
+13 │         let _tmp1 = 42;
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/let_after_incomplete.move:19:9
+   │
+19 │         let _tmp1 = 42;
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an expression term
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/ide_mode/let_after_incomplete.move:24:9
+   │
+24 │         f                // parses correctly but without semicolon
+   │         ^ Unbound variable 'f'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/let_after_incomplete.move:25:9
+   │
+25 │         let _tmp1 = 42;
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/let_after_incomplete.move:31:9
+   │
+31 │         let _tmp1 = 42;
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an expression term
+
