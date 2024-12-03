@@ -481,16 +481,15 @@ async fn get_level2_ticks_from_mid(
         .dev_inspect_transaction_block(SuiAddress::default(), tx, None, None, None)
         .await?;
 
-    let binding = result.results.unwrap();
-
-    let bid_prices = &binding.get(0).unwrap().return_values.get(0).unwrap().0;
+    let mut binding = result.results.unwrap();
+    let bid_prices = &binding.first_mut().unwrap().return_values.get(0).unwrap().0;
     let bid_parsed_prices: Vec<u64> = bcs::from_bytes(bid_prices).unwrap();
-    let bid_quantities = &binding.get(0).unwrap().return_values.get(1).unwrap().0;
+    let bid_quantities = &binding.first_mut().unwrap().return_values.get(1).unwrap().0;
     let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(bid_quantities).unwrap();
 
-    let ask_prices = &binding.get(0).unwrap().return_values.get(2).unwrap().0;
+    let ask_prices = &binding.first_mut().unwrap().return_values.get(2).unwrap().0;
     let ask_parsed_prices: Vec<u64> = bcs::from_bytes(ask_prices).unwrap();
-    let ask_quantities = &binding.get(0).unwrap().return_values.get(3).unwrap().0;
+    let ask_quantities = &binding.first_mut().unwrap().return_values.get(3).unwrap().0;
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(ask_quantities).unwrap();
 
     let mut result = HashMap::new();
