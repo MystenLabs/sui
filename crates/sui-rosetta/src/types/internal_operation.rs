@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::transaction::{ProgrammableTransaction, TransactionData};
@@ -122,4 +123,37 @@ impl InternalOperation {
             metadata.gas_price,
         ))
     }
+}
+
+async fn budget_from_dry_run(
+    client: &SuiClient,
+    pt: ProgrammableTransaction,
+    sender: SuiAddress,
+    gas_price: Option<u64>,
+) -> Result<u64, Error> {
+    let gas_price = match gas_price {
+        Some(p) => p,
+        None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
+    };
+    let dry_run = client
+        .read_api()
+        .dry_run_transaction_block(TransactionData::new_programmable(
+            sender,
+            // TODO: Investigate: Why does this fail sometimes when I pass the gas-coins?
+            // Is it because I use MAX_GAS_BUDGET below?
+            vec![],
+            pt.clone(),
+            // We don't want dry run to fail due to budget, because
+            // it will display the fail-budget
+            MAX_GAS_BUDGET,
+            gas_price,
+        ))
+        .await?;
+    let effects = dry_run.effects;
+
+    if let SuiExecutionStatus::Failure { error } = effects.status() {
+        return Err(Error::TransactionDryRunError(error.to_string()));
+    }
+    // Update budget to be the result of the dry run
+    Ok(effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost)
 }
