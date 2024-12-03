@@ -81,42 +81,40 @@ impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
         }
         use futures::future;
 
+        // Group data by type
+        let mut order_updates_batch = vec![];
+        let mut order_fills_batch = vec![];
+        let mut flashloans_batch = vec![];
+        let mut pool_prices_batch = vec![];
+        let mut balances_batch = vec![];
+        let mut proposals_batch = vec![];
+        let mut rebates_batch = vec![];
+        let mut stakes_batch = vec![];
+        let mut trade_params_update_batch = vec![];
+        let mut votes_batch = vec![];
+        let mut error_transactions_batch = vec![];
+
+        // Collect the data into batches
+        for d in data {
+            match d {
+                ProcessedTxnData::OrderUpdate(t) => order_updates_batch.push(t.to_db()),
+                ProcessedTxnData::OrderFill(t) => order_fills_batch.push(t.to_db()),
+                ProcessedTxnData::Flashloan(t) => flashloans_batch.push(t.to_db()),
+                ProcessedTxnData::PoolPrice(t) => pool_prices_batch.push(t.to_db()),
+                ProcessedTxnData::Balances(t) => balances_batch.push(t.to_db()),
+                ProcessedTxnData::Proposals(t) => proposals_batch.push(t.to_db()),
+                ProcessedTxnData::Rebates(t) => rebates_batch.push(t.to_db()),
+                ProcessedTxnData::Stakes(t) => stakes_batch.push(t.to_db()),
+                ProcessedTxnData::TradeParamsUpdate(t) => trade_params_update_batch.push(t.to_db()),
+                ProcessedTxnData::Votes(t) => votes_batch.push(t.to_db()),
+                ProcessedTxnData::Error(e) => error_transactions_batch.push(e.to_db()),
+            }
+        }
+
         let connection = &mut self.pool.get().await?;
         connection
             .transaction(|conn| {
                 async move {
-                    // Group data by type
-                    let mut order_updates_batch = Vec::new();
-                    let mut order_fills_batch = Vec::new();
-                    let mut flashloans_batch = Vec::new();
-                    let mut pool_prices_batch = Vec::new();
-                    let mut balances_batch = Vec::new();
-                    let mut proposals_batch = Vec::new();
-                    let mut rebates_batch = Vec::new();
-                    let mut stakes_batch = Vec::new();
-                    let mut trade_params_update_batch = Vec::new();
-                    let mut votes_batch = Vec::new();
-                    let mut error_transactions_batch = Vec::new();
-
-                    // Collect the data into batches
-                    for d in data {
-                        match d {
-                            ProcessedTxnData::OrderUpdate(t) => order_updates_batch.push(t.to_db()),
-                            ProcessedTxnData::OrderFill(t) => order_fills_batch.push(t.to_db()),
-                            ProcessedTxnData::Flashloan(t) => flashloans_batch.push(t.to_db()),
-                            ProcessedTxnData::PoolPrice(t) => pool_prices_batch.push(t.to_db()),
-                            ProcessedTxnData::Balances(t) => balances_batch.push(t.to_db()),
-                            ProcessedTxnData::Proposals(t) => proposals_batch.push(t.to_db()),
-                            ProcessedTxnData::Rebates(t) => rebates_batch.push(t.to_db()),
-                            ProcessedTxnData::Stakes(t) => stakes_batch.push(t.to_db()),
-                            ProcessedTxnData::TradeParamsUpdate(t) => {
-                                trade_params_update_batch.push(t.to_db())
-                            }
-                            ProcessedTxnData::Votes(t) => votes_batch.push(t.to_db()),
-                            ProcessedTxnData::Error(e) => error_transactions_batch.push(e.to_db()),
-                        }
-                    }
-
                     // Create async tasks for each batch insert
                     let mut tasks = Vec::new();
 
