@@ -199,12 +199,7 @@ impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
                     }
 
                     // Execute all tasks concurrently
-                    let results: Vec<_> = future::join_all(tasks).await;
-
-                    // Check for errors
-                    for result in results {
-                        result?; // Propagate any errors
-                    }
+                    let _: Vec<_> = future::try_join_all(tasks).await?;
 
                     Ok(())
                 }
