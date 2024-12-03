@@ -17,7 +17,7 @@ async fn list_checkpoint() {
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let core_client = CoreClient::new(test_cluster.rpc_url());
+    let core_client = CoreClient::new(test_cluster.rpc_url()).unwrap();
 
     let checkpoints = client
         .list_checkpoints(&Default::default())
@@ -82,7 +82,7 @@ async fn get_full_checkpoint() {
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let core_client = CoreClient::new(test_cluster.rpc_url());
+    let core_client = CoreClient::new(test_cluster.rpc_url()).unwrap();
 
     let latest = client.get_latest_checkpoint().await.unwrap().into_inner();
     let _ = client
