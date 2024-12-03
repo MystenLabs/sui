@@ -1,10 +1,11 @@
-use std::path::Path;
+use std::{num::NonZeroUsize, path::Path};
 
 use serde_json::json;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_rosetta::operations::Operations;
+use sui_rosetta::CoinMetadataCache;
 use test_cluster::TestClusterBuilder;
 
 use super::rosetta_client::{start_rosetta_test_server, RosettaError};
@@ -104,6 +105,17 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
     assert_eq!(
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
+    );
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string_pretty(&ops).unwrap(),
+        serde_json::to_string_pretty(&ops2).unwrap()
     );
 
     Ok(())
@@ -314,6 +326,17 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
     assert_eq!(
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
+    );
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string_pretty(&ops).unwrap(),
+        serde_json::to_string_pretty(&ops2).unwrap()
     );
 
     Ok(())

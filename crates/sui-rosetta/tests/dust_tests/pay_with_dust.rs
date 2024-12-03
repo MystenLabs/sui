@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
+
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::json;
@@ -10,7 +12,9 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_rosetta::operations::Operations;
 use sui_rosetta::types::PreprocessMetadata;
+use sui_rosetta::CoinMetadataCache;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::Transaction;
@@ -177,6 +181,16 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
     );
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string_pretty(&ops).unwrap(),
+        serde_json::to_string_pretty(&ops2).unwrap()
+    );
 
     Ok(())
 }
@@ -339,6 +353,16 @@ async fn test_limit_many_small_coins() -> Result<()> {
     assert_eq!(
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
+    );
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string_pretty(&ops).unwrap(),
+        serde_json::to_string_pretty(&ops2).unwrap()
     );
 
     Ok(())
@@ -506,7 +530,21 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
     );
-    assert_eq!(tx.transaction.unwrap().data.gas_data().budget, budget);
+    assert_eq!(
+        tx.transaction.as_ref().unwrap().data.gas_data().budget,
+        budget
+    );
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string_pretty(&ops).unwrap(),
+        serde_json::to_string_pretty(&ops2).unwrap()
+    );
 
     Ok(())
 }

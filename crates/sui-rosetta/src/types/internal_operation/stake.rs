@@ -204,6 +204,20 @@ pub fn stake_pt(
     coins_to_merge: &[ObjectRef],
 ) -> anyhow::Result<ProgrammableTransaction> {
     let mut builder = ProgrammableTransactionBuilder::new();
+
+    // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
+    // if amount is none, validator input will be created after the system object input
+    let amount = builder.pure(amount)?;
+    let (validator, system_state) = if !stake_all {
+        let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
+        let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
+        (validator, state)
+    } else {
+        let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
+        let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
+        (validator, state)
+    };
+
     if !coins_to_merge.is_empty() {
         // TODO: test and test that this won't mess with the workaround
         // below
@@ -221,18 +235,6 @@ pub fn stake_pt(
             })?;
     };
 
-    // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
-    // if amount is none, validator input will be created after the system object input
-    let amount = builder.pure(amount)?;
-    let (validator, system_state) = if !stake_all {
-        let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-        let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-        (validator, state)
-    } else {
-        let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-        let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-        (validator, state)
-    };
     let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
 
     let arguments = vec![system_state, coin, validator];

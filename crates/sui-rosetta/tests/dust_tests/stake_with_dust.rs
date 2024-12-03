@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use anyhow::Result;
 use serde_json::json;
 use shared_crypto::intent::Intent;
@@ -5,6 +7,7 @@ use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_rosetta::{operations::Operations, CoinMetadataCache};
 use sui_types::{quorum_driver_types::ExecuteTransactionRequestType, transaction::Transaction};
 use test_cluster::TestClusterBuilder;
 
@@ -178,6 +181,17 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
     assert_eq!(
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
+    );
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string_pretty(&ops).unwrap(),
+        serde_json::to_string_pretty(&ops2).unwrap()
     );
 
     Ok(())
