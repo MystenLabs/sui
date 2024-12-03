@@ -368,24 +368,34 @@ async fn get_level2_ticks_from_mid(
         .get("depth")
         .map(|v| v.parse::<u64>())
         .transpose()
-        .map_err(|_| anyhow!("Depth must be a non-negative integer"))?;
+        .map_err(|_| anyhow!("Depth must be a non-negative integer"))?
+        .map(|depth| if depth == 0 { 200 } else { depth });
 
     if let Some(depth) = depth {
-        if depth <= 0 {
-            return Err(anyhow!("Depth must be a positive number").into());
+        if depth == 1 {
+            return Err(anyhow!("Depth cannot be 1. Use a value greater than 1 or 0 for the entire orderbook").into());
         }
-    }
-
-    let ticks_from_mid = match depth {
-        Some(depth) => (depth / 2) as u64,
-        None => 100u64,
-    };
+}
 
     let level = params
         .get("level")
         .map(|v| v.parse::<u64>())
         .transpose()
-        .map_err(|_| anyhow!("Level must be between 1 and 3"))?;
+        .map_err(|_| anyhow!("Level must be an integer between 1 and 2"))?;
+
+    if let Some(level) = level {
+        if !(1..=2).contains(&level) {
+            return Err(anyhow!("Level must be 1 or 2").into());
+        }
+    }
+
+    let ticks_from_mid = match (depth, level) {
+        (Some(_), Some(1)) => 1u64, // Depth + Level 1 → Best bid and ask
+        (Some(depth), Some(2)) | (Some(depth), None) => (depth / 2) as u64, // Depth + Level 2 → Use depth
+        (None, Some(1)) => 1u64, // Only Level 1 → Best bid and ask
+        (None, Some(2)) | (None, None) => 100u64, // Level 2 or default → 100 ticks
+        _ => 100u64, // Fallback to default
+    };
 
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
