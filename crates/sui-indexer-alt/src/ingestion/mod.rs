@@ -183,7 +183,6 @@ impl Default for IngestionConfig {
 mod tests {
     use std::sync::Mutex;
 
-    use mysten_metrics::spawn_monitored_task;
     use reqwest::StatusCode;
     use wiremock::{MockServer, Request};
 
@@ -220,7 +219,7 @@ mod tests {
         mut rx: mpsc::Receiver<Arc<CheckpointData>>,
         cancel: CancellationToken,
     ) -> JoinHandle<Vec<u64>> {
-        spawn_monitored_task!(async move {
+        tokio::spawn(async move {
             let mut seqs = vec![];
             for _ in 0..stop_after {
                 tokio::select! {

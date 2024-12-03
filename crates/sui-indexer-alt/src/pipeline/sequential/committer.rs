@@ -4,7 +4,6 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -49,7 +48,7 @@ pub(super) fn committer<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
         let mut poll = interval(config.committer.collect_interval());
