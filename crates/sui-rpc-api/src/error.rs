@@ -43,6 +43,12 @@ impl axum::response::IntoResponse for RpcServiceError {
     }
 }
 
+impl From<RpcServiceError> for tonic::Status {
+    fn from(value: RpcServiceError) -> Self {
+        tonic::Status::new(tonic::Code::Unknown, value.message.as_deref().unwrap_or(""))
+    }
+}
+
 impl From<sui_types::storage::error::Error> for RpcServiceError {
     fn from(value: sui_types::storage::error::Error) -> Self {
         Self {
