@@ -364,6 +364,12 @@ impl Core {
             return None;
         }
 
+        let gc_round = self.dag_state.read().gc_round();
+        assert!(
+            gc_round == GENESIS_ROUND || clock_round > gc_round,
+            "Threshold clock round {clock_round} should be higher than gc round {gc_round}."
+        );
+
         // There must be a quorum of blocks from the previous round.
         let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
 
