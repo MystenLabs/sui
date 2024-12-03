@@ -1,25 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use mysten_metrics::spawn_monitored_task;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
+use strum::IntoEnumIterator;
 use strum_macros;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::config::RetentionConfig;
 use crate::errors::IndexerError;
-use crate::store::pg_partition_manager::PgPartitionManager;
+use crate::handlers::pruners::spawn_pruners;
 use crate::store::PgIndexerStore;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
 
+const MAX_DELAY_MS: u64 = 10000;
+
 pub struct Pruner {
     pub store: PgIndexerStore,
-    pub partition_manager: PgPartitionManager,
-    // TODO: (wlmyng) - we can remove this when pruner logic is updated to use `retention_policies`.
-    pub epochs_to_keep: u64,
     pub retention_policies: HashMap<PrunableTable, u64>,
     pub metrics: IndexerMetrics,
 }
@@ -40,6 +41,7 @@ pub struct Pruner {
     Serialize,
     Deserialize,
     Clone,
+    Copy,
 )]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
@@ -65,11 +67,8 @@ pub enum PrunableTable {
     TxDigests,
     TxInputObjects,
     TxKinds,
-    TxRecipients,
-    TxSenders,
 
     Checkpoints,
-    PrunerCpWatermark,
 }
 
 impl PrunableTable {
@@ -96,11 +95,8 @@ impl PrunableTable {
             PrunableTable::TxDigests => tx,
             PrunableTable::TxInputObjects => tx,
             PrunableTable::TxKinds => tx,
-            PrunableTable::TxRecipients => tx,
-            PrunableTable::TxSenders => tx,
 
             PrunableTable::Checkpoints => cp,
-            PrunableTable::PrunerCpWatermark => cp,
         }
     }
 }
@@ -113,27 +109,13 @@ impl Pruner {
         retention_config: RetentionConfig,
         metrics: IndexerMetrics,
     ) -> Result<Self, IndexerError> {
-        let partition_manager = PgPartitionManager::new(store.pool())?;
-        let epochs_to_keep = retention_config.epochs_to_keep;
         let retention_policies = retention_config.retention_policies();
 
         Ok(Self {
             store,
-            epochs_to_keep,
-            partition_manager,
             retention_policies,
             metrics,
         })
-    }
-
-    /// Given a table name, return the number of epochs to keep for that table. Return `None` if the
-    /// table is not prunable.
-    fn table_retention(&self, table_name: &str) -> Option<u64> {
-        if let Ok(variant) = table_name.parse::<PrunableTable>() {
-            self.retention_policies.get(&variant).copied()
-        } else {
-            None
-        }
     }
 
     pub async fn start(&self, cancel: CancellationToken) -> IndexerResult<()> {
@@ -146,79 +128,23 @@ impl Pruner {
             cancel_clone
         ));
 
-        let mut last_seen_max_epoch = 0;
-        // The first epoch that has not yet been pruned.
-        let mut next_prune_epoch = None;
-        while !cancel.is_cancelled() {
-            let (min_epoch, max_epoch) = self.store.get_available_epoch_range().await?;
-            if max_epoch == last_seen_max_epoch {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue;
-            }
-            last_seen_max_epoch = max_epoch;
+        let mut table_tasks = spawn_pruners(cancel.clone(), self.store.clone());
 
-            // Not all partitioned tables are epoch-partitioned, so we need to filter them out.
-            let table_partitions: HashMap<_, _> = self
-                .partition_manager
-                .get_table_partitions()
-                .await?
-                .into_iter()
-                .filter(|(table_name, _)| {
-                    self.partition_manager
-                        .get_strategy(table_name)
-                        .is_epoch_partitioned()
-                })
-                .collect();
+        for table in PrunableTable::iter() {
+            let store_clone = self.store.clone();
+            let cancel_clone = cancel.clone();
 
-            for (table_name, (min_partition, max_partition)) in &table_partitions {
-                if let Some(epochs_to_keep) = self.table_retention(table_name) {
-                    if last_seen_max_epoch != *max_partition {
-                        error!(
-                            "Epochs are out of sync for table {}: max_epoch={}, max_partition={}",
-                            table_name, last_seen_max_epoch, max_partition
-                        );
-                    }
-
-                    for epoch in
-                        *min_partition..last_seen_max_epoch.saturating_sub(epochs_to_keep - 1)
-                    {
-                        if cancel.is_cancelled() {
-                            info!("Pruner task cancelled.");
-                            return Ok(());
-                        }
-                        self.partition_manager
-                            .drop_table_partition(table_name.clone(), epoch)
-                            .await?;
-                        info!(
-                            "Batch dropped table partition {} epoch {}",
-                            table_name, epoch
-                        );
-                    }
-                }
-            }
-
-            // TODO: (wlmyng) Once we have the watermarks table, we can iterate through each row
-            // returned from `watermarks`, look it up against `retention_policies`, and process them
-            // independently. This also means that pruning overrides will only apply for
-            // epoch-partitioned tables right now.
-            let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
-            let prune_start_epoch = next_prune_epoch.unwrap_or(min_epoch);
-            for epoch in prune_start_epoch..prune_to_epoch {
-                if cancel.is_cancelled() {
-                    info!("Pruner task cancelled.");
-                    return Ok(());
-                }
-                info!("Pruning epoch {}", epoch);
-                if let Err(err) = self.store.prune_epoch(epoch).await {
-                    error!("Failed to prune epoch {}: {}", epoch, err);
-                    break;
-                };
-                self.metrics.last_pruned_epoch.set(epoch as i64);
-                info!("Pruned epoch {}", epoch);
-                next_prune_epoch = Some(epoch + 1);
-            }
+            table_tasks.push(spawn_monitored_task!(update_pruner_watermark_task(
+                store_clone,
+                table,
+                cancel_clone
+            )));
         }
-        info!("Pruner task cancelled.");
+
+        cancel.cancelled().await;
+
+        join_all(table_tasks).await;
+
         Ok(())
     }
 }
@@ -238,7 +164,9 @@ async fn update_watermarks_lower_bounds_task(
                 return Ok(());
             }
             _ = interval.tick() => {
-                update_watermarks_lower_bounds(&store, &retention_policies, &cancel).await?;
+                if let Err(err) = update_watermarks_lower_bounds(&store, &retention_policies, &cancel).await {
+                    error!("Failed to update watermarks lower bounds: {}", err);
+                }
             }
         }
     }
@@ -256,7 +184,7 @@ async fn update_watermarks_lower_bounds(
 
     for watermark in watermarks.iter() {
         if cancel.is_cancelled() {
-            info!("Pruner watermark lower bound update task cancelled.");
+            info!("Reader watermark lower bound update task cancelled.");
             return Ok(());
         }
 
@@ -285,4 +213,46 @@ async fn update_watermarks_lower_bounds(
     }
 
     Ok(())
+}
+
+/// Task to periodically update `pruner_hi` to the local `reader_lo` if it sees a newer
+/// value for `reader_lo`.
+async fn update_pruner_watermark_task(
+    store: PgIndexerStore,
+    table: PrunableTable,
+    cancel: CancellationToken,
+) -> IndexerResult<()> {
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    let (watermark, _) = store.get_watermark(table).await?;
+    let mut local_reader_lo = watermark.pruner_upper_bound().unwrap();
+
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                info!("Pruner watermark lower bound update task cancelled.");
+                return Ok(());
+            }
+            _ = interval.tick() => {
+                let (watermark, latest_db_timestamp) = store.get_watermark(table).await?;
+                let reader_lo_timestamp = watermark.timestamp_ms;
+                let new_reader_lo = watermark.pruner_upper_bound().unwrap();
+                let should_update = new_reader_lo > local_reader_lo || local_reader_lo > watermark.pruner_hi as u64;
+                let update_value = if new_reader_lo > local_reader_lo { new_reader_lo } else { local_reader_lo };
+
+                if should_update {
+                    let delay_duration = MAX_DELAY_MS.saturating_sub((latest_db_timestamp - reader_lo_timestamp) as u64);
+
+                    if delay_duration > 0 {
+                        tokio::time::sleep(Duration::from_millis(delay_duration)).await;
+                    }
+
+                    if let Err(err) = store.update_pruner_watermark(table, update_value).await {
+                        error!("Failed to update pruner watermark: {}", err);
+                    }
+
+                    local_reader_lo = update_value;
+                }
+            }
+        }
+    }
 }
