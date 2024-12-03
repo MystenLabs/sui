@@ -1506,11 +1506,11 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
 // Checks if parsing of a sequence should continue after encountering an error.
 fn continue_sequence_after_error(context: &mut Context, diag: Diagnostic) -> bool {
     context.add_diag(diag);
-    // This is intended to handle a rather specific case when a variable declaration is on following line
+    // This is intended to handle a rather specific case when a variable declaration is on the following line
     // from the parsing error. This is particularly useful for the IDE use case when a programmer starts
     // typing an incomplete (and unparsable) line right before the line containing variable declaration.
     // In this case, we would like to still report the error but try to avoid dropping the declaration
-    // itself as might lead to unnecessary cascading errors to appear as in the example below where we
+    // itself as it might lead to unnecessary cascading errors to appear as in the example below where we
     // want to avoid `_tmp1` being undefined in the following lines.
     //
     // let v =
