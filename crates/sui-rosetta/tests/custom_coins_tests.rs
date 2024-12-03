@@ -186,26 +186,6 @@ async fn test_default_balance() {
     );
     assert_eq!(response.balances.len(), 1);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
-
-    // Keep server running for testing with bash/curl
-    // To test with curl,
-    // 1. Uncomment the following lines
-    // 2. use `cargo test -- --nocapture` to print the server <port> and <address0>
-    // 3. run curl 'localhost:<port>/account/balance' --header 'Content-Type: application/json' \
-    // --data-raw '{
-    //     "network_identifier": {
-    //         "blockchain": "sui",
-    //         "network": "localnet"
-    //     },
-    //     "account_identifier": {
-    //         "address": "<address0 above>"
-    //     }
-    // }'
-    // println!("port: {}", rosetta_client.online_port());
-    // println!("address0: {}", test_cluster.get_address_0());
-    // for handle in _handles.into_iter() {
-    //     handle.await.unwrap();
-    // }
 }
 
 #[tokio::test]

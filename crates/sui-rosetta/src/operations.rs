@@ -438,6 +438,10 @@ impl Operations {
                     stake_ids.push(stake_id);
                     Some(vec![])
                 }
+                SuiCommand::MergeCoins(_merge_into, _merges) => {
+                    // We don't care about merge-coins, we can just skip it.
+                    Some(vec![])
+                }
                 _ => None,
             };
             if let Some(result) = result {
