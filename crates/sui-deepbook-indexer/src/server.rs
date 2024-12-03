@@ -394,10 +394,10 @@ async fn get_level2_ticks_from_mid(
 
     let ticks_from_mid = match (depth, level) {
         (Some(_), Some(1)) => 1u64, // Depth + Level 1 → Best bid and ask
-        (Some(depth), Some(2)) | (Some(depth), None) => (depth / 2) as u64, // Depth + Level 2 → Use depth
-        (None, Some(1)) => 1u64, // Only Level 1 → Best bid and ask
+        (Some(depth), Some(2)) | (Some(depth), None) => depth / 2, // Depth + Level 2 → Use depth
+        (None, Some(1)) => 1u64,    // Only Level 1 → Best bid and ask
         (None, Some(2)) | (None, None) => 100u64, // Level 2 or default → 100 ticks
-        _ => 100u64,             // Fallback to default
+        _ => 100u64,                // Fallback to default
     };
 
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
@@ -420,11 +420,7 @@ async fn get_level2_ticks_from_mid(
         "Missing data in pool object response for '{}'",
         pool_name
     ))?;
-    let pool_object_ref: ObjectRef = (
-        pool_data.object_id.clone(),
-        SequenceNumber::from(pool_data.version),
-        ObjectDigest::from(pool_data.digest.clone()),
-    );
+    let pool_object_ref: ObjectRef = (pool_data.object_id, pool_data.version, pool_data.digest);
 
     let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref));
     ptb.input(pool_input)?;
@@ -444,11 +440,8 @@ async fn get_level2_ticks_from_mid(
         .as_ref()
         .ok_or(anyhow!("Missing data in clock object response"))?;
 
-    let sui_clock_object_ref: ObjectRef = (
-        clock_data.object_id.clone(),
-        SequenceNumber::from(clock_data.version),
-        ObjectDigest::from(clock_data.digest.clone()),
-    );
+    let sui_clock_object_ref: ObjectRef =
+        (clock_data.object_id, clock_data.version, clock_data.digest);
 
     let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref));
     ptb.input(clock_input)?;
@@ -494,12 +487,12 @@ async fn get_level2_ticks_from_mid(
     let bid_prices = &binding.get(0).unwrap().return_values.get(0).unwrap().0;
     let bid_parsed_prices: Vec<u64> = bcs::from_bytes(&bid_prices).unwrap();
     let bid_quantities = &binding.get(0).unwrap().return_values.get(1).unwrap().0;
-    let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(&bid_quantities).unwrap();
+    let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(bid_quantities).unwrap();
 
     let ask_prices = &binding.get(0).unwrap().return_values.get(2).unwrap().0;
     let ask_parsed_prices: Vec<u64> = bcs::from_bytes(&ask_prices).unwrap();
     let ask_quantities = &binding.get(0).unwrap().return_values.get(3).unwrap().0;
-    let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(&ask_quantities).unwrap();
+    let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(ask_quantities).unwrap();
 
     let mut result = HashMap::new();
 
