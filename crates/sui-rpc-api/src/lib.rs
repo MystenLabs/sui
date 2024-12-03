@@ -12,6 +12,7 @@ use tap::Pipe;
 pub mod client;
 mod config;
 mod error;
+mod grpc;
 mod metrics;
 pub mod proto;
 mod reader;
@@ -80,7 +81,16 @@ impl RpcService {
 
         let rest_router = build_rest_router(self.clone());
 
+        let grpc_router = {
+            grpc::Services::new()
+                .add_service(crate::proto::node::node_server::NodeServer::new(
+                    self.clone(),
+                ))
+                .into_router()
+        };
+
         rest_router
+            .merge(grpc_router)
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
