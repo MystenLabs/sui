@@ -128,6 +128,21 @@ const MANIFEST_FILE_NAME: &str = "Move.toml";
 const STD_LIB_PKG_ADDRESS: &str = "0x1";
 type SourceFiles = BTreeMap<FileHash, (FileName, String, bool)>;
 
+/// Result of the symbolication process
+#[derive(Clone)]
+pub struct SymbolicationResult {
+    pub symbols: Option<Symbols>,
+    pub diags: BTreeMap<PathBuf, Vec<Diagnostic>>,
+    pub edition: Option<Edition>,
+}
+
+/// Types of custom notifications along with the data they carry
+#[derive(Clone, Debug)]
+pub enum CustomNotification {
+    Diags(BTreeMap<PathBuf, Vec<Diagnostic>>),
+    Edition(Edition),
+}
+
 /// Information about compiled program (ASTs at different levels)
 #[derive(Clone)]
 struct CompiledProgram {
@@ -1366,7 +1381,7 @@ impl SymbolicatorRunner {
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
         pkg_deps: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
-        sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+        custom_sender: Sender<Result<CustomNotification>>,
         lint: LintLevel,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
@@ -1380,6 +1395,7 @@ impl SymbolicatorRunner {
                 let mut missing_manifests = BTreeSet::new();
                 // infinite loop to wait for symbolication requests
                 eprintln!("starting symbolicator runner loop");
+                // remember paths passed to the
                 loop {
                     let starting_path_opt = {
                         // hold the lock only as long as it takes to get the data, rather than through
@@ -1407,19 +1423,20 @@ impl SymbolicatorRunner {
                     };
                     if let Some(starting_path) = starting_path_opt {
                         let root_dir = Self::root_dir(&starting_path);
-                        if root_dir.is_none() && !missing_manifests.contains(&starting_path) {
-                            eprintln!("reporting missing manifest");
-
-                            // report missing manifest file only once to avoid cluttering IDE's UI in
-                            // cases when developer indeed intended to open a standalone file that was
-                            // not meant to compile
-                            missing_manifests.insert(starting_path);
-                            if let Err(err) = sender.send(Err(anyhow!(
-                                "Unable to find package manifest. Make sure that
-                            the source files are located in a sub-directory of a package containing
-                            a Move.toml file. "
-                            ))) {
-                                eprintln!("could not pass missing manifest error: {:?}", err);
+                        if root_dir.is_none() {
+                            eprintln!("missing manifest for {:?}", starting_path);
+                            if !missing_manifests.contains(&starting_path) {
+                                // report missing manifest file only once to avoid cluttering IDE's UI in
+                                // cases when developer indeed intended to open a standalone file that was
+                                // not meant to compile
+                                missing_manifests.insert(starting_path);
+                                if let Err(err) = custom_sender.send(Err(anyhow!(
+                                    "Unable to find package manifest. Make sure that
+                                    the source files are located in a sub-directory of a package containing
+                                    a Move.toml file. "
+                                ))) {
+                                    eprintln!("could not pass missing manifest error: {:?}", err);
+                                }
                             }
                             continue;
                         }
@@ -1432,9 +1449,9 @@ impl SymbolicatorRunner {
                             lint,
                             None,
                         ) {
-                            Ok((symbols_opt, lsp_diagnostics)) => {
+                            Ok(SymbolicationResult{symbols, diags, edition}) => {
                                 eprintln!("symbolication finished");
-                                if let Some(new_symbols) = symbols_opt {
+                                if let Some(new_symbols) = symbols {
                                     // replace symbolication info for a given package
                                     //
                                     // TODO: we may consider "unloading" symbolication information when
@@ -1445,13 +1462,19 @@ impl SymbolicatorRunner {
                                     old_symbols_map.insert(pkg_path, new_symbols);
                                 }
                                 // set/reset (previous) diagnostics
-                                if let Err(err) = sender.send(Ok(lsp_diagnostics)) {
+                                let diags_notification = CustomNotification::Diags(diags);
+                                if let Err(err) = custom_sender.send(Ok(diags_notification)) {
                                     eprintln!("could not pass diagnostics: {:?}", err);
+                                }
+                                if let Some(e) = edition {
+                                    if let Err(e) = custom_sender.send(Ok(CustomNotification::Edition(e))) {
+                                        eprintln!("could not pass edition info: {:?}", e);
+                                    }
                                 }
                             }
                             Err(err) => {
                                 eprintln!("symbolication failed: {:?}", err);
-                                if let Err(err) = sender.send(Err(err)) {
+                                if let Err(err) = custom_sender.send(Err(err)) {
                                     eprintln!("could not pass compiler error: {:?}", err);
                                 }
                             }
@@ -1894,6 +1917,7 @@ pub fn get_compiled_pkg(
         comments = Some(comments_map);
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
+        edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
         parsed_ast = Some(parsed_program.clone());
         mapped_files.extend_with_duplicates(compiler.compilation_env().mapped_files().clone());
 
@@ -1915,7 +1939,6 @@ pub fn get_compiled_pkg(
         compiler_info = Some(CompilerInfo::from(
             compiler.compilation_env().ide_information().clone(),
         ));
-        edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
 
         // compile to CFGIR for accurate diags
         eprintln!("compiling to CFGIR");
@@ -2297,20 +2320,41 @@ pub fn get_symbols(
     pkg_path: &Path,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
-) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
+) -> Result<SymbolicationResult> {
+    let mut edition = None;
     let compilation_start = Instant::now();
-    let (compiled_pkg_info_opt, ide_diagnostics) =
+    let (compiled_pkg_info_opt, diags) =
         get_compiled_pkg(pkg_dependencies.clone(), ide_files_root, pkg_path, lint)?;
     eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
     let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
-        return Ok((None, ide_diagnostics));
+        return Ok(SymbolicationResult {
+            symbols: None,
+            diags,
+            edition,
+        });
     };
+
+    if compiled_pkg_info.cached_deps.is_none()
+        || compiled_pkg_info
+            .cached_deps
+            .as_ref()
+            .unwrap()
+            .symbols_data
+            .is_none()
+    {
+        // no cached symbols, which means we are running analysis for the first time
+        edition = compiled_pkg_info.edition;
+    }
     let analysis_start = Instant::now();
     let symbols = compute_symbols(pkg_dependencies, compiled_pkg_info, cursor_info);
     eprintln!("analysis complete in {:?}", analysis_start.elapsed());
     eprintln!("get_symbols load complete");
 
-    Ok((Some(symbols), ide_diagnostics))
+    Ok(SymbolicationResult {
+        symbols: Some(symbols),
+        diags,
+        edition,
+    })
 }
 
 fn compute_cursor_context(

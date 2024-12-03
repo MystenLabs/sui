@@ -12,7 +12,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as commands from './commands';
 
-
 /**
  * An extension command that displays the version of the server that this extension
  * interfaces with.

@@ -6,12 +6,14 @@ use anyhow::Result;
 use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
-    notification::Notification as _, request::Request as _, CompletionOptions, Diagnostic,
-    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    notification::{self, Notification as _},
+    request::Request as _,
+    CompletionOptions, HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities,
+    OneOf, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
     TypeDefinitionProviderCapability, WorkDoneProgressOptions,
 };
-use move_compiler::linters::LintLevel;
+use move_compiler::{editions::Edition, linters::LintLevel};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -28,6 +30,23 @@ use vfs::{impls::memory::MemoryFS, VfsPath};
 const LINT_NONE: &str = "none";
 const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
+
+/// Info about compiler edition passed to the IDE
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EditionInfo {
+    pub edition: String,
+    pub release: Option<String>,
+}
+
+/// Custom notification for the language server to report compiler edition
+/// to the IDE client.
+#[derive(Debug)]
+struct EditionNotification;
+
+impl notification::Notification for EditionNotification {
+    type Params = EditionInfo;
+    const METHOD: &'static str = "customNotification/edition";
+}
 
 #[allow(deprecated)]
 pub fn run() {
@@ -112,7 +131,7 @@ pub fn run() {
     })
     .expect("could not serialize server capabilities");
 
-    let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>(0);
+    let (custom_sender, custom_receiver) = bounded::<Result<symbols::CustomNotification>>(0);
     let initialize_params: lsp_types::InitializeParams =
         serde_json::from_value(client_response).expect("could not deserialize client capabilities");
 
@@ -134,34 +153,40 @@ pub fn run() {
     };
     eprintln!("linting level {:?}", lint);
 
-    let symbolicator_runner = symbols::SymbolicatorRunner::new(
-        ide_files_root.clone(),
-        symbols_map.clone(),
-        pkg_deps.clone(),
-        diag_sender,
-        lint,
-    );
-
     // If initialization information from the client contains a path to the directory being
     // opened, try to initialize symbols before sending response to the client. Do not bother
     // with diagnostics as they will be recomputed whenever the first source file is opened. The
     // main reason for this is to enable unit tests that rely on the symbolication information
     // to be available right after the client is initialized.
+    let mut edition_opt = None;
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
         if let Some(p) = symbols::SymbolicatorRunner::root_dir(&build_path) {
-            if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                Arc::new(Mutex::new(BTreeMap::new())),
+            if let Ok(symbols::SymbolicationResult {
+                symbols: Some(new_symbols),
+                edition,
+                ..
+            }) = symbols::get_symbols(
+                pkg_deps.clone(),
                 ide_files_root.clone(),
                 p.as_path(),
                 lint,
                 None,
             ) {
+                edition_opt = edition;
                 let mut old_symbols_map = symbols_map.lock().unwrap();
                 old_symbols_map.insert(p, new_symbols);
             }
         }
     }
+
+    let symbolicator_runner = symbols::SymbolicatorRunner::new(
+        ide_files_root.clone(),
+        symbols_map.clone(),
+        pkg_deps.clone(),
+        custom_sender,
+        lint,
+    );
 
     let context = Context {
         connection,
@@ -193,33 +218,45 @@ pub fn run() {
         )
         .expect("could not finish connection initialization");
 
+    if let Some(e) = edition_opt {
+        eprintln!("sending initial edition info");
+        edition_notify(e, &context.connection);
+    }
+
     let mut shutdown_req_received = false;
     loop {
         select! {
-            recv(diag_receiver) -> message => {
+            recv(custom_receiver) -> message => {
                 match message {
                     Ok(result) => {
                         match result {
-                            Ok(diags) => {
-                                for (k, v) in diags {
-                                    let url = Url::from_file_path(k).unwrap();
-                                    let params = lsp_types::PublishDiagnosticsParams::new(url, v, None);
-                                    let notification = Notification::new(lsp_types::notification::PublishDiagnostics::METHOD.to_string(), params);
-                                    if let Err(err) = context
-                                        .connection
-                                        .sender
-                                        .send(lsp_server::Message::Notification(notification)) {
-                                            eprintln!("could not send diagnostics response: {:?}", err);
-                                        };
+                            Ok(custom_notification) => {
+                                use symbols::CustomNotification as CN;
+                                match custom_notification {
+                                    CN::Diags(diags) => {
+                                        eprintln!("sending diagnostics");
+                                        for (k, v) in diags {
+                                            let url = Url::from_file_path(k).unwrap();
+                                            let params = lsp_types::PublishDiagnosticsParams::new(url, v, None);
+                                            let notification = Notification::new(lsp_types::notification::PublishDiagnostics::METHOD.to_string(), params);
+                                            if let Err(err) = context
+                                                .connection
+                                                .sender
+                                                .send(lsp_server::Message::Notification(notification)) {
+                                                    eprintln!("could not send diagnostics response: {:?}", err);
+                                                };
+                                        }
+                                    },
+                                    CN::Edition(e) => {
+                                        eprintln!("sending edition info");
+                                        edition_notify(e, &context.connection);
+                                    }
                                 }
                             },
                             Err(err) => {
                                 let typ = lsp_types::MessageType::ERROR;
                                 let message = format!("{err}");
-                                    // report missing manifest only once to avoid re-generating
-                                    // user-visible error in cases when the developer decides to
-                                    // keep editing a file that does not belong to a packages
-                                    let params = lsp_types::ShowMessageParams { typ, message };
+                                let params = lsp_types::ShowMessageParams { typ, message };
                                 let notification = Notification::new(lsp_types::notification::ShowMessage::METHOD.to_string(), params);
                                 if let Err(err) = context
                                     .connection
@@ -269,6 +306,21 @@ pub fn run() {
     io_threads.join().expect("I/O threads could not finish");
     symbolicator_runner.quit();
     eprintln!("Shut down language server '{}'.", exe);
+}
+
+/// Notify the IDE client about the edition of the compiler being used.
+fn edition_notify(e: Edition, connection: &Connection) {
+    let edition_info = EditionInfo {
+        edition: e.edition.to_string(),
+        release: e.release.map(|r| r.to_string()),
+    };
+    let notification = Notification::new(EditionNotification::METHOD.to_string(), edition_info);
+    if let Err(err) = connection
+        .sender
+        .send(lsp_server::Message::Notification(notification))
+    {
+        eprintln!("could not send edition response: {:?}", err);
+    };
 }
 
 /// This function returns `true` if shutdown request has been received, and `false` otherwise.
