@@ -1906,7 +1906,7 @@ mod test {
         // to D1 so they can't be processed until the leader of round 3 can get committed and gc round moves to 1. That will make all the blocks that depend to D1 get accepted.
         // However, our threshold clock is now at round 6 as the last quorum that we managed to process was the round 5.
         // As commits happen blocks of later rounds get accepted and more leaders get committed. Eventually the leader of round 9 gets committed and gc is moved to 9 - 2 = 7.
-        // If our node attempts to produce a block for the threshold clock 6, that will make the acceptance checks fail as now gc has moved far past this round.
+        // Core should make sure to advance the threshold clock round so the latest accepted quorum is being used as the base for the next proposed block.
         core.add_blocks(
             dag_builder
                 .blocks(1..=11)
