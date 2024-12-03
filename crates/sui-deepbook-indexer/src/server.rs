@@ -482,7 +482,13 @@ async fn get_level2_ticks_from_mid(
         .await?;
 
     let mut binding = result.results.unwrap();
-    let bid_prices = &binding.first_mut().unwrap().return_values.get(0).unwrap().0;
+    let bid_prices = &binding
+        .first_mut()
+        .unwrap()
+        .return_values
+        .first_mut()
+        .unwrap()
+        .0;
     let bid_parsed_prices: Vec<u64> = bcs::from_bytes(bid_prices).unwrap();
     let bid_quantities = &binding.first_mut().unwrap().return_values.get(1).unwrap().0;
     let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(bid_quantities).unwrap();
