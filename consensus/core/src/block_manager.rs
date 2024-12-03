@@ -11,7 +11,7 @@ use std::{
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use tracing::{debug, trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock, GENESIS_ROUND},
@@ -429,8 +429,9 @@ impl BlockManager {
     }
 
     /// Tries to unsuspend any blocks for the latest gc round. If gc round hasn't changed then no blocks will be unsuspended due to
-    /// this action.
-    pub(crate) fn try_unsuspend_blocks_for_latest_gc_round(&mut self) {
+    /// this action. The method returns all the accepted blocks that have been unsuspended due to gc round advancement.
+    #[instrument(level = "debug", skip_all)]
+    pub(crate) fn try_unsuspend_blocks_for_latest_gc_round(&mut self) -> Vec<VerifiedBlock> {
         let _s = monitored_scope("BlockManager::try_unsuspend_blocks_for_latest_gc_round");
         let (gc_enabled, gc_round) = {
             let dag_state = self.dag_state.read();
@@ -438,17 +439,18 @@ impl BlockManager {
         };
         let mut blocks_unsuspended_below_gc_round = 0;
         let mut blocks_gc_ed = 0;
+        let mut all_accepted_blocks = Vec::new();
 
         if !gc_enabled {
             trace!("GC is disabled, no blocks will attempt to get unsuspended.");
-            return;
+            return all_accepted_blocks;
         }
 
         while let Some((block_ref, _children_refs)) = self.missing_ancestors.first_key_value() {
             // If the first block in the missing ancestors is higher than the gc_round, then we can't unsuspend it yet. So we just put it back
             // and we terminate the iteration as any next entry will be of equal or higher round anyways.
             if block_ref.round > gc_round {
-                return;
+                return all_accepted_blocks;
             }
 
             blocks_gc_ed += 1;
@@ -469,7 +471,7 @@ impl BlockManager {
 
             // Now validate their timestamps and accept them
             let accepted_blocks = self.verify_block_timestamps_and_accept(unsuspended_blocks);
-            for block in accepted_blocks {
+            for block in &accepted_blocks {
                 let hostname = self
                     .context
                     .committee
@@ -483,12 +485,16 @@ impl BlockManager {
                     .with_label_values(&[hostname])
                     .inc();
             }
+
+            all_accepted_blocks.extend(accepted_blocks);
         }
 
         debug!(
             "Total {} blocks unsuspended and total blocks {} gc'ed <= gc_round {}",
             blocks_unsuspended_below_gc_round, blocks_gc_ed, gc_round
         );
+
+        all_accepted_blocks
     }
 
     /// Returns all the blocks that are currently missing and needed in order to accept suspended
