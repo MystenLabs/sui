@@ -73,97 +73,171 @@ impl PgDeepbookPersistent {
     }
 }
 
+enum Table {
+    OrderUpdates,
+    OrderFills,
+    Flashloans,
+    PoolPrices,
+    Balances,
+    Proposals,
+    Rebates,
+    Stakes,
+    TradeParamsUpdate,
+    Votes,
+    ErrorTransactions,
+}
+
+impl Table {
+    fn table_name(&self) -> diesel::Table {
+        match self {
+            Table::OrderUpdates => order_updates::table,
+            Table::OrderFills => order_fills::table,
+            Table::Flashloans => flashloans::table,
+            Table::PoolPrices => pool_prices::table,
+            Table::Balances => balances::table,
+            Table::Proposals => proposals::table,
+            Table::Rebates => rebates::table,
+            Table::Stakes => stakes::table,
+            Table::TradeParamsUpdate => trade_params_update::table,
+            Table::Votes => votes::table,
+            Table::ErrorTransactions => sui_error_transactions::table,
+        }
+    }
+}
+
 #[async_trait]
 impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
     async fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
         if data.is_empty() {
             return Ok(());
         }
+        use futures::future;
+
         let connection = &mut self.pool.get().await?;
         connection
             .transaction(|conn| {
                 async move {
+                    // Group data by type
+                    let mut order_updates_batch = Vec::new();
+                    let mut order_fills_batch = Vec::new();
+                    let mut flashloans_batch = Vec::new();
+                    let mut pool_prices_batch = Vec::new();
+                    let mut balances_batch = Vec::new();
+                    let mut proposals_batch = Vec::new();
+                    let mut rebates_batch = Vec::new();
+                    let mut stakes_batch = Vec::new();
+                    let mut trade_params_update_batch = Vec::new();
+                    let mut votes_batch = Vec::new();
+                    let mut error_transactions_batch = Vec::new();
+
+                    // Collect the data into batches
                     for d in data {
                         match d {
-                            ProcessedTxnData::OrderUpdate(t) => {
-                                diesel::insert_into(order_updates::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::OrderFill(t) => {
-                                diesel::insert_into(order_fills::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Flashloan(t) => {
-                                diesel::insert_into(flashloans::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::PoolPrice(t) => {
-                                diesel::insert_into(pool_prices::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Balances(t) => {
-                                diesel::insert_into(balances::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Proposals(t) => {
-                                diesel::insert_into(proposals::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Rebates(t) => {
-                                diesel::insert_into(rebates::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Stakes(t) => {
-                                diesel::insert_into(stakes::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
+                            ProcessedTxnData::OrderUpdate(t) => order_updates_batch.push(t.to_db()),
+                            ProcessedTxnData::OrderFill(t) => order_fills_batch.push(t.to_db()),
+                            ProcessedTxnData::Flashloan(t) => flashloans_batch.push(t.to_db()),
+                            ProcessedTxnData::PoolPrice(t) => pool_prices_batch.push(t.to_db()),
+                            ProcessedTxnData::Balances(t) => balances_batch.push(t.to_db()),
+                            ProcessedTxnData::Proposals(t) => proposals_batch.push(t.to_db()),
+                            ProcessedTxnData::Rebates(t) => rebates_batch.push(t.to_db()),
+                            ProcessedTxnData::Stakes(t) => stakes_batch.push(t.to_db()),
                             ProcessedTxnData::TradeParamsUpdate(t) => {
-                                diesel::insert_into(trade_params_update::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
+                                trade_params_update_batch.push(t.to_db())
                             }
-                            ProcessedTxnData::Votes(t) => {
-                                diesel::insert_into(votes::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Error(e) => {
-                                diesel::insert_into(sui_error_transactions::table)
-                                    .values(&e.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
+                            ProcessedTxnData::Votes(t) => votes_batch.push(t.to_db()),
+                            ProcessedTxnData::Error(e) => error_transactions_batch.push(e.to_db()),
                         }
                     }
+
+                    // Create async tasks for each batch insert
+                    let mut tasks = Vec::new();
+
+                    if !order_updates_batch.is_empty() {
+                        let task = diesel::insert_into(order_updates::table)
+                            .values(&order_updates_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !order_fills_batch.is_empty() {
+                        let task = diesel::insert_into(order_fills::table)
+                            .values(&order_fills_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !flashloans_batch.is_empty() {
+                        let task = diesel::insert_into(flashloans::table)
+                            .values(&flashloans_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !pool_prices_batch.is_empty() {
+                        let task = diesel::insert_into(pool_prices::table)
+                            .values(&pool_prices_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !balances_batch.is_empty() {
+                        let task = diesel::insert_into(balances::table)
+                            .values(&balances_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !proposals_batch.is_empty() {
+                        let task = diesel::insert_into(proposals::table)
+                            .values(&proposals_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !rebates_batch.is_empty() {
+                        let task = diesel::insert_into(rebates::table)
+                            .values(&rebates_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !stakes_batch.is_empty() {
+                        let task = diesel::insert_into(stakes::table)
+                            .values(&stakes_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !trade_params_update_batch.is_empty() {
+                        let task = diesel::insert_into(trade_params_update::table)
+                            .values(&trade_params_update_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !votes_batch.is_empty() {
+                        let task = diesel::insert_into(votes::table)
+                            .values(&votes_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+                    if !error_transactions_batch.is_empty() {
+                        let task = diesel::insert_into(sui_error_transactions::table)
+                            .values(&error_transactions_batch)
+                            .on_conflict_do_nothing()
+                            .execute(conn);
+                        tasks.push(task);
+                    }
+
+                    // Execute all tasks concurrently
+                    let results: Vec<_> = future::join_all(tasks).await;
+
+                    // Check for errors
+                    for result in results {
+                        result?; // Propagate any errors
+                    }
+
                     Ok(())
                 }
                 .scope_boxed()
