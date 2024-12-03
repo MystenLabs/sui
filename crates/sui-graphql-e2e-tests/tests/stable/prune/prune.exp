@@ -76,7 +76,9 @@ task 12, lines 57-67:
 Response: {
   "data": {
     "availableRange": {
-      "first": null,
+      "first": {
+        "sequenceNumber": 5
+      },
       "last": {
         "sequenceNumber": 6
       }
