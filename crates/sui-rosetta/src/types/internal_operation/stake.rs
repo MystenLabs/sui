@@ -5,23 +5,23 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::ObjectRef;
 use sui_types::governance::ADD_STAKE_FUN_NAME;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::{
-    Argument, CallArg, Command, ObjectArg, ProgrammableTransaction, TransactionData,
-};
+use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction};
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::{
     base_types::SuiAddress, programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 
 use crate::errors::Error;
-use crate::types::internal_operation::{MAX_GAS_BUDGET, MAX_GAS_COINS};
+use crate::types::internal_operation::MAX_GAS_COINS;
 
-use super::{TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, START_GAS_UNITS};
+use super::{
+    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+    START_GAS_UNITS,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Stake {
@@ -64,26 +64,9 @@ impl TryConstructTransaction for Stake {
             // provide the gas-coins. Not using gas_coins should not matter in the dry-run.
             // This seems like a bug of the dry-run implementation?
             let pt = stake_pt(validator, total_sui_balance as u64, true, &extra_gas_coins)?;
-            let tx_data = TransactionData::new_programmable(
-                sender,
-                vec![],
-                pt.clone(),
-                // We don't want dry run to fail due to budget, because
-                // it will display the fail-budget
-                MAX_GAS_BUDGET,
-                gas_price,
-            );
+            let actual_budget =
+                budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
 
-            let dry_run = client.read_api().dry_run_transaction_block(tx_data).await?;
-            let effects = dry_run.effects;
-
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
-                return Err(Error::TransactionDryRunError(error.to_string()));
-            }
-
-            // Update budget to be the result of the dry run
-            let actual_budget = effects.gas_cost_summary().computation_cost
-                + effects.gas_cost_summary().storage_cost;
             let pt = stake_pt(
                 validator,
                 total_sui_balance as u64 - actual_budget,
@@ -158,26 +141,7 @@ impl TryConstructTransaction for Stake {
             gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
             extra_gas_coins = iter.collect();
             pt = stake_pt(validator, amount, false, &extra_gas_coins)?;
-            let tx_data = TransactionData::new_programmable(
-                sender,
-                // TODO: sort out whether we should pass or not pass gas_coins here.
-                gas_coins.clone(),
-                pt.clone(),
-                // We don't want dry run to fail due to budget, because
-                // it will display the fail-budget
-                MAX_GAS_BUDGET,
-                gas_price,
-            );
-
-            let dry_run = client.read_api().dry_run_transaction_block(tx_data).await?;
-            let effects = dry_run.effects;
-
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
-                return Err(Error::TransactionDryRunError(error.to_string()));
-            }
-            // Update budget to be the result of the dry run
-            budget = effects.gas_cost_summary().computation_cost
-                + effects.gas_cost_summary().storage_cost;
+            budget = budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
             // If we have already gathered the needed amount of coins we don't need to dry run again,
             // as the transaction will be the same.
             if budget + amount <= gathered {
@@ -219,8 +183,6 @@ pub fn stake_pt(
     };
 
     if !coins_to_merge.is_empty() {
-        // TODO: test and test that this won't mess with the workaround
-        // below
         // We need to merge the rest of the coins.
         // Each merge has a limit of 511 arguments.
         coins_to_merge

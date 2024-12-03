@@ -5,19 +5,18 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{
-    Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData,
-};
+use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
 use crate::types::internal_operation::MAX_GAS_COINS;
 use crate::{errors::Error, Currency};
 
-use super::{TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, MAX_GAS_BUDGET};
+use super::{
+    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PayCoin {
@@ -59,29 +58,7 @@ impl TryConstructTransaction for PayCoin {
         let pt = pay_coin_pt(recipients, amounts, &coin_objs, &currency)?;
         let budget = match budget {
             Some(budget) => budget,
-            None => {
-                let gas_price = match gas_price {
-                    Some(p) => p,
-                    None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-                };
-                let tx_data = TransactionData::new_programmable(
-                    sender,
-                    vec![],
-                    pt.clone(),
-                    // We don't want dry run to fail due to budget, because
-                    // it will display the fail-budget
-                    MAX_GAS_BUDGET,
-                    gas_price,
-                );
-                let dry_run = client.read_api().dry_run_transaction_block(tx_data).await?;
-                let effects = dry_run.effects;
-
-                if let SuiExecutionStatus::Failure { error } = effects.status() {
-                    return Err(Error::TransactionDryRunError(error.to_string()));
-                }
-                effects.gas_cost_summary().computation_cost
-                    + effects.gas_cost_summary().storage_cost
-            }
+            None => budget_from_dry_run(client, pt.clone(), sender, gas_price).await?,
         };
 
         let gas_coins = client

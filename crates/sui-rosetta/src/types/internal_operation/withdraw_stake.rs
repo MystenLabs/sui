@@ -4,23 +4,21 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::{
-    StakeStatus, SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-};
+use sui_json_rpc_types::{StakeStatus, SuiObjectDataOptions};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::governance::WITHDRAW_STAKE_FUN_NAME;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::{
-    CallArg, Command, ObjectArg, ProgrammableTransaction, TransactionData,
-};
+use sui_types::transaction::{CallArg, Command, ObjectArg, ProgrammableTransaction};
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::Error;
 
-use super::{TransactionAndObjectData, TryConstructTransaction, MAX_GAS_BUDGET, MAX_GAS_COINS};
+use super::{
+    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_GAS_COINS,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WithdrawStake {
@@ -79,31 +77,7 @@ impl TryConstructTransaction for WithdrawStake {
         // dry run
         let budget = match budget {
             Some(budget) => budget,
-            None => {
-                let gas_price = match gas_price {
-                    Some(p) => p,
-                    None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-                };
-                // Dry run the transaction to get the gas used, amount doesn't really matter here when using mock coins.
-                // get gas estimation from dry-run, this will also return any tx error.
-                let tx_data = TransactionData::new_programmable(
-                    sender,
-                    vec![],
-                    pt.clone(),
-                    // We don't want dry run to fail due to budget, because
-                    // it will display the fail-budget
-                    MAX_GAS_BUDGET,
-                    gas_price,
-                );
-                let dry_run = client.read_api().dry_run_transaction_block(tx_data).await?;
-                let effects = dry_run.effects;
-
-                if let SuiExecutionStatus::Failure { error } = effects.status() {
-                    return Err(Error::TransactionDryRunError(error.to_string()));
-                }
-                effects.gas_cost_summary().computation_cost
-                    + effects.gas_cost_summary().storage_cost
-            }
+            None => budget_from_dry_run(client, pt.clone(), sender, gas_price).await?,
         };
 
         let gas_coins = client

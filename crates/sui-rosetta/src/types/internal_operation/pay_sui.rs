@@ -5,18 +5,15 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{
-    Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData,
-};
+use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
 use crate::errors::Error;
 
 use super::{
-    TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS, MAX_GAS_BUDGET,
+    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
     MAX_GAS_COINS, START_GAS_UNITS,
 };
 
@@ -106,25 +103,8 @@ impl TryConstructTransaction for PaySui {
             gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
             extra_gas_coins = iter.collect();
             pt = pay_sui_pt(recipients.clone(), amounts.clone(), &extra_gas_coins)?;
-            let tx_data = TransactionData::new_programmable(
-                sender,
-                vec![],
-                pt.clone(),
-                // We don't want dry run to fail due to budget, because
-                // it will display the fail-budget
-                MAX_GAS_BUDGET,
-                gas_price,
-            );
+            budget = budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
 
-            let dry_run = client.read_api().dry_run_transaction_block(tx_data).await?;
-            let effects = dry_run.effects;
-
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
-                return Err(Error::TransactionDryRunError(error.to_string()));
-            }
-            // Update budget to be the result of the dry run
-            budget = effects.gas_cost_summary().computation_cost
-                + effects.gas_cost_summary().storage_cost;
             // If we have already gathered the needed amount of coins we don't need to dry run again,
             // as the transaction will be the same.
             if budget + total_amount <= gathered {
