@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 51 --addresses Test=0x0 A=0x42 --simulator --epochs-to-keep 2
+//# init --protocol-version 51 --addresses Test=0x0 A=0x42 --simulator --epochs-to-keep 2 --objects-snapshot-min-checkpoint-lag 1
 
 //# publish
 module Test::M1 {
@@ -50,6 +50,54 @@ module Test::M1 {
         epochId
       }
       sequenceNumber
+    }
+  }
+}
+
+//# run-graphql
+{
+  availableRange {
+    first {
+      sequenceNumber
+    }
+    last {
+      sequenceNumber
+    }
+  }
+}
+
+//# run-graphql
+{
+    chainIdentifier
+}
+
+//# run-graphql
+{
+  epoch(id: 0) {
+    validatorSet {
+      totalStake
+      activeValidators {
+        nodes {
+          name
+        }
+      }
+      validatorCandidatesSize
+      inactivePoolsId
+    }
+    totalGasFees
+    totalStakeRewards
+    totalStakeSubsidies
+    fundSize
+    fundInflow
+    fundOutflow
+    netInflow
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
     }
   }
 }
