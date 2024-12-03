@@ -28,8 +28,7 @@ use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiObjectResponse};
 use sui_sdk::SuiClientBuilder;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    digests::ObjectDigest,
+    base_types::{ObjectID, ObjectRef, SuiAddress},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, TransactionKind},
     type_input::TypeInput,
@@ -485,12 +484,12 @@ async fn get_level2_ticks_from_mid(
     let binding = result.results.unwrap();
 
     let bid_prices = &binding.get(0).unwrap().return_values.get(0).unwrap().0;
-    let bid_parsed_prices: Vec<u64> = bcs::from_bytes(&bid_prices).unwrap();
+    let bid_parsed_prices: Vec<u64> = bcs::from_bytes(bid_prices).unwrap();
     let bid_quantities = &binding.get(0).unwrap().return_values.get(1).unwrap().0;
     let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(bid_quantities).unwrap();
 
     let ask_prices = &binding.get(0).unwrap().return_values.get(2).unwrap().0;
-    let ask_parsed_prices: Vec<u64> = bcs::from_bytes(&ask_prices).unwrap();
+    let ask_parsed_prices: Vec<u64> = bcs::from_bytes(ask_prices).unwrap();
     let ask_quantities = &binding.get(0).unwrap().return_values.get(3).unwrap().0;
     let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(ask_quantities).unwrap();
 
