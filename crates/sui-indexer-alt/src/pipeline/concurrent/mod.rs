@@ -133,8 +133,7 @@ impl<H: Handler> Batched<H> {
     /// The batch is full if it has more than enough values to write to the database, or more than
     /// enough watermarks to update.
     fn is_full(&self) -> bool {
-        let max_chunk_rows = i16::MAX as usize / H::Value::FIELD_COUNT;
-        self.values.len() >= max_chunk_rows || self.watermark.len() >= MAX_WATERMARK_UPDATES
+        self.values.len() >= max_chunk_rows::<H>() || self.watermark.len() >= MAX_WATERMARK_UPDATES
     }
 }
 
@@ -247,4 +246,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
     })
+}
+
+const fn max_chunk_rows<H: Handler>() -> usize {
+    i16::MAX as usize / H::Value::FIELD_COUNT
 }

@@ -4,7 +4,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mysten_metrics::spawn_monitored_task;
-use sui_field_count::FieldCount;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -39,7 +38,7 @@ impl<H: Handler> Pending<H> {
     /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
     /// chunk size.
     fn batch_into(&mut self, batch: &mut Batched<H>) {
-        let max_chunk_rows = i16::MAX as usize / H::Value::FIELD_COUNT;
+        let max_chunk_rows = super::max_chunk_rows::<H>();
         if batch.values.len() + self.values.len() > max_chunk_rows {
             let mut for_batch = self.values.split_off(max_chunk_rows - batch.values.len());
 
