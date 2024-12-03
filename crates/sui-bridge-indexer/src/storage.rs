@@ -43,7 +43,7 @@ impl PgBridgePersistent {
         use schema::progress_store::dsl::*;
         let mut conn = self.pool.get().await?;
         let cp = progress_store
-            // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
+            // TODO: using like could be error prone, change the progress store schema to store the task name properly.
             .filter(task_name.like(format!("{prefix} - %")))
             .filter(target_checkpoint.ne(i64::MAX))
             .select(target_checkpoint)
