@@ -8,8 +8,6 @@ use diesel::{
     AsChangeset, Insertable, QueryResult, RunQueryDsl, Table,
 };
 
-mod grouped;
-
 #[cfg(test)]
 mod tests;
 
