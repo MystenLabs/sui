@@ -22,7 +22,7 @@ use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
 use crate::types::internal_operation::{
-    PayCoin, TransactionAndObjectData, TryConstructTransaction,
+    PayCoin, TransactionObjectData, TryConstructTransaction,
 };
 use crate::types::{
     Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
@@ -250,7 +250,7 @@ pub async fn metadata(
     // make sure it works over epoch changes
     gas_price += 100;
 
-    let TransactionAndObjectData {
+    let TransactionObjectData {
         gas_coins,
         extra_gas_coins,
         objects,

@@ -13,7 +13,7 @@ use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransacti
 use crate::errors::Error;
 
 use super::{
-    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+    budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
     MAX_GAS_COINS, START_GAS_UNITS,
 };
 
@@ -31,7 +31,7 @@ impl TryConstructTransaction for PaySui {
         client: &SuiClient,
         gas_price: Option<u64>,
         budget: Option<u64>,
-    ) -> Result<TransactionAndObjectData, Error> {
+    ) -> Result<TransactionObjectData, Error> {
         let Self {
             sender,
             recipients,
@@ -52,7 +52,7 @@ impl TryConstructTransaction for PaySui {
             let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
             let extra_gas_coins: Vec<_> = iter.collect();
 
-            return Ok(TransactionAndObjectData {
+            return Ok(TransactionObjectData {
                 gas_coins,
                 extra_gas_coins,
                 objects: vec![],
@@ -107,7 +107,7 @@ impl TryConstructTransaction for PaySui {
         }
         let total_sui_balance = all_coins.iter().map(|c| c.balance).sum::<u64>() as i128;
 
-        Ok(TransactionAndObjectData {
+        Ok(TransactionObjectData {
             gas_coins,
             extra_gas_coins,
             objects: vec![],
