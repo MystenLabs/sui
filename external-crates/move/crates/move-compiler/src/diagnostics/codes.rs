@@ -292,7 +292,6 @@ codes!(
     ],
     CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },
-        EqualOperands: { msg: "redundant equal operands for binary operation", severity: Warning },
     ],
     // errors for any unused code or items
     UnusedItem: [

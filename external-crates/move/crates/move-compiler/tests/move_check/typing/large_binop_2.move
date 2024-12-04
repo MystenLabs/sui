@@ -1,4 +1,3 @@
-#[allow(equal_operands)]
 module 0x42::m {
     fun main() {
         (128 >> 7 ) +

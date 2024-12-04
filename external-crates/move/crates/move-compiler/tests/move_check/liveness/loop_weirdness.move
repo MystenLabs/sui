@@ -1,4 +1,4 @@
-#[allow(equal_operands, unused_trailing_semi)]
+#[allow(unused_trailing_semi)]
 module 0x8675309::M {
     fun t() {
         let x = 0;
