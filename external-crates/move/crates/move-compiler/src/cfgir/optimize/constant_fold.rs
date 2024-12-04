@@ -4,7 +4,6 @@
 
 use crate::{
     cfgir::cfg::MutForwardCFG,
-    diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
@@ -52,6 +51,7 @@ pub fn optimize(
 }
 
 struct Context<'a> {
+    #[allow(dead_code)]
     reporter: &'a DiagnosticReporter<'a>,
     constants: &'a UniqueMap<ConstantName, Value>,
 }
@@ -163,17 +163,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let changed = changed1 || changed2;
             let v1_opt = foldable_exp(e1);
             let v2_opt = foldable_exp(e2);
-            // check operands for warnings before folding
             // TODO warn on operations that always fail
-            check_operands(
-                context,
-                e.exp.loc,
-                e1.exp.loc,
-                v1_opt.as_ref(),
-                op,
-                e2.exp.loc,
-                v2_opt.as_ref(),
-            );
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
@@ -480,61 +470,5 @@ fn ignorable_exp(e: &Exp) -> bool {
         E::Value(_) => true,
         E::Multiple(es) => es.iter().all(ignorable_exp),
         _ => false,
-    }
-}
-
-//**************************************************************************************************
-// Warnings
-//**************************************************************************************************
-
-fn check_operands(
-    context: &Context,
-    loc: Loc,
-    lhs_loc: Loc,
-    lhs: Option<&Value_>,
-    op: &BinOp,
-    rhs_loc: Loc,
-    rhs: Option<&Value_>,
-) {
-    let Some(resulting_value) =
-        lhs.and_then(|lhs| rhs.and_then(|rhs| equal_operands(lhs, op.value, rhs)))
-    else {
-        return;
-    };
-    let msg = format!(
-        "Equal operands detected in binary operation, \
-            which always evaluates to {resulting_value}"
-    );
-    let lhs_msg = "This expression";
-    let rhs_msg = "Evaluates to the same value as this expression";
-    context.reporter.add_diag(diag!(
-        CodeGeneration::EqualOperands,
-        (loc, msg),
-        (lhs_loc, lhs_msg),
-        (rhs_loc, rhs_msg)
-    ));
-}
-
-fn equal_operands(lhs: &Value_, op: BinOp_, rhs: &Value_) -> Option<&'static str> {
-    let resulting_value = match op {
-        // warning reported elsewhere
-        BinOp_::Div | BinOp_::Mod if rhs.is_zero() => return None,
-        BinOp_::Sub | BinOp_::Mod | BinOp_::Xor => "'0'",
-        BinOp_::Div => "'1'",
-        BinOp_::BitOr | BinOp_::BitAnd | BinOp_::And | BinOp_::Or => "the same value",
-        BinOp_::Neq | BinOp_::Lt | BinOp_::Gt => "'false'",
-        BinOp_::Eq | BinOp_::Le | BinOp_::Ge => "'true'",
-        BinOp_::Add
-        | BinOp_::Mul
-        | BinOp_::Shl
-        | BinOp_::Shr
-        | BinOp_::Range
-        | BinOp_::Implies
-        | BinOp_::Iff => return None,
-    };
-    if lhs == rhs {
-        Some(resulting_value)
-    } else {
-        None
     }
 }
