@@ -1,0 +1,30 @@
+[package]
+name = "sui-indexer-restorer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.71", features = ["backtrace"] }
+async-trait = "0.1.68"
+clap = { version = "4.3.0", features = ["derive", "env"] }
+futures = "0.3.28"
+serde = { version = "1.0.163", features = ["derive"] }
+serde_json = "1.0.96"
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.37"
+
+indicatif.workspace = true
+sui-config.workspace = true
+sui-snapshot.workspace = true
+sui-indexer-alt.workspace = true
+sui-types.workspace = true
+sui-storage.workspace = true
+sui-core.workspace = true
+object_store.workspace = true
+
+[[bin]]
+name = "sui-indexer-restorer"
+path = "src/main.rs"
