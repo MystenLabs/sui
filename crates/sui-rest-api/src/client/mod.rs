@@ -26,7 +26,13 @@ pub struct Client {
 impl Client {
     pub fn new<S: AsRef<str>>(base_url: S) -> Self {
         Self {
-            inner: sdk::Client::new(base_url.as_ref()).unwrap(),
+            inner: sdk::Client::new(base_url.as_ref(), None).unwrap(),
+        }
+    }
+
+    pub fn new_with_auth<S: AsRef<str>>(base_url: S, basic_auth: Option<(String, String)>) -> Self {
+        Self {
+            inner: sdk::Client::new(base_url.as_ref(), basic_auth).unwrap(),
         }
     }
 

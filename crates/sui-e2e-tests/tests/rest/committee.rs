@@ -11,7 +11,7 @@ use test_cluster::TestClusterBuilder;
 async fn get_committee() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let client = Client::new(test_cluster.rpc_url(), None).unwrap();
 
     let _committee = client.get_committee(0).await.unwrap();
     let _committee = client.get_current_committee().await.unwrap();

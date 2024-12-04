@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use reqwest::header::HeaderValue;
+use base64::Engine;
+use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
 use reqwest::Url;
 use sui_sdk_types::types::Address;
@@ -60,7 +61,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(url: &str) -> Result<Self> {
+    pub fn new(url: &str, basic_auth: Option<(String, String)>) -> Result<Self> {
         let mut url = Url::parse(url).map_err(Error::from_error)?;
 
         if url.cannot_be_a_base() {
@@ -71,10 +72,23 @@ impl Client {
 
         url.set_path("/v2/");
 
-        let inner = reqwest::ClientBuilder::new()
+        let mut builder = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
-            .http2_prior_knowledge()
-            .build()?;
+            .http2_prior_knowledge();
+
+        if let Some((username, password)) = basic_auth {
+            let mut headers = HeaderMap::new();
+            let auth = base64::engine::general_purpose::STANDARD
+                .encode(format!("{}:{}", username, password));
+            headers.insert(
+                "authorization",
+                // reqwest::header::AUTHORIZATION,
+                HeaderValue::from_str(&format!("Basic {}", auth)).unwrap(),
+            );
+            builder = builder.default_headers(headers);
+        }
+
+        let inner = builder.build()?;
 
         Self {
             inner,
