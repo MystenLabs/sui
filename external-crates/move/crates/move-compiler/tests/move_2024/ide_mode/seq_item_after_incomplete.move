@@ -1,4 +1,4 @@
-// tests if a variable declaration is valid despite
+// tests if a sequence item  is valid despite
 // parsing error preceding it in various scenarios
 module a::m {
 
@@ -30,6 +30,15 @@ module a::m {
         param =         // does not parse correctly
         let _tmp1 = 42;
         _tmp1 + param
+    }
+
+    public fun foo(num: u64):u64 {
+        num
+    }
+
+    public fun test6(param: u64): u64 {
+        let _v         // parses correctly but without semicolon
+        foo(param)     // returned value should still be correct if foo invocation parses correctly
     }
 
 }
