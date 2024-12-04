@@ -1530,6 +1530,7 @@ fn continue_sequence_after_error(
     let tok = context.tokens.peek();
     if last_token_preceded_by_eol
         && (SEQ_ITEM_START_SET.contains(tok, context.tokens.content())
+            //  ANY identfier can start a sequence item
             || tok == Tok::Identifier
             || tok == Tok::SyntaxIdentifier
             || tok == Tok::RestrictedIdentifier)
