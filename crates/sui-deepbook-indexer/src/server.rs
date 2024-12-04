@@ -201,7 +201,7 @@ async fn all_historical_volume(
         .collect::<Vec<String>>()
         .join(",");
 
-    get_historical_volume(Path(pool_ids), Query(params), State(state)).await
+    historical_volume(Path(pool_ids), Query(params), State(state)).await
 }
 
 async fn get_historical_volume_by_balance_manager_id(
