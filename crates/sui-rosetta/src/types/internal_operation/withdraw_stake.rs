@@ -16,9 +16,7 @@ use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::Error;
 
-use super::{
-    budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_GAS_COINS,
-};
+use super::{budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_GAS_COINS};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WithdrawStake {
