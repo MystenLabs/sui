@@ -484,7 +484,7 @@ async fn orderbook(
     let base_coin_type = parse_type_input(&base_asset_id)?;
     let quote_coin_type = parse_type_input(&quote_asset_id)?;
 
-    let package = ObjectID::from_hex_literal(&DEEPBOOK_PACKAGE_ID)
+    let package = ObjectID::from_hex_literal(DEEPBOOK_PACKAGE_ID)
         .map_err(|e| DeepBookError::InternalError(format!("Invalid pool ID: {}", e)))?;
     let module = "pool".to_string();
     let function = "get_level2_ticks_from_mid".to_string();
@@ -535,8 +535,8 @@ async fn orderbook(
         .zip(bid_parsed_quantities.into_iter())
         .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
-            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals).try_into().unwrap());
-            let quantity_factor = 10u64.pow((base_decimals).try_into().unwrap());
+            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals).into());
+            let quantity_factor = 10u64.pow((base_decimals).into());
             Value::Array(vec![
                 Value::from((price as f64 / price_factor as f64).to_string()),
                 Value::from((quantity as f64 / quantity_factor as f64).to_string()),
@@ -550,8 +550,8 @@ async fn orderbook(
         .zip(ask_parsed_quantities.into_iter())
         .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
-            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals).try_into().unwrap());
-            let quantity_factor = 10u64.pow((base_decimals).try_into().unwrap());
+            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals).into());
+            let quantity_factor = 10u64.pow((base_decimals).into());
             Value::Array(vec![
                 Value::from((price as f64 / price_factor as f64).to_string()),
                 Value::from((quantity as f64 / quantity_factor as f64).to_string()),
