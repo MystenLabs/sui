@@ -1341,6 +1341,7 @@
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
+                "passkey_session_auth": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "random_beacon": false,
                 "receive_objects": false,
@@ -6568,6 +6569,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "PasskeySessionAuthenticator"
+            ],
+            "properties": {
+              "PasskeySessionAuthenticator": {
+                "$ref": "#/components/schemas/PasskeySessionAuthenticator"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -7967,6 +7980,55 @@
           }
         }
       },
+      "PasskeySessionAuthenticator": {
+        "description": "An passkey session authenticator with parsed fields. See field defition below. Can be initialized from [struct RawPasskeySessionAuthenticator].",
+        "type": "object",
+        "required": [
+          "authenticator_data",
+          "client_data_json",
+          "ephemeral_signature",
+          "max_epoch",
+          "parsed_challenge"
+        ],
+        "properties": {
+          "authenticator_data": {
+            "description": "`authenticatorData` is a bytearray that encodes [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) structure returned by the authenticator attestation response as is.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "client_data_json": {
+            "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
+            "type": "string"
+          },
+          "ephemeral_signature": {
+            "description": "Ephemeral signature that commits to intent message of tx_data.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Signature"
+              }
+            ]
+          },
+          "max_epoch": {
+            "description": "Maximum epoch that the ephemeral signature is valid for.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "parsed_challenge": {
+            "description": "challenge field parsed from clientDataJSON. This should be `eph_flag || eph_pk || max_epoch`.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
       "ProtocolConfig": {
         "type": "object",
         "required": [
@@ -8131,6 +8193,18 @@
             ],
             "properties": {
               "Passkey": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "PasskeySession"
+            ],
+            "properties": {
+              "PasskeySession": {
                 "$ref": "#/components/schemas/Base64"
               }
             },
