@@ -75,6 +75,7 @@ async fn main() -> Result<()> {
     );
     let sui_checkpoint_datasource = SuiCheckpointDatasource::new(
         config.remote_store_url,
+        vec![],
         sui_client,
         config.concurrency as usize,
         config

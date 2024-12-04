@@ -26,6 +26,7 @@ const LIVE_TASK_INGESTION_READER_BATCH_SIZE: usize = 10;
 
 pub struct SuiCheckpointDatasource {
     remote_store_url: String,
+    remote_store_options: Vec<(String, String)>,
     sui_client: Arc<SuiClient>,
     concurrency: usize,
     checkpoint_path: PathBuf,
@@ -36,6 +37,7 @@ pub struct SuiCheckpointDatasource {
 impl SuiCheckpointDatasource {
     pub fn new(
         remote_store_url: String,
+        remote_store_options: Vec<(String, String)>,
         sui_client: Arc<SuiClient>,
         concurrency: usize,
         checkpoint_path: PathBuf,
@@ -45,6 +47,7 @@ impl SuiCheckpointDatasource {
     ) -> Self {
         SuiCheckpointDatasource {
             remote_store_url,
+            remote_store_options,
             sui_client,
             concurrency,
             checkpoint_path,
@@ -92,12 +95,13 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
         executor.register(worker_pool).await?;
         let checkpoint_path = self.checkpoint_path.clone();
         let remote_store_url = self.remote_store_url.clone();
+        let remote_store_options = self.remote_store_options.clone();
         Ok(spawn_monitored_task!(async {
             executor
                 .run(
                     checkpoint_path,
                     Some(remote_store_url),
-                    vec![], // optional remote store access options
+                    remote_store_options,
                     ReaderOptions {
                         batch_size: ingestion_reader_batch_size,
                         ..Default::default()

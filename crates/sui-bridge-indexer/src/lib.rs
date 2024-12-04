@@ -225,6 +225,7 @@ pub async fn create_sui_indexer(
 
     let sui_checkpoint_datasource = SuiCheckpointDatasource::new(
         config.remote_store_url.clone(),
+        vec![],
         sui_client,
         config.concurrency as usize,
         config
