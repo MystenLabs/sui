@@ -43,10 +43,6 @@ impl TryConstructTransaction for Stake {
             validator,
             amount,
         } = self;
-        let gas_price = match gas_price {
-            Some(p) => p,
-            None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-        };
 
         if amount.is_none() {
             let all_coins = client
@@ -60,19 +56,20 @@ impl TryConstructTransaction for Stake {
             let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
             let extra_gas_coins: Vec<_> = iter.collect();
 
-            // For some reason dry run fails if we use a total_sui_balance - big-budget and also
-            // provide the gas-coins. Not using gas_coins should not matter in the dry-run.
-            // This seems like a bug of the dry-run implementation?
-            let pt = stake_pt(validator, total_sui_balance as u64, true, &extra_gas_coins)?;
-            let actual_budget =
-                budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
+            let budget = match budget {
+                Some(budget) => budget,
+                None => {
+                    let pt = stake_pt(validator, total_sui_balance as u64, true, &extra_gas_coins)?;
+                    budget_from_dry_run(client, pt, sender, gas_price).await?
+                }
+            };
 
             return Ok(TransactionObjectData {
                 gas_coins,
                 extra_gas_coins,
                 objects: vec![],
                 total_sui_balance,
-                budget: budget.unwrap_or(actual_budget),
+                budget,
             });
         }
 
@@ -101,6 +98,11 @@ impl TryConstructTransaction for Stake {
 
         // amount is given, budget is not
         let mut coins_stream = Box::pin(client.coin_read_api().get_coins_stream(sender, None));
+        // Fetch it once instead of fetching it again and again in the below loop.
+        let gas_price = match gas_price {
+            Some(p) => p,
+            None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
+        };
 
         let mut all_coins = vec![];
         let mut gas_coins: Vec<_>;
