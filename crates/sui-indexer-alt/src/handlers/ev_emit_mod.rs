@@ -11,7 +11,8 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{models::events::StoredEvEmitMod, schema::ev_emit_mod};
+use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
+
 pub(crate) struct EvEmitMod;
 
 impl Processor for EvEmitMod {

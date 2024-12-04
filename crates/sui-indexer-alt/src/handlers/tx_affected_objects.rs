@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData};
 
-use crate::{models::transactions::StoredTxAffectedObject, schema::tx_affected_objects};
+use sui_indexer_alt_schema::{schema::tx_affected_objects, transactions::StoredTxAffectedObject};
 
 pub(crate) struct TxAffectedObjects;
 

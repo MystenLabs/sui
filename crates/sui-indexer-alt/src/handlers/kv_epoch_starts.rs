@@ -15,7 +15,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionKind},
 };
 
-use crate::{models::epochs::StoredEpochStart, schema::kv_epoch_starts};
+use sui_indexer_alt_schema::{epochs::StoredEpochStart, schema::kv_epoch_starts};
 
 pub(crate) struct KvEpochStarts;
 

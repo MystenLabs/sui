@@ -8,9 +8,10 @@ use sui_indexer_alt_framework::{
     ingestion::ClientArgs,
     IndexerArgs,
 };
+use sui_indexer_alt_schema::MIGRATIONS;
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
 
-use crate::{config::IndexerConfig, models::MIGRATIONS, start_indexer};
+use crate::{config::IndexerConfig, start_indexer};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct BenchmarkArgs {

@@ -20,8 +20,8 @@ use sui_types::{
     object::Owner,
 };
 
-use crate::{
-    models::objects::{StoredObjectUpdate, StoredSumCoinBalance},
+use sui_indexer_alt_schema::{
+    objects::{StoredObjectUpdate, StoredSumCoinBalance},
     schema::sum_coin_balances,
 };
 

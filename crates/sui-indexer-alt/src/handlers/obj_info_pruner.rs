@@ -10,9 +10,8 @@ use sui_indexer_alt_framework::{
     db,
     pipeline::{concurrent::Handler, Processor},
 };
+use sui_indexer_alt_schema::schema::obj_info;
 use sui_types::full_checkpoint_content::CheckpointData;
-
-use crate::schema::obj_info;
 
 use super::obj_info::{ObjInfo, ProcessedObjInfo, ProcessedObjInfoUpdate};
 

@@ -11,9 +11,9 @@ use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
-use sui_indexer_alt::models::MIGRATIONS;
 use sui_indexer_alt::start_indexer;
 use sui_indexer_alt_framework::db::reset_database;
+use sui_indexer_alt_schema::MIGRATIONS;
 use tokio::fs;
 
 #[tokio::main]

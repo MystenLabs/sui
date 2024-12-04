@@ -165,7 +165,7 @@ jobs:
           ./scripts/generate_indexer_schema.sh
       - name: Indexer Alt schema
         run: |
-          ./crates/sui-indexer-alt/generate_schema.sh
+          ./crates/sui-indexer-alt-schema/generate_schema.sh
       - name: Indexer Alt Framework schema
         run: |
           ./crates/sui-indexer-alt-framework/generate_schema.sh
