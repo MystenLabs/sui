@@ -665,7 +665,7 @@ impl NodeMetrics {
             ).unwrap(),
             round_prober_accepted_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_accepted_quorum_round_gaps",
-                "Round gaps among peers for blocks  & accepted from each authority",
+                "Round gaps among peers for blocks proposed & accepted from each authority",
                 &["authority"],
                 registry
             ).unwrap(),

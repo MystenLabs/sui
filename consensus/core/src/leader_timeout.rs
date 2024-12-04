@@ -188,10 +188,6 @@ mod tests {
         fn highest_received_rounds(&self) -> Vec<Round> {
             todo!()
         }
-
-        fn highest_accepted_rounds(&self) -> Vec<Round> {
-            todo!()
-        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -127,11 +127,6 @@ impl<C: NetworkClient> RoundProber<C> {
         let request_timeout =
             Duration::from_millis(self.context.parameters.round_prober_request_timeout_ms);
         let own_index = self.context.own_index;
-        let last_proposed_round = self
-            .dag_state
-            .read()
-            .get_last_block_for_authority(own_index)
-            .round();
         let mut requests = FuturesUnordered::new();
 
         for (peer, _) in self.context.committee.authorities() {
@@ -154,10 +149,20 @@ impl<C: NetworkClient> RoundProber<C> {
         let mut highest_accepted_rounds =
             vec![vec![0; self.context.committee.size()]; self.context.committee.size()];
 
+        let blocks = self
+            .dag_state
+            .read()
+            .get_last_cached_block_per_authority(Round::MAX);
+        let local_highest_accepted_rounds = blocks
+            .into_iter()
+            .map(|block| block.round())
+            .collect::<Vec<_>>();
+        let last_proposed_round = local_highest_accepted_rounds[own_index];
+
         // For our own index, the highest recieved & accepted round is our last
-        // proposed round.
+        // accepted round or our last proposed round.
         highest_received_rounds[own_index] = self.core_thread_dispatcher.highest_received_rounds();
-        highest_accepted_rounds[own_index] = self.core_thread_dispatcher.highest_accepted_rounds();
+        highest_accepted_rounds[own_index] = local_highest_accepted_rounds;
         highest_received_rounds[own_index][own_index] = last_proposed_round;
         highest_accepted_rounds[own_index][own_index] = last_proposed_round;
 
@@ -361,17 +366,15 @@ mod test {
 
     struct FakeThreadDispatcher {
         highest_received_rounds: Vec<Round>,
-        highest_accepted_rounds: Vec<Round>,
         propagation_delay: Mutex<Round>,
         received_quorum_rounds: Mutex<Vec<QuorumRound>>,
         accepted_quorum_rounds: Mutex<Vec<QuorumRound>>,
     }
 
     impl FakeThreadDispatcher {
-        fn new(highest_received_rounds: Vec<Round>, highest_accepted_rounds: Vec<Round>) -> Self {
+        fn new(highest_received_rounds: Vec<Round>) -> Self {
             Self {
                 highest_received_rounds,
-                highest_accepted_rounds,
                 propagation_delay: Mutex::new(0),
                 received_quorum_rounds: Mutex::new(Vec::new()),
                 accepted_quorum_rounds: Mutex::new(Vec::new()),
@@ -433,10 +436,6 @@ mod test {
 
         fn highest_received_rounds(&self) -> Vec<Round> {
             self.highest_received_rounds.clone()
-        }
-
-        fn highest_accepted_rounds(&self) -> Vec<Round> {
-            self.highest_accepted_rounds.clone()
         }
     }
 
@@ -527,10 +526,9 @@ mod test {
     async fn test_round_prober() {
         const NUM_AUTHORITIES: usize = 7;
         let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
-        let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new(
-            vec![110, 120, 130, 140, 150, 160, 170],
-            vec![110, 120, 130, 140, 150, 160, 170],
-        ));
+        let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new(vec![
+            110, 120, 130, 140, 150, 160, 170,
+        ]));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         // Have some peers return error or incorrect number of rounds.
@@ -561,9 +559,15 @@ mod test {
             network_client.clone(),
         );
 
-        // Fake last proposed round to be 110.
-        let block = VerifiedBlock::new_for_test(TestBlock::new(110, 0).build());
-        dag_state.write().accept_block(block);
+        // Create test blocks for each authority with incrementing rounds starting at 110
+        let blocks = (0..NUM_AUTHORITIES)
+            .map(|authority| {
+                let round = 110 + (authority as u32 * 10);
+                VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build())
+            })
+            .collect::<Vec<_>>();
+
+        dag_state.write().accept_blocks(blocks);
 
         // Compute quorum rounds and propagation delay based on last proposed round = 110,
         // and highest received rounds:

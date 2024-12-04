@@ -35,10 +35,7 @@ const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
-    AddBlocks(
-        Vec<VerifiedBlock>,
-        oneshot::Sender<(BTreeSet<BlockRef>, BTreeSet<BlockRef>)>,
-    ),
+    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
@@ -83,9 +80,6 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 
     /// Returns the highest round received for each authority by Core.
     fn highest_received_rounds(&self) -> Vec<Round>;
-
-    /// Returns the highest round accepted for each authority by Core.
-    fn highest_accepted_rounds(&self) -> Vec<Round>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -125,8 +119,8 @@ impl CoreThread {
                     match command {
                         CoreThreadCommand::AddBlocks(blocks, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::add_blocks");
-                            let (accepted_block_refs, missing_block_refs) = self.core.add_blocks(blocks)?;
-                            sender.send((accepted_block_refs, missing_block_refs)).ok();
+                            let missing_block_refs = self.core.add_blocks(blocks)?;
+                            sender.send(missing_block_refs).ok();
                         }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
                             let _scope = monitored_scope("CoreThread::loop::new_block");
@@ -183,7 +177,6 @@ pub(crate) struct ChannelCoreThreadDispatcher {
         Arc<watch::Sender<(Round, Vec<QuorumRound>, Vec<QuorumRound>)>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
     highest_received_rounds: Arc<Vec<AtomicU32>>,
-    highest_accepted_rounds: Arc<Vec<AtomicU32>>,
 }
 
 impl ChannelCoreThreadDispatcher {
@@ -192,8 +185,8 @@ impl ChannelCoreThreadDispatcher {
         dag_state: &RwLock<DagState>,
         core: Core,
     ) -> (Self, CoreThreadHandle) {
-        // Initialize highest received rounds to last accepted rounds.
-        let (highest_received_rounds, highest_accepted_rounds) = {
+        // Initialize highest received rounds.
+        let highest_received_rounds = {
             let dag_state = dag_state.read();
             let highest_received_rounds = context
                 .committee
@@ -203,14 +196,7 @@ impl ChannelCoreThreadDispatcher {
                 })
                 .collect();
 
-            let blocks = dag_state.get_last_cached_block_per_authority(Round::MAX);
-
-            let highest_accepted_rounds = blocks
-                .into_iter()
-                .map(|block| AtomicU32::new(block.round()))
-                .collect::<Vec<_>>();
-
-            (highest_received_rounds, highest_accepted_rounds)
+            highest_received_rounds
         };
 
         let (sender, receiver) =
@@ -257,7 +243,6 @@ impl ChannelCoreThreadDispatcher {
             ),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
             highest_received_rounds: Arc::new(highest_received_rounds),
-            highest_accepted_rounds: Arc::new(highest_accepted_rounds),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -291,17 +276,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks.clone(), sender))
             .await;
-        let (accepted_block_refs, missing_block_refs) =
-            receiver.await.map_err(|e| Shutdown(e.to_string()))?;
-
-        for block in blocks {
-            let block_ref = block.reference();
-            if accepted_block_refs.contains(&block_ref) {
-                // Block was accepted, update the highest accepted round for author
-                self.highest_accepted_rounds[block.author()]
-                    .fetch_max(block.round(), Ordering::AcqRel);
-            }
-        }
+        let missing_block_refs = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
 
         Ok(missing_block_refs)
     }
@@ -344,13 +319,6 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 
     fn highest_received_rounds(&self) -> Vec<Round> {
         self.highest_received_rounds
-            .iter()
-            .map(|round| round.load(Ordering::Relaxed))
-            .collect()
-    }
-
-    fn highest_accepted_rounds(&self) -> Vec<Round> {
-        self.highest_accepted_rounds
             .iter()
             .map(|round| round.load(Ordering::Relaxed))
             .collect()
@@ -430,10 +398,6 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
     }
 
     fn highest_received_rounds(&self) -> Vec<Round> {
-        todo!()
-    }
-
-    fn highest_accepted_rounds(&self) -> Vec<Round> {
         todo!()
     }
 }
