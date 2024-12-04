@@ -1,0 +1,43 @@
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/false_positive_excessive_nesting.move:3:9
+   │    
+ 3 │ ╭ ╭         if (x > 0) {
+ 4 │ │ │             if (x > 10) {
+ 5 │ │ │                 if (x > 20) {
+ 6 │ │ │                     if (x > 30) { // Complex but necessary business logic
+   · │ │
+10 │ │ │             }
+11 │ │ │         };
+   │ ╰─│─────────^ Nested if statements can be combined
+   │   ╰─────────' Consider combining conditions with && if possible
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/false_positive_excessive_nesting.move:4:13
+   │    
+ 4 │ ╭ ╭             if (x > 10) {
+ 5 │ │ │                 if (x > 20) {
+ 6 │ │ │                     if (x > 30) { // Complex but necessary business logic
+ 7 │ │ │                         return 1
+ 8 │ │ │                     }
+ 9 │ │ │                 }
+10 │ │ │             }
+   │ ╰─│─────────────^ Nested if statements can be combined
+   │   ╰─────────────' Consider combining conditions with && if possible
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+  ┌─ tests/linter/false_positive_excessive_nesting.move:5:17
+  │    
+5 │ ╭ ╭                 if (x > 20) {
+6 │ │ │                     if (x > 30) { // Complex but necessary business logic
+7 │ │ │                         return 1
+8 │ │ │                     }
+9 │ │ │                 }
+  │ ╰─│─────────────────^ Nested if statements can be combined
+  │   ╰─────────────────' Consider combining conditions with && if possible
+  │    
+  = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

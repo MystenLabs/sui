@@ -15,6 +15,7 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
+pub mod excessive_nesting;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
@@ -162,6 +163,12 @@ lints!(
         "unnecessary_unit",
         "unit `()` expression can be removed or simplified"
     ),
+    (
+        ExcessiveNesting,
+        LinterDiagnosticCategory::Complexity,
+        "excessive_nesting",
+        "detected excessive block nesting. Consider refactoring to simplify the code."
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -199,6 +206,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 self_assignment::SelfAssignmentVisitor.visitor(),
                 redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
+                excessive_nesting::NestingExceed.visitor(),
             ]
         }
     }

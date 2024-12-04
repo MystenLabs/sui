@@ -1,0 +1,28 @@
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/true_negative_excessive_nesting.move:18:9
+   │    
+18 │ ╭ ╭         if (x > 0) {
+19 │ │ │             if (x > 10) {
+20 │ │ │                 if (x > 20) { // At MAX_NESTING_LEVEL (3)
+21 │ │ │                     x = x + 1;
+22 │ │ │                 }
+23 │ │ │             }
+24 │ │ │         }
+   │ ╰─│─────────^ Nested if statements can be combined
+   │   ╰─────────' Consider combining conditions with && if possible
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01011]: detected excessive block nesting. Consider refactoring to simplify the code.
+   ┌─ tests/linter/true_negative_excessive_nesting.move:19:13
+   │    
+19 │ ╭ ╭             if (x > 10) {
+20 │ │ │                 if (x > 20) { // At MAX_NESTING_LEVEL (3)
+21 │ │ │                     x = x + 1;
+22 │ │ │                 }
+23 │ │ │             }
+   │ ╰─│─────────────^ Nested if statements can be combined
+   │   ╰─────────────' Consider combining conditions with && if possible
+   │    
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
