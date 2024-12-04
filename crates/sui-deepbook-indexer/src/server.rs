@@ -42,7 +42,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
-pub const GET_ALL_HISTORICAL_VOLUME_PATH: &str = "/get_all_historical_volume";
+pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const DEEPBOOK_PACKAGE_ID: &str =
     "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
@@ -60,8 +60,8 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(GET_POOLS_PATH, get(get_pools))
         .route(GET_HISTORICAL_VOLUME_PATH, get(get_historical_volume))
         .route(
-            GET_ALL_HISTORICAL_VOLUME_PATH,
-            get(get_all_historical_volume),
+            ALL_HISTORICAL_VOLUME_PATH,
+            get(all_historical_volume),
         )
         .route(
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL,
@@ -167,7 +167,7 @@ async fn get_historical_volume(
 }
 
 /// Get all historical volume for all pools
-async fn get_all_historical_volume(
+async fn all_historical_volume(
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
