@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toBase64, toHex } from '@mysten/bcs';
+import { toBase64 } from '@mysten/bcs';
 import { secp256r1 } from '@noble/curves/p256';
 import { blake2b } from '@noble/hashes/blake2b';
 import { randomBytes } from '@noble/hashes/utils';
@@ -22,11 +22,71 @@ import {
 	PasskeyPublicKey,
 } from './publickey.js';
 
+export interface PasskeyCreateOptions {
+	timeout: number; // The timeout for the passkey creation dialog.
+	displayName: string; // The display name of the user, this is shown at creation dialog
+	rpName: string; // The name of the relying party, this is shown to user in the passkey creation dialog.
+}
+
+export interface PasskeySignOptions {
+	timeout: number; // The timeout for the passkey authentication dialog.
+}
+
+function validateCreateOptions(options: PasskeyCreateOptions) {
+	if (options.timeout <= 0) throw new Error('Timeout must be positive');
+	if (!options.displayName?.trim()) throw new Error('Display name cannot be empty');
+	if (!options.rpName?.trim()) throw new Error('RP name cannot be empty');
+	if (options.timeout > 300000) throw new Error('Timeout cannot exceed 5 minutes');
+}
+
+export interface PasskeyProvider {
+	create(options: PasskeyCreateOptions): Promise<RegistrationCredential>;
+	get(challenge: Uint8Array, timeout: number): Promise<AuthenticationCredential>;
+}
+
+// Default browser implementation
+export class BrowserPasskeyProvider implements PasskeyProvider {
+	async create(options: PasskeyCreateOptions): Promise<RegistrationCredential> {
+		return (await navigator.credentials.create({
+			publicKey: {
+				challenge: new TextEncoder().encode('Create passkey wallet on Sui'),
+				rp: {
+					name: options.rpName,
+				},
+				user: {
+					id: randomBytes(10),
+					name: 'sui-wallet-user',
+					displayName: options.displayName,
+				},
+				pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+				authenticatorSelection: {
+					authenticatorAttachment: 'cross-platform',
+					residentKey: 'required',
+					requireResidentKey: true,
+					userVerification: 'required',
+				},
+				timeout: options.timeout ?? 60000,
+			},
+		})) as RegistrationCredential;
+	}
+
+	async get(challenge: Uint8Array, timeout: number): Promise<AuthenticationCredential> {
+		return (await navigator.credentials.get({
+			publicKey: {
+				challenge,
+				userVerification: 'required',
+				timeout,
+			},
+		})) as AuthenticationCredential;
+	}
+}
+
 /**
  * A passkey signer used for signing transactions. This is a client side implementation for [SIP-9](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md).
  */
 export class PasskeyKeypair extends Signer {
 	private publicKey: Uint8Array;
+	private provider: PasskeyProvider;
 
 	/**
 	 * Get the key scheme of passkey,
@@ -39,40 +99,32 @@ export class PasskeyKeypair extends Signer {
 	 * Creates an instance of Passkey signer. It's expected to call the static `getPasskeyInstance` method to create an instance.
 	 * For example:
 	 * ```
-	 * const signer = await AwsKmsSigner.getPasskeyInstance();
+	 * const signer = await PasskeyKeypair.getPasskeyInstance();
 	 * ```
 	 */
-	constructor(publicKey: Uint8Array) {
+	constructor(publicKey: Uint8Array, provider: PasskeyProvider) {
 		super();
+		if (publicKey.length !== PASSKEY_PUBLIC_KEY_SIZE) {
+			throw new Error(`Invalid public key size: expected ${PASSKEY_PUBLIC_KEY_SIZE} bytes`);
+		}
 		this.publicKey = publicKey;
+		this.provider = provider;
 	}
 
 	/**
 	 * Creates an instance of Passkey signer invoking the passkey from navigator.
 	 */
-	static async getPasskeyInstance(): Promise<PasskeyKeypair> {
-		// create a passkey secp256r1 key for the relying party.
-		const credential = (await navigator.credentials.create({
-			publicKey: {
-				challenge: new TextEncoder().encode('Create passkey wallet on Sui'),
-				rp: {
-					name: 'Passkey Wallet on Sui',
-				},
-				user: {
-					id: randomBytes(10),
-					name: 'sui-wallet-user',
-					displayName: 'Sui Wallet User',
-				},
-				pubKeyCredParams: [{ alg: -7, type: 'public-key' }], // -7 is ES256
-				authenticatorSelection: {
-					authenticatorAttachment: 'cross-platform',
-					residentKey: 'required',
-					requireResidentKey: true,
-					userVerification: 'required',
-				},
-				timeout: 60000,
-			},
-		})) as RegistrationCredential;
+	static async getPasskeyInstance(
+		options: PasskeyCreateOptions = {
+			timeout: 60000,
+			rpName: 'Passkey Wallet on Sui',
+			displayName: 'Passkey Wallet on Sui',
+		},
+		provider: PasskeyProvider = new BrowserPasskeyProvider(),
+	): Promise<PasskeyKeypair> {
+		// create a passkey secp256r1 with the provider.
+		validateCreateOptions(options);
+		const credential = await provider.create(options);
 
 		if (!credential.response.getPublicKey) {
 			throw new Error('Invalid credential createresponse');
@@ -81,7 +133,7 @@ export class PasskeyKeypair extends Signer {
 			const pubkeyUncompressed = parseDerSPKI(new Uint8Array(derSPKI));
 			const pubkey = secp256r1.ProjectivePoint.fromHex(pubkeyUncompressed);
 			const pubkeyCompressed = pubkey.toRawBytes(true);
-			return new PasskeyKeypair(pubkeyCompressed);
+			return new PasskeyKeypair(pubkeyCompressed, provider);
 		}
 	}
 
@@ -96,15 +148,9 @@ export class PasskeyKeypair extends Signer {
 	 * Return the signature for the provided data (i.e. blake2b(intent_message)).
 	 * This is sent to passkey as the challenge field.
 	 */
-	async sign(data: Uint8Array) {
-		// sents the passkey to sign over challenge as the data.
-		const credential = (await navigator.credentials.get({
-			publicKey: {
-				challenge: data,
-				userVerification: 'required',
-				timeout: 60000,
-			},
-		})) as AuthenticationCredential;
+	async sign(data: Uint8Array, options: PasskeySignOptions = { timeout: 60000 }) {
+		// sendss the passkey to sign over challenge as the data.
+		const credential = await this.provider.get(data, options.timeout);
 
 		// parse authenticatorData (as bytes), clientDataJSON (decoded as string).
 		const authenticatorData = new Uint8Array(credential.response.authenticatorData);
@@ -115,22 +161,19 @@ export class PasskeyKeypair extends Signer {
 		// parse the signature from DER format, normalize and convert to compressed format (33 bytes).
 		const sig = secp256r1.Signature.fromDER(new Uint8Array(credential.response.signature));
 		const normalized = sig.normalizeS().toCompactRawBytes();
-		const compressedPubkey = secp256r1.ProjectivePoint.fromHex(toHex(this.publicKey)).toRawBytes(
-			true,
-		);
 
 		if (
 			normalized.length !== PASSKEY_SIGNATURE_SIZE ||
-			compressedPubkey.length !== PASSKEY_PUBLIC_KEY_SIZE
+			this.publicKey.length !== PASSKEY_PUBLIC_KEY_SIZE
 		) {
 			throw new Error('Invalid signature or public key length');
 		}
 
 		// construct userSignature as flag || sig || pubkey for the secp256r1 signature.
-		const arr = new Uint8Array(1 + normalized.length + compressedPubkey.length);
+		const arr = new Uint8Array(1 + normalized.length + this.publicKey.length);
 		arr.set([SIGNATURE_SCHEME_TO_FLAG['Secp256r1']]);
 		arr.set(normalized, 1);
-		arr.set(compressedPubkey, 1 + normalized.length);
+		arr.set(this.publicKey, 1 + normalized.length);
 
 		// serialize all fields into a passkey signature according to https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md#signature-encoding
 		return PasskeyAuthenticator.serialize({
