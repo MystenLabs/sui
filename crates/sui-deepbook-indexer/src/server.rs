@@ -166,30 +166,20 @@ async fn get_historical_volume(
     Ok(Json(normalize_pool_addresses(volume_by_pool)))
 }
 
+/// Get all historical volume for all pools
 async fn get_all_historical_volume(
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
-    // Step 1: Clone `state.pool` into a separate variable to ensure it lives long enough
-    let pool = state.pool.clone();
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
 
-    // Step 2: Use the cloned pool to get a connection
-    let connection = &mut pool.get().await?;
-
-    // Step 3: Fetch all pool IDs
-    let pools: Vec<Pools> = schema::pools::table
-        .select(Pools::as_select())
-        .load(connection)
-        .await?;
-
-    // Extract all pool IDs
     let pool_ids: String = pools
+        .0
         .into_iter()
         .map(|pool| pool.pool_id)
         .collect::<Vec<String>>()
         .join(",");
 
-    // Step 4: Call `get_historical_volume` with the pool IDs and query parameters
     get_historical_volume(Path(pool_ids), Query(params), State(state)).await
 }
 
