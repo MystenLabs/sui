@@ -96,9 +96,6 @@ impl TryConstructTransaction for PaySui {
             // The coins to merge should be used as transaction object inputs, as
             // `TransactionData::new_programmable` used in `InternalOperation::try_into_data`,
             // uses all coins passed as gas payment.
-            // For some reason dry run fails if we use a total_sui_balance - big-budget and also
-            // provide the gas-coins. Not using gas_coins should not matter in the dry-run.
-            // This seems like a bug of the dry-run implementation?
             let mut iter = all_coins.iter().map(|c| c.object_ref());
             gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
             extra_gas_coins = iter.collect();
