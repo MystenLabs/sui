@@ -4,7 +4,6 @@
 use std::{sync::Arc, time::Duration};
 
 use backoff::ExponentialBackoff;
-use mysten_metrics::spawn_monitored_task;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -44,7 +43,7 @@ pub(super) fn committer<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         info!(pipeline = H::NAME, "Starting committer");
 
         match ReceiverStream::new(rx)

@@ -3,7 +3,6 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -86,7 +85,7 @@ pub(super) fn collector<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
         let mut poll = interval(config.collect_interval());

@@ -4,7 +4,6 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
-use mysten_metrics::spawn_monitored_task;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
@@ -48,7 +47,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         info!(pipeline = P::NAME, "Starting processor");
         let latest_processed_checkpoint = Arc::new(AtomicU64::new(0));
         let processor = Arc::new(processor);

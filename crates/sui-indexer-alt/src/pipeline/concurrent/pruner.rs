@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     task::JoinHandle,
     time::{interval, MissedTickBehavior},
@@ -38,7 +37,7 @@ pub(super) fn pruner<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         let Some(config) = config else {
             info!(pipeline = H::NAME, "Skipping pruner task");
             return;

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::try_join_all;
-use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -27,7 +26,7 @@ pub(super) fn broadcaster(
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         info!("Starting ingestion broadcaster");
         let retry_interval = config.retry_interval();
 

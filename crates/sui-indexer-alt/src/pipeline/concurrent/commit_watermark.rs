@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -56,7 +55,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         if skip_watermark {
             info!(pipeline = H::NAME, "Skipping commit watermark task");
             return;
