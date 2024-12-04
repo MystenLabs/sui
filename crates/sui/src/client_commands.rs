@@ -9,7 +9,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -50,8 +50,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
-    build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies,
+    build_from_resolution_graph, BuildConfig, CompiledPackage, PackageDependencies,
 };
 use sui_package_management::{LockCommand, PublishedAtError};
 use sui_replay::ReplayToolCommand;
@@ -1002,14 +1001,14 @@ impl SuiClientCommands {
                 } else {
                     None
                 };
-                let compile_result = compile_package(
+                let compiled_package = compile_package(
                     client.read_api(),
                     build_config.clone(),
                     &package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
-                .await;
+                .await?;
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
@@ -1019,7 +1018,9 @@ impl SuiClientCommands {
                         previous_id,
                     )?;
                 }
-                let (dependencies, compiled_modules, _, _) = compile_result?;
+                let compiled_modules =
+                    compiled_package.get_package_bytes(with_unpublished_dependencies);
+                let dependencies = compiled_package.dependency_ids;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1641,7 +1642,7 @@ impl SuiClientCommands {
                     print_diags_to_stderr: true,
                     chain_id: Some(chain_id),
                 }
-                .build(&package_path)?;
+                .build(&package_path, false)?;
 
                 let client = context.get_client().await?;
                 BytecodeSourceVerifier::new(client.read_api())
@@ -1684,6 +1685,7 @@ fn compile_package_simple(
         false,
         false,
         chain_id,
+        false,
     )?)
 }
 
@@ -1706,7 +1708,7 @@ pub(crate) async fn upgrade_package(
     ),
     anyhow::Error,
 > {
-    let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
+    let compiled_package = compile_package(
         read_api,
         build_config,
         package_path,
@@ -1715,7 +1717,7 @@ pub(crate) async fn upgrade_package(
     )
     .await?;
 
-    let package_id = package_id.map_err(|e| match e {
+    let package_id = compiled_package.published_at.as_ref().map_err(|e| match e {
         PublishedAtError::NotPresent => {
             anyhow!("No 'published-at' field in Move.toml or 'published-id' in Move.lock for package to be upgraded.")
         }
@@ -1765,9 +1767,11 @@ pub(crate) async fn upgrade_package(
     // `package` module to change this policy.
     let upgrade_policy = upgrade_cap.policy;
     let package_digest = compiled_package.get_package_digest(with_unpublished_dependencies);
+    let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
+    let dependencies = compiled_package.dependency_ids.clone();
 
     Ok((
-        package_id,
+        *package_id,
         compiled_modules,
         dependencies,
         package_digest,
@@ -1782,15 +1786,7 @@ pub(crate) async fn compile_package(
     package_path: &Path,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
-) -> Result<
-    (
-        PackageDependencies,
-        Vec<Vec<u8>>,
-        CompiledPackage,
-        Result<ObjectID, PublishedAtError>,
-    ),
-    anyhow::Error,
-> {
+) -> Result<CompiledPackage, anyhow::Error> {
     let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
@@ -1802,45 +1798,14 @@ pub(crate) async fn compile_package(
         chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
-    let (package_id, mut dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
-    check_invalid_dependencies(&dependencies.invalid)?;
-    if !with_unpublished_dependencies {
-        check_unpublished_dependencies(&dependencies.unpublished)?;
-    };
 
-    let mut compiled_package = build_from_resolution_graph(
+    let compiled_package = build_from_resolution_graph(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
         chain_id,
+        with_unpublished_dependencies,
     )?;
-
-    // iterate through the modules in the package and collect all the immediate dependencies for
-    // each module. The immediate dependency is the ground truth of which deps are actually used
-    // and called in this package.
-    // We will use this to filter out the dependencies that are potentially imported but not used
-    // in the package.
-    let mut deps = BTreeSet::new();
-    for m in compiled_package.get_modules_and_deps() {
-        for d in m.immediate_dependencies() {
-            deps.insert(d.address().clone());
-        }
-    }
-
-    // Only store in the CompiledPackage the actual dependencies that are used!
-    compiled_package
-        .package
-        .deps_compiled_units
-        .retain(|b| deps.contains(b.1.unit.module.address()));
-    compiled_package
-        .bytecode_deps
-        .retain(|(_, c)| deps.contains(c.address()));
-
-    compiled_package
-        .dependency_ids
-        .published
-        .retain(|_, b| deps.contains(&(*b).into()));
-    dependencies = compiled_package.dependency_ids.clone();
 
     let protocol_config = read_api.get_protocol_config(None).await?;
 
@@ -1901,10 +1866,6 @@ pub(crate) async fn compile_package(
             .into());
         }
     }
-    if with_unpublished_dependencies {
-        compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
-    }
-    let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
         let verifier = BytecodeSourceVerifier::new(read_api);
         if let Err(e) = verifier
@@ -1946,7 +1907,7 @@ pub(crate) async fn compile_package(
             error: format!("Failed to update Move.lock toolchain version: {e}"),
         })?;
 
-    Ok((dependencies, compiled_modules, compiled_package, package_id))
+    Ok(compiled_package)
 }
 
 impl Display for SuiClientCommandResult {

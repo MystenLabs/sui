@@ -203,7 +203,7 @@ pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
-    BuildConfig::new_for_testing().build(&path).unwrap()
+    BuildConfig::new_for_testing().build(&path, false).unwrap()
 }
 
 async fn init_genesis(

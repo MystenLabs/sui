@@ -481,7 +481,7 @@ pub fn build_test_modules_with_dep_addr(
             .additional_named_addresses
             .insert(addr_name.to_string(), AccountAddress::from(obj_id));
     }
-    let mut package = build_config.build(path).unwrap();
+    let mut package = build_config.build(path, false).unwrap();
 
     let dep_id_mapping: BTreeMap<_, _> = dep_ids
         .into_iter()
@@ -527,7 +527,11 @@ pub async fn publish_package_on_single_authority(
             .additional_named_addresses
             .insert(addr_name.to_string(), AccountAddress::from(obj_id));
     }
-    let modules = build_config.build(path).unwrap().get_package_bytes(false);
+    let with_unpublished_deps = false;
+    let modules = build_config
+        .build(path, with_unpublished_deps)
+        .unwrap()
+        .get_package_bytes(with_unpublished_deps);
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let cap = builder.publish_upgradeable(modules, dep_ids);

@@ -162,7 +162,11 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: &Path) -> SuiResult<CompiledPackage> {
+    pub fn build(
+        self,
+        path: &Path,
+        with_unpublished_dependencies: bool,
+    ) -> SuiResult<CompiledPackage> {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
@@ -172,6 +176,7 @@ impl BuildConfig {
             run_bytecode_verifier,
             print_diags_to_stderr,
             chain_id,
+            with_unpublished_dependencies,
         )
     }
 
@@ -235,8 +240,14 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
     chain_id: Option<String>,
+    with_unpublished_dependencies: bool,
 ) -> SuiResult<CompiledPackage> {
-    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph, chain_id);
+    let (published_at, mut dependency_ids) = gather_published_ids(&resolution_graph, chain_id);
+
+    check_invalid_dependencies(&dependency_ids.invalid)?;
+    if !with_unpublished_dependencies {
+        check_unpublished_dependencies(&dependency_ids.unpublished)?;
+    };
 
     // collect bytecode dependencies as these are not returned as part of core
     // `CompiledPackage`
@@ -286,6 +297,16 @@ pub fn build_from_resolution_graph(
         }
         Ok((package, fn_info)) => (package, fn_info),
     };
+
+    let deps: BTreeSet<_> = package
+        .all_compiled_units()
+        .filter_map(|x| {
+            let address = x.address.into_inner();
+            (address != AccountAddress::ZERO).then_some(address)
+        })
+        .collect();
+    dependency_ids.published.retain(|_, id| deps.contains(id));
+
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
         let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
@@ -301,12 +322,19 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
-    Ok(CompiledPackage {
+
+    let compiled_package = CompiledPackage {
         package,
         published_at,
         dependency_ids,
         bytecode_deps,
-    })
+    };
+
+    if with_unpublished_dependencies {
+        compiled_package.verify_unpublished_dependencies()?;
+    }
+
+    Ok(compiled_package)
 }
 
 impl CompiledPackage {
@@ -540,10 +568,8 @@ impl CompiledPackage {
         })
     }
 
-    pub fn verify_unpublished_dependencies(
-        &self,
-        unpublished_deps: &BTreeSet<Symbol>,
-    ) -> SuiResult<()> {
+    pub fn verify_unpublished_dependencies(&self) -> SuiResult<()> {
+        let unpublished_deps = &self.dependency_ids.unpublished;
         if unpublished_deps.is_empty() {
             return Ok(());
         }

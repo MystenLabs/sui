@@ -68,7 +68,7 @@ impl Build {
             print_diags_to_stderr: true,
             chain_id,
         }
-        .build(rerooted_path)?;
+        .build(rerooted_path, with_unpublished_deps)?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {

@@ -328,7 +328,9 @@ impl TestTransactionBuilder {
             TestTransactionData::Publish(data) => {
                 let (all_module_bytes, dependencies) = match data {
                     PublishData::Source(path, with_unpublished_deps) => {
-                        let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+                        let compiled_package = BuildConfig::new_for_testing()
+                            .build(&path, with_unpublished_deps)
+                            .unwrap();
                         let all_module_bytes =
                             compiled_package.get_package_bytes(with_unpublished_deps);
                         let dependencies = compiled_package.get_dependency_storage_package_ids();

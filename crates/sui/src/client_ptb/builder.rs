@@ -965,8 +965,10 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 }
-                let (dependencies, compiled_modules, _, _) =
-                    compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
+                let compiled_package = compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
+                let compiled_modules = compiled_package
+                    .get_package_bytes(false /* with_unpublished_dependencies */);
+                let dependencies = compiled_package.dependency_ids;
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
