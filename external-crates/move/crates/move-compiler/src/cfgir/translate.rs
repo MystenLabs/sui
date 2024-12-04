@@ -249,7 +249,7 @@ fn constants(
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut diag = diag!(
-                BytecodeGeneration::UnfoldableConstant,
+                CodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&scc[0]).unwrap(),
                     format!("Constant definitions form a circular dependency: {}", names),
@@ -275,7 +275,7 @@ fn constants(
             .collect();
         for node in neighbors {
             context.add_diag(diag!(
-                BytecodeGeneration::UnfoldableConstant,
+                CodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&node).unwrap(),
                     format!(
@@ -517,6 +517,7 @@ fn constant_(
     );
     cfgir::optimize(
         context.env,
+        &context.reporter,
         context.current_package,
         &fake_signature,
         &locals,
@@ -526,7 +527,7 @@ fn constant_(
 
     if blocks.len() != 1 {
         context.add_diag(diag!(
-            BytecodeGeneration::UnfoldableConstant,
+            CodeGeneration::UnfoldableConstant,
             (full_loc, CANNOT_FOLD)
         ));
         return None;
@@ -538,7 +539,7 @@ fn constant_(
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
                 context.add_diag(diag!(
-                    BytecodeGeneration::UnfoldableConstant,
+                    CodeGeneration::UnfoldableConstant,
                     (*cloc, CANNOT_FOLD)
                 ));
                 continue;
@@ -560,7 +561,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     match &e.exp.value {
         E::Value(_) => (),
         _ => context.add_diag(diag!(
-            BytecodeGeneration::UnfoldableConstant,
+            CodeGeneration::UnfoldableConstant,
             (e.exp.loc, CANNOT_FOLD)
         )),
     }
@@ -677,6 +678,7 @@ fn function_body(
             if !context.env.has_errors() {
                 cfgir::optimize(
                     context.env,
+                    &context.reporter,
                     context.current_package,
                     signature,
                     &locals,

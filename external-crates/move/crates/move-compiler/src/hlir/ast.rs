@@ -445,6 +445,20 @@ impl FunctionSignature {
     }
 }
 
+impl Value_ {
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::U8(v) => *v == 0,
+            Self::U16(v) => *v == 0,
+            Self::U32(v) => *v == 0,
+            Self::U64(v) => *v == 0,
+            Self::U128(v) => *v == 0,
+            Self::U256(v) => *v == move_core_types::u256::U256::zero(),
+            Self::Address(_) | Self::Bool(_) | Self::Vector(_, _) => false,
+        }
+    }
+}
+
 impl Var {
     pub fn loc(&self) -> Loc {
         self.0.loc
@@ -570,6 +584,10 @@ impl Exp {
     pub fn is_unreachable(&self) -> bool {
         self.exp.value.is_unreachable()
     }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        self.exp.value.as_value()
+    }
 }
 
 impl UnannotatedExp_ {
@@ -579,6 +597,13 @@ impl UnannotatedExp_ {
 
     pub fn is_unreachable(&self) -> bool {
         matches!(self, UnannotatedExp_::Unreachable)
+    }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        match self {
+            UnannotatedExp_::Value(v) => Some(v),
+            _ => None,
+        }
     }
 }
 
