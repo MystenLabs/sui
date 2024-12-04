@@ -14150,6 +14150,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-restorer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "futures",
+ "indicatif",
+ "object_store",
+ "prometheus",
+ "sui-archival",
+ "sui-config",
+ "sui-core",
+ "sui-field-count",
+ "sui-indexer-alt",
+ "sui-snapshot",
+ "sui-storage",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "sui-json"
 version = "0.0.0"
 dependencies = [

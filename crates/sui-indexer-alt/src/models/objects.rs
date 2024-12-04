@@ -6,7 +6,10 @@ use diesel::{
     sql_types::SmallInt, FromSqlRow,
 };
 use sui_field_count::FieldCount;
-use sui_types::base_types::ObjectID;
+use sui_types::{
+    base_types::ObjectID,
+    object::{Object, Owner},
+};
 
 use crate::schema::{
     kv_objects, obj_info, obj_versions, sum_coin_balances, sum_obj_types, wal_coin_balances,
@@ -144,4 +147,43 @@ pub struct StoredObjInfo {
     pub module: Option<String>,
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
+}
+
+pub fn create_stored_obj_info(
+    object_id: ObjectID,
+    cp_sequence_number: i64,
+    object: &Object,
+) -> Result<StoredObjInfo, anyhow::Error> {
+    let type_ = object.type_();
+    Ok(StoredObjInfo {
+        object_id: object_id.to_vec(),
+        cp_sequence_number,
+        owner_kind: Some(match object.owner() {
+            Owner::AddressOwner(_) => StoredOwnerKind::Address,
+            Owner::ObjectOwner(_) => StoredOwnerKind::Object,
+            Owner::Shared { .. } => StoredOwnerKind::Shared,
+            Owner::Immutable => StoredOwnerKind::Immutable,
+            Owner::ConsensusV2 { .. } => todo!(),
+        }),
+
+        owner_id: match object.owner() {
+            Owner::AddressOwner(a) => Some(a.to_vec()),
+            Owner::ObjectOwner(o) => Some(o.to_vec()),
+            Owner::Shared { .. } | Owner::Immutable { .. } => None,
+            Owner::ConsensusV2 { .. } => todo!(),
+        },
+
+        package: type_.map(|t| t.address().to_vec()),
+        module: type_.map(|t| t.module().to_string()),
+        name: type_.map(|t| t.name().to_string()),
+        instantiation: type_
+            .map(|t| bcs::to_bytes(&t.type_params()))
+            .transpose()
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to serialize type parameters for {}: {e}",
+                    object.id().to_canonical_display(/* with_prefix */ true),
+                )
+            })?,
+    })
 }

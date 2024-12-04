@@ -3,13 +3,13 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use diesel_async::RunQueryDsl;
-use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Owner};
+use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData};
 
 use crate::{
     db,
-    models::objects::{StoredObjInfo, StoredOwnerKind},
+    models::objects::{create_stored_obj_info, StoredObjInfo},
     pipeline::{concurrent::Handler, Processor},
     schema::obj_info,
 };
@@ -58,40 +58,9 @@ impl Processor for ObjInfo {
                 None => true,
             };
             if should_insert {
-                let type_ = object.type_();
                 values.insert(
                     *object_id,
-                    StoredObjInfo {
-                        object_id: object_id.to_vec(),
-                        cp_sequence_number,
-                        owner_kind: Some(match object.owner() {
-                            Owner::AddressOwner(_) => StoredOwnerKind::Address,
-                            Owner::ObjectOwner(_) => StoredOwnerKind::Object,
-                            Owner::Shared { .. } => StoredOwnerKind::Shared,
-                            Owner::Immutable => StoredOwnerKind::Immutable,
-                            Owner::ConsensusV2 { .. } => todo!(),
-                        }),
-
-                        owner_id: match object.owner() {
-                            Owner::AddressOwner(a) => Some(a.to_vec()),
-                            Owner::ObjectOwner(o) => Some(o.to_vec()),
-                            Owner::Shared { .. } | Owner::Immutable { .. } => None,
-                            Owner::ConsensusV2 { .. } => todo!(),
-                        },
-
-                        package: type_.map(|t| t.address().to_vec()),
-                        module: type_.map(|t| t.module().to_string()),
-                        name: type_.map(|t| t.name().to_string()),
-                        instantiation: type_
-                            .map(|t| bcs::to_bytes(&t.type_params()))
-                            .transpose()
-                            .map_err(|e| {
-                            anyhow!(
-                                "Failed to serialize type parameters for {}: {e}",
-                                object.id().to_canonical_display(/* with_prefix */ true),
-                            )
-                        })?,
-                    },
+                    create_stored_obj_info(*object_id, cp_sequence_number, object)?,
                 );
             }
         }
