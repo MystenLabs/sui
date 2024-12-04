@@ -194,14 +194,14 @@ async fn all_historical_volume(
 ) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
     let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
 
-    let pool_ids: String = pools
+    let pool_names: String = pools
         .0
         .into_iter()
-        .map(|pool| pool.pool_id)
+        .map(|pool| pool.pool_name)
         .collect::<Vec<String>>()
         .join(",");
 
-    historical_volume(Path(pool_ids), Query(params), State(state)).await
+    historical_volume(Path(pool_names), Query(params), State(state)).await
 }
 
 async fn get_historical_volume_by_balance_manager_id(
@@ -369,10 +369,10 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
     Ok(Json(metrics_by_interval))
 }
-
 async fn get_level2_ticks_from_mid(
     Path(pool_name): Path<String>,
     Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, Value>>, DeepBookError> {
     let depth = params
         .get("depth")
@@ -410,17 +410,28 @@ async fn get_level2_ticks_from_mid(
         _ => 100u64,                // Fallback to default
     };
 
+    // Fetch the pool data from the `pools` table
+    let connection = &mut state.pool.get().await?;
+    let pool_data = schema::pools::table
+        .filter(schema::pools::pool_name.eq(pool_name.clone()))
+        .select((
+            schema::pools::pool_id,
+            schema::pools::base_asset_id,
+            schema::pools::base_asset_decimals,
+            schema::pools::quote_asset_id,
+            schema::pools::quote_asset_decimals,
+        ))
+        .first::<(String, String, i16, String, i16)>(connection)
+        .await?;
+
+    let (pool_id, base_asset_id, base_decimals, quote_asset_id, quote_decimals) = pool_data;
+    let base_decimals = base_decimals as u8;
+    let quote_decimals = quote_decimals as u8;
+
+    let pool_address = ObjectID::from_hex_literal(&pool_id)?;
+
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
-
-    let pool_name_map = get_pool_name_mapping();
-    let pool_id = pool_name_map
-        .iter()
-        .find(|(_, name)| name == &&pool_name)
-        .map(|(address, _)| address)
-        .ok_or_else(|| anyhow!("Pool name '{}' not found", pool_name))?;
-
-    let pool_address = ObjectID::from_hex_literal(pool_id)?;
 
     let pool_object: SuiObjectResponse = sui_client
         .read_api()
@@ -456,21 +467,8 @@ async fn get_level2_ticks_from_mid(
     let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref));
     ptb.input(clock_input)?;
 
-    let pool_full_name = pool_name_map
-        .get(pool_id)
-        .ok_or_else(|| anyhow!("Pool ID not found"))?;
-    let (base_asset, quote_asset) = parse_pool_name(pool_full_name)?;
-
-    let asset_info_map = get_asset_info_mapping();
-    let (base_coin_type, base_decimals) = asset_info_map
-        .get(&base_asset)
-        .ok_or_else(|| anyhow!("Base asset info not found"))?;
-    let (quote_coin_type, quote_decimals) = asset_info_map
-        .get(&quote_asset)
-        .ok_or_else(|| anyhow!("Quote asset info not found"))?;
-
-    let base_coin_type = parse_type_input(base_coin_type)?;
-    let quote_coin_type = parse_type_input(quote_coin_type)?;
+    let base_coin_type = parse_type_input(&base_asset_id)?;
+    let quote_coin_type = parse_type_input(&quote_asset_id)?;
 
     let package = ObjectID::from_hex_literal(DEEPBOOK_PACKAGE_ID).map_err(|e| anyhow!(e))?;
     let module = "pool".to_string();
@@ -522,9 +520,8 @@ async fn get_level2_ticks_from_mid(
         .zip(bid_parsed_quantities.into_iter())
         .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
-            let price_factor =
-                10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
-            let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
+            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals).try_into().unwrap());
+            let quantity_factor = 10u64.pow((base_decimals).try_into().unwrap());
             Value::Array(vec![
                 Value::from((price as f64 / price_factor as f64).to_string()),
                 Value::from((quantity as f64 / quantity_factor as f64).to_string()),
@@ -538,9 +535,8 @@ async fn get_level2_ticks_from_mid(
         .zip(ask_parsed_quantities.into_iter())
         .take(ticks_from_mid as usize)
         .map(|(price, quantity)| {
-            let price_factor =
-                10u64.pow((9 - *base_decimals + *quote_decimals).try_into().unwrap());
-            let quantity_factor = 10u64.pow((*base_decimals).try_into().unwrap());
+            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals).try_into().unwrap());
+            let quantity_factor = 10u64.pow((base_decimals).try_into().unwrap());
             Value::Array(vec![
                 Value::from((price as f64 / price_factor as f64).to_string()),
                 Value::from((quantity as f64 / quantity_factor as f64).to_string()),
@@ -550,139 +546,6 @@ async fn get_level2_ticks_from_mid(
     result.insert("asks".to_string(), Value::Array(asks));
 
     Ok(Json(result))
-}
-
-/// This function can return what's in the pool table when stable
-fn get_pool_name_mapping() -> HashMap<String, String> {
-    [
-        (
-            "0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22",
-            "DEEP_SUI",
-        ),
-        (
-            "0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce",
-            "DEEP_USDC",
-        ),
-        (
-            "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407",
-            "SUI_USDC",
-        ),
-        (
-            "0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c",
-            "BWETH_USDC",
-        ),
-        (
-            "0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545",
-            "WUSDC_USDC",
-        ),
-        (
-            "0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f",
-            "WUSDT_USDC",
-        ),
-        (
-            "0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8",
-            "NS_SUI",
-        ),
-        (
-            "0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060",
-            "NS_USDC",
-        ),
-        (
-            "0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec",
-            "TYPUS_SUI",
-        ),
-        (
-            "0x183df694ebc852a5f90a959f0f563b82ac9691e42357e9a9fe961d71a1b809c8",
-            "SUI_AUSD",
-        ),
-        (
-            "0x5661fc7f88fbeb8cb881150a810758cf13700bb4e1f31274a244581b37c303c3",
-            "AUSD_USDC",
-        ),
-    ]
-    .iter()
-    .map(|&(id, name)| (id.to_string(), name.to_string()))
-    .collect()
-}
-
-/// This function can return what's in the pool table when stable
-fn get_asset_info_mapping() -> HashMap<String, (String, u64)> {
-    [
-        (
-            "SUI",
-            (
-                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
-                9,
-            ),
-        ),
-        (
-            "DEEP",
-            (
-                "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
-                6,
-            ),
-        ),
-        (
-            "USDC",
-            (
-                "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
-                6,
-            ),
-        ),
-        (
-            "BETH",
-            (
-                "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH",
-                8,
-            ),
-        ),
-        (
-            "WUSDC",
-            (
-                "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN",
-                6,
-            ),
-        ),
-        (
-            "WUSDT",
-            (
-                "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN",
-                6,
-            ),
-        ),
-        (
-            "NS",
-            (
-                "0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS",
-                6,
-            ),
-        ),
-        (
-            "TYPUS",
-            (
-                "0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS",
-                9,
-            ),
-        ),
-        (
-            "AUSD",
-            (
-                "0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD",
-                6,
-            ),
-        ),
-    ]
-    .iter()
-    .map(|&(name, (type_str, decimals))| (name.to_string(), (type_str.to_string(), decimals)))
-    .collect()
-}
-
-fn parse_pool_name(pool_name: &str) -> Result<(String, String), anyhow::Error> {
-    let parts: Vec<&str> = pool_name.split('_').collect();
-    if parts.len() != 2 {
-        return Err(anyhow::anyhow!("Invalid pool name format"));
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 fn parse_type_input(type_str: &str) -> Result<TypeInput, DeepBookError> {
