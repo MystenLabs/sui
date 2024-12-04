@@ -7,7 +7,6 @@ mod rosetta_client;
 mod test_coin_utils;
 
 use serde_json::json;
-use sui_types::object::Owner;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use sui_json_rpc_types::{
@@ -22,6 +21,7 @@ use sui_rosetta::types::{
 use sui_rosetta::types::{Currencies, OperationType};
 use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
+use sui_types::object::Owner;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
 
@@ -67,8 +67,14 @@ async fn test_mint() {
             }
         })
         .collect::<Vec<_>>();
-    let coin1 = coins.iter().find(|coin| coin.1 == Owner::AddressOwner(address1)).unwrap();
-    let coin2 = coins.iter().find(|coin| coin.1 == Owner::AddressOwner(address2)).unwrap();
+    let coin1 = coins
+        .iter()
+        .find(|coin| coin.1 == Owner::AddressOwner(address1))
+        .unwrap();
+    let coin2 = coins
+        .iter()
+        .find(|coin| coin.1 == Owner::AddressOwner(address2))
+        .unwrap();
     assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
     assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
 }
