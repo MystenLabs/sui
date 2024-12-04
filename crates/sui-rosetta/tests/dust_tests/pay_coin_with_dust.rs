@@ -1,4 +1,8 @@
-use std::{num::NonZeroUsize, path::Path};
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::num::NonZeroUsize;
+use std::path::Path;
 
 use serde_json::json;
 use sui_json_rpc_types::{
