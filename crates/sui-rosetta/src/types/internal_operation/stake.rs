@@ -67,18 +67,10 @@ impl TryConstructTransaction for Stake {
             let actual_budget =
                 budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
 
-            let pt = stake_pt(
-                validator,
-                total_sui_balance as u64 - actual_budget,
-                true,
-                &extra_gas_coins,
-            )?;
-
             return Ok(TransactionAndObjectData {
                 gas_coins,
                 extra_gas_coins,
                 objects: vec![],
-                pt,
                 total_sui_balance,
                 budget: budget.unwrap_or(actual_budget),
             });
@@ -97,13 +89,11 @@ impl TryConstructTransaction for Stake {
             let mut iter = all_coins.into_iter().map(|c| c.object_ref());
             let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
             let extra_gas_coins: Vec<_> = iter.collect();
-            let pt = stake_pt(validator, amount, false, &extra_gas_coins)?;
 
             return Ok(TransactionAndObjectData {
                 gas_coins,
                 extra_gas_coins,
                 objects: vec![],
-                pt,
                 total_sui_balance,
                 budget,
             });
@@ -117,7 +107,6 @@ impl TryConstructTransaction for Stake {
         let mut extra_gas_coins: Vec<_>;
         let mut gathered = 0;
         let mut budget = START_GAS_UNITS * gas_price;
-        let mut pt;
         // We need to dry-run in a loop, because depending on the amount of coins used the tx might
         // differ slightly: (merge / no merge / number of merge-coins)
         loop {
@@ -140,7 +129,7 @@ impl TryConstructTransaction for Stake {
             let mut iter = all_coins.iter().map(|c| c.object_ref());
             gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
             extra_gas_coins = iter.collect();
-            pt = stake_pt(validator, amount, false, &extra_gas_coins)?;
+            let pt = stake_pt(validator, amount, false, &extra_gas_coins)?;
             budget = budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
             // If we have already gathered the needed amount of coins we don't need to dry run again,
             // as the transaction will be the same.
@@ -154,7 +143,6 @@ impl TryConstructTransaction for Stake {
             gas_coins,
             extra_gas_coins,
             objects: vec![],
-            pt,
             total_sui_balance,
             budget,
         })

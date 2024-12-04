@@ -254,7 +254,6 @@ pub async fn metadata(
         gas_coins,
         extra_gas_coins,
         objects,
-        pt: _,
         total_sui_balance,
         budget,
     } = option

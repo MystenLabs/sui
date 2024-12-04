@@ -55,10 +55,12 @@ impl TryConstructTransaction for PayCoin {
             .map(|coin| coin.object_ref())
             .collect();
 
-        let pt = pay_coin_pt(recipients, amounts, &coin_objs, &currency)?;
         let budget = match budget {
             Some(budget) => budget,
-            None => budget_from_dry_run(client, pt.clone(), sender, gas_price).await?,
+            None => {
+                let pt = pay_coin_pt(recipients, amounts, &coin_objs, &currency)?;
+                budget_from_dry_run(client, pt, sender, gas_price).await?
+            }
         };
 
         let gas_coins = client
@@ -83,7 +85,6 @@ impl TryConstructTransaction for PayCoin {
             gas_coins,
             extra_gas_coins: vec![],
             objects: coin_objs,
-            pt,
             total_sui_balance,
             budget,
         })
