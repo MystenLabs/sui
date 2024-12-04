@@ -58,3 +58,18 @@ error[E01002]: unexpected token
    │         Unexpected 'foo'
    │         Expected ';'
 
+error[E03010]: unbound field
+   ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:52:9
+   │
+52 │         param.bar       // parses correctly
+   │         ^^^^^^^^^ Unbound field 'bar' in 'a::m::SomeStruct'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:53:9
+   │
+53 │         param.bar()     // returned value should still be correct if foo invocation parses correctly
+   │         ^^^^^
+   │         │
+   │         Unexpected 'param'
+   │         Expected ';'
+

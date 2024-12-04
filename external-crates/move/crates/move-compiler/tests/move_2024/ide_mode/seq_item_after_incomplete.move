@@ -41,4 +41,16 @@ module a::m {
         foo(param)     // returned value should still be correct if foo invocation parses correctly
     }
 
+
+    public struct SomeStruct has drop, copy {}
+
+    public fun bar(param: SomeStruct): SomeStruct {
+        param
+    }
+
+    public fun test7(param: SomeStruct): SomeStruct {
+        param.bar       // parses correctly
+        param.bar()     // returned value should still be correct if foo invocation parses correctly
+    }
+
 }
