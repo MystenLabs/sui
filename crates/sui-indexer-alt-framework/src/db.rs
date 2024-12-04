@@ -65,7 +65,7 @@ impl Db {
     }
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
-    /// established before the [DbConfig::connection_timeout] has elapsed.
+    /// established before the [DbArgs::connection_timeout] has elapsed.
     pub async fn connect(&self) -> Result<Connection<'_>, RunError> {
         self.pool.get().await
     }
