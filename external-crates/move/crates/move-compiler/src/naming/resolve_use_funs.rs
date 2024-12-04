@@ -87,7 +87,7 @@ fn module(
     mdef: &mut N::ModuleDefinition,
 ) {
     let context = &mut Context::new(env, info, mident);
-    context.push_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter);
     use_funs(context, &mut mdef.use_funs);
     for (_, _, c) in &mut mdef.constants {
         constant(context, c);
@@ -99,13 +99,13 @@ fn module(
 }
 
 fn constant(context: &mut Context, c: &mut N::Constant) {
-    context.push_warning_filter_scope(c.warning_filter.clone());
+    context.push_warning_filter_scope(c.warning_filter);
     exp(context, &mut c.value);
     context.pop_warning_filter_scope();
 }
 
 fn function(context: &mut Context, function: &mut N::Function) {
-    context.push_warning_filter_scope(function.warning_filter.clone());
+    context.push_warning_filter_scope(function.warning_filter);
     if let N::FunctionBody_::Defined(seq) = &mut function.body.value {
         sequence(context, seq)
     }
@@ -401,7 +401,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)
@@ -416,7 +416,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+        N::ExpDotted_::Dot(ed, _, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             exp_dotted(context, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {

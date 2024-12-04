@@ -13,14 +13,14 @@ use crate::{
     pipeline::Processor, schema::tx_affected_addresses,
 };
 
-pub struct TxAffectedAddress;
+pub struct TxAffectedAddresses;
 
-impl Processor for TxAffectedAddress {
+impl Processor for TxAffectedAddresses {
     const NAME: &'static str = "tx_affected_addresses";
 
     type Value = StoredTxAffectedAddress;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -58,9 +58,8 @@ impl Processor for TxAffectedAddress {
 }
 
 #[async_trait::async_trait]
-impl Handler for TxAffectedAddress {
+impl Handler for TxAffectedAddresses {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

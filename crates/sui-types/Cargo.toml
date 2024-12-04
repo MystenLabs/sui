@@ -42,7 +42,6 @@ roaring.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
 indexmap.workspace = true
-derivative.workspace = true
 jsonrpsee.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -70,7 +69,7 @@ fastcrypto-zkp.workspace = true
 passkey-types.workspace = true
 
 typed-store-error.workspace = true
-derive_more.workspace = true
+derive_more = { workspace = true, features = ["as_ref", "debug", "display", "from"] }
 proptest.workspace = true
 proptest-derive.workspace = true
 better_any.workspace = true
@@ -100,7 +99,6 @@ harness = false
 
 [features]
 default = []
-test-utils = []
 tracing = [
     "move-vm-profiler/tracing",
     "move-vm-test-utils/tracing",

@@ -31,6 +31,45 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_epoch_ends (epoch) {
+        epoch -> Int8,
+        cp_hi -> Int8,
+        tx_hi -> Int8,
+        end_timestamp_ms -> Int8,
+        safe_mode -> Bool,
+        total_stake -> Nullable<Int8>,
+        storage_fund_balance -> Nullable<Int8>,
+        storage_fund_reinvestment -> Nullable<Int8>,
+        storage_charge -> Nullable<Int8>,
+        storage_rebate -> Nullable<Int8>,
+        stake_subsidy_amount -> Nullable<Int8>,
+        total_gas_fees -> Nullable<Int8>,
+        total_stake_rewards_distributed -> Nullable<Int8>,
+        leftover_storage_fund_inflow -> Nullable<Int8>,
+        epoch_commitments -> Bytea,
+    }
+}
+
+diesel::table! {
+    kv_epoch_starts (epoch) {
+        epoch -> Int8,
+        protocol_version -> Int8,
+        cp_lo -> Int8,
+        start_timestamp_ms -> Int8,
+        reference_gas_price -> Int8,
+        system_state -> Bytea,
+    }
+}
+
+diesel::table! {
+    kv_feature_flags (protocol_version, flag_name) {
+        protocol_version -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
+    }
+}
+
+diesel::table! {
     kv_genesis (genesis_digest) {
         genesis_digest -> Bytea,
         initial_protocol_version -> Int8,
@@ -46,6 +85,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     kv_transactions (tx_digest) {
         tx_digest -> Bytea,
         cp_sequence_number -> Int8,
@@ -53,6 +100,19 @@ diesel::table! {
         raw_transaction -> Bytea,
         raw_effects -> Bytea,
         events -> Bytea,
+    }
+}
+
+diesel::table! {
+    obj_info (object_id, cp_sequence_number) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+        owner_kind -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        package -> Nullable<Bytea>,
+        module -> Nullable<Text>,
+        name -> Nullable<Text>,
+        instantiation -> Nullable<Bytea>,
     }
 }
 
@@ -186,9 +246,8 @@ diesel::table! {
         checkpoint_hi_inclusive -> Int8,
         tx_hi -> Int8,
         timestamp_ms_hi_inclusive -> Int8,
-        epoch_lo -> Int8,
         reader_lo -> Int8,
-        pruner_timestamp_ms -> Int8,
+        pruner_timestamp -> Timestamp,
         pruner_hi -> Int8,
     }
 }
@@ -197,9 +256,14 @@ diesel::allow_tables_to_appear_in_same_query!(
     ev_emit_mod,
     ev_struct_inst,
     kv_checkpoints,
+    kv_epoch_ends,
+    kv_epoch_starts,
+    kv_feature_flags,
     kv_genesis,
     kv_objects,
+    kv_protocol_configs,
     kv_transactions,
+    obj_info,
     obj_versions,
     sum_coin_balances,
     sum_displays,

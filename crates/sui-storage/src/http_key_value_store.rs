@@ -84,6 +84,7 @@ pub enum Key {
     CheckpointSummaryByDigest(CheckpointDigest),
     TxToCheckpoint(TransactionDigest),
     ObjectKey(ObjectID, VersionNumber),
+    EventsByTxDigest(TransactionDigest),
 }
 
 impl Key {
@@ -99,6 +100,7 @@ impl Key {
             Key::CheckpointSummaryByDigest(_) => "cs",
             Key::TxToCheckpoint(_) => "tx2c",
             Key::ObjectKey(_, _) => "ob",
+            Key::EventsByTxDigest(_) => "evtx",
         }
     }
 
@@ -117,6 +119,7 @@ impl Key {
             Key::CheckpointSummaryByDigest(digest) => encode_digest(digest),
             Key::TxToCheckpoint(digest) => encode_digest(digest),
             Key::ObjectKey(object_id, version) => encode_object_key(object_id, version),
+            Key::EventsByTxDigest(digest) => encode_digest(digest),
         }
     }
 
@@ -417,12 +420,10 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         checkpoint_summaries: &[CheckpointSequenceNumber],
         checkpoint_contents: &[CheckpointSequenceNumber],
         checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
     ) -> SuiResult<(
         Vec<Option<CertifiedCheckpointSummary>>,
         Vec<Option<CheckpointContents>>,
         Vec<Option<CertifiedCheckpointSummary>>,
-        Vec<Option<CheckpointContents>>,
     )> {
         let keys = checkpoint_summaries
             .iter()
@@ -437,26 +438,15 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
                     .iter()
                     .map(|cp| Key::CheckpointSummaryByDigest(*cp)),
             )
-            .chain(
-                checkpoint_contents_by_digest
-                    .iter()
-                    .map(|cp| Key::CheckpointContentsByDigest(*cp)),
-            )
             .collect::<Vec<_>>();
 
         let summaries_len = checkpoint_summaries.len();
         let contents_len = checkpoint_contents.len();
         let summaries_by_digest_len = checkpoint_summaries_by_digest.len();
-        let contents_by_digest_len = checkpoint_contents_by_digest.len();
 
         let fetches = self.multi_fetch(keys).await;
 
-        let input_slices = [
-            summaries_len,
-            contents_len,
-            summaries_by_digest_len,
-            contents_by_digest_len,
-        ];
+        let input_slices = [summaries_len, contents_len, summaries_by_digest_len];
 
         let result_slices = multi_split_slice(&fetches, &input_slices);
 
@@ -489,23 +479,10 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
                 })
             })
             .collect::<Vec<_>>();
-
-        let contents_by_digest_results = result_slices[3]
-            .iter()
-            .zip(checkpoint_contents_by_digest.iter())
-            .map(map_fetch)
-            .map(|maybe_bytes| {
-                maybe_bytes.and_then(|(bytes, digest)| {
-                    deser_check_digest(digest, bytes, |c: &CheckpointContents| *c.digest())
-                })
-            })
-            .collect::<Vec<_>>();
-
         Ok((
             summaries_results,
             contents_results,
             summaries_by_digest_results,
-            contents_by_digest_results,
         ))
     }
 
@@ -568,5 +545,27 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
             .collect::<Vec<_>>();
 
         Ok(results)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn multi_get_events_by_tx_digests(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        let keys = digests
+            .iter()
+            .map(|digest| Key::EventsByTxDigest(*digest))
+            .collect::<Vec<_>>();
+        Ok(self
+            .multi_fetch(keys)
+            .await
+            .iter()
+            .zip(digests.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes
+                    .and_then(|(bytes, key)| deser::<_, TransactionEvents>(&key, &bytes.slice(1..)))
+            })
+            .collect::<Vec<_>>())
     }
 }

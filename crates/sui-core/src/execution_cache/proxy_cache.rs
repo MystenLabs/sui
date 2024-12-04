@@ -21,7 +21,7 @@ use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::bridge::Bridge;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, PackageObject};
@@ -64,7 +64,8 @@ impl ProxyCache {
         let cache_type = epoch_start_config.execution_cache_type();
         tracing::info!("using cache impl {:?}", cache_type);
         let passthrough_cache = PassthroughCache::new(store.clone(), metrics.clone());
-        let writeback_cache = WritebackCache::new(store.clone(), metrics.clone());
+        let writeback_cache =
+            WritebackCache::new(&Default::default(), store.clone(), metrics.clone());
 
         Self {
             passthrough_cache,
@@ -104,48 +105,34 @@ impl ObjectCacheRead for ProxyCache {
         delegate_method!(self.force_reload_system_packages(system_package_ids))
     }
 
-    fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_object(&self, id: &ObjectID) -> Option<Object> {
         delegate_method!(self.get_object(id))
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         delegate_method!(self.get_object_by_key(object_id, version))
     }
 
-    fn multi_get_objects_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey]) -> Vec<Option<Object>> {
         delegate_method!(self.multi_get_objects_by_key(object_keys))
     }
 
-    fn object_exists_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<bool> {
+    fn object_exists_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> bool {
         delegate_method!(self.object_exists_by_key(object_id, version))
     }
 
-    fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<bool>> {
+    fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> Vec<bool> {
         delegate_method!(self.multi_object_exists_by_key(object_keys))
     }
 
-    fn get_latest_object_ref_or_tombstone(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_object_ref_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
         delegate_method!(self.get_latest_object_ref_or_tombstone(object_id))
     }
 
     fn get_latest_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectKey, ObjectOrTombstone)>, SuiError> {
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
         delegate_method!(self.get_latest_object_or_tombstone(object_id))
     }
 
@@ -153,7 +140,7 @@ impl ObjectCacheRead for ProxyCache {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> Option<Object> {
         delegate_method!(self.find_object_lt_or_eq_version(object_id, version))
     }
 
@@ -182,7 +169,7 @@ impl ObjectCacheRead for ProxyCache {
         object_id: &ObjectID,
         version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
+    ) -> Option<MarkerValue> {
         delegate_method!(self.get_marker_value(object_id, version, epoch_id))
     }
 
@@ -190,11 +177,11 @@ impl ObjectCacheRead for ProxyCache {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+    ) -> Option<(SequenceNumber, MarkerValue)> {
         delegate_method!(self.get_latest_marker(object_id, epoch_id))
     }
 
-    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+    fn get_highest_pruned_checkpoint(&self) -> CheckpointSequenceNumber {
         delegate_method!(self.get_highest_pruned_checkpoint())
     }
 }
@@ -203,35 +190,35 @@ impl TransactionCacheRead for ProxyCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<Arc<VerifiedTransaction>>>> {
+    ) -> Vec<Option<Arc<VerifiedTransaction>>> {
         delegate_method!(self.multi_get_transaction_blocks(digests))
     }
 
     fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+    ) -> Vec<Option<TransactionEffectsDigest>> {
         delegate_method!(self.multi_get_executed_effects_digests(digests))
     }
 
     fn multi_get_effects(
         &self,
         digests: &[TransactionEffectsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+    ) -> Vec<Option<TransactionEffects>> {
         delegate_method!(self.multi_get_effects(digests))
     }
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
+    ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>> {
         delegate_method!(self.notify_read_executed_effects_digests(digests))
     }
 
     fn multi_get_events(
         &self,
         event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+    ) -> Vec<Option<TransactionEvents>> {
         delegate_method!(self.multi_get_events(event_digests))
     }
 }
@@ -241,7 +228,7 @@ impl ExecutionCacheWrite for ProxyCache {
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
-    ) -> BoxFuture<'_, SuiResult> {
+    ) -> BoxFuture<'_, ()> {
         delegate_method!(self.write_transaction_outputs(epoch_id, tx_outputs))
     }
 
@@ -249,12 +236,14 @@ impl ExecutionCacheWrite for ProxyCache {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> BoxFuture<'a, SuiResult> {
         delegate_method!(self.acquire_transaction_locks(
             epoch_store,
             owned_input_objects,
-            transaction
+            tx_digest,
+            signed_transaction
         ))
     }
 }
@@ -310,14 +299,11 @@ impl ExecutionCacheCommit for ProxyCache {
         &'a self,
         epoch: EpochId,
         digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult> {
+    ) -> BoxFuture<'a, ()> {
         delegate_method!(self.commit_transaction_outputs(epoch, digests))
     }
 
-    fn persist_transactions<'a>(
-        &'a self,
-        digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult> {
+    fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
         delegate_method!(self.persist_transactions(digests))
     }
 }
@@ -326,14 +312,14 @@ impl CheckpointCache for ProxyCache {
     fn deprecated_get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
-    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+    ) -> Option<(EpochId, CheckpointSequenceNumber)> {
         delegate_method!(self.deprecated_get_transaction_checkpoint(digest))
     }
 
     fn deprecated_multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
+    ) -> Vec<Option<(EpochId, CheckpointSequenceNumber)>> {
         delegate_method!(self.deprecated_multi_get_transaction_checkpoint(digests))
     }
 
@@ -342,28 +328,25 @@ impl CheckpointCache for ProxyCache {
         digests: &[TransactionDigest],
         epoch: EpochId,
         sequence: CheckpointSequenceNumber,
-    ) -> SuiResult {
+    ) {
         delegate_method!(self.deprecated_insert_finalized_transactions(digests, epoch, sequence))
     }
 }
 
 impl ExecutionCacheReconfigAPI for ProxyCache {
-    fn insert_genesis_object(&self, object: Object) -> SuiResult {
+    fn insert_genesis_object(&self, object: Object) {
         delegate_method!(self.insert_genesis_object(object))
     }
 
-    fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult {
+    fn bulk_insert_genesis_objects(&self, objects: &[Object]) {
         delegate_method!(self.bulk_insert_genesis_objects(objects))
     }
 
-    fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {
+    fn revert_state_update(&self, digest: &TransactionDigest) {
         delegate_method!(self.revert_state_update(digest))
     }
 
-    fn set_epoch_start_configuration(
-        &self,
-        epoch_start_config: &EpochStartConfiguration,
-    ) -> SuiResult {
+    fn set_epoch_start_configuration(&self, epoch_start_config: &EpochStartConfiguration) {
         delegate_method!(self.set_epoch_start_configuration(epoch_start_config))
     }
 
@@ -407,14 +390,14 @@ impl StateSyncAPI for ProxyCache {
         &self,
         transaction: &VerifiedTransaction,
         transaction_effects: &TransactionEffects,
-    ) -> SuiResult {
+    ) {
         delegate_method!(self.insert_transaction_and_effects(transaction, transaction_effects))
     }
 
     fn multi_insert_transaction_and_effects(
         &self,
         transactions_and_effects: &[VerifiedExecutionData],
-    ) -> SuiResult {
+    ) {
         delegate_method!(self.multi_insert_transaction_and_effects(transactions_and_effects))
     }
 }

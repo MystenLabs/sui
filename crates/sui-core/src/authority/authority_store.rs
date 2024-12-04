@@ -593,7 +593,7 @@ impl AuthorityStore {
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
         for id in objects {
-            result.push(self.get_object(id)?);
+            result.push(self.get_object(id));
         }
         Ok(result)
     }
@@ -993,9 +993,9 @@ impl AuthorityStore {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult {
-        let tx_digest = *transaction.digest();
         let epoch = epoch_store.epoch();
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
@@ -1067,7 +1067,7 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            epoch_tables.write_transaction_locks(transaction, locks_to_write.into_iter())?;
+            epoch_tables.write_transaction_locks(signed_transaction, locks_to_write.into_iter())?;
         }
 
         Ok(())
@@ -1920,18 +1920,11 @@ impl AccumulatorStore for AuthorityStore {
 
 impl ObjectStore for AuthorityStore {
     /// Read an object and return it, or Ok(None) if the object was not found.
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.perpetual_tables.as_ref().get_object(object_id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         self.perpetual_tables.get_object_by_key(object_id, version)
     }
 }

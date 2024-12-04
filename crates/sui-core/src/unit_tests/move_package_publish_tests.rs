@@ -89,7 +89,7 @@ async fn test_publishing_with_unpublished_deps() {
 
     assert!(effects.status().is_ok());
     assert_eq!(effects.created().len(), 1);
-    let ((_, v, _), owner) = effects.created()[0];
+    let ((_, v, _), owner) = effects.created()[0].clone();
 
     // Check that calling the function does what we expect
     assert!(matches!(
@@ -105,7 +105,7 @@ async fn test_publish_empty_package() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
     let rgp = authority.reference_gas_price_for_testing().unwrap();
-    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object = authority.get_object(&gas).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     // empty package
@@ -157,7 +157,7 @@ async fn test_publish_duplicate_modules() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
-    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object = authority.get_object(&gas).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let rgp = authority.reference_gas_price_for_testing().unwrap();
 
@@ -321,7 +321,7 @@ async fn test_publish_extraneous_bytes_modules() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
-    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object = authority.get_object(&gas).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let rgp = authority.reference_gas_price_for_testing().unwrap();
 
@@ -345,7 +345,7 @@ async fn test_publish_extraneous_bytes_modules() {
     assert_eq!(result.status(), &ExecutionStatus::Success);
 
     // make the bytes invalid
-    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object = authority.get_object(&gas).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let mut modules = correct_modules.clone();
     modules[0].push(0);
@@ -372,7 +372,7 @@ async fn test_publish_extraneous_bytes_modules() {
     );
 
     // make the bytes invalid, in a different way
-    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object = authority.get_object(&gas).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let mut modules = correct_modules.clone();
     let first_module = modules[0].clone();
@@ -400,7 +400,7 @@ async fn test_publish_extraneous_bytes_modules() {
     );
 
     // make the bytes invalid by adding metadata
-    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object = authority.get_object(&gas).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let mut modules = correct_modules.clone();
     let new_bytes = {

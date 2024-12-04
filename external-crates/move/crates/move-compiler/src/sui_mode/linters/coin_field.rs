@@ -10,12 +10,13 @@ use crate::{
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::DatatypeName,
+    sui_mode::SUI_ADDR_VALUE,
     typing::{ast as T, visitor::simple_visitor},
 };
 
 use super::{
     LinterDiagnosticCategory, LinterDiagnosticCode, COIN_MOD_NAME, COIN_STRUCT_NAME,
-    LINT_WARNING_PREFIX, SUI_PKG_NAME,
+    LINT_WARNING_PREFIX,
 };
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
@@ -62,7 +63,7 @@ fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
         T::Ref(_, inner_t) => is_field_coin_type(inner_t),
         T::Apply(_, tname, _) => {
             let sp!(_, tname) = tname;
-            tname.is(SUI_PKG_NAME, COIN_MOD_NAME, COIN_STRUCT_NAME)
+            tname.is(&SUI_ADDR_VALUE, COIN_MOD_NAME, COIN_STRUCT_NAME)
         }
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => {
             false

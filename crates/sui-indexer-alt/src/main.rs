@@ -1,25 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use std::path::Path;
+
+use anyhow::bail;
+use anyhow::Context;
+use anyhow::Result;
 use clap::Parser;
+use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
-use sui_indexer_alt::bootstrap::bootstrap;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::db::reset_database;
-use sui_indexer_alt::{
-    args::Args,
-    handlers::{
-        ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-        kv_objects::KvObjects, kv_transactions::KvTransactions, obj_versions::ObjVersions,
-        sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays, sum_obj_types::SumObjTypes,
-        sum_packages::SumPackages, tx_affected_addresses::TxAffectedAddress,
-        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-        tx_calls_fun::TxCallsFun, tx_digests::TxDigests, tx_kinds::TxKinds,
-        wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
-    },
-    Indexer,
-};
-use tokio_util::sync::CancellationToken;
+use sui_indexer_alt::start_indexer;
+use tokio::fs;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,47 +24,81 @@ async fn main() -> Result<()> {
         .with_env()
         .init();
 
-    let cancel = CancellationToken::new();
-
     match args.command {
         Command::Indexer {
-            indexer,
-            consistent_range: lag,
+            client_args,
+            indexer_args,
+            config,
         } => {
-            let retry_interval = indexer.ingestion_config.retry_interval;
-            let mut indexer = Indexer::new(args.db_config, indexer, cancel.clone()).await?;
+            let indexer_config = read_config(&config).await?;
 
-            bootstrap(&indexer, retry_interval, cancel.clone()).await?;
-
-            indexer.concurrent_pipeline::<EvEmitMod>().await?;
-            indexer.concurrent_pipeline::<EvStructInst>().await?;
-            indexer.concurrent_pipeline::<KvCheckpoints>().await?;
-            indexer.concurrent_pipeline::<KvObjects>().await?;
-            indexer.concurrent_pipeline::<KvTransactions>().await?;
-            indexer.concurrent_pipeline::<ObjVersions>().await?;
-            indexer.concurrent_pipeline::<TxAffectedAddress>().await?;
-            indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
-            indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
-            indexer.concurrent_pipeline::<TxCallsFun>().await?;
-            indexer.concurrent_pipeline::<TxDigests>().await?;
-            indexer.concurrent_pipeline::<TxKinds>().await?;
-            indexer.concurrent_pipeline::<TxKinds>().await?;
-            indexer.concurrent_pipeline::<WalCoinBalances>().await?;
-            indexer.concurrent_pipeline::<WalObjTypes>().await?;
-            indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;
-            indexer.sequential_pipeline::<SumDisplays>(None).await?;
-            indexer.sequential_pipeline::<SumObjTypes>(lag).await?;
-            indexer.sequential_pipeline::<SumPackages>(None).await?;
-
-            let h_indexer = indexer.run().await.context("Failed to start indexer")?;
-
-            cancel.cancelled().await;
-            let _ = h_indexer.await;
+            start_indexer(
+                args.db_args,
+                indexer_args,
+                client_args,
+                indexer_config,
+                true,
+            )
+            .await?;
         }
+
+        Command::GenerateConfig => {
+            let config = IndexerConfig::example();
+            let config_toml = toml::to_string_pretty(&config)
+                .context("Failed to serialize default configuration to TOML.")?;
+
+            println!("{config_toml}");
+        }
+
+        Command::MergeConfigs { config } => {
+            let mut files = config.into_iter();
+
+            let Some(file) = files.next() else {
+                bail!("At least one configuration file must be provided.");
+            };
+
+            let mut indexer_config = read_config(&file).await?;
+            for file in files {
+                indexer_config =
+                    indexer_config.merge(read_config(&file).await.with_context(|| {
+                        format!("Failed to read configuration file: {}", file.display())
+                    })?);
+            }
+
+            let config_toml = toml::to_string_pretty(&indexer_config)
+                .context("Failed to serialize merged configuration to TOML.")?;
+
+            println!("{config_toml}");
+        }
+
         Command::ResetDatabase { skip_migrations } => {
-            reset_database(args.db_config, skip_migrations).await?;
+            reset_database(args.db_args, skip_migrations).await?;
+        }
+
+        #[cfg(feature = "benchmark")]
+        Command::Benchmark {
+            benchmark_args,
+            config,
+        } => {
+            let config_contents = fs::read_to_string(config)
+                .await
+                .context("failed to read configuration TOML file")?;
+
+            let indexer_config: IndexerConfig = toml::from_str(&config_contents)
+                .context("Failed to parse configuration TOML file.")?;
+
+            sui_indexer_alt::benchmark::run_benchmark(args.db_args, benchmark_args, indexer_config)
+                .await?;
         }
     }
 
     Ok(())
+}
+
+async fn read_config(path: &Path) -> Result<IndexerConfig> {
+    let config_contents = fs::read_to_string(path)
+        .await
+        .context("Failed to read configuration TOML file")?;
+
+    toml::from_str(&config_contents).context("Failed to parse configuration TOML file.")
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Base64};
+use fastcrypto::encoding::Base64;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -23,7 +23,6 @@ use tabled::settings::Style as TableStyle;
 use crate::{type_and_fields_from_move_event_data, Page};
 use sui_types::sui_serde::SuiStructTag;
 
-#[cfg(any(feature = "test-utils", test))]
 use std::str::FromStr;
 
 pub type EventPage = Page<SuiEvent, EventID>;
@@ -52,9 +51,9 @@ pub struct SuiEvent {
     pub type_: StructTag,
     /// Parsed json value of the event
     pub parsed_json: Value,
-    #[serde_as(as = "Base58")]
-    #[schemars(with = "Base58")]
-    /// Base 58 encoded bcs bytes of the move event
+    #[serde_as(as = "Base64")]
+    #[schemars(with = "Base64")]
+    /// Base64 encoded bcs bytes of the move event
     pub bcs: Vec<u8>,
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,7 +153,6 @@ impl Display for SuiEvent {
     }
 }
 
-#[cfg(any(feature = "test-utils", test))]
 impl SuiEvent {
     pub fn random_for_testing() -> Self {
         Self {

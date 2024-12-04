@@ -64,9 +64,10 @@ pub struct OrderFill {
 
 #[derive(Queryable)]
 pub struct OrderFillSummary {
+    pub pool_id: String,
     pub maker_balance_manager_id: String,
     pub taker_balance_manager_id: String,
-    pub base_quantity: i64,
+    pub quantity: i64,
 }
 
 #[derive(QueryableByName, Debug, Serialize)]

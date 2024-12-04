@@ -654,20 +654,18 @@ impl SequencedConsensusTransactionKind {
 
     pub fn is_executable_transaction(&self) -> bool {
         match self {
-            SequencedConsensusTransactionKind::External(ext) => ext.is_certified_transaction(),
+            SequencedConsensusTransactionKind::External(ext) => ext.is_executable_transaction(),
             SequencedConsensusTransactionKind::System(_) => true,
         }
     }
 
     pub fn executable_transaction_digest(&self) -> Option<TransactionDigest> {
         match self {
-            SequencedConsensusTransactionKind::External(ext) => {
-                if let ConsensusTransactionKind::CertifiedTransaction(txn) = &ext.kind {
-                    Some(*txn.digest())
-                } else {
-                    None
-                }
-            }
+            SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
+                ConsensusTransactionKind::CertifiedTransaction(txn) => Some(*txn.digest()),
+                ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
+                _ => None,
+            },
             SequencedConsensusTransactionKind::System(txn) => Some(*txn.digest()),
         }
     }
@@ -712,14 +710,17 @@ impl SequencedConsensusTransaction {
             // which will eventually fail when the randomness state object is not found.
             return false;
         }
-        let SequencedConsensusTransactionKind::External(ConsensusTransaction {
-            kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
-            ..
-        }) = &self.transaction
-        else {
-            return false;
-        };
-        certificate.transaction_data().uses_randomness()
+        match &self.transaction {
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::CertifiedTransaction(cert),
+                ..
+            }) => cert.transaction_data().uses_randomness(),
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransaction(txn),
+                ..
+            }) => txn.transaction_data().uses_randomness(),
+            _ => false,
+        }
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
@@ -728,6 +729,10 @@ impl SequencedConsensusTransaction {
                 kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
             }) if certificate.contains_shared_object() => Some(certificate.data()),
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransaction(txn),
+                ..
+            }) if txn.contains_shared_object() => Some(txn.data()),
             SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
                 Some(txn.data())
             }
@@ -763,7 +768,6 @@ pub struct ConsensusCommitInfo {
     pub timestamp: u64,
     pub consensus_commit_digest: ConsensusCommitDigest,
 
-    #[cfg(any(test, feature = "test-utils"))]
     skip_consensus_commit_prologue_in_test: bool,
 }
 
@@ -774,12 +778,10 @@ impl ConsensusCommitInfo {
             timestamp: consensus_commit.commit_timestamp_ms(),
             consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
 
-            #[cfg(any(test, feature = "test-utils"))]
             skip_consensus_commit_prologue_in_test: false,
         }
     }
 
-    #[cfg(any(test, feature = "test-utils"))]
     pub fn new_for_test(
         commit_round: u64,
         commit_timestamp: u64,
@@ -793,7 +795,6 @@ impl ConsensusCommitInfo {
         }
     }
 
-    #[cfg(any(test, feature = "test-utils"))]
     pub fn skip_consensus_commit_prologue_in_test(&self) -> bool {
         self.skip_consensus_commit_prologue_in_test
     }
@@ -968,6 +969,7 @@ mod tests {
         crypto::deterministic_random_account_key,
         messages_consensus::{
             AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
+            TransactionIndex,
         },
         object::Object,
         supported_protocol_versions::SupportedProtocolVersions,
@@ -1298,7 +1300,7 @@ mod tests {
             }
             let digest = t.digest();
             assert!(
-                !state.is_tx_already_executed(digest).unwrap(),
+                !state.is_tx_already_executed(digest),
                 "Rejected transaction {} {} should not have been executed",
                 i,
                 digest
@@ -1315,8 +1317,8 @@ mod tests {
             vec![
                 "cap(10)".to_string(),
                 "cap(1)".to_string(),
-                "user(100)".to_string(),
-                "user(42)".to_string(),
+                "certified(100)".to_string(),
+                "certified(42)".to_string(),
             ]
         );
 
@@ -1336,12 +1338,12 @@ mod tests {
             vec![
                 "cap(10)".to_string(),
                 "cap(1)".to_string(),
-                "user(1200)".to_string(),
-                "user(1000)".to_string(),
-                "user(1000)".to_string(),
-                "user(100)".to_string(),
-                "user(42)".to_string(),
-                "user(12)".to_string(),
+                "certified(1200)".to_string(),
+                "certified(1000)".to_string(),
+                "certified(1000)".to_string(),
+                "certified(100)".to_string(),
+                "certified(42)".to_string(),
+                "certified(12)".to_string(),
             ]
         );
 
@@ -1380,6 +1382,9 @@ mod tests {
                     format!("cap({})", cap.generation)
                 }
                 ConsensusTransactionKind::CertifiedTransaction(txn) => {
+                    format!("certified({})", txn.transaction_data().gas_price())
+                }
+                ConsensusTransactionKind::UserTransaction(txn) => {
                     format!("user({})", txn.transaction_data().gas_price())
                 }
                 _ => unreachable!(),

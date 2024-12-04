@@ -98,15 +98,14 @@ where
         prometheus_registry: &Registry,
         reconfig_observer: OnsiteReconfigObserver,
     ) -> Self {
+        let metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
         let notifier = Arc::new(NotifyRead::new());
+        let reconfig_observer = Arc::new(reconfig_observer);
         let quorum_driver_handler = Arc::new(
-            QuorumDriverHandlerBuilder::new(
-                validators,
-                Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
-            )
-            .with_notifier(notifier.clone())
-            .with_reconfig_observer(Arc::new(reconfig_observer))
-            .start(),
+            QuorumDriverHandlerBuilder::new(validators.clone(), metrics.clone())
+                .with_notifier(notifier.clone())
+                .with_reconfig_observer(reconfig_observer.clone())
+                .start(),
         );
 
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();
@@ -385,17 +384,7 @@ where
                 metrics.local_execution_timeout.inc();
                 Err(SuiError::TimeoutError)
             }
-            Ok(Err(err)) => {
-                debug!(
-                    ?tx_digest,
-                    "Waiting for finalized tx to be executed locally failed with error: {:?}", err
-                );
-                metrics.local_execution_failure.inc();
-                Err(SuiError::TransactionOrchestratorLocalExecutionError {
-                    error: err.to_string(),
-                })
-            }
-            Ok(Ok(_)) => {
+            Ok(_) => {
                 metrics.local_execution_success.inc();
                 Ok(())
             }
@@ -553,7 +542,6 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_in_flight: GenericGauge<AtomicI64>,
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
-    local_execution_failure: GenericCounter<AtomicU64>,
 
     request_latency_single_writer: Histogram,
     request_latency_shared_obj: Histogram,
@@ -670,12 +658,6 @@ impl TransactionOrchestratorMetrics {
             local_execution_timeout: register_int_counter_with_registry!(
                 "tx_orchestrator_local_execution_timeout",
                 "Total number of timed-out local execution txns Transaction Orchestrator handles",
-                registry,
-            )
-            .unwrap(),
-            local_execution_failure: register_int_counter_with_registry!(
-                "tx_orchestrator_local_execution_failure",
-                "Total number of failed local execution txns Transaction Orchestrator handles",
                 registry,
             )
             .unwrap(),

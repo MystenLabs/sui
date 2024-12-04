@@ -7,9 +7,10 @@ use std::sync::Arc;
 use anyhow::Error;
 use async_trait::async_trait;
 use futures::StreamExt;
-use prometheus::{IntCounterVec, IntGauge, IntGaugeVec};
+use prometheus::{IntGauge, IntGaugeVec};
 use tokio::task::JoinHandle;
 
+use crate::metrics::IndexerMetricProvider;
 use crate::{Task, Tasks};
 use mysten_metrics::{metered_channel, spawn_monitored_task};
 use tap::tap::TapFallible;
@@ -164,7 +165,7 @@ impl<P, D, M> Indexer<P, D, M> {
         let ongoing_tasks = self.storage.get_ongoing_tasks(&self.name).await?;
         let largest_checkpoint = self
             .storage
-            .get_largest_backfill_task_target_checkpoint(&self.name)
+            .get_largest_indexed_checkpoint(&self.name)
             .await?;
         let live_task_from_checkpoint = self.datasource.get_live_task_starting_checkpoint().await?;
 
@@ -337,10 +338,7 @@ pub trait IndexerProgressStore: Send {
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Tasks, Error>;
 
-    async fn get_largest_backfill_task_target_checkpoint(
-        &self,
-        task_prefix: &str,
-    ) -> Result<Option<u64>, Error>;
+    async fn get_largest_indexed_checkpoint(&self, prefix: &str) -> Result<Option<u64>, Error>;
 
     async fn register_task(
         &mut self,
@@ -403,7 +401,9 @@ pub trait Datasource<T: Send>: Sync + Send {
         let is_live_task = task.is_live_task;
         let _live_tasks_tracker = if is_live_task {
             Some(LiveTasksTracker::new(
-                self.get_inflight_live_tasks_metrics().clone(),
+                self.metric_provider()
+                    .get_inflight_live_tasks_metrics()
+                    .clone(),
                 &task_name,
             ))
         } else {
@@ -411,11 +411,13 @@ pub trait Datasource<T: Send>: Sync + Send {
         };
         let join_handle = self.start_data_retrieval(task.clone(), data_sender).await?;
         let processed_checkpoints_metrics = self
+            .metric_provider()
             .get_tasks_processed_checkpoints_metric()
             .with_label_values(&[task_name_prefix, task_type_label]);
         // track remaining checkpoints per task, except for live task
         let remaining_checkpoints_metric = if !is_live_task {
             let remaining = self
+                .metric_provider()
                 .get_tasks_remaining_checkpoints_metric()
                 .with_label_values(&[task_name_prefix]);
             remaining.set((target_checkpoint - starting_checkpoint + 1) as i64);
@@ -547,11 +549,7 @@ pub trait Datasource<T: Send>: Sync + Send {
 
     fn get_genesis_height(&self) -> u64;
 
-    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
-
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec;
-
-    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec;
+    fn metric_provider(&self) -> &dyn IndexerMetricProvider;
 }
 
 pub enum BackfillStrategy {

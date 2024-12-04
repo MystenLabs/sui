@@ -148,6 +148,7 @@ pub fn program(
 ) -> G::Program {
     let H::Program {
         modules: hmodules,
+        warning_filters_table,
         info,
     } = prog;
 
@@ -157,6 +158,7 @@ pub fn program(
 
     let mut program = G::Program {
         modules,
+        warning_filters_table,
         info: info.clone(),
     };
     visit_program(&mut context, &mut program);
@@ -191,7 +193,7 @@ fn module(
         constants: hconstants,
     } = mdef;
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let constants = constants(context, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.pop_warning_filter_scope();
@@ -247,7 +249,7 @@ fn constants(
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut diag = diag!(
-                BytecodeGeneration::UnfoldableConstant,
+                CodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&scc[0]).unwrap(),
                     format!("Constant definitions form a circular dependency: {}", names),
@@ -273,7 +275,7 @@ fn constants(
             .collect();
         for node in neighbors {
             context.add_diag(diag!(
-                BytecodeGeneration::UnfoldableConstant,
+                CodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&node).unwrap(),
                     format!(
@@ -423,7 +425,7 @@ fn constant(
         value: (locals, block),
     } = c;
 
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let final_value = constant_(
         context,
         constant_values,
@@ -515,6 +517,7 @@ fn constant_(
     );
     cfgir::optimize(
         context.env,
+        &context.reporter,
         context.current_package,
         &fake_signature,
         &locals,
@@ -524,7 +527,7 @@ fn constant_(
 
     if blocks.len() != 1 {
         context.add_diag(diag!(
-            BytecodeGeneration::UnfoldableConstant,
+            CodeGeneration::UnfoldableConstant,
             (full_loc, CANNOT_FOLD)
         ));
         return None;
@@ -536,7 +539,7 @@ fn constant_(
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
                 context.add_diag(diag!(
-                    BytecodeGeneration::UnfoldableConstant,
+                    CodeGeneration::UnfoldableConstant,
                     (*cloc, CANNOT_FOLD)
                 ));
                 continue;
@@ -558,7 +561,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     match &e.exp.value {
         E::Value(_) => (),
         _ => context.add_diag(diag!(
-            BytecodeGeneration::UnfoldableConstant,
+            CodeGeneration::UnfoldableConstant,
             (e.exp.loc, CANNOT_FOLD)
         )),
     }
@@ -598,13 +601,14 @@ fn function(
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         compiled_visibility,
         entry,
         signature,
         body,
     } = f;
-    context.push_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter);
     let body = function_body(
         context,
         module,
@@ -620,6 +624,7 @@ fn function(
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         compiled_visibility,
         entry,
@@ -673,6 +678,7 @@ fn function_body(
             if !context.env.has_errors() {
                 cfgir::optimize(
                     context.env,
+                    &context.reporter,
                     context.current_package,
                     signature,
                     &locals,
@@ -1062,6 +1068,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             warning_filter: _,
             index: _,
             attributes,
+            loc: _,
             compiled_visibility: _,
             visibility,
             entry,

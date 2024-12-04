@@ -7,32 +7,41 @@ import { decodeSuiPrivateKey, Keypair } from '@mysten/sui/cryptography';
 import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { toBase64 } from '@mysten/sui/utils';
+import { MIST_PER_SUI, toBase64 } from '@mysten/sui/utils';
 import { beforeAll, expect, test } from 'vitest';
 
-import { getSentTransactionsWithLinks, ZkSendLink, ZkSendLinkBuilder } from './index.js';
+import {
+	getSentTransactionsWithLinks,
+	listCreatedLinks,
+	ZkSendLink,
+	ZkSendLinkBuilder,
+} from './index.js';
 
 export const DEMO_BEAR_CONFIG = {
 	packageId: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65',
 	type: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65::demo_bear::DemoBear',
 };
 
-export const ZK_BAG_CONFIG = {
-	packageId: '0x036fee67274d0d85c3532f58296abe0dee86b93864f1b2b9074be6adb388f138',
-	bagStoreId: '0x5c63e71734c82c48a3cb9124c54001d1a09736cfb1668b3b30cd92a96dd4d0ce',
-	bagStoreTableId: '0x4e1bc4085d64005e03eb4eab2510d527aeba9548cda431cb8f149ff37451f870',
-};
-
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
 });
-const keypair = new Ed25519Keypair();
+
+// address:  0x8ab2b2a5cfa538db19062b79622abe28f3171c8b8048c5957b01846d57574630
+const keypair = Ed25519Keypair.fromSecretKey(
+	'suiprivkey1qz3v0pjxalg3z3p9p6lp4x84y74g0qt2y2q36amvkgfh9zzmm4q66y6ccdz',
+);
 
 // Automatically get gas from testnet is not working reliably, manually request gas via discord,
 // or uncomment the beforeAll and gas function below
 beforeAll(async () => {
-	await getSuiFromFaucet(keypair);
-});
+	const balance = await client.getBalance({
+		owner: keypair.toSuiAddress(),
+	});
+
+	if (Number(balance.totalBalance) < Number(MIST_PER_SUI) * 0.02) {
+		await getSuiFromFaucet(keypair);
+	}
+}, 30_000);
 
 async function getSuiFromFaucet(keypair: Keypair) {
 	const faucetHost = getFaucetHost('testnet');
@@ -51,289 +60,257 @@ async function getSuiFromFaucet(keypair: Keypair) {
 }
 
 describe('Contract links', () => {
-	test(
-		'create and claim link',
-		async () => {
+	test('create and claim link', async () => {
+		const link = new ZkSendLinkBuilder({
+			client,
+			network: 'testnet',
+			sender: keypair.toSuiAddress(),
+		});
+
+		const bears = await createBears(3);
+
+		for (const bear of bears) {
+			link.addClaimableObject(bear.objectId);
+		}
+
+		link.addClaimableMist(100n);
+
+		const linkUrl = link.getLink();
+
+		await link.create({
+			signer: keypair,
+			waitForTransaction: true,
+		});
+
+		const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+
+			client,
+		});
+
+		const claimableAssets = claimLink.assets!;
+
+		expect(claimLink.claimed).toEqual(false);
+		expect(claimableAssets.nfts.length).toEqual(3);
+		expect(claimableAssets.balances).toMatchInlineSnapshot(`
+				[
+				  {
+				    "amount": 100n,
+				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+				  },
+				]
+			`);
+
+		const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+
+		const res = await client.waitForTransaction({
+			digest: claim.digest,
+			options: {
+				showObjectChanges: true,
+			},
+		});
+
+		expect(res.objectChanges?.length).toEqual(
+			3 + // bears,
+				1 + // coin
+				1 + // gas
+				1, // bag
+		);
+
+		const link2 = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+		});
+		expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+		expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
+			claimLink.assets?.nfts.map((nft) => nft.objectId),
+		);
+		expect(link2.claimed).toEqual(true);
+	}, 30_000);
+
+	test('regenerate links', async () => {
+		const linkKp = new Ed25519Keypair();
+
+		const link = new ZkSendLinkBuilder({
+			keypair: linkKp,
+			client,
+			network: 'testnet',
+			sender: keypair.toSuiAddress(),
+		});
+
+		const bears = await createBears(3);
+
+		for (const bear of bears) {
+			link.addClaimableObject(bear.objectId);
+		}
+
+		link.addClaimableMist(100n);
+
+		const { digest } = await link.create({
+			signer: keypair,
+			waitForTransaction: true,
+		});
+
+		await client.waitForTransaction({ digest });
+
+		const {
+			data: [
+				{
+					links: [lostLink],
+				},
+			],
+		} = await getSentTransactionsWithLinks({
+			address: keypair.toSuiAddress(),
+			network: 'testnet',
+		});
+
+		const { url, transaction } = await lostLink.createRegenerateTransaction(keypair.toSuiAddress());
+
+		const result = await client.signAndExecuteTransaction({
+			transaction,
+			signer: keypair,
+			options: {
+				showEffects: true,
+				showObjectChanges: true,
+			},
+		});
+
+		await client.waitForTransaction({ digest: result.digest });
+
+		const claimLink = await ZkSendLink.fromUrl(url, {
+			network: 'testnet',
+		});
+
+		expect(claimLink.assets?.nfts.length).toEqual(3);
+		expect(claimLink.assets?.balances).toMatchInlineSnapshot(`
+				[
+				  {
+				    "amount": 100n,
+				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+				  },
+				]
+			`);
+
+		const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+
+		const res = await client.waitForTransaction({
+			digest: claim.digest,
+			options: {
+				showObjectChanges: true,
+			},
+		});
+
+		expect(res.objectChanges?.length).toEqual(
+			3 + // bears,
+				1 + // coin
+				1 + // gas
+				1, // bag
+		);
+		const link2 = await ZkSendLink.fromUrl(url, {
+			network: 'testnet',
+		});
+		expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+		expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
+			claimLink.assets?.nfts.map((nft) => nft.objectId),
+		);
+		expect(link2.claimed).toEqual(true);
+	}, 30_000);
+
+	test('reclaim links', async () => {
+		const linkKp = new Ed25519Keypair();
+
+		const link = new ZkSendLinkBuilder({
+			keypair: linkKp,
+			client,
+			network: 'testnet',
+			sender: keypair.toSuiAddress(),
+		});
+
+		const bears = await createBears(3);
+
+		for (const bear of bears) {
+			link.addClaimableObject(bear.objectId);
+		}
+
+		link.addClaimableMist(100n);
+
+		const { digest } = await link.create({
+			signer: keypair,
+			waitForTransaction: true,
+		});
+
+		await client.waitForTransaction({ digest });
+
+		const {
+			data: [
+				{
+					links: [lostLink],
+				},
+			],
+		} = await getSentTransactionsWithLinks({
+			address: keypair.toSuiAddress(),
+			network: 'testnet',
+		});
+
+		const { digest: claimDigest } = await lostLink.claimAssets(keypair.toSuiAddress(), {
+			reclaim: true,
+			sign: async (tx) => (await keypair.signTransaction(tx)).signature,
+		});
+
+		const result = await client.waitForTransaction({
+			digest: claimDigest,
+			options: { showObjectChanges: true, showEffects: true },
+		});
+
+		expect(result.objectChanges?.length).toEqual(
+			3 + // bears,
+				1 + // coin
+				1 + // gas
+				1, // bag
+		);
+	}, 30_000);
+
+	test('bulk link creation', async () => {
+		const bears = await createBears(3);
+
+		const links = [];
+		for (const bear of bears) {
 			const link = new ZkSendLinkBuilder({
 				client,
-				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
 				sender: keypair.toSuiAddress(),
 			});
 
-			const bears = await createBears(3);
-
-			for (const bear of bears) {
-				link.addClaimableObject(bear.objectId);
-			}
-
 			link.addClaimableMist(100n);
+			link.addClaimableObject(bear.objectId);
 
+			links.push(link);
+		}
+
+		const tx = await ZkSendLinkBuilder.createLinks({
+			links,
+			client,
+			network: 'testnet',
+		});
+
+		const result = await client.signAndExecuteTransaction({
+			transaction: tx,
+			signer: keypair,
+		});
+
+		await client.waitForTransaction({ digest: result.digest });
+
+		for (const link of links) {
 			const linkUrl = link.getLink();
 
-			await link.create({
-				signer: keypair,
-				waitForTransaction: true,
-			});
-
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
 			});
 
 			const claimableAssets = claimLink.assets!;
 
 			expect(claimLink.claimed).toEqual(false);
-			expect(claimableAssets.nfts.length).toEqual(3);
+			expect(claimableAssets.nfts.length).toEqual(1);
 			expect(claimableAssets.balances).toMatchInlineSnapshot(`
-				[
-				  {
-				    "amount": 100n,
-				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
-				  },
-				]
-			`);
-
-			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
-
-			const res = await client.waitForTransaction({
-				digest: claim.digest,
-				options: {
-					showObjectChanges: true,
-				},
-			});
-
-			expect(res.objectChanges?.length).toEqual(
-				3 + // bears,
-					1 + // coin
-					1 + // gas
-					1, // bag
-			);
-
-			const link2 = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
-				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-			});
-			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
-			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
-				claimLink.assets?.nfts.map((nft) => nft.objectId),
-			);
-			expect(link2.claimed).toEqual(true);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
-
-	test(
-		'regenerate links',
-		async () => {
-			const linkKp = new Ed25519Keypair();
-
-			const link = new ZkSendLinkBuilder({
-				keypair: linkKp,
-				client,
-				contract: ZK_BAG_CONFIG,
-				sender: keypair.toSuiAddress(),
-			});
-
-			const bears = await createBears(3);
-
-			for (const bear of bears) {
-				link.addClaimableObject(bear.objectId);
-			}
-
-			link.addClaimableMist(100n);
-
-			const { digest } = await link.create({
-				signer: keypair,
-				waitForTransaction: true,
-			});
-
-			await client.waitForTransaction({ digest });
-
-			const {
-				data: [
-					{
-						links: [lostLink],
-					},
-				],
-			} = await getSentTransactionsWithLinks({
-				address: keypair.toSuiAddress(),
-				network: 'testnet',
-				contract: ZK_BAG_CONFIG,
-			});
-
-			const { url, transaction } = await lostLink.createRegenerateTransaction(
-				keypair.toSuiAddress(),
-			);
-
-			const result = await client.signAndExecuteTransaction({
-				transaction,
-				signer: keypair,
-				options: {
-					showEffects: true,
-					showObjectChanges: true,
-				},
-			});
-
-			await client.waitForTransaction({ digest: result.digest });
-
-			const claimLink = await ZkSendLink.fromUrl(url, {
-				contract: ZK_BAG_CONFIG,
-				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-			});
-
-			expect(claimLink.assets?.nfts.length).toEqual(3);
-			expect(claimLink.assets?.balances).toMatchInlineSnapshot(`
-				[
-				  {
-				    "amount": 100n,
-				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
-				  },
-				]
-			`);
-
-			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
-
-			const res = await client.waitForTransaction({
-				digest: claim.digest,
-				options: {
-					showObjectChanges: true,
-				},
-			});
-
-			expect(res.objectChanges?.length).toEqual(
-				3 + // bears,
-					1 + // coin
-					1 + // gas
-					1, // bag
-			);
-			const link2 = await ZkSendLink.fromUrl(url, {
-				contract: ZK_BAG_CONFIG,
-				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-			});
-			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
-			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
-				claimLink.assets?.nfts.map((nft) => nft.objectId),
-			);
-			expect(link2.claimed).toEqual(true);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
-
-	test(
-		'reclaim links',
-		async () => {
-			const linkKp = new Ed25519Keypair();
-
-			const link = new ZkSendLinkBuilder({
-				keypair: linkKp,
-				client,
-				contract: ZK_BAG_CONFIG,
-				sender: keypair.toSuiAddress(),
-			});
-
-			const bears = await createBears(3);
-
-			for (const bear of bears) {
-				link.addClaimableObject(bear.objectId);
-			}
-
-			link.addClaimableMist(100n);
-
-			const { digest } = await link.create({
-				signer: keypair,
-				waitForTransaction: true,
-			});
-
-			await client.waitForTransaction({ digest });
-
-			const {
-				data: [
-					{
-						links: [lostLink],
-					},
-				],
-			} = await getSentTransactionsWithLinks({
-				address: keypair.toSuiAddress(),
-				network: 'testnet',
-				contract: ZK_BAG_CONFIG,
-			});
-
-			const { digest: claimDigest } = await lostLink.claimAssets(keypair.toSuiAddress(), {
-				reclaim: true,
-				sign: async (tx) => (await keypair.signTransaction(tx)).signature,
-			});
-
-			const result = await client.waitForTransaction({
-				digest: claimDigest,
-				options: { showObjectChanges: true, showEffects: true },
-			});
-
-			expect(result.objectChanges?.length).toEqual(
-				3 + // bears,
-					1 + // coin
-					1 + // gas
-					1, // bag
-			);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
-
-	test(
-		'bulk link creation',
-		async () => {
-			const bears = await createBears(3);
-
-			const links = [];
-			for (const bear of bears) {
-				const link = new ZkSendLinkBuilder({
-					client,
-					contract: ZK_BAG_CONFIG,
-					sender: keypair.toSuiAddress(),
-				});
-
-				link.addClaimableMist(100n);
-				link.addClaimableObject(bear.objectId);
-
-				links.push(link);
-			}
-
-			const tx = await ZkSendLinkBuilder.createLinks({
-				links,
-				client,
-				contract: ZK_BAG_CONFIG,
-			});
-
-			const result = await client.signAndExecuteTransaction({
-				transaction: tx,
-				signer: keypair,
-			});
-
-			await client.waitForTransaction({ digest: result.digest });
-
-			for (const link of links) {
-				const linkUrl = link.getLink();
-
-				const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-					contract: ZK_BAG_CONFIG,
-					network: 'testnet',
-					claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-				});
-
-				const claimableAssets = claimLink.assets!;
-
-				expect(claimLink.claimed).toEqual(false);
-				expect(claimableAssets.nfts.length).toEqual(1);
-				expect(claimableAssets.balances).toMatchInlineSnapshot(`
 					[
 					  {
 					    "amount": 100n,
@@ -342,64 +319,58 @@ describe('Contract links', () => {
 					]
 				`);
 
-				const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-				const res = await client.waitForTransaction({
-					digest: claim.digest,
-					options: {
-						showObjectChanges: true,
-					},
-				});
+			const res = await client.waitForTransaction({
+				digest: claim.digest,
+				options: {
+					showObjectChanges: true,
+				},
+			});
 
-				expect(res.objectChanges?.length).toEqual(
-					1 + // bears,
-						1 + // coin
-						1 + // gas
-						1, // bag
-				);
-			}
-		},
-		{
-			timeout: 60_000,
-		},
-	);
+			expect(res.objectChanges?.length).toEqual(
+				1 + // bears,
+					1 + // coin
+					1 + // gas
+					1, // bag
+			);
+		}
+	}, 60_000);
 });
 
 describe('Non contract links', () => {
-	test(
-		'Links with separate gas coin',
-		async () => {
-			const link = new ZkSendLinkBuilder({
-				client,
-				sender: keypair.toSuiAddress(),
-				contract: null,
-			});
+	test('Links with separate gas coin', async () => {
+		const link = new ZkSendLinkBuilder({
+			client,
+			sender: keypair.toSuiAddress(),
+			network: 'testnet',
+			contract: null,
+		});
 
-			const bears = await createBears(3);
+		const bears = await createBears(3);
 
-			for (const bear of bears) {
-				link.addClaimableObject(bear.objectId);
-			}
+		for (const bear of bears) {
+			link.addClaimableObject(bear.objectId);
+		}
 
-			link.addClaimableMist(100n);
+		link.addClaimableMist(100n);
 
-			const linkUrl = link.getLink();
+		const linkUrl = link.getLink();
 
-			await link.create({
-				signer: keypair,
-				waitForTransaction: true,
-			});
+		// await link.create({
+		// 	signer: keypair,
+		// 	waitForTransaction: true,
+		// });
 
-			// Balances sometimes not updated even though we wait for the transaction to be indexed
-			await new Promise((resolve) => setTimeout(resolve, 3000));
+		// Balances sometimes not updated even though we wait for the transaction to be indexed
+		await new Promise((resolve) => setTimeout(resolve, 3000));
 
-			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
-				network: 'testnet',
-			});
+		const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+		});
 
-			expect(claimLink.assets?.nfts.length).toEqual(3);
-			expect(claimLink.assets?.balances).toMatchInlineSnapshot(`
+		expect(claimLink.assets?.nfts.length).toEqual(3);
+		expect(claimLink.assets?.balances).toMatchInlineSnapshot(`
 					[
 					  {
 					    "amount": 100n,
@@ -408,183 +379,158 @@ describe('Non contract links', () => {
 					]
 				`);
 
-			const claimTx = await claimLink.claimAssets(new Ed25519Keypair().toSuiAddress());
+		const claimTx = await claimLink.claimAssets(new Ed25519Keypair().toSuiAddress());
 
-			const res = await client.waitForTransaction({
-				digest: claimTx.digest,
-				options: {
-					showObjectChanges: true,
-				},
-			});
+		const res = await client.waitForTransaction({
+			digest: claimTx.digest,
+			options: {
+				showObjectChanges: true,
+			},
+		});
 
-			expect(res.objectChanges?.length).toEqual(
-				3 + // bears,
-					1 + // coin
-					1, // gas
-			);
+		expect(res.objectChanges?.length).toEqual(
+			3 + // bears,
+				1 + // coin
+				1, // gas
+		);
 
-			const link2 = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
+		const link2 = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+		});
+		expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+		expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
+			claimLink.assets?.nfts.map((nft) => nft.objectId),
+		);
+		expect(link2.claimed).toEqual(true);
+	}, 30_000);
+
+	test('Links with single coin', async () => {
+		const linkKp = new Ed25519Keypair();
+
+		const tx = new Transaction();
+
+		const [coin] = tx.splitCoins(tx.gas, [5_000_000]);
+		tx.transferObjects([coin], linkKp.toSuiAddress());
+
+		const { digest } = await client.signAndExecuteTransaction({
+			signer: keypair,
+			transaction: tx,
+		});
+
+		await client.waitForTransaction({ digest });
+
+		const claimLink = new ZkSendLink({
+			keypair: linkKp,
+			network: 'testnet',
+			isContractLink: false,
+		});
+
+		await claimLink.loadAssets();
+
+		expect(claimLink.assets?.nfts.length).toEqual(0);
+		expect(claimLink.assets?.balances.length).toEqual(1);
+		expect(claimLink.assets?.balances[0].coinType).toEqual(
+			'0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+		);
+
+		const claimTx = await claimLink.claimAssets(keypair.toSuiAddress());
+
+		const res = await client.waitForTransaction({
+			digest: claimTx.digest,
+			options: {
+				showBalanceChanges: true,
+			},
+		});
+
+		expect(res.balanceChanges?.length).toEqual(2);
+		const link2 = await ZkSendLink.fromUrl(
+			`https://zksend.con/claim#${toBase64(decodeSuiPrivateKey(linkKp.getSecretKey()).secretKey)}`,
+			{
 				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-			});
-			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
-			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
-				claimLink.assets?.nfts.map((nft) => nft.objectId),
-			);
-			expect(link2.claimed).toEqual(true);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
+			},
+		);
+		expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+		expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
+			claimLink.assets?.nfts.map((nft) => nft.objectId),
+		);
+		expect(link2.claimed).toEqual(true);
+	}, 30_000);
 
-	test(
-		'Links with single coin',
-		async () => {
-			const linkKp = new Ed25519Keypair();
+	test('Send to address', async () => {
+		const link = new ZkSendLinkBuilder({
+			client,
+			sender: keypair.toSuiAddress(),
+			network: 'testnet',
+			contract: null,
+		});
 
-			const tx = new Transaction();
+		const bears = await createBears(3);
 
-			const [coin] = tx.splitCoins(tx.gas, [5_000_000]);
-			tx.transferObjects([coin], linkKp.toSuiAddress());
+		for (const bear of bears) {
+			link.addClaimableObject(bear.objectId);
+		}
 
-			const { digest } = await client.signAndExecuteTransaction({
-				signer: keypair,
-				transaction: tx,
-			});
+		link.addClaimableMist(100n);
 
-			await client.waitForTransaction({ digest });
+		const receiver = new Ed25519Keypair();
 
-			const claimLink = new ZkSendLink({
-				keypair: linkKp,
-				network: 'testnet',
-				isContractLink: false,
-			});
+		const tx = await link.createSendToAddressTransaction({
+			address: receiver.toSuiAddress(),
+		});
 
-			await claimLink.loadAssets();
+		const { digest } = await client.signAndExecuteTransaction({
+			transaction: tx,
+			signer: keypair,
+		});
 
-			expect(claimLink.assets?.nfts.length).toEqual(0);
-			expect(claimLink.assets?.balances.length).toEqual(1);
-			expect(claimLink.assets?.balances[0].coinType).toEqual(
-				'0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
-			);
+		await client.waitForTransaction({
+			digest,
+		});
 
-			const claimTx = await claimLink.claimAssets(keypair.toSuiAddress());
+		const objects = await client.getOwnedObjects({
+			owner: receiver.toSuiAddress(),
+		});
 
-			const res = await client.waitForTransaction({
-				digest: claimTx.digest,
-				options: {
-					showBalanceChanges: true,
-				},
-			});
+		expect(objects.data.length).toEqual(4);
+	}, 30_000);
 
-			expect(res.balanceChanges?.length).toEqual(2);
-			const link2 = await ZkSendLink.fromUrl(
-				`https://zksend.con/claim#${toBase64(decodeSuiPrivateKey(linkKp.getSecretKey()).secretKey)}`,
-				{
-					contract: ZK_BAG_CONFIG,
-					network: 'testnet',
-					claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-				},
-			);
-			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
-			expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
-				claimLink.assets?.nfts.map((nft) => nft.objectId),
-			);
-			expect(link2.claimed).toEqual(true);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
+	test('create link with minted assets', async () => {
+		const link = new ZkSendLinkBuilder({
+			client,
+			network: 'testnet',
+			sender: keypair.toSuiAddress(),
+		});
 
-	test(
-		'Send to address',
-		async () => {
-			const link = new ZkSendLinkBuilder({
-				client,
-				sender: keypair.toSuiAddress(),
-				contract: null,
+		const tx = new Transaction();
+
+		for (let i = 0; i < 3; i++) {
+			const bear = tx.moveCall({
+				target: `${DEMO_BEAR_CONFIG.packageId}::demo_bear::new`,
+				arguments: [tx.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`)],
 			});
 
-			const bears = await createBears(3);
+			link.addClaimableObjectRef(bear, DEMO_BEAR_CONFIG.type);
+		}
 
-			for (const bear of bears) {
-				link.addClaimableObject(bear.objectId);
-			}
+		link.addClaimableMist(100n);
 
-			link.addClaimableMist(100n);
+		const linkUrl = link.getLink();
 
-			const receiver = new Ed25519Keypair();
+		await link.create({
+			transaction: tx,
+			signer: keypair,
+			waitForTransaction: true,
+		});
 
-			const tx = await link.createSendToAddressTransaction({
-				address: receiver.toSuiAddress(),
-			});
+		const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+		});
 
-			const { digest } = await client.signAndExecuteTransaction({
-				transaction: tx,
-				signer: keypair,
-			});
+		const claimableAssets = claimLink.assets!;
 
-			await client.waitForTransaction({
-				digest,
-			});
-
-			const objects = await client.getOwnedObjects({
-				owner: receiver.toSuiAddress(),
-			});
-
-			expect(objects.data.length).toEqual(4);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
-
-	test(
-		'create link with minted assets',
-		async () => {
-			const link = new ZkSendLinkBuilder({
-				client,
-				contract: ZK_BAG_CONFIG,
-				sender: keypair.toSuiAddress(),
-			});
-
-			const tx = new Transaction();
-
-			for (let i = 0; i < 3; i++) {
-				const bear = tx.moveCall({
-					target: `${DEMO_BEAR_CONFIG.packageId}::demo_bear::new`,
-					arguments: [
-						tx.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`),
-					],
-				});
-
-				link.addClaimableObjectRef(bear, DEMO_BEAR_CONFIG.type);
-			}
-
-			link.addClaimableMist(100n);
-
-			const linkUrl = link.getLink();
-
-			await link.create({
-				transaction: tx,
-				signer: keypair,
-				waitForTransaction: true,
-			});
-
-			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
-				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-			});
-
-			const claimableAssets = claimLink.assets!;
-
-			expect(claimLink.claimed).toEqual(false);
-			expect(claimableAssets.nfts.length).toEqual(3);
-			expect(claimableAssets.balances).toMatchInlineSnapshot(`
+		expect(claimLink.claimed).toEqual(false);
+		expect(claimableAssets.nfts.length).toEqual(3);
+		expect(claimableAssets.balances).toMatchInlineSnapshot(`
 				[
 				  {
 				    "amount": 100n,
@@ -593,37 +539,119 @@ describe('Non contract links', () => {
 				]
 			`);
 
-			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+		const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-			const res = await client.waitForTransaction({
-				digest: claim.digest,
-				options: {
-					showObjectChanges: true,
+		const res = await client.waitForTransaction({
+			digest: claim.digest,
+			options: {
+				showObjectChanges: true,
+			},
+		});
+
+		expect(res.objectChanges?.length).toEqual(
+			3 + // bears,
+				1 + // coin
+				1 + // gas
+				1, // bag
+		);
+
+		const link2 = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+		});
+		expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+		expect(link2.assets?.nfts.map((nft) => nft.objectId).sort()).toEqual(
+			claimLink.assets?.nfts.map((nft) => nft.objectId).sort(),
+		);
+		expect(link2.claimed).toEqual(true);
+	}, 30_000);
+
+	test('list created links', async () => {
+		const link = new ZkSendLinkBuilder({
+			client,
+			network: 'testnet',
+			sender: keypair.toSuiAddress(),
+		});
+
+		const bears = await createBears(3);
+
+		for (const bear of bears) {
+			link.addClaimableObject(bear.objectId);
+		}
+
+		link.addClaimableMist(100n);
+
+		const linkUrl = link.getLink();
+
+		// await link.create({
+		// 	signer: keypair,
+		// 	waitForTransaction: true,
+		// });
+
+		// wait for graphql indexing
+		await new Promise((resolve) => setTimeout(resolve, 3000));
+
+		const createdLinks = await listCreatedLinks({
+			network: 'testnet',
+			address: keypair.toSuiAddress(),
+		});
+
+		expect(createdLinks.links[0]?.link.address).toEqual(link.keypair.toSuiAddress());
+
+		expect(createdLinks.links[0].claimed).toEqual(false);
+		expect(createdLinks.links[0].assets).toMatchObject({
+			balances: [
+				{
+					coinType: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+					amount: 100n,
 				},
-			});
+			],
+			nfts: [expect.any(Object), expect.any(Object), expect.any(Object)],
+		});
 
-			expect(res.objectChanges?.length).toEqual(
-				3 + // bears,
-					1 + // coin
-					1 + // gas
-					1, // bag
-			);
+		const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
 
-			const link2 = await ZkSendLink.fromUrl(linkUrl, {
-				contract: ZK_BAG_CONFIG,
-				network: 'testnet',
-				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
-			});
-			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
-			expect(link2.assets?.nfts.map((nft) => nft.objectId).sort()).toEqual(
-				claimLink.assets?.nfts.map((nft) => nft.objectId).sort(),
-			);
-			expect(link2.claimed).toEqual(true);
-		},
-		{
-			timeout: 30_000,
-		},
-	);
+			client,
+		});
+
+		const claimableAssets = claimLink.assets!;
+
+		expect(claimLink.claimed).toEqual(false);
+		expect(claimableAssets.nfts.length).toEqual(3);
+		expect(claimableAssets.balances).toMatchInlineSnapshot(`
+				[
+				  {
+				    "amount": 100n,
+				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+				  },
+				]
+			`);
+
+		const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+
+		const res = await client.waitForTransaction({
+			digest: claim.digest,
+			options: {
+				showObjectChanges: true,
+			},
+		});
+
+		expect(res.objectChanges?.length).toEqual(
+			3 + // bears,
+				1 + // coin
+				1 + // gas
+				1, // bag
+		);
+
+		const link2 = await ZkSendLink.fromUrl(linkUrl, {
+			network: 'testnet',
+		});
+		expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+		expect(link2.assets?.nfts.map((nft) => nft.objectId)).toEqual(
+			claimLink.assets?.nfts.map((nft) => nft.objectId),
+		);
+		expect(link2.claimed).toEqual(true);
+	}, 30_000);
 });
 
 async function createBears(totalBears: number) {

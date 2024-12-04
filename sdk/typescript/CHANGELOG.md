@@ -1,5 +1,63 @@
 # @mysten/sui.js
 
+## 1.16.0
+
+### Minor Changes
+
+- ec2dc7f: Add legacyAddress flag to zklogin methods that generate addresses
+- ec2dc7f: All functionality from `@mysten/zklogin` has been moved to `@mysten/sui/zklogin`
+
+  For most methods, simply replace the `@mysten/zklogin` import with `@mysten/sui/zklogin`
+
+  2 Methods require one small additional change:
+
+  `computeZkLoginAddress` and `jwtToAddress` have new `legacyAddress` flags which must be set to
+  true for backwards compatibility:
+
+  ```diff
+  - import { computeZkLoginAddress, jwtToAddress } from '@mysten/zklogin';
+  + import { computeZkLoginAddress, jwtToAddress } from '@mysten/sui/zklogin';
+
+    const address = jwtToAddress(
+     jwtAsString,
+     salt,
+  +  true
+    );
+    const address = computeZkLoginAddress({
+  	claimName,
+  	claimValue,
+  	iss,
+  	aud,
+  	userSalt: BigInt(salt),
+  +	legacyAddress: true,
+    });
+  ```
+
+## 1.15.1
+
+### Patch Changes
+
+- Updated dependencies [1dd7713]
+  - @mysten/bcs@1.1.1
+
+## 1.15.0
+
+### Minor Changes
+
+- 6460e45: Adding back 'Client-Request-Method' header
+
+## 1.14.4
+
+### Patch Changes
+
+- 938fb6e: fix bug in object cache's applyEffects method that doesn't correctly await cache deletes
+
+## 1.14.3
+
+### Patch Changes
+
+- d5a23d7: Add tx.object.option for creatnig object options in transaction builder
+
 ## 1.14.2
 
 ### Patch Changes

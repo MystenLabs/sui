@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -38,7 +37,7 @@ where
     I: IntoIterator<Item = u64> + Send + Sync + 'static,
     I::IntoIter: Send + Sync + 'static,
 {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         let mut ingest_hi = None;
         let mut subscribers_hi = HashMap::new();
         let mut checkpoints = checkpoints.into_iter().peekable();

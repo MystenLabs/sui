@@ -89,14 +89,13 @@ pub mod versioned;
 pub mod zk_login_authenticator;
 pub mod zk_login_util;
 
-#[cfg(any(test, feature = "test-utils"))]
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 
 macro_rules! built_in_ids {
     ($($addr:ident / $id:ident = $init:expr);* $(;)?) => {
         $(
-            pub const $addr: AccountAddress = builtin_address($init);
+            pub const $addr: AccountAddress = AccountAddress::from_suffix($init);
             pub const $id: ObjectID = ObjectID::from_address($addr);
         )*
     }
@@ -132,14 +131,6 @@ built_in_ids! {
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 pub const SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
-
-const fn builtin_address(suffix: u16) -> AccountAddress {
-    let mut addr = [0u8; AccountAddress::LENGTH];
-    let [hi, lo] = suffix.to_be_bytes();
-    addr[AccountAddress::LENGTH - 2] = hi;
-    addr[AccountAddress::LENGTH - 1] = lo;
-    AccountAddress::new(addr)
-}
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())

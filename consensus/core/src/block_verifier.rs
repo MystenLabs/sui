@@ -59,6 +59,42 @@ impl SignedBlockVerifier {
             transaction_verifier,
         }
     }
+
+    pub(crate) fn check_transactions(&self, batch: &[&[u8]]) -> ConsensusResult<()> {
+        let max_transaction_size_limit =
+            self.context.protocol_config.max_transaction_size_bytes() as usize;
+        for t in batch {
+            if t.len() > max_transaction_size_limit && max_transaction_size_limit > 0 {
+                return Err(ConsensusError::TransactionTooLarge {
+                    size: t.len(),
+                    limit: max_transaction_size_limit,
+                });
+            }
+        }
+
+        let max_num_transactions_limit =
+            self.context.protocol_config.max_num_transactions_in_block() as usize;
+        if batch.len() > max_num_transactions_limit && max_num_transactions_limit > 0 {
+            return Err(ConsensusError::TooManyTransactions {
+                count: batch.len(),
+                limit: max_num_transactions_limit,
+            });
+        }
+
+        let total_transactions_size_limit = self
+            .context
+            .protocol_config
+            .max_transactions_in_block_bytes() as usize;
+        if batch.iter().map(|t| t.len()).sum::<usize>() > total_transactions_size_limit
+            && total_transactions_size_limit > 0
+        {
+            return Err(ConsensusError::TooManyTransactionBytes {
+                size: batch.len(),
+                limit: total_transactions_size_limit,
+            });
+        }
+        Ok(())
+    }
 }
 
 // All block verification logic are implemented below.
@@ -147,38 +183,7 @@ impl BlockVerifier for SignedBlockVerifier {
 
         let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
 
-        let max_transaction_size_limit =
-            self.context.protocol_config.max_transaction_size_bytes() as usize;
-        for t in &batch {
-            if t.len() > max_transaction_size_limit && max_transaction_size_limit > 0 {
-                return Err(ConsensusError::TransactionTooLarge {
-                    size: t.len(),
-                    limit: max_transaction_size_limit,
-                });
-            }
-        }
-
-        let max_num_transactions_limit =
-            self.context.protocol_config.max_num_transactions_in_block() as usize;
-        if batch.len() > max_num_transactions_limit && max_num_transactions_limit > 0 {
-            return Err(ConsensusError::TooManyTransactions {
-                count: batch.len(),
-                limit: max_num_transactions_limit,
-            });
-        }
-
-        let total_transactions_size_limit = self
-            .context
-            .protocol_config
-            .max_transactions_in_block_bytes() as usize;
-        if batch.iter().map(|t| t.len()).sum::<usize>() > total_transactions_size_limit
-            && total_transactions_size_limit > 0
-        {
-            return Err(ConsensusError::TooManyTransactionBytes {
-                size: batch.len(),
-                limit: total_transactions_size_limit,
-            });
-        }
+        self.check_transactions(&batch)?;
 
         self.transaction_verifier
             .verify_batch(&batch)
@@ -264,6 +269,7 @@ mod test {
 
     struct TxnSizeVerifier {}
 
+    #[async_trait::async_trait]
     impl TransactionVerifier for TxnSizeVerifier {
         // Fails verification if any transaction is < 4 bytes.
         fn verify_batch(&self, transactions: &[&[u8]]) -> Result<(), ValidationError> {
@@ -278,8 +284,11 @@ mod test {
             Ok(())
         }
 
-        fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
-            vec![]
+        async fn verify_and_vote_batch(
+            &self,
+            _batch: &[&[u8]],
+        ) -> Result<Vec<TransactionIndex>, ValidationError> {
+            Ok(vec![])
         }
     }
 

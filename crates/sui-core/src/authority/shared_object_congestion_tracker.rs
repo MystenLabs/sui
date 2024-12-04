@@ -151,13 +151,14 @@ impl SharedObjectCongestionTracker {
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
 
         // Allow tx if it's within budget.
-        if start_cost + tx_cost <= self.max_accumulated_txn_cost_per_object_in_commit {
+        if start_cost.saturating_add(tx_cost) <= self.max_accumulated_txn_cost_per_object_in_commit
+        {
             return None;
         }
 
         // Allow over-budget tx if it's not above the overage limit.
         if start_cost <= self.max_accumulated_txn_cost_per_object_in_commit
-            && start_cost + tx_cost
+            && start_cost.saturating_add(tx_cost)
                 <= self
                     .max_accumulated_txn_cost_per_object_in_commit
                     .saturating_add(self.max_txn_cost_overage_per_object_in_commit)
@@ -210,12 +211,12 @@ impl SharedObjectCongestionTracker {
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
-        let end_cost = start_cost + tx_cost;
+        let end_cost = start_cost.saturating_add(tx_cost);
 
         for obj in shared_input_objects {
             if obj.mutable {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
-                assert!(old_end_cost.is_none() || old_end_cost.unwrap() < end_cost);
+                assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
             }
         }
     }

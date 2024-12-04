@@ -252,7 +252,11 @@ fn handle_traffic_resp(
     traffic_controller.tally(TrafficTally {
         direct: client,
         through_fullnode: None,
-        error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+        error_info: error.map(|e| {
+            let error_type = e.to_string();
+            let error_weight = normalize(e);
+            (error_weight, error_type)
+        }),
         // For now, count everything as spam with equal weight
         // on the rpc node side, including gas-charging endpoints
         // such as `sui_executeTransactionBlock`, as this can enable

@@ -175,6 +175,11 @@ enum AddressTransactionBlockRelationship {
 }
 
 """
+An Authenticator represents the access control rules for a ConsensusV2 object.
+"""
+union Authenticator = Address
+
+"""
 System transaction for creating the on-chain state used by zkLogin.
 """
 type AuthenticatorStateCreateTransaction {
@@ -448,6 +453,10 @@ type Checkpoint {
 	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
+	"""
+	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+	"""
+	bcs: Base64
 }
 
 type CheckpointConnection {
@@ -846,6 +855,16 @@ type ConsensusCommitPrologueTransaction {
 	transaction).
 	"""
 	consensusCommitDigest: String
+}
+
+"""
+A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
+and allows different authentication modes based on the chosen authenticator.
+(Initially, only single-owner authentication is supported.)
+"""
+type ConsensusV2 {
+	startVersion: UInt53!
+	authenticator: Authenticator
 }
 
 """
@@ -2905,7 +2924,7 @@ enum ObjectKind {
 """
 The object's owner type: Immutable, Shared, Parent, or Address.
 """
-union ObjectOwner = Immutable | Shared | Parent | AddressOwner
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusV2
 
 input ObjectRef {
 	"""
@@ -3382,7 +3401,8 @@ type Query {
 	"""
 	typeByName(name: String!): MoveType!
 	"""
-	The coin metadata associated with the given coin type.
+	The coin metadata associated with the given coin type. Note that if the latest version of
+	the coin's metadata is wrapped or deleted, it will not be found.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 	"""

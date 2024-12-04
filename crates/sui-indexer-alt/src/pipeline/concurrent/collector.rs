@@ -3,7 +3,6 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -14,7 +13,7 @@ use tracing::{debug, info};
 
 use crate::{
     metrics::IndexerMetrics,
-    pipeline::{Indexed, PipelineConfig, WatermarkPart},
+    pipeline::{CommitterConfig, Indexed, WatermarkPart},
 };
 
 use super::{Batched, Handler};
@@ -38,10 +37,9 @@ impl<H: Handler> Pending<H> {
     /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
     /// chunk size.
     fn batch_into(&mut self, batch: &mut Batched<H>) {
-        if batch.values.len() + self.values.len() > H::MAX_CHUNK_ROWS {
-            let mut for_batch = self
-                .values
-                .split_off(H::MAX_CHUNK_ROWS - batch.values.len());
+        let max_chunk_rows = super::max_chunk_rows::<H>();
+        if batch.values.len() + self.values.len() > max_chunk_rows {
+            let mut for_batch = self.values.split_off(max_chunk_rows - batch.values.len());
 
             std::mem::swap(&mut self.values, &mut for_batch);
             batch.watermark.push(self.watermark.take(for_batch.len()));
@@ -73,24 +71,24 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 /// - If `H::BATCH_SIZE` rows are pending, it will immediately schedule a batch to be gathered.
 ///
 /// - If after sending one batch there is more data to be sent, it will immediately schedule the
-///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZ` rows).
+///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZE` rows).
 ///
 /// - Otherwise, it will check for any data to write out at a regular interval (controlled by
-///   `config.collect_interval`).
+///   `config.collect_interval()`).
 ///
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
-    config: PipelineConfig,
+    config: CommitterConfig,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::Sender<Batched<H>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
-        let mut poll = interval(config.collect_interval);
+        let mut poll = interval(config.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Data for checkpoints that haven't been written yet.
@@ -166,9 +164,9 @@ pub(super) fn collector<H: Handler + 'static>(
                     metrics
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
-                        .inc_by(indexed.values.len() as u64);
+                        .inc_by(indexed.len() as u64);
 
-                    pending_rows += indexed.values.len();
+                    pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
 
                     if pending_rows >= H::MIN_EAGER_ROWS {

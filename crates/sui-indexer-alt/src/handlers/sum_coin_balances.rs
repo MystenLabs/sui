@@ -9,7 +9,8 @@ use std::{
 use anyhow::{anyhow, bail, ensure};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
-use futures::future::try_join_all;
+use futures::future::{try_join_all, Either};
+use sui_field_count::FieldCount;
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
@@ -22,13 +23,8 @@ use crate::{
     schema::sum_coin_balances,
 };
 
-/// Each insert or update will include at most this many rows -- the size is chosen to maximize the
-/// rows without hitting the limit on bind parameters.
-const UPDATE_CHUNK_ROWS: usize = i16::MAX as usize / 5;
-
-/// Each deletion will include at most this many rows.
-const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-
+const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumCoinBalance::FIELD_COUNT;
+const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 pub struct SumCoinBalances;
 
 impl Processor for SumCoinBalances {
@@ -36,7 +32,7 @@ impl Processor for SumCoinBalances {
 
     type Value = StoredObjectUpdate<StoredSumCoinBalance>;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -158,31 +154,32 @@ impl Handler for SumCoinBalances {
                 deletes.push(update.object_id.to_vec());
             }
         }
+        let update_chunks = updates.chunks(MAX_INSERT_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(MAX_DELETE_CHUNK_ROWS).map(Either::Right);
 
-        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(|chunk| {
-            diesel::insert_into(sum_coin_balances::table)
-                .values(chunk)
-                .on_conflict(sum_coin_balances::object_id)
-                .do_update()
-                .set((
-                    sum_coin_balances::object_version
-                        .eq(excluded(sum_coin_balances::object_version)),
-                    sum_coin_balances::owner_id.eq(excluded(sum_coin_balances::owner_id)),
-                    sum_coin_balances::coin_balance.eq(excluded(sum_coin_balances::coin_balance)),
-                ))
-                .execute(conn)
+        let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
+            Either::Left(update) => Either::Left(
+                diesel::insert_into(sum_coin_balances::table)
+                    .values(update)
+                    .on_conflict(sum_coin_balances::object_id)
+                    .do_update()
+                    .set((
+                        sum_coin_balances::object_version
+                            .eq(excluded(sum_coin_balances::object_version)),
+                        sum_coin_balances::owner_id.eq(excluded(sum_coin_balances::owner_id)),
+                        sum_coin_balances::coin_balance
+                            .eq(excluded(sum_coin_balances::coin_balance)),
+                    ))
+                    .execute(conn),
+            ),
+
+            Either::Right(delete) => Either::Right(
+                diesel::delete(sum_coin_balances::table)
+                    .filter(sum_coin_balances::object_id.eq_any(delete.iter().cloned()))
+                    .execute(conn),
+            ),
         });
 
-        let updated: usize = try_join_all(update_chunks).await?.into_iter().sum();
-
-        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(|chunk| {
-            diesel::delete(sum_coin_balances::table)
-                .filter(sum_coin_balances::object_id.eq_any(chunk.iter().cloned()))
-                .execute(conn)
-        });
-
-        let deleted: usize = try_join_all(delete_chunks).await?.into_iter().sum();
-
-        Ok(updated + deleted)
+        Ok(try_join_all(futures).await?.into_iter().sum())
     }
 }

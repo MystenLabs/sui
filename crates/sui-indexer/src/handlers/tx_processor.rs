@@ -196,28 +196,23 @@ impl<'a> EpochEndIndexingObjectStore<'a> {
 }
 
 impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        Ok(self
-            .objects
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.objects
             .iter()
             .find(|o| o.id() == *object_id)
             .cloned()
-            .cloned())
+            .cloned()
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        Ok(self
-            .objects
+    ) -> Option<Object> {
+        self.objects
             .iter()
             .find(|o| o.id() == *object_id && o.version() == version)
             .cloned()
-            .cloned())
+            .cloned()
     }
 }

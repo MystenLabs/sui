@@ -1,0 +1,10 @@
+[package]
+name = "abort_native"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet" }
+
+[addresses]
+abort_native = "0x0"
+Sui = "0x2"

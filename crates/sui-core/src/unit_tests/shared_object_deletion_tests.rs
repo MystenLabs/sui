@@ -115,7 +115,6 @@ impl TestRunner {
             .get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(obj_id)
             .unwrap()
-            .unwrap()
             .1
     }
 
@@ -561,7 +560,6 @@ impl TestRunner {
         self.authority_state
             .get_object_cache_reader()
             .get_deleted_shared_object_previous_tx_digest(object_id, *version, epoch)
-            .unwrap()
     }
 }
 

@@ -17,45 +17,44 @@ use tracing::info;
 use url::Url;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-const DEFAULT_POOL_SIZE: u32 = 100;
-const DEFAULT_CONNECTION_TIMEOUT_SECS: u64 = 60;
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct DbArgs {
+    /// The URL of the database to connect to.
+    #[arg(long, default_value_t = Self::default().database_url)]
+    database_url: Url,
+
+    /// Number of connections to keep in the pool.
+    #[arg(long, default_value_t = Self::default().connection_pool_size)]
+    connection_pool_size: u32,
+
+    /// Time spent waiting for a connection from the pool to become available, in milliseconds.
+    #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
+    pub connection_timeout_ms: u64,
+}
 
 #[derive(Clone)]
 pub struct Db {
     pool: Pool<AsyncPgConnection>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
-pub struct DbConfig {
-    /// The URL of the database to connect to.
-    #[arg(long)]
-    database_url: Url,
-
-    /// Number of connections to keep in the pool.
-    #[arg(long, default_value_t = DEFAULT_POOL_SIZE)]
-    connection_pool_size: u32,
-
-    /// Time spent waiting for a connection from the pool to become available.
-    #[arg(
-        long,
-        default_value = stringify!(DEFAULT_CONNECTION_TIMEOUT_SECS),
-        value_name = "SECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_secs)
-    )]
-    connection_timeout: Duration,
-}
-
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
+
+impl DbArgs {
+    pub fn connection_timeout(&self) -> Duration {
+        Duration::from_millis(self.connection_timeout_ms)
+    }
+}
 
 impl Db {
     /// Construct a new DB connection pool. Instances of [Db] can be cloned to share access to the
     /// same pool.
-    pub async fn new(config: DbConfig) -> Result<Self, PoolError> {
+    pub async fn new(config: DbArgs) -> Result<Self, PoolError> {
         let manager = AsyncDieselConnectionManager::new(config.database_url.as_str());
 
         let pool = Pool::builder()
             .max_size(config.connection_pool_size)
-            .connection_timeout(config.connection_timeout)
+            .connection_timeout(config.connection_timeout())
             .build(manager)
             .await?;
 
@@ -146,26 +145,21 @@ impl Db {
     }
 }
 
-impl DbConfig {
-    pub fn new(
-        database_url: Url,
-        connection_pool_size: Option<u32>,
-        connection_timeout: Option<Duration>,
-    ) -> Self {
+impl Default for DbArgs {
+    fn default() -> Self {
         Self {
-            database_url,
-            connection_pool_size: connection_pool_size.unwrap_or(DEFAULT_POOL_SIZE),
-            connection_timeout: connection_timeout
-                .unwrap_or(Duration::from_secs(DEFAULT_CONNECTION_TIMEOUT_SECS)),
+            database_url: Url::parse(
+                "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt",
+            )
+            .unwrap(),
+            connection_pool_size: 100,
+            connection_timeout_ms: 60_000,
         }
     }
 }
 
 /// Drop all tables and rerunning migrations.
-pub async fn reset_database(
-    db_config: DbConfig,
-    skip_migrations: bool,
-) -> Result<(), anyhow::Error> {
+pub async fn reset_database(db_config: DbArgs, skip_migrations: bool) -> Result<(), anyhow::Error> {
     let db = Db::new(db_config).await?;
     db.clear_database().await?;
     if !skip_migrations {
@@ -173,10 +167,11 @@ pub async fn reset_database(
     }
     Ok(())
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{Db, DbConfig};
+    use crate::db::{Db, DbArgs};
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
     use sui_pg_temp_db::TempDb;
@@ -186,17 +181,23 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let db = TempDb::new().unwrap();
         let url = db.database().url();
-        println!("url: {}", url.as_str());
-        let db_config = DbConfig::new(url.clone(), None, None);
-        let db = Db::new(db_config).await.unwrap();
-        let mut connection = db.connect().await.unwrap();
+
+        info!(%url);
+        let db_args = DbArgs {
+            database_url: url.clone(),
+            ..Default::default()
+        };
+
+        let db = Db::new(db_args).await.unwrap();
+        let mut conn = db.connect().await.unwrap();
 
         // Run a simple query to verify the db can properly be queried
         let resp = diesel::sql_query("SELECT datname FROM pg_database")
-            .execute(&mut connection)
+            .execute(&mut conn)
             .await
             .unwrap();
-        println!("resp: {:?}", resp);
+
+        info!(?resp);
     }
 
     #[derive(QueryableByName)]
@@ -209,9 +210,13 @@ mod tests {
     async fn test_reset_database_skip_migrations() {
         let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
-        let db_config = DbConfig::new(url.clone(), None, None);
 
-        let db = Db::new(db_config.clone()).await.unwrap();
+        let db_args = DbArgs {
+            database_url: url.clone(),
+            ..Default::default()
+        };
+
+        let db = Db::new(db_args.clone()).await.unwrap();
         let mut conn = db.connect().await.unwrap();
         diesel::sql_query("CREATE TABLE test_table (id INTEGER PRIMARY KEY)")
             .execute(&mut conn)
@@ -225,7 +230,7 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database(db_config, true).await.unwrap();
+        reset_database(db_args, true).await.unwrap();
 
         let mut conn = db.connect().await.unwrap();
         let cnt = diesel::sql_query(

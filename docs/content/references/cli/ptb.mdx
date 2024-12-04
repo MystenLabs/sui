@@ -165,7 +165,7 @@ Double-quoted string literals tend to also be valid syntax for shells (like `bas
 Here are some examples for `transfer-objects` and `gas-coin`:
 
 ```bash
-sui client ptb --transfer-objects [ARRAY_OF_OBJECTS] @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
+sui client ptb --transfer-objects "[ARRAY_OF_OBJECTS]" @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
 ```
 
 ### Assign
@@ -194,9 +194,9 @@ In the second case, if a previous command outputs some result, you can bound it 
 
 ```bash
 sui client ptb \
---split-coins gas [1000] \
+--split-coins gas "[1000]" \
 --assign coin \
---transfer-objects [coin] @recipient_address \
+--transfer-objects "[coin]" @recipient_address \
 --gas-budget 50000000
 ```
 
@@ -241,7 +241,7 @@ sui client ptb \
 --assign sender \
 --publish "." \
 --assign upgrade_cap \
---transfer-objects [upgrade_cap] sender \
+--transfer-objects "[upgrade_cap]" sender \
 --gas-budget 100000000
 ```
 
@@ -251,17 +251,17 @@ The following example showcases how to split a gas coin into multiple coins, mak
 
 ```bash
 # Split off from gas
---split-coins gas [0,1,2,3]
+--split-coins gas "[0,1,2,3]"
 --assign coins
 --move-call sui::coin::destroy_zero<sui::sui::SUI> coins.0
 # Can further split a split coin (and through variable bindings/result accesses)
---split-coins coins.1 [0,0]
+--split-coins coins.1 "[0,0]"
 --assign zcoins
 # Destroy both new coins
 --move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.0
 --move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.1
 # Can merge the split coins back
---merge-coins gas [coins.1, coins.2, coins.3]
+--merge-coins gas "[coins.1, coins.2, coins.3]"
 --gas-budget 10000000
 ```
 
@@ -271,9 +271,9 @@ This example creates three new coins from gas and transfers them to a different 
 
 ```bash
 --assign to_address @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 \
---split-coins gas [1,2,3] \
+--split-coins gas "[1,2,3]" \
 --assign s \
---transfer-objects [s.0, s.1, s.2] to_address \
+--transfer-objects "[s.0, s.1, s.2]" to_address \
 --gas-budget 10000000
 ```
 

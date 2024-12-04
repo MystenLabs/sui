@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.38.0"
+    "version": "1.39.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "68",
+              "maxSupportedProtocolVersion": "69",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1307,6 +1307,7 @@
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
+                "consensus_smart_ancestor_selection": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
@@ -3206,7 +3207,7 @@
           "name": "Coin Query API"
         }
       ],
-      "description": "Return metadata(e.g., symbol, decimals) for a coin",
+      "description": "Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was wrapped in the transaction that published its marker type, or the latest version of the metadata object is wrapped or deleted, it will not be found.",
       "params": [
         {
           "name": "coin_type",
@@ -3552,7 +3553,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x82b2fd67344691abd0efc771941b948ad35360b08e449fbbc28b0641175bf60b",
@@ -3564,7 +3565,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x21564fc5a68ace997461b098c1d1f3ccbde241d8fdf562db36bc1423ee10cecb",
@@ -3576,7 +3577,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x7e00acf5386662fa062483ba507b1e9e3039750f0a270f2e12441ad7f611a5f7",
@@ -5248,6 +5249,23 @@
   ],
   "components": {
     "schemas": {
+      "Authenticator": {
+        "oneOf": [
+          {
+            "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
+            "type": "object",
+            "required": [
+              "SingleOwner"
+            ],
+            "properties": {
+              "SingleOwner": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "AuthorityPublicKeyBytes": {
         "description": "Defines the compressed version of the public key that we pass around in Sui",
         "allOf": [
@@ -5942,7 +5960,7 @@
         ],
         "properties": {
           "bcsName": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
@@ -6061,10 +6079,10 @@
         ],
         "properties": {
           "bcs": {
-            "description": "Base 58 encoded bcs bytes of the move event",
+            "description": "Base64 encoded bcs bytes of the move event",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               }
             ]
           },
@@ -7612,6 +7630,41 @@
             "enum": [
               "Immutable"
             ]
+          },
+          {
+            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "type": "object",
+            "required": [
+              "ConsensusV2"
+            ],
+            "properties": {
+              "ConsensusV2": {
+                "type": "object",
+                "required": [
+                  "authenticator",
+                  "start_version"
+                ],
+                "properties": {
+                  "authenticator": {
+                    "description": "The authentication mode of the object",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Authenticator"
+                      }
+                    ]
+                  },
+                  "start_version": {
+                    "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/SequenceNumber2"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -8735,6 +8788,34 @@
           }
         }
       },
+      "SuiMoveNormalizedEnum": {
+        "type": "object",
+        "required": [
+          "abilities",
+          "typeParameters",
+          "variants"
+        ],
+        "properties": {
+          "abilities": {
+            "$ref": "#/components/schemas/SuiMoveAbilitySet"
+          },
+          "typeParameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variants": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedField"
+              }
+            }
+          }
+        }
+      },
       "SuiMoveNormalizedField": {
         "type": "object",
         "required": [
@@ -8799,6 +8880,12 @@
         "properties": {
           "address": {
             "type": "string"
+          },
+          "enums": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedEnum"
+            }
           },
           "exposedFunctions": {
             "type": "object",

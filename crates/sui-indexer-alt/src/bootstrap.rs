@@ -15,7 +15,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    models::checkpoints::StoredGenesis, schema::kv_genesis, task::graceful_shutdown, Indexer,
+    models::{checkpoints::StoredGenesis, epochs::StoredEpochStart},
+    schema::{kv_epoch_starts, kv_genesis},
+    task::graceful_shutdown,
+    Indexer,
 };
 
 /// Ensures the genesis table has been populated before the rest of the indexer is run, and returns
@@ -91,6 +94,15 @@ pub async fn bootstrap(
         initial_protocol_version: system_state.protocol_version() as i64,
     };
 
+    let epoch_start = StoredEpochStart {
+        epoch: 0,
+        protocol_version: system_state.protocol_version() as i64,
+        cp_lo: 0,
+        start_timestamp_ms: system_state.epoch_start_timestamp_ms() as i64,
+        reference_gas_price: system_state.reference_gas_price() as i64,
+        system_state: bcs::to_bytes(&system_state).context("Failed to serialize SystemState")?,
+    };
+
     info!(
         chain = genesis.chain()?.as_str(),
         protocol = ?genesis.initial_protocol_version(),
@@ -103,6 +115,13 @@ pub async fn bootstrap(
         .execute(&mut conn)
         .await
         .context("Failed to write genesis record")?;
+
+    diesel::insert_into(kv_epoch_starts::table)
+        .values(&epoch_start)
+        .on_conflict_do_nothing()
+        .execute(&mut conn)
+        .await
+        .context("Failed to write genesis epoch start record")?;
 
     Ok(genesis)
 }

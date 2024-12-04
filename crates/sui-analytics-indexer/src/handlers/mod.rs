@@ -29,7 +29,6 @@ pub mod package_handler;
 pub mod transaction_handler;
 pub mod transaction_objects_handler;
 pub mod wrapped_object_handler;
-
 const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
     "0x1::string::String",
     "0x1::ascii::String",
@@ -63,6 +62,8 @@ fn get_owner_type(object: &Object) -> OwnerType {
         Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
+        // TODO: Implement support for ConsensusV2 objects.
+        Owner::ConsensusV2 { .. } => todo!(),
     }
 }
 
@@ -72,6 +73,8 @@ fn get_owner_address(object: &Object) -> Option<String> {
         Owner::ObjectOwner(address) => Some(address.to_string()),
         Owner::Shared { .. } => None,
         Owner::Immutable => None,
+        // TODO: Implement support for ConsensusV2 objects.
+        Owner::ConsensusV2 { .. } => todo!(),
     }
 }
 

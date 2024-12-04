@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -23,15 +24,14 @@ impl Processor for WalObjTypes {
 
     type Value = StoredObjectUpdate<StoredSumObjType>;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        SumObjTypes::process(checkpoint)
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+        SumObjTypes.process(checkpoint)
     }
 }
 
 #[async_trait::async_trait]
 impl Handler for WalObjTypes {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
@@ -58,5 +58,12 @@ impl Handler for WalObjTypes {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let filter = wal_obj_types::table
+            .filter(wal_obj_types::cp_sequence_number.between(from as i64, to as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }

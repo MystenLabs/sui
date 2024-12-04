@@ -14,8 +14,7 @@
 /// - the current implementation is not optimized for a large number of records
 /// and the final one will feature better collection type;
 module examples::denylist_rule {
-    use sui::bag::{Self, Bag};
-    use sui::token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest};
+    use sui::{bag::{Self, Bag}, token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest}};
 
     /// Trying to `verify` but the sender or the recipient is on the denylist.
     const EUserBlocked: u64 = 0;
@@ -28,7 +27,7 @@ module examples::denylist_rule {
     public fun verify<T>(
         policy: &TokenPolicy<T>,
         request: &mut ActionRequest<T>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         // early return if no records are added;
         if (!has_config(policy)) {
@@ -58,7 +57,7 @@ module examples::denylist_rule {
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         mut addresses: vector<address>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         if (!has_config(policy)) {
             token::add_rule_config(Denylist {}, policy, cap, bag::new(ctx), ctx);
@@ -76,7 +75,7 @@ module examples::denylist_rule {
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         mut addresses: vector<address>,
-        _ctx: &mut TxContext
+        _ctx: &mut TxContext,
     ) {
         let config_mut = config_mut(policy, cap);
 
@@ -105,12 +104,9 @@ module examples::denylist_rule {
 
 #[test_only]
 module examples::denylist_rule_tests {
-    use std::string::utf8;
-    use std::option::{none, some};
-    use sui::token;
-    use sui::token_test_utils::{Self as test, TEST};
-
     use examples::denylist_rule::{Self as denylist, Denylist};
+    use std::{option::{none, some}, string::utf8};
+    use sui::{token, token_test_utils::{Self as test, TEST}};
 
     #[test]
     // Scenario: add a denylist with addresses, sender is not on the list and
@@ -121,7 +117,7 @@ module examples::denylist_rule_tests {
 
         // first add the list for action and then add records
         token::add_rule_for_action<TEST, Denylist>(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records(&mut policy, &cap, vector[ @0x1 ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[@0x1], ctx);
 
         let mut request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
@@ -138,7 +134,7 @@ module examples::denylist_rule_tests {
         let (mut policy, cap) = test::get_policy(ctx);
 
         token::add_rule_for_action<TEST, Denylist>(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records(&mut policy, &cap, vector[ @0x0 ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[@0x0], ctx);
 
         let mut request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
@@ -155,7 +151,7 @@ module examples::denylist_rule_tests {
         let (mut policy, cap) = test::get_policy(ctx);
 
         token::add_rule_for_action<TEST, Denylist>(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records(&mut policy, &cap, vector[ @0x1 ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[@0x1], ctx);
 
         let mut request = token::new_request(utf8(b"action"), 100, some(@0x1), none(), ctx);
 

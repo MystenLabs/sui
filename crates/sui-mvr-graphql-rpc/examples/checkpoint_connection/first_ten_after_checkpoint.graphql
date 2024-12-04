@@ -1,0 +1,9 @@
+# Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 0. Note that the cursor is opaque.
+{
+  checkpoints(first: 10, after: "eyJjIjoyMjgwMDU4MCwicyI6MH0") {
+    nodes {
+      sequenceNumber
+      digest
+    }
+  }
+}

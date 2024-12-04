@@ -23,7 +23,7 @@ impl MallocSizeOf for fastcrypto::ed25519::Ed25519AggregateSignature {
     }
 }
 malloc_size_of_is_0!(fastcrypto::groups::ristretto255::RistrettoPoint);
-impl<G> MallocSizeOf for fastcrypto_tbls::dkg::Complaint<G>
+impl<G> MallocSizeOf for fastcrypto_tbls::dkg_v1::Complaint<G>
 where
     G: fastcrypto::groups::GroupElement,
 {
@@ -31,7 +31,8 @@ where
         0
     }
 }
-impl<G> MallocSizeOf for fastcrypto_tbls::dkg::Confirmation<G>
+
+impl<G> MallocSizeOf for fastcrypto_tbls::dkg_v1::Confirmation<G>
 where
     G: fastcrypto::groups::GroupElement,
 {

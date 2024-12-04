@@ -4,22 +4,16 @@ use anyhow::bail;
 use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
-use futures::{stream::FuturesUnordered, StreamExt};
-use mysten_metrics::GaugeGuard;
 use prometheus::Registry;
 use rand::Rng;
-use roaring::RoaringBitmap;
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    authority_client::NetworkAuthorityClient,
     quorum_driver::{
-        QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
+        QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
 };
 use sui_json_rpc_types::{
@@ -27,10 +21,11 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::ConciseableName;
-use sui_types::committee::CommitteeTrait;
-use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::gas::GasCostSummary;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::quorum_driver_types::EffectsFinalityInfo;
+use sui_types::quorum_driver_types::FinalizedEffects;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
@@ -38,13 +33,8 @@ use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
-    crypto::{
-        AggregateAuthenticator, AggregateAuthoritySignature, AuthorityQuorumSignInfo,
-        AuthoritySignature,
-    },
-    message_envelope::Envelope,
     object::Object,
-    transaction::{CertifiedTransaction, Transaction},
+    transaction::Transaction,
 };
 use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
 use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};
@@ -52,12 +42,8 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use sui_types::{error::SuiError, gas::GasCostSummary};
-use tokio::{
-    task::JoinSet,
-    time::{sleep, timeout},
-};
-use tracing::{error, info};
+use tokio::time::sleep;
+use tracing::{error, info, warn};
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -69,8 +55,6 @@ pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
-use futures::FutureExt;
-use sui_types::messages_grpc::{HandleCertificateResponseV2, TransactionStatus};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 
 #[derive(Debug)]
@@ -78,41 +62,39 @@ use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 /// responses from LocalValidatorAggregatorProxy and FullNodeProxy
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
-    CertifiedTransactionEffects(CertifiedTransactionEffects, TransactionEvents),
+    FinalizedTransactionEffects(FinalizedEffects, TransactionEvents),
     SuiTransactionBlockEffects(SuiTransactionBlockEffects),
 }
 
 impl ExecutionEffects {
     pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().mutated().to_vec()
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().mutated().to_vec()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .mutated()
                 .iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
                 .collect(),
         }
     }
 
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().created()
-            }
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().created(),
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
                 .iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
                 .collect(),
         }
     }
 
     pub fn deleted(&self) -> Vec<ObjectRef> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().deleted().to_vec()
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().deleted().to_vec()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .deleted()
@@ -124,8 +106,11 @@ impl ExecutionEffects {
 
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                Some(certified_effects.auth_sig())
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                match &effects.finality_info {
+                    EffectsFinalityInfo::Certified(sig) => Some(sig),
+                    _ => None,
+                }
             }
             ExecutionEffects::SuiTransactionBlockEffects(_) => None,
         }
@@ -133,12 +118,12 @@ impl ExecutionEffects {
 
     pub fn gas_object(&self) -> (ObjectRef, Owner) {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().gas_object()
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().gas_object()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 let refe = &sui_tx_effects.gas_object();
-                (refe.reference.to_object_ref(), refe.owner)
+                (refe.reference.to_object_ref(), refe.owner.clone())
             }
         }
     }
@@ -146,14 +131,17 @@ impl ExecutionEffects {
     pub fn sender(&self) -> SuiAddress {
         match self.gas_object().1 {
             Owner::AddressOwner(a) => a,
-            Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => unreachable!(), // owner of gas object is always an address
+            Owner::ObjectOwner(_)
+            | Owner::Shared { .. }
+            | Owner::Immutable
+            | Owner::ConsensusV2 { .. } => unreachable!(), // owner of gas object is always an address
         }
     }
 
     pub fn is_ok(&self) -> bool {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().status().is_ok()
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().status().is_ok()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 sui_tx_effects.status().is_ok()
@@ -163,8 +151,8 @@ impl ExecutionEffects {
 
     pub fn status(&self) -> String {
         match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                format!("{:#?}", certified_effects.data().status())
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                format!("{:#?}", effects.data().status())
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 format!("{:#?}", sui_tx_effects.status())
@@ -174,7 +162,7 @@ impl ExecutionEffects {
 
     pub fn gas_cost_summary(&self) -> GasCostSummary {
         match self {
-            crate::ExecutionEffects::CertifiedTransactionEffects(a, _) => {
+            crate::ExecutionEffects::FinalizedTransactionEffects(a, _) => {
                 a.data().gas_cost_summary().clone()
             }
             crate::ExecutionEffects::SuiTransactionBlockEffects(b) => {
@@ -224,10 +212,6 @@ pub trait ValidatorProxy {
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
-    /// This function is similar to `execute_transaction` but does not check any validator's
-    /// signature. It should only be used for benchmarks.
-    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
-
     fn clone_committee(&self) -> Arc<Committee>;
 
     fn get_current_epoch(&self) -> EpochId;
@@ -244,7 +228,6 @@ pub struct LocalValidatorAggregatorProxy {
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
-    requests: Mutex<JoinSet<()>>,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -276,11 +259,10 @@ impl LocalValidatorAggregatorProxy {
         committee: Committee,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
-        let qd_handler = (if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
-            let qd_handler_builder = QuorumDriverHandlerBuilder::new(
-                Arc::new(aggregator.clone()),
-                quorum_driver_metrics,
-            );
+        let (aggregator, reconfig_observer): (
+            Arc<_>,
+            Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
+        ) = if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
             info!(
                 "Using FullNodeReconfigObserver: {:?}",
                 reconfig_fullnode_rpc_url
@@ -295,28 +277,27 @@ impl LocalValidatorAggregatorProxy {
                 )
                 .await,
             );
-            qd_handler_builder.with_reconfig_observer(reconfig_observer)
+            (Arc::new(aggregator), reconfig_observer)
         } else {
             info!("Using EmbeddedReconfigObserver");
-            let observer = EmbeddedReconfigObserver::new();
+            let reconfig_observer = Arc::new(EmbeddedReconfigObserver::new());
             // Get the latest committee from config observer
-            let new_agg = observer
+            let aggregator = reconfig_observer
                 .get_committee(Arc::new(aggregator))
                 .await
                 .expect("Failed to get latest committee");
-            let qd_handler_builder =
-                QuorumDriverHandlerBuilder::new(new_agg, quorum_driver_metrics);
-            qd_handler_builder.with_reconfig_observer(Arc::new(EmbeddedReconfigObserver::new()))
-        })
-        .start();
-
+            (aggregator, reconfig_observer)
+        };
+        let qd_handler_builder =
+            QuorumDriverHandlerBuilder::new(aggregator.clone(), quorum_driver_metrics.clone())
+                .with_reconfig_observer(reconfig_observer.clone());
+        let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
         Self {
             _qd_handler: qd_handler,
             qd,
             clients,
             committee,
-            requests: Mutex::new(JoinSet::new()),
         }
     }
 }
@@ -346,9 +327,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        if std::env::var("BENCH_MODE").is_ok() {
-            return self.execute_bench_transaction(tx).await;
-        }
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
@@ -372,8 +350,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         events,
                         ..
                     } = resp;
-                    return Ok(ExecutionEffects::CertifiedTransactionEffects(
-                        effects_cert.into(),
+                    return Ok(ExecutionEffects::FinalizedTransactionEffects(
+                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         events.unwrap_or_default(),
                     ));
                 }
@@ -382,7 +360,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
-                    error!(
+                    warn!(
                         ?tx_digest,
                         retry_cnt,
                         "Transaction failed with err: {:?}. Sleeping for {:?} ...",
@@ -395,208 +373,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             }
         }
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
-    }
-
-    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        // Store the epoch number; we read it from the votes and use it later to create the certificate.
-        let mut epoch = 0;
-        let auth_agg = self.qd.authority_aggregator().load();
-
-        // Send the transaction to all validators.
-        let tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
-        let mut futures = FuturesUnordered::new();
-        for (name, client) in self.clients.iter() {
-            let fut = client
-                .handle_transaction(tx.clone(), None)
-                .map(|r| (r, *name));
-            futures.push(fut);
-        }
-        auth_agg
-            .metrics
-            .inflight_transaction_requests
-            .add(futures.len() as i64);
-
-        // TODO: This following aggregation will not work well at epoch boundary.
-
-        // Listen to the replies from the first 2f+1 votes.
-        let mut total_stake = 0;
-        let mut votes = Vec::new();
-        let mut certificate = None;
-        while let Some((response, name)) = futures.next().await {
-            auth_agg.metrics.inflight_transaction_requests.dec();
-            match response {
-                Ok(response) => match response.status {
-                    // If all goes well, the authority returns a vote.
-                    TransactionStatus::Signed(signature) => {
-                        epoch = signature.epoch;
-                        total_stake += self.committee.weight(&signature.authority);
-                        votes.push(signature);
-                    }
-                    // The transaction may be submitted again in case the certificate's submission failed.
-                    TransactionStatus::Executed(cert, _effects, _) => {
-                        tracing::warn!("Transaction already submitted: {tx:?}");
-                        if let Some(cert) = cert {
-                            certificate = Some(CertifiedTransaction::new_from_data_and_sig(
-                                tx.data().clone(),
-                                cert,
-                            ));
-                        }
-                    }
-                },
-                // This typically happens when the validators are overloaded and the transaction is
-                // immediately rejected.
-                Err(e) => {
-                    self.qd
-                        .authority_aggregator()
-                        .load()
-                        .metrics
-                        .process_tx_errors
-                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                        .inc();
-                    tracing::warn!("Failed to submit transaction: {e}")
-                }
-            }
-
-            if total_stake >= self.committee.quorum_threshold() {
-                break;
-            }
-
-            if certificate.is_some() {
-                break;
-            }
-        }
-
-        // Assemble a certificate from the validator's replies.
-        let certified_transaction: CertifiedTransaction = match certificate {
-            Some(x) => x,
-            None => {
-                let signatures: BTreeMap<_, _> = votes
-                    .into_iter()
-                    .map(|a| (a.authority, a.signature))
-                    .collect();
-                let mut signers_map = RoaringBitmap::new();
-                for pk in signatures.keys() {
-                    signers_map.insert(
-                        self.committee
-                            .authority_index(pk)
-                            .ok_or(SuiError::UnknownSigner {
-                                signer: Some(pk.concise().to_string()),
-                                index: None,
-                                committee: Box::new(self.committee.clone()),
-                            })
-                            .expect("Received signature from unknown validator"),
-                    );
-                }
-                let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();
-
-                let quorum_signature = AuthorityQuorumSignInfo {
-                    epoch,
-                    // Note: This function simply aggregates signatures (it does not check that they
-                    // are individually valid).
-                    signature: AggregateAuthoritySignature::aggregate(&sigs)
-                        .map_err(|e| SuiError::InvalidSignature {
-                            error: e.to_string(),
-                        })
-                        .expect("Validator returned invalid signature"),
-                    signers_map,
-                };
-
-                Envelope::new_from_data_and_sig(tx.into_data(), quorum_signature)
-            }
-        };
-        auth_agg
-            .metrics
-            .inflight_transaction_requests
-            .sub(futures.len() as i64);
-        drop(tx_guard);
-
-        // Send the certificate to all validators.
-        let _cert_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_certificates);
-        let mut futures = FuturesUnordered::new();
-        total_stake = 0;
-        let mut transaction_effects = None;
-        let mut transaction_events = None;
-        for (name, client) in self.clients.iter() {
-            let client = client.clone();
-            let certificate = certified_transaction.clone();
-            let name = *name;
-            futures.push(async move {
-                client
-                    .handle_certificate_v2(certificate, None)
-                    .map(move |r| (r, name))
-                    .await
-            });
-        }
-        auth_agg
-            .metrics
-            .inflight_certificate_requests
-            .add(futures.len() as i64);
-
-        // Wait for the replies from a quorum of validators.
-        while let Some((response, name)) = futures.next().await {
-            auth_agg.metrics.inflight_certificate_requests.dec();
-            match response {
-                // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponseV2 {
-                    signed_effects,
-                    events,
-                    fastpath_input_objects: _, // unused field
-                }) => {
-                    let author = signed_effects.auth_sig().authority;
-                    transaction_effects = Some(signed_effects.data().clone());
-                    transaction_events = Some(events);
-                    total_stake += self.committee.weight(&author);
-                }
-
-                // This typically happens when the validators are overloaded and the certificate is
-                // immediately rejected.
-                Err(e) => {
-                    auth_agg
-                        .metrics
-                        .process_cert_errors
-                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                        .inc();
-                    tracing::warn!("Failed to submit certificate: {e}")
-                }
-            }
-
-            if total_stake >= self.committee.quorum_threshold() {
-                break;
-            }
-        }
-
-        // Abort if we failed to submit the certificate to enough validators. This typically
-        // happens when the validators are overloaded and the requests timed out.
-        if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
-            bail!("Failed to submit certificate to quorum of validators");
-        }
-
-        // Wait for 10 more seconds on remaining requests asynchronously.
-        const WAIT_TIMEOUT: Duration = Duration::from_secs(10);
-        {
-            let auth_agg = auth_agg.clone();
-            let mut requests = self.requests.lock().unwrap();
-            requests.spawn(async move {
-                let _ = timeout(WAIT_TIMEOUT, async {
-                    while futures.next().await.is_some() {
-                        auth_agg.metrics.inflight_certificate_requests.dec();
-                    }
-                })
-                .await;
-                auth_agg
-                    .metrics
-                    .inflight_certificate_requests
-                    .sub(futures.len() as i64);
-            });
-        }
-
-        // Package the certificate and effects to return.
-        let signed_material = certified_transaction.auth_sig().clone();
-        let effects = ExecutionEffects::CertifiedTransactionEffects(
-            Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
-            transaction_events.unwrap(),
-        );
-        Ok(effects)
     }
 
     fn clone_committee(&self) -> Arc<Committee> {
@@ -615,7 +391,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             qd,
             clients: self.clients.clone(),
             committee: self.committee.clone(),
-            requests: Mutex::new(JoinSet::new()),
         })
     }
 
@@ -756,10 +531,6 @@ impl ValidatorProxy for FullNodeProxy {
             }
         }
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
-    }
-
-    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        self.execute_transaction_block(tx).await
     }
 
     fn clone_committee(&self) -> Arc<Committee> {

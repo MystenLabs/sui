@@ -27,8 +27,11 @@ use mysten_metrics::start_prometheus_server;
 
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::sui_bridge_watchdog::{
-    eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
-    metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
+    eth_bridge_status::EthBridgeStatus,
+    eth_vault_balance::{EthereumVaultBalance, VaultAsset},
+    metrics::WatchdogMetrics,
+    sui_bridge_status::SuiBridgeStatus,
+    BridgeWatchDog,
 };
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
@@ -143,15 +146,33 @@ async fn start_watchdog(
     let watchdog_metrics = WatchdogMetrics::new(registry);
     let eth_provider =
         Arc::new(new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone()).unwrap());
-    let (_committee_address, _limiter_address, vault_address, _config_address, weth_address) =
-        get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider).await?;
+    let (
+        _committee_address,
+        _limiter_address,
+        vault_address,
+        _config_address,
+        weth_address,
+        usdt_address,
+    ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider).await?;
 
-    let eth_vault_balance = EthVaultBalance::new(
+    let eth_vault_balance = EthereumVaultBalance::new(
         eth_provider.clone(),
         vault_address,
         weth_address,
+        VaultAsset::WETH,
         watchdog_metrics.eth_vault_balance.clone(),
-    );
+    )
+    .await
+    .unwrap_or_else(|e| panic!("Failed to create eth vault balance: {}", e));
+    let usdt_vault_balance = EthereumVaultBalance::new(
+        eth_provider.clone(),
+        vault_address,
+        usdt_address,
+        VaultAsset::USDT,
+        watchdog_metrics.usdt_vault_balance.clone(),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("Failed to create usdt vault balance: {}", e));
 
     let eth_bridge_status = EthBridgeStatus::new(
         eth_provider,
@@ -163,6 +184,7 @@ async fn start_watchdog(
         SuiBridgeStatus::new(sui_client, watchdog_metrics.sui_bridge_paused.clone());
     let observables: Vec<Box<dyn Observable + Send + Sync>> = vec![
         Box::new(eth_vault_balance),
+        Box::new(usdt_vault_balance),
         Box::new(eth_bridge_status),
         Box::new(sui_bridge_status),
     ];

@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 68;
+const MAX_PROTOCOL_VERSION: u64 = 69;
 
 // Record history of protocol version allocations here:
 //
@@ -195,6 +195,9 @@ const MAX_PROTOCOL_VERSION: u64 = 68;
 //             Enable gas based congestion control with overage.
 //             Further reduce minimum number of random beacon shares.
 //             Disallow adding new modules in `deps-only` packages.
+// Version 69: Sets number of rounds allowed for fastpath voting in consensus.
+//             Enable smart ancestor selection in devnet.
+//             Enable G1Uncompressed group in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -564,6 +567,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     disallow_new_modules_in_deps_only_packages: bool,
+
+    // Use smart ancestor selection in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_smart_ancestor_selection: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1624,14 +1631,20 @@ impl ProtocolConfig {
     }
 
     pub fn max_transactions_in_block_bytes(&self) -> u64 {
-        // Provide a default value if protocol config version is too low.
-        self.consensus_max_transactions_in_block_bytes
-            .unwrap_or(512 * 1024)
+        if cfg!(msim) {
+            256 * 1024
+        } else {
+            self.consensus_max_transactions_in_block_bytes
+                .unwrap_or(512 * 1024)
+        }
     }
 
     pub fn max_num_transactions_in_block(&self) -> u64 {
-        // 500 is the value used before this field is introduced.
-        self.consensus_max_num_transactions_in_block.unwrap_or(500)
+        if cfg!(msim) {
+            8
+        } else {
+            self.consensus_max_num_transactions_in_block.unwrap_or(512)
+        }
     }
 
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
@@ -1673,6 +1686,10 @@ impl ProtocolConfig {
     pub fn disallow_new_modules_in_deps_only_packages(&self) -> bool {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages
+    }
+
+    pub fn consensus_smart_ancestor_selection(&self) -> bool {
+        self.feature_flags.consensus_smart_ancestor_selection
     }
 }
 
@@ -2939,9 +2956,19 @@ impl ProtocolConfig {
                     cfg.random_beacon_reduction_lower_bound = Some(500);
 
                     cfg.feature_flags.disallow_new_modules_in_deps_only_packages = true;
-
+                }
+                69 => {
                     // Sets number of rounds allowed for fastpath voting in consensus.
                     cfg.consensus_voting_rounds = Some(40);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable smart ancestor selection for devnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    }
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -1,5 +1,78 @@
 # @mysten/create-dapp
 
+## 0.3.41
+
+### Patch Changes
+
+- Updated dependencies [ec2dc7f]
+- Updated dependencies [ec2dc7f]
+  - @mysten/sui@1.16.0
+  - @mysten/dapp-kit@0.14.40
+
+## 0.3.40
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+- @mysten/dapp-kit@0.14.39
+
+## 0.3.39
+
+### Patch Changes
+
+- Updated dependencies [6460e45]
+  - @mysten/sui@1.15.0
+  - @mysten/dapp-kit@0.14.38
+
+## 0.3.38
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.37
+
+## 0.3.37
+
+### Patch Changes
+
+- Updated dependencies [67d4620]
+  - @mysten/dapp-kit@0.14.36
+
+## 0.3.36
+
+### Patch Changes
+
+- Updated dependencies [6f44f4b]
+  - @mysten/dapp-kit@0.14.35
+
+## 0.3.35
+
+### Patch Changes
+
+- Updated dependencies [938fb6e]
+- Updated dependencies [ec919a0]
+  - @mysten/sui@1.14.4
+  - @mysten/dapp-kit@0.14.34
+
+## 0.3.34
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.33
+
+## 0.3.33
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.32
+
+## 0.3.32
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/dapp-kit@0.14.31
+
 ## 0.3.31
 
 ### Patch Changes

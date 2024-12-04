@@ -338,7 +338,6 @@ async fn test_create_bridge_state_object() {
                 .state()
                 .get_object_cache_reader()
                 .get_latest_object_ref_or_tombstone(SUI_BRIDGE_OBJECT_ID)
-                .unwrap()
                 .is_none());
         });
     }
@@ -356,7 +355,6 @@ async fn test_create_bridge_state_object() {
             node.state()
                 .get_object_cache_reader()
                 .get_latest_object_ref_or_tombstone(SUI_BRIDGE_OBJECT_ID)
-                .unwrap()
                 .expect("auth state object should exist");
         });
     }

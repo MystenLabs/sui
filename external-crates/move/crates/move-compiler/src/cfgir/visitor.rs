@@ -14,9 +14,10 @@ use crate::{
     diagnostics::{warning_filters::WarningFilters, Diagnostic, Diagnostics},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
-    parser::ast::{ConstantName, DatatypeName, FunctionName},
+    parser::ast::{ConstantName, DatatypeName, Field, FunctionName},
     shared::CompilationEnv,
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 
@@ -73,7 +74,7 @@ pub trait CFGIRVisitorContext {
     /// required.
     fn visit(&mut self, program: &G::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter() {
-            self.push_warning_filter_scope(mdef.warning_filter.clone());
+            self.push_warning_filter_scope(mdef.warning_filter);
             if self.visit_module_custom(mident, mdef) {
                 self.pop_warning_filter_scope();
                 continue;
@@ -112,7 +113,7 @@ pub trait CFGIRVisitorContext {
         struct_name: DatatypeName,
         sdef: &H::StructDefinition,
     ) {
-        self.push_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter);
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -134,7 +135,7 @@ pub trait CFGIRVisitorContext {
         enum_name: DatatypeName,
         edef: &H::EnumDefinition,
     ) {
-        self.push_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter);
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -156,7 +157,7 @@ pub trait CFGIRVisitorContext {
         constant_name: ConstantName,
         cdef: &G::Constant,
     ) {
-        self.push_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter);
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -178,7 +179,7 @@ pub trait CFGIRVisitorContext {
         function_name: FunctionName,
         fdef: &G::Function,
     ) {
-        self.push_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter);
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -846,19 +847,25 @@ where
     exp_satisfies_(e, &mut p)
 }
 
-pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
+pub fn calls_special_function(
+    special: &[(AccountAddress, &str, &str)],
+    cfg: &ImmForwardCFG,
+) -> bool {
     cfg_satisfies(cfg, |_| true, |e| is_special_function(special, e))
 }
 
-pub fn calls_special_function_command(special: &[(&str, &str, &str)], cmd: &Command) -> bool {
+pub fn calls_special_function_command(
+    special: &[(AccountAddress, &str, &str)],
+    cmd: &Command,
+) -> bool {
     command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
 }
 
-pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+pub fn calls_special_function_exp(special: &[(AccountAddress, &str, &str)], e: &Exp) -> bool {
     exp_satisfies(e, |e| is_special_function(special, e))
 }
 
-fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+fn is_special_function(special: &[(AccountAddress, &str, &str)], e: &Exp) -> bool {
     use H::UnannotatedExp_ as E;
     matches!(
         &e.exp.value,
@@ -929,5 +936,78 @@ fn exp_satisfies_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
         E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
             es.iter().any(|(_, _, e)| exp_satisfies_(e, p))
         }
+    }
+}
+
+/// Assumes equal types and as such will not check type arguments for equality.
+/// Assumes function calls, assignments, and similar expressions are effectful and thus not equal.
+pub fn same_value_exp(e1: &H::Exp, e2: &H::Exp) -> bool {
+    same_value_exp_(&e1.exp.value, &e2.exp.value)
+}
+
+#[growing_stack]
+pub fn same_value_exp_(e1: &H::UnannotatedExp_, e2: &H::UnannotatedExp_) -> bool {
+    use H::UnannotatedExp_ as E;
+    match (e1, e2) {
+        (E::Value(v1), E::Value(v2)) => v1 == v2,
+        (E::Unit { .. }, E::Unit { .. }) => true,
+        (E::Constant(c1), E::Constant(c2)) => c1 == c2,
+        (E::Move { var, .. } | E::Copy { var, .. } | E::BorrowLocal(_, var), other)
+        | (other, E::Move { var, .. } | E::Copy { var, .. } | E::BorrowLocal(_, var)) => {
+            same_local_(var, other)
+        }
+
+        (E::Vector(_, _, _, e1), E::Vector(_, _, _, e2)) => {
+            e1.len() == e2.len()
+                && e1
+                    .iter()
+                    .zip(e2.iter())
+                    .all(|(e1, e2)| same_value_exp(e1, e2))
+        }
+
+        (E::Dereference(e) | E::Freeze(e), other) | (other, E::Dereference(e) | E::Freeze(e)) => {
+            same_value_exp_(&e.exp.value, other)
+        }
+        (E::UnaryExp(op1, e1), E::UnaryExp(op2, e2)) => op1 == op2 && same_value_exp(e1, e2),
+        (E::BinopExp(l1, op1, r1), E::BinopExp(l2, op2, r2)) => {
+            op1 == op2 && same_value_exp(l1, l2) && same_value_exp(r1, r2)
+        }
+
+        (E::Pack(n1, _, fields1), E::Pack(n2, _, fields2)) => {
+            n1 == n2 && same_value_fields(fields1, fields2)
+        }
+        (E::PackVariant(n1, v1, _, fields1), E::PackVariant(n2, v2, _, fields2)) => {
+            n1 == n2 && v1 == v2 && same_value_fields(fields1, fields2)
+        }
+
+        (E::Borrow(_, e1, f1, _), E::Borrow(_, e2, f2, _)) => f1 == f2 && same_value_exp(e1, e2),
+
+        // false for anything effectful
+        (E::ModuleCall(_), _) => false,
+
+        // TODO there is some potential for equality here, but a bit too brittle now
+        (E::Cast(_, _), _) | (E::ErrorConstant { .. }, _) => false,
+
+        // catch all
+        _ => false,
+    }
+}
+
+fn same_value_fields(
+    fields1: &[(Field, H::BaseType, Exp)],
+    fields2: &[(Field, H::BaseType, Exp)],
+) -> bool {
+    fields1.len() == fields2.len()
+        && fields1
+            .iter()
+            .zip(fields2.iter())
+            .all(|((_, _, e1), (_, _, e2))| same_value_exp(e1, e2))
+}
+
+fn same_local_(lhs: &Var, rhs: &H::UnannotatedExp_) -> bool {
+    use H::UnannotatedExp_ as E;
+    match &rhs {
+        E::Copy { var: r, .. } | E::Move { var: r, .. } | E::BorrowLocal(_, r) => lhs == r,
+        _ => false,
     }
 }

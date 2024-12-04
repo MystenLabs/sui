@@ -3,7 +3,7 @@ Package toml does not specify an edition. As of 2024, Move requires all packages
 
 Please select one of the following editions:
 
-1) 2024.beta
+1) 2024
 2) legacy
 
 Selection (default=1): 

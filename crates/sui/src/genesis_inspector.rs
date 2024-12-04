@@ -75,7 +75,7 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
         let object_id = object.id();
         let object_id_str = object_id.to_string();
         assert_eq!(object.storage_rebate, 0);
-        owner_map.insert(object.id(), object.owner);
+        owner_map.insert(object.id(), object.owner.clone());
 
         match &object.data {
             sui_types::object::Data::Move(move_object) => {

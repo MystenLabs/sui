@@ -254,6 +254,8 @@ pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<SuiAddress>) {
         Owner::ObjectOwner(address) => (OwnerType::Object, Some(*address)),
         Owner::Shared { .. } => (OwnerType::Shared, None),
         Owner::Immutable => (OwnerType::Immutable, None),
+        // TODO: Implement support for ConsensusV2 objects.
+        Owner::ConsensusV2 { .. } => todo!(),
     }
 }
 

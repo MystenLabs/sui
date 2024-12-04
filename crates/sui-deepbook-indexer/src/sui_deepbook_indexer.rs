@@ -15,6 +15,7 @@ use sui_types::transaction::{Command, TransactionDataAPI};
 use tracing::info;
 
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
+use sui_indexer_builder::sui_datasource::CheckpointTxnData;
 use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
@@ -33,7 +34,6 @@ use crate::schema::{
     balances, flashloans, order_fills, order_updates, pool_prices, proposals, rebates, stakes,
     sui_error_transactions, trade_params_update, votes,
 };
-use crate::sui_datasource::CheckpointTxnData;
 use crate::types::{
     Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice, ProcessedTxnData,
     Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes,
@@ -54,6 +54,23 @@ impl PgDeepbookPersistent {
             save_progress_policy,
         }
     }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        let mut conn = self.pool.get().await?;
+        let cp = dsl::progress_store
+            .select(columns::target_checkpoint)
+            // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
+            .filter(columns::task_name.like(format!("{prefix} - %")))
+            .filter(columns::target_checkpoint.ne(i64::MAX))
+            .order_by(columns::target_checkpoint.desc())
+            .first::<i64>(&mut conn)
+            .await
+            .optional()?;
+        Ok(cp.map(|c| c as u64))
+    }
 }
 
 #[async_trait]
@@ -62,91 +79,137 @@ impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
         if data.is_empty() {
             return Ok(());
         }
+        use futures::future;
+
+        // Group data by type
+        let mut order_updates_batch = vec![];
+        let mut order_fills_batch = vec![];
+        let mut flashloans_batch = vec![];
+        let mut pool_prices_batch = vec![];
+        let mut balances_batch = vec![];
+        let mut proposals_batch = vec![];
+        let mut rebates_batch = vec![];
+        let mut stakes_batch = vec![];
+        let mut trade_params_update_batch = vec![];
+        let mut votes_batch = vec![];
+        let mut error_transactions_batch = vec![];
+
+        // Collect the data into batches
+        for d in data {
+            match d {
+                ProcessedTxnData::OrderUpdate(t) => order_updates_batch.push(t.to_db()),
+                ProcessedTxnData::OrderFill(t) => order_fills_batch.push(t.to_db()),
+                ProcessedTxnData::Flashloan(t) => flashloans_batch.push(t.to_db()),
+                ProcessedTxnData::PoolPrice(t) => pool_prices_batch.push(t.to_db()),
+                ProcessedTxnData::Balances(t) => balances_batch.push(t.to_db()),
+                ProcessedTxnData::Proposals(t) => proposals_batch.push(t.to_db()),
+                ProcessedTxnData::Rebates(t) => rebates_batch.push(t.to_db()),
+                ProcessedTxnData::Stakes(t) => stakes_batch.push(t.to_db()),
+                ProcessedTxnData::TradeParamsUpdate(t) => trade_params_update_batch.push(t.to_db()),
+                ProcessedTxnData::Votes(t) => votes_batch.push(t.to_db()),
+                ProcessedTxnData::Error(e) => error_transactions_batch.push(e.to_db()),
+            }
+        }
+
         let connection = &mut self.pool.get().await?;
         connection
             .transaction(|conn| {
                 async move {
-                    for d in data {
-                        match d {
-                            ProcessedTxnData::OrderUpdate(t) => {
-                                diesel::insert_into(order_updates::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::OrderFill(t) => {
-                                diesel::insert_into(order_fills::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Flashloan(t) => {
-                                diesel::insert_into(flashloans::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::PoolPrice(t) => {
-                                diesel::insert_into(pool_prices::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Balances(t) => {
-                                diesel::insert_into(balances::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Proposals(t) => {
-                                diesel::insert_into(proposals::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Rebates(t) => {
-                                diesel::insert_into(rebates::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Stakes(t) => {
-                                diesel::insert_into(stakes::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::TradeParamsUpdate(t) => {
-                                diesel::insert_into(trade_params_update::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Votes(t) => {
-                                diesel::insert_into(votes::table)
-                                    .values(&t.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Error(e) => {
-                                diesel::insert_into(sui_error_transactions::table)
-                                    .values(&e.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                        }
+                    // Create async tasks for each batch insert
+                    let mut tasks = Vec::new();
+
+                    if !order_updates_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(order_updates::table)
+                                .values(&order_updates_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
                     }
+                    if !order_fills_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(order_fills::table)
+                                .values(&order_fills_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !flashloans_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(flashloans::table)
+                                .values(&flashloans_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !pool_prices_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(pool_prices::table)
+                                .values(&pool_prices_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !balances_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(balances::table)
+                                .values(&balances_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !proposals_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(proposals::table)
+                                .values(&proposals_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !rebates_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(rebates::table)
+                                .values(&rebates_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !stakes_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(stakes::table)
+                                .values(&stakes_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !trade_params_update_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(trade_params_update::table)
+                                .values(&trade_params_update_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !votes_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(votes::table)
+                                .values(&votes_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+                    if !error_transactions_batch.is_empty() {
+                        tasks.push(
+                            diesel::insert_into(sui_error_transactions::table)
+                                .values(&error_transactions_batch)
+                                .on_conflict_do_nothing()
+                                .execute(conn),
+                        );
+                    }
+
+                    // Execute all tasks concurrently
+                    let _: Vec<_> = future::try_join_all(tasks).await?;
+
                     Ok(())
                 }
                 .scope_boxed()
@@ -221,21 +284,24 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         Ok(Tasks::new(tasks)?)
     }
 
-    async fn get_largest_backfill_task_target_checkpoint(
-        &self,
-        prefix: &str,
-    ) -> Result<Option<u64>, Error> {
+    async fn get_largest_indexed_checkpoint(&self, prefix: &str) -> Result<Option<u64>, Error> {
         let mut conn = self.pool.get().await?;
-        let cp: Option<i64> = dsl::progress_store
-            .select(columns::target_checkpoint)
+        let cp = dsl::progress_store
+            .select(columns::checkpoint)
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             .filter(columns::task_name.like(format!("{prefix} - %")))
-            .filter(columns::target_checkpoint.ne(i64::MAX))
-            .order_by(columns::target_checkpoint.desc())
+            .filter(columns::target_checkpoint.eq(i64::MAX))
             .first::<i64>(&mut conn)
             .await
             .optional()?;
-        Ok(cp.map(|c| c as u64))
+
+        if let Some(cp) = cp {
+            Ok(Some(cp as u64))
+        } else {
+            // Use the largest backfill target checkpoint as a fallback
+            self.get_largest_backfill_task_target_checkpoint(prefix)
+                .await
+        }
     }
 
     async fn register_task(

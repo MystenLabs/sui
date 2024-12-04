@@ -50,7 +50,7 @@ impl ChildObjectResolver for InMemoryStorage {
             return Err(SuiError::InvalidChildObjectAccess {
                 object: *child,
                 given_parent: parent,
-                actual_owner: child_object.owner,
+                actual_owner: child_object.owner.clone(),
             });
         }
         if child_object.version() > child_version_upper_bound {
@@ -85,10 +85,7 @@ impl ChildObjectResolver for InMemoryStorage {
 }
 
 impl ParentSync for InMemoryStorage {
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        _object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         unreachable!("Should not be called for InMemoryStorage as it's deprecated.")
     }
 }
@@ -110,17 +107,12 @@ impl ModuleResolver for &mut InMemoryStorage {
 }
 
 impl ObjectStore for InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> crate::storage::error::Result<Option<Object>> {
-        Ok(self.persistent.get(object_id).cloned())
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.persistent.get(object_id).cloned()
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> crate::storage::error::Result<Option<Object>> {
-        Ok(self
-            .persistent
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
+        self.persistent
             .get(object_id)
             .and_then(|obj| {
                 if obj.version() == version {
@@ -129,22 +121,17 @@ impl ObjectStore for InMemoryStorage {
                     None
                 }
             })
-            .cloned())
+            .cloned()
     }
 }
 
 impl ObjectStore for &mut InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> crate::storage::error::Result<Option<Object>> {
-        Ok(self.persistent.get(object_id).cloned())
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.persistent.get(object_id).cloned()
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> crate::storage::error::Result<Option<Object>> {
-        Ok(self
-            .persistent
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
+        self.persistent
             .get(object_id)
             .and_then(|obj| {
                 if obj.version() == version {
@@ -153,7 +140,7 @@ impl ObjectStore for &mut InMemoryStorage {
                     None
                 }
             })
-            .cloned())
+            .cloned()
     }
 }
 

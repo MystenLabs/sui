@@ -19,7 +19,7 @@ impl Processor for KvCheckpoints {
 
     type Value = StoredCheckpoint;
 
-    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
         Ok(vec![StoredCheckpoint {
             sequence_number,

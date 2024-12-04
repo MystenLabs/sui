@@ -436,13 +436,11 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
-    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
-    use sui_types::messages_checkpoint::{
-        CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    };
+    use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
     use sui_types::object::MoveObject;
     use sui_types::object::Object;
     use sui_types::object::Owner;
@@ -465,7 +463,6 @@ mod tests {
                 checkpoint_summaries: &[CheckpointSequenceNumber],
                 checkpoint_contents: &[CheckpointSequenceNumber],
                 checkpoint_summaries_by_digest: &[CheckpointDigest],
-                checkpoint_contents_by_digest: &[CheckpointContentsDigest],
             ) -> SuiResult<KVStoreCheckpointData>;
 
             async fn deprecated_get_transaction_checkpoint(
@@ -479,6 +476,8 @@ mod tests {
                 &self,
                 digests: &[TransactionDigest],
             ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
+
+            async fn multi_get_events_by_tx_digests(&self,digests: &[TransactionDigest]) -> SuiResult<Vec<Option<TransactionEvents>>>;
         }
     }
 
