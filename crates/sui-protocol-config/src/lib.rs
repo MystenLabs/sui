@@ -538,6 +538,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
 
+    // Enable passkey session auth
+    #[serde(skip_serializing_if = "is_false")]
+    passkey_session_auth: bool,
+
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
     authority_capabilities_v2: bool,
@@ -1631,6 +1635,9 @@ impl ProtocolConfig {
 
     pub fn passkey_auth(&self) -> bool {
         self.feature_flags.passkey_auth
+    }
+    pub fn passkey_session_auth(&self) -> bool {
+        self.feature_flags.passkey_session_auth
     }
 
     pub fn authority_capabilities_v2(&self) -> bool {
@@ -2991,6 +2998,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
+
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_session_auth = true;
+                    }
                 }
                 70 => {
                     if chain != Chain::Mainnet {
@@ -3227,6 +3238,10 @@ impl ProtocolConfig {
 
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
+    }
+
+    pub fn set_passkey_session_auth_for_testing(&mut self, val: bool) {
+        self.feature_flags.passkey_session_auth = val
     }
 
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
