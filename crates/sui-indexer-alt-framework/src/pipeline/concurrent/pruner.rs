@@ -11,8 +11,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db, metrics::IndexerMetrics, models::watermarks::PrunerWatermark,
-    pipeline::LOUD_WATERMARK_UPDATE_INTERVAL,
+    db::Db, metrics::IndexerMetrics, pipeline::LOUD_WATERMARK_UPDATE_INTERVAL,
+    watermarks::PrunerWatermark,
 };
 
 use super::{Handler, PrunerConfig};

@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     db::{self, Db},
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
+    watermarks::CommitterWatermark,
 };
 
 use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};

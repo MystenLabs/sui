@@ -11,22 +11,24 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
 use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{sequential::Handler, Processor},
+};
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
 };
 
 use crate::{
-    db,
     models::objects::{StoredObjectUpdate, StoredOwnerKind, StoredSumObjType},
-    pipeline::{sequential::Handler, Processor},
     schema::sum_obj_types,
 };
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumObjType::FIELD_COUNT;
 const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 
-pub struct SumObjTypes;
+pub(crate) struct SumObjTypes;
 
 impl Processor for SumObjTypes {
     const NAME: &'static str = "sum_obj_types";

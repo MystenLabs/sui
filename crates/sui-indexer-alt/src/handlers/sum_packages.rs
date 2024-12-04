@@ -8,18 +8,17 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{sequential::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    db,
-    models::packages::StoredPackage,
-    pipeline::{sequential::Handler, Processor},
-    schema::sum_packages,
-};
+use crate::{models::packages::StoredPackage, schema::sum_packages};
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredPackage::FIELD_COUNT;
 
-pub struct SumPackages;
+pub(crate) struct SumPackages;
 
 impl Processor for SumPackages {
     const NAME: &'static str = "sum_packages";

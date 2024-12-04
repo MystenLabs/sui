@@ -5,6 +5,10 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::{
     coin::Coin,
     effects::TransactionEffectsAPI,
@@ -13,14 +17,11 @@ use sui_types::{
 };
 
 use crate::{
-    db,
     models::transactions::{BalanceChange, StoredTxBalanceChange},
-    pipeline::concurrent::Handler,
-    pipeline::Processor,
     schema::tx_balance_changes,
 };
 
-pub struct TxBalanceChanges;
+pub(crate) struct TxBalanceChanges;
 
 impl Processor for TxBalanceChanges {
     const NAME: &'static str = "tx_balance_changes";
