@@ -87,13 +87,13 @@ impl StateSnapshotReaderV1 {
         }
         // Download MANIFEST first
         let manifest_file_path = Path::from(epoch_dir.clone()).child("MANIFEST");
-        copy_file(
-            &manifest_file_path,
-            &manifest_file_path,
-            &remote_object_store,
-            &local_object_store,
-        )
-        .await?;
+        // copy_file(
+        //     &manifest_file_path,
+        //     &manifest_file_path,
+        //     &remote_object_store,
+        //     &local_object_store,
+        // )
+        // .await?;
         let manifest = Self::read_manifest(path_to_filesystem(
             local_staging_dir_root.clone(),
             &manifest_file_path,
@@ -167,15 +167,15 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
-        copy_files(
-            &files_to_download,
-            &files_to_download,
-            &remote_object_store,
-            &local_object_store,
-            download_concurrency,
-            Some(progress_bar.clone()),
-        )
-        .await?;
+        // copy_files(
+        //     &files_to_download,
+        //     &files_to_download,
+        //     &remote_object_store,
+        //     &local_object_store,
+        //     download_concurrency,
+        //     Some(progress_bar.clone()),
+        // )
+        // .await?;
         progress_bar.finish_with_message("Missing ref files download complete");
         Ok(StateSnapshotReaderV1 {
             epoch,

@@ -85,26 +85,26 @@ impl IndexerFormalSnapshotRestorer {
     }
 
     pub async fn restore(&mut self) -> Result<(), IndexerError> {
-        let (sha3_digests, num_part_files) = self.reader.compute_checksum().await?;
-        let (_abort_handle, abort_registration) = AbortHandle::new_pair();
-        let (input_files, epoch_dir, remote_object_store, _concurrency) =
-            self.reader.export_metadata().await?;
-        let owned_input_files: Vec<(u32, (u32, FileMetadata))> = input_files
-            .into_iter()
-            .map(|(bucket, (part_num, metadata))| (*bucket, (part_num, metadata.clone())))
-            .collect();
-        self.restore_move_objects(
-            abort_registration,
-            owned_input_files,
-            epoch_dir,
-            remote_object_store,
-            sha3_digests,
-            num_part_files,
-        )
-        .await?;
-        info!("Finished restoring move objects");
-        self.restore_display_table().await?;
-        info!("Finished restoring display table");
+        // let (sha3_digests, num_part_files) = self.reader.compute_checksum().await?;
+        // let (_abort_handle, abort_registration) = AbortHandle::new_pair();
+        // let (input_files, epoch_dir, remote_object_store, _concurrency) =
+        //     self.reader.export_metadata().await?;
+        // let owned_input_files: Vec<(u32, (u32, FileMetadata))> = input_files
+        //     .into_iter()
+        //     .map(|(bucket, (part_num, metadata))| (*bucket, (part_num, metadata.clone())))
+        //     .collect();
+        // self.restore_move_objects(
+        //     abort_registration,
+        //     owned_input_files,
+        //     epoch_dir,
+        //     remote_object_store,
+        //     sha3_digests,
+        //     num_part_files,
+        // )
+        // .await?;
+        // info!("Finished restoring move objects");
+        // self.restore_display_table().await?;
+        // info!("Finished restoring display table");
         self.restore_cp_watermark_and_chain_id().await?;
         info!("Finished restoring checkpoint info");
         Ok(())
