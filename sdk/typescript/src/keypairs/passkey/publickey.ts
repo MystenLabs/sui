@@ -117,10 +117,15 @@ export class PasskeyPublicKey extends PublicKey {
 		const parsed = parseSerializedPasskeySignature(signature);
 		const clientDataJSON = JSON.parse(parsed.clientDataJson);
 
+		if (clientDataJSON.type !== 'webauthn.get') {
+			throw new Error('Invalid client data JSON');
+		}
+
 		// parse challenge from base64 url
 		const parsedChallenge = fromBase64(
 			clientDataJSON.challenge.replace(/-/g, '+').replace(/_/g, '/'),
 		);
+
 		if (!bytesEqual(message, parsedChallenge)) {
 			return false;
 		}

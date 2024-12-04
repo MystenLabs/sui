@@ -26,44 +26,43 @@ describe('passkey signer E2E testing', () => {
 	beforeEach(() => {
 		const sk = secp256r1.utils.randomPrivateKey();
 
-		Object.defineProperty(global, 'navigator', {
+		Object.defineProperty(global.navigator, 'credentials', {
 			value: {
-				credentials: {
-					create: vi.fn().mockImplementation(async () => ({
-						response: {
-							getPublicKey: () => {
-								// Existing DER-encoded SPKI public key
-								return new Uint8Array([
-									48, 89, 48, 19, 6, 7, 42, 134, 72, 206, 61, 2, 1, 6, 8, 42, 134, 72, 206, 61, 3,
-									1, 7, 3, 66, 0, 4, 232, 238, 71, 180, 129, 19, 164, 11, 106, 184, 25, 185, 136,
-									226, 178, 64, 72, 105, 218, 94, 85, 28, 244, 5, 19, 172, 167, 65, 137, 42, 193,
-									31, 97, 55, 49, 168, 234, 185, 163, 251, 162, 235, 213, 185, 116, 178, 194, 7,
-									128, 238, 255, 59, 121, 255, 175, 188, 137, 89, 147, 168, 103, 128, 97, 52,
-								]);
-							},
+				create: vi.fn().mockImplementation(async () => ({
+					response: {
+						getPublicKey: () => {
+							// Existing DER-encoded SPKI public key
+							return new Uint8Array([
+								48, 89, 48, 19, 6, 7, 42, 134, 72, 206, 61, 2, 1, 6, 8, 42, 134, 72, 206, 61, 3, 1,
+								7, 3, 66, 0, 4, 232, 238, 71, 180, 129, 19, 164, 11, 106, 184, 25, 185, 136, 226,
+								178, 64, 72, 105, 218, 94, 85, 28, 244, 5, 19, 172, 167, 65, 137, 42, 193, 31, 97,
+								55, 49, 168, 234, 185, 163, 251, 162, 235, 213, 185, 116, 178, 194, 7, 128, 238,
+								255, 59, 121, 255, 175, 188, 137, 89, 147, 168, 103, 128, 97, 52,
+							]);
 						},
-					})),
-					get: vi.fn().mockImplementation(async (options) => {
-						const authenticatorData = new Uint8Array([
-							88, 14, 103, 167, 58, 122, 146, 250, 216, 102, 207, 153, 185, 74, 182, 103, 89, 162,
-							151, 100, 181, 113, 130, 31, 171, 174, 46, 139, 29, 123, 54, 228, 29, 0, 0, 0, 0,
-						]);
-						// Create clientDataJSON
-						const clientDataJSON = `{"type":"webauthn.get","challenge":"${Buffer.from(options.challenge).toString('base64')}","origin":"https://www.sui.io","crossOrigin":false}`;
-						// Sign authenticatorData || sha256(clientDataJSON)
-						const dataToSign = new Uint8Array([...authenticatorData, ...sha256(clientDataJSON)]);
-						const signature = secp256r1.sign(sha256(dataToSign), sk);
-						return {
-							response: {
-								clientDataJSON,
-								authenticatorData: authenticatorData,
-								signature: signature.toDERRawBytes(),
-								userHandle: null,
-							},
-						};
-					}),
-				},
+					},
+				})),
+				get: vi.fn().mockImplementation(async (options) => {
+					const authenticatorData = new Uint8Array([
+						88, 14, 103, 167, 58, 122, 146, 250, 216, 102, 207, 153, 185, 74, 182, 103, 89, 162,
+						151, 100, 181, 113, 130, 31, 171, 174, 46, 139, 29, 123, 54, 228, 29, 0, 0, 0, 0,
+					]);
+					// Create clientDataJSON
+					const clientDataJSON = `{"type":"webauthn.get","challenge":"${Buffer.from(options.challenge).toString('base64')}","origin":"https://www.sui.io","crossOrigin":false}`;
+					// Sign authenticatorData || sha256(clientDataJSON)
+					const dataToSign = new Uint8Array([...authenticatorData, ...sha256(clientDataJSON)]);
+					const signature = secp256r1.sign(sha256(dataToSign), sk);
+					return {
+						response: {
+							clientDataJSON,
+							authenticatorData: authenticatorData,
+							signature: signature.toDERRawBytes(),
+							userHandle: null,
+						},
+					};
+				}),
 			},
+			configurable: true,
 		});
 	});
 
@@ -211,7 +210,7 @@ describe('passkey signer E2E testing', () => {
 
 		// verify signature against pubkey
 		const publicKey = signer.getPublicKey();
-		const isValid = await publicKey.verifyTransaction(messageBytes, signature);
+		let isValid = await publicKey.verifyTransaction(messageBytes, signature);
 		expect(isValid).toBe(true);
 
 		// parsed signature as expected
@@ -220,5 +219,71 @@ describe('passkey signer E2E testing', () => {
 		expect(parsed.publicKey!).toEqual(pk);
 		expect(new Uint8Array(parsed.authenticatorData!)).toEqual(authenticatorData);
 		expect(parsed.clientDataJson).toEqual(clientDataJSONString);
+
+		// case 1: passkey returns a signature on wrong intent message, fails to verify
+		const wrongIntentMessage = messageWithIntent('PersonalMessage', messageBytes);
+		const wrongDigest = blake2b(wrongIntentMessage, { dkLen: 32 });
+		const clientDataJSONWrongDigest = {
+			type: 'webauthn.get',
+			challenge: Buffer.from(wrongDigest).toString('base64'),
+			origin: 'https://www.sui.io',
+			crossOrigin: false,
+		};
+
+		const dataToSignWrongDigest = new Uint8Array([
+			...authenticatorData,
+			...sha256(JSON.stringify(clientDataJSONWrongDigest)),
+		]);
+		vi.mocked(navigator.credentials.get).mockImplementationOnce(async () => {
+			return {
+				id: 'test',
+				type: 'public-key',
+				authenticatorAttachment: 'platform' as const,
+				rawId: new Uint8Array([1, 2, 3, 4]),
+				response: {
+					clientDataJSON: new TextEncoder().encode(clientDataJSONString).buffer,
+					authenticatorData: authenticatorData,
+					signature: secp256r1.sign(sha256(dataToSignWrongDigest), sk).toDERRawBytes(),
+					userHandle: null,
+				},
+				getClientExtensionResults: () => ({}),
+			} as AuthenticationCredential;
+		});
+
+		const { signature: wrongSignature } = await signer.signTransaction(wrongIntentMessage);
+		isValid = await publicKey.verifyTransaction(messageBytes, wrongSignature);
+		expect(isValid).toBe(false);
+
+		// case 2: passkey returns wrong type on client data json, fails to verify
+		const clientDataJSONWrongType = {
+			type: 'webauthn.create',
+			challenge: Buffer.from(digest).toString('base64'),
+			origin: 'https://www.sui.io',
+			crossOrigin: false,
+		};
+
+		const dataToSignWrongType = new Uint8Array([
+			...authenticatorData,
+			...sha256(JSON.stringify(clientDataJSONWrongType)),
+		]);
+		vi.mocked(navigator.credentials.get).mockImplementationOnce(async () => {
+			return {
+				id: 'test',
+				type: 'public-key',
+				authenticatorAttachment: 'platform' as const,
+				rawId: new Uint8Array([1, 2, 3, 4]),
+				response: {
+					clientDataJSON: new TextEncoder().encode(clientDataJSONString).buffer,
+					authenticatorData: authenticatorData,
+					signature: secp256r1.sign(sha256(dataToSignWrongType), sk).toDERRawBytes(),
+					userHandle: null,
+				},
+				getClientExtensionResults: () => ({}),
+			} as AuthenticationCredential;
+		});
+
+		const { signature: wrongSignature2 } = await signer.signTransaction(intentMessage);
+		isValid = await publicKey.verifyTransaction(messageBytes, wrongSignature2);
+		expect(isValid).toBe(false);
 	});
 });
