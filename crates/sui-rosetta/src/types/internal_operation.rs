@@ -37,7 +37,6 @@ pub struct TransactionAndObjectData {
     pub gas_coins: Vec<ObjectRef>,
     pub extra_gas_coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
-    pub pt: ProgrammableTransaction,
     /// Refers to the sum of the `Coin<SUI>` balance of the coins participating in the transaction;
     /// either as gas or as objects.
     pub total_sui_balance: i128,

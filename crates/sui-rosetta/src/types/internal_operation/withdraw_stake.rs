@@ -73,11 +73,13 @@ impl TryConstructTransaction for WithdrawStake {
             .collect::<Result<Vec<_>, _>>()
             .map_err(SuiError::from)?;
 
-        let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
         // dry run
         let budget = match budget {
             Some(budget) => budget,
-            None => budget_from_dry_run(client, pt.clone(), sender, gas_price).await?,
+            None => {
+                let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
+                budget_from_dry_run(client, pt.clone(), sender, gas_price).await?
+            }
         };
 
         let gas_coins = client
@@ -102,7 +104,6 @@ impl TryConstructTransaction for WithdrawStake {
             gas_coins,
             extra_gas_coins: vec![],
             objects: stake_refs,
-            pt,
             total_sui_balance,
             budget,
         })
