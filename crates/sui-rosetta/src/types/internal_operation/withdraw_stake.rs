@@ -17,7 +17,7 @@ use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use crate::errors::Error;
 
 use super::{
-    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_GAS_COINS,
+    budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_GAS_COINS,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -34,7 +34,7 @@ impl TryConstructTransaction for WithdrawStake {
         client: &SuiClient,
         gas_price: Option<u64>,
         budget: Option<u64>,
-    ) -> Result<TransactionAndObjectData, Error> {
+    ) -> Result<TransactionObjectData, Error> {
         let Self { sender, stake_ids } = self;
 
         let withdraw_all = stake_ids.is_empty();
@@ -100,7 +100,7 @@ impl TryConstructTransaction for WithdrawStake {
         let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
         let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
 
-        Ok(TransactionAndObjectData {
+        Ok(TransactionObjectData {
             gas_coins,
             extra_gas_coins: vec![],
             objects: stake_refs,

@@ -33,7 +33,7 @@ const MAX_GAS_BUDGET: u64 = 50_000_000_000;
 /// Minimum gas-units a tx might need
 const START_GAS_UNITS: u64 = 1_000;
 
-pub struct TransactionAndObjectData {
+pub struct TransactionObjectData {
     pub gas_coins: Vec<ObjectRef>,
     pub extra_gas_coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
@@ -51,7 +51,7 @@ pub trait TryConstructTransaction {
         client: &SuiClient,
         gas_price: Option<u64>,
         budget: Option<u64>,
-    ) -> Result<TransactionAndObjectData, Error>;
+    ) -> Result<TransactionObjectData, Error>;
 }
 
 #[enum_dispatch(TryConstructTransaction)]

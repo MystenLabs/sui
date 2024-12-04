@@ -15,7 +15,7 @@ use crate::types::internal_operation::MAX_GAS_COINS;
 use crate::{errors::Error, Currency};
 
 use super::{
-    budget_from_dry_run, TransactionAndObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+    budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -33,7 +33,7 @@ impl TryConstructTransaction for PayCoin {
         client: &SuiClient,
         gas_price: Option<u64>,
         budget: Option<u64>,
-    ) -> Result<TransactionAndObjectData, Error> {
+    ) -> Result<TransactionObjectData, Error> {
         let Self {
             sender,
             recipients,
@@ -81,7 +81,7 @@ impl TryConstructTransaction for PayCoin {
         let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
         let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
 
-        Ok(TransactionAndObjectData {
+        Ok(TransactionObjectData {
             gas_coins,
             extra_gas_coins: vec![],
             objects: coin_objs,
