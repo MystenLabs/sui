@@ -872,10 +872,14 @@ impl Core {
             .start_timer();
 
         // Now take the ancestors before the clock_round (excluded) for each authority.
-        let ancestors = self
-            .dag_state
-            .read()
-            .get_last_cached_block_per_authority(clock_round);
+        let (ancestors, gc_enabled, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (
+                dag_state.get_last_cached_block_per_authority(clock_round),
+                dag_state.gc_enabled(),
+                dag_state.gc_round(),
+            )
+        };
 
         assert_eq!(
             ancestors.len(),
@@ -895,11 +899,19 @@ impl Core {
         // And always include own last proposed block first among ancestors.
         // Start by only including the high scoring ancestors. Low scoring ancestors
         // will be included in a second pass below.
-        let included_ancestors = iter::once(self.last_proposed_block().clone())
+        let last_proposed_block = ancestors[self.context.own_index].clone();
+        assert_eq!(last_proposed_block.author(), self.context.own_index);
+        let included_ancestors = iter::once(last_proposed_block)
             .chain(
                 ancestors
                     .into_iter()
                     .filter(|ancestor| ancestor.author() != self.context.own_index)
+                    .filter(|ancestor| {
+                        if gc_enabled && gc_round > GENESIS_ROUND {
+                            return ancestor.round() > gc_round;
+                        }
+                        true
+                    })
                     .flat_map(|ancestor| {
 
                         let ancestor_state = ancestor_state_map[ancestor.author()];
@@ -1666,10 +1678,14 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (mut context, mut key_pairs) = Context::new_for_test(4);
 
-        if gc_depth > 0 {
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(gc_depth);
+
+        if gc_depth == 0 {
             context
                 .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
+                .set_consensus_linearize_subdag_v2_for_testing(false);
         }
 
         let context = Arc::new(context);
@@ -2238,7 +2254,13 @@ mod test {
     #[tokio::test]
     async fn test_smart_ancestor_selection() {
         telemetry_subscribers::init_for_testing();
-        let (context, mut key_pairs) = Context::new_for_test(7);
+        let (mut context, mut key_pairs) = Context::new_for_test(7);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
+        context
+            .protocol_config
+            .set_consensus_linearize_subdag_v2_for_testing(false);
         let context = Arc::new(context.with_parameters(Parameters {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
