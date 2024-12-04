@@ -1030,7 +1030,10 @@ impl IndexerReader {
                     )
                 }
                 EventFilter::MoveEventType(struct_tag) => {
-                    format!("event_type = '{}'", struct_tag)
+                    format!(
+                        "event_type = '{}'",
+                        struct_tag.to_canonical_display(/* with_prefix */ true),
+                    )
                 }
                 EventFilter::MoveEventModule { package, module } => {
                     let package_module_prefix = format!("{}::{}", package.to_hex_literal(), module);

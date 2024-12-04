@@ -173,4 +173,14 @@ export const mainnetPools: PoolMap = {
 		baseCoin: 'TYPUS',
 		quoteCoin: 'SUI',
 	},
+	SUI_AUSD: {
+		address: `0x183df694ebc852a5f90a959f0f563b82ac9691e42357e9a9fe961d71a1b809c8`,
+		baseCoin: 'SUI',
+		quoteCoin: 'AUSD',
+	},
+	AUSD_USDC: {
+		address: `0x5661fc7f88fbeb8cb881150a810758cf13700bb4e1f31274a244581b37c303c3`,
+		baseCoin: 'AUSD',
+		quoteCoin: 'USDC',
+	},
 };

@@ -4,7 +4,6 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -17,32 +16,31 @@ use crate::{
     db::Db,
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
-    pipeline::{Indexed, PipelineConfig, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
+    pipeline::{Indexed, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
 };
 
-use super::Handler;
+use super::{Handler, SequentialConfig};
 
 /// The committer task gathers rows into batches and writes them to the database.
 ///
 /// Data arrives out of order, grouped by checkpoint, on `rx`. The task orders them and waits to
 /// write them until either a configural polling interval has passed (controlled by
-/// `config.collect_interval`), or `H::BATCH_SIZE` rows have been accumulated and we have received
-/// the next expected checkpoint.
+/// `config.collect_interval()`), or `H::BATCH_SIZE` rows have been accumulated and we have
+/// received the next expected checkpoint.
 ///
 /// Writes are performed on checkpoint boundaries (more than one checkpoint can be present in a
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
 ///
-/// The committer can optionally be configured to lag behind the ingestion service by a fixed
-/// number of checkpoints (configured by `checkpoint_lag`).
+/// The committer can be configured to lag behind the ingestion serice by a fixed number of
+/// checkpoints (configured by `checkpoint_lag`). A value of `0` means no lag.
 ///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
 /// unblock its regulator.
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H: Handler + 'static>(
-    config: PipelineConfig,
-    checkpoint_lag: Option<u64>,
+    config: SequentialConfig,
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -50,14 +48,13 @@ pub(super) fn committer<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
-        let mut poll = interval(config.collect_interval);
+        let mut poll = interval(config.committer.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // If no checkpoint lag is specified, we default it to `0` (no lag).
-        let checkpoint_lag = checkpoint_lag.unwrap_or_default();
+        let checkpoint_lag = config.checkpoint_lag;
 
         // Buffer to gather the next batch to write. A checkpoint's data is only added to the batch
         // when it is known to come from the next checkpoint after `watermark` (the current tip of

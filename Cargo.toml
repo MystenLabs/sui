@@ -100,6 +100,7 @@ members = [
     "crates/sui-data-ingestion",
     "crates/sui-data-ingestion-core",
     "crates/sui-deepbook-indexer",
+    "crates/sui-default-config",
     "crates/sui-e2e-tests",
     "crates/sui-edge-proxy",
     "crates/sui-enum-compat-util",
@@ -110,7 +111,6 @@ members = [
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
     "crates/sui-genesis-builder",
-    "crates/sui-graphql-config",
     "crates/sui-graphql-e2e-tests",
     "crates/sui-graphql-rpc",
     "crates/sui-graphql-rpc-client",
@@ -632,6 +632,7 @@ sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
+sui-default-config = { path = "crates/sui-default-config" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
@@ -640,7 +641,6 @@ sui-field-count-derive = { path = "crates/sui-field-count-derive" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
-sui-graphql-config = { path = "crates/sui-graphql-config" }
 sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }

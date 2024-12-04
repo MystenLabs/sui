@@ -505,6 +505,10 @@ pub enum Authenticator {
 
 impl Authenticator {
     pub fn as_single_owner(&self) -> &SuiAddress {
+        // NOTE: Existing callers are written assuming that only singly-owned
+        // ConsensusV2 objects exist. If additional Authenticator variants are
+        // added, do not simply panic here. Instead, change the return type of
+        // this function and update callers accordingly.
         match self {
             Self::SingleOwner(address) => address,
         }

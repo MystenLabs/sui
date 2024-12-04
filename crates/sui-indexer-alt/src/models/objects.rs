@@ -9,7 +9,8 @@ use sui_field_count::FieldCount;
 use sui_types::base_types::ObjectID;
 
 use crate::schema::{
-    kv_objects, obj_versions, sum_coin_balances, sum_obj_types, wal_coin_balances, wal_obj_types,
+    kv_objects, obj_info, obj_versions, sum_coin_balances, sum_obj_types, wal_coin_balances,
+    wal_obj_types,
 };
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
@@ -20,7 +21,7 @@ pub struct StoredObject {
     pub serialized_object: Option<Vec<u8>>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
 pub struct StoredObjVersion {
     pub object_id: Vec<u8>,
@@ -98,6 +99,11 @@ pub struct StoredWalObjType {
     pub cp_sequence_number: i64,
 }
 
+/// StoredObjectUpdate is a wrapper type, we want to count the fields of the inner type.
+impl<T: FieldCount> FieldCount for StoredObjectUpdate<T> {
+    const FIELD_COUNT: usize = T::FIELD_COUNT;
+}
+
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
 where
     i16: serialize::ToSql<SmallInt, DB>,
@@ -125,4 +131,17 @@ where
             o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
         })
     }
+}
+
+#[derive(Insertable, Debug, Clone, FieldCount)]
+#[diesel(table_name = obj_info, primary_key(object_id, cp_sequence_number))]
+pub struct StoredObjInfo {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
+    pub owner_kind: Option<StoredOwnerKind>,
+    pub owner_id: Option<Vec<u8>>,
+    pub package: Option<Vec<u8>>,
+    pub module: Option<String>,
+    pub name: Option<String>,
+    pub instantiation: Option<Vec<u8>>,
 }

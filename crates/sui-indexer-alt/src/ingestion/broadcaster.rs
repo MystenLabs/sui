@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::try_join_all;
-use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -27,8 +26,9 @@ pub(super) fn broadcaster(
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         info!("Starting ingestion broadcaster");
+        let retry_interval = config.retry_interval();
 
         match ReceiverStream::new(checkpoint_rx)
             .try_for_each_spawned(/* limit */ config.ingest_concurrency, |cp| {
@@ -44,9 +44,9 @@ pub(super) fn broadcaster(
                 async move {
                     // Repeatedly retry if the checkpoint is not found, assuming that we are at the
                     // tip of the network and it will become available soon.
-                    let checkpoint = client.wait_for(cp, config.retry_interval, &cancel).await?;
-                    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
+                    let checkpoint = client.wait_for(cp, retry_interval, &cancel).await?;
 
+                    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
                     if try_join_all(futures).await.is_err() {
                         info!("Subscription dropped, signalling shutdown");
                         supervisor_cancel.cancel();

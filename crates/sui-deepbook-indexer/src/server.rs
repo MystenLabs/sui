@@ -132,7 +132,7 @@ async fn get_historical_volume(
     let results: Vec<(String, i64)> = schema::order_fills::table
         .select((schema::order_fills::pool_id, column_to_query))
         .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
-        .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
         .load(connection)
         .await?;
 
@@ -189,7 +189,7 @@ async fn get_historical_volume_by_balance_manager_id(
             column_to_query,
         ))
         .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
-        .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
         .filter(
             schema::order_fills::maker_balance_manager_id
                 .eq(&balance_manager_id)
@@ -278,7 +278,9 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
                 column_to_query,
             ))
             .filter(schema::order_fills::pool_id.eq_any(&pool_ids_list))
-            .filter(schema::order_fills::onchain_timestamp.between(current_start, current_end))
+            .filter(
+                schema::order_fills::checkpoint_timestamp_ms.between(current_start, current_end),
+            )
             .filter(
                 schema::order_fills::maker_balance_manager_id
                     .eq(&balance_manager_id)

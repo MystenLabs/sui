@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     task::JoinHandle,
     time::{interval, MissedTickBehavior},
@@ -24,8 +23,8 @@ use super::{Handler, PrunerConfig};
 ///
 /// To ensure that the pruner does not interfere with reads that are still in flight, it respects
 /// the watermark's `pruner_timestamp`, which records the time that `reader_lo` was last updated.
-/// The task will not prune data until at least `config.delay` has passed since `pruner_timestamp`
-/// to give in-flight reads time to land.
+/// The task will not prune data until at least `config.delay()` has passed since
+/// `pruner_timestamp` to give in-flight reads time to land.
 ///
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
@@ -38,7 +37,7 @@ pub(super) fn pruner<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         let Some(config) = config else {
             info!(pipeline = H::NAME, "Skipping pruner task");
             return;
@@ -47,7 +46,7 @@ pub(super) fn pruner<H: Handler + 'static>(
         // The pruner can pause for a while, waiting for the delay imposed by the
         // `pruner_timestamp` to expire. In that case, the period between ticks should not be
         // compressed to make up for missed ticks.
-        let mut poll = interval(config.interval);
+        let mut poll = interval(config.interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // The pruner task will periodically output a log message at a higher log level to
@@ -73,7 +72,7 @@ pub(super) fn pruner<H: Handler + 'static>(
                         continue;
                     };
 
-                    match PrunerWatermark::get(&mut conn, H::NAME, config.delay).await {
+                    match PrunerWatermark::get(&mut conn, H::NAME, config.delay()).await {
                         Ok(Some(current)) => {
                             guard.stop_and_record();
                             current

@@ -1,4 +1,4 @@
-processed 12 tasks
+processed 15 tasks
 
 task 1, lines 6-25:
 //# publish
@@ -67,6 +67,60 @@ Response: {
           "sequenceNumber": 6
         }
       ]
+    }
+  }
+}
+
+task 12, lines 57-67:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 5
+      },
+      "last": {
+        "sequenceNumber": 6
+      }
+    }
+  }
+}
+
+task 13, lines 69-72:
+//# run-graphql
+Response: {
+  "data": {
+    "chainIdentifier": "084d40f2"
+  }
+}
+
+task 14, lines 74-103:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "totalStake": "0",
+        "activeValidators": {
+          "nodes": [
+            {
+              "name": "validator-0"
+            }
+          ]
+        },
+        "validatorCandidatesSize": 0,
+        "inactivePoolsId": "0x514509ad914ad681508af65f278bea302598aa33653436d497faaa0dbd756f61"
+      },
+      "totalGasFees": "2000000",
+      "totalStakeRewards": "2000000",
+      "totalStakeSubsidies": "0",
+      "fundSize": "0",
+      "fundInflow": "7873600",
+      "fundOutflow": "978120",
+      "netInflow": "6895480",
+      "transactionBlocks": {
+        "nodes": []
+      }
     }
   }
 }

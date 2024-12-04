@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use mysten_metrics::spawn_monitored_task;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -21,7 +20,7 @@ use crate::{
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
     pipeline::{
-        PipelineConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
+        CommitterConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
     },
 };
 
@@ -45,23 +44,24 @@ use super::Handler;
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
 /// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and
-/// the watermark cannot be progressed. If the `config` specifies `skip_watermark`, the task will
-/// shutdown immediately.
+/// the watermark cannot be progressed. If `skip_watermark` is set, the task will shutdown
+/// immediately.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     initial_watermark: Option<CommitterWatermark<'static>>,
-    config: PipelineConfig,
+    config: CommitterConfig,
+    skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
-        if config.skip_watermark {
+    tokio::spawn(async move {
+        if skip_watermark {
             info!(pipeline = H::NAME, "Skipping commit watermark task");
             return;
         }
 
-        let mut poll = interval(config.watermark_interval);
+        let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // To correctly update the watermark, the task tracks the watermark it last tried to write

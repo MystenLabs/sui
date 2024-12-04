@@ -6,6 +6,7 @@ use std::time::Duration;
 use crate::models::watermarks::CommitterWatermark;
 
 pub use processor::Processor;
+use serde::{Deserialize, Serialize};
 
 pub mod concurrent;
 mod processor;
@@ -28,33 +29,16 @@ const PIPELINE_BUFFER: usize = 5;
 /// `--skip-watermarks` should be used.
 const WARN_PENDING_WATERMARKS: usize = 10000;
 
-#[derive(clap::Args, Debug, Clone)]
-pub struct PipelineConfig {
-    /// Number of concurrent writers per pipeline
-    #[arg(long, default_value_t = 5)]
-    write_concurrency: usize,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CommitterConfig {
+    /// Number of concurrent writers per pipeline.
+    pub write_concurrency: usize,
 
-    /// The collector will check for pending data at least this often
-    #[arg(
-        long,
-        default_value = "500",
-        value_name = "MILLISECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_millis),
-    )]
-    collect_interval: Duration,
+    /// The collector will check for pending data at least this often, in milliseconds.
+    pub collect_interval_ms: u64,
 
-    /// Watermark task will check for pending watermarks this often
-    #[arg(
-        long,
-        default_value = "500",
-        value_name = "MILLISECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_millis),
-    )]
-    watermark_interval: Duration,
-
-    /// Avoid writing to the watermark table
-    #[arg(long)]
-    pub skip_watermark: bool,
+    /// Watermark task will check for pending watermarks this often, in milliseconds.
+    pub watermark_interval_ms: u64,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
@@ -86,6 +70,16 @@ enum Break {
 
     #[error(transparent)]
     Err(#[from] anyhow::Error),
+}
+
+impl CommitterConfig {
+    pub fn collect_interval(&self) -> Duration {
+        Duration::from_millis(self.collect_interval_ms)
+    }
+
+    pub fn watermark_interval(&self) -> Duration {
+        Duration::from_millis(self.watermark_interval_ms)
+    }
 }
 
 impl<P: Processor> Indexed<P> {
@@ -147,6 +141,16 @@ impl WatermarkPart {
             watermark: self.watermark.clone(),
             batch_rows: rows,
             total_rows: self.total_rows,
+        }
+    }
+}
+
+impl Default for CommitterConfig {
+    fn default() -> Self {
+        Self {
+            write_concurrency: 5,
+            collect_interval_ms: 500,
+            watermark_interval_ms: 500,
         }
     }
 }

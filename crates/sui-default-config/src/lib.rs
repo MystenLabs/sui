@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Fields, FieldsNamed, Ident, Meta,
-    NestedMeta,
+    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Fields, FieldsNamed, Meta,
+    MetaList, MetaNameValue, NestedMeta,
 };
 
 /// Attribute macro to be applied to config-based structs. It ensures that the struct derives serde
@@ -17,7 +15,7 @@ use syn::{
 /// the config struct.
 #[allow(non_snake_case)]
 #[proc_macro_attribute]
-pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
+pub fn DefaultConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let DeriveInput {
         attrs,
         vis,
@@ -32,7 +30,7 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
         semi_token,
     }) = data
     else {
-        panic!("GraphQL configs must be structs.");
+        panic!("Default configs must be structs.");
     };
 
     let Fields::Named(FieldsNamed {
@@ -40,11 +38,8 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
         named,
     }) = fields
     else {
-        panic!("GraphQL configs must have named fields.");
+        panic!("Default configs must have named fields.");
     };
-
-    // Figure out which derives need to be added to meet the criteria of a config struct.
-    let core_derives = core_derives(&attrs);
 
     // Extract field names once to avoid having to check for their existence multiple times.
     let fields_with_names: Vec<_> = named
@@ -73,14 +68,40 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
         quote! {
             #[doc(hidden)] #cfg
             fn #fn_name() -> #ty {
-                Self::default().#name
+                <Self as std::default::Default>::default().#name
             }
         }
     });
 
+    // Check if there's already a serde rename_all attribute
+    let has_rename_all = attrs.iter().any(|attr| {
+        if !attr.path.is_ident("serde") {
+            return false;
+        };
+
+        let Ok(Meta::List(MetaList { nested, .. })) = attr.parse_meta() else {
+            return false;
+        };
+
+        nested.iter().any(|nested| {
+            if let NestedMeta::Meta(Meta::NameValue(MetaNameValue { path, .. })) = nested {
+                path.is_ident("rename_all")
+            } else {
+                false
+            }
+        })
+    });
+
+    // Only include the default rename_all if none exists
+    let rename_all = if !has_rename_all {
+        quote! { #[serde(rename_all = "kebab-case")] }
+    } else {
+        quote! {}
+    };
+
     TokenStream::from(quote! {
-        #[derive(#(#core_derives),*)]
-        #[serde(rename_all = "kebab-case")]
+        #[derive(serde::Serialize, serde::Deserialize)]
+        #rename_all
         #(#attrs)* #vis #struct_token #ident #generics {
             #(#fields),*
         } #semi_token
@@ -89,49 +110,6 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
             #(#defaults)*
         }
     })
-}
-
-/// Return a set of derives that should be added to the struct to make sure it derives all the
-/// things we expect from a config, namely `Serialize`, `Deserialize`, and `Debug`.
-///
-/// We cannot add core derives unconditionally, because they will conflict with existing ones.
-fn core_derives(attrs: &[Attribute]) -> BTreeSet<Ident> {
-    let mut derives = BTreeSet::from_iter([
-        format_ident!("Serialize"),
-        format_ident!("Deserialize"),
-        format_ident!("Debug"),
-        format_ident!("Clone"),
-        format_ident!("Eq"),
-        format_ident!("PartialEq"),
-    ]);
-
-    for attr in attrs {
-        let Ok(Meta::List(list)) = attr.parse_meta() else {
-            continue;
-        };
-
-        let Some(ident) = list.path.get_ident() else {
-            continue;
-        };
-
-        if ident != "derive" {
-            continue;
-        }
-
-        for nested in list.nested {
-            let NestedMeta::Meta(Meta::Path(path)) = nested else {
-                continue;
-            };
-
-            let Some(ident) = path.get_ident() else {
-                continue;
-            };
-
-            derives.remove(ident);
-        }
-    }
-
-    derives
 }
 
 /// Find the attribute that corresponds to a `#[cfg(...)]` annotation, if it exists.

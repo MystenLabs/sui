@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -13,7 +14,7 @@ use crate::{
     models::watermarks::CommitterWatermark,
 };
 
-use super::{processor::processor, PipelineConfig, Processor, PIPELINE_BUFFER};
+use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
 
 use self::committer::committer;
 
@@ -60,6 +61,16 @@ pub trait Handler: Processor {
     async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> anyhow::Result<usize>;
 }
 
+/// Configuration for a sequential pipeline
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct SequentialConfig {
+    /// Configuration for the writer, that makes forward progress.
+    pub committer: CommitterConfig,
+
+    /// How many checkpoints to hold back writes for.
+    pub checkpoint_lag: u64,
+}
+
 /// Start a new sequential (in-order) indexing pipeline, served by the handler, `H`. Starting
 /// strictly after the `watermark` (or from the beginning if no watermark was provided).
 ///
@@ -88,8 +99,7 @@ pub trait Handler: Processor {
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
-    config: PipelineConfig,
-    checkpoint_lag: Option<u64>,
+    config: SequentialConfig,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -107,8 +117,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
-        config.clone(),
-        checkpoint_lag,
+        config,
         initial_watermark,
         committer_rx,
         watermark_tx,

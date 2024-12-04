@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail, ensure};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
+use sui_field_count::FieldCount;
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
@@ -22,13 +23,8 @@ use crate::{
     schema::sum_coin_balances,
 };
 
-/// Each insert or update will include at most this many rows -- the size is chosen to maximize the
-/// rows without hitting the limit on bind parameters.
-const UPDATE_CHUNK_ROWS: usize = i16::MAX as usize / 5;
-
-/// Each deletion will include at most this many rows.
-const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-
+const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumCoinBalance::FIELD_COUNT;
+const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 pub struct SumCoinBalances;
 
 impl Processor for SumCoinBalances {
@@ -158,9 +154,8 @@ impl Handler for SumCoinBalances {
                 deletes.push(update.object_id.to_vec());
             }
         }
-
-        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(Either::Left);
-        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(Either::Right);
+        let update_chunks = updates.chunks(MAX_INSERT_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(MAX_DELETE_CHUNK_ROWS).map(Either::Right);
 
         let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
             Either::Left(update) => Either::Left(

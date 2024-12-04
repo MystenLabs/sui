@@ -4,7 +4,6 @@
 use std::{sync::Arc, time::Duration};
 
 use backoff::ExponentialBackoff;
-use mysten_metrics::spawn_monitored_task;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -13,7 +12,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
-    pipeline::{Break, PipelineConfig, WatermarkPart},
+    pipeline::{Break, CommitterConfig, WatermarkPart},
     task::TrySpawnStreamExt,
 };
 
@@ -31,24 +30,24 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// The writing of each batch will be repeatedly retried on an exponential back-off until it
 /// succeeds. Once the write succeeds, the [WatermarkPart]s for that batch are sent on `tx` to the
-/// watermark task.
+/// watermark task, as long as `skip_watermark` is not true.
 ///
 /// This task will shutdown via its `cancel`lation token, or if its receiver or sender channels are
 /// closed.
 pub(super) fn committer<H: Handler + 'static>(
-    config: PipelineConfig,
+    config: CommitterConfig,
+    skip_watermark: bool,
     rx: mpsc::Receiver<Batched<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+    tokio::spawn(async move {
         info!(pipeline = H::NAME, "Starting committer");
-        let write_concurrency = H::WRITE_CONCURRENCY_OVERRIDE.unwrap_or(config.write_concurrency);
 
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(write_concurrency, |Batched { values, watermark }| {
+            .try_for_each_spawned(config.write_concurrency, |Batched { values, watermark }| {
                 let values = Arc::new(values);
                 let tx = tx.clone();
                 let db = db.clone();
@@ -158,7 +157,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         }
                     };
 
-                    if !config.skip_watermark && tx.send(watermark).await.is_err() {
+                    if !skip_watermark && tx.send(watermark).await.is_err() {
                         info!(pipeline = H::NAME, "Watermark closed channel");
                         return Err(Break::Cancel);
                     }

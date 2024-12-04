@@ -4,15 +4,14 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
-use axum::{extract::Extension, routing::get, Router};
-use mysten_metrics::RegistryService;
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{
     core::{Collector, Desc},
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry, TextEncoder,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -52,7 +51,7 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 /// Service to expose prometheus metrics from the indexer.
 pub struct MetricsService {
     addr: SocketAddr,
-    service: RegistryService,
+    registry: Registry,
     cancel: CancellationToken,
 }
 
@@ -140,12 +139,11 @@ impl MetricsService {
         let registry = Registry::new_custom(Some("indexer_alt".to_string()), None)?;
 
         let metrics = IndexerMetrics::new(&registry);
-        mysten_metrics::init_metrics(&registry);
         registry.register(Box::new(DbConnectionStatsCollector::new(db)))?;
 
         let service = Self {
             addr,
-            service: RegistryService::new(registry),
+            registry,
             cancel,
         };
 
@@ -156,8 +154,8 @@ impl MetricsService {
     pub async fn run(self) -> Result<JoinHandle<()>> {
         let listener = TcpListener::bind(&self.addr).await?;
         let app = Router::new()
-            .route("/metrics", get(mysten_metrics::metrics))
-            .layer(Extension(self.service));
+            .route("/metrics", get(metrics))
+            .layer(Extension(self.registry));
 
         Ok(tokio::spawn(async move {
             info!("Starting metrics service on {}", self.addr);
@@ -645,6 +643,17 @@ impl Collector for DbConnectionStatsCollector {
                 ],
             ),
         ]
+    }
+}
+
+/// Route handler for metrics service
+async fn metrics(Extension(registry): Extension<Registry>) -> (StatusCode, String) {
+    match TextEncoder.encode_to_string(&registry.gather()) {
+        Ok(s) => (StatusCode::OK, s),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encoding metrics: {e}"),
+        ),
     }
 }
 

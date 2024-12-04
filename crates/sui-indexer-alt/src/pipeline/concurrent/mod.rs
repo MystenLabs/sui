@@ -3,7 +3,8 @@
 
 use std::{sync::Arc, time::Duration};
 
-use reader_watermark::reader_watermark;
+use serde::{Deserialize, Serialize};
+use sui_field_count::FieldCount;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -14,10 +15,11 @@ use crate::{
     models::watermarks::CommitterWatermark,
 };
 
-use super::{processor::processor, PipelineConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
+use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
+    reader_watermark::reader_watermark,
 };
 
 mod collector;
@@ -51,21 +53,12 @@ const MAX_WATERMARK_UPDATES: usize = 10_000;
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
 #[async_trait::async_trait]
-pub trait Handler: Processor {
+pub trait Handler: Processor<Value: FieldCount> {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
-    /// If there are more than this many rows pending, the committer will only commit this many in
-    /// one operation.
-    const MAX_CHUNK_ROWS: usize = 1000;
-
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
-
-    /// Provides a way for individual pipeline to override the write_concurrency parameter
-    /// from the PipelineConfig. This is used to determine the number of concurrent tasks
-    /// to commit data to the database.
-    const WRITE_CONCURRENCY_OVERRIDE: Option<usize> = None;
 
     /// Take a chunk of values and commit them to the database, returning the number of rows
     /// affected.
@@ -79,14 +72,24 @@ pub trait Handler: Processor {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Configuration for a concurrent pipeline
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct ConcurrentConfig {
+    /// Configuration for the writer, that makes forward progress.
+    pub committer: CommitterConfig,
+
+    /// Configuration for the pruner, that deletes old data.
+    pub pruner: Option<PrunerConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PrunerConfig {
-    /// How often the pruner should check whether there is any data to prune.
-    pub interval: Duration,
+    /// How often the pruner should check whether there is any data to prune, in milliseconds.
+    pub interval_ms: u64,
 
     /// How long to wait after the reader low watermark was set, until it is safe to prune up until
-    /// this new watermark.
-    pub delay: Duration,
+    /// this new watermark, in milliseconds.
+    pub delay_ms: u64,
 
     /// How much data to keep, this is measured in checkpoints.
     pub retention: u64,
@@ -102,6 +105,16 @@ struct Batched<H: Handler> {
     values: Vec<H::Value>,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+}
+
+impl PrunerConfig {
+    pub fn interval(&self) -> Duration {
+        Duration::from_millis(self.interval_ms)
+    }
+
+    pub fn delay(&self) -> Duration {
+        Duration::from_millis(self.delay_ms)
+    }
 }
 
 impl<H: Handler> Batched<H> {
@@ -120,7 +133,18 @@ impl<H: Handler> Batched<H> {
     /// The batch is full if it has more than enough values to write to the database, or more than
     /// enough watermarks to update.
     fn is_full(&self) -> bool {
-        self.values.len() >= H::MAX_CHUNK_ROWS || self.watermark.len() >= MAX_WATERMARK_UPDATES
+        self.values.len() >= max_chunk_rows::<H>() || self.watermark.len() >= MAX_WATERMARK_UPDATES
+    }
+}
+
+impl Default for PrunerConfig {
+    fn default() -> Self {
+        Self {
+            interval_ms: 300_000,
+            delay_ms: 120_000,
+            retention: 4_000_000,
+            max_chunk_size: 2_000,
+        }
     }
 }
 
@@ -137,7 +161,8 @@ impl<H: Handler> Batched<H> {
 /// time.
 ///
 /// The pipeline also maintains a row in the `watermarks` table for the pipeline which tracks the
-/// watermark below which all data has been committed (modulo pruning).
+/// watermark below which all data has been committed (modulo pruning), as long as `skip_watermark`
+/// is not true.
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline can be
@@ -146,18 +171,23 @@ impl<H: Handler> Batched<H> {
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     initial_commit_watermark: Option<CommitterWatermark<'static>>,
-    commit_config: PipelineConfig,
-    pruner_config: Option<PrunerConfig>,
+    config: ConcurrentConfig,
+    skip_watermark: bool,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
+    let ConcurrentConfig {
+        committer: committer_config,
+        pruner: pruner_config,
+    } = config;
+
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
     let (collector_tx, committer_rx) =
-        mpsc::channel(commit_config.write_concurrency + PIPELINE_BUFFER);
+        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
     let (committer_tx, watermark_rx) =
-        mpsc::channel(commit_config.write_concurrency + PIPELINE_BUFFER);
+        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
 
     // The pruner is not connected to the rest of the tasks by channels, so it needs to be
     // explicitly signalled to shutdown when the other tasks shutdown, in addition to listening to
@@ -174,7 +204,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let collector = collector::<H>(
-        commit_config.clone(),
+        committer_config.clone(),
         collector_rx,
         collector_tx,
         metrics.clone(),
@@ -182,7 +212,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
-        commit_config.clone(),
+        committer_config.clone(),
+        skip_watermark,
         committer_rx,
         committer_tx,
         db.clone(),
@@ -192,7 +223,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let commit_watermark = commit_watermark::<H>(
         initial_commit_watermark,
-        commit_config,
+        committer_config,
+        skip_watermark,
         watermark_rx,
         db.clone(),
         metrics.clone(),
@@ -214,4 +246,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
     })
+}
+
+const fn max_chunk_rows<H: Handler>() -> usize {
+    i16::MAX as usize / H::Value::FIELD_COUNT
 }

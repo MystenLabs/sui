@@ -1,7 +1,7 @@
 # Update this value to the location you want Sui to store its database
 db-path: "suidb"
 
-# For ipv4, update this to "/ipv4/X.X.X.X/tcp/8080/http"
+# For ipv4, update this to "/ip4/X.X.X.X/tcp/8080/http"
 network-address: "/dns/localhost/tcp/8080/http"
 metrics-address: "0.0.0.0:9184"
 # this address is also used for web socket connections

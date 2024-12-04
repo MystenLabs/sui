@@ -4,33 +4,35 @@
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
-use args::ConsistencyConfig;
 use bootstrap::bootstrap;
-use db::{Db, DbConfig};
+use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
+use db::{Db, DbArgs};
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
-    obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays,
-    sum_obj_types::SumObjTypes, sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddress, tx_affected_objects::TxAffectedObjects,
+    obj_info::ObjInfo, obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances,
+    sum_displays::SumDisplays, sum_obj_types::SumObjTypes, sum_packages::SumPackages,
+    tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
 };
-use ingestion::{client::IngestionClient, IngestionConfig, IngestionService};
+use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{
-    concurrent::{self, PrunerConfig},
-    sequential, PipelineConfig, Processor,
+    concurrent::{self, ConcurrentConfig, PrunerConfig},
+    sequential::{self, SequentialConfig},
+    CommitterConfig, Processor,
 };
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 pub mod args;
 pub mod bootstrap;
+pub mod config;
 pub mod db;
 pub mod handlers;
 pub mod ingestion;
@@ -42,6 +44,34 @@ pub mod task;
 
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
+
+/// Command-line arguments for the indexer
+#[derive(clap::Args, Debug, Clone)]
+pub struct IndexerArgs {
+    /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
+    /// ingestion will start just after the lowest checkpoint watermark across all active
+    /// pipelines.
+    #[arg(long)]
+    pub first_checkpoint: Option<u64>,
+
+    /// Override for the checkpoint to end ingestion at (inclusive) -- useful for backfills. By
+    /// default, ingestion will not stop, and will continue to poll for new checkpoints.
+    #[arg(long)]
+    pub last_checkpoint: Option<u64>,
+
+    /// Only run the following pipelines. If not provided, all pipelines found in the
+    /// configuration file will be run.
+    #[arg(long, action = clap::ArgAction::Append)]
+    pipeline: Vec<String>,
+
+    /// Don't write to the watermark tables for concurrent pipelines.
+    #[arg(long)]
+    pub skip_watermark: bool,
+
+    /// Address to serve Prometheus Metrics from.
+    #[arg(long, default_value_t = Self::default().metrics_address)]
+    pub metrics_address: SocketAddr,
+}
 
 pub struct Indexer {
     /// Connection pool to the database.
@@ -56,16 +86,18 @@ pub struct Indexer {
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
 
-    /// Parameters for the committers of each pipeline.
-    pipeline_config: PipelineConfig,
-
     /// Optional override of the checkpoint lowerbound.
     first_checkpoint: Option<u64>,
 
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
 
-    /// Optional override of enabled pipelines.
+    /// Don't write to the watermark tables for concurrent pipelines.
+    skip_watermark: bool,
+
+    /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
+    /// run. Any pipelines that are present in this filter but not added to the indexer will yield
+    /// a warning when the indexer is run.
     enabled_pipelines: Option<BTreeSet<String>>,
 
     /// Pipelines that have already been registered with the indexer. Used to make sure a pipeline
@@ -84,59 +116,23 @@ pub struct Indexer {
     handles: Vec<JoinHandle<()>>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
-pub struct IndexerConfig {
-    #[command(flatten)]
-    pub ingestion_config: IngestionConfig,
-
-    #[command(flatten)]
-    pub pipeline_config: PipelineConfig,
-
-    /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
-    /// ingestion will start just after the lowest checkpoint watermark across all active
-    /// pipelines.
-    #[arg(long)]
-    pub first_checkpoint: Option<u64>,
-
-    /// Override for the checkpoint to end ingestion at (inclusive) -- useful for backfills. By
-    /// default, ingestion will not stop, and will continue to poll for new checkpoints.
-    #[arg(long)]
-    pub last_checkpoint: Option<u64>,
-
-    /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
-    /// will be run.
-    #[arg(long, action = clap::ArgAction::Append)]
-    pub pipeline: Vec<String>,
-
-    /// Address to serve Prometheus Metrics from.
-    #[arg(long, default_value = Self::DEFAULT_METRICS_ADDRESS)]
-    pub metrics_address: SocketAddr,
-}
-
-impl IndexerConfig {
-    const DEFAULT_METRICS_ADDRESS: &'static str = "0.0.0.0:9184";
-
-    pub fn default_metrics_address() -> SocketAddr {
-        Self::DEFAULT_METRICS_ADDRESS.parse().unwrap()
-    }
-}
-
 impl Indexer {
     pub async fn new(
-        db_config: DbConfig,
-        indexer_config: IndexerConfig,
+        db_args: DbArgs,
+        indexer_args: IndexerArgs,
+        client_args: ClientArgs,
+        ingestion_config: IngestionConfig,
         cancel: CancellationToken,
     ) -> Result<Self> {
-        let IndexerConfig {
-            ingestion_config,
-            pipeline_config,
+        let IndexerArgs {
             first_checkpoint,
             last_checkpoint,
             pipeline,
+            skip_watermark,
             metrics_address,
-        } = indexer_config;
+        } = indexer_args;
 
-        let db = Db::new(db_config)
+        let db = Db::new(db_args)
             .await
             .context("Failed to connect to database")?;
 
@@ -147,23 +143,26 @@ impl Indexer {
 
         let (metrics, metrics_service) =
             MetricsService::new(metrics_address, db.clone(), cancel.clone())?;
-        let ingestion_service =
-            IngestionService::new(ingestion_config, metrics.clone(), cancel.clone())?;
 
-        let enabled_pipelines: BTreeSet<_> = pipeline.into_iter().collect();
+        let ingestion_service = IngestionService::new(
+            client_args,
+            ingestion_config,
+            metrics.clone(),
+            cancel.clone(),
+        )?;
 
         Ok(Self {
             db,
             metrics,
             metrics_service,
             ingestion_service,
-            pipeline_config,
             first_checkpoint,
             last_checkpoint,
-            enabled_pipelines: if enabled_pipelines.is_empty() {
+            skip_watermark,
+            enabled_pipelines: if pipeline.is_empty() {
                 None
             } else {
-                Some(enabled_pipelines)
+                Some(pipeline.into_iter().collect())
             },
             added_pipelines: BTreeSet::new(),
             cancel,
@@ -191,7 +190,7 @@ impl Indexer {
     pub async fn concurrent_pipeline<H: concurrent::Handler + Send + Sync + 'static>(
         &mut self,
         handler: H,
-        pruner_config: Option<PrunerConfig>,
+        config: ConcurrentConfig,
     ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
@@ -200,15 +199,15 @@ impl Indexer {
         // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
         // watermark consistency. first_checkpoint can be anything since we don't update watermark,
         // and writes should be idempotent.
-        if !self.pipeline_config.skip_watermark {
+        if !self.skip_watermark {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
         self.handles.push(concurrent::pipeline(
             handler,
             watermark,
-            self.pipeline_config.clone(),
-            pruner_config,
+            config,
+            self.skip_watermark,
             self.db.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
@@ -231,11 +230,18 @@ impl Indexer {
     pub async fn sequential_pipeline<H: sequential::Handler + Send + Sync + 'static>(
         &mut self,
         handler: H,
-        checkpoint_lag: Option<u64>,
+        config: SequentialConfig,
     ) -> Result<()> {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
+
+        if self.skip_watermark {
+            warn!(
+                pipeline = H::NAME,
+                "--skip-watermarks enabled and ignored for sequential pipeline"
+            );
+        }
 
         // For a sequential pipeline, data must be written in the order of checkpoints.
         // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
@@ -246,8 +252,7 @@ impl Indexer {
         self.handles.push(sequential::pipeline(
             handler,
             watermark,
-            self.pipeline_config.clone(),
-            checkpoint_lag,
+            config,
             self.db.clone(),
             checkpoint_rx,
             watermark_tx,
@@ -269,7 +274,8 @@ impl Indexer {
         if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
             ensure!(
                 first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. This could create gaps in the data.",
+                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
+                 This could create gaps in the data.",
                 P::NAME,
                 first_checkpoint,
                 watermark.checkpoint_hi_inclusive,
@@ -284,10 +290,11 @@ impl Indexer {
     /// Ingestion will stop after consuming the configured `last_checkpoint`, if one is provided,
     /// or will continue until it tracks the tip of the network.
     pub async fn run(mut self) -> Result<JoinHandle<()>> {
-        if let Some(enabled_pipelines) = &self.enabled_pipelines {
+        if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
                 enabled_pipelines.is_empty(),
-                "Tried to enable pipelines that this indexer does not know about: {enabled_pipelines:#?}",
+                "Tried to enable pipelines that this indexer does not know about: \
+                {enabled_pipelines:#?}",
             );
         }
 
@@ -347,7 +354,7 @@ impl Indexer {
 
         if let Some(enabled_pipelines) = &mut self.enabled_pipelines {
             if !enabled_pipelines.remove(P::NAME) {
-                info!("Skipping pipeline {}", P::NAME);
+                info!(pipeline = P::NAME, "Skipping");
                 return Ok(None);
             }
         }
@@ -368,80 +375,216 @@ impl Indexer {
     }
 }
 
+impl Default for IndexerArgs {
+    fn default() -> Self {
+        Self {
+            first_checkpoint: None,
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: false,
+            metrics_address: "0.0.0.0:9184".parse().unwrap(),
+        }
+    }
+}
+
 pub async fn start_indexer(
+    db_args: DbArgs,
+    indexer_args: IndexerArgs,
+    client_args: ClientArgs,
     indexer_config: IndexerConfig,
-    db_config: DbConfig,
-    consistency_config: ConsistencyConfig,
     // If true, the indexer will bootstrap from genesis.
     // Otherwise it will skip the pipelines that rely on genesis data.
     // TODO: There is probably a better way to handle this.
     // For instance, we could also pass in dummy genesis data in the benchmark mode.
     with_genesis: bool,
 ) -> anyhow::Result<()> {
+    let IndexerConfig {
+        ingestion,
+        consistency,
+        committer,
+        pruner,
+        pipeline,
+        extra: _,
+    } = indexer_config.finish();
+
+    let PipelineLayer {
+        sum_coin_balances,
+        wal_coin_balances,
+        sum_obj_types,
+        wal_obj_types,
+        sum_displays,
+        sum_packages,
+        ev_emit_mod,
+        ev_struct_inst,
+        kv_checkpoints,
+        kv_epoch_ends,
+        kv_epoch_starts,
+        kv_feature_flags,
+        kv_objects,
+        kv_protocol_configs,
+        kv_transactions,
+        obj_info,
+        obj_versions,
+        tx_affected_addresses,
+        tx_affected_objects,
+        tx_balance_changes,
+        tx_calls,
+        tx_digests,
+        tx_kinds,
+        extra: _,
+    } = pipeline.finish();
+
+    let ingestion = ingestion.finish(IngestionConfig::default());
+
+    let ConsistencyConfig {
+        consistent_pruning_interval_ms,
+        pruner_delay_ms,
+        consistent_range,
+    } = consistency.finish(ConsistencyConfig::default());
+
+    let committer = committer.finish(CommitterConfig::default());
+    let pruner = pruner.finish(PrunerConfig::default());
+
+    // Pipelines that are split up into a summary table, and a write-ahead log prune their
+    // write-ahead log so it contains just enough information to overlap with the summary table.
+    let consistent_range = consistent_range.unwrap_or_default();
+    let pruner_config = (consistent_range != 0).then(|| PrunerConfig {
+        interval_ms: consistent_pruning_interval_ms,
+        delay_ms: pruner_delay_ms,
+        // Retain at least twice as much data as the lag, to guarantee overlap between the
+        // summary table and the write-ahead log.
+        retention: consistent_range * 2,
+        // Prune roughly five minutes of data in one go.
+        max_chunk_size: 5 * 300,
+    });
+
     let cancel = CancellationToken::new();
-    let retry_interval = indexer_config.ingestion_config.retry_interval;
-    let mut indexer = Indexer::new(db_config, indexer_config, cancel.clone()).await?;
+    let retry_interval = ingestion.retry_interval();
+
+    let mut indexer = Indexer::new(
+        db_args,
+        indexer_args,
+        client_args,
+        ingestion,
+        cancel.clone(),
+    )
+    .await?;
+
+    // These macros are responsible for registering pipelines with the indexer. It is responsible
+    // for:
+    //
+    //  - Checking whether the pipeline is enabled in the file-based configuration.
+    //  - Checking for unexpected parameters in the config.
+    //  - Combining shared and per-pipeline configurations.
+    //  - Registering the pipeline with the indexer.
+    //
+    // There are three kinds of pipeline, each with their own macro: `add_concurrent`,
+    // `add_sequential`, and `add_consistent`. `add_concurrent` and `add_sequential` map directly
+    // to `Indexer::concurrent_pipeline` and `Indexer::sequential_pipeline` respectively while
+    // `add_consistent` is a special case that generates both a sequential "summary" pipeline and a
+    // `concurrent` "write-ahead log" pipeline, with their configuration based on the supplied
+    // ConsistencyConfig.
+
+    macro_rules! add_concurrent {
+        ($handler:expr, $config:expr) => {
+            if let Some(layer) = $config {
+                indexer
+                    .concurrent_pipeline(
+                        $handler,
+                        layer.finish(ConcurrentConfig {
+                            committer: committer.clone(),
+                            pruner: Some(pruner.clone()),
+                        }),
+                    )
+                    .await?
+            }
+        };
+    }
+
+    macro_rules! add_sequential {
+        ($handler:expr, $config:expr) => {
+            if let Some(layer) = $config {
+                indexer
+                    .sequential_pipeline(
+                        $handler,
+                        layer.finish(SequentialConfig {
+                            committer: committer.clone(),
+                            ..Default::default()
+                        }),
+                    )
+                    .await?
+            }
+        };
+    }
+
+    macro_rules! add_consistent {
+        ($sum_handler:expr, $sum_config:expr; $wal_handler:expr, $wal_config:expr) => {
+            if let Some(sum_layer) = $sum_config {
+                indexer
+                    .sequential_pipeline(
+                        $sum_handler,
+                        SequentialConfig {
+                            committer: sum_layer.finish(committer.clone()),
+                            checkpoint_lag: consistent_range,
+                        },
+                    )
+                    .await?;
+
+                if let Some(pruner_config) = pruner_config.clone() {
+                    indexer
+                        .concurrent_pipeline(
+                            $wal_handler,
+                            ConcurrentConfig {
+                                committer: $wal_config
+                                    .unwrap_or_default()
+                                    .finish(committer.clone()),
+                                pruner: Some(pruner_config),
+                            },
+                        )
+                        .await?;
+                }
+            }
+        };
+    }
 
     if with_genesis {
         let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
 
         // Pipelines that rely on genesis information
-        indexer
-            .concurrent_pipeline(KvFeatureFlags(genesis.clone()), None)
-            .await?;
-
-        indexer
-            .concurrent_pipeline(KvProtocolConfigs(genesis.clone()), None)
-            .await?;
+        add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
+        add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
     }
 
-    let ConsistencyConfig {
-        consistent_pruning_interval,
-        pruner_delay,
-        consistent_range: lag,
-    } = consistency_config;
+    add_consistent!(
+        SumCoinBalances, sum_coin_balances;
+        WalCoinBalances, wal_coin_balances
+    );
 
-    // Pipelines that are split up into a summary table, and a write-ahead log, where the
-    // write-ahead log needs to be pruned.
-    let pruner_config = lag.map(|l| PrunerConfig {
-        interval: consistent_pruning_interval,
-        delay: pruner_delay,
-        // Retain at least twice as much data as the lag, to guarantee overlap between the
-        // summary table and the write-ahead log.
-        retention: l * 2,
-        // Prune roughly five minutes of data in one go.
-        max_chunk_size: 5 * 300,
-    });
-
-    indexer.sequential_pipeline(SumCoinBalances, lag).await?;
-    indexer
-        .concurrent_pipeline(WalCoinBalances, pruner_config.clone())
-        .await?;
-
-    indexer.sequential_pipeline(SumObjTypes, lag).await?;
-    indexer
-        .concurrent_pipeline(WalObjTypes, pruner_config)
-        .await?;
+    add_consistent!(
+        SumObjTypes, sum_obj_types;
+        WalObjTypes, wal_obj_types
+    );
 
     // Other summary tables (without write-ahead log)
-    indexer.sequential_pipeline(SumDisplays, None).await?;
-    indexer.sequential_pipeline(SumPackages, None).await?;
+    add_sequential!(SumDisplays, sum_displays);
+    add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
-    indexer.concurrent_pipeline(EvEmitMod, None).await?;
-    indexer.concurrent_pipeline(EvStructInst, None).await?;
-    indexer.concurrent_pipeline(KvCheckpoints, None).await?;
-    indexer.concurrent_pipeline(KvEpochEnds, None).await?;
-    indexer.concurrent_pipeline(KvEpochStarts, None).await?;
-    indexer.concurrent_pipeline(KvObjects, None).await?;
-    indexer.concurrent_pipeline(KvTransactions, None).await?;
-    indexer.concurrent_pipeline(ObjVersions, None).await?;
-    indexer.concurrent_pipeline(TxAffectedAddress, None).await?;
-    indexer.concurrent_pipeline(TxAffectedObjects, None).await?;
-    indexer.concurrent_pipeline(TxBalanceChanges, None).await?;
-    indexer.concurrent_pipeline(TxCalls, None).await?;
-    indexer.concurrent_pipeline(TxDigests, None).await?;
-    indexer.concurrent_pipeline(TxKinds, None).await?;
+    add_concurrent!(EvEmitMod, ev_emit_mod);
+    add_concurrent!(EvStructInst, ev_struct_inst);
+    add_concurrent!(KvCheckpoints, kv_checkpoints);
+    add_concurrent!(KvEpochEnds, kv_epoch_ends);
+    add_concurrent!(KvEpochStarts, kv_epoch_starts);
+    add_concurrent!(KvObjects, kv_objects);
+    add_concurrent!(KvTransactions, kv_transactions);
+    add_concurrent!(ObjInfo, obj_info);
+    add_concurrent!(ObjVersions, obj_versions);
+    add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
+    add_concurrent!(TxAffectedObjects, tx_affected_objects);
+    add_concurrent!(TxBalanceChanges, tx_balance_changes);
+    add_concurrent!(TxCalls, tx_calls);
+    add_concurrent!(TxDigests, tx_digests);
+    add_concurrent!(TxKinds, tx_kinds);
 
     let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
