@@ -99,8 +99,7 @@ struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
     rx_subscriber_exists: watch::Receiver<bool>,
-    rx_propagation_delay_and_quorum_rounds:
-        watch::Receiver<(Round, Vec<QuorumRound>, Vec<QuorumRound>)>,
+    rx_propagation_delay_and_quorum_rounds: watch::Receiver<PropagationDelayAndQuorumRounds>,
     rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
 }
@@ -153,8 +152,12 @@ impl CoreThread {
                 _ = self.rx_propagation_delay_and_quorum_rounds.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_propagation_delay_and_quorum_rounds");
                     let should_propose_before = self.core.should_propose();
-                    let (delay, received_quorum_rounds, accepted_quorum_rounds) = self.rx_propagation_delay_and_quorum_rounds.borrow().clone();
-                    self.core.set_propagation_delay_and_quorum_rounds(delay, received_quorum_rounds, accepted_quorum_rounds);
+                    let state = self.rx_propagation_delay_and_quorum_rounds.borrow().clone();
+                    self.core.set_propagation_delay_and_quorum_rounds(
+                        state.delay,
+                        state.received_quorum_rounds,
+                        state.accepted_quorum_rounds
+                    );
                     if !should_propose_before && self.core.should_propose() {
                         // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
@@ -173,8 +176,7 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
     tx_subscriber_exists: Arc<watch::Sender<bool>>,
-    tx_propagation_delay_and_quorum_rounds:
-        Arc<watch::Sender<(Round, Vec<QuorumRound>, Vec<QuorumRound>)>>,
+    tx_propagation_delay_and_quorum_rounds: Arc<watch::Sender<PropagationDelayAndQuorumRounds>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
     highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
@@ -203,11 +205,11 @@ impl ChannelCoreThreadDispatcher {
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
         let (tx_propagation_delay_and_quorum_rounds, mut rx_propagation_delay_and_quorum_rounds) =
-            watch::channel((
-                0,
-                vec![(0, 0); context.committee.size()],
-                vec![(0, 0); context.committee.size()],
-            ));
+            watch::channel(PropagationDelayAndQuorumRounds {
+                delay: 0,
+                received_quorum_rounds: vec![(0, 0); context.committee.size()],
+                accepted_quorum_rounds: vec![(0, 0); context.committee.size()],
+            });
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
         rx_subscriber_exists.mark_unchanged();
         rx_propagation_delay_and_quorum_rounds.mark_unchanged();
@@ -307,7 +309,11 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         accepted_quorum_rounds: Vec<QuorumRound>,
     ) -> Result<(), CoreError> {
         self.tx_propagation_delay_and_quorum_rounds
-            .send((delay, received_quorum_rounds, accepted_quorum_rounds))
+            .send(PropagationDelayAndQuorumRounds {
+                delay,
+                received_quorum_rounds,
+                accepted_quorum_rounds,
+            })
             .map_err(|e| Shutdown(e.to_string()))
     }
 
@@ -323,6 +329,13 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             .map(|round| round.load(Ordering::Relaxed))
             .collect()
     }
+}
+
+#[derive(Clone)]
+struct PropagationDelayAndQuorumRounds {
+    delay: Round,
+    received_quorum_rounds: Vec<QuorumRound>,
+    accepted_quorum_rounds: Vec<QuorumRound>,
 }
 
 // TODO: complete the Mock for thread dispatcher to be used from several tests

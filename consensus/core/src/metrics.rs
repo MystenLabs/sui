@@ -187,7 +187,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) round_prober_current_accepted_round_gaps: IntGaugeVec,
     pub(crate) round_prober_propagation_delays: Histogram,
     pub(crate) round_prober_last_propagation_delay: IntGauge,
-    pub(crate) round_prober_request_errors: IntCounter,
+    pub(crate) round_prober_request_errors: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -704,9 +704,10 @@ impl NodeMetrics {
                 "Most recent propagation delay observed by RoundProber",
                 registry
             ).unwrap(),
-            round_prober_request_errors: register_int_counter_with_registry!(
+            round_prober_request_errors: register_int_counter_vec_with_registry!(
                 "round_prober_request_errors",
-                "Number of timeouts when probing against peers",
+                "Number of errors when probing against peers per error type",
+                &["error_type"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

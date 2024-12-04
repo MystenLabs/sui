@@ -787,7 +787,7 @@ pub(crate) struct GetLatestRoundsRequest {}
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct GetLatestRoundsResponse {
     // Highest received round per authority.
-    highest_received: Vec<u32>,
+    highest_received: Vec<Round>,
     // Highest accepted round per authority.
-    highest_accepted: Vec<u32>,
+    highest_accepted: Vec<Round>,
 }

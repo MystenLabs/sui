@@ -307,7 +307,7 @@ mod test {
     use crate::leader_scoring::ReputationScores;
 
     #[tokio::test]
-    async fn test_calculate_network_high_accepted_quorum_round() {
+    async fn test_calculate_network_high_received_quorum_round() {
         telemetry_subscribers::init_for_testing();
 
         let (mut context, _key_pairs) = Context::new_for_test(4);
@@ -340,7 +340,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_calculate_network_high_received_quorum_round() {
+    async fn test_calculate_network_high_accepted_quorum_round() {
         telemetry_subscribers::init_for_testing();
 
         let (mut context, _key_pairs) = Context::new_for_test(4);

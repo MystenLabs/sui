@@ -176,7 +176,7 @@ impl<C: NetworkClient> RoundProber<C> {
                             {
                                 highest_received_rounds[peer] = received;
                             } else {
-                                node_metrics.round_prober_request_errors.inc();
+                                node_metrics.round_prober_request_errors.with_label_values(&["invalid_received_rounds"]).inc();
                                 tracing::warn!("Received invalid number of received rounds from peer {}", peer);
                             }
 
@@ -187,7 +187,7 @@ impl<C: NetworkClient> RoundProber<C> {
                                     if accepted.len() == self.context.committee.size() {
                                         highest_accepted_rounds[peer] = accepted;
                                     } else {
-                                        node_metrics.round_prober_request_errors.inc();
+                                        node_metrics.round_prober_request_errors.with_label_values(&["invalid_accepted_rounds"]).inc();
                                         tracing::warn!("Received invalid number of accepted rounds from peer {}", peer);
                                     }
                                 }
@@ -204,11 +204,11 @@ impl<C: NetworkClient> RoundProber<C> {
                         // (peer A cannot propagate its blocks well). It can be difficult to distinguish between
                         // own probing failures and actual propagation issues.
                         Ok(Err(err)) => {
-                            node_metrics.round_prober_request_errors.inc();
+                            node_metrics.round_prober_request_errors.with_label_values(&["failed_fetch"]).inc();
                             tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
                         },
                         Err(_) => {
-                            node_metrics.round_prober_request_errors.inc();
+                            node_metrics.round_prober_request_errors.with_label_values(&["timeout"]).inc();
                             tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
                         },
                     }
