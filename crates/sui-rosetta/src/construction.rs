@@ -21,9 +21,7 @@ use sui_types::signature_verification::{
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
-use crate::types::internal_operation::{
-    PayCoin, TransactionObjectData, TryConstructTransaction,
-};
+use crate::types::internal_operation::{PayCoin, TransactionObjectData, TryConstructTransaction};
 use crate::types::{
     Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
     ConstructionDeriveResponse, ConstructionHashRequest, ConstructionMetadata,
