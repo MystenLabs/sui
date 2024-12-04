@@ -119,7 +119,7 @@ diesel::table! {
         owner_id -> Bytea,
         coin_type -> Bytea,
         coin_balance -> Int8,
-        owner_kind -> Int2,
+        coin_owner_kind -> Int2,
     }
 }
 
@@ -210,7 +210,7 @@ diesel::table! {
         coin_type -> Nullable<Bytea>,
         coin_balance -> Nullable<Int8>,
         cp_sequence_number -> Int8,
-        owner_kind -> Nullable<Int2>,
+        coin_owner_kind -> Nullable<Int2>,
     }
 }
 

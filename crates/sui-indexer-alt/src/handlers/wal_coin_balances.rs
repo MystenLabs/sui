@@ -49,7 +49,7 @@ impl Handler for WalCoinBalances {
 
                 cp_sequence_number: value.cp_sequence_number as i64,
 
-                owner_kind: value.update.as_ref().map(|o| o.owner_kind),
+                coin_owner_kind: value.update.as_ref().map(|o| o.coin_owner_kind),
             })
             .collect();
 

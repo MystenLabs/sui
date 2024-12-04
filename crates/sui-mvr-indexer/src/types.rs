@@ -206,7 +206,6 @@ pub enum OwnerType {
     Address = 1,
     Object = 2,
     Shared = 3,
-    ConsensusV2 = 4,
 }
 
 pub enum ObjectStatus {
@@ -257,10 +256,9 @@ pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<SuiAddress>) {
         Owner::Immutable => (OwnerType::Immutable, None),
         // ConsensusV2 objects are treated as singly-owned for now in indexers.
         // This will need to be updated if additional Authenticators are added.
-        Owner::ConsensusV2 { authenticator, .. } => (
-            OwnerType::ConsensusV2,
-            Some(*authenticator.as_single_owner()),
-        ),
+        Owner::ConsensusV2 { authenticator, .. } => {
+            (OwnerType::Address, Some(*authenticator.as_single_owner()))
+        }
     }
 }
 

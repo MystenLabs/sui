@@ -17,7 +17,7 @@ use sui_types::{
 
 use crate::{
     db,
-    models::objects::{StoredObjectUpdate, StoredOwnerKind, StoredSumCoinBalance},
+    models::objects::{StoredCoinOwnerKind, StoredObjectUpdate, StoredSumCoinBalance},
     pipeline::{sequential::Handler, Processor},
     schema::sum_coin_balances,
 };
@@ -100,12 +100,12 @@ impl Processor for SumCoinBalances {
                 };
 
                 // Coin balance only tracks address-owned or ConsensusV2 objects
-                let (owner_kind, owner_id) = match object.owner() {
-                    Owner::AddressOwner(owner_id) => (StoredOwnerKind::Address, owner_id),
+                let (coin_owner_kind, owner_id) = match object.owner() {
+                    Owner::AddressOwner(owner_id) => (StoredCoinOwnerKind::Fastpath, owner_id),
                     // ConsensusV2 objects are treated as address-owned for now in indexers.
                     // This will need to be updated if additional Authenticators are added.
                     Owner::ConsensusV2 { authenticator, .. } => (
-                        StoredOwnerKind::ConsensusV2,
+                        StoredCoinOwnerKind::Consensus,
                         authenticator.as_single_owner(),
                     ),
 
@@ -132,7 +132,7 @@ impl Processor for SumCoinBalances {
                                 owner_id: owner_id.to_vec(),
                                 coin_type: coin_type.clone(),
                                 coin_balance: coin.balance.value() as i64,
-                                owner_kind,
+                                coin_owner_kind,
                             }),
                         });
                     }
@@ -183,6 +183,8 @@ impl Handler for SumCoinBalances {
                         sum_coin_balances::owner_id.eq(excluded(sum_coin_balances::owner_id)),
                         sum_coin_balances::coin_balance
                             .eq(excluded(sum_coin_balances::coin_balance)),
+                        sum_coin_balances::coin_owner_kind
+                            .eq(excluded(sum_coin_balances::coin_owner_kind)),
                     ))
                     .execute(conn),
             ),

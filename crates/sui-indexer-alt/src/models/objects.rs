@@ -48,7 +48,14 @@ pub enum StoredOwnerKind {
     Address = 1,
     Object = 2,
     Shared = 3,
-    ConsensusV2 = 4,
+}
+
+#[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[diesel(sql_type = SmallInt)]
+#[repr(i16)]
+pub enum StoredCoinOwnerKind {
+    Fastpath = 0,
+    Consensus = 1,
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
@@ -59,7 +66,7 @@ pub struct StoredSumCoinBalance {
     pub owner_id: Vec<u8>,
     pub coin_type: Vec<u8>,
     pub coin_balance: i64,
-    pub owner_kind: StoredOwnerKind,
+    pub coin_owner_kind: StoredCoinOwnerKind,
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
@@ -84,7 +91,7 @@ pub struct StoredWalCoinBalance {
     pub coin_type: Option<Vec<u8>>,
     pub coin_balance: Option<i64>,
     pub cp_sequence_number: i64,
-    pub owner_kind: Option<StoredOwnerKind>,
+    pub coin_owner_kind: Option<StoredCoinOwnerKind>,
 }
 
 #[derive(Insertable, Debug, Clone)]
@@ -111,7 +118,6 @@ where
             StoredOwnerKind::Address => 1.to_sql(out),
             StoredOwnerKind::Object => 2.to_sql(out),
             StoredOwnerKind::Shared => 3.to_sql(out),
-            StoredOwnerKind::ConsensusV2 => 4.to_sql(out),
         }
     }
 }
@@ -127,6 +133,31 @@ where
             2 => StoredOwnerKind::Object,
             3 => StoredOwnerKind::Shared,
             o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
+        })
+    }
+}
+
+impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredCoinOwnerKind
+where
+    i16: serialize::ToSql<SmallInt, DB>,
+{
+    fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
+        match self {
+            StoredCoinOwnerKind::Fastpath => 0.to_sql(out),
+            StoredCoinOwnerKind::Consensus => 1.to_sql(out),
+        }
+    }
+}
+
+impl<DB: Backend> deserialize::FromSql<SmallInt, DB> for StoredCoinOwnerKind
+where
+    i16: deserialize::FromSql<SmallInt, DB>,
+{
+    fn from_sql(raw: DB::RawValue<'_>) -> deserialize::Result<Self> {
+        Ok(match i16::from_sql(raw)? {
+            0 => StoredCoinOwnerKind::Fastpath,
+            1 => StoredCoinOwnerKind::Consensus,
+            o => return Err(format!("Unexpected StoredCoinOwnerKind: {o}").into()),
         })
     }
 }

@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS sum_obj_types
 (
     object_id                   BYTEA         PRIMARY KEY,
     object_version              BIGINT        NOT NULL,
-    -- TODO-DNS Question for reviewers: what do I do about updating 
-    -- now-invalid comments on existing columns, like below? Just change here?
     -- An enum describing the object's ownership model:
     --
     --   Immutable = 0,
@@ -19,6 +17,11 @@ CREATE TABLE IF NOT EXISTS sum_obj_types
     -- another object (kind 2), which relates to dynamic fields, and an object
     -- that is owned by another object's address (kind 1), which relates to
     -- transfer-to-object.
+    --
+    -- Warning: This column may look similar to the concept of "ObjectOwner"
+    -- but is NOT the same. For purposes of determining owner_kind, ConsensusV2
+    -- objects mapped onto the variants described above based on their
+    -- authenticator.
     owner_kind                  SMALLINT      NOT NULL,
     -- The address for address-owned objects, and the parent object for
     -- object-owned objects.
