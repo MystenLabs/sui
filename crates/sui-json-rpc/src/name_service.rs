@@ -17,14 +17,6 @@ use sui_types::TypeTag;
 
 const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
 const NAME_SERVICE_DOMAIN_STRUCT: &IdentStr = ident_str!("Domain");
-const NAME_SERVICE_DEFAULT_PACKAGE_ADDRESS: &str =
-    "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0";
-const NAME_SERVICE_DEFAULT_REGISTRY: &str =
-    "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
-const NAME_SERVICE_DEFAULT_REVERSE_REGISTRY: &str =
-    "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
-const _NAME_SERVICE_OBJECT_ADDRESS: &str =
-    "0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871";
 const LEAF_EXPIRATION_TIMESTAMP: u64 = 0;
 const DEFAULT_TLD: &str = "sui";
 const ACCEPTED_SEPARATORS: [char; 2] = ['.', '*'];
@@ -160,15 +152,43 @@ impl NameServiceConfig {
         )
         .unwrap()
     }
+
+    // Create a config based on the package and object ids published on mainnet
+    pub fn mainnet() -> Self {
+        const MAINNET_NS_PACKAGE_ADDRESS: &str =
+            "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0";
+        const MAINNET_NS_REGISTRY_ID: &str =
+            "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
+        const MAINNET_NS_REVERSE_REGISTRY_ID: &str =
+            "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
+
+        let package_address = SuiAddress::from_str(MAINNET_NS_PACKAGE_ADDRESS).unwrap();
+        let registry_id = ObjectID::from_str(MAINNET_NS_REGISTRY_ID).unwrap();
+        let reverse_registry_id = ObjectID::from_str(MAINNET_NS_REVERSE_REGISTRY_ID).unwrap();
+
+        Self::new(package_address, registry_id, reverse_registry_id)
+    }
+
+    // Create a config based on the package and object ids published on testnet
+    pub fn testnet() -> Self {
+        const TESTNET_NS_PACKAGE_ADDRESS: &str =
+            "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93";
+        const TESTNET_NS_REGISTRY_ID: &str =
+            "0xb120c0d55432630fce61f7854795a3463deb6e3b443cc4ae72e1282073ff56e4";
+        const TESTNET_NS_REVERSE_REGISTRY_ID: &str =
+            "0xcee9dbb070db70936c3a374439a6adb16f3ba97eac5468d2e1e6fff6ed93e465";
+
+        let package_address = SuiAddress::from_str(TESTNET_NS_PACKAGE_ADDRESS).unwrap();
+        let registry_id = ObjectID::from_str(TESTNET_NS_REGISTRY_ID).unwrap();
+        let reverse_registry_id = ObjectID::from_str(TESTNET_NS_REVERSE_REGISTRY_ID).unwrap();
+
+        Self::new(package_address, registry_id, reverse_registry_id)
+    }
 }
 
 impl Default for NameServiceConfig {
     fn default() -> Self {
-        let package_address = SuiAddress::from_str(NAME_SERVICE_DEFAULT_PACKAGE_ADDRESS).unwrap();
-        let registry_id = ObjectID::from_str(NAME_SERVICE_DEFAULT_REGISTRY).unwrap();
-        let reverse_registry_id =
-            ObjectID::from_str(NAME_SERVICE_DEFAULT_REVERSE_REGISTRY).unwrap();
-        Self::new(package_address, registry_id, reverse_registry_id)
+        Self::mainnet()
     }
 }
 
