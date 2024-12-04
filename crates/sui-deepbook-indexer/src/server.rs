@@ -7,7 +7,6 @@ use crate::{
     schema::{self},
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
-use anyhow::anyhow;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -380,15 +379,17 @@ async fn orderbook(
         .get("depth")
         .map(|v| v.parse::<u64>())
         .transpose()
-        .map_err(|_| anyhow!("Depth must be a non-negative integer"))?
+        .map_err(|_| {
+            DeepBookError::InternalError("Depth must be a non-negative integer".to_string())
+        })?
         .map(|depth| if depth == 0 { 200 } else { depth });
 
     if let Some(depth) = depth {
         if depth == 1 {
-            return Err(anyhow!(
+            return Err(DeepBookError::InternalError(
                 "Depth cannot be 1. Use a value greater than 1 or 0 for the entire orderbook"
-            )
-            .into());
+                    .to_string(),
+            ));
         }
     }
 
@@ -396,11 +397,15 @@ async fn orderbook(
         .get("level")
         .map(|v| v.parse::<u64>())
         .transpose()
-        .map_err(|_| anyhow!("Level must be an integer between 1 and 2"))?;
+        .map_err(|_| {
+            DeepBookError::InternalError("Level must be an integer between 1 and 2".to_string())
+        })?;
 
     if let Some(level) = level {
         if !(1..=2).contains(&level) {
-            return Err(anyhow!("Level must be 1 or 2").into());
+            return Err(DeepBookError::InternalError(
+                "Level must be 1 or 2".to_string(),
+            ));
         }
     }
 
@@ -439,10 +444,14 @@ async fn orderbook(
         .read_api()
         .get_object_with_options(pool_address, SuiObjectDataOptions::full_content())
         .await?;
-    let pool_data: &SuiObjectData = pool_object.data.as_ref().ok_or(anyhow!(
-        "Missing data in pool object response for '{}'",
-        pool_name
-    ))?;
+    let pool_data: &SuiObjectData =
+        pool_object
+            .data
+            .as_ref()
+            .ok_or(DeepBookError::InternalError(format!(
+                "Missing data in pool object response for '{}'",
+                pool_name
+            )))?;
     let pool_object_ref: ObjectRef = (pool_data.object_id, pool_data.version, pool_data.digest);
 
     let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref));
@@ -458,10 +467,13 @@ async fn orderbook(
         .read_api()
         .get_object_with_options(sui_clock_object_id, SuiObjectDataOptions::full_content())
         .await?;
-    let clock_data: &SuiObjectData = sui_clock_object
-        .data
-        .as_ref()
-        .ok_or(anyhow!("Missing data in clock object response"))?;
+    let clock_data: &SuiObjectData =
+        sui_clock_object
+            .data
+            .as_ref()
+            .ok_or(DeepBookError::InternalError(
+                "Missing data in clock object response".to_string(),
+            ))?;
 
     let sui_clock_object_ref: ObjectRef =
         (clock_data.object_id, clock_data.version, clock_data.digest);
@@ -472,7 +484,8 @@ async fn orderbook(
     let base_coin_type = parse_type_input(&base_asset_id)?;
     let quote_coin_type = parse_type_input(&quote_asset_id)?;
 
-    let package = ObjectID::from_hex_literal(DEEPBOOK_PACKAGE_ID).map_err(|e| anyhow!(e))?;
+    let package = ObjectID::from_hex_literal(&DEEPBOOK_PACKAGE_ID)
+        .map_err(|e| DeepBookError::InternalError(format!("Invalid pool ID: {}", e)))?;
     let module = "pool".to_string();
     let function = "get_level2_ticks_from_mid".to_string();
 
