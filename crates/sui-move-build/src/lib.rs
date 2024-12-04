@@ -167,11 +167,14 @@ impl BuildConfig {
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
         let resolution_graph = self.resolution_graph(path, chain_id.clone())?;
+        let (published_at, dependency_ids) =
+            gather_published_ids(&resolution_graph, chain_id.clone());
         build_from_resolution_graph(
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
-            chain_id,
+            published_at,
+            dependency_ids,
         )
     }
 
@@ -234,10 +237,9 @@ pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
-    chain_id: Option<String>,
+    published_at: Result<ObjectID, PublishedAtError>,
+    dependencies: PackageDependencies,
 ) -> SuiResult<CompiledPackage> {
-    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph, chain_id);
-
     // collect bytecode dependencies as these are not returned as part of core
     // `CompiledPackage`
     let mut bytecode_deps = vec![];
@@ -301,10 +303,21 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
+
+    let deps: BTreeSet<_> = package
+        .all_compiled_units()
+        .filter_map(|x| {
+            let address = x.address.into_inner();
+            (address != AccountAddress::ZERO).then_some(address)
+        })
+        .collect();
+
+    let mut dependencies = dependencies.clone();
+    dependencies.published.retain(|_, id| deps.contains(id));
     Ok(CompiledPackage {
         package,
         published_at,
-        dependency_ids,
+        dependency_ids: dependencies,
         bytecode_deps,
     })
 }
