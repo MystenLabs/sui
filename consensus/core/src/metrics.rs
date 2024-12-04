@@ -659,13 +659,13 @@ impl NodeMetrics {
             ).unwrap(),
             round_prober_received_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_received_quorum_round_gaps",
-                "Round gaps among peers for blocks proposed from each authority",
+                "Received round gaps among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
             round_prober_accepted_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_accepted_quorum_round_gaps",
-                "Round gaps among peers for blocks proposed & accepted from each authority",
+                "Accepted round gaps among peers for blocks proposed & accepted from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
@@ -683,13 +683,13 @@ impl NodeMetrics {
             ).unwrap(),
             round_prober_current_received_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_current_received_round_gaps",
-                "Round gaps from local last proposed round to the low received quorum round of each peer. Can be negative.",
+                "Received round gaps from local last proposed round to the low received quorum round of each peer. Can be negative.",
                 &["authority"],
                 registry
             ).unwrap(),
             round_prober_current_accepted_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_current_accepted_round_gaps",
-                "Round gaps from local last proposed & accepted round to the low accepted quorum round of each peer. Can be negative.",
+                "Accepted round gaps from local last proposed & accepted round to the low accepted quorum round of each peer. Can be negative.",
                 &["authority"],
                 registry
             ).unwrap(),

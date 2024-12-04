@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! RoundProber periodically checks each peer for the latest rounds they received or accepted
+//! RoundProber periodically checks each peer for the latest rounds they received and accepted
 //! from others. This provides insight into how effectively each authority's blocks are propagated
 //! and accepted across the network.
 //!
@@ -9,9 +9,9 @@
 //! it remains active even when peers are not proposing. This makes it essential for determining
 //! when to disable optimizations that improve DAG quality but may compromise liveness.
 //!
-//! RoundProber's data source is the `highest_received_rounds` & `highest_accepted_rounds` tracked
-//! by the CoreThreadDispatcher. The received rounds are updated after blocks are verified but before
-//! checking for dependencies. This should make the values more indicative of how well authorities
+//! RoundProber's data sources include the `highest_received_rounds` & `highest_accepted_rounds` tracked
+//! by the CoreThreadDispatcher and DagState. The received rounds are updated after blocks are verified
+//! but before checking for dependencies. This should make the values more indicative of how well authorities
 //! propagate blocks, and less influenced by the quality of ancestors in the proposed blocks. The
 //! accepted rounds are updated after checking for dependencies which should indicate the quality
 //! of the proposed blocks including its ancestors.
@@ -173,18 +173,25 @@ impl<C: NetworkClient> RoundProber<C> {
                     match result {
                         Ok(Ok((received, accepted))) => {
                             if received.len() == self.context.committee.size()
-                                && (!self
-                                    .context
-                                    .protocol_config
-                                    .consensus_round_prober_probe_accepted_rounds()
-                                    || accepted.len() == self.context.committee.size())
                             {
                                 highest_received_rounds[peer] = received;
-                                highest_accepted_rounds[peer] = accepted;
                             } else {
                                 node_metrics.round_prober_request_errors.inc();
-                                tracing::warn!("Received invalid number of rounds from peer {}", peer);
+                                tracing::warn!("Received invalid number of received rounds from peer {}", peer);
                             }
+
+                            if self
+                                .context
+                                .protocol_config
+                                .consensus_round_prober_probe_accepted_rounds() {
+                                    if accepted.len() == self.context.committee.size() {
+                                        highest_accepted_rounds[peer] = accepted;
+                                    } else {
+                                        node_metrics.round_prober_request_errors.inc();
+                                        tracing::warn!("Received invalid number of accepted rounds from peer {}", peer);
+                                    }
+                                }
+
                         },
                         // When a request fails, the highest received rounds from that authority will be 0
                         // for the subsequent computations.

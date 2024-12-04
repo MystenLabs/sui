@@ -244,8 +244,14 @@ impl NetworkClient for AnemoClient {
         let response = client
             .get_latest_rounds(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| {
-                ConsensusError::NetworkRequest(format!("get_latest_rounds failed: {e:?}"))
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!(
+                        "get_latest_rounds timeout: {e:?}"
+                    ))
+                } else {
+                    ConsensusError::NetworkRequest(format!("get_latest_rounds failed: {e:?}"))
+                }
             })?;
         let body = response.into_body();
         Ok((body.highest_received, body.highest_accepted))
