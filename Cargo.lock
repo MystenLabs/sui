@@ -13594,6 +13594,7 @@ dependencies = [
  "mysten-metrics",
  "prometheus",
  "serde",
+ "serde_json",
  "serde_yaml 0.8.26",
  "sui-config",
  "sui-data-ingestion-core",
