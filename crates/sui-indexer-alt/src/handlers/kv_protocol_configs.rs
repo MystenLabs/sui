@@ -12,9 +12,8 @@ use sui_indexer_alt_framework::{
 use sui_protocol_config::ProtocolConfig;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    models::{checkpoints::StoredGenesis, epochs::StoredProtocolConfig},
-    schema::kv_protocol_configs,
+use sui_indexer_alt_schema::{
+    checkpoints::StoredGenesis, epochs::StoredProtocolConfig, schema::kv_protocol_configs,
 };
 
 pub(crate) struct KvProtocolConfigs(pub(crate) StoredGenesis);

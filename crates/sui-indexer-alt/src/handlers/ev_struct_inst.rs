@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{models::events::StoredEvStructInst, schema::ev_struct_inst};
+use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
 
 pub(crate) struct EvStructInst;
 

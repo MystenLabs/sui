@@ -11,8 +11,8 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Owner};
 
-use crate::{
-    models::objects::{StoredObjInfo, StoredOwnerKind},
+use sui_indexer_alt_schema::{
+    objects::{StoredObjInfo, StoredOwnerKind},
     schema::obj_info,
 };
 

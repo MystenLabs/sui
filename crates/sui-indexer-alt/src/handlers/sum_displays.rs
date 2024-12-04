@@ -14,7 +14,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData};
 
-use crate::{models::displays::StoredDisplay, schema::sum_displays};
+use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredDisplay::FIELD_COUNT;
 

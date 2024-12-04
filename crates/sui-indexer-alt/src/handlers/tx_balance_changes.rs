@@ -16,9 +16,9 @@ use sui_types::{
     gas_coin::GAS,
 };
 
-use crate::{
-    models::transactions::{BalanceChange, StoredTxBalanceChange},
+use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
+    transactions::{BalanceChange, StoredTxBalanceChange},
 };
 
 pub(crate) struct TxBalanceChanges;

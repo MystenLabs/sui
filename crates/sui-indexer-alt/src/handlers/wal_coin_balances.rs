@@ -12,8 +12,8 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    models::objects::{StoredObjectUpdate, StoredSumCoinBalance, StoredWalCoinBalance},
+use sui_indexer_alt_schema::{
+    objects::{StoredObjectUpdate, StoredSumCoinBalance, StoredWalCoinBalance},
     schema::wal_coin_balances,
 };
 

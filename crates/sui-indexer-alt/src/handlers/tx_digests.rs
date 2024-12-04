@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{models::transactions::StoredTxDigest, schema::tx_digests};
+use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
 
 pub(crate) struct TxDigests;
 
