@@ -133,7 +133,9 @@ pub fn pay_coin_pt(
         commands += 1;
     }
 
-    // TODO: Optimally do not split last coin if the remaining balance is 0
+    // We could optimally not split the last coin if the sum of the coins.balance given matches
+    // the amounts.sum. This would require changes in the ConstructionMetadata type, as information
+    // about the total-coin-value would be needed.
     let amount_args = amounts
         .into_iter()
         .map(|v| builder.pure(v))

@@ -197,6 +197,9 @@ pub fn stake_pt(
             })?;
     };
 
+    // Theoretically, if stake_all is true, we could not use amount, and instead,
+    // directly use Argument::GasCoin here, but this is how this Operation has always worked.
+    // Changing this now would require editing other endpoints too.
     let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
 
     let arguments = vec![system_state, coin, validator];
