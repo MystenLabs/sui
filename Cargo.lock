@@ -14161,6 +14161,7 @@ dependencies = [
  "sui-default-config",
  "sui-field-count",
  "sui-indexer-alt-framework",
+ "sui-indexer-alt-schema",
  "sui-protocol-config",
  "sui-synthetic-ingestion",
  "sui-types",
@@ -14205,6 +14206,19 @@ dependencies = [
  "tracing",
  "url",
  "wiremock",
+]
+
+[[package]]
+name = "sui-indexer-alt-schema"
+version = "1.40.0"
+dependencies = [
+ "anyhow",
+ "diesel",
+ "diesel_migrations",
+ "serde",
+ "sui-field-count",
+ "sui-protocol-config",
+ "sui-types",
 ]
 
 [[package]]

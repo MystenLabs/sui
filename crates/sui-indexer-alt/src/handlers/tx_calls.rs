@@ -12,7 +12,7 @@ use sui_indexer_alt_framework::{
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::{models::transactions::StoredTxCalls, schema::tx_calls};
+use sui_indexer_alt_schema::{schema::tx_calls, transactions::StoredTxCalls};
 
 pub(crate) struct TxCalls;
 

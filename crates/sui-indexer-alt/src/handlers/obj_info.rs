@@ -16,8 +16,8 @@ use sui_types::{
     object::{Object, Owner},
 };
 
-use crate::{
-    models::objects::{StoredObjInfo, StoredOwnerKind},
+use sui_indexer_alt_schema::{
+    objects::{StoredObjInfo, StoredOwnerKind},
     schema::obj_info,
 };
 

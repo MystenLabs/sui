@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{models::checkpoints::StoredCheckpoint, schema::kv_checkpoints};
+use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
 
 pub(crate) struct KvCheckpoints;
 

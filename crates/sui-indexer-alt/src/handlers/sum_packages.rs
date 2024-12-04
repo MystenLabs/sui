@@ -14,7 +14,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{models::packages::StoredPackage, schema::sum_packages};
+use sui_indexer_alt_schema::{packages::StoredPackage, schema::sum_packages};
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredPackage::FIELD_COUNT;
 

@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::{
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{models::objects::StoredObjVersion, schema::obj_versions};
+use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 
 pub(crate) struct ObjVersions;
 
