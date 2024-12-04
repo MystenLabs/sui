@@ -43,6 +43,8 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
+pub const LEVEL2_MODULE: &str = "pool";
+pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
 pub const DEEPBOOK_PACKAGE_ID: &str =
     "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
 
@@ -457,7 +459,9 @@ async fn orderbook(
     let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref));
     ptb.input(pool_input)?;
 
-    let input_argument = CallArg::Pure(bcs::to_bytes(&ticks_from_mid).unwrap());
+    let input_argument = CallArg::Pure(bcs::to_bytes(&ticks_from_mid).map_err(|_| {
+        DeepBookError::InternalError("Failed to serialize ticks_from_mid".to_string())
+    })?);
     ptb.input(input_argument)?;
 
     let sui_clock_object_id = ObjectID::from_hex_literal(
@@ -486,8 +490,8 @@ async fn orderbook(
 
     let package = ObjectID::from_hex_literal(DEEPBOOK_PACKAGE_ID)
         .map_err(|e| DeepBookError::InternalError(format!("Invalid pool ID: {}", e)))?;
-    let module = "pool".to_string();
-    let function = "get_level2_ticks_from_mid".to_string();
+    let module = LEVEL2_MODULE.to_string();
+    let function = LEVEL2_FUNCTION.to_string();
 
     ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
         package,
@@ -505,28 +509,72 @@ async fn orderbook(
         .dev_inspect_transaction_block(SuiAddress::default(), tx, None, None, None)
         .await?;
 
-    let mut binding = result.results.unwrap();
+    let mut binding = result.results.ok_or(DeepBookError::InternalError(
+        "No results from dev_inspect_transaction_block".to_string(),
+    ))?;
     let bid_prices = &binding
         .first_mut()
-        .unwrap()
+        .ok_or(DeepBookError::InternalError(
+            "No return values for bid prices".to_string(),
+        ))?
         .return_values
         .first_mut()
-        .unwrap()
+        .ok_or(DeepBookError::InternalError(
+            "No bid price data found".to_string(),
+        ))?
         .0;
-    let bid_parsed_prices: Vec<u64> = bcs::from_bytes(bid_prices).unwrap();
-    let bid_quantities = &binding.first_mut().unwrap().return_values.get(1).unwrap().0;
-    let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(bid_quantities).unwrap();
+    let bid_parsed_prices: Vec<u64> = bcs::from_bytes(bid_prices).map_err(|_| {
+        DeepBookError::InternalError("Failed to deserialize bid prices".to_string())
+    })?;
+    let bid_quantities = &binding
+        .first_mut()
+        .ok_or(DeepBookError::InternalError(
+            "No return values for bid quantities".to_string(),
+        ))?
+        .return_values
+        .get(1)
+        .ok_or(DeepBookError::InternalError(
+            "No bid quantity data found".to_string(),
+        ))?
+        .0;
+    let bid_parsed_quantities: Vec<u64> = bcs::from_bytes(bid_quantities).map_err(|_| {
+        DeepBookError::InternalError("Failed to deserialize bid quantities".to_string())
+    })?;
 
-    let ask_prices = &binding.first_mut().unwrap().return_values.get(2).unwrap().0;
-    let ask_parsed_prices: Vec<u64> = bcs::from_bytes(ask_prices).unwrap();
-    let ask_quantities = &binding.first_mut().unwrap().return_values.get(3).unwrap().0;
-    let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(ask_quantities).unwrap();
+    let ask_prices = &binding
+        .first_mut()
+        .ok_or(DeepBookError::InternalError(
+            "No return values for ask prices".to_string(),
+        ))?
+        .return_values
+        .get(2)
+        .ok_or(DeepBookError::InternalError(
+            "No ask price data found".to_string(),
+        ))?
+        .0;
+    let ask_parsed_prices: Vec<u64> = bcs::from_bytes(ask_prices).map_err(|_| {
+        DeepBookError::InternalError("Failed to deserialize ask prices".to_string())
+    })?;
+    let ask_quantities = &binding
+        .first_mut()
+        .ok_or(DeepBookError::InternalError(
+            "No return values for ask quantities".to_string(),
+        ))?
+        .return_values
+        .get(3)
+        .ok_or(DeepBookError::InternalError(
+            "No ask quantity data found".to_string(),
+        ))?
+        .0;
+    let ask_parsed_quantities: Vec<u64> = bcs::from_bytes(ask_quantities).map_err(|_| {
+        DeepBookError::InternalError("Failed to deserialize ask quantities".to_string())
+    })?;
 
     let mut result = HashMap::new();
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .map_err(|_| DeepBookError::InternalError("System time error".to_string()))?
         .as_millis() as i64;
     result.insert("timestamp".to_string(), Value::from(timestamp.to_string()));
 
