@@ -41,7 +41,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
     "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
-pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids";
+pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_ids";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const DEEPBOOK_PACKAGE_ID: &str =
@@ -58,11 +58,8 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
     Router::new()
         .route("/", get(health_check))
         .route(GET_POOLS_PATH, get(get_pools))
-        .route(GET_HISTORICAL_VOLUME_PATH, get(get_historical_volume))
-        .route(
-            ALL_HISTORICAL_VOLUME_PATH,
-            get(all_historical_volume),
-        )
+        .route(HISTORICAL_VOLUME_PATH, get(historical_volume))
+        .route(ALL_HISTORICAL_VOLUME_PATH, get(all_historical_volume))
         .route(
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL,
             get(get_historical_volume_by_balance_manager_id_with_interval),
@@ -112,16 +109,32 @@ async fn get_pools(
     Ok(Json(results))
 }
 
-async fn get_historical_volume(
-    Path(pool_ids): Path<String>,
+async fn historical_volume(
+    Path(pool_names): Path<String>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
-    let connection = &mut state.pool.get().await?;
+    // Fetch all pools to map names to IDs
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_name_to_id: HashMap<String, String> = pools
+        .0
+        .into_iter()
+        .map(|pool| (pool.pool_name, pool.pool_id))
+        .collect();
 
-    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+    // Map provided pool names to pool IDs
+    let pool_ids_list: Vec<String> = pool_names
+        .split(',')
+        .filter_map(|name| pool_name_to_id.get(name).cloned())
+        .collect();
 
-    // Get start_time and end_time from query parameters (in seconds)
+    if pool_ids_list.is_empty() {
+        return Err(DeepBookError::InternalError(
+            "No valid pool names provided".to_string(),
+        ));
+    }
+
+    // Parse start_time and end_time from query parameters (in seconds) and convert to milliseconds
     let end_time = params
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
@@ -150,6 +163,8 @@ async fn get_historical_volume(
         sql::<diesel::sql_types::BigInt>("quote_quantity")
     };
 
+    // Query the database for the historical volume
+    let connection = &mut state.pool.get().await?;
     let results: Vec<(String, i64)> = schema::order_fills::table
         .select((schema::order_fills::pool_id, column_to_query))
         .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
@@ -157,13 +172,19 @@ async fn get_historical_volume(
         .load(connection)
         .await?;
 
-    // Aggregate volume by pool
+    // Aggregate volume by pool ID and map back to pool names
     let mut volume_by_pool = HashMap::new();
     for (pool_id, volume) in results {
-        *volume_by_pool.entry(pool_id).or_insert(0) += volume as u64;
+        if let Some(pool_name) = pool_name_to_id
+            .iter()
+            .find(|(_, id)| **id == pool_id)
+            .map(|(name, _)| name)
+        {
+            *volume_by_pool.entry(pool_name.clone()).or_insert(0) += volume as u64;
+        }
     }
 
-    Ok(Json(normalize_pool_addresses(volume_by_pool)))
+    Ok(Json(volume_by_pool))
 }
 
 /// Get all historical volume for all pools
@@ -529,22 +550,6 @@ async fn get_level2_ticks_from_mid(
     result.insert("asks".to_string(), Value::Array(asks));
 
     Ok(Json(result))
-}
-
-/// Helper function to normalize pool addresses
-fn normalize_pool_addresses(raw_response: HashMap<String, u64>) -> HashMap<String, u64> {
-    let pool_map = get_pool_name_mapping();
-
-    raw_response
-        .into_iter()
-        .map(|(address, volume)| {
-            let pool_name = pool_map
-                .get(&address)
-                .unwrap_or(&"Unknown Pool".to_string())
-                .to_string();
-            (pool_name, volume)
-        })
-        .collect()
 }
 
 /// This function can return what's in the pool table when stable
