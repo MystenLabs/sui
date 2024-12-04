@@ -47,6 +47,7 @@ pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
 pub const DEEPBOOK_PACKAGE_ID: &str =
     "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
+pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -70,6 +71,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
             get(get_historical_volume_by_balance_manager_id),
         )
         .route(LEVEL2_PATH, get(orderbook))
+        .route(GET_NET_DEPOSITS, get(get_net_deposits))
         .with_state(state)
 }
 
@@ -609,6 +611,45 @@ async fn orderbook(
     result.insert("asks".to_string(), Value::Array(asks));
 
     Ok(Json(result))
+}
+
+async fn get_net_deposits(
+    Path((asset_ids, timestamp)): Path<(String, String)>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, i64>>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+    let mut query =
+        "SELECT asset, SUM(amount)::bigint AS amount, deposit FROM balances WHERE checkpoint_timestamp_ms < "
+            .to_string();
+    query.push_str(&timestamp);
+    query.push_str("000 AND asset in (");
+    for asset in asset_ids.split(",") {
+        if asset.starts_with("0x") {
+            let len = asset.len();
+            query.push_str(&format!("'{}',", &asset[2..len]));
+        } else {
+            query.push_str(&format!("'{}',", asset));
+        }
+    }
+    query.pop();
+    query.push_str(") GROUP BY asset, deposit");
+
+    let results: Vec<BalancesSummary> = diesel::sql_query(query).load(connection).await?;
+    let mut net_deposits = HashMap::new();
+    for result in results {
+        let mut asset = result.asset;
+        if !asset.starts_with("0x") {
+            asset.insert_str(0, "0x");
+        }
+        let amount = result.amount;
+        if result.deposit {
+            *net_deposits.entry(asset).or_insert(0) += amount;
+        } else {
+            *net_deposits.entry(asset).or_insert(0) -= amount;
+        }
+    }
+
+    Ok(Json(net_deposits))
 }
 
 fn parse_type_input(type_str: &str) -> Result<TypeInput, DeepBookError> {
