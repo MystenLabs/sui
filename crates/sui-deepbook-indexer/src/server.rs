@@ -41,7 +41,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
     "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
-pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_ids";
+pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const DEEPBOOK_PACKAGE_ID: &str =
