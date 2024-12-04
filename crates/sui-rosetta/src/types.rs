@@ -669,6 +669,7 @@ pub struct ConstructionMetadata {
     /// `Coin<SUI>` objects to be merged to GasCoin
     pub extra_gas_coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
+    /// Always refers to SUI balance used
     #[serde(with = "str_format")]
     pub total_coin_value: i128,
     pub gas_price: u64,

@@ -135,16 +135,13 @@ async fn budget_from_dry_run(
         Some(p) => p,
         None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
     };
+    // We don't want dry run to fail due to budget, so we leave coins empty and set MAX_GAS_BUDGET
     let dry_run = client
         .read_api()
         .dry_run_transaction_block(TransactionData::new_programmable(
             sender,
-            // TODO: Investigate: Why does this fail sometimes when I pass the gas-coins?
-            // Is it because I use MAX_GAS_BUDGET below?
             vec![],
             pt.clone(),
-            // We don't want dry run to fail due to budget, because
-            // it will display the fail-budget
             MAX_GAS_BUDGET,
             gas_price,
         ))
