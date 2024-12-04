@@ -105,9 +105,12 @@ impl BlockManager {
             // Try to accept the input block.
             let block_ref = block.reference();
             let block = match self.try_accept_one_block(block) {
-                TryAcceptResult::Accepted(block) => block,
+                TryAcceptResult::Accepted(block) => {
+                    debug!("Block accepted: {}", block.reference());
+                    block
+                }
                 TryAcceptResult::Suspended(ancestors_to_fetch) => {
-                    trace!(
+                    debug!(
                         "Missing ancestors for block {block_ref}: {}",
                         ancestors_to_fetch.iter().map(|b| b.to_string()).join(",")
                     );
@@ -246,6 +249,8 @@ impl BlockManager {
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
     fn try_accept_one_block(&mut self, block: VerifiedBlock) -> TryAcceptResult {
+        debug!("Trying to accept block: {}", block.reference());
+
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
         let mut ancestors_to_fetch = BTreeSet::new();
@@ -355,6 +360,7 @@ impl BlockManager {
     /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
     /// All the unsuspended / accepted blocks are returned as a vector in causal order.
     fn try_unsuspend_children_blocks(&mut self, accepted_block: BlockRef) -> Vec<VerifiedBlock> {
+        debug!("Trying to unsuspend children blocks: {}", accepted_block);
         let mut unsuspended_blocks = vec![];
         let mut to_process_blocks = vec![accepted_block];
 
@@ -395,6 +401,14 @@ impl BlockManager {
                 .with_label_values(&[hostname])
                 .observe(now.saturating_duration_since(block.timestamp).as_secs_f64());
         }
+
+        debug!(
+            "Unsuspended blocks: {:?}",
+            unsuspended_blocks
+                .iter()
+                .map(|block| block.block.reference())
+                .collect::<Vec<_>>()
+        );
 
         unsuspended_blocks
             .into_iter()
