@@ -44,6 +44,13 @@ impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
         Duration::from_millis(self.connection_timeout_ms)
     }
+
+    pub fn with_url(url: Url) -> Self {
+        Self {
+            database_url: url,
+            ..Default::default()
+        }
+    }
 }
 
 impl Db {
@@ -63,7 +70,7 @@ impl Db {
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
     /// established before the [DbConfig::connection_timeout] has elapsed.
-    pub(crate) async fn connect(&self) -> Result<Connection<'_>, RunError> {
+    pub async fn connect(&self) -> Result<Connection<'_>, RunError> {
         self.pool.get().await
     }
 
@@ -183,10 +190,7 @@ mod tests {
         let url = db.database().url();
 
         info!(%url);
-        let db_args = DbArgs {
-            database_url: url.clone(),
-            ..Default::default()
-        };
+        let db_args = DbArgs::with_url(url.clone());
 
         let db = Db::new(db_args).await.unwrap();
         let mut conn = db.connect().await.unwrap();
@@ -211,11 +215,7 @@ mod tests {
         let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
 
-        let db_args = DbArgs {
-            database_url: url.clone(),
-            ..Default::default()
-        };
-
+        let db_args = DbArgs::with_url(url.clone());
         let db = Db::new(db_args.clone()).await.unwrap();
         let mut conn = db.connect().await.unwrap();
         diesel::sql_query("CREATE TABLE test_table (id INTEGER PRIMARY KEY)")
