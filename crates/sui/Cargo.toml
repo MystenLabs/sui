@@ -111,6 +111,7 @@ assert_cmd.workspace = true
 toml.workspace = true
 insta.workspace = true
 insta-cmd.workspace = true
+toml_edit.workspace = true
 
 test-cluster.workspace = true
 sui-macros.workspace = true

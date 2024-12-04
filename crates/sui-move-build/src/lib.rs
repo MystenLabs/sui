@@ -188,11 +188,14 @@ impl BuildConfig {
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
         let resolution_graph = self.resolution_graph(path, chain_id.clone())?;
+        let (published_at, dependency_ids) =
+            gather_published_ids(&resolution_graph, chain_id.clone());
         build_from_resolution_graph(
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
-            chain_id,
+            published_at,
+            dependency_ids,
         )
     }
 
@@ -255,10 +258,9 @@ pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
-    chain_id: Option<String>,
+    published_at: Result<ObjectID, PublishedAtError>,
+    mut dependency_ids: PackageDependencies,
 ) -> SuiResult<CompiledPackage> {
-    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph, chain_id);
-
     // collect bytecode dependencies as these are not returned as part of core
     // `CompiledPackage`
     let mut bytecode_deps = vec![];
@@ -292,11 +294,18 @@ pub fn build_from_resolution_graph(
         }
     }
 
+    let renamings: BTreeMap<_, _> = resolution_graph.extract_named_address_mapping().collect();
+    let renamings: BTreeMap<String, &AccountAddress> = renamings
+        .iter()
+        .map(|(s, a)| (s.to_lowercase(), a))
+        .collect();
+
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
         BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
     };
+
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
     let (package, fn_info) = match result {
@@ -322,6 +331,24 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
+
+    // Filter out packages that are in the manifest but not referenced in the source code.
+    let deps: BTreeSet<_> = package
+        .all_compiled_units()
+        .filter_map(|x| {
+            let address = x.address.into_inner();
+            (address != AccountAddress::ZERO).then_some(address)
+        })
+        .collect();
+
+    dependency_ids.published.retain(|name, id| {
+        if let Some(address) = renamings.get(&name.to_lowercase()) {
+            deps.contains(address)
+        } else {
+            deps.contains(id)
+        }
+    });
+
     Ok(CompiledPackage {
         package,
         published_at,
@@ -561,10 +588,8 @@ impl CompiledPackage {
         })
     }
 
-    pub fn verify_unpublished_dependencies(
-        &self,
-        unpublished_deps: &BTreeSet<Symbol>,
-    ) -> SuiResult<()> {
+    pub fn verify_unpublished_dependencies(&self) -> SuiResult<()> {
+        let unpublished_deps = &self.dependency_ids.unpublished;
         if unpublished_deps.is_empty() {
             return Ok(());
         }

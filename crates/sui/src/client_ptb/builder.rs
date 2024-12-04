@@ -965,8 +965,10 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 }
-                let (dependencies, compiled_modules, _, _) =
-                    compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
+                let compiled_package = compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
+                let compiled_modules = compiled_package
+                    .get_package_bytes(false /* with_unpublished_dependencies */);
+                let dependencies = compiled_package.dependency_ids;
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
@@ -1034,7 +1036,7 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
+                let (package_id, package_digest, upgrade_policy, compiled_package) =
                     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
@@ -1053,6 +1055,10 @@ impl<'a> PTBBuilder<'a> {
                     vec![],
                     vec![upgrade_cap_arg, upgrade_arg, digest_arg],
                 ));
+
+                let compiled_modules = compiled_package
+                    .get_package_bytes(false /* with_unpublished_dependencies */);
+                let dependencies = compiled_package.dependency_ids;
                 let upgrade_receipt = self.ptb.upgrade(
                     package_id,
                     upgrade_ticket,

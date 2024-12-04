@@ -1599,6 +1599,25 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         .await?
         .data;
 
+    // Get chain identifier
+    let chain_id = client.read_api().get_chain_identifier().await?;
+    // The Move.lock file of module_dependency_nonexistent needs to have its chain-id set to the
+    // current local chain-id. We need this Move.lock file to pick up correctly the
+    // original-published-id of the dependency for this test to work as expected.
+    let move_lock_path = PathBuf::from(TEST_DATA_DIR)
+        .join("module_dependency_nonexistent")
+        .join("Move.lock");
+    let content = std::fs::read_to_string(&move_lock_path)?;
+
+    // Parse the file into a toml_edit Document
+    let mut doc: toml_edit::Document = content.parse()?;
+    if let Some(cid) = doc["env"]["localnet"]["chain-id"].as_value_mut() {
+        *cid = toml_edit::Value::from(chain_id);
+        std::fs::write(move_lock_path, doc.to_string())?;
+    } else {
+        eprintln!("chain-id not found under [env.localnet]");
+    }
+
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
@@ -1620,6 +1639,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         "{}",
         err
     );
+
     Ok(())
 }
 

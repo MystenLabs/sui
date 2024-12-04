@@ -52,7 +52,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies,
+    gather_published_ids, BuildConfig, CompiledPackage,
 };
 use sui_package_management::{LockCommand, PublishedAtError};
 use sui_replay::ReplayToolCommand;
@@ -939,20 +939,22 @@ impl SuiClientCommands {
                         previous_id,
                     )?;
                 }
-                let (
-                    package_id,
-                    compiled_modules,
-                    dependencies,
-                    package_digest,
-                    upgrade_policy,
-                    compiled_module,
-                ) = upgrade_result?;
+                let (package_id, package_digest, upgrade_policy, compiled_package) =
+                    upgrade_result?;
+                let compiled_modules =
+                    compiled_package.get_package_bytes(with_unpublished_dependencies);
+                let dependencies = compiled_package
+                    .dependency_ids
+                    .published
+                    .clone()
+                    .into_values()
+                    .collect();
 
                 if verify_compatibility {
                     check_compatibility(
                         &client,
                         package_id,
-                        compiled_module,
+                        compiled_package,
                         package_path,
                         upgrade_policy,
                         protocol_config,
@@ -965,7 +967,7 @@ impl SuiClientCommands {
                     .upgrade_tx_kind(
                         package_id,
                         compiled_modules,
-                        dependencies.published.into_values().collect(),
+                        dependencies,
                         upgrade_capability,
                         upgrade_policy,
                         package_digest.to_vec(),
@@ -1060,7 +1062,11 @@ impl SuiClientCommands {
                         previous_id,
                     )?;
                 }
-                let (dependencies, compiled_modules, _, _) = compile_result?;
+                let compiled_package = compile_result?;
+                eprintln!("deps {:?}", compiled_package.dependency_ids);
+                let compiled_modules =
+                    compiled_package.get_package_bytes(with_unpublished_dependencies);
+                let dependencies = compiled_package.dependency_ids;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1725,12 +1731,14 @@ fn compile_package_simple(
         chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
+    let (published_at, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
 
     Ok(build_from_resolution_graph(
         resolution_graph,
         false,
         false,
-        chain_id,
+        published_at,
+        dependencies,
     )?)
 }
 
@@ -1742,18 +1750,8 @@ pub(crate) async fn upgrade_package(
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
     env_alias: Option<String>,
-) -> Result<
-    (
-        ObjectID,
-        Vec<Vec<u8>>,
-        PackageDependencies,
-        [u8; 32],
-        u8,
-        CompiledPackage,
-    ),
-    anyhow::Error,
-> {
-    let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
+) -> Result<(ObjectID, [u8; 32], u8, CompiledPackage), anyhow::Error> {
+    let compiled_package = compile_package(
         read_api,
         build_config,
         package_path,
@@ -1762,7 +1760,7 @@ pub(crate) async fn upgrade_package(
     )
     .await?;
 
-    let package_id = package_id.map_err(|e| match e {
+    let package_id = compiled_package.published_at.as_ref().map_err(|e| match e {
         PublishedAtError::NotPresent => {
             anyhow!("No 'published-at' field in Move.toml or 'published-id' in Move.lock for package to be upgraded.")
         }
@@ -1814,9 +1812,7 @@ pub(crate) async fn upgrade_package(
     let package_digest = compiled_package.get_package_digest(with_unpublished_dependencies);
 
     Ok((
-        package_id,
-        compiled_modules,
-        dependencies,
+        *package_id,
         package_digest,
         upgrade_policy,
         compiled_package,
@@ -1829,15 +1825,7 @@ pub(crate) async fn compile_package(
     package_path: &Path,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
-) -> Result<
-    (
-        PackageDependencies,
-        Vec<Vec<u8>>,
-        CompiledPackage,
-        Result<ObjectID, PublishedAtError>,
-    ),
-    anyhow::Error,
-> {
+) -> Result<CompiledPackage, anyhow::Error> {
     let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
@@ -1858,7 +1846,8 @@ pub(crate) async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
-        chain_id,
+        package_id,
+        dependencies,
     )?;
     let protocol_config = read_api.get_protocol_config(None).await?;
 
@@ -1920,9 +1909,8 @@ pub(crate) async fn compile_package(
         }
     }
     if with_unpublished_dependencies {
-        compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
+        compiled_package.verify_unpublished_dependencies()?;
     }
-    let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
         let verifier = BytecodeSourceVerifier::new(read_api);
         if let Err(e) = verifier
@@ -1964,7 +1952,7 @@ pub(crate) async fn compile_package(
             error: format!("Failed to update Move.lock toolchain version: {e}"),
         })?;
 
-    Ok((dependencies, compiled_modules, compiled_package, package_id))
+    Ok(compiled_package)
 }
 
 impl Display for SuiClientCommandResult {
