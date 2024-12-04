@@ -68,7 +68,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
             GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID,
             get(get_historical_volume_by_balance_manager_id),
         )
-        .route(LEVEL2_PATH, get(get_level2_ticks_from_mid))
+        .route(LEVEL2_PATH, get(orderbook))
         .with_state(state)
 }
 
@@ -369,7 +369,9 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
     Ok(Json(metrics_by_interval))
 }
-async fn get_level2_ticks_from_mid(
+
+/// Level2 data for all pools
+async fn orderbook(
     Path(pool_name): Path<String>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
