@@ -4133,7 +4133,7 @@ module deepbook::clob_test {
                 quote_custodian,
                 account_cap_user,
                 5500 + 6 + 5,
-                0, // 9500 - 2500 - 5000 - 2000
+                9500 - 2500 - 5000 - 2000
             );
             custodian::assert_user_balance<SUI>(base_custodian, account_cap_user, 1500, 10000);
             {
