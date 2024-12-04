@@ -10,7 +10,6 @@ use crate::{
     file_format_common::VERSION_5,
     normalized::Module,
 };
-use move_core_types::identifier::Identifier;
 use move_core_types::vm_status::StatusCode;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
@@ -462,17 +461,17 @@ where
     Existing(&'a K, &'a V, &'a V), // Old and new values for existing keys
 }
 
-fn compare_ord_iters<'c, I, J, K, V>(old: I, new: J) -> impl Iterator<Item = Mark<'c, K, V>> + 'c
+fn compare_ord_iters<'a, I, J, K, V>(old: I, new: J) -> impl Iterator<Item = Mark<'a, K, V>> + 'a
 where
-    K: Ord + 'c,
-    V: 'c,
-    I: Iterator<Item = (&'c K, &'c V)> + 'c,
-    J: Iterator<Item = (&'c K, &'c V)> + 'c,
+    K: Ord + 'a,
+    V: 'a,
+    I: Iterator<Item = (&'a K, &'a V)> + 'a,
+    J: Iterator<Item = (&'a K, &'a V)> + 'a,
 {
     let mut old = old.peekable();
     let mut new = new.peekable();
     std::iter::from_fn(move || match (old.peek(), new.peek()) {
-        (Some((old_key, old_value)), Some((new_key, new_value))) => match old_key.cmp(new_key) {
+        (Some((old_key, _old_value)), Some((new_key, _new_value))) => match old_key.cmp(new_key) {
             std::cmp::Ordering::Equal => {
                 let (old_key, old_value) = old.next().unwrap();
                 let (_, new_value) = new.next().unwrap();
@@ -487,11 +486,11 @@ where
                 Some(Mark::New(new_key, new_value))
             }
         },
-        (Some((old_key, old_value)), None) => {
+        (Some((_old_key, _old_value)), None) => {
             let (key, value) = old.next().unwrap();
             Some(Mark::Missing(key, value))
         }
-        (None, Some((new_key, new_value))) => {
+        (None, Some((_new_key, _new_value))) => {
             let (key, value) = new.next().unwrap();
             Some(Mark::New(key, value))
         }
@@ -499,61 +498,7 @@ where
     })
 }
 
-// A marker for the differences between two iterators
-// #[derive(PartialEq, Debug)]
-// enum Mark<'a, T>
-// where
-//     T: Ord,
-// {
-//     New(&'a T),
-//     Missing(&'a T),
-//     Existing(&'a T),
-// }
-//
-// /// Compare two sorted iterators of identifiers and return an iterator providing the
-// /// differences between the two input iterators. The iterators are assumed to be sorted in ascending
-// /// no duplicates are allowed.
-// fn compare_ord_iters<'c, I, J, T>(old: I, new: J) -> impl Iterator<Item = Mark<'c, T>> + 'c
-// where
-//     T: Ord + 'c,
-//     I: Iterator<Item = &'c T> + 'c,
-//     J: Iterator<Item = &'c T> + 'c,
-// {
-//     let mut old = old.peekable();
-//     let mut new = new.peekable();
-//     std::iter::from_fn(move || match (old.peek(), new.peek()) {
-//         (Some(old_name), Some(new_name)) => match old_name.cmp(new_name) {
-//             std::cmp::Ordering::Equal => {
-//                 let old_name = *old_name;
-//                 old.next();
-//                 new.next();
-//                 Some(Mark::Existing(old_name))
-//             }
-//             std::cmp::Ordering::Less => {
-//                 let old_name = *old_name;
-//                 old.next();
-//                 Some(Mark::Missing(old_name))
-//             }
-//             std::cmp::Ordering::Greater => {
-//                 let new_name = *new_name;
-//                 new.next();
-//                 Some(Mark::New(new_name))
-//             }
-//         },
-//         (Some(old_name), None) => {
-//             let name = *old_name;
-//             old.next();
-//             Some(Mark::Missing(name))
-//         }
-//         (None, Some(new_name)) => {
-//             let name = *new_name;
-//             new.next();
-//             Some(Mark::New(name))
-//         }
-//         (None, None) => None,
-//     })
-// }
-//
+// TODO use proptest instead
 // #[test]
 // fn test_compare_ord_iters() {
 //     let a = Identifier::new("a").unwrap();
