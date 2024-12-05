@@ -34,6 +34,7 @@ impl TryFrom<u8> for IntentVersion {
 #[repr(u8)]
 pub enum AppId {
     Sui = 0,
+    // TODO(nw-deprecation)
     Narwhal = 1,
     Consensus = 2,
 }
@@ -139,6 +140,7 @@ impl Intent {
         }
     }
 
+    // TODO(nw-deprecation)
     pub fn narwhal_app(scope: IntentScope) -> Self {
         Self {
             scope,

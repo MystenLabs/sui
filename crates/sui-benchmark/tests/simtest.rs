@@ -374,15 +374,12 @@ mod test {
             }
         });
 
-        // Narwhal & Consensus 2.0 fail points.
+        // Consensus fail points.
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
         let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
-                "narwhal-rpc-response",
-                "narwhal-store-before-write",
-                "narwhal-store-after-write",
                 "consensus-store-before-write",
                 "consensus-store-after-write",
                 "consensus-after-propose",
@@ -397,7 +394,6 @@ mod test {
                 );
             },
         );
-        register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();

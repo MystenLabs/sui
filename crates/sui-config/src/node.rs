@@ -606,6 +606,7 @@ impl NodeConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum ConsensusProtocol {
+    // TODO(nw-deprecation)
     #[serde(rename = "narwhal")]
     Narwhal,
     #[serde(rename = "mysticeti")]
@@ -640,7 +641,7 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
-    // Deprecated: Narwhal specific configs.
+    // TODO(nw-deprecation)
     pub address: Multiaddr,
     pub narwhal_config: NarwhalParameters,
 
@@ -665,6 +666,7 @@ impl ConsensusConfig {
             .map(Duration::from_millis)
     }
 
+    // TODO(nw-deprecation)
     pub fn narwhal_config(&self) -> &NarwhalParameters {
         &self.narwhal_config
     }

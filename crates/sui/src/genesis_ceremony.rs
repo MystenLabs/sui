@@ -63,10 +63,13 @@ pub enum CeremonyCommand {
         network_address: Multiaddr,
         #[clap(long)]
         p2p_address: Multiaddr,
+
+        // TODO(nw-deprecation)
         #[clap(long)]
         narwhal_primary_address: Multiaddr,
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
+
         #[clap(long)]
         description: String,
         #[clap(long)]

@@ -19,6 +19,7 @@ CHANGELOG.md
 /crates/sui-graphql-e2e-tests/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
 
 
+# TODO(nw-deprecation)
 # Notify Narwhal changes to interested folks.
 /narwhal/crypto/ @joyqvq @kchalkias
 /narwhal/executor/ @asonnino @akichidis @laura-makdah

@@ -8,6 +8,7 @@ import re
 ROOT = os.path.join(os.path.dirname(__file__), "../")
 PATTERN = None
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", default="move")
@@ -29,6 +30,7 @@ def parse_args():
     upgrade_group.add_argument("--branch")
     return parser.parse_args()
 
+
 def scan_file(file, process_line, depth=0):
     new_content = []
     with open(file) as f:
@@ -49,7 +51,7 @@ def scan_files(path, process_line, depth=0):
 
 def try_match_line(line):
     # Remove all spacing for easier pattern matching
-    line = line.strip().replace(' ', '')
+    line = line.strip().replace(" ", "")
     m = PATTERN.match(line)
     if m:
         name = m.group(1)
@@ -57,14 +59,14 @@ def try_match_line(line):
             extra = ""
         else:
             # Add some spacing so it looks nicer
-            extra = m.group(2).replace(',', ', ').replace('=', ' = ')
+            extra = m.group(2).replace(",", ", ").replace("=", " = ")
         return (name, extra)
     return None
+
 
 def switch_to_local(project):
     default_path_map = {
         "move": "move/language",
-        "narwhal": "narwhal",
     }
     # Packages that don't directly map to a directory under move/language
     # go here as special cases. By default, we just use language/[name].
@@ -94,7 +96,6 @@ def switch_to_local(project):
             "move-table-extension": "extensions/move-table-extension",
             "move-transactional-test-runner": "testing-infra/transactional-test-runner",
         },
-        "narwhal": {},
     }
 
     def process_line(line, depth):
@@ -105,8 +106,6 @@ def switch_to_local(project):
             path = default_path_map[project]
             if project == "move":
                 subpath = subpath_path_map[project].get(name, name)
-            elif project == "narwhal":
-                subpath = name.replace("narwhal-", "")
             return '{} = {{ path = "{}{}/{}"{} }}\n'.format(
                 name, go_back, path, subpath, extra
             )
@@ -117,15 +116,18 @@ def switch_to_local(project):
 
 def upgrade_revision(project, repo, rev, branch):
     assert (args.rev is None) != (args.branch is None)
+
     def process_line(line, _):
         m = try_match_line(line)
         if m:
             (name, extra) = m
             return '{} = {{ git = "https://github.com/{}/{}", {} = "{}"{} }}\n'.format(
-                name, repo, project,
+                name,
+                repo,
+                project,
                 "branch" if branch else "rev",
                 branch if branch else rev,
-                extra
+                extra,
             )
         return line
 
@@ -133,10 +135,12 @@ def upgrade_revision(project, repo, rev, branch):
 
 
 args = parse_args()
-assert(args.project == "move" or args.project == "narwhal")
+assert args.project == "move"
 
 PATTERN = re.compile(
-    '(.+)={git="https://github.com/.+/' + args.project + '",(?:rev|branch)="[^"]+"(,.*)?}'
+    '(.+)={git="https://github.com/.+/'
+    + args.project
+    + '",(?:rev|branch)="[^"]+"(,.*)?}'
 )
 
 if args.command == "local":

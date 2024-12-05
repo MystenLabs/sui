@@ -92,17 +92,13 @@ needing more instances down the line.
 
 ## Step 4. Choose protocol
 
-There is support to benchmark either Sui or Narwhal only. To choose which protocol to benchmark, you can set the `Protocol` & `BenchmarkType` field [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-aws-orchestrator/src/main.rs#L33-L34)
+There is support to benchmark either Sui only. To choose which protocol to benchmark, you can set the `Protocol` & `BenchmarkType` field [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-aws-orchestrator/src/main.rs#L33-L34)
 
 ```
 // Sui
 use protocol::sui::{SuiBenchmarkType, SuiProtocol};
 type Protocol = SuiProtocol;
 type BenchmarkType = SuiBenchmarkType;
-// Narwhal
-use protocol::narwhal::{NarwhalBenchmarkType, NarwhalProtocol};
-type Protocol = NarwhalProtocol;
-type BenchmarkType = NarwhalBenchmarkType;
 ```
 
 ## Step 5. Running benchmarks

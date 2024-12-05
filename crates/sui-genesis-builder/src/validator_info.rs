@@ -28,8 +28,11 @@ pub struct ValidatorInfo {
     pub commission_rate: u64,
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
+
+    // TODO(nw-deprecation)
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+
     pub description: String,
     pub image_url: String,
     pub project_url: String,

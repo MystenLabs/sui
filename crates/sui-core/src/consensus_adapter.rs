@@ -313,6 +313,7 @@ impl ConsensusAdapter {
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
+        // TODO(nw-deprecation): Investigate if this is still needed.
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
         // todo - get_all_pending_consensus_transactions is called twice when
         // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
@@ -640,10 +641,6 @@ impl ConsensusAdapter {
         //
         // In addition to that, within_alive_epoch ensures that all pending consensus
         // adapter tasks are stopped before reconfiguration can proceed.
-        //
-        // This is essential because narwhal workers reuse same ports when narwhal restarts,
-        // this means we might be sending transactions from previous epochs to narwhal of
-        // new epoch if we have not had this barrier.
         epoch_store
             .within_alive_epoch(self.submit_and_wait_inner(transactions, &epoch_store))
             .await

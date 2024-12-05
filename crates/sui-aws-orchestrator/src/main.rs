@@ -10,7 +10,6 @@ use eyre::{Context, Result};
 use faults::FaultsType;
 use measurement::MeasurementsCollection;
 use orchestrator::Orchestrator;
-use protocol::narwhal::{NarwhalBenchmarkType, NarwhalProtocol};
 use settings::{CloudProvider, Settings};
 use ssh::SshConnectionManager;
 use testbed::Testbed;
@@ -29,12 +28,10 @@ pub mod settings;
 pub mod ssh;
 pub mod testbed;
 
-/// NOTE: Link these types to the correct protocol. Either Sui or Narwhal.
-// use protocol::sui::{SuiBenchmarkType, SuiProtocol};
-// type Protocol = SuiProtocol;
-// type BenchmarkType = SuiBenchmarkType;
-type Protocol = NarwhalProtocol;
-type BenchmarkType = NarwhalBenchmarkType;
+/// NOTE: Link these types to the correct protocol.
+use protocol::sui::{SuiBenchmarkType, SuiProtocol};
+type Protocol = SuiProtocol;
+type BenchmarkType = SuiBenchmarkType;
 
 #[derive(Parser)]
 #[command(author, version, about = "Testbed orchestrator", long_about = None)]

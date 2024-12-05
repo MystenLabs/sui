@@ -659,7 +659,7 @@ mod tests {
         // AND add a metric to the default registry
 
         // AND a registry with one metric
-        let registry_1 = Registry::new_custom(Some("narwhal".to_string()), None).unwrap();
+        let registry_1 = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
         registry_1
             .register(Box::new(
                 IntCounter::new("counter_1", "counter_1_desc").unwrap(),
@@ -680,7 +680,7 @@ mod tests {
         assert_eq!(metric_default.get_help(), "counter_desc");
 
         let metric_1 = metrics.remove(0);
-        assert_eq!(metric_1.get_name(), "narwhal_counter_1");
+        assert_eq!(metric_1.get_name(), "consensus_counter_1");
         assert_eq!(metric_1.get_help(), "counter_1_desc");
 
         // AND add a second registry with a metric
@@ -703,7 +703,7 @@ mod tests {
         assert_eq!(metric_default.get_help(), "counter_desc");
 
         let metric_1 = metrics.remove(0);
-        assert_eq!(metric_1.get_name(), "narwhal_counter_1");
+        assert_eq!(metric_1.get_name(), "consensus_counter_1");
         assert_eq!(metric_1.get_help(), "counter_1_desc");
 
         let metric_2 = metrics.remove(0);
