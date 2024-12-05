@@ -76,6 +76,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         fullnode_rpc_port: 9000,
         epoch_duration_ms: None,
         no_full_node: false,
+        committee_size: None,
         indexer_feature_args: IndexerArgs::for_testing(),
     }
     .execute()
@@ -90,6 +91,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         benchmark_ips: None,
         with_faucet: false,
+        committee_size: None,
     }
     .execute()
     .await?;
@@ -129,6 +131,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         benchmark_ips: None,
         with_faucet: false,
+        committee_size: None,
     }
     .execute()
     .await;
