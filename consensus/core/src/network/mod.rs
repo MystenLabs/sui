@@ -116,12 +116,12 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
-    /// Gets the latest received rounds of all authorities from the peer.
+    /// Gets the latest received & accepted rounds of all authorities from the peer.
     async fn get_latest_rounds(
         &self,
         peer: AuthorityIndex,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Round>>;
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
 /// Network service for handling requests from peers.
@@ -166,8 +166,11 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         authorities: Vec<AuthorityIndex>,
     ) -> ConsensusResult<Vec<Bytes>>;
 
-    /// Handles the request to get the latest received rounds of all authorities.
-    async fn handle_get_latest_rounds(&self, peer: AuthorityIndex) -> ConsensusResult<Vec<Round>>;
+    /// Handles the request to get the latest received & accepted rounds of all authorities.
+    async fn handle_get_latest_rounds(
+        &self,
+        peer: AuthorityIndex,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

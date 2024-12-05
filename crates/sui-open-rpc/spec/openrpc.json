@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "69",
+              "maxSupportedProtocolVersion": "70",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1307,6 +1307,7 @@
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
+                "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_smart_ancestor_selection": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
