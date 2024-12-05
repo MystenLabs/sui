@@ -43,7 +43,8 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
-pub const TICKER: &str = "/ticker";
+pub const TICKER_PATH: &str = "/ticker";
+pub const TRADES_PATH: &str = "/trades/:pool_name";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
@@ -73,7 +74,8 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         )
         .route(LEVEL2_PATH, get(orderbook))
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
-        .route(TICKER, get(ticker))
+        .route(TICKER_PATH, get(ticker))
+        .route(TRADES_PATH, get(trades))
         .with_state(state)
 }
 
@@ -377,7 +379,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     Ok(Json(metrics_by_interval))
 }
 
-pub async fn ticker(
+async fn ticker(
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, HashMap<String, Value>>>, DeepBookError> {
@@ -459,6 +461,104 @@ async fn fetch_historical_volume(
     all_historical_volume(Query(params_with_volume), State(state.clone()))
         .await
         .map(|Json(volumes)| volumes)
+}
+
+async fn trades(
+    Path(pool_name): Path<String>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
+    // Fetch all pools to map names to IDs and decimals
+    let connection = &mut state.pool.get().await?;
+    let pool_data = schema::pools::table
+        .filter(schema::pools::pool_name.eq(pool_name.clone()))
+        .select((
+            schema::pools::pool_id,
+            schema::pools::base_asset_decimals,
+            schema::pools::quote_asset_decimals,
+        ))
+        .first::<(String, i16, i16)>(connection)
+        .await
+        .map_err(|_| DeepBookError::InternalError(format!("Pool '{}' not found", pool_name)))?;
+
+    let (pool_id, base_decimals, quote_decimals) = pool_data;
+    let base_decimals = base_decimals as u8;
+    let quote_decimals = quote_decimals as u8;
+
+    // Fetch the last trade for the pool from the order_fills table
+    let last_trade = schema::order_fills::table
+        .filter(schema::order_fills::pool_id.eq(pool_id))
+        .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+        .select((
+            schema::order_fills::maker_order_id,
+            schema::order_fills::taker_order_id,
+            schema::order_fills::price,
+            schema::order_fills::base_quantity,
+            schema::order_fills::quote_quantity,
+            schema::order_fills::checkpoint_timestamp_ms,
+            schema::order_fills::taker_is_bid,
+        ))
+        .first::<(String, String, i64, i64, i64, i64, bool)>(connection)
+        .await
+        .map_err(|_| {
+            DeepBookError::InternalError(format!("No trades found for pool '{}'", pool_name))
+        })?;
+
+    let (
+        maker_order_id,
+        taker_order_id,
+        price,
+        base_quantity,
+        quote_quantity,
+        timestamp,
+        taker_is_bid,
+    ) = last_trade;
+
+    // Calculate the `trade_id` using the external function
+    let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id)?;
+
+    // Conversion factors for decimals
+    let base_factor = 10u64.pow(base_decimals as u32);
+    let quote_factor = 10u64.pow(quote_decimals as u32);
+    let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
+    let trade_type = if taker_is_bid { "buy" } else { "sell" };
+
+    // Prepare the trade data
+    let trade = HashMap::from([
+        ("trade_id".to_string(), Value::from(trade_id.to_string())), // Computed from `maker_id` and `taker_id`
+        (
+            "price".to_string(),
+            Value::from(price as f64 / price_factor as f64),
+        ),
+        (
+            "base_volume".to_string(),
+            Value::from(base_quantity as f64 / base_factor as f64),
+        ),
+        (
+            "quote_volume".to_string(),
+            Value::from(quote_quantity as f64 / quote_factor as f64),
+        ),
+        ("timestamp".to_string(), Value::from(timestamp as u64)),
+        ("type".to_string(), Value::from(trade_type)), // Trade type (buy/sell)
+    ]);
+
+    Ok(Json(vec![trade]))
+}
+
+fn calculate_trade_id(maker_id: &str, taker_id: &str) -> Result<u128, DeepBookError> {
+    // Parse maker_id and taker_id as u128
+    let maker_id = maker_id
+        .parse::<u128>()
+        .map_err(|_| DeepBookError::InternalError("Invalid maker_id".to_string()))?;
+    let taker_id = taker_id
+        .parse::<u128>()
+        .map_err(|_| DeepBookError::InternalError("Invalid taker_id".to_string()))?;
+
+    // Ignore the most significant bit for both IDs
+    let maker_id = maker_id & !(1 << 127);
+    let taker_id = taker_id & !(1 << 127);
+
+    // Return the sum of the modified IDs as the trade_id
+    Ok(maker_id + taker_id)
 }
 
 /// Level2 data for all pools
