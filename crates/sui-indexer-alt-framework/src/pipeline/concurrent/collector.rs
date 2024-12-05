@@ -18,12 +18,6 @@ use crate::{
 
 use super::{Batched, Handler};
 
-/// When there is a checkpoint lag specified, the collector will keep a buffer of checkpoints to
-/// account for the lag. This multiplier controls how much buffer to keep.
-/// We need to make the range wide enough to account for both the lag and the time it takes to
-/// actually commit the checkpoint.
-const CHECKPOINT_LAG_BUFFER_MULTIPLIER: usize = 2;
-
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
 struct Pending<H: Handler> {
@@ -100,11 +94,7 @@ pub(super) fn collector<H: Handler + 'static>(
 
         // Data for checkpoints that have been received but not yet ready to be sent to committer due to lag constraint.
         let mut received: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
-        // In the case when checkpoint_lag is 0, max_allowed_received will be 0 as well.
-        // This is OK because we will always move all checkpoints from `received` to `pending` right away,
-        // and hence `received` will always be empty.
         let checkpoint_lag = checkpoint_lag.unwrap_or_default();
-        let max_allowed_received = checkpoint_lag as usize * CHECKPOINT_LAG_BUFFER_MULTIPLIER;
 
         // Data for checkpoints that are ready to be sent but haven't been written yet.
         let mut pending: BTreeMap<u64, Pending<H>> = BTreeMap::new();
@@ -175,7 +165,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     }
                 }
 
-                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS && received.len() <= max_allowed_received => {
+                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
                     metrics
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
