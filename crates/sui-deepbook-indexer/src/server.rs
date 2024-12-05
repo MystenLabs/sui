@@ -463,7 +463,7 @@ async fn fetch_historical_volume(
         .map(|Json(volumes)| volumes)
 }
 
-pub async fn trades(
+async fn trades(
     Path(pool_name): Path<String>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
