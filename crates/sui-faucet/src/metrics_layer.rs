@@ -37,6 +37,7 @@ struct MetricsGuard {
     timer: Option<HistogramTimer>,
     metrics: Arc<RequestMetrics>,
     path: String,
+    user_agent: String,
 }
 
 impl RequestMetricsLayer {
@@ -76,7 +77,11 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let path = req.uri().path().to_string();
-        let metrics = MetricsGuard::new(self.metrics.clone(), &path);
+        let user_agent = req
+            .headers()
+            .get(http::header::USER_AGENT)
+            .and_then(|val| val.to_str().ok());
+        let metrics = MetricsGuard::new(self.metrics.clone(), &path, user_agent);
         let inner = self.inner.clone();
 
         let future = Box::pin(async move {
@@ -113,8 +118,9 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 }
 
 impl MetricsGuard {
-    fn new(metrics: Arc<RequestMetrics>, path: &str) -> Option<Self> {
+    fn new(metrics: Arc<RequestMetrics>, path: &str, user_agent: Option<&str>) -> Option<Self> {
         let normalized_path = normalize_path(path);
+        let user_agent = user_agent.unwrap_or("unknown");
 
         if !is_path_tracked(normalized_path) {
             return None;
@@ -122,21 +128,22 @@ impl MetricsGuard {
 
         metrics
             .total_requests_received
-            .with_label_values(&[normalized_path])
+            .with_label_values(&[normalized_path, user_agent])
             .inc();
         metrics
             .current_requests_in_flight
-            .with_label_values(&[normalized_path])
+            .with_label_values(&[normalized_path, user_agent])
             .inc();
         Some(MetricsGuard {
             timer: Some(
                 metrics
                     .process_latency
-                    .with_label_values(&[normalized_path])
+                    .with_label_values(&[normalized_path, user_agent])
                     .start_timer(),
             ),
             metrics,
             path: normalized_path.to_string(),
+            user_agent: user_agent.to_string(),
         })
     }
 
@@ -145,7 +152,7 @@ impl MetricsGuard {
             let elapsed = timer.stop_and_record();
             self.metrics
                 .total_requests_succeeded
-                .with_label_values(&[&self.path])
+                .with_label_values(&[&self.path, &self.user_agent])
                 .inc();
             info!(
                 "Request succeeded for path {} in {:.2}s",
@@ -159,7 +166,7 @@ impl MetricsGuard {
             let elapsed = timer.stop_and_record();
             self.metrics
                 .total_requests_failed
-                .with_label_values(&[&self.path])
+                .with_label_values(&[&self.path, &self.user_agent])
                 .inc();
 
             if let Some(err) = error {
@@ -183,7 +190,7 @@ impl MetricsGuard {
             let elapsed = timer.stop_and_record();
             self.metrics
                 .total_requests_shed
-                .with_label_values(&[&self.path])
+                .with_label_values(&[&self.path, &self.user_agent])
                 .inc();
             info!("Request shed for path {} in {:.2}s", self.path, elapsed);
         }
@@ -207,7 +214,7 @@ impl Drop for MetricsGuard {
                 let elapsed = timer.stop_and_record();
                 self.metrics
                     .total_requests_disconnected
-                    .with_label_values(&[&self.path])
+                    .with_label_values(&[&self.path, &self.user_agent])
                     .inc();
                 info!(
                     "Request disconnected for path {} in {:.2}s",
