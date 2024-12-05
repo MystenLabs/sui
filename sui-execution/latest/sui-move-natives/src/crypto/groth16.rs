@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -183,7 +183,17 @@ pub fn verify_groth16_proof_internal(
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
             context.charge_gas(crypto_invalid_arguments_cost);
-            return Ok(NativeResult::err(context.gas_budget(), INVALID_CURVE));
+            let cost = if context
+                .extensions()
+                .get::<ObjectRuntime>()
+                .protocol_config
+                .native_charging_v2()
+            {
+                context.gas_used()
+            } else {
+                context.gas_budget()
+            };
+            return Ok(NativeResult::err(cost, INVALID_CURVE));
         }
     };
     // Charge the base cost for this oper

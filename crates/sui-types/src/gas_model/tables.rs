@@ -15,6 +15,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
 
+use crate::gas_model::gas_predicates::native_function_threshold_exceeded;
 use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 
 use super::gas_predicates::charge_input_as_memory;
@@ -76,6 +77,7 @@ pub struct GasStatus {
     instructions_current_tier_mult: u64,
 
     profiler: Option<GasProfiler>,
+    num_native_calls: u64,
 }
 
 impl GasStatus {
@@ -113,6 +115,7 @@ impl GasStatus {
             stack_size_next_tier_start,
             instructions_next_tier_start,
             profiler: None,
+            num_native_calls: 0,
         }
     }
 
@@ -140,6 +143,7 @@ impl GasStatus {
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
             profiler: None,
+            num_native_calls: 0,
         }
     }
 
@@ -429,12 +433,23 @@ impl GasMeter for GasStatus {
                 })
             })
             .unwrap_or_else(AbstractMemorySize::zero);
-        // Charge for the stack operations. We don't count this as an "instruction" since we
-        // already accounted for the `Call` instruction in the
-        // `charge_native_function_before_execution` call.
-        self.charge(0, pushes, 0, size_increase.into(), 0)?;
-        // Now charge the gas that the native function told us to charge.
-        self.deduct_gas(amount)
+        self.num_native_calls = self.num_native_calls.saturating_add(1);
+        if native_function_threshold_exceeded(self.gas_model_version, self.num_native_calls) {
+            // Charge for the stack operations. We don't count this as an "instruction" since we
+            // already accounted for the `Call` instruction in the
+            // `charge_native_function_before_execution` call.
+            // The amount returned by the native function is viewed as the "virtual" instruction cost
+            // for the native function, and will be charged and contribute to the overall cost tier of
+            // the transaction accordingly.
+            self.charge(amount.into(), pushes, 0, size_increase.into(), 0)
+        } else {
+            // Charge for the stack operations. We don't count this as an "instruction" since we
+            // already accounted for the `Call` instruction in the
+            // `charge_native_function_before_execution` call.
+            self.charge(0, pushes, 0, size_increase.into(), 0)?;
+            // Now charge the gas that the native function told us to charge.
+            self.deduct_gas(amount)
+        }
     }
 
     fn charge_native_function_before_execution(
