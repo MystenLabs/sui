@@ -432,7 +432,7 @@ pub async fn ticker(
                     "quote_volume".to_string(),
                     Value::from(quote_volume as f64 / quote_factor as f64),
                 ),
-                ("isFrozen".to_string(), Value::from(0)), // Fixed to 0 because all pools are active
+                ("isFrozen".to_string(), Value::from(0)), // Fixed to 0 because all pools in pools table are active
             ]),
         );
     }
@@ -453,7 +453,7 @@ async fn fetch_historical_volume(
 
     all_historical_volume(Query(params_with_volume), State(state.clone()))
         .await
-        .map(|Json(volumes)| volumes) // Destructure Json to access inner value
+        .map(|Json(volumes)| volumes)
 }
 
 /// Level2 data for all pools
