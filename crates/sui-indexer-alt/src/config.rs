@@ -757,6 +757,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -767,6 +768,7 @@ mod tests {
                 watermark_interval_ms: 500,
             },
             pruner: Some(PrunerConfig::default()),
+            checkpoint_lag: None,
         };
 
         assert_matches!(
@@ -778,6 +780,7 @@ mod tests {
                     watermark_interval_ms: 500,
                 },
                 pruner: None,
+                checkpoint_lag: None,
             },
         );
     }
@@ -787,6 +790,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -797,6 +801,7 @@ mod tests {
                 watermark_interval_ms: 500,
             },
             pruner: None,
+            checkpoint_lag: None,
         };
 
         assert_matches!(
@@ -808,6 +813,7 @@ mod tests {
                     watermark_interval_ms: 500,
                 },
                 pruner: None,
+                checkpoint_lag: None,
             },
         );
     }
@@ -820,6 +826,7 @@ mod tests {
                 interval_ms: Some(1000),
                 ..Default::default()
             }),
+            checkpoint_lag: Some(200),
             extra: Default::default(),
         };
 
@@ -835,6 +842,7 @@ mod tests {
                 retention: 300,
                 max_chunk_size: 400,
             }),
+            checkpoint_lag: None,
         };
 
         assert_matches!(
@@ -851,6 +859,7 @@ mod tests {
                     retention: 300,
                     max_chunk_size: 400,
                 }),
+                checkpoint_lag: Some(200),
             },
         );
     }
