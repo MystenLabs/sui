@@ -571,6 +571,11 @@ struct FeatureFlags {
     // Use smart ancestor selection in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_smart_ancestor_selection: bool,
+
+    // Enable support for ConsensusV2 objects.
+    // WARNING: This feature is experimental and incomplete.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_v2_objects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1690,6 +1695,10 @@ impl ProtocolConfig {
 
     pub fn consensus_smart_ancestor_selection(&self) -> bool {
         self.feature_flags.consensus_smart_ancestor_selection
+    }
+
+    pub fn consensus_v2_objects(&self) -> bool {
+        self.feature_flags.consensus_v2_objects
     }
 }
 

@@ -593,9 +593,12 @@ where
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
         key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>>;
+    ) -> SuiResult<Option<Vec<((ObjectID, SequenceNumber), SequenceNumber)>>>;
+
+    fn is_initial_shared_version_unknown(&self) -> bool;
 }

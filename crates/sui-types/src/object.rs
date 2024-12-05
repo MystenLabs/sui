@@ -539,6 +539,17 @@ impl Owner {
         }
     }
 
+    // Returns initial_shared_version for Shared objects, and start_version for ConsensusV2 objects.
+    pub fn start_version(&self) -> Option<SequenceNumber> {
+        match self {
+            Self::Shared {
+                initial_shared_version,
+            } => Some(*initial_shared_version),
+            Self::ConsensusV2 { start_version, .. } => Some(*start_version),
+            Self::Immutable | Self::AddressOwner(_) | Self::ObjectOwner(_) => None,
+        }
+    }
+
     pub fn is_immutable(&self) -> bool {
         matches!(self, Owner::Immutable)
     }
