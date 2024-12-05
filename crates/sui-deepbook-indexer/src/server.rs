@@ -397,7 +397,10 @@ pub async fn ticker(
     let connection = &mut state.pool.get().await?;
     let last_prices: Vec<(String, i64)> = schema::order_fills::table
         .select((schema::order_fills::pool_id, schema::order_fills::price))
-        .order_by((schema::order_fills::pool_id.asc(), schema::order_fills::checkpoint_timestamp_ms.desc()))
+        .order_by((
+            schema::order_fills::pool_id.asc(),
+            schema::order_fills::checkpoint_timestamp_ms.desc(),
+        ))
         .distinct_on(schema::order_fills::pool_id)
         .load(connection)
         .await?;
@@ -415,14 +418,19 @@ pub async fn ticker(
         // Conversion factors based on decimals
         let base_factor = 10u64.pow(pool.base_asset_decimals as u32);
         let quote_factor = 10u64.pow(pool.quote_asset_decimals as u32);
-        let price_factor = 10u64.pow((9 - pool.base_asset_decimals + pool.quote_asset_decimals) as u32);
+        let price_factor =
+            10u64.pow((9 - pool.base_asset_decimals + pool.quote_asset_decimals) as u32);
 
         response.insert(
             pool_name.clone(),
             HashMap::from([
                 (
                     "last_price".to_string(),
-                    Value::from(last_price.map(|price| price as f64 / price_factor as f64).unwrap_or(0.0)),
+                    Value::from(
+                        last_price
+                            .map(|price| price as f64 / price_factor as f64)
+                            .unwrap_or(0.0),
+                    ),
                 ),
                 (
                     "base_volume".to_string(),
@@ -446,10 +454,7 @@ async fn fetch_historical_volume(
     state: &PgDeepbookPersistent,
 ) -> Result<HashMap<String, u64>, DeepBookError> {
     let mut params_with_volume = params.clone();
-    params_with_volume.insert(
-        "volume_in_base".to_string(),
-        volume_in_base.to_string(),
-    );
+    params_with_volume.insert("volume_in_base".to_string(), volume_in_base.to_string());
 
     all_historical_volume(Query(params_with_volume), State(state.clone()))
         .await
