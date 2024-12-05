@@ -462,6 +462,7 @@ async fn fetch_historical_volume(
         .await
         .map(|Json(volumes)| volumes)
 }
+
 pub async fn trades(
     Path(pool_name): Path<String>,
     State(state): State<PgDeepbookPersistent>,
