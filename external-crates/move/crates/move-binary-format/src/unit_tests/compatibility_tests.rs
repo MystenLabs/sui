@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compatibility::{Compatibility, InclusionCheck},
+    compatibility::{compare_ord_iters, Compatibility, InclusionCheck, Mark},
     file_format::*,
     normalized::{self, Type},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
+use proptest::prelude::*;
 use std::{collections::BTreeMap, convert::TryFrom};
 
 // A way to permute pools, and index into them still.
@@ -1198,4 +1199,58 @@ fn check_new_changed_missing_declarations() {
 
     assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
     assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+}
+
+fn arbitrary_map() -> impl Strategy<Value = BTreeMap<i32, i32>> {
+    prop::collection::btree_map(0..1000, 0..1000, 0..20)
+}
+
+proptest! {
+    #[test]
+    fn test_compare_ord_iters(old in arbitrary_map(), new in arbitrary_map()) {
+        let result: Vec<_> = compare_ord_iters(old.iter(), new.iter()).collect();
+
+        for mark in &result {
+                match mark {
+                    Mark::New(key, _) => {
+                        // New keys must only be in `new`
+                        assert!(new.contains_key(key));
+                        assert!(!old.contains_key(key));
+                    },
+                    Mark::Missing(key, _) => {
+                        // Missing keys must only be in `old`
+                        assert!(old.contains_key(key));
+                        assert!(!new.contains_key(key));
+                    },
+                    Mark::Existing(key, old_value, new_value) => {
+                        // Existing keys must be in both
+                        assert!(old.contains_key(key));
+                        assert!(new.contains_key(key));
+                        // Values must match the input maps
+                        assert_eq!(Some(old_value), old.get(key).as_ref());
+                        assert_eq!(Some(new_value), new.get(key).as_ref());
+                    },
+                }
+            }
+
+            // Check that all keys in `old` and `new` are represented in the result
+            let mut old_keys: Vec<_> = old.keys().collect();
+            let mut new_keys: Vec<_> = new.keys().collect();
+            old_keys.sort();
+            new_keys.sort();
+
+            let mut combined = old_keys.clone();
+            combined.extend(new_keys.clone());
+            combined.sort();
+            // dedup since "existing" will have duplicates across old and new
+            combined.dedup();
+
+            let mut result_keys: Vec<_> = result.iter().map(|mark| match mark {
+                Mark::New(key, _) => *key,
+                Mark::Missing(key, _) => *key,
+                Mark::Existing(key, _, _) => *key,
+            }).collect();
+            result_keys.sort();
+            assert_eq!(result_keys, combined);
+    }
 }

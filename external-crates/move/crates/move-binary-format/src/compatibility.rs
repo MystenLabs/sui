@@ -452,7 +452,7 @@ impl InclusionCheck {
 }
 
 #[derive(PartialEq, Debug)]
-enum Mark<'a, K, V>
+pub(crate) enum Mark<'a, K, V>
 where
     K: Ord,
 {
@@ -461,7 +461,10 @@ where
     Existing(&'a K, &'a V, &'a V), // Old and new values for existing keys
 }
 
-fn compare_ord_iters<'a, I, J, K, V>(old: I, new: J) -> impl Iterator<Item = Mark<'a, K, V>> + 'a
+pub(crate) fn compare_ord_iters<'a, I, J, K, V>(
+    old: I,
+    new: J,
+) -> impl Iterator<Item = Mark<'a, K, V>> + 'a
 where
     K: Ord + 'a,
     V: 'a,
@@ -497,85 +500,3 @@ where
         (None, None) => None,
     })
 }
-
-// TODO use proptest instead
-// #[test]
-// fn test_compare_ord_iters() {
-//     let a = Identifier::new("a").unwrap();
-//     let b = Identifier::new("b").unwrap();
-//     let c = Identifier::new("c").unwrap();
-//     let d = Identifier::new("d").unwrap();
-//     let e = Identifier::new("e").unwrap();
-//     let f = Identifier::new("f").unwrap();
-//
-//     // (old, new, expected, name)
-//     let tests = vec![
-//         ("empty", vec![], vec![], vec![]),
-//         (
-//             "existing",
-//             vec![a.clone()],
-//             vec![a.clone()],
-//             vec![Mark::Existing(&a)],
-//         ),
-//         ("missing", vec![a.clone()], vec![], vec![Mark::Missing(&a)]),
-//         ("new", vec![], vec![a.clone()], vec![Mark::New(&a)]),
-//         (
-//             "missing new",
-//             vec![a.clone()],
-//             vec![b.clone()],
-//             vec![Mark::Missing(&a), Mark::New(&b)],
-//         ),
-//         (
-//             "existing new",
-//             vec![a.clone()],
-//             vec![a.clone(), b.clone()],
-//             vec![Mark::Existing(&a), Mark::New(&b)],
-//         ),
-//         (
-//             "existing missing",
-//             vec![a.clone(), b.clone()],
-//             vec![a.clone()],
-//             vec![Mark::Existing(&a), Mark::Missing(&b)],
-//         ),
-//         (
-//             "missing existing",
-//             vec![a.clone(), b.clone()],
-//             vec![b.clone()],
-//             vec![Mark::Missing(&a), Mark::Existing(&b)],
-//         ),
-//         (
-//             "existing new missing",
-//             vec![a.clone(), e.clone()],
-//             vec![a.clone(), b.clone()],
-//             vec![Mark::Existing(&a), Mark::New(&b), Mark::Missing(&e)],
-//         ),
-//         (
-//             "new existing missing",
-//             vec![b.clone(), f.clone()],
-//             vec![a.clone(), b.clone()],
-//             vec![Mark::New(&a), Mark::Existing(&b), Mark::Missing(&f)],
-//         ),
-//         (
-//             "new missing existing",
-//             vec![d.clone(), e.clone()],
-//             vec![a.clone(), e.clone()],
-//             vec![Mark::New(&a), Mark::Missing(&d), Mark::Existing(&e)],
-//         ),
-//         (
-//             "missing existing new",
-//             vec![a.clone(), b.clone()],
-//             vec![b.clone(), c.clone()],
-//             vec![Mark::Missing(&a), Mark::Existing(&b), Mark::New(&c)],
-//         ),
-//     ];
-//
-//     for (name, old, new, expected) in tests {
-//         let iter = compare_ord_iters(old.iter(), new.iter());
-//         let result: Vec<_> = iter.collect();
-//         assert_eq!(
-//             result, expected,
-//             "failed: {}. Result: {:?}, Expected: {:?}",
-//             name, result, expected
-//         );
-//     }
-// }
