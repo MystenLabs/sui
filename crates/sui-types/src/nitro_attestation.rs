@@ -86,6 +86,9 @@ pub fn attestation_verify_inner(
     let cert = X509Certificate::from_der(doc.certificate.as_slice())
         .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
     let pk_bytes = cert.1.public_key().raw;
+    if pk_bytes.len() < P384_PUBLIC_KEY_SIZE {
+        return Err(NitroError::InvalidCertificate("Invalid public key length".to_string()).into());
+    }
     let public_key = &pk_bytes[pk_bytes.len() - P384_PUBLIC_KEY_SIZE..];
     let verifying_key = VerifyingKey::from_sec1_bytes(public_key)
         .map_err(|err| NitroError::InvalidCertificate(err.to_string()))?;
@@ -280,7 +283,7 @@ impl CoseSign1 {
         Ok(cosesign1)
     }
 
-    /// todo: add docs
+    /// Validate protected header, payload and signature length.
     pub fn validate_header(&self) -> Result<(), NitroError> {
         let is_valid = {
             let mut is_valid = true;
@@ -297,8 +300,13 @@ impl CoseSign1 {
         Ok(())
     }
 
-    /// todo: add docs
-    /// From spec, {1: -35}, /* This is equivalent with {algorithm: ECDS 384} */
+    // Check protected header: https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html#COSE-CBOR
+    // 18(/* COSE_Sign1 CBOR tag is 18 */
+    //     {1: -35}, /* This is equivalent with {algorithm: ECDS 384} */
+    //     {}, /* We have nothing in unprotected */
+    //     $ATTESTATION_DOCUMENT_CONTENT /* Attestation Document */,
+    //     signature /* This is the signature */
+    // )
     fn is_valid_protected_header(bytes: &[u8]) -> bool {
         let expected_key: Integer = Integer::from(1);
         let expected_val: Integer = Integer::from(-35);
@@ -346,7 +354,7 @@ impl AttestationDocument {
     /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match. Adapted from https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs
     pub fn parse_and_validate_payload(
         payload: &Vec<u8>,
-        timestamp: u64,
+        curr_timestamp: u64,
         expected_pcrs: &[&[u8]],
     ) -> Result<AttestationDocument, NitroError> {
         let document_data: ciborium::value::Value = ciborium::de::from_reader(payload.as_slice())
@@ -488,7 +496,7 @@ impl AttestationDocument {
             nonce,
         };
 
-        doc.validate_cert(timestamp)?;
+        doc.validate_cert(curr_timestamp)?;
         doc.validate_pcrs(expected_pcrs)?;
         Ok(doc)
     }
@@ -512,10 +520,9 @@ impl AttestationDocument {
                 NitroError::InvalidCertificate(format!("Failed to parse root certificate: {}", e))
             })?;
         let root_cert = certs
-            .first()
-            .ok_or_else(|| NitroError::InvalidCertificate("No certificates found".to_string()))
-            .map(|cert| CertificateDer::from(cert.clone()))?;
-
+            .into_iter()
+            .next()
+            .ok_or_else(|| NitroError::InvalidCertificate("No certificates found".to_string()))?;
         root_store
             .add(root_cert)
             .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
@@ -537,9 +544,8 @@ impl AttestationDocument {
     fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroError> {
         // only pcr0, pcr1, pcr2 are checked
         assert!(expected_pcrs.len() == 3);
-        assert!(self.pcrs.len() == 3);
-        for i in 0..3 {
-            if self.pcrs[i] != expected_pcrs[i] {
+        for (i, expected_pcr) in expected_pcrs.into_iter().enumerate().take(3) {
+            if self.pcrs[i] != *expected_pcr {
                 return Err(NitroError::InvalidPcrs);
             }
         }
