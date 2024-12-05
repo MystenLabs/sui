@@ -4,6 +4,7 @@
 use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
+use handlers::obj_info_pruner::ObjInfoPruner;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
@@ -62,6 +63,8 @@ pub async fn start_indexer(
         wal_obj_types,
         sum_displays,
         sum_packages,
+        obj_info,
+        obj_info_pruner,
         ev_emit_mod,
         ev_struct_inst,
         kv_checkpoints,
@@ -71,7 +74,6 @@ pub async fn start_indexer(
         kv_objects,
         kv_protocol_configs,
         kv_transactions,
-        obj_info,
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
@@ -198,6 +200,36 @@ pub async fn start_indexer(
         };
     }
 
+    // Add two concurrent pipelines, one as the main pipeline, and one as a lagged pruner.
+    // The lagged pruner will prune the main pipeline's data based on the consistency range.
+    macro_rules! add_concurrent_with_lagged_pruner {
+        ($main_handler:expr, $main_config:expr; $lagged_handler:expr, $lagged_config:expr) => {
+            if let Some(main_layer) = $main_config {
+                indexer
+                    .concurrent_pipeline(
+                        $main_handler,
+                        ConcurrentConfig {
+                            committer: main_layer.finish(committer.clone()),
+                            pruner: None,
+                            checkpoint_lag: None,
+                        },
+                    )
+                    .await?;
+
+                indexer
+                    .concurrent_pipeline(
+                        $lagged_handler,
+                        ConcurrentConfig {
+                            committer: $lagged_config.unwrap_or_default().finish(committer.clone()),
+                            pruner: None,
+                            checkpoint_lag: Some(consistent_range),
+                        },
+                    )
+                    .await?;
+            }
+        };
+    }
+
     if with_genesis {
         let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
 
@@ -220,6 +252,11 @@ pub async fn start_indexer(
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
 
+    add_concurrent_with_lagged_pruner!(
+        ObjInfo, obj_info;
+        ObjInfoPruner, obj_info_pruner
+    );
+
     // Unpruned concurrent pipelines
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
@@ -228,7 +265,6 @@ pub async fn start_indexer(
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
-    add_concurrent!(ObjInfo, obj_info);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
