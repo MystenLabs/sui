@@ -114,6 +114,21 @@ impl<T> InMemoryPersistent<T> {
         tasks.sort_by(|t1, t2| t2.start_checkpoint.cmp(&t1.start_checkpoint));
         Ok(tasks)
     }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        task_prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        Ok(self
+            .progress_store
+            .lock()
+            .await
+            .values()
+            .filter(|task| task.task_name.starts_with(task_prefix))
+            .filter(|task| task.target_checkpoint.ne(&(i64::MAX as u64)))
+            .max_by(|t1, t2| t1.target_checkpoint.cmp(&t2.target_checkpoint))
+            .map(|t| t.target_checkpoint))
+    }
 }
 
 #[async_trait]
@@ -156,19 +171,26 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         Tasks::new(tasks)
     }
 
-    async fn get_largest_backfill_task_target_checkpoint(
+    async fn get_largest_indexed_checkpoint(
         &self,
         task_prefix: &str,
     ) -> Result<Option<u64>, Error> {
-        Ok(self
+        let checkpoint = self
             .progress_store
             .lock()
             .await
             .values()
             .filter(|task| task.task_name.starts_with(task_prefix))
-            .filter(|task| task.target_checkpoint.ne(&(i64::MAX as u64)))
-            .max_by(|t1, t2| t1.target_checkpoint.cmp(&t2.target_checkpoint))
-            .map(|t| t.target_checkpoint))
+            .filter(|task| task.target_checkpoint.eq(&(i64::MAX as u64)))
+            .last()
+            .map(|t| t.start_checkpoint);
+
+        if checkpoint.is_some() {
+            Ok(checkpoint)
+        } else {
+            self.get_largest_backfill_task_target_checkpoint(task_prefix)
+                .await
+        }
     }
 
     async fn register_task(

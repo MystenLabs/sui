@@ -5,14 +5,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData};
 
-use crate::{
-    db, models::transactions::StoredTxAffectedObject, pipeline::concurrent::Handler,
-    pipeline::Processor, schema::tx_affected_objects,
-};
+use crate::{models::transactions::StoredTxAffectedObject, schema::tx_affected_objects};
 
-pub struct TxAffectedObjects;
+pub(crate) struct TxAffectedObjects;
 
 impl Processor for TxAffectedObjects {
     const NAME: &'static str = "tx_affected_objects";
@@ -52,7 +53,6 @@ impl Processor for TxAffectedObjects {
 #[async_trait::async_trait]
 impl Handler for TxAffectedObjects {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

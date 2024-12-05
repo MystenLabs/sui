@@ -3,61 +3,61 @@ source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01003]: ability mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:10:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:10:19
    │
 10 │     public struct AddExtraAbility has copy {} // added copy
-   │                   ^^^^^^^^^^^^^^^ Unexpected abilities 'copy'
+   │                   ^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'AddExtraAbility'.
+   = Restore the original abilities of struct 'AddExtraAbility': none.
 
 error[Compatibility E01003]: ability mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:11:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:11:19
    │
 11 │     public struct RemoveAbility has drop {} // removed copy
-   │                   ^^^^^^^^^^^^^ Missing abilities 'copy'
+   │                   ^^^^^^^^^^^^^ Missing ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'RemoveAbility'.
+   = Restore the original abilities of struct 'RemoveAbility': 'copy' and 'drop'.
 
 error[Compatibility E01003]: ability mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:12:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:12:19
    │
 12 │     public struct AddAndRemoveAbility has drop, store {} // remove copy, add store
    │                   ^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'store'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'AddAndRemoveAbility'.
+   = Restore the original abilities of struct 'AddAndRemoveAbility': 'copy' and 'drop'.
 
 error[Compatibility E01003]: ability mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:13:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:13:19
    │
 13 │     public struct RemoveMultipleAbilities has drop {} // remove copy, store
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities 'copy' and 'store'
+   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities: 'copy' and 'store'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'RemoveMultipleAbilities'.
+   = Restore the original abilities of struct 'RemoveMultipleAbilities': 'copy', 'drop', and 'store'.
 
 error[Compatibility E01003]: ability mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:14:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:14:19
    │
 14 │     public struct AddMultipleAbilities has drop, copy {}
-   │                   ^^^^^^^^^^^^^^^^^^^^ Unexpected abilities 'copy' and 'drop'
+   │                   ^^^^^^^^^^^^^^^^^^^^ Unexpected abilities: 'copy' and 'drop'
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's abilities for struct 'AddMultipleAbilities'.
+   = Restore the original abilities of struct 'AddMultipleAbilities': none.
 
 error[Compatibility E01002]: type mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:17:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:17:19
    │
 17 │     public struct AddField {
    │                   ^^^^^^^^ Incorrect number of fields: expected 1, found 2
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original struct's fields for struct 'AddField' including the ordering.
+   = Restore the original struct's field for struct 'AddField' including the ordering.
 
 error[Compatibility E01002]: type mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:22:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:22:19
    │
 22 │     public struct RemoveField {
    │                   ^^^^^^^^^^^ Incorrect number of fields: expected 2, found 1
@@ -66,7 +66,7 @@ error[Compatibility E01002]: type mismatch
    = Restore the original struct's fields for struct 'RemoveField' including the ordering.
 
 error[Compatibility E01004]: field mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:30:9
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:30:9
    │
 28 │     public struct ChangeFieldName {
    │                   --------------- Struct definition
@@ -78,7 +78,7 @@ error[Compatibility E01004]: field mismatch
    = Restore the original struct's fields for struct 'ChangeFieldName' including the ordering.
 
 error[Compatibility E01002]: type mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:36:9
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:36:9
    │
 34 │     public struct ChangeFieldType {
    │                   --------------- Struct definition
@@ -90,4 +90,4 @@ error[Compatibility E01002]: type mismatch
    = Restore the original struct's fields for struct 'ChangeFieldType' including the ordering.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

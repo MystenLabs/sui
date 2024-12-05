@@ -68,11 +68,6 @@ impl Committee {
         self.total_stake
     }
 
-    pub fn n_percent_stake_threshold(&self, n: u64) -> Stake {
-        assert!(n <= 100, "n must be between 0 and 100");
-        self.total_stake * n / 100
-    }
-
     pub fn quorum_threshold(&self) -> Stake {
         self.quorum_threshold
     }

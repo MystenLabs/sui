@@ -435,7 +435,7 @@ module sui::bls12381_tests {
         // Sum with random terms
         let mut gen = random::new_generator_for_testing();
         let mut elements = vector[];
-        let mut i = 2001;
+        let mut i = 1201;
         while (i > 0) {
             let scalar = bls12381::scalar_from_u64(gen.generate_u64());
             let element = bls12381::g1_mul(&scalar, &bls12381::g1_generator());

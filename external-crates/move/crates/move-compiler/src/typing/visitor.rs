@@ -5,7 +5,7 @@ use crate::{
     command_line::compiler::Visitor,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::ModuleIdent,
-    naming::ast as N,
+    naming::ast::{self as N, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
     shared::CompilationEnv,
     typing::ast as T,
@@ -1269,4 +1269,20 @@ where
     list.iter().any(|item| match item {
         T::ExpListItem::Single(e, _) | T::ExpListItem::Splat(_, e, _) => exp_satisfies_(e, p),
     })
+}
+
+pub fn same_local(lhs: &Var, rhs: &T::Exp) -> Option<(Loc, Loc)> {
+    if same_local_(lhs, &rhs.exp.value) {
+        Some((lhs.loc, rhs.exp.loc))
+    } else {
+        None
+    }
+}
+
+fn same_local_(lhs: &Var, rhs: &T::UnannotatedExp_) -> bool {
+    use T::UnannotatedExp_ as E;
+    match &rhs {
+        E::Copy { var: r, .. } | E::Move { var: r, .. } | E::BorrowLocal(_, r) => lhs == r,
+        _ => false,
+    }
 }

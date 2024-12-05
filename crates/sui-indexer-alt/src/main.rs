@@ -11,8 +11,9 @@ use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
-use sui_indexer_alt::db::reset_database;
+use sui_indexer_alt::models::MIGRATIONS;
 use sui_indexer_alt::start_indexer;
+use sui_indexer_alt_framework::db::reset_database;
 use tokio::fs;
 
 #[tokio::main]
@@ -72,7 +73,7 @@ async fn main() -> Result<()> {
         }
 
         Command::ResetDatabase { skip_migrations } => {
-            reset_database(args.db_args, skip_migrations).await?;
+            reset_database(args.db_args, (!skip_migrations).then_some(&MIGRATIONS)).await?;
         }
 
         #[cfg(feature = "benchmark")]

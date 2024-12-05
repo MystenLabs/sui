@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "69",
+              "maxSupportedProtocolVersion": "70",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1307,6 +1307,7 @@
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
+                "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_smart_ancestor_selection": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
@@ -1334,6 +1335,7 @@
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
+                "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
@@ -3553,7 +3555,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x82b2fd67344691abd0efc771941b948ad35360b08e449fbbc28b0641175bf60b",
@@ -3565,7 +3567,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x21564fc5a68ace997461b098c1d1f3ccbde241d8fdf562db36bc1423ee10cecb",
@@ -3577,7 +3579,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x7e00acf5386662fa062483ba507b1e9e3039750f0a270f2e12441ad7f611a5f7",
@@ -5960,7 +5962,7 @@
         ],
         "properties": {
           "bcsName": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
@@ -6079,10 +6081,10 @@
         ],
         "properties": {
           "bcs": {
-            "description": "Base 58 encoded bcs bytes of the move event",
+            "description": "Base64 encoded bcs bytes of the move event",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               }
             ]
           },
