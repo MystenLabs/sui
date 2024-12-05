@@ -12,3 +12,4 @@ DROP TABLE IF EXISTS rebates;
 DROP TABLE IF EXISTS sui_error_transactions;
 DROP TABLE IF EXISTS progress_store;
 DROP TABLE IF EXISTS pools;
+DROP TABLE IF EXISTS assets;

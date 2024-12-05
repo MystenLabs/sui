@@ -209,3 +209,14 @@ CREATE TABLE IF NOT EXISTS pools
     lot_size                    INTEGER      NOT NULL,
     tick_size                   INTEGER      NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS assets
+(
+    type                      TEXT         PRIMARY KEY,
+    name                      TEXT         NOT NULL,
+    symbol                    TEXT         NOT NULL,
+    decimals                  SMALLINT     NOT NULL,
+    ucid                      INT,
+    package_id                TEXT,
+    package_address_url       TEXT
+);
