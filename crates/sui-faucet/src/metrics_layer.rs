@@ -79,7 +79,7 @@ where
         let path = req.uri().path().to_string();
         let user_agent = req
             .headers()
-            .get("user-agent")
+            .get(http::header::USER_AGENT)
             .and_then(|val| val.to_str().ok());
         let metrics = MetricsGuard::new(self.metrics.clone(), &path, user_agent);
         let inner = self.inner.clone();

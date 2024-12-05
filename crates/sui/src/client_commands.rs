@@ -2554,8 +2554,8 @@ pub async fn request_tokens_from_faucet(
     let client = reqwest::Client::new();
     let resp = client
         .post(&url)
-        .header("Content-Type", "application/json")
-        .header("User-Agent", USER_AGENT)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .header(http::header::USER_AGENT, USER_AGENT)
         .json(&json_body)
         .send()
         .await?;
