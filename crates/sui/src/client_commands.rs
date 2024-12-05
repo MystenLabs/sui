@@ -100,6 +100,8 @@ use tracing::{debug, info};
 #[cfg(test)]
 mod profiler_tests;
 
+static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
 /// Only to be used within CLI
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
@@ -2553,6 +2555,7 @@ pub async fn request_tokens_from_faucet(
     let resp = client
         .post(&url)
         .header("Content-Type", "application/json")
+        .header("User-Agent", USER_AGENT)
         .json(&json_body)
         .send()
         .await?;
