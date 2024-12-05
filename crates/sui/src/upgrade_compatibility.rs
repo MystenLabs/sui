@@ -496,11 +496,10 @@ pub(crate) async fn check_compatibility(
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 
-    if let Ok(policy) = UpgradePolicy::try_from(upgrade_policy) {
-        compare_packages(existing_modules, new_package, policy)
-    } else {
-        Err(anyhow!("Invalid upgrade policy"))
-    }
+    let policy =
+        UpgradePolicy::try_from(upgrade_policy).map_err(|_| anyhow!("Invalid upgrade policy"))?;
+
+    compare_packages(existing_modules, new_package, policy)
 }
 
 fn compare_packages(
@@ -632,7 +631,7 @@ fn compare_packages(
         if !missing_modules.is_empty() {
             format!(
                 "The following modules are missing from the new package: {}\n",
-                format_list(missing_modules.iter().map(|m| format!("'{}'", m)), None)
+                format_list(missing_modules.iter().map(|m| format!("'{m}'")), None)
             )
         } else {
             "".to_string()
@@ -1324,7 +1323,7 @@ fn struct_field_mismatch_diag(
         .unit
         .source_map
         .get_struct_source_map(StructDefinitionIndex::new(*struct_index))
-        .context(format!("Unable to get struct source map {}", struct_name))?;
+        .with_context(|| format!("Unable to get struct source map {struct_name}"))?;
 
     let def_loc = struct_sourcemap.definition_location;
 
@@ -1862,7 +1861,7 @@ fn type_param_constraint_labels(
 
     let old_abilities_list: Vec<String> = old_constraints
         .into_iter()
-        .map(|a| format!("'{}'", a).to_lowercase())
+        .map(|a| format!("'{a}'").to_lowercase())
         .collect();
 
     Some((
