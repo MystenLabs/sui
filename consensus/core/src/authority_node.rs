@@ -575,6 +575,105 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
+    async fn test_small_committee(
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(2, 3)] num_authorities: usize,
+    ) {
+        let db_registry = Registry::new();
+        DBMetrics::init(&db_registry);
+
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
+        let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
+
+        let temp_dirs = (0..num_authorities)
+            .map(|_| TempDir::new().unwrap())
+            .collect::<Vec<_>>();
+
+        let mut output_receivers = Vec::with_capacity(committee.size());
+        let mut authorities: Vec<ConsensusAuthority> = Vec::with_capacity(committee.size());
+        let mut boot_counters = vec![0; num_authorities];
+
+        for (index, _authority_info) in committee.authorities() {
+            let (authority, receiver) = make_authority(
+                index,
+                &temp_dirs[index.value()],
+                committee.clone(),
+                keypairs.clone(),
+                network_type,
+                boot_counters[index],
+                protocol_config.clone(),
+            )
+            .await;
+            boot_counters[index] += 1;
+            output_receivers.push(receiver);
+            authorities.push(authority);
+        }
+
+        const NUM_TRANSACTIONS: u8 = 15;
+        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i; 16];
+            submitted_transactions.insert(txn.clone());
+            authorities[i as usize % authorities.len()]
+                .transaction_client()
+                .submit(vec![txn])
+                .await
+                .unwrap();
+        }
+
+        for receiver in &mut output_receivers {
+            let mut expected_transactions = submitted_transactions.clone();
+            loop {
+                let committed_subdag =
+                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                for b in committed_subdag.blocks {
+                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+                        assert!(
+                            expected_transactions.remove(&txn),
+                            "Transaction not submitted or already seen: {:?}",
+                            txn
+                        );
+                    }
+                }
+                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
+                if expected_transactions.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        // Stop authority 0.
+        let index = committee.to_authority_index(1).unwrap();
+        authorities.remove(index.value()).stop().await;
+        sleep(Duration::from_secs(10)).await;
+
+        // Restart authority 0 and let it run.
+        let (authority, receiver) = make_authority(
+            index,
+            &temp_dirs[index.value()],
+            committee.clone(),
+            keypairs.clone(),
+            network_type,
+            boot_counters[index],
+            protocol_config.clone(),
+        )
+        .await;
+        boot_counters[index] += 1;
+        output_receivers[index] = receiver;
+        authorities.insert(index.value(), authority);
+        sleep(Duration::from_secs(10)).await;
+
+        // Stop all authorities and exit.
+        for authority in authorities {
+            authority.stop().await;
+        }
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_amnesia_recovery_success(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
         #[values(0, 5, 10)] gc_depth: u32,
