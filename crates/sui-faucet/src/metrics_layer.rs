@@ -120,7 +120,7 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 impl MetricsGuard {
     fn new(metrics: Arc<RequestMetrics>, path: &str, user_agent: Option<&str>) -> Option<Self> {
         let normalized_path = normalize_path(path);
-        let user_agent = user_agent.unwrap_or_else(|| "unknown");
+        let user_agent = user_agent.unwrap_or("unknown");
 
         if !is_path_tracked(normalized_path) {
             return None;
