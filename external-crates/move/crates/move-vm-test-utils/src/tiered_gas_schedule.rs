@@ -64,6 +64,8 @@ pub const INSTRUCTION_TIER_DEFAULT: u64 = 1;
 pub const STACK_HEIGHT_TIER_DEFAULT: u64 = 1;
 pub const STACK_SIZE_TIER_DEFAULT: u64 = 1;
 
+pub const NATIVE_FUNCTION_THRESHOLD: u64 = 700;
+
 // The cost table holds the tiers and curves for instruction costs.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq, Deserialize)]
 pub struct CostTable {
@@ -181,6 +183,7 @@ pub struct GasStatus<'a> {
     instructions_current_tier_mult: u64,
 
     profiler: Option<GasProfiler>,
+    num_native_calls: u64,
 }
 
 impl<'a> GasStatus<'a> {
@@ -211,6 +214,7 @@ impl<'a> GasStatus<'a> {
             stack_size_next_tier_start,
             instructions_next_tier_start,
             profiler: None,
+            num_native_calls: 0,
         }
     }
 
@@ -235,6 +239,7 @@ impl<'a> GasStatus<'a> {
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
             profiler: None,
+            num_native_calls: 0,
         }
     }
 
@@ -465,9 +470,16 @@ impl<'b> GasMeter for GasStatus<'b> {
         // Charge for the stack operations. We don't count this as an "instruction" since we
         // already accounted for the `Call` instruction in the
         // `charge_native_function_before_execution` call.
-        self.charge(0, pushes, 0, size_increase.into(), 0)?;
-        // Now charge the gas that the native function told us to charge.
-        self.deduct_gas(amount)
+        // The amount returned by the native function is viewed as the "virtual" instruction cost
+        // for the native function, and will be charged and contribute to the overall cost tier of
+        // the transaction accordingly.
+        self.num_native_calls = self.num_native_calls.saturating_add(1);
+        if self.num_native_calls > NATIVE_FUNCTION_THRESHOLD {
+            self.charge(amount.into(), pushes, 0, size_increase.into(), 0)
+        } else {
+            self.charge(0, pushes, 0, size_increase.into(), 0)?;
+            self.deduct_gas(amount)
+        }
     }
 
     fn charge_native_function_before_execution(
