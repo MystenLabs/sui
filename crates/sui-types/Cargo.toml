@@ -75,7 +75,14 @@ lru.workspace = true
 sui-sdk-types.workspace = true
 
 ciborium.workspace = true
+<<<<<<< HEAD
 x509-parser.workspace = true
+=======
+serde_bytes.workspace = true
+rustls.workspace = true
+x509-parser.workspace = true
+webpki.workspace = true
+>>>>>>> 2d6ee73be2 (feat: add attestation verify in sui-types)
 p384.workspace = true
 rustls-pemfile.workspace = true
 
