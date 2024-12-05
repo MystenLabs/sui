@@ -43,6 +43,7 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
+pub const TICKER: &str = "/ticker";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
@@ -72,6 +73,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         )
         .route(LEVEL2_PATH, get(orderbook))
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
+        .route(TICKER, get(ticker))
         .with_state(state)
 }
 
@@ -373,6 +375,61 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     }
 
     Ok(Json(metrics_by_interval))
+}
+
+pub async fn ticker(
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, HashMap<String, String>>>, DeepBookError> {
+    // Fetch base and quote historical volumes
+    let base_volumes = fetch_historical_volume(&params, true, &state).await?;
+    let quote_volumes = fetch_historical_volume(&params, false, &state).await?;
+
+    // Fetch pools data for metadata
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_map: HashMap<&str, &Pools> = pools
+        .0
+        .iter()
+        .map(|pool| (pool.pool_name.as_str(), pool))
+        .collect();
+
+    // Prepare response directly as a HashMap
+    let mut response = HashMap::new();
+    for (pool_name, base_volume) in base_volumes {
+        let quote_volume = quote_volumes.get(&pool_name).copied().unwrap_or(0);
+
+        if let Some(_pool) = pool_map.get(pool_name.as_str()) {
+            response.insert(
+                pool_name,
+                HashMap::from([
+                    ("base_id".to_string(), "0".to_string()),        // Placeholder for base_id
+                    ("quote_id".to_string(), "0".to_string()),      // Placeholder for quote_id
+                    ("last_price".to_string(), "0".to_string()),    // Placeholder for last_price
+                    ("base_volume".to_string(), base_volume.to_string()),
+                    ("quote_volume".to_string(), quote_volume.to_string()),
+                    ("isFrozen".to_string(), "0".to_string()),      // Fixed value
+                ]),
+            );
+        }
+    }
+
+    Ok(Json(response))
+}
+
+async fn fetch_historical_volume(
+    params: &HashMap<String, String>,
+    volume_in_base: bool,
+    state: &PgDeepbookPersistent,
+) -> Result<HashMap<String, u64>, DeepBookError> {
+    let mut params_with_volume = params.clone();
+    params_with_volume.insert(
+        "volume_in_base".to_string(),
+        volume_in_base.to_string(),
+    );
+
+    all_historical_volume(Query(params_with_volume), State(state.clone()))
+        .await
+        .map(|Json(volumes)| volumes) // Destructure Json to access inner value
 }
 
 /// Level2 data for all pools
