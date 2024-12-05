@@ -5,11 +5,16 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use diesel_async::RunQueryDsl;
+use sui_field_count::FieldCount;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{concurrent::Handler, Processor},
 };
-use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Owner};
+use sui_types::{
+    base_types::ObjectID,
+    full_checkpoint_content::CheckpointData,
+    object::{Object, Owner},
+};
 
 use crate::{
     models::objects::{StoredObjInfo, StoredOwnerKind},
@@ -18,12 +23,22 @@ use crate::{
 
 pub(crate) struct ObjInfo;
 
+pub(crate) enum ProcessedObjInfoUpdate {
+    Insert(Object),
+    Delete(ObjectID),
+}
+
+pub(crate) struct ProcessedObjInfo {
+    pub cp_sequence_number: u64,
+    pub update: ProcessedObjInfoUpdate,
+}
+
 impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";
-    type Value = StoredObjInfo;
+    type Value = ProcessedObjInfo;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
+        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
         let latest_live_output_objects = checkpoint
             .latest_live_output_objects()
@@ -39,15 +54,9 @@ impl Processor for ObjInfo {
                 // include the object in the result if it was deleted.
                 values.insert(
                     *object_id,
-                    StoredObjInfo {
-                        object_id: object_id.to_vec(),
+                    ProcessedObjInfo {
                         cp_sequence_number,
-                        owner_kind: None,
-                        owner_id: None,
-                        package: None,
-                        module: None,
-                        name: None,
-                        instantiation: None,
+                        update: ProcessedObjInfoUpdate::Delete(*object_id),
                     },
                 );
             }
@@ -60,39 +69,11 @@ impl Processor for ObjInfo {
                 None => true,
             };
             if should_insert {
-                let type_ = object.type_();
                 values.insert(
                     *object_id,
-                    StoredObjInfo {
-                        object_id: object_id.to_vec(),
+                    ProcessedObjInfo {
                         cp_sequence_number,
-                        owner_kind: Some(match object.owner() {
-                            Owner::AddressOwner(_) => StoredOwnerKind::Address,
-                            Owner::ObjectOwner(_) => StoredOwnerKind::Object,
-                            Owner::Shared { .. } => StoredOwnerKind::Shared,
-                            Owner::Immutable => StoredOwnerKind::Immutable,
-                            Owner::ConsensusV2 { .. } => todo!(),
-                        }),
-
-                        owner_id: match object.owner() {
-                            Owner::AddressOwner(a) => Some(a.to_vec()),
-                            Owner::ObjectOwner(o) => Some(o.to_vec()),
-                            Owner::Shared { .. } | Owner::Immutable { .. } => None,
-                            Owner::ConsensusV2 { .. } => todo!(),
-                        },
-
-                        package: type_.map(|t| t.address().to_vec()),
-                        module: type_.map(|t| t.module().to_string()),
-                        name: type_.map(|t| t.name().to_string()),
-                        instantiation: type_
-                            .map(|t| bcs::to_bytes(&t.type_params()))
-                            .transpose()
-                            .map_err(|e| {
-                            anyhow!(
-                                "Failed to serialize type parameters for {}: {e}",
-                                object.id().to_canonical_display(/* with_prefix */ true),
-                            )
-                        })?,
+                        update: ProcessedObjInfoUpdate::Insert((*object).clone()),
                     },
                 );
             }
@@ -105,10 +86,78 @@ impl Processor for ObjInfo {
 #[async_trait::async_trait]
 impl Handler for ObjInfo {
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+        let stored = values
+            .iter()
+            .map(|v| v.try_into())
+            .collect::<Result<Vec<StoredObjInfo>>>()?;
         Ok(diesel::insert_into(obj_info::table)
-            .values(values)
+            .values(stored)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+}
+
+impl ProcessedObjInfo {
+    pub fn object_id(&self) -> ObjectID {
+        match &self.update {
+            ProcessedObjInfoUpdate::Insert(object) => object.id(),
+            ProcessedObjInfoUpdate::Delete(object_id) => *object_id,
+        }
+    }
+}
+
+impl FieldCount for ProcessedObjInfo {
+    const FIELD_COUNT: usize = StoredObjInfo::FIELD_COUNT;
+}
+
+impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<StoredObjInfo> {
+        match &self.update {
+            ProcessedObjInfoUpdate::Insert(object) => {
+                let type_ = object.type_();
+                let (owner_kind, owner_id) = match object.owner() {
+                    Owner::AddressOwner(a) => (StoredOwnerKind::Address, Some(a.to_vec())),
+                    Owner::ObjectOwner(o) => (StoredOwnerKind::Object, Some(o.to_vec())),
+                    Owner::Shared { .. } | Owner::Immutable { .. } => {
+                        (StoredOwnerKind::Shared, None)
+                    }
+                    Owner::ConsensusV2 { authenticator, .. } => (
+                        StoredOwnerKind::Address,
+                        Some(authenticator.as_single_owner().to_vec()),
+                    ),
+                };
+                Ok(StoredObjInfo {
+                    object_id: object.id().to_vec(),
+                    cp_sequence_number: self.cp_sequence_number as i64,
+                    owner_kind: Some(owner_kind),
+                    owner_id,
+                    package: type_.map(|t| t.address().to_vec()),
+                    module: type_.map(|t| t.module().to_string()),
+                    name: type_.map(|t| t.name().to_string()),
+                    instantiation: type_
+                        .map(|t| bcs::to_bytes(&t.type_params()))
+                        .transpose()
+                        .map_err(|e| {
+                            anyhow!(
+                                "Failed to serialize type parameters for {}: {e}",
+                                object.id().to_canonical_display(/* with_prefix */ true),
+                            )
+                        })?,
+                })
+            }
+            ProcessedObjInfoUpdate::Delete(object_id) => Ok(StoredObjInfo {
+                object_id: object_id.to_vec(),
+                cp_sequence_number: self.cp_sequence_number as i64,
+                owner_kind: None,
+                owner_id: None,
+                package: None,
+                module: None,
+                name: None,
+                instantiation: None,
+            }),
+        }
     }
 }
