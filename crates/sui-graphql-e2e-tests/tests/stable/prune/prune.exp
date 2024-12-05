@@ -52,6 +52,9 @@ task 11, lines 45-55:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
+    "epoch": {
+      "epochId": 3
+    },
     "checkpoints": {
       "nodes": [
         {
@@ -65,6 +68,12 @@ Response: {
             "epochId": 2
           },
           "sequenceNumber": 6
+        },
+        {
+          "epoch": {
+            "epochId": 3
+          },
+          "sequenceNumber": 7
         }
       ]
     }
