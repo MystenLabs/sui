@@ -376,50 +376,65 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
     Ok(Json(metrics_by_interval))
 }
+
 pub async fn ticker(
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, HashMap<String, String>>>, DeepBookError> {
+) -> Result<Json<HashMap<String, HashMap<String, Value>>>, DeepBookError> {
     // Fetch base and quote historical volumes
     let base_volumes = fetch_historical_volume(&params, true, &state).await?;
     let quote_volumes = fetch_historical_volume(&params, false, &state).await?;
 
     // Fetch pools data for metadata
     let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
-    let pool_map: HashMap<&str, &Pools> = pools
+    let pool_map: HashMap<String, &Pools> = pools
         .0
         .iter()
-        .map(|pool| (pool.pool_name.as_str(), pool))
+        .map(|pool| (pool.pool_id.clone(), pool))
         .collect();
 
-    // Prepare response directly as a HashMap
+    // Fetch last prices for all pools in a single query
+    let connection = &mut state.pool.get().await?;
+    let last_prices: Vec<(String, i64)> = schema::order_fills::table
+        .select((schema::order_fills::pool_id, schema::order_fills::price))
+        .order_by((schema::order_fills::pool_id.asc(), schema::order_fills::checkpoint_timestamp_ms.desc()))
+        .distinct_on(schema::order_fills::pool_id)
+        .load(connection)
+        .await?;
+
+    let last_price_map: HashMap<String, i64> = last_prices.into_iter().collect();
+
     let mut response = HashMap::new();
-    for (pool_name, base_volume) in base_volumes {
-        let quote_volume = quote_volumes.get(&pool_name).copied().unwrap_or(0);
 
-        if let Some(pool) = pool_map.get(pool_name.as_str()) {
-            // Conversion factors based on decimals
-            let base_factor = 10u64.pow(pool.base_asset_decimals as u32);
-            let quote_factor = 10u64.pow(pool.quote_asset_decimals as u32);
+    for (pool_id, pool) in &pool_map {
+        let pool_name = &pool.pool_name;
+        let base_volume = base_volumes.get(pool_name).copied().unwrap_or(0);
+        let quote_volume = quote_volumes.get(pool_name).copied().unwrap_or(0);
+        let last_price = last_price_map.get(pool_id).copied();
 
-            response.insert(
-                pool_name,
-                HashMap::from([
-                    ("base_id".to_string(), pool.base_asset_id.clone()),
-                    ("quote_id".to_string(), pool.quote_asset_id.clone()),
-                    ("last_price".to_string(), "0".to_string()), // Placeholder for last price
-                    (
-                        "base_volume".to_string(),
-                        (base_volume as f64 / base_factor as f64).to_string(),
-                    ),
-                    (
-                        "quote_volume".to_string(),
-                        (quote_volume as f64 / quote_factor as f64).to_string(),
-                    ),
-                    ("isFrozen".to_string(), "0".to_string()), // Fixed value
-                ]),
-            );
-        }
+        // Conversion factors based on decimals
+        let base_factor = 10u64.pow(pool.base_asset_decimals as u32);
+        let quote_factor = 10u64.pow(pool.quote_asset_decimals as u32);
+        let price_factor = 10u64.pow((9 - pool.base_asset_decimals + pool.quote_asset_decimals) as u32);
+
+        response.insert(
+            pool_name.clone(),
+            HashMap::from([
+                (
+                    "last_price".to_string(),
+                    Value::from(last_price.map(|price| price as f64 / price_factor as f64).unwrap_or(0.0)),
+                ),
+                (
+                    "base_volume".to_string(),
+                    Value::from(base_volume as f64 / base_factor as f64),
+                ),
+                (
+                    "quote_volume".to_string(),
+                    Value::from(quote_volume as f64 / quote_factor as f64),
+                ),
+                ("isFrozen".to_string(), Value::from(0)), // Fixed to 0 because all pools are active
+            ]),
+        );
     }
 
     Ok(Json(response))
