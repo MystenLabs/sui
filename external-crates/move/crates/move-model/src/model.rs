@@ -2127,6 +2127,7 @@ impl<'env> ModuleEnv<'env> {
                 print_code: true,
                 print_basic_blocks: true,
                 print_locals: true,
+                max_output_size: None,
             },
         );
         disas

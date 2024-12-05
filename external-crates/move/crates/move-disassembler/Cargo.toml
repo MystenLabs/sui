@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-colored.workspace = true
+inline_colorization.workspace = true
 
 move-bytecode-source-map.workspace = true
 move-command-line-common.workspace = true
