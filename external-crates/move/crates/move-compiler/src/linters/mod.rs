@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub mod abort_constant;
-pub mod combinable_conditions;
+pub mod combinable_comparisons;
 pub mod constant_naming;
 pub mod equal_operands;
 pub mod loop_without_exit;
@@ -171,10 +171,10 @@ lints!(
         "redundant, always-equal operands for binary operation"
     ),
     (
-        CombinableConditions,
+        CombinableComparisons,
         LinterDiagnosticCategory::Complexity,
-        "combinable_conditions",
-        "boolean condition can be simplified"
+        "combinable_comparison",
+        "comparison operations condition can be simplified"
     )
 );
 
@@ -214,7 +214,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 redundant_ref_deref::RedundantRefDeref.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
-                combinable_bool_conditions::CombinableBoolConditionsVisitor.visitor(),
+                combinable_comparisons::CombinableComparisons.visitor(),
             ]
         }
     }
