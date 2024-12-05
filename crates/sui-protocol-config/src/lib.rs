@@ -2986,6 +2986,8 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .consensus_round_prober_probe_accepted_rounds = true;
                     }
+
+                    cfg.consensus_gc_depth = Some(5);
                 }
                 // Use this template when making changes:
                 //
