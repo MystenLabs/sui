@@ -1800,7 +1800,7 @@ pub(crate) async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
         package_id,
-        dependencies.clone(),
+        dependencies,
     )?;
     let protocol_config = read_api.get_protocol_config(None).await?;
 
@@ -1862,7 +1862,7 @@ pub(crate) async fn compile_package(
         }
     }
     if with_unpublished_dependencies {
-        compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
+        compiled_package.verify_unpublished_dependencies()?;
     }
     if !skip_dependency_verification {
         let verifier = BytecodeSourceVerifier::new(read_api);

@@ -1648,12 +1648,9 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     .execute(context)
     .await;
 
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("Dependency object does not exist or was deleted"),
-        "{}",
-        err
-    );
+    // publishing with a dependency that is not referenced in code is OK, as the dependency list
+    // only contains the dependencies that are actually referenced in the code
+    assert!(result.is_ok());
     Ok(())
 }
 
