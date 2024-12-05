@@ -558,7 +558,7 @@ impl AuthorityPerpetualTables {
     }
 
     /// Read an object and return it, or Ok(None) if the object was not found.
-    fn get_object_fallible(
+    pub fn get_object_fallible(
         &self,
         object_id: &ObjectID,
     ) -> SuiResult<Option<Object>> {
