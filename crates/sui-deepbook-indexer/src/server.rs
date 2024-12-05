@@ -376,7 +376,6 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
     Ok(Json(metrics_by_interval))
 }
-
 pub async fn ticker(
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
@@ -398,16 +397,26 @@ pub async fn ticker(
     for (pool_name, base_volume) in base_volumes {
         let quote_volume = quote_volumes.get(&pool_name).copied().unwrap_or(0);
 
-        if let Some(_pool) = pool_map.get(pool_name.as_str()) {
+        if let Some(pool) = pool_map.get(pool_name.as_str()) {
+            // Conversion factors based on decimals
+            let base_factor = 10u64.pow(pool.base_asset_decimals as u32);
+            let quote_factor = 10u64.pow(pool.quote_asset_decimals as u32);
+
             response.insert(
                 pool_name,
                 HashMap::from([
-                    ("base_id".to_string(), "0".to_string()),        // Placeholder for base_id
-                    ("quote_id".to_string(), "0".to_string()),      // Placeholder for quote_id
-                    ("last_price".to_string(), "0".to_string()),    // Placeholder for last_price
-                    ("base_volume".to_string(), base_volume.to_string()),
-                    ("quote_volume".to_string(), quote_volume.to_string()),
-                    ("isFrozen".to_string(), "0".to_string()),      // Fixed value
+                    ("base_id".to_string(), pool.base_asset_id.clone()),
+                    ("quote_id".to_string(), pool.quote_asset_id.clone()),
+                    ("last_price".to_string(), "0".to_string()), // Placeholder for last price
+                    (
+                        "base_volume".to_string(),
+                        (base_volume as f64 / base_factor as f64).to_string(),
+                    ),
+                    (
+                        "quote_volume".to_string(),
+                        (quote_volume as f64 / quote_factor as f64).to_string(),
+                    ),
+                    ("isFrozen".to_string(), "0".to_string()), // Fixed value
                 ]),
             );
         }
