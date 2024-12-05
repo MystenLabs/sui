@@ -106,6 +106,8 @@ impl Linearizer {
             &mut dag_state,
         );
 
+        drop(dag_state);
+
         // Create the Commit.
         let commit = Commit::new(
             last_commit_index + 1,
