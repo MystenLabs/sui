@@ -245,7 +245,9 @@ impl DagState {
                         .scan_commits((index..=index).into())
                         .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
                     let Some(commit) = commits.first() else {
-                        info!("Recovering finished, no more commits to recover");
+                        info!(
+                            "Recovering finished up to index {index}, no more commits to recover"
+                        );
                         break;
                     };
 
@@ -268,8 +270,11 @@ impl DagState {
                         assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
                     });
 
-                    // When reaching zero will exist anyways as all commits are indexed starting from 1.
+                    // All commits are indexed starting from 1, so one reach zero exit.
                     index = index.saturating_sub(1);
+                    if index == 0 {
+                        break;
+                    }
                 }
             }
         }
