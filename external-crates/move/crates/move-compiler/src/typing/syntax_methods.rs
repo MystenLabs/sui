@@ -185,9 +185,12 @@ fn validate_index_syntax_methods(
     // `&` param. We already ensured they were both references of the appropriate shape in naming,
     // so this is a bit redundant.
     if let Some((ndx, (subject_ref_type, subject_mut_ref_type))) = param_tys.next() {
-        if let Ok((subst_, _)) =
-            core::subtype(subst.clone(), subject_mut_ref_type, subject_ref_type)
-        {
+        if let Ok((subst_, _)) = core::subtype(
+            &mut context.tvar_counter,
+            subst.clone(),
+            subject_mut_ref_type,
+            subject_ref_type,
+        ) {
             subst = subst_;
         } else {
             let (_, _, index_type) = &index_finfo.signature.parameters[ndx];
@@ -237,7 +240,9 @@ fn validate_index_syntax_methods(
 
     // We ensure the rest of the parameters match exactly.
     for (ndx, (ptype, mut_ptype)) in param_tys {
-        if let Ok((subst_, _)) = core::invariant(subst.clone(), ptype, mut_ptype) {
+        if let Ok((subst_, _)) =
+            core::invariant(&mut context.tvar_counter, subst.clone(), ptype, mut_ptype)
+        {
             subst = subst_;
         } else {
             let (_, _, index_type) = &index_finfo.signature.parameters[ndx];
@@ -271,6 +276,7 @@ fn validate_index_syntax_methods(
     // that they are appropriately-shaped references, and now we ensure they refer to the same type
     // under the reference.
     if core::subtype(
+        &mut context.tvar_counter,
         subst.clone(),
         &mut_finfo.signature.return_type,
         &index_ty.return_,

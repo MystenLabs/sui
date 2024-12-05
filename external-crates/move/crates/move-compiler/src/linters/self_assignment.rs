@@ -9,14 +9,14 @@ use crate::{
     naming::ast::Var,
     typing::{
         ast::{self as T},
-        visitor::simple_visitor,
+        visitor::{same_local, simple_visitor},
     },
 };
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
 simple_visitor!(
-    SelfAssignmentVisitor,
+    SelfAssignment,
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         match &e.exp.value {
@@ -111,20 +111,6 @@ fn check_assign(context: &mut Context, sp!(_, lvalues_): &T::LValueList, rhs: &T
         if let Some((lhs_loc, rhs_loc)) = same_local(lhs, rhs) {
             report_self_assignment(context, "assignment", loc, lhs_loc, rhs_loc);
         }
-    }
-}
-
-fn same_local(lhs: &Var, rhs: &T::Exp) -> Option<(Loc, Loc)> {
-    use T::UnannotatedExp_ as E;
-    match &rhs.exp.value {
-        E::Copy { var: r, .. } | E::Move { var: r, .. } | E::BorrowLocal(_, r) => {
-            if lhs == r {
-                Some((lhs.loc, r.loc))
-            } else {
-                None
-            }
-        }
-        _ => None,
     }
 }
 

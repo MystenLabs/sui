@@ -1,5 +1,19 @@
 # @mysten/kms
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [ec2dc7f]
+- Updated dependencies [ec2dc7f]
+  - @mysten/sui@1.16.0
+
+## 0.0.9
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+
 ## 0.0.8
 
 ### Patch Changes

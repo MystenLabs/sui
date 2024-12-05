@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 69;
+const MAX_PROTOCOL_VERSION: u64 = 70;
 
 // Record history of protocol version allocations here:
 //
@@ -198,6 +198,7 @@ const MAX_PROTOCOL_VERSION: u64 = 69;
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
 //             Enable G1Uncompressed group in testnet.
+// Version 70: Enable probing for accepted rounds in round prober.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -571,6 +572,10 @@ struct FeatureFlags {
     // Use smart ancestor selection in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_smart_ancestor_selection: bool,
+
+    // Probe accepted rounds in round prober.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober_probe_accepted_rounds: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1631,14 +1636,20 @@ impl ProtocolConfig {
     }
 
     pub fn max_transactions_in_block_bytes(&self) -> u64 {
-        // Provide a default value if protocol config version is too low.
-        self.consensus_max_transactions_in_block_bytes
-            .unwrap_or(512 * 1024)
+        if cfg!(msim) {
+            256 * 1024
+        } else {
+            self.consensus_max_transactions_in_block_bytes
+                .unwrap_or(512 * 1024)
+        }
     }
 
     pub fn max_num_transactions_in_block(&self) -> u64 {
-        // 500 is the value used before this field is introduced.
-        self.consensus_max_num_transactions_in_block.unwrap_or(500)
+        if cfg!(msim) {
+            8
+        } else {
+            self.consensus_max_num_transactions_in_block.unwrap_or(512)
+        }
     }
 
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
@@ -1684,6 +1695,11 @@ impl ProtocolConfig {
 
     pub fn consensus_smart_ancestor_selection(&self) -> bool {
         self.feature_flags.consensus_smart_ancestor_selection
+    }
+
+    pub fn consensus_round_prober_probe_accepted_rounds(&self) -> bool {
+        self.feature_flags
+            .consensus_round_prober_probe_accepted_rounds
     }
 }
 
@@ -2964,6 +2980,13 @@ impl ProtocolConfig {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
                 }
+                70 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable probing for accepted rounds in round prober.
+                        cfg.feature_flags
+                            .consensus_round_prober_probe_accepted_rounds = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3129,6 +3152,11 @@ impl ProtocolConfig {
     pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages = val;
+    }
+
+    pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
+        self.feature_flags
+            .consensus_round_prober_probe_accepted_rounds = val;
     }
 }
 

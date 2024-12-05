@@ -33,6 +33,7 @@ sui-indexer-builder.workspace = true
 tempfile.workspace = true
 axum.workspace = true
 bigdecimal = { version = "0.4.5" }
+serde_json = { version = "1.0", features = ["preserve_order"] }
 
 [dev-dependencies]
 hex-literal = "0.3.4"

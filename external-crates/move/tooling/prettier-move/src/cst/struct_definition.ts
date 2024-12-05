@@ -4,7 +4,14 @@
 import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { list, printIdentifier, shouldBreakFirstChild } from '../utilities';
+import {
+	emptyBlockOrList,
+	list,
+	printIdentifier,
+	printLeadingComment,
+	printTrailingComment,
+	shouldBreakFirstChild,
+} from '../utilities';
 const { group, join } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
@@ -105,17 +112,23 @@ export function printStructDefinition(
 	]);
 }
 
+type Ability = { name: 'key' | 'store' | 'drop'; text: Doc };
+
 /**
  * Print `ability_decls` node.
  */
 export function printAbilityDeclarations(
 	path: AstPath<Node>,
-	options: ParserOptions,
+	options: MoveOptions,
 	print: printFn,
 ): Doc {
+	const abilities = formatAndSortAbilities(path, options, print);
 	return [
 		' has ',
-		join(', ', path.map(print, 'nonFormattingChildren')),
+		join(
+			', ',
+			abilities.map((ability) => ability.text),
+		),
 		path.next?.namedChildren[0]?.type === StructDefinition.PositionalFields ? ' ' : '',
 	];
 }
@@ -125,10 +138,18 @@ export function printAbilityDeclarations(
  */
 export function printPostfixAbilityDeclarations(
 	path: AstPath<Node>,
-	options: ParserOptions,
+	options: MoveOptions,
 	print: printFn,
 ): Doc {
-	return group([' has ', join(', ', path.map(print, 'nonFormattingChildren')), ';']);
+	const abilities = formatAndSortAbilities(path, options, print);
+	return group([
+		' has ',
+		join(
+			', ',
+			abilities.map((ability) => ability.text),
+		),
+		';',
+	]);
 }
 
 /**
@@ -151,7 +172,7 @@ export function printNamedFields(path: AstPath<Node>, options: MoveOptions, prin
 	const children = path.map(print, 'nonFormattingChildren');
 
 	if (children.length === 0) {
-		return ' {}';
+		return [' ', emptyBlockOrList(path, '{', '}', doc.builders.line)];
 	}
 
 	return [
@@ -174,7 +195,7 @@ export function printPositionalFields(
 	const children = path.map(print, 'nonFormattingChildren');
 
 	if (children.length === 0) {
-		return '()';
+		return emptyBlockOrList(path, '(', ')', doc.builders.line);
 	}
 
 	return group(list({ path, print, options, open: '(', close: ')' }), {
@@ -203,4 +224,44 @@ export function printFieldAnnotation(
  */
 export function printApplyType(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	return path.map(print, 'nonFormattingChildren');
+}
+
+/**
+ * Utility function which formats and sorts abilities in the following order::
+ *
+ * - key
+ * - copy
+ * - drop
+ * - store
+ *
+ * Key always goes first, the rest are sorted alphabetically.
+ */
+function formatAndSortAbilities(
+	path: AstPath<Node>,
+	options: MoveOptions,
+	print: printFn,
+): Ability[] {
+	const abilities: Ability[] = path.map(
+		(path) => ({
+			name: path.node.text as Ability['name'],
+			text: [
+				printLeadingComment(path, options),
+				path.node.text,
+				printTrailingComment(path, true),
+			] as Doc,
+		}),
+		'nonFormattingChildren',
+	);
+
+	// alphabetical but `key` always goes first
+	const priority = {
+		key: 0,
+		copy: 1,
+		drop: 2,
+		store: 3,
+	};
+
+	abilities.sort((a, b) => priority[a.name] - priority[b.name]);
+
+	return abilities;
 }

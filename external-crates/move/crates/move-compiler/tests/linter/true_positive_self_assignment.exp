@@ -24,8 +24,8 @@ warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:13:9
    │
 13 │         x = move x; // warn
-   │         ^        - Is the same as this location
-   │         │         
+   │         ^   ------ Is the same as this location
+   │         │    
    │         Unnecessary self-assignment. The assignment is redundant and will not change the value
    │         This location
    │
@@ -35,8 +35,8 @@ warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:15:9
    │
 15 │         x = copy x; // warn
-   │         ^        - Is the same as this location
-   │         │         
+   │         ^   ------ Is the same as this location
+   │         │    
    │         Unnecessary self-assignment. The assignment is redundant and will not change the value
    │         This location
    │
@@ -289,8 +289,8 @@ warning[Lint W02008]: assignment preserves the same value
    │
 50 │         *move r = *copy r;
    │         ^^^^^^^^^^^^^^^^^
-   │         │     │         │
-   │         │     │         Is the same as this location
+   │         │     │    │
+   │         │     │    Is the same as this location
    │         │     This location
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
@@ -301,8 +301,8 @@ warning[Lint W02008]: assignment preserves the same value
    │
 53 │         *&mut x = *&mut x;
    │         ^^^^^^^^^^^^^^^^^
-   │         │     │         │
-   │         │     │         Is the same as this location
+   │         │     │    │
+   │         │     │    Is the same as this location
    │         │     This location
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │

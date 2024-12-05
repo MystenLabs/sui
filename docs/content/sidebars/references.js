@@ -58,6 +58,15 @@ const references = [
 	},
 	{
 		type: 'category',
+		label: 'Sui IDE Support',
+		collapsed: false,
+		items: [
+			'references/ide/move',
+			'references/ide/debugger',
+		],
+	},
+	{
+		type: 'category',
 		label: 'Sui SDKs',
 		collapsed: false,
 		link: {

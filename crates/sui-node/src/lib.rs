@@ -488,8 +488,12 @@ impl SuiNode {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
-        let cache_traits =
-            build_execution_cache(&epoch_start_configuration, &prometheus_registry, &store);
+        let cache_traits = build_execution_cache(
+            &config.execution_cache,
+            &epoch_start_configuration,
+            &prometheus_registry,
+            &store,
+        );
 
         let auth_agg = {
             let safe_client_metrics_base = SafeClientMetricsBase::new(&prometheus_registry);
@@ -2061,7 +2065,15 @@ pub async fn build_http_server(
                     reverse_registry_id,
                 )
             } else {
-                sui_json_rpc::name_service::NameServiceConfig::default()
+                match CHAIN_IDENTIFIER
+                    .get()
+                    .expect("chain_id should be initialized")
+                    .chain()
+                {
+                    Chain::Mainnet => sui_json_rpc::name_service::NameServiceConfig::mainnet(),
+                    Chain::Testnet => sui_json_rpc::name_service::NameServiceConfig::testnet(),
+                    Chain::Unknown => sui_json_rpc::name_service::NameServiceConfig::default(),
+                }
             };
 
         server.register_module(IndexerApi::new(

@@ -121,6 +121,7 @@ pub fn choose_execution_cache(_: &ExecutionCacheConfig) -> ExecutionCacheConfigT
 }
 
 pub fn build_execution_cache(
+    cache_config: &ExecutionCacheConfig,
     epoch_start_config: &EpochStartConfiguration,
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
@@ -129,7 +130,7 @@ pub fn build_execution_cache(
 
     match epoch_start_config.execution_cache_type() {
         ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+            WritebackCache::new(cache_config, store.clone(), execution_cache_metrics).into(),
         ),
         ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
             ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
@@ -151,7 +152,7 @@ pub fn build_execution_cache_from_env(
         )
     } else {
         ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+            WritebackCache::new(&Default::default(), store.clone(), execution_cache_metrics).into(),
         )
     }
 }

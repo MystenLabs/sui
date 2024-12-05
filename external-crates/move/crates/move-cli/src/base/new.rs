@@ -1,18 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{self, ensure, Context};
 use clap::*;
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
+use std::io::{BufRead, BufReader};
 use std::{fmt::Display, fs::create_dir_all, io::Write, path::Path};
 
-// TODO get a stable path to this stdlib
-// pub const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
-// pub const MOVE_STDLIB_PACKAGE_PATH: &str = "{ \
-//     git = \"https://github.com/move-language/move.git\", \
-//     subdir = \"language/move-stdlib\", rev = \"main\" \
-// }";
 pub const MOVE_STDLIB_ADDR_NAME: &str = "std";
 pub const MOVE_STDLIB_ADDR_VALUE: &str = "0x1";
 
@@ -43,17 +38,53 @@ impl New {
         custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
     ) -> anyhow::Result<()> {
         // TODO warn on build config flags
-        let Self { name } = self;
 
-        if !Identifier::is_valid(&name) {
-            return Err(anyhow!(
-                "Invalid package name. Package name must start with a lowercase letter \
-                 and consist only of lowercase letters, numbers, and underscores."
-            ));
+        ensure!(
+            Identifier::is_valid(&self.name),
+            "Invalid package name. Package name must start with a lowercase letter \
+                     and consist only of lowercase letters, numbers, and underscores."
+        );
+
+        let path = path.unwrap_or_else(|| Path::new(&self.name));
+        create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
+
+        self.write_move_toml(path, deps, addrs, custom)?;
+        self.write_gitignore(path)?;
+        Ok(())
+    }
+
+    /// add `build/*` to `{path}/.gitignore` if it doesn't already have it
+    fn write_gitignore(&self, path: &Path) -> anyhow::Result<()> {
+        let gitignore_entry = "build/*";
+
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(path.join(".gitignore"))
+            .context("Unexpected error creating .gitignore")?;
+
+        for line in BufReader::new(&file).lines().map_while(Result::ok) {
+            if line == gitignore_entry {
+                return Ok(());
+            }
         }
 
-        let path = path.unwrap_or_else(|| Path::new(&name));
-        create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
+        writeln!(file, "{gitignore_entry}")?;
+        Ok(())
+    }
+
+    /// create default `Move.toml`
+    fn write_move_toml(
+        &self,
+        path: &Path,
+        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
+        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
+        custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
+    ) -> anyhow::Result<()> {
+        let Self { name } = self;
+
         let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         writeln!(
             w,

@@ -229,8 +229,17 @@ pub fn end_transaction(
                     .or_default()
                     .insert(id);
             }
-            // TODO: Implement support for ConsensusV2 objects.
-            Owner::ConsensusV2 { .. } => todo!(),
+            Owner::ConsensusV2 { authenticator, .. } => {
+                // Treat ConsensusV2 objects the same as address-owned for now. This will have
+                // to be revisited when other Authenticators are added.
+                inventories
+                    .address_inventories
+                    .entry(*authenticator.as_single_owner())
+                    .or_default()
+                    .entry(ty)
+                    .or_default()
+                    .insert(id);
+            }
         }
     }
 
@@ -833,8 +842,12 @@ fn transaction_effects(
             Owner::ObjectOwner(o) => transferred_to_object.push((pack_id(id), pack_id(o))),
             Owner::Shared { .. } => shared.push(id),
             Owner::Immutable => frozen.push(id),
-            // TODO: Implement support for ConsensusV2 objects.
-            Owner::ConsensusV2 { .. } => todo!(),
+            // Treat ConsensusV2 objects the same as address-owned for now. This will have
+            // to be revisited when other Authenticators are added.
+            Owner::ConsensusV2 { authenticator, .. } => transferred_to_account.push((
+                pack_id(id),
+                Value::address((*authenticator.as_single_owner()).into()),
+            )),
         }
     }
 

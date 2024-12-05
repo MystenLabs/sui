@@ -7,7 +7,7 @@ module prettier::struct;
 use std::string::String;
 
 // struct and abilities never break the line
-public struct Default has key, store, drop {
+public struct Default has key, drop, store {
     id: UID,
     field: String,
 }
@@ -17,7 +17,27 @@ public struct Default has key, store, drop {
 public struct Default2 {
     id: UID,
     field: String,
-} has key, store, drop;
+} has key, drop, store;
+
+// abilities are always sorted in `key`,
+// copy`, `drop`, `store` order
+public struct Sort has key, copy, drop, store {}
+
+// abilities support comments in between
+public struct Cmt has /* please */ key /* don't */ , /* do */ store /* this */  {}
+
+// line comments are also possible, but
+// let's hope no one ever uses them
+public struct Cmt2 has copy, drop, // kill me
+store // trailing
+ {}
+
+// empty struct can be with comemtns
+// both single and multi-line
+public struct Cmt3 { /* block cmmt */ }
+public struct Cmt4 {
+    // line cmmt
+}
 
 // struct can be single line, and breaks
 // automatically
@@ -61,10 +81,10 @@ public struct Struct5<
 public struct Point(
     u64,
     u64,
-) has key, store, drop;
+) has key, drop, store;
 
 // prefix abilities are also an option
-public struct Point2 has key, store, drop (
+public struct Point2 has key, drop, store (
     u64,
     u64,
 )

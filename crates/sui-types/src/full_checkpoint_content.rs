@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
-use crate::base_types::ObjectRef;
+use crate::base_types::{ObjectID, ObjectRef};
 use crate::effects::{
     IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
 };
@@ -51,11 +51,24 @@ impl CheckpointData {
         eventually_removed_object_refs.into_values().collect()
     }
 
-    pub fn input_objects(&self) -> Vec<&Object> {
-        self.transactions
-            .iter()
-            .flat_map(|tx| &tx.input_objects)
-            .collect()
+    /// Returns all objects that are used as input to the transactions in the checkpoint,
+    /// and already exist prior to the checkpoint.
+    pub fn checkpoint_input_objects(&self) -> BTreeMap<ObjectID, &Object> {
+        let mut output_objects_seen = HashSet::new();
+        let mut checkpoint_input_objects = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj in tx.input_objects.iter() {
+                let id = obj.id();
+                if output_objects_seen.contains(&id) || checkpoint_input_objects.contains_key(&id) {
+                    continue;
+                }
+                checkpoint_input_objects.insert(id, obj);
+            }
+            for obj in tx.output_objects.iter() {
+                output_objects_seen.insert(obj.id());
+            }
+        }
+        checkpoint_input_objects
     }
 
     pub fn all_objects(&self) -> Vec<&Object> {
@@ -73,7 +86,7 @@ pub struct CheckpointTransaction {
     pub transaction: Transaction,
     /// The effects produced by executing this transaction
     pub effects: TransactionEffects,
-    /// The events, if any, emitted by this transaciton during execution
+    /// The events, if any, emitted by this transactions during execution
     pub events: Option<TransactionEvents>,
     /// The state of all inputs to this transaction as they were prior to execution.
     pub input_objects: Vec<Object>,
@@ -87,7 +100,7 @@ impl CheckpointTransaction {
         // Iterator over id and versions for all deleted or wrapped objects
         match &self.effects {
             TransactionEffects::V1(v1) => Either::Left(
-                // Effects v1 has delted and wrapped objects versions as the "new" version, not the
+                // Effects v1 has deleted and wrapped objects versions as the "new" version, not the
                 // old one that was actually removed. So we need to take these and then look them
                 // up in the `modified_at_versions`.
                 // No need to chain unwrapped_then_deleted because these objects must have been wrapped

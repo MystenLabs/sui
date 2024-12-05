@@ -5409,6 +5409,31 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
             .collect())
     }
+
+    #[instrument(skip(self))]
+    async fn multi_get_events_by_tx_digests(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        if digests.is_empty() {
+            return Ok(vec![]);
+        }
+        let events_digests: Vec<_> = self
+            .get_transaction_cache_reader()
+            .multi_get_executed_effects(digests)
+            .into_iter()
+            .map(|t| t.and_then(|t| t.events_digest().cloned()))
+            .collect();
+        let non_empty_events: Vec<_> = events_digests.iter().filter_map(|e| *e).collect();
+        let mut events = self
+            .get_transaction_cache_reader()
+            .multi_get_events(&non_empty_events)
+            .into_iter();
+        Ok(events_digests
+            .into_iter()
+            .map(|ev| ev.and_then(|_| events.next()?))
+            .collect())
+    }
 }
 
 #[cfg(msim)]

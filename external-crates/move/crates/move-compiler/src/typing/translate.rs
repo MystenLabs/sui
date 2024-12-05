@@ -1215,7 +1215,7 @@ fn subtype_no_report(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    match core::subtype(subst.clone(), &lhs, &rhs) {
+    match core::subtype(&mut context.tvar_counter, subst.clone(), &lhs, &rhs) {
         Ok((next_subst, ty)) => {
             context.subst = next_subst;
             Ok(ty)
@@ -1237,7 +1237,7 @@ fn subtype_impl<T: ToString, F: FnOnce() -> T>(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    match core::subtype(subst.clone(), &lhs, &rhs) {
+    match core::subtype(&mut context.tvar_counter, subst.clone(), &lhs, &rhs) {
         Err(e) => {
             context.subst = subst;
             let diag = typing_error(context, /* from_subtype */ true, loc, msg, e);
@@ -1287,7 +1287,7 @@ fn join_opt<T: ToString, F: FnOnce() -> T>(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let t1 = core::ready_tvars(&subst, pre_t1);
     let t2 = core::ready_tvars(&subst, pre_t2);
-    match core::join(subst.clone(), &t1, &t2) {
+    match core::join(&mut context.tvar_counter, subst.clone(), &t1, &t2) {
         Err(e) => {
             context.subst = subst;
             let diag = typing_error(context, /* from_subtype */ false, loc, msg, e);
@@ -1322,7 +1322,7 @@ fn invariant_no_report(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    core::invariant(subst.clone(), &lhs, &rhs).map(|(next_subst, ty)| {
+    core::invariant(&mut context.tvar_counter, subst.clone(), &lhs, &rhs).map(|(next_subst, ty)| {
         context.subst = next_subst;
         ty
     })
@@ -1339,7 +1339,7 @@ fn invariant_impl<T: ToString, F: FnOnce() -> T>(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    match core::invariant(subst.clone(), &lhs, &rhs) {
+    match core::invariant(&mut context.tvar_counter, subst.clone(), &lhs, &rhs) {
         Err(e) => {
             context.subst = subst;
             let diag = typing_error(context, /* from_subtype */ false, loc, msg, e);

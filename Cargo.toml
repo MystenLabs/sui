@@ -100,7 +100,9 @@ members = [
     "crates/sui-data-ingestion",
     "crates/sui-data-ingestion-core",
     "crates/sui-deepbook-indexer",
+    "crates/sui-default-config",
     "crates/sui-e2e-tests",
+    "crates/sui-edge-proxy",
     "crates/sui-enum-compat-util",
     "crates/sui-faucet",
     "crates/sui-field-count",
@@ -109,13 +111,13 @@ members = [
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
     "crates/sui-genesis-builder",
-    "crates/sui-graphql-config",
     "crates/sui-graphql-e2e-tests",
     "crates/sui-graphql-rpc",
     "crates/sui-graphql-rpc-client",
     "crates/sui-graphql-rpc-headers",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
+    "crates/sui-indexer-alt-framework",
     "crates/sui-indexer-builder",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -414,7 +416,7 @@ ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "52"
 pkcs8 = { version = "0.9.0", features = ["std"] }
-pprof = { version = "0.13.0", features = ["cpp", "frame-pointer"] }
+pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
@@ -631,6 +633,7 @@ sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
+sui-default-config = { path = "crates/sui-default-config" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
@@ -639,12 +642,12 @@ sui-field-count-derive = { path = "crates/sui-field-count-derive" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
-sui-graphql-config = { path = "crates/sui-graphql-config" }
 sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-indexer = { path = "crates/sui-indexer" }
+sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }

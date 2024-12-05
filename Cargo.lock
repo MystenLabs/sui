@@ -114,6 +114,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
+name = "aligned-vec"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e0966165eaf052580bd70eb1b32cb3d6245774c0104d1b2793e9650bf83b52a"
+dependencies = [
+ "equator",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -841,8 +850,8 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "zstd 0.13.0",
- "zstd-safe 7.0.0",
+ "zstd 0.13.2",
+ "zstd-safe 7.2.1",
 ]
 
 [[package]]
@@ -2898,20 +2907,6 @@ name = "const-str"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aca749d3d3f5b87a0d6100509879f9cf486ab510803a4a4e1001da1ff61c2bd6"
-dependencies = [
- "const-str-proc-macro",
-]
-
-[[package]]
-name = "const-str-proc-macro"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d3007177ccd2435eef6de9e7471365c36bc35c0b31773e27b4fe797f39f84bf"
-dependencies = [
- "proc-macro2 1.0.87",
- "quote 1.0.35",
- "syn 2.0.79",
-]
 
 [[package]]
 name = "constant_time_eq"
@@ -4327,6 +4322,26 @@ dependencies = [
  "env_filter",
  "humantime",
  "log",
+]
+
+[[package]]
+name = "equator"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c35da53b5a021d2484a7cc49b2ac7f2d840f8236a286f84202369bd338d761ea"
+dependencies = [
+ "equator-macro",
+]
+
+[[package]]
+name = "equator-macro"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf679796c0322556351f287a51b49e48f7c4986e727b5dd78c972d30e2e16cc"
+dependencies = [
+ "proc-macro2 1.0.87",
+ "quote 1.0.35",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -9648,7 +9663,7 @@ dependencies = [
  "snap",
  "thrift",
  "twox-hash",
- "zstd 0.13.0",
+ "zstd 0.13.2",
  "zstd-sys",
 ]
 
@@ -10124,10 +10139,11 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "pprof"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef5c97c51bd34c7e742402e216abdeb44d415fbe6ae41d56b114723e953711cb"
+checksum = "ebbe2f8898beba44815fdc9e5a4ae9c929e21c5dc29b0c774a15555f7f58d6d0"
 dependencies = [
+ "aligned-vec",
  "backtrace",
  "cfg-if",
  "findshlibs",
@@ -13384,6 +13400,7 @@ dependencies = [
  "fastcrypto",
  "insta",
  "move-vm-config",
+ "mysten-common",
  "narwhal-config",
  "object_store",
  "once_cell",
@@ -13607,6 +13624,7 @@ dependencies = [
  "mysten-metrics",
  "prometheus",
  "serde",
+ "serde_json",
  "serde_yaml 0.8.26",
  "sui-config",
  "sui-data-ingestion-core",
@@ -13619,6 +13637,14 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sui-default-config"
+version = "1.39.0"
+dependencies = [
+ "quote 1.0.35",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -13680,6 +13706,31 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "test-cluster",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "sui-edge-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.5",
+ "axum-extra",
+ "axum-server",
+ "bin-version",
+ "bytes",
+ "clap",
+ "futures",
+ "mysten-metrics",
+ "prometheus",
+ "reqwest 0.12.5",
+ "serde",
+ "serde_json",
+ "serde_with 3.9.0",
+ "serde_yaml 0.8.26",
+ "telemetry-subscribers",
  "tokio",
  "tracing",
  "url",
@@ -13880,14 +13931,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-graphql-config"
-version = "1.39.0"
-dependencies = [
- "quote 1.0.35",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
@@ -13949,8 +13992,8 @@ dependencies = [
  "shared-crypto",
  "similar",
  "simulacrum",
+ "sui-default-config",
  "sui-framework",
- "sui-graphql-config",
  "sui-graphql-rpc-client",
  "sui-graphql-rpc-headers",
  "sui-indexer",
@@ -14083,28 +14126,52 @@ version = "1.39.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.7.5",
- "backoff",
- "bb8",
  "bcs",
- "chrono",
  "clap",
- "const-str",
  "diesel",
  "diesel-async",
  "diesel_migrations",
  "futures",
  "itertools 0.13.0",
- "mysten-metrics",
+ "rand 0.8.5",
+ "serde",
+ "sui-default-config",
+ "sui-field-count",
+ "sui-indexer-alt-framework",
+ "sui-protocol-config",
+ "sui-synthetic-ingestion",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tokio-util 0.7.10",
+ "toml 0.7.4",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
+name = "sui-indexer-alt-framework"
+version = "1.39.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.7.5",
+ "backoff",
+ "bb8",
+ "chrono",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "futures",
  "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.5",
  "serde",
  "sui-field-count",
  "sui-pg-temp-db",
- "sui-protocol-config",
  "sui-storage",
- "sui-synthetic-ingestion",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -14605,8 +14672,8 @@ dependencies = [
  "shared-crypto",
  "similar",
  "simulacrum",
+ "sui-default-config",
  "sui-framework",
- "sui-graphql-config",
  "sui-graphql-rpc-client",
  "sui-graphql-rpc-headers",
  "sui-indexer",
@@ -18459,11 +18526,11 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.13.0"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bffb3309596d527cfcba7dfc6ed6052f1d39dfbd7c867aa2e865e4a449c10110"
+checksum = "fcf2b778a664581e31e389454a7072dab1647606d44f7feea22cd5abb9c9f3f9"
 dependencies = [
- "zstd-safe 7.0.0",
+ "zstd-safe 7.2.1",
 ]
 
 [[package]]
@@ -18488,20 +18555,19 @@ dependencies = [
 
 [[package]]
 name = "zstd-safe"
-version = "7.0.0"
+version = "7.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43747c7422e2924c11144d5229878b98180ef8b06cca4ab5af37afc8a8d8ea3e"
+checksum = "54a3ab4db68cea366acc5c897c7b4d4d1b8994a9cd6e6f841f8964566a419059"
 dependencies = [
  "zstd-sys",
 ]
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.8+zstd.1.5.5"
+version = "2.0.11+zstd.1.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5556e6ee25d32df2586c098bbfa278803692a20d0ab9565e049480d52707ec8c"
+checksum = "75652c55c0b6f3e6f12eb786fe1bc960396bf05a1eb3bf1f3691c3610ac2e6d4"
 dependencies = [
  "cc",
- "libc",
  "pkg-config",
 ]

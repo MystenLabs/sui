@@ -18,13 +18,13 @@ Let's dive into the specific implementation details.
 To use the zkLogin TypeScript SDK in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm install @mysten/zklogin
+npm install @mysten/sui
 ```
 
 If you want to use the latest experimental version:
 
 ```sh npm2yarn
-npm install @mysten/zklogin@experimental
+npm install @mysten/sui@experimental
 ```
 
 ## Get JWT
@@ -36,7 +36,7 @@ npm install @mysten/zklogin@experimental
 1. Assemble the OAuth URL with configured client ID, redirect URL, ephemeral public key and nonce: This is what the application sends the user to complete the login flow with a computed [nonce](#notations).
 
 ```typescript
-import { generateNonce, generateRandomness } from '@mysten/zklogin';
+import { generateNonce, generateRandomness } from '@mysten/sui/zklogin';
 
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io'; // replace with the RPC URL you want to use
 const suiClient = new SuiClient({ url: FULLNODE_URL });
@@ -54,15 +54,15 @@ For some providers ("Yes" for "Auth Flow Only"), the JWT can be found immediatel
 
 For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT, an additional POST call is required with "Token Exchange URL".
 
-| Provider | Auth Flow URL                                                                                                                                                                        | Token Exchange URL                                                                                                                   | Auth Flow Only |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
-| Google    | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                      | N/A                                                                                                                                 | Yes            |
-| Facebook  | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                       | N/A                                                                                                                                 | Yes            |
+| Provider  | Auth Flow URL                                                                                                                                                                       | Token Exchange URL                                                                                                                  | Auth Flow Only |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Google    | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                     | N/A                                                                                                                                 | Yes            |
+| Facebook  | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                      | N/A                                                                                                                                 | Yes            |
 | Twitch    | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` | N/A                                                                                                                                 | Yes            |
-| Kakao     | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                            | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
-| Apple     | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`            | N/A                                                                                                                                 | Yes            |
-| Slack     | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                            | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | Yes            |
-| Microsoft | `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=$CLIENT_ID&scope=openid&response_type=id_token&nonce=$NONCE&redirect_uri=$REDIRECT_URL`                                                                                                      | Yes            |
+| Kakao     | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                           | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
+| Apple     | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`           | N/A                                                                                                                                 | Yes            |
+| Slack     | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                           | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | Yes            |
+| Microsoft | `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=$CLIENT_ID&scope=openid&response_type=id_token&nonce=$NONCE&redirect_uri=$REDIRECT_URL`                   | Yes                                                                                                                                 |
 
 ## Decoding JWT
 
@@ -116,7 +116,7 @@ User salt is used to disconnect the OAuth identifier (sub) from the on-chain Sui
 Once the OAuth flow completes, the JWT can be found in the redirect URL. Along with the user salt, the zkLogin address can be derived as follows:
 
 ```typescript
-import { jwtToAddress } from '@mysten/zklogin';
+import { jwtToAddress } from '@mysten/sui/zklogin';
 
 const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
 ```
@@ -128,7 +128,7 @@ The next step is to fetch the ZK proof. This is an attestation (proof) over the 
 First, generate the extended ephemeral public key to use as an input to the ZKP.
 
 ```typescript
-import { getExtendedEphemeralPublicKey } from '@mysten/zklogin';
+import { getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
 
 const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(ephemeralKeyPair.getPublicKey());
 ```
@@ -315,7 +315,7 @@ You can now serialize the zkLogin signature by combining the ZK proof (`inputs`)
 the `maxEpoch`, and the ephemeral signature (`userSignature`).
 
 ```typescript
-import { genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
+import { genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
 
 const addressSeed: string = genAddressSeed(
 	BigInt(userSalt!),

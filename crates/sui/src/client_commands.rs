@@ -873,6 +873,8 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
 
+                check_protocol_version_and_warn(&client).await?;
+
                 let package_path =
                     package_path
                         .canonicalize()
@@ -980,6 +982,8 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
+
+                check_protocol_version_and_warn(&client).await?;
 
                 let package_path =
                     package_path
@@ -2991,4 +2995,28 @@ pub(crate) async fn prerender_clever_errors(
             *error = rendered;
         }
     }
+}
+
+/// Warn the user if the CLI falls behind more than 2 protocol versions.
+async fn check_protocol_version_and_warn(client: &SuiClient) -> Result<(), anyhow::Error> {
+    let protocol_cfg = client.read_api().get_protocol_config(None).await?;
+    let on_chain_protocol_version = protocol_cfg.protocol_version.as_u64();
+    let cli_protocol_version = ProtocolVersion::MAX.as_u64();
+    if (cli_protocol_version + 2) < on_chain_protocol_version {
+        eprintln!(
+            "{}",
+            format!(
+                "[warning] CLI's protocol version is {cli_protocol_version}, but the active \
+                network's protocol version is {on_chain_protocol_version}. \
+                \n Consider installing the latest version of the CLI - \
+                https://docs.sui.io/guides/developer/getting-started/sui-install \n\n \
+                If publishing/upgrading returns a dependency verification error, then install the \
+                latest CLI version."
+            )
+            .yellow()
+            .bold()
+        );
+    }
+
+    Ok(())
 }
