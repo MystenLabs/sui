@@ -50,7 +50,7 @@ enum CmpOp {
 }
 
 simple_visitor!(
-    CombinableBoolConditionsVisitor,
+    CombinableComparisons,
     fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
         use H::UnannotatedExp_ as E;
         let E::BinopExp(outer_l, outer_bop, outer_r) = &exp.exp.value else {

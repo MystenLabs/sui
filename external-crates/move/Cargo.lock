@@ -1823,7 +1823,6 @@ dependencies = [
  "datatest-stable",
  "dunce",
  "hex",
- "lazy_static",
  "lsp-types",
  "move-binary-format",
  "move-borrow-graph",

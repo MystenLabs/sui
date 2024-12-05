@@ -173,7 +173,7 @@ lints!(
     (
         CombinableComparisons,
         LinterDiagnosticCategory::Complexity,
-        "combinable_comparison",
+        "combinable_comparisons",
         "comparison operations condition can be simplified"
     )
 );
