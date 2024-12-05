@@ -197,6 +197,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
 
 // The limit actually passes for 1650 coins, but it often fails with
 // "Failed to confirm tx status for TransactionDigest(...) within .. seconds.".
+// So we use a smaller split-count in the test, but it can pass with a larger amount locally.
 // This originates from the fact that we pass None as the ExecuteTransactionRequestType
 // in the submit endpoint. This defaults to WaitForLocalExecution which has a timetout.
 #[tokio::test]
@@ -262,7 +263,7 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let gas_for_split_tx = iter.next().unwrap();
     let new_coins = 2048;
     let split_amount = coin_to_split.balance / new_coins;
-    let amount_to_send = split_amount as i128 * 1500;
+    let amount_to_send = split_amount as i128 * 1200;
     let recipient_change = amount_to_send.to_string();
     let sender_change = (-amount_to_send).to_string();
 
