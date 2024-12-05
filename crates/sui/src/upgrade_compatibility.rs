@@ -1284,8 +1284,7 @@ fn struct_ability_mismatch_diag(
                 cannot be changed during an upgrade."
                     .to_string(),
                 format!(
-                    "Restore the original {} of the struct: {} \
-                    for struct '{struct_name}'.",
+                    "Restore the original {} of struct '{struct_name}': {}.",
                     singular_or_plural(old_abilities.len(), "ability", "abilities"),
                     format_list(
                         old_struct
