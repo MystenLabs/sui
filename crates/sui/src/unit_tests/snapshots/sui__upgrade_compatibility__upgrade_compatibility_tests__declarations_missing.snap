@@ -8,7 +8,6 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::enum_ {
   │                  ^^^^^ enum 'EnumToBeRemoved' is missing
   │
-  = enum is missing expected enum 'EnumToBeRemoved', but found none
   = enums are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
 
@@ -18,9 +17,17 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::func_ {
   │                  ^^^^^ public function 'fun_to_be_removed' is missing
   │
-  = public function is missing expected public function 'fun_to_be_removed', but found none
   = public functions are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing public function 'fun_to_be_removed' back to the module 'func_'.
+
+error[Compatibility E01001]: missing public declaration
+  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:7:9
+  │
+7 │     fun fun_to_lose_public(): u64 {
+  │         ^^^^^^^^^^^^^^^^^^ Function 'fun_to_lose_public' has lost its public visibility
+  │
+  = Functions are part of a module's public interface and cannot be changed during an upgrade.
+  = Restore the original function's 'public' visibility for function 'fun_to_lose_public'.
 
 error[Compatibility E01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/struct.move:4:18
@@ -28,9 +35,9 @@ error[Compatibility E01001]: missing public declaration
 4 │ module upgrades::struct_ {
   │                  ^^^^^^^ struct 'StructToBeRemoved' is missing
   │
-  = struct is missing expected struct 'StructToBeRemoved', but found none
   = structs are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
+The following modules are missing from the new package: 'missing_module'
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

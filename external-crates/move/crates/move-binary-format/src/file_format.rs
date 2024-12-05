@@ -44,6 +44,7 @@ use move_core_types::{
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::ops::BitOr;
 use variant_count::VariantCount;
 
@@ -791,6 +792,17 @@ impl Ability {
     }
 }
 
+impl Display for Ability {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Ability::Copy => write!(f, "copy"),
+            Ability::Drop => write!(f, "drop"),
+            Ability::Store => write!(f, "store"),
+            Ability::Key => write!(f, "key"),
+        }
+    }
+}
+
 /// A set of `Ability`s
 #[derive(Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
@@ -845,7 +857,7 @@ impl AbilitySet {
     }
 
     pub fn remove(self, ability: Ability) -> Self {
-        Self(self.0 & (!(ability as u8)))
+        self.difference(Self::singleton(ability))
     }
 
     pub fn intersect(self, other: Self) -> Self {
@@ -854,6 +866,10 @@ impl AbilitySet {
 
     pub fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
+    }
+
+    pub fn difference(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
     }
 
     #[inline]

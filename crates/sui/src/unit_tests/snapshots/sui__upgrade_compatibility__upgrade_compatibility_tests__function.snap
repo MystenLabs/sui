@@ -2,59 +2,59 @@
 source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
-error[Compatibility E04001]: function signature mismatch
+error[Compatibility E03001]: function signature mismatch
   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
   │
 9 │     public fun func_with_wrong_param(a: u32): u64 {
   │                                      ^ Unexpected parameter u32, expected u64
   │
   = Functions are part of a module's public interface and cannot be changed during an upgrade.
-  = Restore the original function's parameters for function 'func_with_wrong_param'.
+  = Restore the original function's parameter for function 'func_with_wrong_param'.
 
-error[Compatibility E04001]: function signature mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:14:42
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:14:42
    │
 14 │     public fun func_with_wrong_return(): u32 {
    │                                          ^^^ Unexpected return type u32, expected u64
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original function's return types for function 'func_with_wrong_return'.
+   = Restore the original function's return type for function 'func_with_wrong_return'.
 
-error[Compatibility E04001]: function signature mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:49
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:49
    │
 19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
    │                                                 ^ Unexpected parameter u32, expected u64
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original function's parameters for function 'func_with_wrong_param_and_return'.
+   = Restore the original function's parameter for function 'func_with_wrong_param_and_return'.
 
-error[Compatibility E04001]: function signature mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:58
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:58
    │
 19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
    │                                                          ^^^ Unexpected return type u32, expected u64
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
-   = Restore the original function's return types for function 'func_with_wrong_param_and_return'.
+   = Restore the original function's return type for function 'func_with_wrong_param_and_return'.
 
-error[Compatibility E04001]: function signature mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:24:16
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:24:16
    │
 24 │     public fun func_with_wrong_param_length(a: u64): u64 {
-   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 parameters, have 1
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 parameters, found 1
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's parameters for function 'func_with_wrong_param_length', expected 2 parameters.
 
-error[Compatibility E04001]: function signature mismatch
-   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:29:16
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:29:16
    │
 29 │     public fun func_with_wrong_return_length(): u64 {
-   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected to have 2 return type(s), have 1
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 return types, found 1
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's return types for function 'func_with_wrong_return_length'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
