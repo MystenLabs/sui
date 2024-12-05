@@ -43,7 +43,8 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
-pub const TICKER: &str = "/ticker";
+pub const TICKER_PATH: &str = "/ticker";
+pub const TRADES_PATH: &str = "/trades/:pool_name";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
@@ -73,7 +74,8 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         )
         .route(LEVEL2_PATH, get(orderbook))
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
-        .route(TICKER, get(ticker))
+        .route(TICKER_PATH, get(ticker))
+        .route(TRADES_PATH, get(trades))
         .with_state(state)
 }
 
@@ -461,6 +463,72 @@ async fn fetch_historical_volume(
         .map(|Json(volumes)| volumes)
 }
 
+pub async fn trades(
+    Path(pool_name): Path<String>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
+    // Fetch all pools to map names to IDs and decimals
+    let connection = &mut state.pool.get().await?;
+    let pool_data = schema::pools::table
+        .filter(schema::pools::pool_name.eq(pool_name.clone()))
+        .select((
+            schema::pools::pool_id,
+            schema::pools::base_asset_decimals,
+            schema::pools::quote_asset_decimals,
+        ))
+        .first::<(String, i16, i16)>(connection)
+        .await
+        .map_err(|_| DeepBookError::InternalError(format!("Pool '{}' not found", pool_name)))?;
+
+    let (pool_id, base_decimals, quote_decimals) = pool_data;
+
+    // Fetch the last trade for the pool from the order_fills table
+    let last_trade = schema::order_fills::table
+        .filter(schema::order_fills::pool_id.eq(pool_id))
+        .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+        .select((
+            schema::order_fills::price,
+            schema::order_fills::base_quantity,
+            schema::order_fills::quote_quantity,
+            schema::order_fills::checkpoint_timestamp_ms,
+        ))
+        .first::<(i64, i64, i64, i64)>(connection)
+        .await
+        .map_err(|_| {
+            DeepBookError::InternalError(format!("No trades found for pool '{}'", pool_name))
+        })?;
+
+    let (price, base_quantity, quote_quantity, timestamp) = last_trade;
+
+    // Conversion factors for decimals
+    let base_factor = 10u64.pow(base_decimals as u32);
+    let quote_factor = 10u64.pow(quote_decimals as u32);
+    let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
+
+    // Prepare the trade data
+    let trade = HashMap::from([
+        ("trade_id".to_string(), Value::from(0)), // Placeholder as requested
+        (
+            "price".to_string(),
+            Value::from((price as f64 / price_factor as f64).to_string()),
+        ),
+        (
+            "base_volume".to_string(),
+            Value::from((base_quantity as f64 / base_factor as f64).to_string()),
+        ),
+        (
+            "quote_volume".to_string(),
+            Value::from((quote_quantity as f64 / quote_factor as f64).to_string()),
+        ),
+        (
+            "timestamp".to_string(),
+            Value::from(timestamp.to_string()),
+        ),
+        ("type".to_string(), Value::from("undefined")), // Placeholder as requested
+    ]);
+
+    Ok(Json(vec![trade]))
+}
 /// Level2 data for all pools
 async fn orderbook(
     Path(pool_name): Path<String>,
