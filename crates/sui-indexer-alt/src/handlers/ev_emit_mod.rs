@@ -5,13 +5,14 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    db, models::events::StoredEvEmitMod, pipeline::concurrent::Handler, pipeline::Processor,
-    schema::ev_emit_mod,
-};
-pub struct EvEmitMod;
+use crate::{models::events::StoredEvEmitMod, schema::ev_emit_mod};
+pub(crate) struct EvEmitMod;
 
 impl Processor for EvEmitMod {
     const NAME: &'static str = "ev_emit_mod";

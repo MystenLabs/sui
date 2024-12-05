@@ -15,8 +15,8 @@ use tracing::{debug, info, warn};
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
     pipeline::{Indexed, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS},
+    watermarks::CommitterWatermark,
 };
 
 use super::{Handler, SequentialConfig};

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use diesel::migration::MigrationVersion;
+use diesel::migration::{self, Migration, MigrationSource, MigrationVersion};
+use diesel::pg::Pg;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::{
     pooled_connection::{
@@ -16,6 +17,8 @@ use std::time::Duration;
 use tracing::info;
 use url::Url;
 
+/// Migrations for schema that the indexer framework needs, regardless of the specific data being
+/// indexed.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[derive(clap::Args, Debug, Clone)]
@@ -62,8 +65,8 @@ impl Db {
     }
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
-    /// established before the [DbConfig::connection_timeout] has elapsed.
-    pub(crate) async fn connect(&self) -> Result<Connection<'_>, RunError> {
+    /// established before the [DbArgs::connection_timeout] has elapsed.
+    pub async fn connect(&self) -> Result<Connection<'_>, RunError> {
         self.pool.get().await
     }
 
@@ -123,10 +126,26 @@ impl Db {
         Ok(())
     }
 
+    /// Run migrations on the database. Use the `migrations` parameter to pass in the migrations
+    /// that are specific to the indexer being run. Migrations that the indexer framework needs
+    /// will be added automatically.
+    ///
+    /// Use Diesel's `embed_migrations!` macro to generate the `migrations` parameter for your
+    /// indexer.
     pub(crate) async fn run_migrations(
         &self,
+        migrations: &'static EmbeddedMigrations,
     ) -> Result<Vec<MigrationVersion<'static>>, anyhow::Error> {
         use diesel_migrations::MigrationHarness;
+
+        struct WithFrameworkMigrations(&'static EmbeddedMigrations);
+        impl MigrationSource<Pg> for WithFrameworkMigrations {
+            fn migrations(&self) -> migration::Result<Vec<Box<dyn Migration<Pg>>>> {
+                let mut migrations = self.0.migrations()?;
+                migrations.extend(MIGRATIONS.migrations()?);
+                Ok(migrations)
+            }
+        }
 
         info!("Running migrations ...");
         let conn = self.pool.dedicated_connection().await?;
@@ -135,7 +154,7 @@ impl Db {
 
         let finished_migrations = tokio::task::spawn_blocking(move || {
             wrapper
-                .run_pending_migrations(MIGRATIONS)
+                .run_pending_migrations(WithFrameworkMigrations(migrations))
                 .map(|versions| versions.iter().map(MigrationVersion::as_owned).collect())
         })
         .await?
@@ -158,13 +177,18 @@ impl Default for DbArgs {
     }
 }
 
-/// Drop all tables and rerunning migrations.
-pub async fn reset_database(db_config: DbArgs, skip_migrations: bool) -> Result<(), anyhow::Error> {
+/// Drop all tables, and re-run migrations if supplied.
+pub async fn reset_database(
+    db_config: DbArgs,
+    migrations: Option<&'static EmbeddedMigrations>,
+) -> Result<(), anyhow::Error> {
     let db = Db::new(db_config).await?;
     db.clear_database().await?;
-    if !skip_migrations {
-        db.run_migrations().await?;
+
+    if let Some(migrations) = migrations {
+        db.run_migrations(migrations).await?;
     }
+
     Ok(())
 }
 
@@ -230,7 +254,7 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database(db_args, true).await.unwrap();
+        reset_database(db_args, None).await.unwrap();
 
         let mut conn = db.connect().await.unwrap();
         let cnt = diesel::sql_query(

@@ -6,14 +6,15 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::{full_checkpoint_content::CheckpointData, object::Owner};
 
-use crate::{
-    db, models::transactions::StoredTxAffectedAddress, pipeline::concurrent::Handler,
-    pipeline::Processor, schema::tx_affected_addresses,
-};
+use crate::{models::transactions::StoredTxAffectedAddress, schema::tx_affected_addresses};
 
-pub struct TxAffectedAddresses;
+pub(crate) struct TxAffectedAddresses;
 
 impl Processor for TxAffectedAddresses {
     const NAME: &'static str = "tx_affected_addresses";

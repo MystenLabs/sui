@@ -6,18 +6,20 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::{
-    db,
     models::objects::{StoredObjectUpdate, StoredSumObjType, StoredWalObjType},
-    pipeline::{concurrent::Handler, Processor},
     schema::wal_obj_types,
 };
 
 use super::sum_obj_types::SumObjTypes;
 
-pub struct WalObjTypes;
+pub(crate) struct WalObjTypes;
 
 impl Processor for WalObjTypes {
     const NAME: &'static str = "wal_obj_types";

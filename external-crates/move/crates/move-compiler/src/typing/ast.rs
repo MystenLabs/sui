@@ -3,10 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
+    diagnostics::{
+        warning_filters::{WarningFilters, WarningFiltersTable},
+        DiagnosticReporter,
+    },
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
     },
+    ice,
     naming::ast::{
         BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods,
         Type, Type_, UseFuns, Var,
@@ -19,6 +23,7 @@ use crate::{
 };
 use move_core_types::parsing::address::NumericalAddress;
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, VecDeque},
@@ -330,6 +335,37 @@ impl BuiltinFunction_ {
         match self {
             B::Freeze(_) => NB::FREEZE,
             B::Assert(_) => NB::ASSERT_MACRO,
+        }
+    }
+}
+
+impl Exp {
+    pub fn is_unit(&self, diags: &DiagnosticReporter) -> bool {
+        self.exp.value.is_unit(diags, self.exp.loc)
+    }
+}
+
+impl UnannotatedExp_ {
+    #[growing_stack]
+    pub fn is_unit(&self, diags: &DiagnosticReporter, loc: Loc) -> bool {
+        match &self {
+            Self::Unit { .. } => true,
+            Self::Annotate(inner, _) => inner.is_unit(diags),
+            Self::Block((_, seq)) if seq.is_empty() => {
+                diags.add_diag(ice!((loc, "Unexpected empty block without a value")));
+                false
+            }
+            Self::Block((_, seq)) if seq.len() == 1 => seq[0].value.is_unit(diags),
+            _ => false,
+        }
+    }
+}
+
+impl SequenceItem_ {
+    pub fn is_unit(&self, diags: &DiagnosticReporter) -> bool {
+        match &self {
+            Self::Seq(e) => e.is_unit(diags),
+            Self::Declare(_) | Self::Bind(_, _, _) => false,
         }
     }
 }
