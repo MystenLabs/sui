@@ -45,6 +45,7 @@ pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 pub const TICKER_PATH: &str = "/ticker";
 pub const TRADES_PATH: &str = "/trades/:pool_name";
+pub const GET_TYPE_PATH: &str = "/get_type";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
@@ -76,6 +77,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
         .route(TICKER_PATH, get(ticker))
         .route(TRADES_PATH, get(trades))
+        .route(GET_TYPE_PATH, get(get_type))
         .with_state(state)
 }
 
@@ -559,6 +561,49 @@ fn calculate_trade_id(maker_id: &str, taker_id: &str) -> Result<u128, DeepBookEr
 
     // Return the sum of the modified IDs as the trade_id
     Ok(maker_id + taker_id)
+}
+
+pub async fn get_type(
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, HashMap<String, Value>>>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+    let assets = schema::assets::table
+        .select((
+            schema::assets::symbol,
+            schema::assets::name,
+            schema::assets::ucid,
+            schema::assets::package_address_url,
+            schema::assets::package_id,
+        ))
+        .load::<(String, String, Option<i32>, Option<String>, Option<String>)>(connection)
+        .await
+        .map_err(|err| DeepBookError::InternalError(format!("Failed to query assets: {}", err)))?;
+
+    let mut response = HashMap::new();
+
+    for (symbol, name, ucid, package_address_url, package_id) in assets {
+        let mut asset_info = HashMap::new();
+        asset_info.insert("name".to_string(), Value::String(name));
+        if let Some(ucid) = ucid {
+            asset_info.insert("unified_cryptoasset_id".to_string(), Value::String(ucid.to_string()));
+        }
+        asset_info.insert("can_withdraw".to_string(), Value::String("true".to_string()));
+        asset_info.insert("can_deposit".to_string(), Value::String("true".to_string()));
+        asset_info.insert("maker_fee".to_string(), Value::String("0.01".to_string()));
+        asset_info.insert("taker_fee".to_string(), Value::String("0.01".to_string()));
+
+        if let Some(addresses) = package_address_url {
+            asset_info.insert("contractAddressUrl".to_string(), Value::String(addresses));
+        }
+
+        if let Some(addresses) = package_id {
+            asset_info.insert("contractAddress".to_string(), Value::String(addresses));
+        }
+
+        response.insert(symbol, asset_info);
+    }
+
+    Ok(Json(response))
 }
 
 /// Level2 data for all pools
