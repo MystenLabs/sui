@@ -77,7 +77,7 @@ module Test::M1 {
       }
     }
   }
-  transactionBlocks(filter: { signAddress: "@{A}" }) {
+  transactionBlocks(filter: { sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -98,7 +98,7 @@ module Test::M1 {
 //# run-graphql --wait-for-checkpoint-pruned 4
 # In the absence of an upper bound, graphql sets the upper bound to `checkpoint_viewed_at`'s max tx + 1 (right-open interval)
 {
-  transactionBlocks(filter: { afterCheckpoint: 5 signAddress: "@{A}" }) {
+  transactionBlocks(filter: { afterCheckpoint: 5 sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -119,7 +119,7 @@ module Test::M1 {
 //# run-graphql --wait-for-checkpoint-pruned 4
 # In the absence of a lower bound, graphql sets the lower bound to the smallest unpruned checkpoint's min tx
 {
-  transactionBlocks(filter: { beforeCheckpoint: 7 signAddress: "@{A}" }) {
+  transactionBlocks(filter: { beforeCheckpoint: 7 sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -142,7 +142,7 @@ module Test::M1 {
 //# run-graphql --wait-for-checkpoint-pruned 4
 # If the caller tries to fetch data outside of the unpruned range, they should receive an error
 {
-  transactionBlocks(filter: { atCheckpoint: 0 signAddress: "@{A}" }) {
+  transactionBlocks(filter: { atCheckpoint: 0 sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -163,7 +163,7 @@ module Test::M1 {
 //# run-graphql --wait-for-checkpoint-pruned 4
 # Empty response if caller tries to fetch data beyond the available upper bound
 {
-  transactionBlocks(filter: { atCheckpoint: 10 signAddress: "@{A}" }) {
+  transactionBlocks(filter: { atCheckpoint: 10 sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -185,7 +185,7 @@ module Test::M1 {
 //# run-graphql
 # Mirror from the back
 {
-  transactionBlocks(last: 10 filter: { signAddress: "@{A}" }) {
+  transactionBlocks(last: 10 filter: { sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -206,7 +206,7 @@ module Test::M1 {
 //# run-graphql
 # Mirror from the back
 {
-  transactionBlocks(last: 10 filter: { afterCheckpoint: 5 signAddress: "@{A}" }) {
+  transactionBlocks(last: 10 filter: { afterCheckpoint: 5 sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor
@@ -227,7 +227,7 @@ module Test::M1 {
 //# run-graphql
 # Mirror from the back
 {
-  transactionBlocks(last: 10 filter: { beforeCheckpoint: 7 signAddress: "@{A}" }) {
+  transactionBlocks(last: 10 filter: { beforeCheckpoint: 7 sentAddress: "@{A}" }) {
     pageInfo {
       startCursor
       endCursor

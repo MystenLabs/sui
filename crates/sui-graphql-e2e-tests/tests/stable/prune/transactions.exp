@@ -206,24 +206,17 @@ Response: {
 task 16, lines 142-161:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Requested data is pruned and no longer available",
-      "locations": [
-        {
-          "line": 3,
-          "column": 3
-        }
-      ],
-      "path": [
-        "transactionBlocks"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
     }
-  ]
+  }
 }
 
 task 17, lines 163-182:
@@ -361,68 +354,97 @@ Response: {
 task 22, lines 270-289:
 //# run-graphql --cursors {"c":7,"t":0,"i":false}
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Requested data is pruned and no longer available",
-      "locations": [
-        {
-          "line": 3,
-          "column": 3
-        }
-      ],
-      "path": [
-        "transactionBlocks"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": []
     }
-  ]
+  }
 }
 
 task 23, lines 291-310:
 //# run-graphql --cursors {"c":7,"t":0,"i":true}
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Requested data is pruned and no longer available",
-      "locations": [
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
         {
-          "line": 3,
-          "column": 3
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
         }
-      ],
-      "path": [
-        "transactionBlocks"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+      ]
     }
-  ]
+  }
 }
 
 task 24, lines 312-331:
 //# run-graphql --cursors {"c":7,"t":0,"i":true}
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Requested data is pruned and no longer available",
-      "locations": [
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjp0cnVlfQ",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
         {
-          "line": 3,
-          "column": 3
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
         }
-      ],
-      "path": [
-        "transactionBlocks"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+      ]
     }
-  ]
+  }
 }
