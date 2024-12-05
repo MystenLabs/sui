@@ -463,43 +463,6 @@ async fn fetch_historical_volume(
         .map(|Json(volumes)| volumes)
 }
 
-fn digest_to_integer(digest: &str) -> Result<u128, DeepBookError> {
-    // Decode Base64-like `event_digest` into bytes
-    const BASE64_ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut decode_map = [0u8; 256];
-    for (i, c) in BASE64_ALPHABET.chars().enumerate() {
-        decode_map[c as usize] = i as u8;
-    }
-
-    let mut decoded = Vec::new();
-    let mut buffer = 0u32;
-    let mut bits_collected = 0;
-
-    for c in digest.chars() {
-        let value = decode_map[c as usize];
-        buffer = (buffer << 6) | (value as u32);
-        bits_collected += 6;
-
-        if bits_collected >= 8 {
-            bits_collected -= 8;
-            decoded.push((buffer >> bits_collected) as u8);
-            buffer &= (1 << bits_collected) - 1;
-        }
-    }
-
-    // Ensure the resulting bytes can fit into a u128 (16 bytes)
-    if decoded.len() < 16 {
-        return Err(DeepBookError::InternalError(
-            "Digest is too short to convert to u128".to_string(),
-        ));
-    }
-
-    // Take the first 16 bytes and convert them to a u128
-    Ok(u128::from_be_bytes(
-        decoded[..16].try_into().unwrap_or([0; 16]),
-    ))
-}
-
 pub async fn trades(
     Path(pool_name): Path<String>,
     State(state): State<PgDeepbookPersistent>,
@@ -526,23 +489,24 @@ pub async fn trades(
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
         .select((
-            schema::order_fills::event_digest,
+            schema::order_fills::maker_order_id,
+            schema::order_fills::taker_order_id,
             schema::order_fills::price,
             schema::order_fills::base_quantity,
             schema::order_fills::quote_quantity,
             schema::order_fills::checkpoint_timestamp_ms,
         ))
-        .first::<(String, i64, i64, i64, i64)>(connection)
+        .first::<(String, String, i64, i64, i64, i64)>(connection)
         .await
         .map_err(|_| {
             DeepBookError::InternalError(format!("No trades found for pool '{}'", pool_name))
         })?;
 
-    let (event_digest, price, base_quantity, quote_quantity, timestamp) = last_trade;
+    let (maker_order_id, taker_order_id, price, base_quantity, quote_quantity, timestamp) =
+        last_trade;
 
-    // Map `event_digest` to a unique integer `trade_id`
-    let trade_id = digest_to_integer(&event_digest)
-        .map_err(|_| DeepBookError::InternalError("Failed to map digest to integer".to_string()))?;
+    // Calculate the `trade_id` using the external function
+    let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id)?;
 
     // Conversion factors for decimals
     let base_factor = 10u64.pow(base_decimals as u32);
@@ -551,7 +515,7 @@ pub async fn trades(
 
     // Prepare the trade data
     let trade = HashMap::from([
-        ("trade_id".to_string(), Value::from(trade_id.to_string())), // Computed from `event_digest`
+        ("trade_id".to_string(), Value::from(trade_id.to_string())), // Computed from `maker_id` and `taker_id`
         (
             "price".to_string(),
             Value::from((price as f64 / price_factor as f64).to_string()),
@@ -572,6 +536,23 @@ pub async fn trades(
     ]);
 
     Ok(Json(vec![trade]))
+}
+
+fn calculate_trade_id(maker_id: &str, taker_id: &str) -> Result<u128, DeepBookError> {
+    // Parse maker_id and taker_id as u128
+    let maker_id = maker_id
+        .parse::<u128>()
+        .map_err(|_| DeepBookError::InternalError("Invalid maker_id".to_string()))?;
+    let taker_id = taker_id
+        .parse::<u128>()
+        .map_err(|_| DeepBookError::InternalError("Invalid taker_id".to_string()))?;
+
+    // Ignore the most significant bit for both IDs
+    let maker_id = maker_id & !(1 << 127);
+    let taker_id = taker_id & !(1 << 127);
+
+    // Return the sum of the modified IDs as the trade_id
+    Ok(maker_id + taker_id)
 }
 
 /// Level2 data for all pools
