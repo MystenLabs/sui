@@ -556,14 +556,12 @@ impl AuthorityPerpetualTables {
         wb.write()?;
         Ok(())
     }
-}
 
-impl ObjectStore for AuthorityPerpetualTables {
     /// Read an object and return it, or Ok(None) if the object was not found.
-    fn get_object(
+    fn get_object_fallible(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+    ) -> SuiResult<Option<Object>> {
         let obj_entry = self.objects.last_in_range(
             &ObjectKey::min_for_id(object_id),
             &ObjectKey::max_for_id(object_id),
