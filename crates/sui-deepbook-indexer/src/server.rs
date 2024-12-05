@@ -462,7 +462,6 @@ async fn fetch_historical_volume(
         .await
         .map(|Json(volumes)| volumes)
 }
-
 pub async fn trades(
     Path(pool_name): Path<String>,
     State(state): State<PgDeepbookPersistent>,
@@ -495,15 +494,23 @@ pub async fn trades(
             schema::order_fills::base_quantity,
             schema::order_fills::quote_quantity,
             schema::order_fills::checkpoint_timestamp_ms,
+            schema::order_fills::taker_is_bid,
         ))
-        .first::<(String, String, i64, i64, i64, i64)>(connection)
+        .first::<(String, String, i64, i64, i64, i64, bool)>(connection)
         .await
         .map_err(|_| {
             DeepBookError::InternalError(format!("No trades found for pool '{}'", pool_name))
         })?;
 
-    let (maker_order_id, taker_order_id, price, base_quantity, quote_quantity, timestamp) =
-        last_trade;
+    let (
+        maker_order_id,
+        taker_order_id,
+        price,
+        base_quantity,
+        quote_quantity,
+        timestamp,
+        taker_is_bid,
+    ) = last_trade;
 
     // Calculate the `trade_id` using the external function
     let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id)?;
@@ -512,27 +519,25 @@ pub async fn trades(
     let base_factor = 10u64.pow(base_decimals as u32);
     let quote_factor = 10u64.pow(quote_decimals as u32);
     let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
+    let trade_type = if taker_is_bid { "buy" } else { "sell" };
 
     // Prepare the trade data
     let trade = HashMap::from([
         ("trade_id".to_string(), Value::from(trade_id.to_string())), // Computed from `maker_id` and `taker_id`
         (
             "price".to_string(),
-            Value::from((price as f64 / price_factor as f64).to_string()),
+            Value::from(price as f64 / price_factor as f64),
         ),
         (
             "base_volume".to_string(),
-            Value::from((base_quantity as f64 / base_factor as f64).to_string()),
+            Value::from(base_quantity as f64 / base_factor as f64),
         ),
         (
             "quote_volume".to_string(),
-            Value::from((quote_quantity as f64 / quote_factor as f64).to_string()),
+            Value::from(quote_quantity as f64 / quote_factor as f64),
         ),
-        (
-            "timestamp".to_string(),
-            Value::from(timestamp.to_string()),
-        ),
-        ("type".to_string(), Value::from("undefined")), // Placeholder as requested
+        ("timestamp".to_string(), Value::from(timestamp as u64)),
+        ("type".to_string(), Value::from(trade_type)), // Trade type (buy/sell)
     ]);
 
     Ok(Json(vec![trade]))
