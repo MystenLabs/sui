@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS obj_info
     --
     -- Warning: This column may look similar to the concept of "ObjectOwner"
     -- but is NOT the same. For purposes of determining owner_kind, ConsensusV2
-    -- objects mapped onto the variants described above based on their
+    -- objects are mapped onto the variants described above based on their
     -- authenticator.
     owner_kind                  SMALLINT,
     -- The address for address-owned objects, and the parent object for
