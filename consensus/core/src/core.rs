@@ -261,7 +261,8 @@ impl Core {
             .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
-        let (mut accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
+        let (mut accepted_blocks, missing_block_refs) =
+            self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
             debug!(
