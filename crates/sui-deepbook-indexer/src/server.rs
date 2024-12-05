@@ -584,18 +584,18 @@ pub async fn assets(
     for (symbol, name, ucid, package_address_url, package_id) in assets {
         let mut asset_info = HashMap::new();
         asset_info.insert("name".to_string(), Value::String(name));
-        if let Some(ucid) = ucid {
-            asset_info.insert(
-                "unified_cryptoasset_id".to_string(),
-                Value::String(ucid.to_string()),
-            );
-        }
         asset_info.insert(
             "can_withdraw".to_string(),
             Value::String("true".to_string()),
         );
         asset_info.insert("can_deposit".to_string(), Value::String("true".to_string()));
 
+        if let Some(ucid) = ucid {
+            asset_info.insert(
+                "unified_cryptoasset_id".to_string(),
+                Value::String(ucid.to_string()),
+            );
+        }
         if let Some(addresses) = package_address_url {
             asset_info.insert("contractAddressUrl".to_string(), Value::String(addresses));
         }
