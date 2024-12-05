@@ -104,6 +104,7 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     committer: Option<CommitterLayer>,
     pruner: Option<PrunerLayer>,
+    checkpoint_lag: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -245,6 +246,7 @@ impl ConcurrentLayer {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)),
             },
+            checkpoint_lag: self.checkpoint_lag.or(base.checkpoint_lag),
         }
     }
 }
@@ -373,6 +375,7 @@ impl Merge for ConcurrentLayer {
         ConcurrentLayer {
             committer: self.committer.merge(other.committer),
             pruner: self.pruner.merge(other.pruner),
+            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
             extra: Default::default(),
         }
     }
@@ -503,6 +506,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
+            checkpoint_lag: config.checkpoint_lag,
             extra: Default::default(),
         }
     }
