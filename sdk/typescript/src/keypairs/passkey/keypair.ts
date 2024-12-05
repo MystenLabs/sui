@@ -24,6 +24,7 @@ import {
 
 export interface PasskeyCreateOptions {
 	timeout: number; // The timeout for the passkey creation dialog.
+	name: string; // The name of the user
 	displayName: string; // The display name of the user, this is shown at creation dialog
 	rpName: string; // The name of the relying party, this is shown to user in the passkey creation dialog.
 }
@@ -40,23 +41,30 @@ function validateCreateOptions(options: PasskeyCreateOptions) {
 }
 
 export interface PasskeyProvider {
+	options: PasskeyCreateOptions;
 	create(options: PasskeyCreateOptions): Promise<RegistrationCredential>;
 	get(challenge: Uint8Array, timeout: number): Promise<AuthenticationCredential>;
 }
 
 // Default browser implementation
 export class BrowserPasskeyProvider implements PasskeyProvider {
-	async create(options: PasskeyCreateOptions): Promise<RegistrationCredential> {
+	options: PasskeyCreateOptions;
+	constructor(options: PasskeyCreateOptions) {
+		validateCreateOptions(options);
+		this.options = options;
+	}
+
+	async create(): Promise<RegistrationCredential> {
 		return (await navigator.credentials.create({
 			publicKey: {
 				challenge: new TextEncoder().encode('Create passkey wallet on Sui'),
 				rp: {
-					name: options.rpName,
+					name: this.options.rpName,
 				},
 				user: {
 					id: randomBytes(10),
-					name: 'sui-wallet-user',
-					displayName: options.displayName,
+					name: this.options.name,
+					displayName: this.options.displayName,
 				},
 				pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
 				authenticatorSelection: {
@@ -65,7 +73,7 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 					requireResidentKey: true,
 					userVerification: 'required',
 				},
-				timeout: options.timeout ?? 60000,
+				timeout: this.options.timeout,
 			},
 		})) as RegistrationCredential;
 	}
@@ -104,9 +112,6 @@ export class PasskeyKeypair extends Signer {
 	 */
 	constructor(publicKey: Uint8Array, provider: PasskeyProvider) {
 		super();
-		if (publicKey.length !== PASSKEY_PUBLIC_KEY_SIZE) {
-			throw new Error(`Invalid public key size: expected ${PASSKEY_PUBLIC_KEY_SIZE} bytes`);
-		}
 		this.publicKey = publicKey;
 		this.provider = provider;
 	}
@@ -115,16 +120,15 @@ export class PasskeyKeypair extends Signer {
 	 * Creates an instance of Passkey signer invoking the passkey from navigator.
 	 */
 	static async getPasskeyInstance(
-		options: PasskeyCreateOptions = {
+		provider = new BrowserPasskeyProvider({
 			timeout: 60000,
-			rpName: 'Passkey Wallet on Sui',
-			displayName: 'Passkey Wallet on Sui',
-		},
-		provider: PasskeyProvider = new BrowserPasskeyProvider(),
+			displayName: 'Sui Wallet User',
+			rpName: 'Sui Wallet',
+			name: 'Sui Wallet User',
+		}),
 	): Promise<PasskeyKeypair> {
 		// create a passkey secp256r1 with the provider.
-		validateCreateOptions(options);
-		const credential = await provider.create(options);
+		const credential = await provider.create();
 
 		if (!credential.response.getPublicKey) {
 			throw new Error('Invalid credential createresponse');
