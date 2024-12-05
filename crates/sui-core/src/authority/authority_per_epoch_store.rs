@@ -3156,7 +3156,7 @@ impl AuthorityPerEpochStore {
             "additional_cancelled_txns_for_tests",
             |additional_cancelled_txns: Vec<(
                 TransactionDigest,
-                Vec<(ObjectID, SequenceNumber)>
+                Vec<((ObjectID, SequenceNumber), SequenceNumber)>
             )>| {
                 version_assignment.extend(additional_cancelled_txns);
             }
