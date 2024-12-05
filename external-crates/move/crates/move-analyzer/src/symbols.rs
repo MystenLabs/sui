@@ -1408,7 +1408,7 @@ impl SymbolicatorRunner {
                     if let Some(all_starting_paths) = all_starting_paths_opt {
                         let mut pkgs_to_analyze = BTreeMap::new();
                         for starting_path in &all_starting_paths {
-                            let root_dir = Self::root_dir(&starting_path);
+                            let root_dir = Self::root_dir(starting_path);
                             if root_dir.is_none() {
                                 if !missing_manifests.contains(starting_path) {
                                     eprintln!("reporting missing manifest");
