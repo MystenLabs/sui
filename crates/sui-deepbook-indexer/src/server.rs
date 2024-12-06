@@ -46,6 +46,7 @@ pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 pub const TICKER_PATH: &str = "/ticker";
 pub const TRADES_PATH: &str = "/trades/:pool_name";
 pub const ASSETS_PATH: &str = "/assets";
+pub const SUMMARY_PATH: &str = "/summary";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
@@ -78,6 +79,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(TICKER_PATH, get(ticker))
         .route(TRADES_PATH, get(trades))
         .route(ASSETS_PATH, get(assets))
+        .route(SUMMARY_PATH, get(summary))
         .with_state(state)
 }
 
@@ -463,6 +465,85 @@ async fn fetch_historical_volume(
     all_historical_volume(Query(params_with_volume), State(state.clone()))
         .await
         .map(|Json(volumes)| volumes)
+}
+async fn summary(
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
+    // Call the ticker function to get volumes and last price
+    let ticker_data = ticker(Query(HashMap::new()), State(state.clone())).await?;
+    let Json(ticker_map) = ticker_data;
+
+    let mut response = Vec::new();
+
+    for (pool_name, ticker_info) in &ticker_map {
+        // Extract data from the ticker function response
+        let last_price = ticker_info
+            .get("last_price")
+            .and_then(|price| price.as_f64())
+            .unwrap_or(0.0);
+
+        let base_volume = ticker_info
+            .get("base_volume")
+            .and_then(|volume| volume.as_f64())
+            .unwrap_or(0.0);
+
+        let quote_volume = ticker_info
+            .get("quote_volume")
+            .and_then(|volume| volume.as_f64())
+            .unwrap_or(0.0);
+
+        // Call the orderbook function to get lowest ask and highest bid
+        let orderbook_data = orderbook(
+            Path(pool_name.clone()),
+            Query(HashMap::from([("level".to_string(), "1".to_string())])),
+            State(state.clone()),
+        )
+        .await
+        .ok()
+        .map(|Json(data)| data);
+
+        let lowest_ask = orderbook_data
+            .as_ref()
+            .and_then(|data| data.get("asks"))
+            .and_then(|asks| asks.as_array())
+            .and_then(|asks| asks.get(0))
+            .and_then(|ask| ask.as_array())
+            .and_then(|ask| ask.get(0))
+            .and_then(|price| price.as_str()?.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        let highest_bid = orderbook_data
+            .as_ref()
+            .and_then(|data| data.get("bids"))
+            .and_then(|bids| bids.as_array())
+            .and_then(|bids| bids.get(0))
+            .and_then(|bid| bid.as_array())
+            .and_then(|bid| bid.get(0))
+            .and_then(|price| price.as_str()?.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        // Prepare the summary data
+        let mut summary_data = HashMap::new();
+        summary_data.insert(
+            "trading_pairs".to_string(),
+            Value::String(pool_name.clone()),
+        );
+        summary_data.insert("last_price".to_string(), Value::from(last_price));
+        summary_data.insert("lowest_ask".to_string(), Value::from(lowest_ask));
+        summary_data.insert("highest_bid".to_string(), Value::from(highest_bid));
+        summary_data.insert("base_volume".to_string(), Value::from(base_volume));
+        summary_data.insert("quote_volume".to_string(), Value::from(quote_volume));
+        summary_data.insert(
+            "price_change_percent_24h".to_string(),
+            Value::from(0.0), // Hardcoded for now
+        );
+        summary_data.insert("highest_price_24h".to_string(), Value::from(0.0)); // Hardcoded for now
+        summary_data.insert("lowest_price_24h".to_string(), Value::from(0.0)); // Hardcoded for now
+
+        response.push(summary_data);
+    }
+
+    Ok(Json(response))
 }
 
 async fn trades(
