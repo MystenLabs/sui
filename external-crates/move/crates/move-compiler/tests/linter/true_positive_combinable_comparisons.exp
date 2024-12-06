@@ -959,33 +959,177 @@ warning[Lint W01012]: comparison operations condition can be simplified
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01012]: comparison operations condition can be simplified
-    ┌─ tests/linter/true_positive_combinable_comparisons.move:129:26
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:130:9
     │
-129 │     const Values: bool = 5 > 3 || 5 == 3;
-    │                          ^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+130 │         x == y && x == y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '=='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:131:9
+    │
+131 │         x != y && x != y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '!='
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01012]: comparison operations condition can be simplified
     ┌─ tests/linter/true_positive_combinable_comparisons.move:132:9
     │
-132 │         5 != 3 && 5 > 3
-    │         ^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
+132 │         x > y && x > y;
+    │         ^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:133:9
+    │
+133 │         x < y && x < y;
+    │         ^^^^^^^^^^^^^^ This comparison simplifies to the operation '<'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:134:9
+    │
+134 │         x >= y && x >= y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:135:9
+    │
+135 │         x <= y && x <= y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:136:9
+    │
+136 │         x == y || x == y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '=='
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01012]: comparison operations condition can be simplified
     ┌─ tests/linter/true_positive_combinable_comparisons.move:137:9
     │
-137 │         {&x} == &y || (x as u64) > (*&y:u64);
-    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+137 │         x != y || x != y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '!='
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01012]: comparison operations condition can be simplified
     ┌─ tests/linter/true_positive_combinable_comparisons.move:138:9
     │
-138 │         &copy x == &y || x < move y;
+138 │         x > y || x > y;
+    │         ^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:139:9
+    │
+139 │         x < y || x < y;
+    │         ^^^^^^^^^^^^^^ This comparison simplifies to the operation '<'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:140:9
+    │
+140 │         x >= y || x >= y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:141:9
+    │
+141 │         x <= y || x <= y;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:142:9
+    │
+142 │         x == y && y == x;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '=='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:143:9
+    │
+143 │         x != y && y != x;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '!='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:144:9
+    │
+144 │         x > y && y < x;
+    │         ^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:145:9
+    │
+145 │         x < y && y > x;
+    │         ^^^^^^^^^^^^^^ This comparison simplifies to the operation '<'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:146:9
+    │
+146 │         x >= y && y <= x;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:147:9
+    │
+147 │         x <= y && y >= x;
+    │         ^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:150:26
+    │
+150 │     const Values: bool = 5 > 3 || 5 == 3;
+    │                          ^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:153:9
+    │
+153 │         5 != 3 && 5 > 3
+    │         ^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:158:9
+    │
+158 │         {&x} == &y || (x as u64) > (*&y:u64);
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+    │
+    = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+    ┌─ tests/linter/true_positive_combinable_comparisons.move:159:9
+    │
+159 │         &copy x == &y || x < move y;
     │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -126,6 +126,27 @@ module a::m {
         x <= y || y >= x;
     }
 
+    fun same_op(x: u64, y: u64) {
+        x == y && x == y;
+        x != y && x != y;
+        x > y && x > y;
+        x < y && x < y;
+        x >= y && x >= y;
+        x <= y && x <= y;
+        x == y || x == y;
+        x != y || x != y;
+        x > y || x > y;
+        x < y || x < y;
+        x >= y || x >= y;
+        x <= y || x <= y;
+        x == y && y == x;
+        x != y && y != x;
+        x > y && y < x;
+        x < y && y > x;
+        x >= y && y <= x;
+        x <= y && y >= x;
+    }
+
     const Values: bool = 5 > 3 || 5 == 3;
 
     fun values(): bool {
