@@ -7,8 +7,9 @@ use chrono::{naive::NaiveDateTime, DateTime, Utc};
 use diesel::{dsl::sql, prelude::*, sql_types};
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
+use sui_pg_db::Connection;
 
-use crate::{db::Connection, schema::watermarks};
+use crate::schema::watermarks;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]

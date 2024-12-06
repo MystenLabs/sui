@@ -6,19 +6,16 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::{anyhow, Result};
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::{
-    db,
-    pipeline::{concurrent::Handler, Processor},
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_schema::{
+    objects::{StoredObjInfo, StoredOwnerKind},
+    schema::obj_info,
 };
+use sui_pg_db as db;
 use sui_types::{
     base_types::ObjectID,
     full_checkpoint_content::CheckpointData,
     object::{Object, Owner},
-};
-
-use sui_indexer_alt_schema::{
-    objects::{StoredObjInfo, StoredOwnerKind},
-    schema::obj_info,
 };
 
 pub(crate) struct ObjInfo;

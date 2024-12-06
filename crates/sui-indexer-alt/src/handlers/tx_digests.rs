@@ -5,13 +5,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    db,
-    pipeline::{concurrent::Handler, Processor},
-};
-use sui_types::full_checkpoint_content::CheckpointData;
-
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
 use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
+use sui_pg_db as db;
+use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct TxDigests;
 

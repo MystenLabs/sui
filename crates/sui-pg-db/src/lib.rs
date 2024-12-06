@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use diesel::migration::{self, Migration, MigrationSource, MigrationVersion};
+use diesel::migration::{MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::{
@@ -12,14 +12,11 @@ use diesel_async::{
     },
     AsyncPgConnection, RunQueryDsl,
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use std::time::Duration;
 use tracing::info;
 use url::Url;
 
-/// Migrations for schema that the indexer framework needs, regardless of the specific data being
-/// indexed.
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+pub mod temp;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct DbArgs {
@@ -71,7 +68,7 @@ impl Db {
     }
 
     /// Statistics about the connection pool
-    pub(crate) fn state(&self) -> bb8::State {
+    pub fn state(&self) -> bb8::State {
         self.pool.state()
     }
 
@@ -126,26 +123,13 @@ impl Db {
         Ok(())
     }
 
-    /// Run migrations on the database. Use the `migrations` parameter to pass in the migrations
-    /// that are specific to the indexer being run. Migrations that the indexer framework needs
-    /// will be added automatically.
-    ///
-    /// Use Diesel's `embed_migrations!` macro to generate the `migrations` parameter for your
-    /// indexer.
-    pub(crate) async fn run_migrations(
+    /// Run migrations on the database. Use Diesel's `embed_migrations!` macro to generate the
+    /// `migrations` parameter for your indexer.
+    pub async fn run_migrations<S: MigrationSource<Pg> + Send + Sync + 'static>(
         &self,
-        migrations: &'static EmbeddedMigrations,
+        migrations: S,
     ) -> Result<Vec<MigrationVersion<'static>>, anyhow::Error> {
         use diesel_migrations::MigrationHarness;
-
-        struct WithFrameworkMigrations(&'static EmbeddedMigrations);
-        impl MigrationSource<Pg> for WithFrameworkMigrations {
-            fn migrations(&self) -> migration::Result<Vec<Box<dyn Migration<Pg>>>> {
-                let mut migrations = self.0.migrations()?;
-                migrations.extend(MIGRATIONS.migrations()?);
-                Ok(migrations)
-            }
-        }
 
         info!("Running migrations ...");
         let conn = self.pool.dedicated_connection().await?;
@@ -154,11 +138,12 @@ impl Db {
 
         let finished_migrations = tokio::task::spawn_blocking(move || {
             wrapper
-                .run_pending_migrations(WithFrameworkMigrations(migrations))
+                .run_pending_migrations(migrations)
                 .map(|versions| versions.iter().map(MigrationVersion::as_owned).collect())
         })
         .await?
         .map_err(|e| anyhow!("Failed to run migrations: {:?}", e))?;
+
         info!("Migrations complete.");
         Ok(finished_migrations)
     }
@@ -178,13 +163,12 @@ impl Default for DbArgs {
 }
 
 /// Drop all tables, and re-run migrations if supplied.
-pub async fn reset_database(
+pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
     db_config: DbArgs,
-    migrations: Option<&'static EmbeddedMigrations>,
+    migrations: Option<S>,
 ) -> Result<(), anyhow::Error> {
     let db = Db::new(db_config).await?;
     db.clear_database().await?;
-
     if let Some(migrations) = migrations {
         db.run_migrations(migrations).await?;
     }
@@ -195,15 +179,14 @@ pub async fn reset_database(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{Db, DbArgs};
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
-    use sui_pg_temp_db::TempDb;
+    use diesel_migrations::EmbeddedMigrations;
 
     #[tokio::test]
     async fn temp_db_smoketest() {
         telemetry_subscribers::init_for_testing();
-        let db = TempDb::new().unwrap();
+        let db = temp::TempDb::new().unwrap();
         let url = db.database().url();
 
         info!(%url);
@@ -232,7 +215,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_reset_database_skip_migrations() {
-        let temp_db = TempDb::new().unwrap();
+        let temp_db = temp::TempDb::new().unwrap();
         let url = temp_db.database().url();
 
         let db_args = DbArgs {
@@ -254,7 +237,9 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database(db_args, None).await.unwrap();
+        reset_database::<EmbeddedMigrations>(db_args, None)
+            .await
+            .unwrap();
 
         let mut conn = db.connect().await.unwrap();
         let cnt = diesel::sql_query(
