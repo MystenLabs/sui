@@ -497,8 +497,7 @@ async fn summary(
         .collect();
 
     // Call the price_change_24h function to get price changes
-    let price_change_data = price_change_24h(State(state.clone())).await?;
-    let Json(price_change_map) = price_change_data;
+    let price_change_map = price_change_24h(&pool_metadata, State(state.clone())).await?;
 
     // Call the high_low_prices_24h function to get the highest and lowest prices
     let high_low_map = high_low_prices_24h(&pool_decimals, State(state.clone())).await?;
@@ -600,8 +599,9 @@ async fn high_low_prices_24h(
 }
 
 async fn price_change_24h(
+    pool_metadata: &HashMap<String, (String, (i16, i16))>,
     State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<HashMap<String, f64>>, DeepBookError> {
+) -> Result<HashMap<String, f64>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
 
     // Calculate the timestamp for 24 hours ago
@@ -612,19 +612,9 @@ async fn price_change_24h(
 
     let timestamp_24h_ago = now - (24 * 60 * 60 * 1000); // 24 hours in milliseconds
 
-    // Fetch pools data for metadata
-    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
-    let pool_map: HashMap<String, &Pools> = pools
-        .0
-        .iter()
-        .map(|pool| (pool.pool_id.clone(), pool))
-        .collect();
-
     let mut response = HashMap::new();
 
-    for (pool_id, pool) in pool_map.iter() {
-        let pool_name = &pool.pool_name;
-
+    for (pool_name, (pool_id, (base_decimals, quote_decimals))) in pool_metadata.iter() {
         // Get the latest price <= 24 hours ago
         let earliest_trade_24h = schema::order_fills::table
             .filter(schema::order_fills::pool_id.eq(pool_id))
@@ -644,8 +634,7 @@ async fn price_change_24h(
 
         if let (Ok(earliest_price), Ok(most_recent_price)) = (earliest_trade_24h, most_recent_trade)
         {
-            let price_factor =
-                10u64.pow((9 - pool.base_asset_decimals + pool.quote_asset_decimals) as u32);
+            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
 
             // Scale the prices
             let earliest_price_scaled = earliest_price as f64 / price_factor as f64;
@@ -662,7 +651,7 @@ async fn price_change_24h(
         }
     }
 
-    Ok(Json(response))
+    Ok(response)
 }
 
 async fn trades(
