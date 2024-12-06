@@ -466,12 +466,17 @@ async fn fetch_historical_volume(
         .await
         .map(|Json(volumes)| volumes)
 }
+
 async fn summary(
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
     // Call the ticker function to get volumes and last price
     let ticker_data = ticker(Query(HashMap::new()), State(state.clone())).await?;
     let Json(ticker_map) = ticker_data;
+
+    // Call the price_change_24h function to get price changes
+    let price_change_data = price_change_24h(Query(HashMap::new()), State(state.clone())).await?;
+    let Json(price_change_map) = price_change_data;
 
     let mut response = Vec::new();
 
@@ -522,6 +527,9 @@ async fn summary(
             .and_then(|price| price.as_str()?.parse::<f64>().ok())
             .unwrap_or(0.0);
 
+        // Fetch the 24-hour price change percent
+        let price_change_percent = price_change_map.get(pool_name).copied().unwrap_or(0.0);
+
         // Prepare the summary data
         let mut summary_data = HashMap::new();
         summary_data.insert(
@@ -535,12 +543,79 @@ async fn summary(
         summary_data.insert("quote_volume".to_string(), Value::from(quote_volume));
         summary_data.insert(
             "price_change_percent_24h".to_string(),
-            Value::from(0.0), // Hardcoded for now
+            Value::from(price_change_percent),
         );
         summary_data.insert("highest_price_24h".to_string(), Value::from(0.0)); // Hardcoded for now
         summary_data.insert("lowest_price_24h".to_string(), Value::from(0.0)); // Hardcoded for now
 
         response.push(summary_data);
+    }
+
+    Ok(Json(response))
+}
+
+async fn price_change_24h(
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, f64>>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+
+    // Calculate the timestamp for 24 hours ago
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| DeepBookError::InternalError("System time error".to_string()))?
+        .as_millis() as i64;
+
+    let timestamp_24h_ago = now - (24 * 60 * 60 * 1000); // 24 hours in milliseconds
+
+    // Fetch pools data for metadata
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_map: HashMap<String, &Pools> = pools
+        .0
+        .iter()
+        .map(|pool| (pool.pool_id.clone(), pool))
+        .collect();
+
+    let mut response = HashMap::new();
+
+    for (pool_id, pool) in pool_map.iter() {
+        let pool_name = &pool.pool_name;
+
+        // Get the latest price <= 24 hours ago
+        let earliest_trade_24h = schema::order_fills::table
+            .filter(schema::order_fills::pool_id.eq(pool_id))
+            .filter(schema::order_fills::checkpoint_timestamp_ms.le(timestamp_24h_ago))
+            .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+            .select(schema::order_fills::price)
+            .first::<i64>(connection)
+            .await;
+
+        // Get the most recent price
+        let most_recent_trade = schema::order_fills::table
+            .filter(schema::order_fills::pool_id.eq(pool_id))
+            .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+            .select(schema::order_fills::price)
+            .first::<i64>(connection)
+            .await;
+
+        if let (Ok(earliest_price), Ok(most_recent_price)) = (earliest_trade_24h, most_recent_trade)
+        {
+            let price_factor =
+                10u64.pow((9 - pool.base_asset_decimals + pool.quote_asset_decimals) as u32);
+
+            // Scale the prices
+            let earliest_price_scaled = earliest_price as f64 / price_factor as f64;
+            let most_recent_price_scaled = most_recent_price as f64 / price_factor as f64;
+
+            // Calculate price change percentage
+            let price_change_percent =
+                ((most_recent_price_scaled / earliest_price_scaled) - 1.0) * 100.0;
+
+            response.insert(pool_name.clone(), price_change_percent);
+        } else {
+            // If there's no price data for 24 hours or recent trades, insert 0.0 as price change
+            response.insert(pool_name.clone(), 0.0);
+        }
     }
 
     Ok(Json(response))
