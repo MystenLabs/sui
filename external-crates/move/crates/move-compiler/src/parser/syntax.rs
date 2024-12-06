@@ -1504,11 +1504,7 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
 }
 
 // Checks if parsing of a sequence should continue after encountering an error.
-fn continue_sequence_after_error(
-    context: &mut Context,
-    diag: Diagnostic,
-    last_token_preceded_by_eol: bool,
-) -> bool {
+fn should_continue_sequence_after_error(context: &mut Context, diag: Diagnostic) -> bool {
     context.add_diag(diag);
     // This is intended to handle a rather specific case when a valid sequence item is on the following line
     // from the parsing error. This is particularly useful for the IDE use case when a programmer starts
@@ -1528,7 +1524,7 @@ fn continue_sequence_after_error(
         return false;
     }
     let tok = context.tokens.peek();
-    if last_token_preceded_by_eol
+    if context.tokens.last_token_preceded_by_eol()
         && (SEQ_ITEM_START_SET.contains(tok, context.tokens.content())
             //  ANY identfier can start a sequence item
             || tok == Tok::Identifier
@@ -1585,11 +1581,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 seq.push(item);
                 last_semicolon_loc = Some(current_token_loc(context.tokens));
                 if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
-                    if continue_sequence_after_error(
-                        context,
-                        diag.as_ref().clone(),
-                        context.tokens.last_token_preceded_by_eol(),
-                    ) {
+                    if should_continue_sequence_after_error(context, diag.as_ref().clone()) {
                         continue;
                     }
                     advance_separated_items_error(
@@ -1607,11 +1599,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
             }
             Err(diag) => {
                 context.stop_set.remove(Tok::Semicolon);
-                if continue_sequence_after_error(
-                    context,
-                    diag.as_ref().clone(),
-                    context.tokens.last_token_preceded_by_eol(),
-                ) {
+                if should_continue_sequence_after_error(context, diag.as_ref().clone()) {
                     continue;
                 }
                 let err_exp = sp(context.tokens.current_token_loc(), Exp_::UnresolvedError);
