@@ -694,15 +694,13 @@ async fn start(
                 if committee_size.is_some() {
                     eprintln!(
                         "{}",
-                        format!(
-                            "[warning] The committee-size arg wil be ignored as a network \
+                        "[warning] The committee-size arg wil be ignored as a network \
                             configuration already exists. To change the committee-size, you'll \
                             have to adjust the network configuration file or regenerate a genesis \
                             with the desired committee size. See `sui genesis --help` for more \
                             information."
-                        )
-                        .yellow()
-                        .bold()
+                            .yellow()
+                            .bold()
                     );
                 }
                 (config, sui_config_dir()?)
@@ -712,15 +710,13 @@ async fn start(
                 if committee_size.is_some() {
                     eprintln!(
                         "{}",
-                        format!(
-                            "[warning] The committee-size arg wil be ignored as a network \
+                        "[warning] The committee-size arg wil be ignored as a network \
                             configuration already exists. To change the committee-size, you'll \
                             have to adjust the network configuration file or regenerate a genesis \
                             with the desired committee size. See `sui genesis --help` for more \
                             information."
-                        )
-                        .yellow()
-                        .bold()
+                            .yellow()
+                            .bold()
                     );
                 }
                 (config.join(SUI_NETWORK_CONFIG), config)
@@ -754,21 +750,17 @@ async fn start(
                             sui_config.display(),
                         )
                     })?;
-                } else {
-                    if committee_size.is_some() {
-                        eprintln!(
-                            "{}",
-                            format!(
-                                "[warning] The committee-size arg wil be ignored as a network \
+                } else if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
                             configuration already exists. To change the committee-size, you'll \
                             have to adjust the network configuration file or regenerate a genesis \
                             with the desired committee size. See `sui genesis --help` for more \
                             information."
-                            )
                             .yellow()
                             .bold()
-                        );
-                    }
+                    );
                 }
 
                 (network_config, sui_config)
