@@ -159,7 +159,7 @@ impl<C: NetworkClient> RoundProber<C> {
             .collect::<Vec<_>>();
         let last_proposed_round = local_highest_accepted_rounds[own_index];
 
-        // For our own index, the highest recieved & accepted round is our last
+        // For our own index, the highest received & accepted round is our last
         // accepted round or our last proposed round.
         highest_received_rounds[own_index] = self.core_thread_dispatcher.highest_received_rounds();
         highest_accepted_rounds[own_index] = local_highest_accepted_rounds;
