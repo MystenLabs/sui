@@ -2,22 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accept::AcceptFormat,
+    accept::{AcceptFormat, AcceptJsonProtobufBcs},
     openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
+    proto::GetObjectResponse,
     reader::StateReader,
-    response::ResponseContent,
+    response::{JsonProtobufBcs, ResponseContent},
     Page, RestError, RestService, Result,
 };
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
-use sui_sdk_types::types::{Object, ObjectId, TypeTag, Version};
+use sui_sdk_types::types::{Object, ObjectDigest, ObjectId, TypeTag, Version};
 use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
 use sui_types::{
     storage::{DynamicFieldIndexInfo, DynamicFieldKey},
     sui_sdk_types_conversions::SdkTypeConversionError,
 };
 use tap::Pipe;
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct ObjectResponse {
+    pub digest: ObjectDigest,
+    pub object: Object,
+}
 
 pub struct GetObject;
 
@@ -41,7 +48,8 @@ impl ApiEndpoint<RestService> for GetObject {
             .response(
                 200,
                 ResponseBuilder::new()
-                    .json_content::<Object>(generator)
+                    .json_content::<ObjectResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -56,16 +64,24 @@ impl ApiEndpoint<RestService> for GetObject {
 
 pub async fn get_object(
     Path(object_id): Path<ObjectId>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<Object>> {
+) -> Result<JsonProtobufBcs<ObjectResponse, GetObjectResponse, Object>> {
     let object = state
         .get_object(object_id)?
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
 
+    let object = ObjectResponse {
+        digest: object.digest(),
+        object,
+    };
+
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(object),
-        AcceptFormat::Bcs => ResponseContent::Bcs(object),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(object),
+        AcceptJsonProtobufBcs::Protobuf => {
+            JsonProtobufBcs::Protobuf(GetObjectResponse::try_from(object)?)
+        }
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(object.object),
     }
     .pipe(Ok)
 }
@@ -93,7 +109,8 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
             .response(
                 200,
                 ResponseBuilder::new()
-                    .json_content::<Object>(generator)
+                    .json_content::<ObjectResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -108,16 +125,24 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
 
 pub async fn get_object_with_version(
     Path((object_id, version)): Path<(ObjectId, Version)>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<Object>> {
+) -> Result<JsonProtobufBcs<ObjectResponse, GetObjectResponse, Object>> {
     let object = state
         .get_object_with_version(object_id, version)?
         .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
 
+    let object = ObjectResponse {
+        digest: object.digest(),
+        object,
+    };
+
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(object),
-        AcceptFormat::Bcs => ResponseContent::Bcs(object),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(object),
+        AcceptJsonProtobufBcs::Protobuf => {
+            JsonProtobufBcs::Protobuf(GetObjectResponse::try_from(object)?)
+        }
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(object.object),
     }
     .pipe(Ok)
 }

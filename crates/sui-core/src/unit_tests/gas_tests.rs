@@ -166,7 +166,6 @@ where
             .get_object(coin_id)
             .await
             .unwrap()
-            .unwrap()
             .compute_object_reference();
         gas_coin_refs.push(coin_ref);
     }
@@ -211,11 +210,7 @@ where
             .any(|deleted| deleted.0 == *gas_coin_id));
     }
     let gas_ref = effects.gas_object().0;
-    let gas_object = authority_state
-        .get_object(&gas_ref.0)
-        .await
-        .unwrap()
-        .unwrap();
+    let gas_object = authority_state.get_object(&gas_ref.0).await.unwrap();
     let final_value = GasCoin::try_from(&gas_object)?.value();
     let summary = effects.gas_cost_summary();
 
@@ -261,7 +256,6 @@ async fn touch_gas_coins(
             .get_object(coin_id)
             .await
             .unwrap()
-            .unwrap()
             .compute_object_reference();
         builder.transfer_object(recipient, coin_ref).unwrap();
     }
@@ -270,7 +264,6 @@ async fn touch_gas_coins(
     let gas_object_ref = authority_state
         .get_object(&gas_object_id)
         .await
-        .unwrap()
         .unwrap()
         .compute_object_reference();
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
@@ -497,7 +490,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let gas_object = result
         .authority_state
         .get_object(&result.gas_object_id)
-        .await?
+        .await
         .unwrap();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
@@ -578,7 +571,10 @@ async fn test_transfer_sui_insufficient_gas() {
         ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None)
     );
     // Ensure that the owner of the object did not change if the transfer failed.
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
 }
 
 /// - All gas coins should be owned by an address (not shared or immutable)
@@ -736,13 +732,12 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .authority_state
         .get_object(&result.gas_object_id)
         .await
-        .unwrap()
         .unwrap();
     let gas_coin = GasCoin::try_from(&gas_object).unwrap();
     assert_eq!(gas_coin.value(), 0);
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
-    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0];
+    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0].clone();
     assert_eq!(version, gas_object.version());
     assert_eq!(owner, gas_object.owner);
 
@@ -775,7 +770,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     let gas_cost = effects.gas_cost_summary();
     assert!(gas_cost.storage_cost > 0);
 
-    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
     let gas_size = gas_object.object_size_for_gas_metering();
     let expected_gas_balance = GAS_VALUE_FOR_TESTING - gas_cost.net_gas_usage() as u64;
     assert_eq!(
@@ -813,7 +808,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
 
     assert!(gas_cost.gas_used() > 0);
 
-    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.net_gas_usage() as u64;
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
@@ -830,7 +825,7 @@ async fn test_move_call_gas() -> SuiResult {
     let (authority_state, package_object_ref) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
 
     let module = ident_str!("object_basics").to_owned();
     let function = ident_str!("create").to_owned();
@@ -859,7 +854,7 @@ async fn test_move_call_gas() -> SuiResult {
     let gas_cost = effects.gas_cost_summary();
     assert!(gas_cost.storage_cost > 0);
     assert_eq!(gas_cost.storage_rebate, 0);
-    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
     let expected_gas_balance = GAS_VALUE_FOR_TESTING - gas_cost.net_gas_usage() as u64;
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
@@ -1028,11 +1023,7 @@ async fn execute_transfer_with_price(
     let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_balance);
     let gas_object_ref = gas_object.compute_object_reference();
     authority_state.insert_genesis_object(gas_object).await;
-    let object = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let object = authority_state.get_object(&object_id).await.unwrap();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();

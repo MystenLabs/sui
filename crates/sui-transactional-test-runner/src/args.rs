@@ -5,10 +5,13 @@ use crate::test_adapter::{FakeID, SuiTestAdapter};
 use anyhow::{bail, ensure};
 use clap;
 use clap::{Args, Parser};
-use move_command_line_common::parser::{parse_u256, parse_u64};
-use move_command_line_common::values::{ParsableValue, ParsedValue};
-use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
 use move_compiler::editions::Flavor;
+use move_core_types::parsing::{
+    parser::Parser as MoveCLParser,
+    parser::{parse_u256, parse_u64},
+    values::ValueToken,
+    values::{ParsableValue, ParsedValue},
+};
 use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
@@ -435,8 +438,8 @@ impl SuiValue {
             sui_types::storage::ObjectStore::get_object(&*test_adapter.executor, &id)
         };
         let obj = match obj_res {
-            Ok(Some(obj)) => obj,
-            Err(_) | Ok(None) => bail!("INVALID TEST. Could not load object argument {}", id),
+            Some(obj) => obj,
+            None => bail!("INVALID TEST. Could not load object argument {}", id),
         };
         Ok(obj)
     }
@@ -481,6 +484,10 @@ impl SuiValue {
         match obj.owner {
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                ..
             } => Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,

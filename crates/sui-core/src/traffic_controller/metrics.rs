@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 
 #[derive(Clone)]
@@ -18,6 +18,7 @@ pub struct TrafficControllerMetrics {
     pub num_dry_run_blocked_requests: IntCounter,
     pub tally_handled: IntCounter,
     pub error_tally_handled: IntCounter,
+    pub tally_error_types: IntCounterVec,
     pub deadmans_switch_enabled: IntGauge,
     pub highest_direct_spam_rate: IntGauge,
     pub highest_proxied_spam_rate: IntGauge,
@@ -87,6 +88,13 @@ impl TrafficControllerMetrics {
             error_tally_handled: register_int_counter_with_registry!(
                 "traffic_control_error_tally_handled",
                 "Number of error tallies handled",
+                registry
+            )
+            .unwrap(),
+            tally_error_types: register_int_counter_vec_with_registry!(
+                "traffic_control_tally_error_types",
+                "Number of tally errors, grouped by error type",
+                &["error_type"],
                 registry
             )
             .unwrap(),

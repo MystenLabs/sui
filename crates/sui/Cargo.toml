@@ -20,6 +20,7 @@ bin-version.workspace = true
 bip32.workspace = true
 camino.workspace = true
 clap.workspace = true
+codespan-reporting.workspace = true
 datatest-stable.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -56,8 +57,8 @@ sui-cluster-test.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-faucet.workspace = true
 sui-swarm-config.workspace = true
-sui-graphql-rpc = {workspace = true }
-sui-indexer = { workspace = true }
+sui-graphql-rpc.workspace = true
+sui-indexer.workspace = true
 sui-genesis-builder.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
@@ -74,6 +75,7 @@ shared-crypto.workspace = true
 sui-replay.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
 test-cluster.workspace = true
 
 fastcrypto.workspace = true
@@ -92,9 +94,11 @@ move-analyzer.workspace = true
 move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-compiler.workspace = true
 csv.workspace = true
 move-vm-profiler.workspace = true
 move-vm-config.workspace = true
+move-ir-types.workspace = true
 move-command-line-common.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -129,7 +133,7 @@ name = "ptb_files_tests"
 harness = false
 
 [features]
-gas-profiler = [
-    "sui-types/gas-profiler",
-    "sui-execution/gas-profiler",
+tracing = [
+    "sui-types/tracing",
+    "sui-execution/tracing",
 ]

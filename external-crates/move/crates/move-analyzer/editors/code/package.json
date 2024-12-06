@@ -5,7 +5,7 @@
   "publisher": "mysten",
   "icon": "images/move.png",
   "license": "Apache-2.0",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "preview": true,
   "repository": {
     "url": "https://github.com/MystenLabs/sui.git",
@@ -44,7 +44,12 @@
       },
       {
         "command": "move.test",
-        "title": "Test a Move package",
+        "title": "Run Move package test",
+        "category": "Move"
+      },
+      {
+        "command": "move.trace",
+        "title": "Trace Move test execution",
         "category": "Move"
       }
     ],
@@ -131,8 +136,11 @@
         },
         {
           "command": "move.test"
+        },
+        {
+          "command": "move.trace"
         }
-      ]
+        ]
     }
   },
   "scripts": {
@@ -149,8 +157,9 @@
     "publish": "npm run pretest && npm run test && vsce publish"
   },
   "extensionDependencies": [
-    "damirka.move-syntax"
-  ],
+    "damirka.move-syntax",
+    "mysten.move-trace-debug"
+],
   "dependencies": {
     "command-exists": "^1.2.9",
     "lru-cache": "^4.1.3",

@@ -170,8 +170,8 @@ impl TransactionBlock {
             // Non-stored transactions have a sentinel checkpoint_viewed_at value that generally
             // prevents access to further queries, but inputs should generally be available so try
             // to access them at the high watermark.
-            let Watermark { checkpoint, .. } = *ctx.data_unchecked();
-            checkpoint
+            let Watermark { hi_cp, .. } = *ctx.data_unchecked();
+            hi_cp
         };
 
         Some(GasInput::from(
@@ -342,6 +342,9 @@ impl TransactionBlock {
     /// and `function` should provide a value for `scan_limit`. This modifies querying behavior by
     /// limiting how many transactions to scan through before applying filters, and also affects
     /// pagination behavior.
+    ///
+    /// Queries for data that have been pruned will return an empty connection; we treat pruned data
+    /// as simply non-existent and thus no error is returned.
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         page: Page<Cursor>,
@@ -350,6 +353,10 @@ impl TransactionBlock {
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>, Error> {
         let limits = &ctx.data_unchecked::<ServiceConfig>().limits;
+        let db: &Db = ctx.data_unchecked();
+        // If we've entered this function, we already fetched `checkpoint_viewed_at` from the
+        // `Watermark`, and so we must be able to retrieve `lo_cp` as well.
+        let Watermark { lo_cp, .. } = *ctx.data_unchecked();
 
         // If the caller has provided some arbitrary combination of `function`, `kind`,
         // `recvAddress`, `inputObject`, or `changedObject`, we require setting a `scanLimit`.
@@ -375,16 +382,18 @@ impl TransactionBlock {
             }
         }
 
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let is_from_front = page.is_from_front();
+        let cp_after = filter.after_checkpoint.map(u64::from);
+        let cp_at = filter.at_checkpoint.map(u64::from);
+        let cp_before = filter.before_checkpoint.map(u64::from);
+
         // If page size or scan limit is 0, we want to standardize behavior by returning an empty
         // connection
         if filter.is_empty() || page.limit() == 0 || scan_limit.is_some_and(|v| v == 0) {
             return Ok(ScanConnection::new(false, false));
         }
-
-        let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
-        let db: &Db = ctx.data_unchecked();
-        let is_from_front = page.is_from_front();
 
         use transactions::dsl as tx;
         let (prev, next, transactions, tx_bounds): (
@@ -397,9 +406,10 @@ impl TransactionBlock {
                 async move {
                     let Some(tx_bounds) = TxBounds::query(
                         conn,
-                        filter.after_checkpoint.map(u64::from),
-                        filter.at_checkpoint.map(u64::from),
-                        filter.before_checkpoint.map(u64::from),
+                        cp_after,
+                        cp_at,
+                        cp_before,
+                        lo_cp,
                         checkpoint_viewed_at,
                         scan_limit,
                         &page,

@@ -69,6 +69,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Start network without authorities
     let start = SuiCommand::Start {
+        data_ingestion_dir: None,
         config_dir: Some(config),
         force_regenesis: false,
         with_faucet: None,
@@ -2195,7 +2196,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         panic!();
     };
 
-    let (gas, obj) = if mut_obj1.owner.unwrap().get_owner_address().unwrap() == address {
+    let (gas, obj) = if mut_obj1.owner.clone().unwrap().get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
     } else {
         (mut_obj2, mut_obj1)
@@ -2897,6 +2898,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: true,
             serialize_signed_transaction: false,
         },
@@ -2911,6 +2913,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: true,
         },
@@ -2926,6 +2929,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: true,
         },
@@ -3101,7 +3105,7 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
     // assert that all the objects_returned are owned by the address
     for resp in &object_responses.data {
-        let obj_owner = resp.object().unwrap().owner.unwrap();
+        let obj_owner = resp.object().unwrap().owner.clone().unwrap();
         assert_eq!(
             obj_owner.get_owner_address().unwrap().to_string(),
             address.to_string()
@@ -3772,6 +3776,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: None,
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
         },

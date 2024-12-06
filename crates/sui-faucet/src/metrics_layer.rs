@@ -13,7 +13,7 @@ use prometheus::{HistogramTimer, Registry};
 use tower::{load_shed::error::Overloaded, BoxError, Layer, Service, ServiceExt};
 use tracing::{error, info, warn};
 
-use crate::metrics::RequestMetrics;
+use crate::metrics::{is_path_tracked, normalize_path, RequestMetrics};
 use http::Request;
 
 /// Tower Layer for tracking metrics in Prometheus related to number, success-rate and latency of
@@ -37,6 +37,7 @@ struct MetricsGuard {
     timer: Option<HistogramTimer>,
     metrics: Arc<RequestMetrics>,
     path: String,
+    user_agent: String,
 }
 
 impl RequestMetricsLayer {
@@ -76,21 +77,28 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let path = req.uri().path().to_string();
-        let metrics = MetricsGuard::new(self.metrics.clone(), &path);
+        let user_agent = req
+            .headers()
+            .get(http::header::USER_AGENT)
+            .and_then(|val| val.to_str().ok());
+        let metrics = MetricsGuard::new(self.metrics.clone(), &path, user_agent);
         let inner = self.inner.clone();
 
         let future = Box::pin(async move {
             let resp = inner.oneshot(req).await;
-            match &resp {
-                Ok(resp) if !resp.status().is_success() => {
-                    metrics.failed(None, Some(resp.status()))
-                }
-                Ok(_) => metrics.succeeded(),
-                Err(err) => {
-                    if err.is::<Overloaded>() {
-                        metrics.shed();
-                    } else {
-                        metrics.failed(Some(err), None);
+
+            if let Some(metrics) = metrics {
+                match &resp {
+                    Ok(resp) if !resp.status().is_success() => {
+                        metrics.failed(None, Some(resp.status()))
+                    }
+                    Ok(_) => metrics.succeeded(),
+                    Err(err) => {
+                        if err.is::<Overloaded>() {
+                            metrics.shed();
+                        } else {
+                            metrics.failed(Some(err), None);
+                        }
                     }
                 }
             }
@@ -110,25 +118,33 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 }
 
 impl MetricsGuard {
-    fn new(metrics: Arc<RequestMetrics>, path: &str) -> Self {
+    fn new(metrics: Arc<RequestMetrics>, path: &str, user_agent: Option<&str>) -> Option<Self> {
+        let normalized_path = normalize_path(path);
+        let user_agent = user_agent.unwrap_or("unknown");
+
+        if !is_path_tracked(normalized_path) {
+            return None;
+        }
+
         metrics
             .total_requests_received
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path, user_agent])
             .inc();
         metrics
             .current_requests_in_flight
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path, user_agent])
             .inc();
-        MetricsGuard {
+        Some(MetricsGuard {
             timer: Some(
                 metrics
                     .process_latency
-                    .with_label_values(&[path])
+                    .with_label_values(&[normalized_path, user_agent])
                     .start_timer(),
             ),
             metrics,
-            path: path.to_string(),
-        }
+            path: normalized_path.to_string(),
+            user_agent: user_agent.to_string(),
+        })
     }
 
     fn succeeded(mut self) {
@@ -136,7 +152,7 @@ impl MetricsGuard {
             let elapsed = timer.stop_and_record();
             self.metrics
                 .total_requests_succeeded
-                .with_label_values(&[&self.path])
+                .with_label_values(&[&self.path, &self.user_agent])
                 .inc();
             info!(
                 "Request succeeded for path {} in {:.2}s",
@@ -150,7 +166,7 @@ impl MetricsGuard {
             let elapsed = timer.stop_and_record();
             self.metrics
                 .total_requests_failed
-                .with_label_values(&[&self.path])
+                .with_label_values(&[&self.path, &self.user_agent])
                 .inc();
 
             if let Some(err) = error {
@@ -174,7 +190,7 @@ impl MetricsGuard {
             let elapsed = timer.stop_and_record();
             self.metrics
                 .total_requests_shed
-                .with_label_values(&[&self.path])
+                .with_label_values(&[&self.path, &self.user_agent])
                 .inc();
             info!("Request shed for path {} in {:.2}s", self.path, elapsed);
         }
@@ -183,22 +199,28 @@ impl MetricsGuard {
 
 impl Drop for MetricsGuard {
     fn drop(&mut self) {
-        self.metrics
+        if self
+            .metrics
             .current_requests_in_flight
-            .with_label_values(&[&self.path])
-            .dec();
-
-        // Request was still in flight when the guard was dropped, implying the client disconnected.
-        if let Some(timer) = self.timer.take() {
-            let elapsed = timer.stop_and_record();
+            .get_metric_with_label_values(&[&self.path])
+            .is_ok()
+        {
             self.metrics
-                .total_requests_disconnected
+                .current_requests_in_flight
                 .with_label_values(&[&self.path])
-                .inc();
-            info!(
-                "Request disconnected for path {} in {:.2}s",
-                self.path, elapsed
-            );
+                .dec();
+
+            if let Some(timer) = self.timer.take() {
+                let elapsed = timer.stop_and_record();
+                self.metrics
+                    .total_requests_disconnected
+                    .with_label_values(&[&self.path, &self.user_agent])
+                    .inc();
+                info!(
+                    "Request disconnected for path {} in {:.2}s",
+                    self.path, elapsed
+                );
+            }
         }
     }
 }

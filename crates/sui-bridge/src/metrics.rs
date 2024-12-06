@@ -103,6 +103,8 @@ pub struct BridgeMetrics {
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
     pub(crate) action_executor_execution_queue_skipped_actions_due_to_pausing: IntCounter,
 
+    pub(crate) last_observed_actions_seq_num: IntGaugeVec,
+
     pub(crate) signer_with_cache_hit: IntCounterVec,
     pub(crate) signer_with_cache_miss: IntCounterVec,
 
@@ -114,6 +116,9 @@ pub struct BridgeMetrics {
     pub(crate) sui_rpc_errors: IntCounterVec,
     pub(crate) observed_governance_actions: IntCounterVec,
     pub(crate) current_bridge_voting_rights: IntGaugeVec,
+
+    pub(crate) auth_agg_ok_responses: IntCounterVec,
+    pub(crate) auth_agg_bad_responses: IntCounterVec,
 }
 
 impl BridgeMetrics {
@@ -290,6 +295,13 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
+            last_observed_actions_seq_num: register_int_gauge_vec_with_registry!(
+                "bridge_last_observed_actions_seq_num",
+                "The latest observed action sequence number per chain_id and action_type",
+                &["chain_id", "action_type"],
+                registry,
+            )
+            .unwrap(),
             signer_with_cache_hit: register_int_counter_vec_with_registry!(
                 "bridge_signer_with_cache_hit",
                 "Total number of hit in signer's cache, by verifier type",
@@ -323,6 +335,20 @@ impl BridgeMetrics {
                 "Current voting power in the bridge committee",
                 &["authority"],
                 registry
+            )
+            .unwrap(),
+            auth_agg_ok_responses: register_int_counter_vec_with_registry!(
+                "bridge_auth_agg_ok_responses",
+                "Total number of ok respones from auth agg",
+                &["authority"],
+                registry,
+            )
+            .unwrap(),
+            auth_agg_bad_responses: register_int_counter_vec_with_registry!(
+                "bridge_auth_agg_bad_responses",
+                "Total number of bad respones from auth agg",
+                &["authority"],
+                registry,
             )
             .unwrap(),
         }

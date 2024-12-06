@@ -181,6 +181,9 @@ pub enum RunSpec {
         // relative weight of randomness transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         randomness: Vec<u32>,
+        // relative weight of expected failure transactions in the benchmark workload
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        expected_failure: Vec<u32>,
 
         // --- workload-specific options --- (TODO: use subcommands or similar)
         // 100 for max hotness i.e all requests target
@@ -210,6 +213,10 @@ pub enum RunSpec {
         // Default is (0-0.5) implying random load at 50% load. See `AdversarialPayloadType` enum for `adversarial_type`
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = ["0-1.0".to_string()])]
         adversarial_cfg: Vec<String>,
+        // type of expected failure transactions in the benchmark workload.
+        // See `ExpectedFailureType` enum for `expected_failure_type`
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        expected_failure_type: Vec<u32>,
 
         // --- generic options ---
         // Target qps

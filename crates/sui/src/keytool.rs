@@ -435,7 +435,10 @@ pub struct ZkLoginSignAndExecuteTx {
 #[serde(rename_all = "camelCase")]
 pub struct ZkLoginSigVerifyResponse {
     data: Option<String>,
-    parsed: Option<String>,
+    iss: String,
+    address_seed: String,
+    kid: String,
+    parsed: String,
     jwks: Option<String>,
     res: Option<SuiResult>,
 }
@@ -629,8 +632,15 @@ impl KeyToolCommand {
                 match SuiKeyPair::decode(&input_string) {
                     Ok(skp) => {
                         info!("Importing Bech32 encoded private key to keystore");
-                        let key = Key::from(&skp);
-                        keystore.add_key(alias, skp)?;
+                        let mut key = Key::from(&skp);
+                        keystore.add_key(alias.clone(), skp)?;
+
+                        let alias = match alias {
+                            Some(x) => x,
+                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                        };
+
+                        key.alias = Some(alias);
                         CommandOutput::Import(key)
                     }
                     Err(_) => {
@@ -639,10 +649,17 @@ impl KeyToolCommand {
                             &input_string,
                             key_scheme,
                             derivation_path,
-                            alias,
+                            alias.clone(),
                         )?;
                         let skp = keystore.get_key(&sui_address)?;
-                        let key = Key::from(skp);
+                        let mut key = Key::from(skp);
+
+                        let alias = match alias {
+                            Some(x) => x,
+                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                        };
+
+                        key.alias = Some(alias);
                         CommandOutput::Import(key)
                     }
                 }
@@ -1204,7 +1221,10 @@ impl KeyToolCommand {
                         if bytes.is_none() || cur_epoch.is_none() {
                             return Ok(CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
                                 data: None,
-                                parsed: Some(serde_json::to_string(&zk)?),
+                                parsed: serde_json::to_string(&zk)?,
+                                iss: zk.inputs.get_iss().to_owned(),
+                                kid: zk.inputs.get_kid().to_owned(),
+                                address_seed: zk.inputs.get_address_seed().to_string(),
                                 res: None,
                                 jwks: None,
                             }));
@@ -1263,7 +1283,10 @@ impl KeyToolCommand {
                         };
                         CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
                             data: Some(serialized),
-                            parsed: Some(serde_json::to_string(&zk)?),
+                            parsed: serde_json::to_string(&zk)?,
+                            iss: zk.inputs.get_iss().to_owned(),
+                            kid: zk.inputs.get_kid().to_owned(),
+                            address_seed: zk.inputs.get_address_seed().to_string(),
                             jwks: Some(serde_json::to_string(&jwks)?),
                             res: Some(res),
                         })

@@ -1,0 +1,22 @@
+current frame stack:
+  function: test (m.move:16)
+    scope 0 :
+  function: foo (m.move:0)
+    scope 0 :
+      ret : 2
+      type: u64
+
+  function: __inlined__ (m_dep.move:5)
+    scope 0 :
+current frame stack:
+  function: test (m.move:16)
+    scope 0 :
+  function: foo (m.move:9)
+    scope 0 :
+current frame stack:
+  function: test (m.move:16)
+    scope 0 :
+  function: foo (m.move:9)
+    scope 0 :
+  function: __inlined__ (m_dep.move:5)
+    scope 0 :

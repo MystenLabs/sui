@@ -105,6 +105,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
+    pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
     pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
@@ -140,6 +141,10 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
+    pub(crate) smart_selection_wait: IntCounter,
+    pub(crate) ancestor_state_change_by_authority: IntCounterVec,
+    pub(crate) excluded_proposal_ancestors_count_by_authority: IntCounterVec,
+    pub(crate) included_excluded_proposal_ancestors_count_by_authority: IntCounterVec,
     pub(crate) missing_blocks_total: IntCounter,
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
     pub(crate) num_of_bad_nodes: IntGauge,
@@ -174,12 +179,15 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
-    pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
-    pub(crate) round_prober_low_quorum_round: IntGaugeVec,
-    pub(crate) round_prober_current_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_received_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_accepted_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_low_received_quorum_round: IntGaugeVec,
+    pub(crate) round_prober_low_accepted_quorum_round: IntGaugeVec,
+    pub(crate) round_prober_current_received_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_current_accepted_round_gaps: IntGaugeVec,
     pub(crate) round_prober_propagation_delays: Histogram,
     pub(crate) round_prober_last_propagation_delay: IntGauge,
-    pub(crate) round_prober_request_errors: IntCounter,
+    pub(crate) round_prober_request_errors: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -233,6 +241,12 @@ impl NodeMetrics {
                 "lowest_verified_authority_round",
                 "The lowest round of verified block for the corresponding authority",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            block_proposal_interval: register_histogram_with_registry!(
+                "block_proposal_interval",
+                "Intervals (in secs) between block proposals.",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
@@ -434,6 +448,29 @@ impl NodeMetrics {
                 &["timeout_type"],
                 registry,
             ).unwrap(),
+            smart_selection_wait: register_int_counter_with_registry!(
+                "smart_selection_wait",
+                "Number of times we waited for smart ancestor selection.",
+                registry,
+            ).unwrap(),
+            ancestor_state_change_by_authority: register_int_counter_vec_with_registry!(
+                "ancestor_state_change_by_authority",
+                "The total number of times an ancestor state changed to EXCLUDE or INCLUDE.",
+                &["authority", "state"],
+                registry,
+            ).unwrap(),
+            excluded_proposal_ancestors_count_by_authority: register_int_counter_vec_with_registry!(
+                "excluded_proposal_ancestors_count_by_authority",
+                "Total number of excluded ancestors per authority during proposal.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            included_excluded_proposal_ancestors_count_by_authority: register_int_counter_vec_with_registry!(
+                "included_excluded_proposal_ancestors_count_by_authority",
+                "Total number of ancestors per authority with 'excluded' status that got included in proposal. Either weak or strong type.",
+                &["authority", "type"],
+                registry,
+            ).unwrap(),
             missing_blocks_total: register_int_counter_with_registry!(
                 "missing_blocks_total",
                 "Total cumulative number of missing blocks",
@@ -620,21 +657,39 @@ impl NodeMetrics {
                 &["authority", "error"],
                 registry
             ).unwrap(),
-            round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
-                "round_prober_quorum_round_gaps",
-                "Round gaps among peers for blocks proposed from each authority",
+            round_prober_received_quorum_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_received_quorum_round_gaps",
+                "Received round gaps among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
-            round_prober_low_quorum_round: register_int_gauge_vec_with_registry!(
-                "round_prober_low_quorum_round",
+            round_prober_accepted_quorum_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_accepted_quorum_round_gaps",
+                "Accepted round gaps among peers for blocks proposed & accepted from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_low_received_quorum_round: register_int_gauge_vec_with_registry!(
+                "round_prober_low_received_quorum_round",
                 "Low quorum round among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
-            round_prober_current_round_gaps: register_int_gauge_vec_with_registry!(
-                "round_prober_current_round_gaps",
-                "Round gaps from local last proposed round to the low quorum round of each peer. Can be negative.",
+            round_prober_low_accepted_quorum_round: register_int_gauge_vec_with_registry!(
+                "round_prober_low_accepted_quorum_round",
+                "Low quorum round among peers for blocks proposed & accepted from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_current_received_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_current_received_round_gaps",
+                "Received round gaps from local last proposed round to the low received quorum round of each peer. Can be negative.",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_current_accepted_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_current_accepted_round_gaps",
+                "Accepted round gaps from local last proposed & accepted round to the low accepted quorum round of each peer. Can be negative.",
                 &["authority"],
                 registry
             ).unwrap(),
@@ -649,9 +704,10 @@ impl NodeMetrics {
                 "Most recent propagation delay observed by RoundProber",
                 registry
             ).unwrap(),
-            round_prober_request_errors: register_int_counter_with_registry!(
+            round_prober_request_errors: register_int_counter_vec_with_registry!(
                 "round_prober_request_errors",
-                "Number of timeouts when probing against peers",
+                "Number of errors when probing against peers per error type",
+                &["error_type"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

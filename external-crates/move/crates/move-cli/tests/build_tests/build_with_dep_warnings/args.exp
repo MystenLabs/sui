@@ -5,16 +5,14 @@ Command `disassemble --package Test --name m`:
 // Move bytecode v6
 module 43.m {
 
-
-
-
 public aborts() {
 B0:
 	0: LdU64(42)
 	1: Abort
+}
 
 }
-}
+
 Command `build -p dep`:
 BUILDING SomeDep
 warning[W09002]: unused variable

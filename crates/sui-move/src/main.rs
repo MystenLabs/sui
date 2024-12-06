@@ -26,10 +26,10 @@ struct Args {
     #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
     /// If true, run the Move bytecode verifier on the bytecode from a successful build
-    #[clap(long = "path", short = 'p', global = true)]
+    #[clap(long, global = true)]
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
-    #[clap(long = "path", short = 'p', global = true)]
+    #[clap(long, global = true)]
     pub print_diags_to_stderr: bool,
     /// Package build options
     #[clap(flatten)]

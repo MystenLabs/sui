@@ -45,28 +45,28 @@ impl RequestMetrics {
             total_requests_received: register_int_counter_vec_with_registry!(
                 "total_requests_received",
                 "Total number of requests received in Faucet",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             total_requests_succeeded: register_int_counter_vec_with_registry!(
                 "total_requests_succeeded",
                 "Total number of requests processed successfully in Faucet",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             total_requests_shed: register_int_counter_vec_with_registry!(
                 "total_requests_shed",
                 "Total number of requests that were dropped because the service was saturated",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             total_requests_failed: register_int_counter_vec_with_registry!(
                 "total_requests_failed",
                 "Total number of requests that started but failed with an uncaught error",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
@@ -74,21 +74,21 @@ impl RequestMetrics {
                 "total_requests_disconnected",
                 "Total number of requests where the client disconnected before the service \
                  returned a response",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             current_requests_in_flight: register_int_gauge_vec_with_registry!(
                 "current_requests_in_flight",
                 "Current number of requests being processed in Faucet",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             process_latency: register_histogram_vec_with_registry!(
                 "process_latency",
                 "Latency of processing a Faucet request",
-                &["path"],
+                &["path", "user_agent"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -135,47 +135,83 @@ impl FaucetMetrics {
 
 impl MetricsCallbackProvider for RequestMetrics {
     fn on_request(&self, path: String) {
+        let normalized_path = normalize_path(&path);
+        if !is_path_tracked(normalized_path) {
+            return;
+        }
+
         self.total_requests_received
-            .with_label_values(&[path.as_str()])
+            .with_label_values(&[normalized_path])
             .inc();
     }
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, grpc_status_code: Code) {
+        let normalized_path = normalize_path(&path);
+        if !is_path_tracked(normalized_path) {
+            return;
+        }
+
         self.process_latency
-            .with_label_values(&[path.as_str()])
+            .with_label_values(&[normalized_path])
             .observe(latency.as_secs_f64());
 
         match grpc_status_code {
             Code::Ok => {
                 self.total_requests_succeeded
-                    .with_label_values(&[path.as_str()])
+                    .with_label_values(&[normalized_path])
                     .inc();
             }
             Code::Unavailable | Code::ResourceExhausted => {
                 self.total_requests_shed
-                    .with_label_values(&[path.as_str()])
+                    .with_label_values(&[normalized_path])
                     .inc();
             }
             _ => {
                 self.total_requests_failed
-                    .with_label_values(&[path.as_str()])
+                    .with_label_values(&[normalized_path])
                     .inc();
             }
         }
     }
 
     fn on_start(&self, path: &str) {
+        let normalized_path = normalize_path(path);
+        if !is_path_tracked(normalized_path) {
+            return;
+        }
+
         self.current_requests_in_flight
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .inc();
     }
 
     fn on_drop(&self, path: &str) {
+        let normalized_path = normalize_path(path);
+        if !is_path_tracked(normalized_path) {
+            return;
+        }
+
         self.total_requests_disconnected
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .inc();
         self.current_requests_in_flight
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .dec();
     }
+}
+
+/// Normalizes the given path to handle variations across different deployments.
+/// Specifically, it trims dynamic segments from the `/v1/status/` endpoint.
+pub fn normalize_path(path: &str) -> &str {
+    if path.starts_with("/v1/status/") {
+        return "/v1/status";
+    }
+
+    path
+}
+
+/// Determines whether the given path should be tracked for metrics collection.
+/// Only specified paths relevant to monitoring are included.
+pub fn is_path_tracked(path: &str) -> bool {
+    matches!(path, "/v1/gas" | "/gas" | "/v1/status")
 }

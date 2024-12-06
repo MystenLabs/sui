@@ -17,18 +17,22 @@ futures.workspace = true
 tracing.workspace = true
 jsonrpsee.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
+tokio-util.workspace = true
 rand.workspace = true
+tempfile.workspace = true
 sui-config.workspace = true
-sui-core = { workspace = true, features = ["test-utils"] }
+sui-core.workspace = true
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
+sui-indexer.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-types.workspace = true
 sui-json-rpc-api.workspace = true
 sui-node.workspace = true
+sui-pg-temp-db.workspace = true
 sui-protocol-config.workspace = true
 sui-swarm.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
+sui-types.workspace = true
 prometheus.workspace = true
 sui-keys.workspace = true
 sui-sdk.workspace = true

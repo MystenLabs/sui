@@ -6,18 +6,22 @@ use move_symbol_pool::Symbol;
 use crate::{
     cfgir::visitor::CFGIRVisitor,
     command_line::compiler::Visitor,
-    diagnostics::codes::WarningFilter,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::{
+        codes::{custom, DiagnosticInfo, Severity},
+        warning_filters::WarningFilter,
+    },
     typing::visitor::TypingVisitor,
 };
 
 pub mod abort_constant;
 pub mod constant_naming;
+pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
+pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
 
@@ -152,7 +156,19 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "redundant_ref_deref",
         "redundant reference/dereference"
-    )
+    ),
+    (
+        UnnecessaryUnit,
+        LinterDiagnosticCategory::Style,
+        "unnecessary_unit",
+        "unit `()` expression can be removed or simplified"
+    ),
+    (
+        EqualOperands,
+        LinterDiagnosticCategory::Suspicious,
+        "always_equal_operands",
+        "redundant, always-equal operands for binary operation"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -180,15 +196,17 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::None | LintLevel::Default => vec![],
         LintLevel::All => {
             vec![
-                constant_naming::ConstantNamingVisitor.visitor(),
+                constant_naming::ConstantNaming.visitor(),
                 unnecessary_while_loop::WhileTrueToLoop.visitor(),
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
-                unneeded_return::UnneededReturnVisitor.visitor(),
+                unneeded_return::UnneededReturn.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
-                self_assignment::SelfAssignmentVisitor.visitor(),
-                redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
+                self_assignment::SelfAssignment.visitor(),
+                redundant_ref_deref::RedundantRefDeref.visitor(),
+                unnecessary_unit::UnnecessaryUnit.visitor(),
+                equal_operands::EqualOperands.visitor(),
             ]
         }
     }

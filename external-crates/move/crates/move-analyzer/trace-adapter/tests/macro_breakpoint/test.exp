@@ -1,0 +1,10 @@
+current frame stack:
+  function: test (m.move:16)
+    scope 0 :
+  function: foo (m.move:0)
+    scope 0 :
+  function: __inlined__ (m_dep.move:4)
+    scope 0 :
+line breakpoints
+  m_dep.move
+    4

@@ -15,6 +15,7 @@ use tokio::{sync::mpsc, time::sleep};
 use crate::{
     authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
     checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop},
+    consensus_adapter::NoopConsensusOverloadChecker,
     consensus_handler::ConsensusHandlerInitializer,
     consensus_manager::{
         mysticeti_manager::MysticetiManager, ConsensusManagerMetrics, ConsensusManagerTrait,
@@ -52,7 +53,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
 async fn test_mysticeti_manager() {
     // GIVEN
     let configs = ConfigBuilder::new_with_temp_dir()
-        .committee_size(1.try_into().unwrap())
+        .committee_size(4.try_into().unwrap())
         .build();
 
     let config = &configs.validator_configs()[0];
@@ -96,7 +97,8 @@ async fn test_mysticeti_manager() {
                 epoch_store.clone(),
                 consensus_handler_initializer,
                 SuiTxValidator::new(
-                    epoch_store.clone(),
+                    state.clone(),
+                    Arc::new(NoopConsensusOverloadChecker {}),
                     Arc::new(CheckpointServiceNoop {}),
                     state.transaction_manager().clone(),
                     SuiTxValidatorMetrics::new(&Registry::new()),

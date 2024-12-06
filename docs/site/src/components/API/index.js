@@ -4,7 +4,9 @@
 import React, { useState, useEffect } from "react";
 import ExecutionEnvironment from "@docusaurus/ExecutionEnvironment";
 import RefNav from "./api-ref/refnav";
+import CompNav from "./api-ref/compnav";
 import Methods from "./api-ref/method";
+import Components from "./api-ref/components";
 
 import ScrollSpy from "react-ui-scrollspy";
 
@@ -81,6 +83,7 @@ const Rpc = () => {
     <div className="mx-4 flex flex-row">
       <div className="pt-12 w-1/4 mb-24 flex-none max-h-screen overflow-y-auto sticky top-12">
         <RefNav json={openrpc} apis={apis} />
+        <CompNav json={openrpc} apis={apis} />
       </div>
 
       <main className="flex-grow w-3/4">
@@ -89,12 +92,15 @@ const Rpc = () => {
             <h1 className="fixed bg-white dark:bg-ifm-background-color-dark w-full py-4 top-14">
               Sui JSON-RPC Reference - Version: {openrpc.info.version}
             </h1>
-            <ScrollSpy>
+            
               <div className="">
                 <p className="pt-24">{openrpc.info.description}</p>
+                <ScrollSpy>
                 <Methods json={openrpc} apis={apis} schemas={schemas} />
+                <Components json={openrpc} apis={apis} schemas={schemas} />
+                </ScrollSpy>
               </div>
-            </ScrollSpy>
+            
           </div>
         </div>
       </main>

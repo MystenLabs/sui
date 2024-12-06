@@ -3,7 +3,7 @@
 
 use clap::*;
 use regex::Regex;
-use std::{fmt, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser, Clone, ValueEnum, Debug)]
 pub enum Env {
@@ -16,8 +16,7 @@ pub enum Env {
     NewLocal,
 }
 
-#[derive(derivative::Derivative, Parser)]
-#[derivative(Debug)]
+#[derive(derive_more::Debug, Parser)]
 #[clap(name = "", rename_all = "kebab-case")]
 pub struct ClusterTestOpt {
     #[clap(value_enum)]
@@ -33,7 +32,12 @@ pub struct ClusterTestOpt {
     pub indexer_address: Option<String>,
     /// URL for the Indexer Postgres DB
     #[clap(long)]
-    #[derivative(Debug(format_with = "obfuscated_pg_address"))]
+    #[debug("{}", match pg_address {
+        None => "None".into(),
+        Some(val) => Regex::new(r":.*@")
+            .unwrap()
+            .replace_all(val.as_str(), ":*****@"),
+    })]
     pub pg_address: Option<String>,
     #[clap(long)]
     pub config_dir: Option<PathBuf>,
@@ -45,21 +49,6 @@ pub struct ClusterTestOpt {
     /// Only used with a local cluster
     #[clap(long)]
     pub with_indexer_and_graphql: bool,
-}
-
-fn obfuscated_pg_address(val: &Option<String>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match val {
-        None => write!(f, "None"),
-        Some(val) => {
-            write!(
-                f,
-                "{}",
-                Regex::new(r":.*@")
-                    .unwrap()
-                    .replace_all(val.as_str(), ":*****@")
-            )
-        }
-    }
 }
 
 impl ClusterTestOpt {

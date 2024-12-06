@@ -148,7 +148,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -167,6 +167,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -320,7 +329,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -339,6 +348,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -492,7 +510,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -511,6 +529,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -664,7 +691,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -683,6 +710,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -836,7 +872,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -855,6 +891,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1008,7 +1053,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1027,6 +1072,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1180,7 +1234,7 @@ validator_configs:
     authority-overload-config:
       max-txn-age-in-queue:
         secs: 0
-        nanos: 200000000
+        nanos: 500000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1199,6 +1253,15 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1214,3 +1277,4 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
+

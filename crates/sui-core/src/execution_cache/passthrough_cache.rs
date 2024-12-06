@@ -12,6 +12,7 @@ use crate::transaction_outputs::TransactionOutputs;
 use futures::{future::BoxFuture, FutureExt};
 use mysten_common::sync::notify_read::NotifyRead;
 use prometheus::Registry;
+use std::future::ready;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::package_object_cache::PackageObjectCache;
@@ -21,7 +22,7 @@ use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -64,8 +65,8 @@ impl PassthroughCache {
         &self.store
     }
 
-    fn revert_state_update_impl(&self, digest: &TransactionDigest) -> SuiResult {
-        self.store.revert_state_update(digest)
+    fn revert_state_update_impl(&self, digest: &TransactionDigest) {
+        self.store.revert_state_update(digest).expect("db error");
     }
 
     fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard) {
@@ -77,12 +78,14 @@ impl PassthroughCache {
             .ok();
     }
 
-    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) -> SuiResult {
-        self.store.bulk_insert_genesis_objects(objects)
+    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) {
+        self.store
+            .bulk_insert_genesis_objects(objects)
+            .expect("db error");
     }
 
-    fn insert_genesis_object_impl(&self, object: Object) -> SuiResult {
-        self.store.insert_genesis_object(object)
+    fn insert_genesis_object_impl(&self, object: Object) {
+        self.store.insert_genesis_object(object).expect("db error");
     }
 }
 
@@ -97,57 +100,53 @@ impl ObjectCacheRead for PassthroughCache {
             .force_reload_system_packages(system_package_ids.iter().cloned(), self);
     }
 
-    fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.store.get_object(id).map_err(Into::into)
+    fn get_object(&self, id: &ObjectID) -> Option<Object> {
+        self.store.get_object(id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        Ok(self.store.get_object_by_key(object_id, version)?)
+    fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        self.store.get_object_by_key(object_id, version)
     }
 
-    fn multi_get_objects_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        Ok(self.store.multi_get_objects_by_key(object_keys)?)
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey]) -> Vec<Option<Object>> {
+        self.store.multi_get_objects_by_key(object_keys)
     }
 
-    fn object_exists_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<bool> {
-        self.store.object_exists_by_key(object_id, version)
+    fn object_exists_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> bool {
+        self.store
+            .object_exists_by_key(object_id, version)
+            .expect("db error")
     }
 
-    fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<bool>> {
-        self.store.multi_object_exists_by_key(object_keys)
+    fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> Vec<bool> {
+        self.store
+            .multi_object_exists_by_key(object_keys)
+            .expect("db error")
     }
 
-    fn get_latest_object_ref_or_tombstone(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
-        self.store.get_latest_object_ref_or_tombstone(object_id)
+    fn get_latest_object_ref_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
+        self.store
+            .get_latest_object_ref_or_tombstone(object_id)
+            .expect("db error")
     }
 
     fn get_latest_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectKey, ObjectOrTombstone)>, SuiError> {
-        self.store.get_latest_object_or_tombstone(object_id)
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
+        self.store
+            .get_latest_object_or_tombstone(object_id)
+            .expect("db error")
     }
 
     fn find_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        self.store.find_object_lt_or_eq_version(object_id, version)
+    ) -> Option<Object> {
+        self.store
+            .find_object_lt_or_eq_version(object_id, version)
+            .expect("db error")
     }
 
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
@@ -175,20 +174,27 @@ impl ObjectCacheRead for PassthroughCache {
         object_id: &ObjectID,
         version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
-        self.store.get_marker_value(object_id, &version, epoch_id)
+    ) -> Option<MarkerValue> {
+        self.store
+            .get_marker_value(object_id, &version, epoch_id)
+            .expect("db error")
     }
 
     fn get_latest_marker(
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        self.store.get_latest_marker(object_id, epoch_id)
+    ) -> Option<(SequenceNumber, MarkerValue)> {
+        self.store
+            .get_latest_marker(object_id, epoch_id)
+            .expect("db error")
     }
 
-    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
-        self.store.perpetual_tables.get_highest_pruned_checkpoint()
+    fn get_highest_pruned_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.store
+            .perpetual_tables
+            .get_highest_pruned_checkpoint()
+            .expect("db error")
     }
 }
 
@@ -196,33 +202,39 @@ impl TransactionCacheRead for PassthroughCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<Arc<VerifiedTransaction>>>> {
-        Ok(self
-            .store
-            .multi_get_transaction_blocks(digests)?
+    ) -> Vec<Option<Arc<VerifiedTransaction>>> {
+        self.store
+            .multi_get_transaction_blocks(digests)
+            .expect("db error")
             .into_iter()
             .map(|o| o.map(Arc::new))
-            .collect())
+            .collect()
     }
 
     fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
-        self.store.multi_get_executed_effects_digests(digests)
+    ) -> Vec<Option<TransactionEffectsDigest>> {
+        self.store
+            .multi_get_executed_effects_digests(digests)
+            .expect("db error")
     }
 
     fn multi_get_effects(
         &self,
         digests: &[TransactionEffectsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(self.store.perpetual_tables.effects.multi_get(digests)?)
+    ) -> Vec<Option<TransactionEffects>> {
+        self.store
+            .perpetual_tables
+            .effects
+            .multi_get(digests)
+            .expect("db error")
     }
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
+    ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>> {
         self.executed_effects_digests_notify_read
             .read(digests, |digests| {
                 self.multi_get_executed_effects_digests(digests)
@@ -233,8 +245,10 @@ impl TransactionCacheRead for PassthroughCache {
     fn multi_get_events(
         &self,
         event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.store.multi_get_events(event_digests)
+    ) -> Vec<Option<TransactionEvents>> {
+        self.store
+            .multi_get_events(event_digests)
+            .expect("db error")
     }
 }
 
@@ -244,7 +258,7 @@ impl ExecutionCacheWrite for PassthroughCache {
         &'a self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
-    ) -> BoxFuture<'a, SuiResult> {
+    ) -> BoxFuture<'a, ()> {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
             let effects_digest = tx_outputs.effects.digest();
@@ -259,11 +273,13 @@ impl ExecutionCacheWrite for PassthroughCache {
             //    been deleted by a concurrent tx that finished first. In that case, check if the
             //    tx effects exist.
             self.store
-                .check_owned_objects_are_live(&tx_outputs.locks_to_delete)?;
+                .check_owned_objects_are_live(&tx_outputs.locks_to_delete)
+                .expect("db error");
 
             self.store
                 .write_transaction_outputs(epoch_id, &[tx_outputs])
-                .await?;
+                .await
+                .expect("db error");
 
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
@@ -271,8 +287,6 @@ impl ExecutionCacheWrite for PassthroughCache {
             self.metrics
                 .pending_notify_read
                 .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-
-            Ok(())
         }
         .boxed()
     }
@@ -281,10 +295,16 @@ impl ExecutionCacheWrite for PassthroughCache {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        transaction: VerifiedSignedTransaction,
+        tx_digest: TransactionDigest,
+        signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> BoxFuture<'a, SuiResult> {
         self.store
-            .acquire_transaction_locks(epoch_store, owned_input_objects, transaction)
+            .acquire_transaction_locks(
+                epoch_store,
+                owned_input_objects,
+                tx_digest,
+                signed_transaction,
+            )
             .boxed()
     }
 }
@@ -335,14 +355,14 @@ impl ExecutionCacheCommit for PassthroughCache {
         &'a self,
         _epoch: EpochId,
         _digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult> {
+    ) -> BoxFuture<'a, ()> {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
-        async { Ok(()) }.boxed()
+        ready(()).boxed()
     }
 
-    fn persist_transactions(&self, _digests: &[TransactionDigest]) -> BoxFuture<'_, SuiResult> {
+    fn persist_transactions(&self, _digests: &[TransactionDigest]) -> BoxFuture<'_, ()> {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
-        async { Ok(()) }.boxed()
+        ready(()).boxed()
     }
 }
 

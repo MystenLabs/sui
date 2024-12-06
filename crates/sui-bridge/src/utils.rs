@@ -5,7 +5,7 @@ use crate::abi::{
     EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge,
 };
 use crate::config::{
-    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig,
+    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig,
 };
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
@@ -107,15 +107,24 @@ pub fn generate_bridge_client_key_and_write_to_file(
 pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 'static>(
     bridge_proxy_address: EthAddress,
     provider: &Arc<Provider<P>>,
-) -> anyhow::Result<(EthAddress, EthAddress, EthAddress, EthAddress, EthAddress)> {
+) -> anyhow::Result<(
+    EthAddress,
+    EthAddress,
+    EthAddress,
+    EthAddress,
+    EthAddress,
+    EthAddress,
+)> {
     let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
+    let committee = EthBridgeCommittee::new(committee_address, provider.clone());
+    let config_address: EthAddress = committee.config().call().await?;
+    let bridge_config = EthBridgeConfig::new(config_address, provider.clone());
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
     let vault = EthBridgeVault::new(vault_address, provider.clone());
     let weth_address: EthAddress = vault.w_eth().call().await?;
-    let committee = EthBridgeCommittee::new(committee_address, provider.clone());
-    let config_address: EthAddress = committee.config().call().await?;
+    let usdt_address: EthAddress = bridge_config.token_address_of(4).call().await?;
 
     Ok((
         committee_address,
@@ -123,6 +132,7 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
         vault_address,
         config_address,
         weth_address,
+        usdt_address,
     ))
 }
 
@@ -206,6 +216,13 @@ pub fn generate_bridge_node_config_and_write_to_file(
         metrics: Some(MetricsConfig {
             push_interval_seconds: None, // use default value
             push_url: "metrics_proxy_url".to_string(),
+        }),
+        watchdog_config: Some(WatchdogConfig {
+            total_supplies: BTreeMap::from_iter(vec![(
+                "eth".to_string(),
+                "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH"
+                    .to_string(),
+            )]),
         }),
     };
     if run_client {
@@ -389,7 +406,7 @@ pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> a
 /// If a validator is not in the Sui committee, we will use its base URL as the name.
 pub async fn get_committee_voting_power_by_name(
     bridge_committee: &Arc<BridgeCommittee>,
-    system_state: SuiSystemStateSummary,
+    system_state: &SuiSystemStateSummary,
 ) -> BTreeMap<String, StakeUnit> {
     let mut sui_committee: BTreeMap<_, _> = system_state
         .active_validators
@@ -405,6 +422,31 @@ pub async fn get_committee_voting_power_by_name(
                     .remove(&v.1.sui_address)
                     .unwrap_or(v.1.base_url.clone()),
                 v.1.voting_power,
+            )
+        })
+        .collect()
+}
+
+/// Return a mappping from validator pub keys to their names.
+/// If a validator is not in the Sui committee, we will use its base URL as the name.
+pub async fn get_validator_names_by_pub_keys(
+    bridge_committee: &Arc<BridgeCommittee>,
+    system_state: &SuiSystemStateSummary,
+) -> BTreeMap<BridgeAuthorityPublicKeyBytes, String> {
+    let mut sui_committee: BTreeMap<_, _> = system_state
+        .active_validators
+        .iter()
+        .map(|v| (v.sui_address, v.name.clone()))
+        .collect();
+    bridge_committee
+        .members()
+        .iter()
+        .map(|(name, validator)| {
+            (
+                name.clone(),
+                sui_committee
+                    .remove(&validator.sui_address)
+                    .unwrap_or(validator.base_url.clone()),
             )
         })
         .collect()

@@ -691,6 +691,9 @@ advance_epoch
 current_epoch_subsidy_amount
 	public fun
 	0x3::stake_subsidy
+get_distribution_counter
+	public(package) fun
+	0x3::stake_subsidy
 SystemParameters
 	public struct
 	0x3::sui_system_state_inner
@@ -1561,6 +1564,12 @@ multi_scalar_multiplication
 pairing
 	public(package) fun
 	0x2::group_ops
+convert
+	public(package) fun
+	0x2::group_ops
+sum
+	public(package) fun
+	0x2::group_ops
 internal_validate
 	fun
 	0x2::group_ops
@@ -1585,6 +1594,12 @@ internal_multi_scalar_mul
 internal_pairing
 	fun
 	0x2::group_ops
+internal_convert
+	fun
+	0x2::group_ops
+internal_sum
+	fun
+	0x2::group_ops
 set_as_prefix
 	public(package) fun
 	0x2::group_ops
@@ -1598,6 +1613,9 @@ G2
 	public struct
 	0x2::bls12381
 GT
+	public struct
+	0x2::bls12381
+UncompressedG1
 	public struct
 	0x2::bls12381
 bls12381_min_sig_verify
@@ -1666,6 +1684,9 @@ hash_to_g1
 g1_multi_scalar_multiplication
 	public fun
 	0x2::bls12381
+g1_to_uncompressed_g1
+	public fun
+	0x2::bls12381
 g2_from_bytes
 	public fun
 	0x2::bls12381
@@ -1718,6 +1739,12 @@ gt_neg
 	public fun
 	0x2::bls12381
 pairing
+	public fun
+	0x2::bls12381
+uncompressed_g1_to_g1
+	public fun
+	0x2::bls12381
+uncompressed_g1_sum
 	public fun
 	0x2::bls12381
 Referent

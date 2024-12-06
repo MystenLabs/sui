@@ -5,6 +5,7 @@
 mod test {
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::collections::HashSet;
+    use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,7 +14,11 @@ mod test {
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
-    use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
+    use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
+    use sui_benchmark::workloads::workload::ExpectedFailureType;
+    use sui_benchmark::workloads::workload_configuration::{
+        WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
+    };
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
@@ -35,11 +40,13 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
+    use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
+    use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
     use sui_types::transaction::{
         DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     };
@@ -85,7 +92,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 1000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -120,21 +127,21 @@ mod test {
         // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
-        let test_cluster = build_test_cluster(4, 10000).await;
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(7, 0).await;
+        let test_cluster = build_test_cluster(7, 0, 1).await;
         test_simulated_load(test_cluster, 15).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 0).await;
+        let test_cluster = build_test_cluster(4, 0, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -146,7 +153,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_rolling_restarts_all_validators() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 330_000).await;
+        let test_cluster = build_test_cluster(4, 330_000, 1).await;
 
         let validators = test_cluster.get_validator_pubkeys();
         let test_cluster_clone = test_cluster.clone();
@@ -166,18 +173,22 @@ mod test {
         test_cluster.wait_for_epoch_all_nodes(1).await;
     }
 
-    #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
-        // TODO added to invalidate a failing test seed in CI. Remove me
-        tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 5_000, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
+        test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_small_committee_reconfig() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(1, 5_000, 0).await;
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -297,7 +308,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_prune_and_compact() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 1000, 0).await;
 
         let node_state = test_cluster.fullnode_handle.sui_node.clone().state();
         register_fail_point_async("prune-and-compact", move || {
@@ -409,6 +420,7 @@ mod test {
             }
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+        register_fail_point_async("write_object_entry", || delay_failpoint(10..20, 0.001));
 
         register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
@@ -418,7 +430,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes_during_epoch_change() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 10000).await;
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
@@ -436,7 +448,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
-        let test_cluster = build_test_cluster(10, 1000).await;
+        let test_cluster = build_test_cluster(10, 1000, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
@@ -462,16 +474,17 @@ mod test {
         let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
         let cap_factor_denominator;
+        let absolute_cap_factor;
+        let allow_overage_factor;
+        let separate_randomness_budget;
         {
             let mut rng = thread_rng();
             mode = if rng.gen_bool(0.33) {
                 PerObjectCongestionControlMode::TotalGasBudget
+            } else if rng.gen_bool(0.5) {
+                PerObjectCongestionControlMode::TotalTxCount
             } else {
-                if rng.gen_bool(0.5) {
-                    PerObjectCongestionControlMode::TotalTxCount
-                } else {
-                    PerObjectCongestionControlMode::TotalGasBudgetWithCap
-                }
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap
             };
             checkpoint_budget_factor = rng.gen_range(1..20);
             txn_count_limit = rng.gen_range(1..=10);
@@ -480,26 +493,34 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-
+            allow_overage_factor = if rng.gen_bool(0.5) {
+                0
+            } else {
+                rng.gen_range(1..100)
+            };
             cap_factor_denominator = rng.gen_range(1..100);
+            absolute_cap_factor = rng.gen_range(2..50);
+            separate_randomness_budget = rng.gen_bool(0.5);
         }
 
         info!(
             "test_simulated_load_shared_object_congestion_control setup.
-             mode: {:?}, checkpoint_budget_factor: {:?},
-             max_deferral_rounds: {:?},
-             txn_count_limit: {:?}",
-            mode, checkpoint_budget_factor, max_deferral_rounds, txn_count_limit
+             mode: {mode:?}, checkpoint_budget_factor: {checkpoint_budget_factor:?},
+             max_deferral_rounds: {max_deferral_rounds:?},
+             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?},
+             cap_factor_denominator: {cap_factor_denominator:?},
+             absolute_cap_factor: {absolute_cap_factor:?},
+             separate_randomness_budget: {separate_randomness_budget:?}",
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            let total_gas_limit = checkpoint_budget_factor
+                * DEFAULT_VALIDATOR_GAS_PRICE
+                * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
                 PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
                 PerObjectCongestionControlMode::TotalGasBudget => {
-                    let total_gas_limit = checkpoint_budget_factor
-                        * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                 },
@@ -512,19 +533,32 @@ mod test {
                     );
                 },
                 PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
-                    let total_gas_limit = checkpoint_budget_factor
-                        * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
+                    config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
                 },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
+            config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                allow_overage_factor * total_gas_limit,
+            );
+            if separate_randomness_budget {
+                config
+                .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                    std::cmp::max(
+                        1,
+                        config.max_accumulated_txn_cost_per_object_in_mysticeti_commit() / 10,
+                    ),
+                );
+            } else {
+                config
+                .disable_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing();
+            }
             config
         });
 
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = build_test_cluster(4, 5000, 2).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
@@ -541,7 +575,64 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config).await;
+        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config, None, None)
+            .await;
+    }
+
+    // Tests cluster defense against failing transaction floods Traffic Control
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_expected_failure_traffic_control() {
+        // TODO: can we get away with significatly increasing this?
+        let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
+        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
+
+        let expected_tps = target_qps * num_workers;
+        let error_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
+            client_threshold: expected_tps / 2,
+            window_size_secs: 5,
+            update_interval_secs: 1,
+            ..Default::default()
+        });
+        info!(
+            "test_simulated_load_expected_failure_traffic_control setup.
+             Policy type: {:?}",
+            error_policy_type
+        );
+
+        let policy_config = PolicyConfig {
+            connection_blocklist_ttl_sec: 1,
+            error_policy_type,
+            dry_run: false,
+            ..Default::default()
+        };
+        let network_config = ConfigBuilder::new_with_temp_dir()
+            .committee_size(NonZeroUsize::new(4).unwrap())
+            .with_policy_config(Some(policy_config))
+            .with_epoch_duration(5000)
+            .build();
+        let test_cluster = Arc::new(
+            TestClusterBuilder::new()
+                .set_network_config(network_config)
+                .build()
+                .await,
+        );
+
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        {
+            simulated_load_config.expected_failure_weight = 20;
+            simulated_load_config.expected_failure_config.failure_type =
+                ExpectedFailureType::try_from(0).unwrap();
+            info!("Simulated load config: {:?}", simulated_load_config);
+        }
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            50,
+            simulated_load_config,
+            Some(target_qps),
+            Some(num_workers),
+        )
+        .await;
     }
 
     // Tests cluster liveness when DKG has failed.
@@ -552,7 +643,7 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 30_000).await;
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -591,7 +682,7 @@ mod test {
     // simtest has low timeout tolerance and it is not designed to test performance.
     #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 5_000).await;
+        let test_cluster = build_test_cluster(4, 5_000, 1).await;
 
         let mut additional_cancelled_txns = Vec::new();
         let num_txns = thread_rng().gen_range(500..2000);
@@ -621,7 +712,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
-        let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
+        let test_cluster = build_test_cluster(4, epoch_duration_ms, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
@@ -748,7 +839,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_randomness_partial_sig_failures() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(6, 20_000).await;
+        let test_cluster = build_test_cluster(6, 20_000, 1).await;
 
         // Network should continue as long as f+1 nodes (in this case 3/6) are sending partial signatures.
         let eligible_nodes: HashSet<_> = test_cluster
@@ -768,7 +859,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_randomness_dkg_failures() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(6, 20_000).await;
+        let test_cluster = build_test_cluster(6, 20_000, 1).await;
 
         // Network should continue as long as nodes are participating in DKG representing
         // stake equal to 2f+1 PLUS proportion of stake represented by the
@@ -806,7 +897,12 @@ mod test {
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
+        default_num_of_unpruned_validators: usize,
     ) -> Arc<TestCluster> {
+        assert!(
+            default_num_of_unpruned_validators <= default_num_validators,
+            "Provided number of unpruned validators is greater than the total number of validators"
+        );
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 // Disable system overload checks for the test - during tests with crashes,
@@ -817,6 +913,7 @@ mod test {
                 ..Default::default()
             })
             .with_submit_delay_step_override_millis(3000)
+            .with_num_unpruned_validators(default_num_of_unpruned_validators)
             .build()
             .await
             .into()
@@ -853,6 +950,8 @@ mod test {
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
+        expected_failure_weight: u32,
+        expected_failure_config: ExpectedFailurePayloadCfg,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -869,6 +968,10 @@ mod test {
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
+                expected_failure_weight: 0,
+                expected_failure_config: ExpectedFailurePayloadCfg {
+                    failure_type: ExpectedFailureType::try_from(0).unwrap(),
+                },
             }
         }
     }
@@ -878,6 +981,8 @@ mod test {
             test_cluster,
             test_duration_secs,
             SimulatedLoadConfig::default(),
+            None,
+            None,
         )
         .await;
     }
@@ -886,6 +991,8 @@ mod test {
         test_cluster: Arc<TestCluster>,
         test_duration_secs: u64,
         config: SimulatedLoadConfig,
+        target_qps: Option<u64>,
+        num_workers: Option<u64>,
     ) {
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -916,17 +1023,10 @@ mod test {
 
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
-        let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
-        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
+        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 10));
+        let num_workers = num_workers.unwrap_or(get_var("SIM_STRESS_TEST_WORKERS", 10));
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
-        let shared_counter_weight = config.shared_counter_weight;
-        let transfer_object_weight = config.transfer_object_weight;
-        let num_transfer_accounts = config.num_transfer_accounts;
-        let delegation_weight = config.delegation_weight;
-        let batch_payment_weight = config.batch_payment_weight;
-        let shared_object_deletion_weight = config.shared_deletion_weight;
-        let randomness_weight = config.randomness_weight;
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
@@ -937,8 +1037,6 @@ mod test {
         // tests run for ever
         let adversarial_weight = 0;
 
-        let shared_counter_hotness_factor = config.shared_counter_hotness_factor;
-        let num_shared_counters = config.num_shared_counters;
         let shared_counter_max_tip = if config.use_shared_counter_max_tip {
             config.shared_counter_max_tip
         } else {
@@ -946,25 +1044,35 @@ mod test {
         };
         let gas_request_chunk_size = 100;
 
-        let workloads_builders = WorkloadConfiguration::create_workload_builders(
-            0,
+        let weights = WorkloadWeights {
+            shared_counter: config.shared_counter_weight,
+            transfer_object: config.transfer_object_weight,
+            delegation: config.delegation_weight,
+            batch_payment: config.batch_payment_weight,
+            shared_deletion: config.shared_deletion_weight,
+            randomness: config.randomness_weight,
+            adversarial: adversarial_weight,
+            expected_failure: config.expected_failure_weight,
+        };
+
+        let workload_config = WorkloadConfig {
+            group: 0,
             num_workers,
-            num_transfer_accounts,
-            shared_counter_weight,
-            transfer_object_weight,
-            delegation_weight,
-            batch_payment_weight,
-            shared_object_deletion_weight,
-            adversarial_weight,
+            num_transfer_accounts: config.num_transfer_accounts,
+            weights,
             adversarial_cfg,
-            randomness_weight,
+            expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
-            shared_counter_hotness_factor,
-            num_shared_counters,
+            shared_counter_hotness_factor: config.shared_counter_hotness_factor,
+            num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
             target_qps,
             in_flight_ratio,
             duration,
+        };
+
+        let workloads_builders = WorkloadConfiguration::create_workload_builders(
+            workload_config,
             system_state_observer.clone(),
         )
         .await;

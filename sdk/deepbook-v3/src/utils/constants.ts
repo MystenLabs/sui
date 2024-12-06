@@ -87,6 +87,21 @@ export const mainnetCoins: CoinMap = {
 		type: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`,
 		scalar: 1000000,
 	},
+	NS: {
+		address: `0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178`,
+		type: `0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS`,
+		scalar: 1000000,
+	},
+	TYPUS: {
+		address: `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385`,
+		type: `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS`,
+		scalar: 1000000000,
+	},
+	AUSD: {
+		address: `0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2`,
+		type: `0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD`,
+		scalar: 1000000,
+	},
 };
 
 export const testnetPools: PoolMap = {
@@ -141,6 +156,31 @@ export const mainnetPools: PoolMap = {
 	BETH_USDC: {
 		address: `0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c`,
 		baseCoin: 'BETH',
+		quoteCoin: 'USDC',
+	},
+	NS_USDC: {
+		address: `0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060`,
+		baseCoin: 'NS',
+		quoteCoin: 'USDC',
+	},
+	NS_SUI: {
+		address: `0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8`,
+		baseCoin: 'NS',
+		quoteCoin: 'SUI',
+	},
+	TYPUS_SUI: {
+		address: `0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec`,
+		baseCoin: 'TYPUS',
+		quoteCoin: 'SUI',
+	},
+	SUI_AUSD: {
+		address: `0x183df694ebc852a5f90a959f0f563b82ac9691e42357e9a9fe961d71a1b809c8`,
+		baseCoin: 'SUI',
+		quoteCoin: 'AUSD',
+	},
+	AUSD_USDC: {
+		address: `0x5661fc7f88fbeb8cb881150a810758cf13700bb4e1f31274a244581b37c303c3`,
+		baseCoin: 'AUSD',
 		quoteCoin: 'USDC',
 	},
 };

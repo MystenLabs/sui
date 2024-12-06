@@ -121,6 +121,17 @@ impl TestRunner {
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
     ) -> Result<Self> {
+        // If we want to trace the execution, check that the tracing compilation feature is
+        // enabled, otherwise we won't generate a trace.
+        move_vm_profiler::tracing_feature_disabled! {
+            if trace_location.is_some() {
+                return Err(anyhow::anyhow!(
+                    "Tracing is enabled but the binary was not compiled with the `tracing` \
+                     feature flag set. Rebuild binary with `--features tracing`"
+                ));
+            }
+        };
+
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state =
             setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
@@ -262,7 +273,7 @@ impl SharedTestingConfig {
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             use move_vm_types::gas::GasMeter;
             gas_meter.set_profiler(GasProfiler::init_default_cfg(

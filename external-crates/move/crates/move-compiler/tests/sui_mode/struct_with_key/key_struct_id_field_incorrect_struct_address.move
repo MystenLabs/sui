@@ -6,8 +6,7 @@ module a::object {
     }
 }
 
-// TODO we might want to support this
-module 0x2::object {
+module 0x3::object {
     struct UID has store { flag: bool }
     struct S has key {
         id: UID

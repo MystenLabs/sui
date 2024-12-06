@@ -7,12 +7,6 @@ error[E04005]: expected a single type
 6 │         match (x()) {
   │                ^^^ Invalid 'match' subject
 
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/matching/invalid_match_tuple.move:6:16
-  │
-6 │         match (x()) {
-  │                ^^^ Pattern '_' not covered
-
 error[E01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_match_tuple.move:7:15
   │
@@ -21,6 +15,23 @@ error[E01002]: unexpected token
   │               │
   │               Unexpected ','
   │               Expected ')'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/matching/invalid_match_tuple.move:7:17
+  │
+7 │             (x, y) => ()
+  │                 ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04005]: expected a single type
+  ┌─ tests/move_2024/matching/invalid_match_tuple.move:7:17
+  │
+3 │     fun x(): (u64, u64) { (0, 42) }
+  │              ---------- Expected a single type, but found expression list type: '(u64, u64)'
+  ·
+7 │             (x, y) => ()
+  │                 ^ Invalid type for pattern
 
 error[E01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_match_tuple.move:7:18

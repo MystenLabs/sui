@@ -1,0 +1,22 @@
+# See examples in Query::transactionBlocks as this is similar behavior
+# to the `transactionBlocks` in Query but supports additional
+# `AddressTransactionBlockRelationship` filter
+
+# Filtering on package where the signer of the TX is the current
+# address and displaying the transaction's sender and the gas price
+# and budget.
+query transaction_block_with_relation_filter {
+  address(address: "0x2") {
+    transactionBlocks(relation: SENT, filter: { function: "0x2" }) {
+      nodes {
+        sender {
+          address
+        }
+        gasInput {
+          gasPrice
+          gasBudget
+        }
+      }
+    }
+  }
+}

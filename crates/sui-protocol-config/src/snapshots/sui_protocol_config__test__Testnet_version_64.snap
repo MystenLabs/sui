@@ -45,7 +45,7 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
-  per_object_congestion_control_mode: TotalGasBudgetWithCap
+  per_object_congestion_control_mode: TotalTxCount
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
@@ -319,11 +319,12 @@ random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 524288
 consensus_max_num_transactions_in_block: 512
-max_accumulated_txn_cost_per_object_in_narwhal_commit: 240000000
+max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
-max_accumulated_txn_cost_per_object_in_mysticeti_commit: 18500000
+max_accumulated_txn_cost_per_object_in_mysticeti_commit: 3
 gas_budget_based_txn_cost_cap_factor: 400000
+

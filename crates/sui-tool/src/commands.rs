@@ -433,7 +433,7 @@ async fn check_locked_object(
     }
     let top_record = output.voting_power.first().unwrap();
     let top_record_stake = top_record.1;
-    let top_record = top_record.0.unwrap();
+    let top_record = top_record.0.clone().unwrap();
     if top_record.4.is_none() {
         println!(
             "Object {} does not seem to be locked by majority of validators (unlocked stake: {})",

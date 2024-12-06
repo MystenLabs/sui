@@ -6,15 +6,16 @@ use std::collections::HashMap;
 
 use super::execution::SimulateTransactionQueryParameters;
 use super::TransactionSimulationResponse;
-use crate::accept::AcceptFormat;
+use crate::accept::AcceptJsonProtobufBcs;
 use crate::objects::ObjectNotFoundError;
 use crate::openapi::ApiEndpoint;
 use crate::openapi::OperationBuilder;
 use crate::openapi::RequestBodyBuilder;
 use crate::openapi::ResponseBuilder;
 use crate::openapi::RouteHandler;
+use crate::proto;
 use crate::reader::StateReader;
-use crate::response::ResponseContent;
+use crate::response::JsonProtobufBcs;
 use crate::RestError;
 use crate::RestService;
 use crate::Result;
@@ -79,6 +80,7 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
                 200,
                 ResponseBuilder::new()
                     .json_content::<ResolveTransactionResponse>(generator)
+                    .protobuf_content()
                     .bcs_content()
                     .build(),
             )
@@ -93,9 +95,15 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
 async fn resolve_transaction(
     State(state): State<RestService>,
     Query(parameters): Query<ResolveTransactionQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     Json(unresolved_transaction): Json<UnresolvedTransaction>,
-) -> Result<ResponseContent<ResolveTransactionResponse>> {
+) -> Result<
+    JsonProtobufBcs<
+        ResolveTransactionResponse,
+        proto::ResolveTransactionResponse,
+        ResolveTransactionResponse,
+    >,
+> {
     let executor = state
         .executor
         .as_ref()
@@ -183,14 +191,16 @@ async fn resolve_transaction(
         None
     };
 
-    ResolveTransactionResponse {
+    let response = ResolveTransactionResponse {
         transaction: resolved_transaction.try_into()?,
         simulation,
+    };
+
+    match accept {
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
     }
-    .pipe(|response| match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
-    })
     .pipe(Ok)
 }
 
@@ -233,7 +243,7 @@ fn called_packages(
     {
         let package = reader
             .inner()
-            .get_object(&(move_call.package.into()))?
+            .get_object(&(move_call.package.into()))
             .ok_or_else(|| ObjectNotFoundError::new(move_call.package))?
             .data
             .try_as_package()
@@ -322,7 +332,7 @@ fn resolve_object_reference(
     let object_id = unresolved_object_reference.object_id;
     let object = reader
         .inner()
-        .get_object(&object_id.into())?
+        .get_object(&object_id.into())
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
     resolve_object_reference_with_object(&object, unresolved_object_reference)
 }
@@ -531,7 +541,7 @@ fn resolve_object(
     let id = object_id.into();
     let object = reader
         .inner()
-        .get_object(&id)?
+        .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
 
     match object.owner() {
@@ -562,7 +572,7 @@ fn resolve_object(
             }
             .pipe(Ok)
         }
-        sui_types::object::Owner::Shared { .. } => {
+        sui_types::object::Owner::Shared { .. } | sui_types::object::Owner::ConsensusV2 { .. } => {
             resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
         }
         sui_types::object::Owner::ObjectOwner(_) => Err(RestError::new(
@@ -582,7 +592,7 @@ fn resolve_shared_input(
     let id = object_id.into();
     let object = reader
         .inner()
-        .get_object(&id)?
+        .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
     resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
 }
@@ -668,13 +678,17 @@ fn resolve_shared_input_with_object(
     let object_id = object.id();
     let initial_shared_version = if let sui_types::object::Owner::Shared {
         initial_shared_version,
+    }
+    | sui_types::object::Owner::ConsensusV2 {
+        start_version: initial_shared_version,
+        ..
     } = object.owner()
     {
         *initial_shared_version
     } else {
         return Err(RestError::new(
             axum::http::StatusCode::BAD_REQUEST,
-            format!("object {object_id} is not a shared object"),
+            format!("object {object_id} is not a shared or consensus object"),
         ));
     };
     let mut mutable = false;
@@ -808,7 +822,7 @@ fn select_gas(
         .account_owned_objects_info_iter(owner, None)?
         .filter(|info| info.type_.is_gas_coin())
         .filter(|info| !input_objects.contains(&info.object_id))
-        .filter_map(|info| reader.inner().get_object(&info.object_id).ok().flatten())
+        .filter_map(|info| reader.inner().get_object(&info.object_id))
         .filter_map(|object| {
             GasCoin::try_from(&object)
                 .ok()

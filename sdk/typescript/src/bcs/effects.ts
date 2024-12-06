@@ -105,6 +105,18 @@ const ExecutionFailureStatus = bcs.enum('ExecutionFailureStatus', {
 	SuiMoveVerificationTimedout: null,
 	SharedObjectOperationNotAllowed: null,
 	InputObjectDeleted: null,
+	ExecutionCancelledDueToSharedObjectCongestion: bcs.struct(
+		'ExecutionCancelledDueToSharedObjectCongestion',
+		{
+			congestedObjects: bcs.vector(Address),
+		},
+	),
+	AddressDeniedForCoin: bcs.struct('AddressDeniedForCoin', {
+		address: Address,
+		coinType: bcs.string(),
+	}),
+	CoinTypeGlobalPause: bcs.struct('CoinTypeGlobalPause', { coinType: bcs.string() }),
+	ExecutionCancelledDueToRandomnessUnavailable: null,
 });
 
 const ExecutionStatus = bcs.enum('ExecutionStatus', {

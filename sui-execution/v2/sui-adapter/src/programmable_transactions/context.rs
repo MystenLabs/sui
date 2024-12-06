@@ -194,7 +194,7 @@ mod checked {
 
             // Set the profiler if in CLI
             #[skip_checked_arithmetic]
-            move_vm_profiler::gas_profiler_feature_enabled! {
+            move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
                 use move_vm_types::gas::GasMeter;
 
@@ -1225,13 +1225,16 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
+            }
         };
-        let owner = obj.owner;
+        let owner = obj.owner.clone();
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
             is_mutable_input,
-            owner,
+            owner: owner.clone(),
             version,
         };
         let obj_value = value_from_object(protocol_config, vm, linkage_view, new_packages, obj)?;

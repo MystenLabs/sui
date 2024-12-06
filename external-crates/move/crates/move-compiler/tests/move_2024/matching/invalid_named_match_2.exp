@@ -9,17 +9,17 @@ error[E03013]: positional call mismatch
   │
   = Named patterns take arguments using '{ }'
 
-error[E04016]: too few arguments
-  ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13
-  │
-9 │             Entry::One(x) => ()
-  │             ^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Entry::One'
-
 error[E03010]: unbound field
   ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13
   │
 9 │             Entry::One(x) => ()
   │             ^^^^^^^^^^^^^ Unbound field '0' in '0x42::m::Entry::One'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:13
+  │
+9 │             Entry::One(x) => ()
+  │             ^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Entry::One'
 
 warning[W09002]: unused variable
   ┌─ tests/move_2024/matching/invalid_named_match_2.move:9:24

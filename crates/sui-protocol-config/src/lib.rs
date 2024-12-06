@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 64;
+const MAX_PROTOCOL_VERSION: u64 = 70;
 
 // Record history of protocol version allocations here:
 //
@@ -185,7 +185,22 @@ const MAX_PROTOCOL_VERSION: u64 = 64;
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
-// Version 64: Switch to distributed vote scoring in consensus in mainnet
+// Version 64: Revert congestion control change.
+// Version 65: Enable distributed vote scoring in mainnet.
+// Version 66: Revert distributed vote scoring in mainnet.
+//             Framework fix for fungible staking book-keeping.
+// Version 67: Re-enable distributed vote scoring in mainnet.
+// Version 68: Add G1Uncompressed group to group ops.
+//             Update to Move stdlib.
+//             Enable gas based congestion control with overage.
+//             Further reduce minimum number of random beacon shares.
+//             Disallow adding new modules in `deps-only` packages.
+// Version 69: Sets number of rounds allowed for fastpath voting in consensus.
+//             Enable smart ancestor selection in devnet.
+//             Enable G1Uncompressed group in testnet.
+// Version 70: Enable smart ancestor selection in testnet.
+//             Enable probing for accepted rounds in round prober in testnet
+//             Add new gas model version to update charging of native functions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -548,6 +563,25 @@ struct FeatureFlags {
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
+
+    // Enable uncompressed group elements in BLS123-81 G1
+    #[serde(skip_serializing_if = "is_false")]
+    uncompressed_g1_group_elements: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_new_modules_in_deps_only_packages: bool,
+
+    // Use smart ancestor selection in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_smart_ancestor_selection: bool,
+
+    // Probe accepted rounds in round prober.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober_probe_accepted_rounds: bool,
+
+    // Enable v2 native charging for natives.
+    #[serde(skip_serializing_if = "is_false")]
+    native_charging_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1137,6 +1171,11 @@ pub struct ProtocolConfig {
     group_ops_bls12381_g2_msm_base_cost_per_input: Option<u64>,
     group_ops_bls12381_msm_max_len: Option<u32>,
     group_ops_bls12381_pairing_cost: Option<u64>,
+    group_ops_bls12381_g1_to_uncompressed_g1_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_to_g1_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_base_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -1235,15 +1274,19 @@ pub struct ProtocolConfig {
     /// The maximum number of transactions included in a consensus block.
     consensus_max_num_transactions_in_block: Option<u64>,
 
-    /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
-    /// in a checkpoint will be deferred once their touch shared objects hit this limit.
-    /// This config is meant to be used when consensus protocol is Narwhal, where each
-    /// consensus commit corresponding to 1 checkpoint (or 2 if randomness is enabled)
+    /// The maximum number of rounds where transaction voting is allowed.
+    consensus_voting_rounds: Option<u32>,
+
+    /// DEPRECATED. Do not use.
     max_accumulated_txn_cost_per_object_in_narwhal_commit: Option<u64>,
 
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// If >0, congestion control will allow up to one transaction per object to exceed
+    /// the configured maximum accumulated cost by the given amount.
+    max_txn_cost_overage_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
@@ -1260,10 +1303,15 @@ pub struct ProtocolConfig {
     bridge_should_try_to_finalize_committee: Option<bool>,
 
     /// The max accumulated txn execution cost per object in a mysticeti. Transactions
-    /// in a commit will be deferred once their touch shared objects hit this limit.
+    /// in a commit will be deferred once their touch shared objects hit this limit,
+    /// unless the selected congestion control mode allows overage.
     /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
+    /// As above, but separate per-commit budget for transactions that use randomness.
+    /// If not configured, uses the setting for `max_accumulated_txn_cost_per_object_in_mysticeti_commit`.
+    max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
 
     /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
     /// is disabled.
@@ -1273,6 +1321,10 @@ pub struct ProtocolConfig {
     /// object congestion control strategy. Basically the max transaction cost is calculated as
     /// (num of input object + num of commands) * this factor.
     gas_budget_based_txn_cost_cap_factor: Option<u64>,
+
+    /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
+    /// the given multiple of the per-commit budget.
+    gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
 }
 
 // feature flags
@@ -1590,14 +1642,20 @@ impl ProtocolConfig {
     }
 
     pub fn max_transactions_in_block_bytes(&self) -> u64 {
-        // Provide a default value if protocol config version is too low.
-        self.consensus_max_transactions_in_block_bytes
-            .unwrap_or(512 * 1024)
+        if cfg!(msim) {
+            256 * 1024
+        } else {
+            self.consensus_max_transactions_in_block_bytes
+                .unwrap_or(512 * 1024)
+        }
     }
 
     pub fn max_num_transactions_in_block(&self) -> u64 {
-        // 500 is the value used before this field is introduced.
-        self.consensus_max_num_transactions_in_block.unwrap_or(500)
+        if cfg!(msim) {
+            8
+        } else {
+            self.consensus_max_num_transactions_in_block.unwrap_or(512)
+        }
     }
 
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
@@ -1622,11 +1680,36 @@ impl ProtocolConfig {
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
+        if let Some(enabled) = is_mysticeti_fpc_enabled_in_env() {
+            return enabled;
+        }
         self.feature_flags.mysticeti_fastpath
     }
 
     pub fn relocate_event_module(&self) -> bool {
         self.feature_flags.relocate_event_module
+    }
+
+    pub fn uncompressed_g1_group_elements(&self) -> bool {
+        self.feature_flags.uncompressed_g1_group_elements
+    }
+
+    pub fn disallow_new_modules_in_deps_only_packages(&self) -> bool {
+        self.feature_flags
+            .disallow_new_modules_in_deps_only_packages
+    }
+
+    pub fn consensus_smart_ancestor_selection(&self) -> bool {
+        self.feature_flags.consensus_smart_ancestor_selection
+    }
+
+    pub fn consensus_round_prober_probe_accepted_rounds(&self) -> bool {
+        self.feature_flags
+            .consensus_round_prober_probe_accepted_rounds
+    }
+
+    pub fn native_charging_v2(&self) -> bool {
+        self.feature_flags.native_charging_v2
     }
 }
 
@@ -2048,6 +2131,11 @@ impl ProtocolConfig {
             group_ops_bls12381_g2_msm_base_cost_per_input: None,
             group_ops_bls12381_msm_max_len: None,
             group_ops_bls12381_pairing_cost: None,
+            group_ops_bls12381_g1_to_uncompressed_g1_cost: None,
+            group_ops_bls12381_uncompressed_g1_to_g1_cost: None,
+            group_ops_bls12381_uncompressed_g1_sum_base_cost: None,
+            group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
+            group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2128,9 +2216,13 @@ impl ProtocolConfig {
 
             consensus_max_num_transactions_in_block: None,
 
+            consensus_voting_rounds: None,
+
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            max_txn_cost_overage_per_object_in_commit: None,
 
             min_checkpoint_interval_ms: None,
 
@@ -2142,9 +2234,13 @@ impl ProtocolConfig {
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
 
+            max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: None,
+
             consensus_gc_depth: None,
 
             gas_budget_based_txn_cost_cap_factor: None,
+
+            gas_budget_based_txn_cost_absolute_cap_commit_count: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2834,9 +2930,149 @@ impl ProtocolConfig {
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
                 }
                 64 => {
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(40);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
+                }
+                65 => {
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
+                }
+                66 => {
+                    if chain == Chain::Mainnet {
+                        // Revert the distributed vote scoring for mainnet (for one protocol upgrade)
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = false;
+                    }
+                }
+                67 => {
+                    // Enable it once again.
+                    cfg.feature_flags
+                        .consensus_distributed_vote_scoring_strategy = true;
+                }
+                68 => {
+                    cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
+                    cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(13);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(2000);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
+
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
+                    cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
+                        Some(3_700_000); // 20% of above
+                    cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
+                    cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
+
+                    // Further reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(500);
+
+                    cfg.feature_flags.disallow_new_modules_in_deps_only_packages = true;
+                }
+                69 => {
+                    // Sets number of rounds allowed for fastpath voting in consensus.
+                    cfg.consensus_voting_rounds = Some(40);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable smart ancestor selection for devnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                    }
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
+                }
+                70 => {
+                    if chain != Chain::Mainnet {
+                        // Enable smart ancestor selection for testnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                        // Enable probing for accepted rounds in round prober for testnet
+                        cfg.feature_flags
+                            .consensus_round_prober_probe_accepted_rounds = true;
+                    }
+
+                    cfg.poseidon_bn254_cost_per_block = Some(388);
+
+                    cfg.gas_model_version = Some(9);
+                    cfg.feature_flags.native_charging_v2 = true;
+                    cfg.bls12381_bls12381_min_sig_verify_cost_base = Some(44064);
+                    cfg.bls12381_bls12381_min_pk_verify_cost_base = Some(49282);
+                    cfg.ecdsa_k1_secp256k1_verify_keccak256_cost_base = Some(1470);
+                    cfg.ecdsa_k1_secp256k1_verify_sha256_cost_base = Some(1470);
+                    cfg.ecdsa_r1_secp256r1_verify_sha256_cost_base = Some(4225);
+                    cfg.ecdsa_r1_secp256r1_verify_keccak256_cost_base = Some(4225);
+                    cfg.ecvrf_ecvrf_verify_cost_base = Some(4848);
+                    cfg.ed25519_ed25519_verify_cost_base = Some(1802);
+
+                    // Manually changed to be "under cost"
+                    cfg.ecdsa_r1_ecrecover_keccak256_cost_base = Some(1173);
+                    cfg.ecdsa_r1_ecrecover_sha256_cost_base = Some(1173);
+                    cfg.ecdsa_k1_ecrecover_keccak256_cost_base = Some(500);
+                    cfg.ecdsa_k1_ecrecover_sha256_cost_base = Some(500);
+
+                    cfg.groth16_prepare_verifying_key_bls12381_cost_base = Some(53838);
+                    cfg.groth16_prepare_verifying_key_bn254_cost_base = Some(82010);
+                    cfg.groth16_verify_groth16_proof_internal_bls12381_cost_base = Some(72090);
+                    cfg.groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input =
+                        Some(8213);
+                    cfg.groth16_verify_groth16_proof_internal_bn254_cost_base = Some(115502);
+                    cfg.groth16_verify_groth16_proof_internal_bn254_cost_per_public_input =
+                        Some(9484);
+
+                    cfg.hash_keccak256_cost_base = Some(10);
+                    cfg.hash_blake2b256_cost_base = Some(10);
+
+                    // group ops
+                    cfg.group_ops_bls12381_decode_scalar_cost = Some(7);
+                    cfg.group_ops_bls12381_decode_g1_cost = Some(2848);
+                    cfg.group_ops_bls12381_decode_g2_cost = Some(3770);
+                    cfg.group_ops_bls12381_decode_gt_cost = Some(3068);
+
+                    cfg.group_ops_bls12381_scalar_add_cost = Some(10);
+                    cfg.group_ops_bls12381_g1_add_cost = Some(1556);
+                    cfg.group_ops_bls12381_g2_add_cost = Some(3048);
+                    cfg.group_ops_bls12381_gt_add_cost = Some(188);
+
+                    cfg.group_ops_bls12381_scalar_sub_cost = Some(10);
+                    cfg.group_ops_bls12381_g1_sub_cost = Some(1550);
+                    cfg.group_ops_bls12381_g2_sub_cost = Some(3019);
+                    cfg.group_ops_bls12381_gt_sub_cost = Some(497);
+
+                    cfg.group_ops_bls12381_scalar_mul_cost = Some(11);
+                    cfg.group_ops_bls12381_g1_mul_cost = Some(4842);
+                    cfg.group_ops_bls12381_g2_mul_cost = Some(9108);
+                    cfg.group_ops_bls12381_gt_mul_cost = Some(27490);
+
+                    cfg.group_ops_bls12381_scalar_div_cost = Some(91);
+                    cfg.group_ops_bls12381_g1_div_cost = Some(5091);
+                    cfg.group_ops_bls12381_g2_div_cost = Some(9206);
+                    cfg.group_ops_bls12381_gt_div_cost = Some(27804);
+
+                    cfg.group_ops_bls12381_g1_hash_to_base_cost = Some(2962);
+                    cfg.group_ops_bls12381_g2_hash_to_base_cost = Some(8688);
+
+                    cfg.group_ops_bls12381_g1_msm_base_cost = Some(62648);
+                    cfg.group_ops_bls12381_g2_msm_base_cost = Some(131192);
+                    cfg.group_ops_bls12381_g1_msm_base_cost_per_input = Some(1333);
+                    cfg.group_ops_bls12381_g2_msm_base_cost_per_input = Some(3216);
+
+                    cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(677);
+                    cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(2099);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(77);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(26);
+
+                    cfg.group_ops_bls12381_pairing_cost = Some(26897);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(1200);
+
+                    cfg.validator_validate_metadata_cost_base = Some(20000);
                 }
                 // Use this template when making changes:
                 //
@@ -3000,8 +3236,14 @@ impl ProtocolConfig {
         self.feature_flags.consensus_round_prober = val;
     }
 
-    pub fn set_gc_depth_for_testing(&mut self, val: u32) {
-        self.consensus_gc_depth = Some(val);
+    pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .disallow_new_modules_in_deps_only_packages = val;
+    }
+
+    pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
+        self.feature_flags
+            .consensus_round_prober_probe_accepted_rounds = val;
     }
 }
 
@@ -3091,6 +3333,17 @@ macro_rules! check_limit_by_meter {
         };
         result
     }};
+}
+
+pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
+    if let Ok(v) = std::env::var("CONSENSUS") {
+        if v == "mysticeti_fpc" {
+            return Some(true);
+        } else if v == "mysticeti" {
+            return Some(false);
+        }
+    }
+    None
 }
 
 #[cfg(all(test, not(msim)))]

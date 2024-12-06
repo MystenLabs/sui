@@ -3,12 +3,12 @@
 
 use crate::{
     diag,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{ModuleIdent, Value_},
     ice,
     naming::ast::BuiltinTypeName_,
     parser::ast::{DatatypeName, VariantName},
     shared::{
-        ast_debug::AstDebug,
         ide::{IDEAnnotation, MissingMatchArmsInfo, PatternSuggestion},
         matching::{MatchContext, PatternMatrix},
         string_utils::{debug_print, format_oxford_list},
@@ -70,12 +70,12 @@ impl TypingMutVisitorContext for MatchCompiler<'_, '_> {
         }
     }
 
-    fn add_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
-        self.context.env.add_warning_filter_scope(filter);
+    fn push_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.context.push_warning_filter_scope(filter);
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.context.env.pop_warning_filter_scope();
+        self.context.pop_warning_filter_scope();
     }
 }
 
@@ -564,7 +564,7 @@ fn find_counterexample_impl(
         } else {
             // An error case: no entry on the fringe but no
             if !context.env.has_errors() {
-                context.env.add_diag(ice!((
+                context.add_diag(ice!((
                     matrix.loc,
                     "Non-empty matrix with non errors but no type"
                 )));
@@ -593,7 +593,7 @@ fn find_counterexample_impl(
         if has_guards {
             diag.add_note("Match arms with guards are not considered for coverage.");
         }
-        context.env.add_diag(diag);
+        context.add_diag(diag);
         true
     } else {
         false
@@ -622,9 +622,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
         if !unused.is_empty() {
             let arms = unused.into_iter().map(PS::Value).collect::<Vec<_>>();
             let info = MissingMatchArmsInfo { arms };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 
@@ -635,9 +633,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let info = MissingMatchArmsInfo {
                 arms: vec![PS::Wildcard],
             };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 
@@ -657,7 +653,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             // If the matrix _is_ empty, we suggest adding an unpack.
             let is_positional = context.modules.struct_is_positional(&mident, &name);
             let Some(fields) = context.modules.struct_fields(&mident, &name) else {
-                context.env.add_diag(ice!((
+                context.add_diag(ice!((
                     loc,
                     "Tried to look up fields for this struct and found none"
                 )));
@@ -684,9 +680,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let info = MissingMatchArmsInfo {
                 arms: vec![suggestion],
             };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         } else {
             // If there's a default arm, no suggestion is necessary.
             if matrix.has_default_arm() {
@@ -722,7 +716,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
                     .modules
                     .enum_variant_fields(&mident, &name, &variant)
                 else {
-                    context.env.add_diag(ice!((
+                    context.add_diag(ice!((
                         loc,
                         "Tried to look up fields for this enum and found none"
                     )));
@@ -752,14 +746,12 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
                 arms.push(suggestion);
             }
             let info = MissingMatchArmsInfo { arms };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 
     let Some(ty) = matrix.tys.first() else {
-        context.env.add_diag(ice!((
+        context.add_diag(ice!((
             loc,
             "Pattern matrix with no types handed to IDE function"
         )));
@@ -778,7 +770,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     } else {
         if !context.env.has_errors() {
             // It's unclear how we got here, so report an ICE and suggest a wildcard.
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 loc,
                 format!(
                     "Found non-matchable type {} as match subject",
@@ -790,9 +782,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let info = MissingMatchArmsInfo {
                 arms: vec![PS::Wildcard],
             };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 }

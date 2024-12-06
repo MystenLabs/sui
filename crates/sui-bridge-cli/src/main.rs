@@ -7,6 +7,7 @@ use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::{Encoding, Hex};
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::str::from_utf8;
 use std::str::FromStr;
@@ -83,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
             let config = LoadedBridgeCliConfig::load(config).await?;
             let metrics = Arc::new(BridgeMetrics::new_for_testing());
             let sui_bridge_client =
-                SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url, metrics).await?;
+                SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url, metrics.clone()).await?;
 
             let (sui_key, sui_address, gas_object_ref) = config
                 .get_sui_account_info()
@@ -99,7 +100,11 @@ async fn main() -> anyhow::Result<()> {
                     .await
                     .expect("Failed to get bridge committee"),
             );
-            let agg = BridgeAuthorityAggregator::new(bridge_committee);
+            let agg = BridgeAuthorityAggregator::new(
+                bridge_committee,
+                metrics,
+                Arc::new(BTreeMap::new()),
+            );
 
             // Handle Sui Side
             if chain_id.is_sui_chain() {
@@ -411,7 +416,8 @@ async fn main() -> anyhow::Result<()> {
                 };
                 let url = url.to_string();
 
-                let name = names.get(&sui_address).unwrap();
+                let name = names.get(&sui_address).cloned().unwrap_or(url.clone());
+
                 if ping {
                     let client_clone = client.clone();
                     ping_tasks.push(client_clone.get(url.clone()).send());

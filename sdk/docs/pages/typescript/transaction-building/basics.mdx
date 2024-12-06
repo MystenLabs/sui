@@ -140,7 +140,7 @@ tx.transferObjects([coin], tx.pure.address('0xSomeSuiAddress'));
 tx.transferObjects([coin], tx.pure(bcs.Address.serialize('0xSomeSuiAddress')));
 ```
 
-To pass `vector` or `option` types, you you can pass use the corresponding methods on `tx.pure`, use
+To pass `vector` or `option` types, you can pass use the corresponding methods on `tx.pure`, use
 tx.pure as a function with a type argument, or serialize the value before passing it to tx.pure
 using the bcs sdk:
 
@@ -190,7 +190,7 @@ tx.moveCall({
 	arguments: [tx.object('0xSomeObject')],
 });
 
-// tx.object automaically converts the object ID to receiving transaction arguments if the moveCall expects it
+// tx.object automatically converts the object ID to receiving transaction arguments if the moveCall expects it
 tx.moveCall({
 	target: '0xSomeAddress::example::receive_object',
 	// 0xSomeAddress::example::receive_object expects a receiving argument and has a Move definition that looks like this:
@@ -215,6 +215,24 @@ tx.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
 
 // for receiving objects
 tx.object(Inputs.ReceivingRef({ digest, objectId, version }));
+```
+
+##### Object helpers
+
+There are a handful of specific object types that can be referenced through helper methods on
+tx.object:
+
+```ts
+tx.object.system(),
+tx.object.clock(),
+tx.object.random(),
+tx.object.denyList(),
+
+tx.object.option({
+	type: '0x123::example::Thing',
+	// value can be an Object ID, or any other object reference, or null for `none`
+	value: '0x456',
+}),
 ```
 
 #### Transaction results

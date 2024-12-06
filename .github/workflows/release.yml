@@ -142,7 +142,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          sudo apt install libpq-dev
+          sudo apt update && sudo apt install libpq-dev
 
       - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
@@ -161,7 +161,7 @@ jobs:
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_archive_exist == '' }}
@@ -201,7 +201,7 @@ jobs:
           choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # pin@4.4.3
         with:
           name: sui-binaries-${{ matrix.os }}
           if-no-files-found: error

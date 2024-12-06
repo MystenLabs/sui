@@ -4,13 +4,13 @@
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format_common::VERSION_MAX;
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 use once_cell::sync::Lazy;
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
@@ -88,7 +88,7 @@ pub struct VMProfilerConfig {
     pub use_long_function_name: bool,
 }
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 impl std::default::Default for VMProfilerConfig {
     fn default() -> Self {
         Self {
@@ -99,7 +99,7 @@ impl std::default::Default for VMProfilerConfig {
     }
 }
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 impl VMProfilerConfig {
     pub fn get_default_config_if_enabled() -> Option<VMProfilerConfig> {
         if *PROFILER_ENABLED {

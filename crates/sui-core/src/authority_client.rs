@@ -11,6 +11,7 @@ use std::time::Duration;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::crypto::NetworkPublicKey;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
 };
@@ -97,15 +98,32 @@ pub struct NetworkAuthorityClient {
 }
 
 impl NetworkAuthorityClient {
-    pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect(address)
+    pub async fn connect(
+        address: &Multiaddr,
+        tls_target: Option<NetworkPublicKey>,
+    ) -> anyhow::Result<Self> {
+        let tls_config = tls_target.map(|tls_target| {
+            sui_tls::create_rustls_client_config(
+                tls_target,
+                sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+                None,
+            )
+        });
+        let channel = mysten_network::client::connect(address, tls_config)
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
         Ok(Self::new(channel))
     }
 
-    pub fn connect_lazy(address: &Multiaddr) -> Self {
-        let client: SuiResult<_> = mysten_network::client::connect_lazy(address)
+    pub fn connect_lazy(address: &Multiaddr, tls_target: Option<NetworkPublicKey>) -> Self {
+        let tls_config = tls_target.map(|tls_target| {
+            sui_tls::create_rustls_client_config(
+                tls_target,
+                sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+                None,
+            )
+        });
+        let client: SuiResult<_> = mysten_network::client::connect_lazy(address, tls_config)
             .map(ValidatorClient::new)
             .map_err(|err| err.to_string().into());
         Self { client }
@@ -265,7 +283,16 @@ pub fn make_network_authority_clients_with_network_config(
     for (name, (_state, network_metadata)) in committee.validators() {
         let address = network_metadata.network_address.clone();
         let address = address.rewrite_udp_to_tcp();
-        let maybe_channel = network_config.connect_lazy(&address).map_err(|e| {
+        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
+        // let tls_config = network_metadata.network_public_key.as_ref().map(|key| {
+        //     sui_tls::create_rustls_client_config(
+        //         key.clone(),
+        //         sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        //         None,
+        //     )
+        // });
+        // TODO: Change below code to generate a SuiError if no valid TLS config is available.
+        let maybe_channel = network_config.connect_lazy(&address, None).map_err(|e| {
             tracing::error!(
                 address = %address,
                 name = %name,

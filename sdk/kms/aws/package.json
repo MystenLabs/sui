@@ -1,0 +1,6 @@
+{
+	"private": true,
+	"import": "../dist/esm/aws/index.js",
+	"main": "../dist/cjs/aws/index.js",
+	"sideEffects": false
+}
