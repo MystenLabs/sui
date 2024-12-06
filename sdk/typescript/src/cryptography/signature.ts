@@ -4,6 +4,7 @@
 import { fromBase64, toBase64 } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
+import { parseSerializedPasskeySignature } from '../keypairs/passkey/publickey.js';
 import type { MultiSigStruct } from '../multisig/publickey.js';
 import { parseSerializedZkLoginSignature } from '../zklogin/publickey.js';
 import type { PublicKey } from './publickey.js';
@@ -55,6 +56,8 @@ export function parseSerializedSignature(serializedSignature: string) {
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
 	switch (signatureScheme) {
+		case 'Passkey':
+			return parseSerializedPasskeySignature(serializedSignature);
 		case 'MultiSig':
 			const multisig: MultiSigStruct = bcs.MultiSig.parse(bytes.slice(1));
 			return {
