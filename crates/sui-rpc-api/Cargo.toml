@@ -48,3 +48,7 @@ bytes.workspace = true
 diffy = "0.3"
 prost-build = "0.13.3"
 tonic-build = "0.12.3"
+sui-sdk-types = { workspace = true, features = ["proptest"] }
+test-strategy = "0.4.0"
+proptest.workspace = true
+paste = "1.0.15"
