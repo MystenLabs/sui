@@ -1313,40 +1313,43 @@ proptest! {
     fn proptest_compare_ord_iters(old in arbitrary_map(), new in arbitrary_map()) {
         let result: Vec<_> = compare_ord_iters(old.iter(), new.iter()).collect();
 
+        // For each 'mark' make sure the key exists in the expected maps of old, new or both
         for mark in &result {
-                match mark {
-                    Mark::New(key, _) => {
-                        // New keys must only be in `new`
-                        prop_assert!(new.contains_key(key));
-                        prop_assert!(!old.contains_key(key));
-                    },
-                    Mark::Missing(key, _) => {
-                        // Missing keys must only be in `old`
-                        prop_assert!(old.contains_key(key));
-                        prop_assert!(!new.contains_key(key));
-                    },
-                    Mark::Existing(key, old_value, new_value) => {
-                        let old_expected = old.get(key).expect("key exists in old");
-                        let new_expected = new.get(key).expect("key exists in new");
-                        // Existing keys must be in both
-                        prop_assert!(old.contains_key(key));
-                        prop_assert!(new.contains_key(key));
-                        // Values must match the input maps
-                        prop_assert_eq!(Some(*old_value), Some(old_expected));
-                        prop_assert_eq!(Some(*new_value), Some(new_expected));
-                    },
-                }
+            match mark {
+                Mark::New(key, _) => {
+                    // New keys must only be in `new`
+                    prop_assert!(new.contains_key(key));
+                    prop_assert!(!old.contains_key(key));
+                },
+                Mark::Missing(key, _) => {
+                    // Missing keys must only be in `old`
+                    prop_assert!(old.contains_key(key));
+                    prop_assert!(!new.contains_key(key));
+                },
+                Mark::Existing(key, old_value, new_value) => {
+                    let old_expected = old.get(key).expect("key exists in old");
+                    let new_expected = new.get(key).expect("key exists in new");
+                    // Existing keys must be in both
+                    prop_assert!(old.contains_key(key));
+                    prop_assert!(new.contains_key(key));
+                    // Values must match the input maps
+                    prop_assert_eq!(Some(*old_value), Some(old_expected));
+                    prop_assert_eq!(Some(*new_value), Some(new_expected));
+                },
             }
+        }
 
-            let combined: BTreeSet<_> = old.keys().chain(new.keys()).collect();
+        // check that the combined keys of old and new are the same as the keys in result
+        // btreeset is used to dedup 'existing' keys
+        let combined: BTreeSet<_> = old.keys().chain(new.keys()).collect();
 
-            let result_keys: BTreeSet<_> = result
-                .iter()
-                .map(|mark| match mark {
-                    Mark::New(key, _) | Mark::Missing(key, _) | Mark::Existing(key, _, _) => *key,
-                })
-                .collect();
+        let result_keys: BTreeSet<_> = result
+            .iter()
+            .map(|mark| match mark {
+                Mark::New(key, _) | Mark::Missing(key, _) | Mark::Existing(key, _, _) => *key,
+            })
+            .collect();
 
-            prop_assert_eq!(result_keys, combined);
+        prop_assert_eq!(result_keys, combined);
     }
 }
