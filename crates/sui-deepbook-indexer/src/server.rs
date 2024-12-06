@@ -497,7 +497,7 @@ async fn summary(
         .collect();
 
     // Call the price_change_24h function to get price changes
-    let price_change_data = price_change_24h(Query(HashMap::new()), State(state.clone())).await?;
+    let price_change_data = price_change_24h(State(state.clone())).await?;
     let Json(price_change_map) = price_change_data;
 
     // Call the high_low_prices_24h function to get the highest and lowest prices
@@ -530,12 +530,17 @@ async fn summary(
             let (highest_price, lowest_price) =
                 high_low_map.get(pool_id).copied().unwrap_or((0.0, 0.0));
 
-            // Prepare the summary data
             let mut summary_data = HashMap::new();
             summary_data.insert(
                 "trading_pairs".to_string(),
                 Value::String(pool_name.clone()),
             );
+            let parts: Vec<&str> = pool_name.split('_').collect();
+            let base_currency = parts.get(0).unwrap_or(&"Unknown").to_string();
+            let quote_currency = parts.get(1).unwrap_or(&"Unknown").to_string();
+
+            summary_data.insert("base_currency".to_string(), Value::String(base_currency));
+            summary_data.insert("quote_currency".to_string(), Value::String(quote_currency));
             summary_data.insert("last_price".to_string(), Value::from(last_price));
             summary_data.insert("base_volume".to_string(), Value::from(base_volume));
             summary_data.insert("quote_volume".to_string(), Value::from(quote_volume));
@@ -595,7 +600,6 @@ async fn high_low_prices_24h(
 }
 
 async fn price_change_24h(
-    Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, f64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
