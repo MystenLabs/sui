@@ -140,3 +140,10 @@ public fun destroy_for_testing<T>(self: Balance<T>): u64 {
 public fun create_supply_for_testing<T>(): Supply<T> {
     Supply { value: 0 }
 }
+
+#[test_only]
+/// Destroy a `Supply` preventing any further minting and burning.
+public fun destroy_supply_for_testing<T>(self: Supply<T>): u64 {
+    let Supply { value } = self;
+    value
+}
