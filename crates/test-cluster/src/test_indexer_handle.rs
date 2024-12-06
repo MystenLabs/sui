@@ -9,7 +9,7 @@ use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
 use sui_json_rpc_api::ReadApiClient;
-use sui_pg_temp_db::TempDb;
+use sui_pg_db::temp::TempDb;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use tempfile::TempDir;
 use tokio::time::sleep;

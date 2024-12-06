@@ -31,6 +31,7 @@ sui-default-config.workspace = true
 sui-field-count.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-schema.workspace = true
+sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 sui-synthetic-ingestion = { workspace = true, optional = true }

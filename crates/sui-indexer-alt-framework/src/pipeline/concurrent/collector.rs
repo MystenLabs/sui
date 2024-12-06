@@ -221,12 +221,10 @@ fn move_ready_checkpoints<H: Handler>(
 #[cfg(test)]
 mod tests {
     use sui_field_count::FieldCount;
+    use sui_pg_db as db;
     use sui_types::full_checkpoint_content::CheckpointData;
 
-    use crate::{
-        db,
-        pipeline::{concurrent::max_chunk_rows, Processor},
-    };
+    use crate::pipeline::{concurrent::max_chunk_rows, Processor};
 
     use super::*;
 

@@ -11,18 +11,15 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
 use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::{
-    db,
-    pipeline::{sequential::Handler, Processor},
-};
-use sui_types::{
-    base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
-    object::Owner,
-};
-
+use sui_indexer_alt_framework::pipeline::{sequential::Handler, Processor};
 use sui_indexer_alt_schema::{
     objects::{StoredObjectUpdate, StoredSumCoinBalance},
     schema::sum_coin_balances,
+};
+use sui_pg_db as db;
+use sui_types::{
+    base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
+    object::Owner,
 };
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumCoinBalance::FIELD_COUNT;

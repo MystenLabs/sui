@@ -143,7 +143,7 @@ members = [
     "crates/sui-package-dump",
     "crates/sui-package-management",
     "crates/sui-package-resolver",
-    "crates/sui-pg-temp-db",
+    "crates/sui-pg-db",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
@@ -671,7 +671,7 @@ sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
-sui-pg-temp-db = { path = "crates/sui-pg-temp-db" }
+sui-pg-db = { path = "crates/sui-pg-db" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }

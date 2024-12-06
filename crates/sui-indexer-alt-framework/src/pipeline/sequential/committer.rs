@@ -4,6 +4,7 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
+use sui_pg_db::Db;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -13,7 +14,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
     pipeline::{logging::WatermarkLogger, Indexed, WARN_PENDING_WATERMARKS},
     watermarks::CommitterWatermark,
