@@ -256,7 +256,8 @@ where
             block_manager,
             // For streaming RPC, Core will be notified when consumer is available.
             // For non-streaming RPC, there is no way to know so default to true.
-            !N::Client::SUPPORT_STREAMING,
+            // When there is only one (this) authority, assume subscriber exists.
+            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -577,7 +578,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_small_committee(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-        #[values(2, 3)] num_authorities: usize,
+        #[values(1, 2, 3)] num_authorities: usize,
     ) {
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
@@ -646,7 +647,7 @@ mod tests {
         }
 
         // Stop authority 0.
-        let index = committee.to_authority_index(1).unwrap();
+        let index = committee.to_authority_index(0).unwrap();
         authorities.remove(index.value()).stop().await;
         sleep(Duration::from_secs(10)).await;
 

@@ -53,7 +53,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
 async fn test_mysticeti_manager() {
     // GIVEN
     let configs = ConfigBuilder::new_with_temp_dir()
-        .committee_size(1.try_into().unwrap())
+        .committee_size(4.try_into().unwrap())
         .build();
 
     let config = &configs.validator_configs()[0];

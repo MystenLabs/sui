@@ -710,6 +710,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         const MAX_RETRY_DELAY_STEP: Duration = Duration::from_millis(4_000);
 
         let context = self.context.clone();
+        let dag_state = self.dag_state.clone();
         let network_client = self.network_client.clone();
         let block_verifier = self.block_verifier.clone();
         let core_dispatcher = self.core_dispatcher.clone();
@@ -753,12 +754,17 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 };
 
                 // Get the highest of all the results. Retry until at least `f+1` results have been gathered.
-                let mut total_stake;
                 let mut highest_round;
                 let mut retries = 0;
                 let mut retry_delay_step = Duration::from_millis(500);
                 'main:loop {
-                    total_stake = 0;
+                    if context.committee.size() == 1 {
+                        highest_round = dag_state.read().get_last_proposed_block().round();
+                        info!("Only one node in the network, will not try fetching own last block from peers.");
+                        break 'main;
+                    }
+
+                    let mut total_stake = 0;
                     highest_round = 0;
 
                     // Ask all the other peers about our last block
@@ -811,16 +817,16 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     if context.committee.reached_validity(total_stake) {
                         info!("{} out of {} total stake returned acceptable results for our own last block with highest round {}, with {retries} retries.", total_stake, context.committee.total_stake(), highest_round);
                         break 'main;
-                    } else {
-                        retries += 1;
-                        context.metrics.node_metrics.sync_last_known_own_block_retries.inc();
-                        warn!("Not enough stake: {} out of {} total stake returned acceptable results for our own last block with highest round {}. Will now retry {retries}.", total_stake, context.committee.total_stake(), highest_round);
-
-                        sleep(retry_delay_step).await;
-
-                        retry_delay_step = Duration::from_secs_f64(retry_delay_step.as_secs_f64() * 1.5);
-                        retry_delay_step = retry_delay_step.min(MAX_RETRY_DELAY_STEP);
                     }
+
+                    retries += 1;
+                    context.metrics.node_metrics.sync_last_known_own_block_retries.inc();
+                    warn!("Not enough stake: {} out of {} total stake returned acceptable results for our own last block with highest round {}. Will now retry {retries}.", total_stake, context.committee.total_stake(), highest_round);
+
+                    sleep(retry_delay_step).await;
+
+                    retry_delay_step = Duration::from_secs_f64(retry_delay_step.as_secs_f64() * 1.5);
+                    retry_delay_step = retry_delay_step.min(MAX_RETRY_DELAY_STEP);
                 }
 
                 // Update the Core with the highest detected round
