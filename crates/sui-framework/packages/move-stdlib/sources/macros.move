@@ -163,7 +163,7 @@ public macro fun uq_from_quotient<$T, $U>(
     // Scale the numerator to have 64 fractional bits and the denominator to have 32 fractional
     // bits, so that the quotient will have 32 fractional bits.
     let scaled_numerator = numerator as $U << $t_bits;
-    let scaled_denominator = denominator as $U << $fractional_bits;
+    let scaled_denominator = denominator as $U << ($t_bits - $fractional_bits);
     let quotient = scaled_numerator / scaled_denominator;
 
     // The quotient can only be zero if the numerator is also zero.
@@ -175,8 +175,8 @@ public macro fun uq_from_quotient<$T, $U>(
     quotient as $T
 }
 
-public macro fun uq_from_int<$T, $U>($integer: $T, $t_bits: u8): $U {
-    ($integer as $U) << $t_bits
+public macro fun uq_from_int<$T, $U>($integer: $T, $fractional_bits: u8): $U {
+    ($integer as $U) << $fractional_bits
 }
 
 public macro fun uq_add<$T, $U>($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T {
@@ -207,7 +207,7 @@ public macro fun uq_int_mul<$T, $U>(
     // multiplication with $U types and keep the full $U bit product
     // to avoid losing accuracy.
     let unscaled_product = $val as $U * ($multiplier as $U);
-    // The unscaled product has fractional_bitsfractional bits (from the multiplier)
+    // The unscaled product has fractional_bits fractional bits (from the multiplier)
     // so rescale it by shifting away the low bits.
     let product = unscaled_product >> $fractional_bits;
     // Check whether the value is too large.
