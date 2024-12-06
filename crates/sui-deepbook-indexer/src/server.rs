@@ -529,6 +529,36 @@ async fn summary(
             let (highest_price, lowest_price) =
                 high_low_map.get(pool_id).copied().unwrap_or((0.0, 0.0));
 
+            // Fetch the highest bid and lowest ask from the orderbook
+            let orderbook_data = orderbook(
+                Path(pool_name.clone()),
+                Query(HashMap::from([("level".to_string(), "1".to_string())])),
+                State(state.clone()),
+            )
+            .await
+            .ok()
+            .map(|Json(data)| data);
+
+            let highest_bid = orderbook_data
+                .as_ref()
+                .and_then(|data| data.get("bids"))
+                .and_then(|bids| bids.as_array())
+                .and_then(|bids| bids.get(0))
+                .and_then(|bid| bid.as_array())
+                .and_then(|bid| bid.get(0))
+                .and_then(|price| price.as_str()?.parse::<f64>().ok())
+                .unwrap_or(0.0);
+
+            let lowest_ask = orderbook_data
+                .as_ref()
+                .and_then(|data| data.get("asks"))
+                .and_then(|asks| asks.as_array())
+                .and_then(|asks| asks.get(0))
+                .and_then(|ask| ask.as_array())
+                .and_then(|ask| ask.get(0))
+                .and_then(|price| price.as_str()?.parse::<f64>().ok())
+                .unwrap_or(0.0);
+
             let mut summary_data = HashMap::new();
             summary_data.insert(
                 "trading_pairs".to_string(),
@@ -549,6 +579,8 @@ async fn summary(
             );
             summary_data.insert("highest_price_24h".to_string(), Value::from(highest_price));
             summary_data.insert("lowest_price_24h".to_string(), Value::from(lowest_price));
+            summary_data.insert("highest_bid".to_string(), Value::from(highest_bid));
+            summary_data.insert("lowest_ask".to_string(), Value::from(lowest_ask));
 
             response.push(summary_data);
         }
