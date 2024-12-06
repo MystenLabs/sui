@@ -1614,37 +1614,6 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
-  sdk/kms:
-    dependencies:
-      '@mysten/sui':
-        specifier: workspace:*
-        version: link:../typescript
-      '@noble/curves':
-        specifier: ^1.4.2
-        version: 1.6.0
-      '@noble/hashes':
-        specifier: ^1.4.0
-        version: 1.5.0
-      asn1-ts:
-        specifier: ^8.0.2
-        version: 8.0.2
-      aws4fetch:
-        specifier: ^1.0.20
-        version: 1.0.20
-    devDependencies:
-      '@mysten/build-scripts':
-        specifier: workspace:*
-        version: link:../build-scripts
-      '@types/node':
-        specifier: ^20.14.10
-        version: 20.14.10
-      typescript:
-        specifier: ^5.5.3
-        version: 5.5.3
-      vitest:
-        specifier: ^2.0.1
-        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
-
   sdk/ledgerjs-hw-app-sui:
     dependencies:
       '@ledgerhq/hw-transport':
@@ -1693,6 +1662,37 @@ importers:
       wasm-pack:
         specifier: ^0.13.0
         version: 0.13.0
+
+  sdk/signers:
+    dependencies:
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../typescript
+      '@noble/curves':
+        specifier: ^1.4.2
+        version: 1.6.0
+      '@noble/hashes':
+        specifier: ^1.4.0
+        version: 1.5.0
+      asn1-ts:
+        specifier: ^8.0.2
+        version: 8.0.2
+    devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.14.10
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.4.5
+      typescript:
+        specifier: ^5.5.3
+        version: 5.5.3
+      vitest:
+        specifier: ^2.0.1
+        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
 
   sdk/suins-toolkit:
     dependencies:
@@ -7882,9 +7882,6 @@ packages:
   aws4@1.12.0:
     resolution: {integrity: sha512-NmWvPnx0F1SfrQbYwOi7OeaNGokp9XhzNioJ/CSBs8Qa4vxug81mhJEAVZwxXuBmYB5KDRfMq/F3RR0BIU7sWg==}
 
-  aws4fetch@1.0.20:
-    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
-
   axe-core@4.9.1:
     resolution: {integrity: sha512-QbUdXJVTpvUTHU7871ppZkdOLBeGUKBQWHkHrvN2V9IQWGMt61zf3B45BtzjxEJzYuj0JBjBZP/hmYS/R9pmAw==}
     engines: {node: '>=4'}
@@ -9187,8 +9184,8 @@ packages:
     peerDependencies:
       webpack: ^4 || ^5
 
-  dotenv@16.4.1:
-    resolution: {integrity: sha512-CjA3y+Dr3FyFDOAMnxZEGtnW9KBR2M0JvvUtXNW+dYJL5ROWxP9DUHCwgFqpMk0OXCc0ljhaNTr2w/kutYIcHQ==}
+  dotenv@16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
     engines: {node: '>=12'}
 
   dotenv@7.0.0:
@@ -18003,7 +18000,7 @@ snapshots:
       '@whatwg-node/fetch': 0.9.16
       chalk: 4.1.2
       debug: 4.3.7(supports-color@8.1.1)
-      dotenv: 16.4.1
+      dotenv: 16.4.5
       graphql: 16.9.0
       graphql-request: 6.1.0(graphql@16.9.0)
       http-proxy-agent: 7.0.0
@@ -23315,8 +23312,6 @@ snapshots:
 
   aws4@1.12.0: {}
 
-  aws4fetch@1.0.20: {}
-
   axe-core@4.9.1: {}
 
   axios@0.26.1:
@@ -24768,7 +24763,7 @@ snapshots:
       dotenv-defaults: 2.0.2
       webpack: 5.92.1(@swc/core@1.6.13(@swc/helpers@0.5.5))(webpack-cli@5.1.4(webpack@5.92.1))
 
-  dotenv@16.4.1: {}
+  dotenv@16.4.5: {}
 
   dotenv@7.0.0: {}
 
@@ -27407,7 +27402,7 @@ snapshots:
   lazy-universal-dotenv@4.0.0:
     dependencies:
       app-root-dir: 1.0.2
-      dotenv: 16.4.1
+      dotenv: 16.4.5
       dotenv-expand: 10.0.0
 
   lcid@3.1.1:
