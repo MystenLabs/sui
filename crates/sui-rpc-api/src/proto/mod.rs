@@ -1,6 +1,9 @@
 pub mod node;
 pub mod types;
 
+#[cfg(test)]
+mod proptests;
+
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 #[derive(Debug)]
