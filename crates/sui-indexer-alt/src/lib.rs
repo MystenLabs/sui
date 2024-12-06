@@ -143,6 +143,7 @@ pub async fn start_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
+                            checkpoint_lag: None,
                         }),
                     )
                     .await?
@@ -188,6 +189,7 @@ pub async fn start_indexer(
                                     .unwrap_or_default()
                                     .finish(committer.clone()),
                                 pruner: Some(pruner_config),
+                                checkpoint_lag: None,
                             },
                         )
                         .await?;

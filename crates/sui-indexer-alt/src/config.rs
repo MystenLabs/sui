@@ -104,6 +104,7 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     committer: Option<CommitterLayer>,
     pruner: Option<PrunerLayer>,
+    checkpoint_lag: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -245,6 +246,7 @@ impl ConcurrentLayer {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)),
             },
+            checkpoint_lag: self.checkpoint_lag.or(base.checkpoint_lag),
         }
     }
 }
@@ -373,6 +375,7 @@ impl Merge for ConcurrentLayer {
         ConcurrentLayer {
             committer: self.committer.merge(other.committer),
             pruner: self.pruner.merge(other.pruner),
+            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
             extra: Default::default(),
         }
     }
@@ -503,6 +506,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
+            checkpoint_lag: config.checkpoint_lag,
             extra: Default::default(),
         }
     }
@@ -753,6 +757,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -763,6 +768,7 @@ mod tests {
                 watermark_interval_ms: 500,
             },
             pruner: Some(PrunerConfig::default()),
+            checkpoint_lag: None,
         };
 
         assert_matches!(
@@ -774,6 +780,7 @@ mod tests {
                     watermark_interval_ms: 500,
                 },
                 pruner: None,
+                checkpoint_lag: None,
             },
         );
     }
@@ -783,6 +790,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -793,6 +801,7 @@ mod tests {
                 watermark_interval_ms: 500,
             },
             pruner: None,
+            checkpoint_lag: None,
         };
 
         assert_matches!(
@@ -804,6 +813,7 @@ mod tests {
                     watermark_interval_ms: 500,
                 },
                 pruner: None,
+                checkpoint_lag: None,
             },
         );
     }
@@ -816,6 +826,7 @@ mod tests {
                 interval_ms: Some(1000),
                 ..Default::default()
             }),
+            checkpoint_lag: Some(200),
             extra: Default::default(),
         };
 
@@ -831,6 +842,7 @@ mod tests {
                 retention: 300,
                 max_chunk_size: 400,
             }),
+            checkpoint_lag: None,
         };
 
         assert_matches!(
@@ -847,6 +859,7 @@ mod tests {
                     retention: 300,
                     max_chunk_size: 400,
                 }),
+                checkpoint_lag: Some(200),
             },
         );
     }
