@@ -28,15 +28,27 @@ enum BoolOp {
     Or,
 }
 
+/// See `simplify` for how these values are used.
+#[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 enum CmpOp {
-    Eq,
-    Neq,
-    Lt,
-    Gt,
-    Le,
-    Ge,
+    Lt = LT,
+    Eq = EQ,
+    Le = LE,
+    Gt = GT,
+    Neq = NEQ,
+    Ge = GE,
 }
+
+// See `simplify` for how these values are used.
+const FALSE: u8 = 0b000;
+const LT: u8 = 0b001;
+const EQ: u8 = 0b010;
+const LE: u8 = 0b011;
+const GT: u8 = 0b100;
+const NEQ: u8 = 0b101;
+const GE: u8 = 0b110;
+const TRUE: u8 = 0b111;
 
 simple_visitor!(
     CombinableComparisons,
@@ -56,10 +68,7 @@ simple_visitor!(
         else {
             return false;
         };
-        let simplification = match outer {
-            BoolOp::And => simplify_and(inner_l, inner_r),
-            BoolOp::Or => simplify_or(inner_l, inner_r),
-        };
+        let simplification = simplify(outer, inner_l, inner_r);
         let msg = match simplification {
             Simplification::Reducible(inner_op) => {
                 format!("simplifies to the operation '{}'", inner_op)
@@ -76,104 +85,41 @@ simple_visitor!(
     }
 );
 
-fn simplify_and(op1: CmpOp, op2: CmpOp) -> Simplification {
-    use CmpOp as C;
-    Simplification::Reducible(match (op1, op2) {
-        // same operation
-        (C::Eq, C::Eq)
-        | (C::Neq, C::Neq)
-        | (C::Ge, C::Ge)
-        | (C::Le, C::Le)
-        | (C::Lt, C::Lt)
-        | (C::Gt, C::Gt) => op1,
-
-        // contradiction
-        (C::Lt, C::Gt)
-        | (C::Gt, C::Lt)
-        | (C::Lt, C::Ge)
-        | (C::Ge, C::Lt)
-        | (C::Le, C::Gt)
-        | (C::Gt, C::Le)
-        | (C::Eq, C::Lt)
-        | (C::Lt, C::Eq)
-        | (C::Eq, C::Gt)
-        | (C::Gt, C::Eq)
-        | (C::Neq, C::Eq)
-        | (C::Eq, C::Neq) => return Simplification::AlwaysFalse,
-
-        // ==
-        (C::Le, C::Ge)
-        | (C::Ge, C::Le)
-        | (C::Ge, C::Eq)
-        | (C::Eq, C::Ge)
-        | (C::Le, C::Eq)
-        | (C::Eq, C::Le) => C::Eq,
-
-        // <
-        (C::Lt, C::Le)
-        | (C::Le, C::Lt)
-        | (C::Lt, C::Neq)
-        | (C::Neq, C::Lt)
-        | (C::Le, C::Neq)
-        | (C::Neq, C::Le) => C::Lt,
-        // >
-        (C::Gt, C::Ge)
-        | (C::Ge, C::Gt)
-        | (C::Gt, C::Neq)
-        | (C::Neq, C::Gt)
-        | (C::Ge, C::Neq)
-        | (C::Neq, C::Ge) => C::Gt,
-    })
-}
-
-fn simplify_or(op1: CmpOp, op2: CmpOp) -> Simplification {
-    use CmpOp as C;
-    Simplification::Reducible(match (op1, op2) {
-        // same operation
-        (C::Eq, C::Eq)
-        | (C::Neq, C::Neq)
-        | (C::Ge, C::Ge)
-        | (C::Le, C::Le)
-        | (C::Lt, C::Lt)
-        | (C::Gt, C::Gt) => op1,
-
-        // tautology
-        (C::Neq, C::Le)
-        | (C::Neq, C::Ge)
-        | (C::Le, C::Neq)
-        | (C::Ge, C::Neq)
-        | (C::Gt, C::Le)
-        | (C::Le, C::Gt)
-        | (C::Lt, C::Ge)
-        | (C::Ge, C::Lt)
-        | (C::Ge, C::Le)
-        | (C::Le, C::Ge)
-        | (C::Neq, C::Eq)
-        | (C::Eq, C::Neq) => return Simplification::AlwaysTrue,
-
-        // !=
-        (C::Neq, C::Lt)
-        | (C::Neq, C::Gt)
-        | (C::Lt, C::Neq)
-        | (C::Gt, C::Neq)
-        | (C::Lt, C::Gt)
-        | (C::Gt, C::Lt) => C::Neq,
-
-        // <=
-        (C::Lt, C::Le)
-        | (C::Le, C::Lt)
-        | (C::Eq, C::Lt)
-        | (C::Lt, C::Eq)
-        | (C::Eq, C::Le)
-        | (C::Le, C::Eq) => C::Le,
-        // >=
-        (C::Gt, C::Ge)
-        | (C::Ge, C::Gt)
-        | (C::Eq, C::Gt)
-        | (C::Eq, C::Ge)
-        | (C::Gt, C::Eq)
-        | (C::Ge, C::Eq) => C::Ge,
-    })
+/// Each binary operator is represented as a 3-bit number where each bit represents a range of
+/// possible values. With three bits, 0bLEG we are "drawing" an interval of ranges. The comparison
+/// `true` if the value is within the interval. so for `x cmp y``
+/// ```text
+/// G E L
+///     ^ this bit represents x < y (less than the equal bit)
+///   ^ this bit represents x == y (the equal bit)
+/// ^ this bit represents x > y (greater than the equal bit)
+/// ```
+/// We then take the disjunction of intervals by the bits--creating a bitset.
+/// So for example, `>=` is 0b110 since the interval is either greater OR equal.
+/// And for `!=` is 0b101 since the interval is either not equal OR less than. We are only dealing
+/// with primitives so we know the values are well ordered.
+/// From there we can then bitwise-or the bits (set union) when the outer operation is `||` and
+/// bitwise-and the bits (set intersection) when the outer operation is `&&` to get the final
+/// "simplified" operation. If all bits are set, then the operation is always true. If no bits are
+/// set, then the operation is always false.
+fn simplify(outer: BoolOp, inner_l: CmpOp, inner_r: CmpOp) -> Simplification {
+    let lbits = inner_l as u8;
+    let rbits = inner_r as u8;
+    let simplification = match outer {
+        BoolOp::And => lbits & rbits,
+        BoolOp::Or => lbits | rbits,
+    };
+    match simplification {
+        FALSE => Simplification::AlwaysFalse,
+        LT => Simplification::Reducible(CmpOp::Lt),
+        EQ => Simplification::Reducible(CmpOp::Eq),
+        LE => Simplification::Reducible(CmpOp::Le),
+        GT => Simplification::Reducible(CmpOp::Gt),
+        NEQ => Simplification::Reducible(CmpOp::Neq),
+        GE => Simplification::Reducible(CmpOp::Ge),
+        TRUE => Simplification::AlwaysTrue,
+        _ => unreachable!(),
+    }
 }
 
 fn bool_op(sp!(_, bop_): &BinOp) -> Option<BoolOp> {
