@@ -6,11 +6,13 @@
 //! This rule focuses on simplifying expressions involving `==`, `<`, `>`, and `!=` operators to improve code readability.
 
 use crate::{
-    cfgir::visitor::{same_value_exp, simple_visitor},
     diag,
-    hlir::ast::{self as H},
     linters::StyleCodes,
     parser::ast::{BinOp, BinOp_},
+    typing::{
+        ast::{self as T},
+        visitor::{same_value_exp, simple_visitor},
+    },
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -19,19 +21,6 @@ enum Simplification {
     AlwaysTrue,
     AlwaysFalse,
 }
-
-// impl Simplification {
-//     fn message(&self) -> &'static str {
-//         match self {
-//             Simplification::SameOp
-//             Simplification::Contradiction => {
-//                 "This is always contradictory and can be simplified to false"
-//             }
-//             Simplification::UseComparison => "Consider simplifying to `<=` or `>=` respectively.",
-//             Simplification::UseEquality => "Consider simplifying to `==`.",
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, Copy)]
 enum BoolOp {
@@ -51,16 +40,16 @@ enum CmpOp {
 
 simple_visitor!(
     CombinableComparisons,
-    fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
-        use H::UnannotatedExp_ as E;
-        let E::BinopExp(outer_l, outer_bop, outer_r) = &exp.exp.value else {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
+        use T::UnannotatedExp_ as E;
+        let E::BinopExp(outer_l, outer_bop, _, outer_r) = &exp.exp.value else {
             return false;
         };
         // TODO handle negation
-        let E::BinopExp(l1, op_l, r1) = &outer_l.exp.value else {
+        let E::BinopExp(l1, op_l, _, r1) = &outer_l.exp.value else {
             return false;
         };
-        let E::BinopExp(l2, op_r, r2) = &outer_r.exp.value else {
+        let E::BinopExp(l2, op_r, _, r2) = &outer_r.exp.value else {
             return false;
         };
         let Some((outer, inner_l, inner_r)) = binop_case(outer_bop, l1, op_l, r1, l2, op_r, r2)
@@ -253,12 +242,12 @@ fn flip(op: CmpOp) -> CmpOp {
 
 fn binop_case(
     outer_bop: &BinOp,
-    l1: &H::Exp,
+    l1: &T::Exp,
     op_l: &BinOp,
-    r1: &H::Exp,
-    l2: &H::Exp,
+    r1: &T::Exp,
+    l2: &T::Exp,
     op_r: &BinOp,
-    r2: &H::Exp,
+    r2: &T::Exp,
 ) -> Option<(BoolOp, CmpOp, CmpOp)> {
     let outer = bool_op(outer_bop)?;
     let inner_l = cmp_op(op_l)?;
@@ -268,12 +257,12 @@ fn binop_case(
 }
 
 fn operand_case(
-    l1: &H::Exp,
+    l1: &T::Exp,
     op1: CmpOp,
-    r1: &H::Exp,
-    l2: &H::Exp,
+    r1: &T::Exp,
+    l2: &T::Exp,
     op2: CmpOp,
-    r2: &H::Exp,
+    r2: &T::Exp,
 ) -> Option<(CmpOp, CmpOp)> {
     if same_value_exp(l1, l2) && same_value_exp(r1, r2) {
         Some((op1, op2))
