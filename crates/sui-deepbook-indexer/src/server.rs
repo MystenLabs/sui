@@ -564,8 +564,8 @@ async fn summary(
                 "trading_pairs".to_string(),
                 Value::String(pool_name.clone()),
             );
-            let parts: Vec<&str> = pool_name.split('_').collect();
-            let base_currency = parts.get(0).unwrap_or(&"Unknown").to_string();
+            let mut parts: Vec<&str> = pool_name.split('_').collect();
+            let base_currency = parts.first_mut().unwrap_or(&mut "Unknown").to_string();
             let quote_currency = parts.get(1).unwrap_or(&"Unknown").to_string();
 
             summary_data.insert("base_currency".to_string(), Value::String(base_currency));
