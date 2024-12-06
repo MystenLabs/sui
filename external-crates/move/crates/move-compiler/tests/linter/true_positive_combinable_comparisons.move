@@ -1,3 +1,4 @@
+// tests lints against combinable comparisons that can be simplified to a single comparison.
 module a::m {
     fun t(x: u64, y: u64) {
         x == y && x != y;
