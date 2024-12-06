@@ -446,6 +446,8 @@ impl BlockManager {
             return all_accepted_blocks;
         }
 
+        debug!("Moved gc round to {gc_round}");
+
         while let Some((block_ref, _children_refs)) = self.missing_ancestors.first_key_value() {
             // If the first block in the missing ancestors is higher than the gc_round, then we can't unsuspend it yet. So we just put it back
             // and we terminate the iteration as any next entry will be of equal or higher round anyways.
