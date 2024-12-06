@@ -86,7 +86,7 @@ simple_visitor!(
 );
 
 /// Each binary operator is represented as a 3-bit number where each bit represents a range of
-/// possible values. With three bits, 0bLEG we are "drawing" an interval of ranges. The comparison
+/// possible values. With three bits, 0bGEL we are "drawing" an interval of ranges. The comparison
 /// `true` if the value is within the interval. so for `x cmp y``
 /// ```text
 /// G E L
