@@ -949,6 +949,10 @@ pub fn same_value_exp(e1: &H::Exp, e2: &H::Exp) -> bool {
 pub fn same_value_exp_(e1: &H::UnannotatedExp_, e2: &H::UnannotatedExp_) -> bool {
     use H::UnannotatedExp_ as E;
     match (e1, e2) {
+        (E::Dereference(e) | E::Freeze(e), other) | (other, E::Dereference(e) | E::Freeze(e)) => {
+            same_value_exp_(&e.exp.value, other)
+        }
+
         (E::Value(v1), E::Value(v2)) => v1 == v2,
         (E::Unit { .. }, E::Unit { .. }) => true,
         (E::Constant(c1), E::Constant(c2)) => c1 == c2,
@@ -965,9 +969,6 @@ pub fn same_value_exp_(e1: &H::UnannotatedExp_, e2: &H::UnannotatedExp_) -> bool
                     .all(|(e1, e2)| same_value_exp(e1, e2))
         }
 
-        (E::Dereference(e) | E::Freeze(e), other) | (other, E::Dereference(e) | E::Freeze(e)) => {
-            same_value_exp_(&e.exp.value, other)
-        }
         (E::UnaryExp(op1, e1), E::UnaryExp(op2, e2)) => op1 == op2 && same_value_exp(e1, e2),
         (E::BinopExp(l1, op1, r1), E::BinopExp(l2, op2, r2)) => {
             op1 == op2 && same_value_exp(l1, l2) && same_value_exp(r1, r2)
