@@ -1314,21 +1314,23 @@ proptest! {
                 match mark {
                     Mark::New(key, _) => {
                         // New keys must only be in `new`
-                        assert!(new.contains_key(key));
-                        assert!(!old.contains_key(key));
+                        prop_assert!(new.contains_key(key));
+                        prop_assert!(!old.contains_key(key));
                     },
                     Mark::Missing(key, _) => {
                         // Missing keys must only be in `old`
-                        assert!(old.contains_key(key));
-                        assert!(!new.contains_key(key));
+                        prop_assert!(old.contains_key(key));
+                        prop_assert!(!new.contains_key(key));
                     },
                     Mark::Existing(key, old_value, new_value) => {
+                        let old_expected = old.get(key).expect("key exists in old");
+                        let new_expected = new.get(key).expect("key exists in new");
                         // Existing keys must be in both
-                        assert!(old.contains_key(key));
-                        assert!(new.contains_key(key));
+                        prop_assert!(old.contains_key(key));
+                        prop_assert!(new.contains_key(key));
                         // Values must match the input maps
-                        assert_eq!(Some(old_value), old.get(key).as_ref());
-                        assert_eq!(Some(new_value), new.get(key).as_ref());
+                        prop_assert_eq!(Some(*old_value), Some(old_expected));
+                        prop_assert_eq!(Some(*new_value), Some(new_expected));
                     },
                 }
             }
@@ -1351,6 +1353,6 @@ proptest! {
                 Mark::Existing(key, _, _) => *key,
             }).collect();
             result_keys.sort();
-            assert_eq!(result_keys, combined);
+            prop_assert_eq!(result_keys, combined);
     }
 }
