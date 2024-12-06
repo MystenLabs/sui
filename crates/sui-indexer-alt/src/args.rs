@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use crate::benchmark::BenchmarkArgs;
 use crate::IndexerArgs;
 use clap::Subcommand;
-use sui_indexer_alt_framework::{db::DbArgs, ingestion::ClientArgs};
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_pg_db::DbArgs;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
