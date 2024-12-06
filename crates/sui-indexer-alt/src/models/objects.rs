@@ -111,7 +111,9 @@ pub struct StoredWalObjType {
 
 /// StoredObjectUpdate is a wrapper type, we want to count the fields of the inner type.
 impl<T: FieldCount> FieldCount for StoredObjectUpdate<T> {
-    const FIELD_COUNT: usize = T::FIELD_COUNT;
+    // Add one here for cp_sequence_number field, because StoredObjectUpdate is used for
+    // wal_* handlers, where the actual type to commit has an additional field besides fields of T.
+    const FIELD_COUNT: usize = T::FIELD_COUNT.saturating_add(1);
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
