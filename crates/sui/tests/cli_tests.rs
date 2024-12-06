@@ -1648,9 +1648,13 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     .execute(context)
     .await;
 
-    // publishing with a dependency that is not referenced in code is OK, as the dependency list
-    // only contains the dependencies that are actually referenced in the code
-    assert!(result.is_ok());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("On-chain version of dependency Nonexistent::nonexistent was not found"),
+        "{}",
+        err
+    );
+
     Ok(())
 }
 
