@@ -201,6 +201,7 @@ const MAX_PROTOCOL_VERSION: u64 = 70;
 // Version 70: Enable smart ancestor selection in testnet.
 //             Enable probing for accepted rounds in round prober in testnet
 //             Add new gas model version to update charging of native functions.
+//             Add std::uq64_64 module to Move stdlib.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
