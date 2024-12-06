@@ -467,11 +467,13 @@ where
     I: Iterator<Item = (&'a K, &'a V)> + 'a,
     J: Iterator<Item = (&'a K, &'a V)> + 'a,
 {
+    // Peeks are needed to prevent advancing the iterators when we don't need to
     let mut old = old.peekable();
     let mut new = new.peekable();
     std::iter::from_fn(move || match (old.peek(), new.peek()) {
         (Some((old_key, _old_value)), Some((new_key, _new_value))) => match old_key.cmp(new_key) {
             std::cmp::Ordering::Equal => {
+                // Unwrap is safe because we know there is a next element since we just peeked it.
                 let (old_key, old_value) = old.next().unwrap();
                 let (_, new_value) = new.next().unwrap();
                 Some(Mark::Existing(old_key, old_value, new_value))
