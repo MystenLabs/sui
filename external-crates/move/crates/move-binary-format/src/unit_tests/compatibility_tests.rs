@@ -8,7 +8,10 @@ use crate::{
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use proptest::prelude::*;
-use std::{collections::BTreeMap, convert::TryFrom};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+};
 
 // A way to permute pools, and index into them still.
 pub struct Permutation {
@@ -1335,24 +1338,15 @@ proptest! {
                 }
             }
 
-            // Check that all keys in `old` and `new` are represented in the result
-            let mut old_keys: Vec<_> = old.keys().collect();
-            let mut new_keys: Vec<_> = new.keys().collect();
-            old_keys.sort();
-            new_keys.sort();
+            let combined: BTreeSet<_> = old.keys().chain(new.keys()).collect();
 
-            let mut combined = old_keys.clone();
-            combined.extend(new_keys.clone());
-            combined.sort();
-            // dedup since "existing" will have duplicates across old and new
-            combined.dedup();
+            let result_keys: BTreeSet<_> = result
+                .iter()
+                .map(|mark| match mark {
+                    Mark::New(key, _) | Mark::Missing(key, _) | Mark::Existing(key, _, _) => *key,
+                })
+                .collect();
 
-            let mut result_keys: Vec<_> = result.iter().map(|mark| match mark {
-                Mark::New(key, _) => *key,
-                Mark::Missing(key, _) => *key,
-                Mark::Existing(key, _, _) => *key,
-            }).collect();
-            result_keys.sort();
             prop_assert_eq!(result_keys, combined);
     }
 }
