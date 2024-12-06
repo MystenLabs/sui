@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use sui_pg_db::Db;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -16,7 +17,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
     pipeline::{
         CommitterConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,

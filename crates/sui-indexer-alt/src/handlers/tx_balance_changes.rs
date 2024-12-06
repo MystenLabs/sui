@@ -5,20 +5,17 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    db,
-    pipeline::{concurrent::Handler, Processor},
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_schema::{
+    schema::tx_balance_changes,
+    transactions::{BalanceChange, StoredTxBalanceChange},
 };
+use sui_pg_db as db;
 use sui_types::{
     coin::Coin,
     effects::TransactionEffectsAPI,
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     gas_coin::GAS,
-};
-
-use sui_indexer_alt_schema::{
-    schema::tx_balance_changes,
-    transactions::{BalanceChange, StoredTxBalanceChange},
 };
 
 pub(crate) struct TxBalanceChanges;

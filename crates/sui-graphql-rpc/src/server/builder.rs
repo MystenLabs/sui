@@ -692,7 +692,7 @@ pub mod tests {
     use serde_json::json;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_pg_temp_db::get_available_port;
+    use sui_pg_db::temp::get_available_port;
     use sui_sdk::SuiClient;
     use sui_types::digests::get_mainnet_chain_identifier;
     use sui_types::transaction::TransactionData;
