@@ -238,7 +238,7 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
     published_at: Result<ObjectID, PublishedAtError>,
-    dependencies: PackageDependencies,
+    mut dependency_ids: PackageDependencies,
 ) -> SuiResult<CompiledPackage> {
     // collect bytecode dependencies as these are not returned as part of core
     // `CompiledPackage`
@@ -312,13 +312,12 @@ pub fn build_from_resolution_graph(
             (address != AccountAddress::ZERO).then_some(address)
         })
         .collect();
-    let mut dependencies = dependencies.clone();
-    dependencies.published.retain(|_, id| deps.contains(id));
+    dependency_ids.published.retain(|_, id| deps.contains(id));
 
     Ok(CompiledPackage {
         package,
         published_at,
-        dependency_ids: dependencies,
+        dependency_ids,
         bytecode_deps,
     })
 }
