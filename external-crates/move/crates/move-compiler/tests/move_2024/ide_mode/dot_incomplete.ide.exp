@@ -67,3 +67,33 @@ error[E01002]: unexpected token
    │         Unexpected 'let'
    │         Expected an identifier or a decimal number
 
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:23
+   │
+17 │         let _tmp4 = _s.
+   │                       ^ Possible dot names: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:18:9
+   │
+18 │         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:18:23
+   │
+18 │         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+   │                       ^ Possible dot names: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:19:5
+   │
+19 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number
+

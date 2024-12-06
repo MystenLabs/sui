@@ -1503,6 +1503,41 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
     ))
 }
 
+// Checks if parsing of a sequence should continue after encountering an error.
+fn should_continue_sequence_after_error(context: &mut Context, diag: Diagnostic) -> bool {
+    context.add_diag(diag);
+    // This is intended to handle a rather specific case when a valid sequence item is on the following line
+    // from the parsing error. This is particularly useful for the IDE use case when a programmer starts
+    // typing an incomplete (and unparsable) line right before the line containing a valid expression.
+    // In this case, we would like to still report the error but try to avoid dropping the valid expression
+    // itself, particularly as it might lead to unnecessary cascading errors to appear if this expression
+    // is a variable declaration as in the example below where we want to avoid `_tmp1` being undefined
+    // in the following lines.
+    //
+    // let v =
+    // let _tmp1 = 42;
+    // let _tmp2 = _tmp1 * param;
+    // let _tmp3 = _tmp1 + param;
+
+    if context.at_stop_set() {
+        // don't continue if we are at the stop set
+        return false;
+    }
+    let tok = context.tokens.peek();
+    if context.tokens.last_token_preceded_by_eol()
+        && (SEQ_ITEM_START_SET.contains(tok, context.tokens.content())
+            //  ANY identfier can start a sequence item
+            || tok == Tok::Identifier
+            || tok == Tok::SyntaxIdentifier
+            || tok == Tok::RestrictedIdentifier)
+    {
+        // if the last token was preceded by EOL, and it's in the start set for sequence items, continue
+        // parsing the sequence
+        return true;
+    }
+    false
+}
+
 // Parse a sequence:
 //      Sequence = <UseDecl>* (<SequenceItem> ";")* <Exp>? "}"
 //
@@ -1546,6 +1581,9 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 seq.push(item);
                 last_semicolon_loc = Some(current_token_loc(context.tokens));
                 if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
+                    if should_continue_sequence_after_error(context, diag.as_ref().clone()) {
+                        continue;
+                    }
                     advance_separated_items_error(
                         context,
                         Tok::LBrace,
@@ -1560,10 +1598,13 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 }
             }
             Err(diag) => {
+                context.stop_set.remove(Tok::Semicolon);
+                if should_continue_sequence_after_error(context, diag.as_ref().clone()) {
+                    continue;
+                }
                 let err_exp = sp(context.tokens.current_token_loc(), Exp_::UnresolvedError);
                 let err_seq_item = SequenceItem_::Seq(Box::new(err_exp));
                 seq.push(sp(context.tokens.current_token_loc(), err_seq_item));
-                context.stop_set.remove(Tok::Semicolon);
                 advance_separated_items_error(
                     context,
                     Tok::LBrace,
