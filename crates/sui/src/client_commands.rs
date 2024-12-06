@@ -1023,6 +1023,7 @@ impl SuiClientCommands {
                     )?;
                 }
                 let compiled_package = compile_result?;
+                eprintln!("deps {:?}", compiled_package.dependency_ids);
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
                 let dependencies = compiled_package.dependency_ids;
