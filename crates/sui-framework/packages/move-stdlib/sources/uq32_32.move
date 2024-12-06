@@ -26,6 +26,11 @@ const EOverflow: vector<u8> = b"Overflow from an arithmetic operation";
 #[error]
 const EDivisionByZero: vector<u8> = b"Division by zero";
 
+/// The total number of bits in the fixed-point number. Used in `macro` invocations.
+const TOTAL_BITS: u8 = 64;
+/// The number of fractional bits in the fixed-point number. Used in `macro` invocations.
+const FRACTIONAL_BITS: u8 = 32;
+
 /// A fixed-point numeric type with 32 integer bits and 32 fractional bits, represented by an
 /// underlying 64 bit value. This is a binary representation, so decimal values may not be exactly
 /// representable, but it provides more than 9 decimal digits of precision both before and after the
@@ -45,8 +50,8 @@ public fun from_quotient(numerator: u64, denominator: u64): UQ32_32 {
         numerator,
         denominator,
         std::u64::max_value!(),
-        64,
-        32,
+        TOTAL_BITS,
+        FRACTIONAL_BITS,
         abort EDenominator,
         abort EQuotientTooSmall,
         abort EQuotientTooLarge,
@@ -56,7 +61,7 @@ public fun from_quotient(numerator: u64, denominator: u64): UQ32_32 {
 /// Create a fixed-point value from an integer.
 /// `from_int` and `from_quotient` should be preferred over using `from_raw`.
 public fun from_int(integer: u32): UQ32_32 {
-    UQ32_32(std::macros::uq_from_int!(integer, 32))
+    UQ32_32(std::macros::uq_from_int!(integer, FRACTIONAL_BITS))
 }
 
 /// Add two fixed-point numbers, `a + b`.
@@ -91,7 +96,7 @@ public fun div(a: UQ32_32, b: UQ32_32): UQ32_32 {
 
 /// Convert a fixed-point number to an integer, truncating any fractional part.
 public fun to_int(a: UQ32_32): u32 {
-    std::macros::uq_to_int!(a.0, 32)
+    std::macros::uq_to_int!(a.0, FRACTIONAL_BITS)
 }
 
 /// Multiply a `u64` integer by a fixed-point number, truncating any fractional part of the product.
@@ -101,7 +106,7 @@ public fun int_mul(val: u64, multiplier: UQ32_32): u64 {
         val,
         multiplier.0,
         std::u64::max_value!(),
-        32,
+        FRACTIONAL_BITS,
         abort EOverflow,
     )
 }
@@ -114,7 +119,7 @@ public fun int_div(val: u64, divisor: UQ32_32): u64 {
         val,
         divisor.0,
         std::u64::max_value!(),
-        32,
+        FRACTIONAL_BITS,
         abort EDivisionByZero,
         abort EOverflow,
     )

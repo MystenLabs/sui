@@ -26,10 +26,15 @@ const EOverflow: vector<u8> = b"Overflow from an arithmetic operation";
 #[error]
 const EDivisionByZero: vector<u8> = b"Division by zero";
 
+/// The total number of bits in the fixed-point number. Used in `macro` invocations.
+const TOTAL_BITS: u8 = 128;
+/// The number of fractional bits in the fixed-point number. Used in `macro` invocations.
+const FRACTIONAL_BITS: u8 = 64;
+
 /// A fixed-point numeric type with 64 integer bits and 64 fractional bits, represented by an
 /// underlying 128 bit value. This is a binary representation, so decimal values may not be exactly
-/// representable, but it provides more than 9 decimal digits of precision both before and after the
-/// decimal point (18 digits total).
+/// representable, but it provides more than 19 decimal digits of precision both before and after
+/// the decimal point (38 digits total).
 public struct UQ64_64(u128) has copy, drop, store;
 
 /// Create a fixed-point value from a quotient specified by its numerator and denominator.
@@ -45,8 +50,8 @@ public fun from_quotient(numerator: u128, denominator: u128): UQ64_64 {
         numerator,
         denominator,
         std::u128::max_value!(),
-        128,
-        64,
+        TOTAL_BITS,
+        FRACTIONAL_BITS,
         abort EDenominator,
         abort EQuotientTooSmall,
         abort EQuotientTooLarge,
@@ -56,7 +61,7 @@ public fun from_quotient(numerator: u128, denominator: u128): UQ64_64 {
 /// Create a fixed-point value from an integer.
 /// `from_int` and `from_quotient` should be preferred over using `from_raw`.
 public fun from_int(integer: u64): UQ64_64 {
-    UQ64_64(std::macros::uq_from_int!(integer, 64))
+    UQ64_64(std::macros::uq_from_int!(integer, FRACTIONAL_BITS))
 }
 
 /// Add two fixed-point numbers, `a + b`.
@@ -91,7 +96,7 @@ public fun div(a: UQ64_64, b: UQ64_64): UQ64_64 {
 
 /// Convert a fixed-point number to an integer, truncating any fractional part.
 public fun to_int(a: UQ64_64): u64 {
-    std::macros::uq_to_int!(a.0, 64)
+    std::macros::uq_to_int!(a.0, FRACTIONAL_BITS)
 }
 
 /// Multiply a `u128` integer by a fixed-point number, truncating any fractional part of the product.
@@ -101,7 +106,7 @@ public fun int_mul(val: u128, multiplier: UQ64_64): u128 {
         val,
         multiplier.0,
         std::u128::max_value!(),
-        64,
+        FRACTIONAL_BITS,
         abort EOverflow,
     )
 }
@@ -114,7 +119,7 @@ public fun int_div(val: u128, divisor: UQ64_64): u128 {
         val,
         divisor.0,
         std::u128::max_value!(),
-        64,
+        FRACTIONAL_BITS,
         abort EDivisionByZero,
         abort EOverflow,
     )
