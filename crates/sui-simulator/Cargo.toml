@@ -19,7 +19,6 @@ tempfile.workspace = true
 tracing.workspace = true
 anemo.workspace = true
 anemo-tower.workspace = true
-narwhal-network.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 telemetry-subscribers.workspace = true
 tower.workspace = true
