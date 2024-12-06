@@ -474,84 +474,124 @@ async fn summary(
     let ticker_data = ticker(Query(HashMap::new()), State(state.clone())).await?;
     let Json(ticker_map) = ticker_data;
 
+    // Prepare pool metadata (including decimals and pool_id <-> pool_name mapping)
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_metadata: HashMap<String, (String, (i16, i16))> = pools
+        .0
+        .into_iter()
+        .map(|pool| {
+            (
+                pool.pool_name.clone(),
+                (
+                    pool.pool_id.clone(),
+                    (pool.base_asset_decimals, pool.quote_asset_decimals),
+                ),
+            )
+        })
+        .collect();
+
+    // Prepare pool decimals for scaling
+    let pool_decimals: HashMap<String, (i16, i16)> = pool_metadata
+        .iter()
+        .map(|(_, (pool_id, decimals))| (pool_id.clone(), *decimals))
+        .collect();
+
     // Call the price_change_24h function to get price changes
     let price_change_data = price_change_24h(Query(HashMap::new()), State(state.clone())).await?;
     let Json(price_change_map) = price_change_data;
 
+    // Call the high_low_prices_24h function to get the highest and lowest prices
+    let high_low_map = high_low_prices_24h(&pool_decimals, State(state.clone())).await?;
+
     let mut response = Vec::new();
 
     for (pool_name, ticker_info) in &ticker_map {
-        // Extract data from the ticker function response
-        let last_price = ticker_info
-            .get("last_price")
-            .and_then(|price| price.as_f64())
-            .unwrap_or(0.0);
+        if let Some((pool_id, _)) = pool_metadata.get(pool_name) {
+            // Extract data from the ticker function response
+            let last_price = ticker_info
+                .get("last_price")
+                .and_then(|price| price.as_f64())
+                .unwrap_or(0.0);
 
-        let base_volume = ticker_info
-            .get("base_volume")
-            .and_then(|volume| volume.as_f64())
-            .unwrap_or(0.0);
+            let base_volume = ticker_info
+                .get("base_volume")
+                .and_then(|volume| volume.as_f64())
+                .unwrap_or(0.0);
 
-        let quote_volume = ticker_info
-            .get("quote_volume")
-            .and_then(|volume| volume.as_f64())
-            .unwrap_or(0.0);
+            let quote_volume = ticker_info
+                .get("quote_volume")
+                .and_then(|volume| volume.as_f64())
+                .unwrap_or(0.0);
 
-        // Call the orderbook function to get lowest ask and highest bid
-        let orderbook_data = orderbook(
-            Path(pool_name.clone()),
-            Query(HashMap::from([("level".to_string(), "1".to_string())])),
-            State(state.clone()),
-        )
-        .await
-        .ok()
-        .map(|Json(data)| data);
+            // Fetch the 24-hour price change percent
+            let price_change_percent = price_change_map.get(pool_name).copied().unwrap_or(0.0);
 
-        let lowest_ask = orderbook_data
-            .as_ref()
-            .and_then(|data| data.get("asks"))
-            .and_then(|asks| asks.as_array())
-            .and_then(|asks| asks.get(0))
-            .and_then(|ask| ask.as_array())
-            .and_then(|ask| ask.get(0))
-            .and_then(|price| price.as_str()?.parse::<f64>().ok())
-            .unwrap_or(0.0);
+            // Fetch the highest and lowest prices in the last 24 hours
+            let (highest_price, lowest_price) =
+                high_low_map.get(pool_id).copied().unwrap_or((0.0, 0.0));
 
-        let highest_bid = orderbook_data
-            .as_ref()
-            .and_then(|data| data.get("bids"))
-            .and_then(|bids| bids.as_array())
-            .and_then(|bids| bids.get(0))
-            .and_then(|bid| bid.as_array())
-            .and_then(|bid| bid.get(0))
-            .and_then(|price| price.as_str()?.parse::<f64>().ok())
-            .unwrap_or(0.0);
+            // Prepare the summary data
+            let mut summary_data = HashMap::new();
+            summary_data.insert(
+                "trading_pairs".to_string(),
+                Value::String(pool_name.clone()),
+            );
+            summary_data.insert("last_price".to_string(), Value::from(last_price));
+            summary_data.insert("base_volume".to_string(), Value::from(base_volume));
+            summary_data.insert("quote_volume".to_string(), Value::from(quote_volume));
+            summary_data.insert(
+                "price_change_percent_24h".to_string(),
+                Value::from(price_change_percent),
+            );
+            summary_data.insert("highest_price_24h".to_string(), Value::from(highest_price));
+            summary_data.insert("lowest_price_24h".to_string(), Value::from(lowest_price));
 
-        // Fetch the 24-hour price change percent
-        let price_change_percent = price_change_map.get(pool_name).copied().unwrap_or(0.0);
-
-        // Prepare the summary data
-        let mut summary_data = HashMap::new();
-        summary_data.insert(
-            "trading_pairs".to_string(),
-            Value::String(pool_name.clone()),
-        );
-        summary_data.insert("last_price".to_string(), Value::from(last_price));
-        summary_data.insert("lowest_ask".to_string(), Value::from(lowest_ask));
-        summary_data.insert("highest_bid".to_string(), Value::from(highest_bid));
-        summary_data.insert("base_volume".to_string(), Value::from(base_volume));
-        summary_data.insert("quote_volume".to_string(), Value::from(quote_volume));
-        summary_data.insert(
-            "price_change_percent_24h".to_string(),
-            Value::from(price_change_percent),
-        );
-        summary_data.insert("highest_price_24h".to_string(), Value::from(0.0)); // Hardcoded for now
-        summary_data.insert("lowest_price_24h".to_string(), Value::from(0.0)); // Hardcoded for now
-
-        response.push(summary_data);
+            response.push(summary_data);
+        }
     }
 
     Ok(Json(response))
+}
+
+async fn high_low_prices_24h(
+    pool_decimals: &HashMap<String, (i16, i16)>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<HashMap<String, (f64, f64)>, DeepBookError> {
+    // Get the current timestamp in milliseconds
+    let end_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| DeepBookError::InternalError("System time error".to_string()))?
+        .as_millis() as i64;
+
+    // Calculate the start time for 24 hours ago
+    let start_time = end_time - (24 * 60 * 60 * 1000);
+
+    let connection = &mut state.pool.get().await?;
+
+    // Query for trades within the last 24 hours for all pools
+    let results: Vec<(String, i64)> = schema::order_fills::table
+        .select((schema::order_fills::pool_id, schema::order_fills::price))
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
+        .order_by(schema::order_fills::pool_id.asc())
+        .load(connection)
+        .await?;
+
+    // Aggregate the highest and lowest prices for each pool
+    let mut price_map: HashMap<String, (f64, f64)> = HashMap::new();
+
+    for (pool_id, price) in results {
+        if let Some((base_decimals, quote_decimals)) = pool_decimals.get(&pool_id) {
+            let scaling_factor = 10f64.powi((9 - base_decimals + quote_decimals) as i32);
+            let price_f64 = price as f64 / scaling_factor;
+
+            let entry = price_map.entry(pool_id).or_insert((f64::MIN, f64::MAX));
+            // Update the highest and lowest prices
+            entry.0 = entry.0.max(price_f64); // Highest price
+            entry.1 = entry.1.min(price_f64); // Lowest price
+        }
+    }
+
+    Ok(price_map)
 }
 
 async fn price_change_24h(
