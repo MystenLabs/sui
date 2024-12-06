@@ -454,7 +454,6 @@ async fn ticker(
     Ok(Json(response))
 }
 
-#[allow(clippy::get_first)]
 async fn fetch_historical_volume(
     params: &HashMap<String, String>,
     volume_in_base: bool,
@@ -468,6 +467,7 @@ async fn fetch_historical_volume(
         .map(|Json(volumes)| volumes)
 }
 
+#[allow(clippy::get_first)]
 async fn summary(
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
