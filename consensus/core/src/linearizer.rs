@@ -57,16 +57,16 @@ impl BlockStoreAPI
 #[derive(Clone)]
 pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
+    context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
     leader_schedule: Arc<LeaderSchedule>,
-    context: Arc<Context>,
 }
 
 impl Linearizer {
     pub(crate) fn new(
+        context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         leader_schedule: Arc<LeaderSchedule>,
-        context: Arc<Context>,
     ) -> Self {
         Self {
             dag_state,
@@ -325,7 +325,7 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule, context.clone());
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
@@ -376,7 +376,7 @@ mod tests {
                 .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
         );
         let mut linearizer =
-            Linearizer::new(dag_state.clone(), leader_schedule.clone(), context.clone());
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
 
         // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
         let num_rounds: u32 = 20;
@@ -446,7 +446,7 @@ mod tests {
                 .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
         );
         let mut linearizer =
-            Linearizer::new(dag_state.clone(), leader_schedule.clone(), context.clone());
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
 
         // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
         let num_rounds: u32 = 20;
@@ -514,7 +514,7 @@ mod tests {
             LeaderSwapTable::default(),
         ));
         let mut linearizer =
-            Linearizer::new(dag_state.clone(), leader_schedule.clone(), context.clone());
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
         let wave_length = DEFAULT_WAVE_LENGTH;
 
         let leader_round_wave_1 = 3;
@@ -633,7 +633,7 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule, context.clone());
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
 
         // Authorities of index 0->2 will always creates blocks that see each other, but until round 5 they won't see the blocks of authority 3.
         // For authority 3 we create blocks that connect to all the other authorities.
@@ -747,7 +747,7 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule, context.clone());
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
 
         // Authority D will create an "orphaned" block on round 1 as it won't reference to it on the block of round 2. Similar, no other authority will reference to it on round 2.
         // Then on round 3 the authorities A, B & C will link to block D1. Once the DAG gets committed we should see the block D1 getting committed as well. Normally ,as block D2 would

@@ -54,9 +54,9 @@ impl CommitObserver {
     ) -> Self {
         let mut observer = Self {
             commit_interpreter: Linearizer::new(
+                context.clone(),
                 dag_state.clone(),
                 leader_schedule.clone(),
-                context.clone(),
             ),
             context,
             sender: commit_consumer.commit_sender,
