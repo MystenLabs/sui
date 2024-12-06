@@ -244,7 +244,7 @@ async fn get_historical_volume_by_balance_manager_id(
     let volume_in_base = params
         .get("volume_in_base")
         .map(|v| v == "true")
-        .unwrap_or(true);
+        .unwrap_or(false);
     let column_to_query = if volume_in_base {
         sql::<diesel::sql_types::BigInt>("base_quantity")
     } else {
@@ -333,7 +333,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
         let volume_in_base = params
             .get("volume_in_base")
             .map(|v| v == "true")
-            .unwrap_or(true);
+            .unwrap_or(false);
         let column_to_query = if volume_in_base {
             sql::<diesel::sql_types::BigInt>("base_quantity")
         } else {
