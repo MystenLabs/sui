@@ -240,6 +240,7 @@ pub fn build_from_resolution_graph(
     published_at: Result<ObjectID, PublishedAtError>,
     mut dependency_ids: PackageDependencies,
 ) -> SuiResult<CompiledPackage> {
+    println!("Orig deps: {:?}", dependency_ids);
     // collect bytecode dependencies as these are not returned as part of core
     // `CompiledPackage`
     let mut bytecode_deps = vec![];
@@ -303,6 +304,10 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
+
+    package
+        .all_modules()
+        .for_each(|x| println!("{:?} {:?}", x.unit.name, x.unit.address));
 
     // Filter out packages that are in the manifest but not referenced in the source code.
     let deps: BTreeSet<_> = package
