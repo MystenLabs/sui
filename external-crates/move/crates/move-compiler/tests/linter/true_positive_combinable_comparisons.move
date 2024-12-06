@@ -1,6 +1,5 @@
 module a::m {
-    fun t(x: u64, y: u64): bool {
-        x == y || x > y;
+    fun t(x: u64, y: u64) {
         x == y && x != y;
         x == y && x > y;
         x == y && x < y;
@@ -31,48 +30,110 @@ module a::m {
         x < y || x >= y;
         x < y || x <= y;
         x >= y || x <= y;
+        x != y && x == y;
+        x > y && x == y;
+        x < y && x == y;
+        x >= y && x == y;
+        x <= y && x == y;
+        x > y && x != y;
+        x < y && x != y;
+        x >= y && x != y;
+        x <= y && x != y;
+        x < y && x > y;
+        x >= y && x > y;
+        x <= y && x > y;
+        x >= y && x < y;
+        x <= y && x < y;
+        x <= y && x >= y;
+        x != y || x == y;
+        x > y || x == y;
+        x < y || x == y;
+        x >= y || x == y;
+        x <= y || x == y;
+        x > y || x != y;
+        x < y || x != y;
+        x >= y || x != y;
+        x <= y || x != y;
+        x < y || x > y;
+        x >= y || x > y;
+        x <= y || x > y;
+        x >= y || x < y;
+        x <= y || x < y;
+        x <= y || x >= y;
     }
 
-    // fun flipped(x: u64, y: u64): bool {
-    //     x == y && y != x;
-    //     x == y && y > x;
-    //     x == y && y < x;
-    //     x == y && y >= x;
-    //     x == y && y <= x;
-    //     x != y && y > x;
-    //     x != y && y < x;
-    //     x != y && y >= x;
-    //     x != y && y <= x;
-    //     x > y && y < x;
-    //     x > y && y >= x;
-    //     x > y && y <= x;
-    //     x < y && y >= x;
-    //     x < y && y <= x;
-    //     x >= y && y <= x;
-    //     x == y || y != x;
-    //     x == y || y > x;
-    //     x == y || y < x;
-    //     x == y || y >= x;
-    //     x == y || y <= x;
-    //     x != y || y > x;
-    //     x != y || y < x;
-    //     x != y || y >= x;
-    //     x != y || y <= x;
-    //     x > y || y < x;
-    //     x > y || y >= x;
-    //     x > y || y <= x;
-    //     x < y || y >= x;
-    //     x < y || y <= x;
-    //     x >= y || y <= x;
-    // }
+    fun flipped(x: u64, y: u64) {
+        x == y && y != x;
+        x == y && y > x;
+        x == y && y < x;
+        x == y && y >= x;
+        x == y && y <= x;
+        x != y && y > x;
+        x != y && y < x;
+        x != y && y >= x;
+        x != y && y <= x;
+        x > y && y < x;
+        x > y && y >= x;
+        x > y && y <= x;
+        x < y && y >= x;
+        x < y && y <= x;
+        x >= y && y <= x;
+        x == y || y != x;
+        x == y || y > x;
+        x == y || y < x;
+        x == y || y >= x;
+        x == y || y <= x;
+        x != y || y > x;
+        x != y || y < x;
+        x != y || y >= x;
+        x != y || y <= x;
+        x > y || y < x;
+        x > y || y >= x;
+        x > y || y <= x;
+        x < y || y >= x;
+        x < y || y <= x;
+        x >= y || y <= x;
+        x != y && y == x;
+        x > y && y == x;
+        x < y && y == x;
+        x >= y && y == x;
+        x <= y && y == x;
+        x > y && y != x;
+        x < y && y != x;
+        x >= y && y != x;
+        x <= y && y != x;
+        x < y && y > x;
+        x >= y && y > x;
+        x <= y && y > x;
+        x >= y && y < x;
+        x <= y && y < x;
+        x <= y && y >= x;
+        x != y || y == x;
+        x > y || y == x;
+        x < y || y == x;
+        x >= y || y == x;
+        x <= y || y == x;
+        x > y || y != x;
+        x < y || y != x;
+        x >= y || y != x;
+        x <= y || y != x;
+        x < y || y > x;
+        x >= y || y > x;
+        x <= y || y > x;
+        x >= y || y < x;
+        x <= y || y < x;
+        x <= y || y >= x;
+    }
 
-    // const Values: bool = 5 > 3 || 5 == 3;
+    const Values: bool = 5 > 3 || 5 == 3;
 
-    // fun values(x: u64, y: u64): bool {
-    //     5 != 3 && 5 > 3
-    // }
+    fun values(): bool {
+        5 != 3 && 5 > 3
+    }
 
-    // fun refs(x: u64, y: u64): bool {
-    //     &x == &y || x > y;
-    // }
+    #[allow(lint(redundant_ref_deref))]
+    fun mismatched(x: u64, y: u64) {
+        {&x} == &y || (x as u64) > (*&y:u64);
+        &copy x == &y || x < move y;
+    }
 }

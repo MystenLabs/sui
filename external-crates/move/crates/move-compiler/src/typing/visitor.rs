@@ -1318,6 +1318,18 @@ pub fn same_value_exp_(e1: &T::UnannotatedExp_, e2: &T::UnannotatedExp_) -> bool
         };
     }
     match (e1, e2) {
+        (E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _), other)
+        | (other, E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _)) => {
+            same_value_exp_(&e.exp.value, other)
+        }
+        (E::NamedBlock(_, s) | E::Block(s), other) | (other, E::NamedBlock(_, s) | E::Block(s)) => {
+            same_value_seq_exp_(s, other)
+        }
+        (E::ExpList(l), other) | (other, E::ExpList(l)) if l.len() == 1 => match &l[0] {
+            T::ExpListItem::Single(e, _) => same_value_exp_(&e.exp.value, other),
+            T::ExpListItem::Splat(_, e, _) => same_value_exp_(&e.exp.value, other),
+        },
+
         (E::Value(v1), E::Value(v2)) => v1 == v2,
         (E::Unit { .. }, E::Unit { .. }) => true,
         (E::Constant(m1, c1), E::Constant(m2, c2)) => m1 == m2 && c1 == c2,
@@ -1337,18 +1349,8 @@ pub fn same_value_exp_(e1: &T::UnannotatedExp_, e2: &T::UnannotatedExp_) -> bool
         {
             same_value_exp_(&e.exp.value, other)
         }
-        (E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _), other)
-        | (other, E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _)) => {
-            same_value_exp_(&e.exp.value, other)
-        }
-        (E::NamedBlock(_, s) | E::Block(s), other) | (other, E::NamedBlock(_, s) | E::Block(s)) => {
-            same_value_seq_exp_(s, other)
-        }
+
         (E::ExpList(l1), E::ExpList(l2)) => same_value_exp_list(l1, l2),
-        (E::ExpList(l), other) | (other, E::ExpList(l)) if l.len() == 1 => match &l[0] {
-            T::ExpListItem::Single(e, _) => same_value_exp_(&e.exp.value, other),
-            T::ExpListItem::Splat(_, e, _) => same_value_exp_(&e.exp.value, other),
-        },
 
         (E::UnaryExp(op1, e1), E::UnaryExp(op2, e2)) => op1 == op2 && same_value_exp(e1, e2),
         (E::BinopExp(l1, op1, _, r1), E::BinopExp(l2, op2, _, r2)) => {
