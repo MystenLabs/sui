@@ -167,7 +167,7 @@ async fn historical_volume(
     let volume_in_base = params
         .get("volume_in_base")
         .map(|v| v == "true")
-        .unwrap_or(true);
+        .unwrap_or(false);
     let column_to_query = if volume_in_base {
         sql::<diesel::sql_types::BigInt>("base_quantity")
     } else {
