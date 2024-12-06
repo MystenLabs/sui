@@ -215,7 +215,9 @@ impl TxBounds {
                 Some(lo) => Ok(lo),
                 None => Err(diesel::result::Error::DatabaseError(
                     diesel::result::DatabaseErrorKind::Unknown,
-                    Box::new("min_tx_sequence_number should never be None in production".to_string())
+                    Box::new(
+                        "min_tx_sequence_number should never be None in production".to_string(),
+                    ),
                 )),
             }? as u64;
 

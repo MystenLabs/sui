@@ -343,7 +343,8 @@ impl TransactionBlock {
     /// limiting how many transactions to scan through before applying filters, and also affects
     /// pagination behavior.
     ///
-    /// Queries for data that have been pruned
+    /// Queries for data that have been pruned will return an empty connection; we treat pruned data
+    /// as simply non-existent and thus no error is returned.
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         page: Page<Cursor>,

@@ -140,7 +140,7 @@ module Test::M1 {
 
 
 //# run-graphql --wait-for-checkpoint-pruned 4
-# If the caller tries to fetch data outside of the unpruned range, they should receive an error
+# If the caller tries to fetch data outside of the unpruned range, they should receive an empty connection.
 {
   transactionBlocks(filter: { atCheckpoint: 0 sentAddress: "@{A}" }) {
     pageInfo {
