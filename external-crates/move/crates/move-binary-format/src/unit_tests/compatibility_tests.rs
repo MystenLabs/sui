@@ -1201,13 +1201,113 @@ fn check_new_changed_missing_declarations() {
     assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
 }
 
+#[test]
+fn test_compare_ord_iters() {
+    let a = Identifier::new("a").unwrap();
+    let b = Identifier::new("b").unwrap();
+    let c = Identifier::new("c").unwrap();
+    let d = Identifier::new("d").unwrap();
+    let e = Identifier::new("e").unwrap();
+    let f = Identifier::new("f").unwrap();
+
+    // (old, new, expected, name)
+    let tests = vec![
+        ("empty", vec![], vec![], vec![]),
+        (
+            "existing",
+            vec![&a],
+            vec![&a],
+            vec![Mark::Existing(&a, &(), &())],
+        ),
+        ("missing", vec![&a], vec![], vec![Mark::Missing(&a, &())]),
+        ("new", vec![], vec![&a], vec![Mark::New(&a, &())]),
+        (
+            "missing new",
+            vec![&a],
+            vec![&b],
+            vec![Mark::Missing(&a, &()), Mark::New(&b, &())],
+        ),
+        (
+            "existing new",
+            vec![&a],
+            vec![&a, &b],
+            vec![Mark::Existing(&a, &(), &()), Mark::New(&b, &())],
+        ),
+        (
+            "existing missing",
+            vec![&a, &b],
+            vec![&a],
+            vec![Mark::Existing(&a, &(), &()), Mark::Missing(&b, &())],
+        ),
+        (
+            "missing existing",
+            vec![&a, &b],
+            vec![&b],
+            vec![Mark::Missing(&a, &()), Mark::Existing(&b, &(), &())],
+        ),
+        (
+            "existing new missing",
+            vec![&a, &e],
+            vec![&a, &b],
+            vec![
+                Mark::Existing(&a, &(), &()),
+                Mark::New(&b, &()),
+                Mark::Missing(&e, &()),
+            ],
+        ),
+        (
+            "new existing missing",
+            vec![&b, &f],
+            vec![&a, &b],
+            vec![
+                Mark::New(&a, &()),
+                Mark::Existing(&b, &(), &()),
+                Mark::Missing(&f, &()),
+            ],
+        ),
+        (
+            "new missing existing",
+            vec![&d, &e],
+            vec![&a, &e],
+            vec![
+                Mark::New(&a, &()),
+                Mark::Missing(&d, &()),
+                Mark::Existing(&e, &(), &()),
+            ],
+        ),
+        (
+            "missing existing new",
+            vec![&a, &b],
+            vec![&b, &c],
+            vec![
+                Mark::Missing(&a, &()),
+                Mark::Existing(&b, &(), &()),
+                Mark::New(&c, &()),
+            ],
+        ),
+    ];
+
+    for (name, old, new, expected) in tests {
+        let old = old.into_iter().map(|x| (x, &())).collect::<Vec<_>>();
+        let new = new.into_iter().map(|x| (x, &())).collect::<Vec<_>>();
+
+        let iter = compare_ord_iters(old.into_iter(), new.into_iter());
+        let result: Vec<_> = iter.collect();
+        assert_eq!(
+            result, expected,
+            "failed: {}. Result: {:?}, Expected: {:?}",
+            name, result, expected
+        );
+    }
+}
+
 fn arbitrary_map() -> impl Strategy<Value = BTreeMap<i32, i32>> {
     prop::collection::btree_map(0..1000, 0..1000, 0..20)
 }
 
 proptest! {
     #[test]
-    fn test_compare_ord_iters(old in arbitrary_map(), new in arbitrary_map()) {
+    fn proptest_compare_ord_iters(old in arbitrary_map(), new in arbitrary_map()) {
         let result: Vec<_> = compare_ord_iters(old.iter(), new.iter()).collect();
 
         for mark in &result {

@@ -408,7 +408,7 @@ impl InclusionCheck {
         // enum checks
         for mark in compare_ord_iters(old_module.enums.iter(), new_module.enums.iter()) {
             match mark {
-                Mark::New(name, _) => context.enum_new(name, new_module.enums.get(name).unwrap()),
+                Mark::New(name, new) => context.enum_new(name, new),
                 Mark::Missing(name, _) => context.enum_missing(name),
                 Mark::Existing(name, old, new) => {
                     if old != new {
@@ -421,15 +421,11 @@ impl InclusionCheck {
         // function checks
         for mark in compare_ord_iters(old_module.functions.iter(), new_module.functions.iter()) {
             match mark {
-                Mark::New(name, _) => {
-                    context.function_new(name, new_module.functions.get(name).unwrap())
-                }
+                Mark::New(name, new) => context.function_new(name, new),
                 Mark::Missing(name, _) => context.function_missing(name),
-                Mark::Existing(name, _, _) => {
-                    let old_function = old_module.functions.get(name).unwrap();
-                    let new_function = new_module.functions.get(name).unwrap();
-                    if old_function != new_function {
-                        context.function_change(name, old_function);
+                Mark::Existing(name, old, new) => {
+                    if old != new {
+                        context.function_change(name, old);
                     }
                 }
             }
