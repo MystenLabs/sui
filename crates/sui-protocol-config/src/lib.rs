@@ -3001,7 +3001,7 @@ impl ProtocolConfig {
                             .consensus_round_prober_probe_accepted_rounds = true;
                     }
 
-                    cfg.consensus_gc_depth = Some(5);
+                    cfg.consensus_gc_depth = Some(50);
                 }
                 // Use this template when making changes:
                 //
