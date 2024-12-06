@@ -73,12 +73,12 @@ module a::m {
         x != y && y < x;
         x != y && y >= x;
         x != y && y <= x;
-        x > y && y < x;
+        x > y && y > x;
         x > y && y >= x;
         x > y && y <= x;
         x < y && y >= x;
         x < y && y <= x;
-        x >= y && y <= x;
+        x >= y && y >= x;
         x == y || y != x;
         x == y || y > x;
         x == y || y < x;
@@ -88,12 +88,12 @@ module a::m {
         x != y || y < x;
         x != y || y >= x;
         x != y || y <= x;
-        x > y || y < x;
+        x > y || y > x;
         x > y || y >= x;
         x > y || y <= x;
         x < y || y >= x;
         x < y || y <= x;
-        x >= y || y <= x;
+        x >= y || y >= x;
         x != y && y == x;
         x > y && y == x;
         x < y && y == x;
@@ -103,12 +103,12 @@ module a::m {
         x < y && y != x;
         x >= y && y != x;
         x <= y && y != x;
-        x < y && y > x;
+        x < y && y < x;
         x >= y && y > x;
         x <= y && y > x;
         x >= y && y < x;
         x <= y && y < x;
-        x <= y && y >= x;
+        x <= y && y <= x;
         x != y || y == x;
         x > y || y == x;
         x < y || y == x;
@@ -118,12 +118,12 @@ module a::m {
         x < y || y != x;
         x >= y || y != x;
         x <= y || y != x;
-        x < y || y > x;
+        x < y || y < x;
         x >= y || y > x;
         x <= y || y > x;
         x >= y || y < x;
         x <= y || y < x;
-        x <= y || y >= x;
+        x <= y || y <= x;
     }
 
     fun same_op(x: u64, y: u64) {
