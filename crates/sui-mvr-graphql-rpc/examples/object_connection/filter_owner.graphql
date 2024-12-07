@@ -1,0 +1,30 @@
+# Filter on owner
+{
+  objects(filter: {
+    owner: "0x23b7b0e2badb01581ba9b3ab55587d8d9fdae087e0cfc79f2c72af36f5059439"
+  }) {
+    edges {
+      node {
+        storageRebate
+        owner {
+          __typename
+          ... on Shared {
+            initialSharedVersion
+          }
+          __typename
+          ... on Parent {
+            parent {
+              address
+            }
+          }
+          __typename
+          ... on AddressOwner {
+            owner {
+              address
+            }
+          }
+        }
+      }
+    }
+  }
+}

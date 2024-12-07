@@ -130,6 +130,7 @@ members = [
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-move-lsp",
+    "crates/sui-mvr-graphql-rpc",
     "crates/sui-mvr-indexer",
     "crates/sui-network",
     "crates/sui-node",
@@ -656,6 +657,7 @@ sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
+sui-mvr-graphql-rpc = { path = "crates/sui-mvr-graphql-rpc" }
 sui-mvr-indexer = { path = "crates/sui-mvr-indexer" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }

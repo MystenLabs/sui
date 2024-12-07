@@ -1,0 +1,18 @@
+{
+  resolveSuinsAddress(domain: "example.sui") {
+    address
+  }
+  address(
+    address: "0x0b86be5d779fac217b41d484b8040ad5145dc9ba0cba099d083c6cbda50d983e"
+  ) {
+    address
+    balance(type: "0x2::sui::SUI") {
+      coinType {
+        repr
+      }
+      coinObjectCount
+      totalBalance
+    }
+    defaultSuinsName
+  }
+}

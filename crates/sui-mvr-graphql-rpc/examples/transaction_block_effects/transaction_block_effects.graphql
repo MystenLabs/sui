@@ -1,0 +1,65 @@
+{
+  object(
+    address: "0x0bba1e7d907dc2832edfc3bf4468b6deacd9a2df435a35b17e640e135d2d5ddc"
+  ) {
+    version
+    owner {
+      __typename
+      ... on Shared {
+        initialSharedVersion
+      }
+      __typename
+      ... on Parent {
+        parent {
+          address
+        }
+      }
+      __typename
+      ... on AddressOwner {
+        owner {
+          address
+        }
+      }
+    }
+    previousTransactionBlock {
+      effects {
+        status
+        checkpoint {
+          sequenceNumber
+        }
+        lamportVersion
+        gasEffects {
+          gasSummary {
+            computationCost
+            storageCost
+            storageRebate
+            nonRefundableStorageFee
+          }
+        }
+        balanceChanges {
+          nodes {
+            owner {
+              address
+              balance(type: "0x2::sui::SUI") {
+                totalBalance
+              }
+            }
+            amount
+            coinType {
+              repr
+              signature
+              layout
+            }
+          }
+        }
+        dependencies {
+          nodes {
+            sender {
+              address
+            }
+          }
+        }
+      }
+    }
+  }
+}

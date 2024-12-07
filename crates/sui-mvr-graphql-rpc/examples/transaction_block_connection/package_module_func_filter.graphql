@@ -1,0 +1,18 @@
+# Filtering on package, module and function
+{
+  transactionBlocks(
+    filter: {
+      function: "0x3::sui_system::request_withdraw_stake"
+    }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

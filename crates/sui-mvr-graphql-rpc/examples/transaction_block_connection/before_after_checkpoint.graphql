@@ -1,0 +1,16 @@
+# Filter on before_ and after_checkpoint. If both are provided, before must be greater than after
+{
+  transactionBlocks(
+    filter: { afterCheckpoint: 10, beforeCheckpoint: 20 }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

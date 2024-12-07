@@ -1,0 +1,31 @@
+# Get the data for a TransactionBlock by its digest
+{
+  transactionBlock(digest: "HvTjk3ELg8gRofmB1GgrpLHBFeA53QKmUKGEuhuypezg") {
+    sender {
+      address
+    }
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPayment {
+        nodes {
+          address
+        }
+      }
+      gasPrice
+      gasBudget
+    }
+    kind {
+      __typename
+    }
+    signatures
+    digest
+    expiration {
+      epochId
+    }
+    effects {
+      timestamp
+    }
+  }
+}

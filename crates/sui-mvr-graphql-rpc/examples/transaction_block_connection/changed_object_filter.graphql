@@ -1,0 +1,18 @@
+# Filter on changedObject
+{
+  transactionBlocks(
+    filter: {
+      changedObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
+    }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

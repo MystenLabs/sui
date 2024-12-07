@@ -1,0 +1,29 @@
+{
+  epoch {
+    transactionBlocks(first: 20, after: "eyJjIjoyNjkzMzMyNCwidCI6MTEwMTYxMDQ4MywiaSI6ZmFsc2V9") {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          sender {
+            address
+          }
+          effects {
+            gasEffects {
+              gasObject {
+                address
+              }
+            }
+          }
+          gasInput {
+            gasPrice
+            gasBudget
+          }
+        }
+      }
+    }
+  }
+}

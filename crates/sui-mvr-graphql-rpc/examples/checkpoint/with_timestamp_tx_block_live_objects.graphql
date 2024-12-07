@@ -1,0 +1,21 @@
+# Latest checkpoint's timestamp, and transaction block data
+{
+  checkpoint {
+    digest
+    sequenceNumber
+    timestamp
+    transactionBlocks {
+      edges {
+        node {
+          digest
+          sender {
+            address
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+    }
+  }
+}

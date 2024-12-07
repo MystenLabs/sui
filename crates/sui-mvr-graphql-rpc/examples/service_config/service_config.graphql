@@ -1,0 +1,14 @@
+# Get the configuration of the running service
+{
+  serviceConfig {
+    isEnabled(feature: ANALYTICS)
+    enabledFeatures
+    maxQueryDepth
+    maxQueryNodes
+    maxDbQueryCost
+    defaultPageSize
+    maxPageSize
+    requestTimeoutMs
+    maxQueryPayloadSize
+  }
+}

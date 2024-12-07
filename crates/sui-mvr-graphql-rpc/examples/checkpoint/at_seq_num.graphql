@@ -1,0 +1,22 @@
+# Get the checkpoint's information at a particular sequence number
+{
+  checkpoint(id: { sequenceNumber: 10 }) {
+    digest
+    sequenceNumber
+    validatorSignatures
+    previousCheckpointDigest
+    networkTotalTransactions
+    rollingGasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+    epoch {
+      epochId
+      referenceGasPrice
+      startTimestamp
+      endTimestamp
+    }
+  }
+}

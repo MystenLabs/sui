@@ -1,0 +1,26 @@
+# Query the balance for objects of type COIN and then for each coin
+# get the coin type, the number of objects, and the total balance
+{
+  address(
+    address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9"
+  ) {
+    balance(
+      type: "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN"
+    ) {
+      coinObjectCount
+      totalBalance
+    }
+    balances {
+      nodes {
+        coinType {
+          repr
+        }
+        coinObjectCount
+        totalBalance
+      }
+      pageInfo {
+        endCursor
+      }
+    }
+  }
+}
