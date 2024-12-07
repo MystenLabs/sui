@@ -1727,9 +1727,9 @@ fn check_function_visibility(
 pub enum PublicForTesting {
     /// The function is entry, so it can be called in unit tests
     Entry(Loc),
-    // TODO we should allow calling init in unit tests, but this would need Sui bytecode verifier
-    // support. Or we would need to name dodge init in unit tests
-    // SuiInit(Loc),
+    // We allow calling init in unit tests in debug build
+    #[cfg(debug_assertions)]
+    SuiInit,
 }
 
 pub fn public_testing_visibility(
@@ -1743,9 +1743,10 @@ pub fn public_testing_visibility(
         return None;
     }
 
-    // TODO support sui init functions
-    // let flavor = env.package_config(package).flavor;
-    // flavor == Flavor::Sui && callee_name.value() == INIT_FUNCTION_NAME
+    #[cfg(debug_assertions)]
+    if _callee_name.value() == crate::sui_mode::INIT_FUNCTION_NAME {
+        return Some(PublicForTesting::SuiInit)
+    }
     callee_entry.map(PublicForTesting::Entry)
 }
 
@@ -1780,7 +1781,18 @@ fn report_visibility_error_(
                         TestingAttribute::TEST_ONLY,
                     );
                     (entry_loc, entry_msg)
-                }
+                },
+                #[cfg(debug_assertions)]
+                PublicForTesting::SuiInit => {
+                    let entry_msg = format!(
+                        "'{}' functions can be called in tests, \
+                    but only from testing contexts, e.g. '#[{}]' or '#[{}]'",
+                        crate::sui_mode::INIT_FUNCTION_NAME,
+                        TestingAttribute::TEST,
+                        TestingAttribute::TEST_ONLY,
+                    );
+                    (Loc::invalid(), entry_msg)
+                },
             };
             diag.add_secondary_label((test_loc, test_msg))
         }
