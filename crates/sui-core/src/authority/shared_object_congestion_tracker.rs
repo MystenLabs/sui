@@ -4,13 +4,13 @@
 use super::authority_per_epoch_store::AuthorityEpochTables;
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
-use narwhal_types::Round;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages_consensus::Round;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
 use tracing::trace;
 
