@@ -54,20 +54,20 @@ export function NicknameDialog({ accountID, trigger }: NicknameDialogProps) {
 
 	const {
 		register,
-		watch,
-		setValue,
+		watch: watchUseDomain,
+		setValue: setNickname,
 		formState: { isSubmitting, isValid },
 	} = form;
 
-	const useDomain = watch('useDomain');
+	const useDomain = watchUseDomain('useDomain');
 
 	useEffect(() => {
 		if (useDomain) {
-			setValue('nickname', '');
+			setNickname('nickname', '');
 		} else {
-			setValue('nickname', account?.nickname ?? '');
+			setNickname('nickname', account?.nickname ?? '');
 		}
-	}, [useDomain, account?.nickname, setValue]);
+	}, [useDomain, account?.nickname, setNickname]);
 
 	const onSubmit = async ({ nickname, useDomain }: FormValues) => {
 		if (account && accountID) {
@@ -119,7 +119,7 @@ export function NicknameDialog({ accountID, trigger }: NicknameDialogProps) {
 							variant="primary"
 							size="tall"
 							loading={isSubmitting}
-							text="Save"
+							text={'Save'}
 						/>
 					</div>
 				</Form>
