@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use crate::test_adapter::{FakeID, SuiTestAdapter};
 use anyhow::{bail, ensure};
 use clap;
@@ -73,6 +75,13 @@ pub struct SuiInitArgs {
     /// the indexer.
     #[clap(long = "epochs-to-keep")]
     pub epochs_to_keep: Option<u64>,
+    /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer and
+    /// reader.
+    #[clap(long)]
+    pub data_ingestion_path: Option<PathBuf>,
+    /// URL for the Sui REST API. To be passed to the offchain indexer and reader.
+    #[clap(long)]
+    pub rest_api_url: Option<String>,
 }
 
 #[derive(Debug, clap::Parser)]
