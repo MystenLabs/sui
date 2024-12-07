@@ -148,7 +148,7 @@ impl WatermarkPart {
 impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
-            write_concurrency: 5,
+            write_concurrency: 20,
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
         }
