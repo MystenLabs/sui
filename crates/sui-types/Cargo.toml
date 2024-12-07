@@ -77,6 +77,14 @@ lru.workspace = true
 
 sui-sdk-types.workspace = true
 
+ciborium.workspace = true
+serde_bytes.workspace = true
+rustls.workspace = true
+x509-parser.workspace = true
+webpki.workspace = true
+p384.workspace = true
+rustls-pemfile.workspace = true
+
 [dev-dependencies]
 bincode.workspace = true
 criterion.workspace = true
