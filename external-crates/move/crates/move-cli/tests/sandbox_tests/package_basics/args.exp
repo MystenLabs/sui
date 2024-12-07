@@ -51,46 +51,41 @@ Command `coverage bytecode --module AModule`:
 // Move bytecode v6
 module 1.AModule {
 
-
-
-
 public double_except_three(x#0#0: u64): u64 {
 B0:
-[6]	0: CopyLoc[0](x#0#0: u64)
-[6]	1: LdU64(3)
-[6]	2: Neq
-[6]	3: BrFalse(5)
+[32m[6]	0: CopyLoc[0](x#0#0: u64)[39m
+[32m[6]	1: LdU64(3)[39m
+[32m[6]	2: Neq[39m
+[32m[6]	3: BrFalse(5)[39m
 B1:
-[4]	4: Branch(7)
+[32m[4]	4: Branch(7)[39m
 B2:
-[2]	5: LdConst[0](u64: 0)
-[2]	6: Abort
+[32m[2]	5: LdConst[0](u64: 0)[39m
+[32m[2]	6: Abort[39m
 B3:
-[4]	7: CopyLoc[0](x#0#0: u64)
-[4]	8: MoveLoc[0](x#0#0: u64)
-[4]	9: Mul
-[4]	10: Ret
-
+[32m[4]	7: CopyLoc[0](x#0#0: u64)[39m
+[32m[4]	8: MoveLoc[0](x#0#0: u64)[39m
+[32m[4]	9: Mul[39m
+[32m[4]	10: Ret[39m
 }
 
 Constants [
 	0 => u64: 0
 ]
 }
+
 Command `disassemble --package MoveStdlib --name address`:
 // Move bytecode v6
 module 1.address {
-
-
-
 
 public length(): u64 {
 B0:
 	0: LdU64(32)
 	1: Ret
+}
 
 }
-}
+
 Command `info`:
 PackageBasics
 ├── std:0x1

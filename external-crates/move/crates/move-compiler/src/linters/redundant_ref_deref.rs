@@ -15,7 +15,7 @@ use crate::{
 };
 
 simple_visitor!(
-    RedundantRefDerefVisitor,
+    RedundantRefDeref,
     fn visit_exp_custom(&mut self, exp: &Exp) -> bool {
         self.check_redundant_ref_deref(exp);
         false

@@ -5,16 +5,18 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::{
-    db,
     models::transactions::{StoredKind, StoredTxKind},
-    pipeline::{concurrent::Handler, Processor},
     schema::tx_kinds,
 };
 
-pub struct TxKinds;
+pub(crate) struct TxKinds;
 
 impl Processor for TxKinds {
     const NAME: &'static str = "tx_kinds";
@@ -52,7 +54,6 @@ impl Processor for TxKinds {
 #[async_trait::async_trait]
 impl Handler for TxKinds {
     const MIN_EAGER_ROWS: usize = 100;
-    const MAX_CHUNK_ROWS: usize = 1000;
     const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {

@@ -6,8 +6,7 @@ CREATE TABLE IF NOT EXISTS sum_coin_balances
 (
     object_id                   BYTEA         PRIMARY KEY,
     object_version              BIGINT        NOT NULL,
-    -- The address that owns this version of the coin (it is guaranteed to be
-    -- address-owned).
+    -- The address that owns this version of the coin.
     owner_id                    BYTEA         NOT NULL,
     -- The type of the coin, as a BCS-serialized `TypeTag`. This is only the
     -- marker type, and not the full object type (e.g. `0x0...02::sui::SUI`).

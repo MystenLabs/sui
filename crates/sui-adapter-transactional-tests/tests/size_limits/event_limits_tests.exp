@@ -16,7 +16,7 @@ task 3, lines 59-61:
 //# run Test::M1::emit_n_small_events --args 1024 --gas-budget 100000000000000 --summarize
 events: 50
 mutated: 1
-gas summary: computation_cost: 3000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 53000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 62-64:
 //# run Test::M1::emit_n_small_events --args 1025 --gas-budget 100000000000000

@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::path::PathBuf;
 
 #[cfg(feature = "benchmark")]
-use crate::benchmark::BenchmarkConfig;
-use crate::db::DbConfig;
-use crate::IndexerConfig;
+use crate::benchmark::BenchmarkArgs;
+use crate::IndexerArgs;
 use clap::Subcommand;
+use sui_indexer_alt_framework::{db::DbArgs, ingestion::ClientArgs};
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
     #[command(flatten)]
-    pub db_config: DbConfig,
+    pub db_args: DbArgs,
 
     #[command(subcommand)]
     pub command: Command,
@@ -24,10 +24,25 @@ pub enum Command {
     /// Run the indexer.
     Indexer {
         #[command(flatten)]
-        indexer: IndexerConfig,
+        client_args: ClientArgs,
 
         #[command(flatten)]
-        consistency_config: ConsistencyConfig,
+        indexer_args: IndexerArgs,
+
+        /// Path to the indexer's configuration TOML file.
+        #[arg(long)]
+        config: PathBuf,
+    },
+
+    /// Output the contents of the default configuration to STDOUT.
+    GenerateConfig,
+
+    /// Combine the configuration held across multiple files into one and output it to STDOUT. When
+    /// two configurations set the same field, the last write wins.
+    MergeConfigs {
+        /// Path to a TOML file to be merged
+        #[arg(long, required = true, action = clap::ArgAction::Append)]
+        config: Vec<PathBuf>,
     },
 
     /// Wipe the database of its contents
@@ -45,51 +60,10 @@ pub enum Command {
     #[cfg(feature = "benchmark")]
     Benchmark {
         #[command(flatten)]
-        config: BenchmarkConfig,
+        benchmark_args: BenchmarkArgs,
+
+        /// Path to the indexer's configuration TOML file.
+        #[arg(long)]
+        config: PathBuf,
     },
-}
-
-#[derive(clap::Args, Debug, Clone)]
-pub struct ConsistencyConfig {
-    /// How often to check whether write-ahead logs related to the consistent range can be
-    /// pruned.
-    #[arg(
-        long,
-        default_value = "300",
-        value_name = "SECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_secs),
-    )]
-    pub consistent_pruning_interval: Duration,
-
-    /// How long to wait before honouring reader low watermarks.
-    #[arg(
-        long,
-        default_value = "120",
-        value_name = "SECONDS",
-        value_parser = |s: &str| s.parse().map(Duration::from_secs),
-    )]
-    pub pruner_delay: Duration,
-
-    /// Number of checkpoints to delay indexing summary tables for.
-    #[clap(long)]
-    pub consistent_range: Option<u64>,
-}
-
-impl ConsistencyConfig {
-    const DEFAULT_CONSISTENT_PRUNING_INTERVAL: &'static str = "300";
-    const DEFAULT_PRUNER_DELAY: &'static str = "120";
-
-    pub fn default_consistent_pruning_interval() -> Duration {
-        Self::DEFAULT_CONSISTENT_PRUNING_INTERVAL
-            .parse()
-            .map(Duration::from_secs)
-            .unwrap()
-    }
-
-    pub fn default_pruner_delay() -> Duration {
-        Self::DEFAULT_PRUNER_DELAY
-            .parse()
-            .map(Duration::from_secs)
-            .unwrap()
-    }
 }

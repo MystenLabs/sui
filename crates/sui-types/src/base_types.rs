@@ -516,7 +516,7 @@ impl ObjectInfo {
             version,
             digest,
             type_: o.into(),
-            owner: o.owner,
+            owner: o.owner.clone(),
             previous_transaction: o.previous_transaction,
         }
     }
@@ -527,7 +527,7 @@ impl ObjectInfo {
             version: object.version(),
             digest: object.digest(),
             type_: object.into(),
-            owner: object.owner,
+            owner: object.owner.clone(),
             previous_transaction: object.previous_transaction,
         }
     }

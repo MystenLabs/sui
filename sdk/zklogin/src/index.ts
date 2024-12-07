@@ -1,13 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export { computeZkLoginAddress, jwtToAddress } from './address.js';
-export type { ComputeZkLoginAddressOptions } from './address.js';
+import '@mysten/sui/zklogin';
 
-export { getZkLoginSignature } from '@mysten/sui/zklogin';
+import type { ComputeZkLoginAddressOptions } from '@mysten/sui/zklogin';
+import {
+	computeZkLoginAddress as suiComputeZkLoginAddress,
+	jwtToAddress as suiJwtToAddress,
+} from '@mysten/sui/zklogin';
 
-export { poseidonHash } from './poseidon.js';
+export type { ComputeZkLoginAddressOptions } from '@mysten/sui/zklogin';
 
-export { generateNonce, generateRandomness } from './nonce.js';
+export {
+	/** @deprecated, use `import { genAddressSeed } from '@mysten/sui/zklogin';` instead */
+	genAddressSeed,
+	/** @deprecated, use `import { generateNonce } from '@mysten/sui/zklogin';` instead */
+	generateNonce,
+	/** @deprecated, use `import { generateRandomness } from '@mysten/sui/zklogin';` instead */
+	generateRandomness,
+	/** @deprecated, use `import { getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';` instead */
+	getExtendedEphemeralPublicKey,
+	/** @deprecated, use `import { getZkLoginSignature } from '@mysten/sui/zklogin';` instead */
+	getZkLoginSignature,
+	/** @deprecated, use `import { hashASCIIStrToField } from '@mysten/sui/zklogin';` instead */
+	hashASCIIStrToField,
+	/** @deprecated, use `import { poseidonHash } from '@mysten/sui/zklogin';` instead */
+	poseidonHash,
+} from '@mysten/sui/zklogin';
 
-export { hashASCIIStrToField, genAddressSeed, getExtendedEphemeralPublicKey } from './utils.js';
+/** @deprecated, use `import { parseZkLoginSignature } from '@mysten/sui/zklogin';` instead */
+export function computeZkLoginAddress(options: ComputeZkLoginAddressOptions) {
+	return suiComputeZkLoginAddress({
+		...options,
+		legacyAddress: true,
+	});
+}
+
+/** @deprecated, use `import { jwtToAddress } from '@mysten/sui/zklogin';` instead */
+export function jwtToAddress(jwt: string, userSalt: string | bigint, legacyAddress = true) {
+	return suiJwtToAddress(jwt, userSalt, legacyAddress);
+}

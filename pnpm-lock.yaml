@@ -141,13 +141,13 @@ importers:
     devDependencies:
       '@headlessui/tailwindcss':
         specifier: ^0.1.3
-        version: 0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       '@tailwindcss/aspect-ratio':
         specifier: ^0.4.2
-        version: 0.4.2(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 0.4.2(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       '@tailwindcss/forms':
         specifier: ^0.5.7
-        version: 0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.3
@@ -544,7 +544,7 @@ importers:
         version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       tailwindcss-animate:
         specifier: ^1.0.7
-        version: 1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       ts-loader:
         specifier: ^9.4.4
         version: 9.5.1(typescript@5.5.3)(webpack@5.92.1(@swc/core@1.6.13(@swc/helpers@0.5.5))(webpack-cli@5.1.4(webpack@5.92.1)))
@@ -614,7 +614,7 @@ importers:
     devDependencies:
       '@headlessui/tailwindcss':
         specifier: ^0.1.3
-        version: 0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.3
@@ -729,7 +729,7 @@ importers:
     devDependencies:
       '@tailwindcss/forms':
         specifier: ^0.5.7
-        version: 0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       '@tsconfig/docusaurus':
         specifier: ^2.0.3
         version: 2.0.3
@@ -756,7 +756,7 @@ importers:
         version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       tailwindcss-animate:
         specifier: ^1.0.7
-        version: 1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
+        version: 1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -824,7 +824,7 @@ importers:
     devDependencies:
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3)
+        version: 10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -931,7 +931,7 @@ importers:
         version: 5.16.2
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3)
+        version: 10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -1364,7 +1364,7 @@ importers:
         version: 0.2.3
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3)
+        version: 10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)
       ts-retry-promise:
         specifier: ^0.8.1
         version: 0.8.1
@@ -1401,7 +1401,7 @@ importers:
         version: 0.2.3
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3)
+        version: 10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)
       ts-retry-promise:
         specifier: ^0.8.1
         version: 0.8.1
@@ -1614,37 +1614,6 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
-  sdk/kms:
-    dependencies:
-      '@mysten/sui':
-        specifier: workspace:*
-        version: link:../typescript
-      '@noble/curves':
-        specifier: ^1.4.2
-        version: 1.6.0
-      '@noble/hashes':
-        specifier: ^1.4.0
-        version: 1.5.0
-      asn1-ts:
-        specifier: ^8.0.2
-        version: 8.0.2
-      aws4fetch:
-        specifier: ^1.0.20
-        version: 1.0.20
-    devDependencies:
-      '@mysten/build-scripts':
-        specifier: workspace:*
-        version: link:../build-scripts
-      '@types/node':
-        specifier: ^20.14.10
-        version: 20.14.10
-      typescript:
-        specifier: ^5.5.3
-        version: 5.5.3
-      vitest:
-        specifier: ^2.0.1
-        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
-
   sdk/ledgerjs-hw-app-sui:
     dependencies:
       '@ledgerhq/hw-transport':
@@ -1694,7 +1663,36 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
 
-  sdk/move-bytecode-template/pkg/node: {}
+  sdk/signers:
+    dependencies:
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../typescript
+      '@noble/curves':
+        specifier: ^1.4.2
+        version: 1.6.0
+      '@noble/hashes':
+        specifier: ^1.4.0
+        version: 1.5.0
+      asn1-ts:
+        specifier: ^8.0.2
+        version: 8.0.2
+    devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.14.10
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.4.5
+      typescript:
+        specifier: ^5.5.3
+        version: 5.5.3
+      vitest:
+        specifier: ^2.0.1
+        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(lightningcss@1.27.0)(sass@1.77.6)(terser@5.31.1)
 
   sdk/suins-toolkit:
     dependencies:
@@ -1710,7 +1708,7 @@ importers:
         version: link:../build-scripts
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3)
+        version: 10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -1750,6 +1748,12 @@ importers:
       graphql:
         specifier: ^16.9.0
         version: 16.9.0
+      jose:
+        specifier: ^5.6.3
+        version: 5.6.3
+      poseidon-lite:
+        specifier: ^0.2.0
+        version: 0.2.0
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
@@ -1838,25 +1842,13 @@ importers:
         version: 5.5.3
       typescript-json-schema:
         specifier: ^0.64.0
-        version: 0.64.0(@swc/core@1.6.13)
+        version: 0.64.0(@swc/core@1.6.13(@swc/helpers@0.5.5))
 
   sdk/zklogin:
     dependencies:
-      '@mysten/bcs':
-        specifier: workspace:*
-        version: link:../bcs
       '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
-      '@noble/hashes':
-        specifier: ^1.4.0
-        version: 1.4.0
-      jose:
-        specifier: ^5.6.3
-        version: 5.6.3
-      poseidon-lite:
-        specifier: ^0.2.0
-        version: 0.2.0
     devDependencies:
       '@mysten/build-scripts':
         specifier: workspace:*
@@ -7890,9 +7882,6 @@ packages:
   aws4@1.12.0:
     resolution: {integrity: sha512-NmWvPnx0F1SfrQbYwOi7OeaNGokp9XhzNioJ/CSBs8Qa4vxug81mhJEAVZwxXuBmYB5KDRfMq/F3RR0BIU7sWg==}
 
-  aws4fetch@1.0.20:
-    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
-
   axe-core@4.9.1:
     resolution: {integrity: sha512-QbUdXJVTpvUTHU7871ppZkdOLBeGUKBQWHkHrvN2V9IQWGMt61zf3B45BtzjxEJzYuj0JBjBZP/hmYS/R9pmAw==}
     engines: {node: '>=4'}
@@ -9195,8 +9184,8 @@ packages:
     peerDependencies:
       webpack: ^4 || ^5
 
-  dotenv@16.4.1:
-    resolution: {integrity: sha512-CjA3y+Dr3FyFDOAMnxZEGtnW9KBR2M0JvvUtXNW+dYJL5ROWxP9DUHCwgFqpMk0OXCc0ljhaNTr2w/kutYIcHQ==}
+  dotenv@16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
     engines: {node: '>=12'}
 
   dotenv@7.0.0:
@@ -18011,7 +18000,7 @@ snapshots:
       '@whatwg-node/fetch': 0.9.16
       chalk: 4.1.2
       debug: 4.3.7(supports-color@8.1.1)
-      dotenv: 16.4.1
+      dotenv: 16.4.5
       graphql: 16.9.0
       graphql-request: 6.1.0(graphql@16.9.0)
       http-proxy-agent: 7.0.0
@@ -18137,7 +18126,7 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  '@headlessui/tailwindcss@0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))':
+  '@headlessui/tailwindcss@0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))':
     dependencies:
       tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
@@ -18857,13 +18846,15 @@ snapshots:
     transitivePeerDependencies:
       - '@parcel/core'
 
-  '@parcel/cache@2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))':
+  '@parcel/cache@2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)':
     dependencies:
       '@parcel/core': 2.12.0(@swc/helpers@0.5.5)
       '@parcel/fs': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/logger': 2.12.0
       '@parcel/utils': 2.12.0
       lmdb: 2.8.5
+    transitivePeerDependencies:
+      - '@swc/helpers'
 
   '@parcel/codeframe@2.12.0':
     dependencies:
@@ -18923,7 +18914,7 @@ snapshots:
   '@parcel/core@2.12.0(@swc/helpers@0.5.5)':
     dependencies:
       '@mischnic/json-sourcemap': 0.1.1
-      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))
+      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/diagnostic': 2.12.0
       '@parcel/events': 2.12.0
       '@parcel/fs': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
@@ -19338,7 +19329,7 @@ snapshots:
 
   '@parcel/types@2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)':
     dependencies:
-      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))
+      '@parcel/cache': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/diagnostic': 2.12.0
       '@parcel/fs': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
       '@parcel/package-manager': 2.12.0(@parcel/core@2.12.0(@swc/helpers@0.5.5))(@swc/helpers@0.5.5)
@@ -21797,11 +21788,11 @@ snapshots:
     dependencies:
       defer-to-connect: 2.0.1
 
-  '@tailwindcss/aspect-ratio@0.4.2(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))':
+  '@tailwindcss/aspect-ratio@0.4.2(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))':
     dependencies:
       tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
-  '@tailwindcss/forms@0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))':
+  '@tailwindcss/forms@0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)))':
     dependencies:
       mini-svg-data-uri: 1.4.4
       tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
@@ -23321,8 +23312,6 @@ snapshots:
 
   aws4@1.12.0: {}
 
-  aws4fetch@1.0.20: {}
-
   axe-core@4.9.1: {}
 
   axios@0.26.1:
@@ -24774,7 +24763,7 @@ snapshots:
       dotenv-defaults: 2.0.2
       webpack: 5.92.1(@swc/core@1.6.13(@swc/helpers@0.5.5))(webpack-cli@5.1.4(webpack@5.92.1))
 
-  dotenv@16.4.1: {}
+  dotenv@16.4.5: {}
 
   dotenv@7.0.0: {}
 
@@ -27413,7 +27402,7 @@ snapshots:
   lazy-universal-dotenv@4.0.0:
     dependencies:
       app-root-dir: 1.0.2
-      dotenv: 16.4.1
+      dotenv: 16.4.5
       dotenv-expand: 10.0.0
 
   lcid@3.1.1:
@@ -30876,7 +30865,7 @@ snapshots:
 
   tailwind-merge@2.4.0: {}
 
-  tailwindcss-animate@1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))):
+  tailwindcss-animate@1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))):
     dependencies:
       tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
@@ -31116,27 +31105,7 @@ snapshots:
 
   ts-log@2.2.5: {}
 
-  ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3):
-    dependencies:
-      '@cspotcode/source-map-support': 0.8.1
-      '@tsconfig/node10': 1.0.11
-      '@tsconfig/node12': 1.0.11
-      '@tsconfig/node14': 1.0.3
-      '@tsconfig/node16': 1.0.4
-      '@types/node': 20.14.10
-      acorn: 8.12.1
-      acorn-walk: 8.3.3
-      arg: 4.1.3
-      create-require: 1.1.1
-      diff: 4.0.2
-      make-error: 1.3.6
-      typescript: 5.5.3
-      v8-compile-cache-lib: 3.0.1
-      yn: 3.1.1
-    optionalDependencies:
-      '@swc/core': 1.6.13(@swc/helpers@0.5.5)
-
-  ts-node@10.9.2(@swc/core@1.6.13)(@types/node@16.18.101)(typescript@5.1.6):
+  ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@16.18.101)(typescript@5.1.6):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.11
@@ -31156,7 +31125,7 @@ snapshots:
     optionalDependencies:
       '@swc/core': 1.6.13(@swc/helpers@0.5.5)
 
-  ts-node@10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3):
+  ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.11
@@ -31339,14 +31308,14 @@ snapshots:
       typescript: 5.6.3
       yaml: 2.4.5
 
-  typescript-json-schema@0.64.0(@swc/core@1.6.13):
+  typescript-json-schema@0.64.0(@swc/core@1.6.13(@swc/helpers@0.5.5)):
     dependencies:
       '@types/json-schema': 7.0.15
       '@types/node': 16.18.101
       glob: 7.2.3
       path-equal: 1.2.5
       safe-stable-stringify: 2.4.3
-      ts-node: 10.9.2(@swc/core@1.6.13)(@types/node@16.18.101)(typescript@5.1.6)
+      ts-node: 10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@16.18.101)(typescript@5.1.6)
       typescript: 5.1.6
       yargs: 17.7.2
     transitivePeerDependencies:

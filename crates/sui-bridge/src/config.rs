@@ -261,8 +261,14 @@ impl BridgeNodeConfig {
                 .interval(std::time::Duration::from_millis(2000)),
         );
         let chain_id = provider.get_chainid().await?;
-        let (committee_address, limiter_address, vault_address, config_address, _weth_address) =
-            get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
+        let (
+            committee_address,
+            limiter_address,
+            vault_address,
+            config_address,
+            _weth_address,
+            _usdt_address,
+        ) = get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
 
         if self.run_client && self.eth.eth_contracts_start_block_fallback.is_none() {

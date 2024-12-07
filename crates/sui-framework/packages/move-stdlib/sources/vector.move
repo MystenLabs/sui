@@ -84,10 +84,8 @@ public fun reverse<Element>(v: &mut vector<Element>) {
 }
 
 /// Pushes all of the elements of the `other` vector into the `lhs` vector.
-public fun append<Element>(lhs: &mut vector<Element>, mut other: vector<Element>) {
-    other.reverse();
-    while (other.length() != 0) lhs.push_back(other.pop_back());
-    other.destroy_empty();
+public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
+    other.do!(|e| lhs.push_back(e));
 }
 
 /// Return `true` if the vector `v` has no elements and `false` otherwise.
@@ -185,7 +183,7 @@ public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
 public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
     let mut v = $v;
     v.reverse();
-    while (v.length() != 0) $f(v.pop_back());
+    v.length().do!(|_| $f(v.pop_back()));
     v.destroy_empty();
 }
 

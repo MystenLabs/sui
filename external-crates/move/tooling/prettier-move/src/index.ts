@@ -34,12 +34,12 @@ export const languages: SupportLanguage[] = [
 	{
 		name: 'move',
 		extensions: ['.move'],
-		parsers: ['move-parse'],
+		parsers: ['move'],
 	},
 ];
 
 export const parsers: { [key: string]: PrettierParser } = {
-	'move-parse': {
+	move: {
 		parse: (text: string): Promise<Node> => {
 			return (async (): Promise<Node> => {
 				await Parser.init();
@@ -52,14 +52,14 @@ export const parsers: { [key: string]: PrettierParser } = {
 			})();
 		},
 
-		astFormat: 'move-format',
+		astFormat: 'move',
 		locStart: () => -1,
 		locEnd: () => -1,
 	},
 };
 
 export const printers: { [key: string]: Printer } = {
-	'move-format': { print },
+	'move': { print },
 };
 
 export const options: Record<string, SupportOption> = {
@@ -86,12 +86,6 @@ export const options: Record<string, SupportOption> = {
 		category: 'Global',
 		default: false,
 		description: 'Wrap comments to the next line if the line is too long.',
-	},
-	alwaysBreakFunctions: {
-		type: 'boolean',
-		category: 'Global',
-		default: true,
-		description: 'Always break function body into multiple lines.',
 	},
 	useModuleLabel: {
 		type: 'boolean',

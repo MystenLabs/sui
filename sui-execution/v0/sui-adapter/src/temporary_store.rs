@@ -236,7 +236,7 @@ impl<'backing> TemporaryStore<'backing> {
         // the first coin is where all the others are merged.
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
             let (object, _kind) = &self.written[&coin_id];
-            (object.compute_object_reference(), object.owner)
+            (object.compute_object_reference(), object.owner.clone())
         } else {
             (
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
@@ -249,10 +249,11 @@ impl<'backing> TemporaryStore<'backing> {
         let mut unwrapped = vec![];
         for (object, kind) in self.written.values() {
             let object_ref = object.compute_object_reference();
+            let owner = object.owner.clone();
             match kind {
-                WriteKind::Mutate => mutated.push((object_ref, object.owner)),
-                WriteKind::Create => created.push((object_ref, object.owner)),
-                WriteKind::Unwrap => unwrapped.push((object_ref, object.owner)),
+                WriteKind::Mutate => mutated.push((object_ref, owner)),
+                WriteKind::Create => created.push((object_ref, owner)),
+                WriteKind::Unwrap => unwrapped.push((object_ref, owner)),
             }
         }
 
@@ -534,6 +535,9 @@ impl<'backing> TemporaryStore<'backing> {
                 Owner::ObjectOwner(_parent) => {
                     unreachable!("Input objects must be address owned, shared, or immutable")
                 }
+                Owner::ConsensusV2 { .. } => {
+                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                }
             }
         }
 
@@ -564,6 +568,9 @@ impl<'backing> TemporaryStore<'backing> {
                                 "Only system packages can be upgraded"
                             );
                         }
+                        Owner::ConsensusV2 { .. } => {
+                            unimplemented!("ConsensusV2 does not exist for this execution version")
+                        }
                     }
                 }
                 WriteKind::Create | WriteKind::Unwrap => {
@@ -589,6 +596,9 @@ impl<'backing> TemporaryStore<'backing> {
                             unreachable!("Should already be in authenticated_objs")
                         }
                         Owner::Immutable => unreachable!("Immutable objects cannot be deleted"),
+                        Owner::ConsensusV2 { .. } => {
+                            unimplemented!("ConsensusV2 does not exist for this execution version")
+                        }
                     }
                 }
                 DeleteKindWithOldVersion::UnwrapThenDelete

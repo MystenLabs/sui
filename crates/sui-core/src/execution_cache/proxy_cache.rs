@@ -64,7 +64,8 @@ impl ProxyCache {
         let cache_type = epoch_start_config.execution_cache_type();
         tracing::info!("using cache impl {:?}", cache_type);
         let passthrough_cache = PassthroughCache::new(store.clone(), metrics.clone());
-        let writeback_cache = WritebackCache::new(store.clone(), metrics.clone());
+        let writeback_cache =
+            WritebackCache::new(&Default::default(), store.clone(), metrics.clone());
 
         Self {
             passthrough_cache,

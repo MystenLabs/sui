@@ -299,7 +299,9 @@ mod checked {
                 // must be a shared object).
                 if let Some(obj) = gas_object.as_object() {
                     if !obj.is_address_owned() {
-                        return Err(UserInputError::GasObjectNotOwnedObject { owner: obj.owner });
+                        return Err(UserInputError::GasObjectNotOwnedObject {
+                            owner: obj.owner.clone(),
+                        });
                     }
                 } else {
                     // This case should never happen (because gas can't be a shared object), but we

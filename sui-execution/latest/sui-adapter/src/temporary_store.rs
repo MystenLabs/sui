@@ -323,7 +323,7 @@ impl<'backing> TemporaryStore<'backing> {
             DynamicallyLoadedObjectMetadata {
                 version: old_ref.1,
                 digest: old_ref.2,
-                owner: old_object.owner,
+                owner: old_object.owner.clone(),
                 storage_rebate: old_object.storage_rebate,
                 previous_transaction: old_object.previous_transaction,
             },
@@ -484,7 +484,7 @@ impl<'backing> TemporaryStore<'backing> {
                         |((version, digest), owner)| DynamicallyLoadedObjectMetadata {
                             version: *version,
                             digest: *digest,
-                            owner: *owner,
+                            owner: owner.clone(),
                             // It's guaranteed that a mutable input object is an input object.
                             storage_rebate: self.input_objects[object_id].storage_rebate,
                             previous_transaction: self.input_objects[object_id]
@@ -500,7 +500,7 @@ impl<'backing> TemporaryStore<'backing> {
                         DynamicallyLoadedObjectMetadata {
                             version: obj.version(),
                             digest: obj.digest(),
-                            owner: obj.owner,
+                            owner: obj.owner.clone(),
                             storage_rebate: obj.storage_rebate,
                             previous_transaction: obj.previous_transaction,
                         }
@@ -537,10 +537,10 @@ impl<'backing> TemporaryStore<'backing> {
                 }
                 match &obj.owner {
                     Owner::AddressOwner(a) => {
-                        assert!(sender == a, "Input object not owned by sender");
+                        assert!(sender == a, "Input object must be owned by sender");
                         Some(id)
                     }
-                    Owner::Shared { .. } => Some(id),
+                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => Some(id),
                     Owner::Immutable => {
                         // object is authenticated, but it cannot own other objects,
                         // so we should not add it to `authenticated_objs`
@@ -555,7 +555,9 @@ impl<'backing> TemporaryStore<'backing> {
                         None
                     }
                     Owner::ObjectOwner(_parent) => {
-                        unreachable!("Input objects must be address owned, shared, or immutable")
+                        unreachable!(
+                            "Input objects must be address owned, shared, consensus, or immutable"
+                        )
                     }
                 }
             })
@@ -604,7 +606,7 @@ impl<'backing> TemporaryStore<'backing> {
                         // it would already have been in authenticated_for_mutation
                         ObjectID::from(*parent)
                     }
-                    owner @ Owner::Shared { .. } => panic!(
+                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusV2 { .. } => panic!(
                         "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                         Potentially covering objects in: {authenticated_for_mutation:#?}",
                     ),

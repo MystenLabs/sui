@@ -19,6 +19,28 @@ public struct Default2 {
     field: String,
 } has key, store, drop;
 
+// abilities are always sorted in `key`,
+// copy`, `drop`, `store` order
+public struct Sort has key, store, drop, copy {}
+
+// abilities support comments in between
+public struct Cmt has /* please */ key /* don't */, /* do */ store /* this */ {}
+
+// line comments are also possible, but
+// let's hope no one ever uses them
+public struct Cmt2 has copy,
+// kill me
+store, // trailing
+drop,
+{}
+
+// empty struct can be with comemtns
+// both single and multi-line
+public struct Cmt3 { /* block cmmt */ }
+public struct Cmt4 {
+    // line cmmt
+}
+
 // struct can be single line, and breaks
 // automatically
 public struct Struct has key { id: UID }

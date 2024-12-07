@@ -10,26 +10,25 @@ use anyhow::{anyhow, bail, ensure};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
+use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{sequential::Handler, Processor},
+};
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
 };
 
 use crate::{
-    db,
-    models::objects::{StoredObjectUpdate, StoredSumCoinBalance},
-    pipeline::{sequential::Handler, Processor},
+    models::objects::{StoredCoinOwnerKind, StoredObjectUpdate, StoredSumCoinBalance},
     schema::sum_coin_balances,
 };
 
-/// Each insert or update will include at most this many rows -- the size is chosen to maximize the
-/// rows without hitting the limit on bind parameters.
-const UPDATE_CHUNK_ROWS: usize = i16::MAX as usize / 5;
+const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumCoinBalance::FIELD_COUNT;
+const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 
-/// Each deletion will include at most this many rows.
-const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-
-pub struct SumCoinBalances;
+pub(crate) struct SumCoinBalances;
 
 impl Processor for SumCoinBalances {
     const NAME: &'static str = "sum_coin_balances";
@@ -99,9 +98,17 @@ impl Processor for SumCoinBalances {
                     continue;
                 };
 
-                // Coin balance only tracks address-owned objects
-                let Owner::AddressOwner(owner_id) = object.owner() else {
-                    continue;
+                // Coin balance only tracks address-owned or ConsensusV2 objects
+                let (coin_owner_kind, owner_id) = match object.owner() {
+                    Owner::AddressOwner(owner_id) => (StoredCoinOwnerKind::Fastpath, owner_id),
+                    // ConsensusV2 objects are treated as address-owned for now in indexers.
+                    // This will need to be updated if additional Authenticators are added.
+                    Owner::ConsensusV2 { authenticator, .. } => (
+                        StoredCoinOwnerKind::Consensus,
+                        authenticator.as_single_owner(),
+                    ),
+
+                    Owner::Immutable | Owner::ObjectOwner(_) | Owner::Shared { .. } => continue,
                 };
 
                 let Some(coin) = object.as_coin_maybe() else {
@@ -124,6 +131,7 @@ impl Processor for SumCoinBalances {
                                 owner_id: owner_id.to_vec(),
                                 coin_type: coin_type.clone(),
                                 coin_balance: coin.balance.value() as i64,
+                                coin_owner_kind,
                             }),
                         });
                     }
@@ -158,9 +166,8 @@ impl Handler for SumCoinBalances {
                 deletes.push(update.object_id.to_vec());
             }
         }
-
-        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(Either::Left);
-        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(Either::Right);
+        let update_chunks = updates.chunks(MAX_INSERT_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(MAX_DELETE_CHUNK_ROWS).map(Either::Right);
 
         let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
             Either::Left(update) => Either::Left(
@@ -174,6 +181,8 @@ impl Handler for SumCoinBalances {
                         sum_coin_balances::owner_id.eq(excluded(sum_coin_balances::owner_id)),
                         sum_coin_balances::coin_balance
                             .eq(excluded(sum_coin_balances::coin_balance)),
+                        sum_coin_balances::coin_owner_kind
+                            .eq(excluded(sum_coin_balances::coin_owner_kind)),
                     ))
                     .execute(conn),
             ),

@@ -10,26 +10,25 @@ use anyhow::{anyhow, ensure};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::{try_join_all, Either};
+use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{sequential::Handler, Processor},
+};
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
     object::Owner,
 };
 
 use crate::{
-    db,
     models::objects::{StoredObjectUpdate, StoredOwnerKind, StoredSumObjType},
-    pipeline::{sequential::Handler, Processor},
     schema::sum_obj_types,
 };
 
-/// Each insert or update will include at most this many rows -- the size is chosen to maximize the
-/// rows without hitting the limit on bind parameters.
-const UPDATE_CHUNK_ROWS: usize = i16::MAX as usize / 8;
+const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredSumObjType::FIELD_COUNT;
+const MAX_DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 
-/// Each deletion will include at most this many rows.
-const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
-
-pub struct SumObjTypes;
+pub(crate) struct SumObjTypes;
 
 impl Processor for SumObjTypes {
     const NAME: &'static str = "sum_obj_types";
@@ -99,6 +98,9 @@ impl Processor for SumObjTypes {
                                     Owner::ObjectOwner(_) => StoredOwnerKind::Object,
                                     Owner::Shared { .. } => StoredOwnerKind::Shared,
                                     Owner::Immutable => StoredOwnerKind::Immutable,
+                                    // ConsensusV2 objects are treated as address-owned for now in indexers.
+                                    // This will need to be updated if additional Authenticators are added.
+                                    Owner::ConsensusV2 { .. } => StoredOwnerKind::Address,
                                 },
 
                                 owner_id: match object.owner() {
@@ -156,8 +158,8 @@ impl Handler for SumObjTypes {
             }
         }
 
-        let update_chunks = updates.chunks(UPDATE_CHUNK_ROWS).map(Either::Left);
-        let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(Either::Right);
+        let update_chunks = updates.chunks(MAX_INSERT_CHUNK_ROWS).map(Either::Left);
+        let delete_chunks = deletes.chunks(MAX_DELETE_CHUNK_ROWS).map(Either::Right);
 
         let futures = update_chunks.chain(delete_chunks).map(|chunk| match chunk {
             Either::Left(update) => Either::Left(

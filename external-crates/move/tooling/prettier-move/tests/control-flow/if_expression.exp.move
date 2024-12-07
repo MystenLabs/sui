@@ -4,9 +4,8 @@
 module test::if_expression {
     public fun basic() {
         if (true) call_something();
-        if (false) {
-            call_something_else_call_something_else_call_something_else()
-        };
+        if (false)
+            call_something_else_call_something_else_call_something_else();
 
         if (cond) do_this() else {
             do_that();
@@ -36,9 +35,8 @@ module test::if_expression {
 
     public fun control_flow() {
         if (true) return call_something();
-        if (true) {
-            return call_something_else_call_something_else_call_something_else()
-        };
+        if (true)
+            return call_something_else_call_something_else_call_something_else();
     }
 
     public fun folding() {
@@ -59,9 +57,8 @@ module test::if_expression {
             let a = b;
         };
 
-        if (very_very_long_if_condition) {
-            very_very_long_if_condition > very_very_long_if_condition
-        };
+        if (very_very_long_if_condition)
+            very_very_long_if_condition > very_very_long_if_condition;
 
         let a = if (true) {
             call_something_else();
@@ -73,11 +70,10 @@ module test::if_expression {
             very_very_long_if_condition > very_very_long_if_condition ||
             very_very_long_if_condition + very_very_long_if_condition > 100 &&
             very_very_long_if_condition
-        ) {
+        )
             very_very_long_if_condition > very_very_long_if_condition &&
             very_very_long_if_condition > very_very_long_if_condition &&
-            very_very_long_if_condition > very_very_long_if_condition
-        };
+            very_very_long_if_condition > very_very_long_if_condition;
         // should break list of expressions inside parens, with indent;
         if (
             very_very_long_if_condition > very_very_long_if_condition ||
@@ -89,18 +85,16 @@ module test::if_expression {
             very_very_long_if_condition > very_very_long_if_condition;
         };
 
-        if (very_very_long_if_condition > very_very_long_if_condition) {
-            return very_very > very_very_long_if_condition + 100
-        };
+        if (very_very_long_if_condition > very_very_long_if_condition)
+            return very_very > very_very_long_if_condition + 100;
 
         if (
             very_very_long_if_condition > very_very_long_if_condition &&
             very_very_long_if_condition > very_very_long_if_condition &&
             very_very_long_if_condition > very_very_long_if_condition
-        ) {
+        )
             return very_very_long_if_condition > very_very_long_if_condition &&
                 very_very_long_if_condition > very_very_long_if_condition ||
                 very_very_long_if_condition > very_very_long_if_condition
-        }
     }
 }

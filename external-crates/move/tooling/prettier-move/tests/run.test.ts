@@ -96,7 +96,7 @@ function runSpec(filepath: string, content: string) {
 		const result = await prettier.format(content, {
 			// @ts-ignore
 			plugins: [plugin],
-			parser: 'move-parse',
+			parser: 'move',
 			printWidth: config.printWidth,
 			tabWidth: config.tabWidth,
 			wrapComments: config.wrapComments,
