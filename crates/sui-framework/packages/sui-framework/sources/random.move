@@ -149,6 +149,11 @@ public fun new_generator(r: &Random, ctx: &mut TxContext): RandomGenerator {
     RandomGenerator { seed, counter: 0, buffer: vector[] }
 }
 
+#[spec]
+fun new_generator_spec(r: &Random, ctx: &mut TxContext): RandomGenerator {
+    new_generator(r, ctx)
+}
+
 // Get the next block of random bytes.
 fun derive_next_block(g: &mut RandomGenerator): vector<u8> {
     g.counter = g.counter + 1;
@@ -249,6 +254,15 @@ fun u128_in_range(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u
     let range_size = (max - min) as u256 + 1;
     let rand = u256_from_bytes(g, num_of_bytes);
     min + (rand % range_size as u128)
+}
+
+#[spec]
+fun u128_in_range_spec(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
+    // prover::asserts(min <= max);
+    let result = u128_in_range(g, min, max, num_of_bytes);
+    // prover::ensures(result >= min);
+    // prover::ensures(result <= max);
+    result
 }
 
 /// Generate a random u128 in [min, max] (with a bias of 2^{-64}).

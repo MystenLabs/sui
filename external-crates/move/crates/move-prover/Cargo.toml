@@ -11,6 +11,7 @@ license = "Apache-2.0"
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-model.workspace = true
+move-prover-boogie-backend.workspace = true
 move-docgen.workspace = true
 move-stackless-bytecode.workspace = true
 

@@ -5,13 +5,20 @@
 //! This escape analysis flags procedures that return a reference pointing inside of a struct type
 //! declared in the current module.
 
-use std::{cell::RefCell, cmp::Ordering, collections::BTreeMap};
+use std::{
+    cell::RefCell,
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet, HashSet},
+};
 
 use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 
 use move_binary_format::file_format::CodeOffset;
-use move_model::{ast::TempIndex, model::FunctionEnv};
+use move_model::{
+    ast::{Operation as ASTOperation, TempIndex},
+    model::{DatatypeId, FieldId, FunctionEnv, ModuleId, QualifiedId},
+};
 
 use crate::{
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
@@ -105,12 +112,27 @@ struct WarningId {
     offset: CodeOffset,
 }
 
+struct SpecMemoryInfo {
+    /// Fields that occur in struct, module, or global specs. Leaked references to fields inside
+    /// this set will be flagged, leaked references to other fields will be allowed.
+    relevant_fields: BTreeSet<(QualifiedId<DatatypeId>, FieldId)>,
+    /// Structs that occur in struct, module, or global specs. Leaked references to fields inside
+    /// these structs may cause a spec like `invariant forall s: S: s == S { f: 10 }` to be false
+    relevant_structs: BTreeSet<QualifiedId<DatatypeId>>,
+    /// Vector-related operations that occur in struct, module, or global specs. Leaked references
+    /// to vector contents will be allowed if this is empty
+    vector_operations: HashSet<ASTOperation>,
+}
+
 struct EscapeAnalysis<'a> {
     func_env: &'a FunctionEnv<'a>,
     /// Warnings about escaped references to surface to the programmer
     // Uses a map instead of a vec to avoid reporting multiple warnings
     // at program locations in a loop during fixpoint iteration
     escape_warnings: RefCell<BTreeMap<WarningId, Diagnostic<FileId>>>,
+    /// Information about the memory touched by the specs of the declaring module for this function
+    /// If the function's declaring module has no specs, this will be None
+    spec_memory: Option<SpecMemoryInfo>,
 }
 
 impl EscapeAnalysis<'_> {
@@ -135,6 +157,54 @@ impl EscapeAnalysis<'_> {
                 .with_labels(vec![label]),
         );
     }
+
+    /// Return true if `fld` is mentioned in a specification of the current module *or* if the
+    /// module has no specifications (i.e., we consider all fields to be relevant in that case)
+    pub fn specs_contain_field(&self, mid: &ModuleId, sid: &DatatypeId, fld: &FieldId) -> bool {
+        if let Some(specs) = &self.spec_memory {
+            let qsid = mid.qualified(*sid);
+            specs.relevant_structs.contains(&qsid) || specs.relevant_fields.contains(&(qsid, *fld))
+        } else {
+            true
+        }
+    }
+
+    /// Return `true` if vector indexes are mentioned in a specification of the current module *or*
+    /// if the module has no specifications
+    pub fn specs_contain_vector_index(&self) -> bool {
+        use ASTOperation::*;
+        if let Some(specs) = &self.spec_memory {
+            for op in &specs.vector_operations {
+                match op {
+                    // TODO: not sure about SingleVec, IndexOf, ContainsVec, InRangeVec, RangeVec
+                    Index | Slice | UpdateVec | SingleVec | IndexOfVec | ContainsVec
+                    | InRangeVec | RangeVec => return true,
+                    _ => (),
+                }
+            }
+            false
+        } else {
+            true
+        }
+    }
+
+    /// Returns `true` if vector lengths are mentioned in a specification of the current module *or*
+    /// if the module has no specifications
+    pub fn specs_contain_vector_length(&self) -> bool {
+        use ASTOperation::*;
+        if let Some(specs) = &self.spec_memory {
+            for op in &specs.vector_operations {
+                match op {
+                    // TODO: does every indexing-related operation belong here?
+                    Len | SingleVec | EmptyVec => return true,
+                    _ => (),
+                }
+            }
+            false
+        } else {
+            true
+        }
+    }
 }
 
 impl<'a> TransferFunctions for EscapeAnalysis<'a> {
@@ -147,9 +217,23 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
 
         match instr {
             Call(_, rets, oper, args, _) => match oper {
-                BorrowField(_, _, _type_params, _) => {
+                BorrowField(mid, sid, _type_params, offset) => {
+                    let struct_env = self.func_env.module_env.get_struct(*sid);
+                    let field_env = struct_env.get_field_by_offset(*offset);
+                    let field_id = field_env.get_id();
+
                     let to_propagate = match state.get_local_index(&args[0]) {
-                        AbsValue::OkRef => AbsValue::OkRef,
+                        AbsValue::OkRef => {
+                            // TODO: or if the field is a vector and specs contain a length
+                            if self.specs_contain_field(mid, sid, &field_id)
+                                || (field_env.get_type().is_vector()
+                                    && self.specs_contain_vector_length())
+                            {
+                                AbsValue::InternalRef
+                            } else {
+                                AbsValue::OkRef
+                            }
+                        }
                         AbsValue::InternalRef => AbsValue::InternalRef,
                         AbsValue::NonRef => panic!("Invariant violation: expected reference"),
                     };
@@ -182,7 +266,13 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
                             ("vector", "borrow_mut") | ("vector", "borrow") => {
                                 let vec_arg = 0;
                                 let to_propagate = match state.get_local_index(&args[vec_arg]) {
-                                    AbsValue::OkRef => AbsValue::OkRef,
+                                    AbsValue::OkRef => {
+                                        if self.specs_contain_vector_index() {
+                                            AbsValue::InternalRef
+                                        } else {
+                                            AbsValue::OkRef
+                                        }
+                                    }
                                     AbsValue::InternalRef => AbsValue::InternalRef,
                                     AbsValue::NonRef => {
                                         panic!("Invariant violation: expected reference")
@@ -219,6 +309,7 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
             Load(_, lhs, _) => {
                 state.insert(*lhs, AbsValue::NonRef);
             }
+            VariantSwitch(_, tmp_index, labels) => todo!(),
             Assign(_, lhs, rhs, _) => state.assign(*lhs, rhs),
             Ret(_, rets) => {
                 let ret_types = self.func_env.get_return_types();
@@ -232,7 +323,8 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
                     }
                 }
             }
-            Abort(..) | Branch(..) | Jump(..) | Label(..) | Nop(..) | VariantSwitch(..) => {
+            Abort(..) | SaveMem(..) | Prop(..) | SaveSpecVar(..) | Branch(..) | Jump(..)
+            | Label(..) | Nop(..) => {
                 // these operations do not assign any locals
             }
         }
@@ -269,10 +361,43 @@ impl FunctionTargetProcessor for EscapeAnalysisProcessor {
             initial_state.insert(param_index, param_val);
         }
 
+        // compute set of fields and vector ops used in all struct specs
+        // Note: global and module specs are not relevant here because
+        // it is not possible to leak a reference to a global outside of
+        // the module that declares it.
+        let mut has_specs = false;
+        let menv = &func_env.module_env;
+        let mut relevant_fields = BTreeSet::new();
+        let mut relevant_structs = BTreeSet::new();
+        let mut vector_operations = HashSet::new();
+        for struct_env in menv.get_structs() {
+            let struct_spec = struct_env.get_spec();
+            if !struct_spec.conditions.is_empty() {
+                relevant_structs.insert(struct_env.get_qualified_id());
+            }
+            for condition in &struct_spec.conditions {
+                for exp in condition.all_exps() {
+                    exp.field_usage(&mut relevant_fields);
+                    exp.struct_usage(&mut relevant_structs);
+                    exp.vector_usage(&mut vector_operations);
+                    has_specs = true
+                }
+            }
+        }
+
         let cfg = StacklessControlFlowGraph::new_forward(&data.code);
         let analysis = EscapeAnalysis {
             func_env,
             escape_warnings: RefCell::new(BTreeMap::new()),
+            spec_memory: if has_specs {
+                Some(SpecMemoryInfo {
+                    relevant_fields,
+                    relevant_structs,
+                    vector_operations,
+                })
+            } else {
+                None
+            },
         };
         analysis.analyze_function(initial_state, &data.code, &cfg);
         let env = func_env.module_env.env;

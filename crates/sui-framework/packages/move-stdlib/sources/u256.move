@@ -90,3 +90,8 @@ public macro fun do($stop: u256, $f: |u256|) {
 public macro fun do_eq($stop: u256, $f: |u256|) {
     std::macros::do_eq!($stop, $f)
 }
+
+#[spec_only]
+public use fun std::integer::from_u256 as u256.to_int;
+#[spec_only]
+public use fun std::real::from_u256 as u256.to_real;

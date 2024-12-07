@@ -4,7 +4,8 @@
 use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
 use move_cli::base;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
+use move_prover::run_boogie_gen;
 use serde_json::json;
 use std::{fs, path::Path};
 use sui_move_build::{check_invalid_dependencies, check_unpublished_dependencies, BuildConfig};
@@ -34,6 +35,8 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
+    #[clap(long, global = true)]
+    pub generate_boogie: bool,
     /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
     /// for automated address management, where package addresses are resolved for the
     /// respective chain in the Move.lock file.
@@ -55,18 +58,40 @@ impl Build {
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
+            self.generate_boogie,
             self.chain_id.clone(),
         )
     }
 
     pub fn execute_internal(
         rerooted_path: &Path,
-        config: MoveBuildConfig,
+        mut config: MoveBuildConfig,
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
+        generate_boogie: bool,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
+        if generate_boogie {
+            config.verify_mode = true;
+            config.dev_mode = true;
+
+            let model = config.move_model_for_package(
+                rerooted_path,
+                ModelConfig {
+                    all_files_as_targets: false,
+                    target_filter: None,
+                },
+            )?;
+            let mut options = move_prover::cli::Options::default();
+            // don't spawn async tasks when running Boogie--causes a crash if we do
+            options.backend.sequential_task = true;
+            options.backend.use_array_theory = true;
+            options.backend.vc_timeout = 3000;
+            run_boogie_gen(&model, options)?;
+            return Ok(());
+        }
+
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,

@@ -5,33 +5,48 @@
 use crate::{
     borrow_analysis::BorrowAnalysisProcessor,
     clean_and_optimize::CleanAndOptimizeProcessor,
+    data_invariant_instrumentation::DataInvariantInstrumentationProcessor,
     debug_instrumentation::DebugInstrumenter,
     eliminate_imm_refs::EliminateImmRefsProcessor,
     function_target_pipeline::{FunctionTargetPipeline, FunctionTargetProcessor},
+    global_invariant_analysis::GlobalInvariantAnalysisProcessor,
+    global_invariant_instrumentation::GlobalInvariantInstrumentationProcessor,
     inconsistency_check::InconsistencyCheckInstrumenter,
     livevar_analysis::LiveVarAnalysisProcessor,
     loop_analysis::LoopAnalysisProcessor,
     memory_instrumentation::MemoryInstrumentationProcessor,
     mono_analysis::MonoAnalysisProcessor,
+    move_loop_invariants::MoveLoopInvariantsProcessor,
     mut_ref_instrumentation::MutRefInstrumenter,
     mutation_tester::MutationTester,
     number_operation_analysis::NumberOperationProcessor,
     options::ProverOptions,
     reaching_def_analysis::ReachingDefProcessor,
+    spec_global_variable_analysis::SpecGlobalVariableAnalysisProcessor,
+    spec_instrumentation::SpecInstrumentationProcessor,
+    type_invariant_analysis::TypeInvariantAnalysisProcessor,
+    usage_analysis::UsageProcessor,
+    verification_analysis::VerificationAnalysisProcessor,
+    well_formed_instrumentation::WellFormedInstrumentationProcessor,
 };
 
 pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetPipeline {
     // NOTE: the order of these processors is import!
     let mut processors: Vec<Box<dyn FunctionTargetProcessor>> = vec![
+        SpecGlobalVariableAnalysisProcessor::new(),
         DebugInstrumenter::new(),
         // transformation and analysis
         EliminateImmRefsProcessor::new(),
         MutRefInstrumenter::new(),
+        MoveLoopInvariantsProcessor::new(),
         ReachingDefProcessor::new(),
         LiveVarAnalysisProcessor::new(),
         BorrowAnalysisProcessor::new_borrow_natives(options.borrow_natives.clone()),
         MemoryInstrumentationProcessor::new(),
         CleanAndOptimizeProcessor::new(),
+        UsageProcessor::new(),
+        TypeInvariantAnalysisProcessor::new(),
+        VerificationAnalysisProcessor::new(),
     ];
 
     if !options.skip_loop_analysis {
@@ -39,6 +54,12 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
     }
 
     processors.append(&mut vec![
+        // spec instrumentation
+        SpecInstrumentationProcessor::new(),
+        GlobalInvariantAnalysisProcessor::new(),
+        GlobalInvariantInstrumentationProcessor::new(),
+        WellFormedInstrumentationProcessor::new(),
+        DataInvariantInstrumentationProcessor::new(),
         // monomorphization
         MonoAnalysisProcessor::new(),
     ]);

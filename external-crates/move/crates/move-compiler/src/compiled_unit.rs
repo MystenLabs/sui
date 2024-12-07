@@ -30,6 +30,13 @@ pub struct VarInfo {
 }
 
 #[derive(Debug, Clone)]
+pub struct SpecInfo {
+    pub offset: F::CodeOffset,
+    // Free locals that are used but not declared in the block
+    pub used_locals: UniqueMap<H::Var, VarInfo>,
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionInfo {
     pub parameters: Vec<(H::Var, VarInfo)>,
     pub attributes: Attributes,

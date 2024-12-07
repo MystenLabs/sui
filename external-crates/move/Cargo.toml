@@ -31,6 +31,7 @@ arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
 better_any = "0.1.1"
+bimap = "0.6.2"
 bitvec = "0.19.4"
 byteorder = "1.4.3"
 bytes = "1.0.1"
@@ -162,6 +163,7 @@ move-model = { path = "crates/move-model" }
 move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-prover = { path = "crates/move-prover" }
+move-prover-boogie-backend = { path = "crates/move-prover-boogie-backend" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }

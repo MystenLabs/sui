@@ -1,8 +1,9 @@
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/use_inner_scope_shadows.move:12:5
-   │  
-12 │ ╭     spec schema Foo<T> {
-13 │ │         ensures true;
-14 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+12 │     spec schema Foo<T> {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
