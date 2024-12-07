@@ -9,6 +9,7 @@ const links = [
 	{ to: '/multisig-address', label: 'MultiSig Address' },
 	{ to: '/combine-signatures', label: 'Combine MultiSig Signatures' },
 	{ to: '/execute-transaction', label: 'Execute Transaction' },
+	{ to: '/help', label: 'Help' },
 ];
 
 export function Menu({ callback }: { callback?: () => void }) {
