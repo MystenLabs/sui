@@ -3,10 +3,8 @@
 import type { PublicKey, SignatureFlag } from '@mysten/sui/cryptography';
 import { SIGNATURE_FLAG_TO_SCHEME, Signer } from '@mysten/sui/cryptography';
 import { fromBase64, toBase64 } from '@mysten/sui/utils';
-import { secp256r1 } from '@noble/curves/p256';
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { DERElement } from 'asn1-ts';
 
+import { getConcatenatedSignature } from '../utils/utils.js';
 import type { AwsClientOptions } from './aws-client.js';
 import { AwsKmsClient } from './aws-client.js';
 
@@ -82,7 +80,7 @@ export class AwsKmsSigner extends Signer {
 		});
 
 		// Concatenate the signature components into a compact form
-		return this.#getConcatenatedSignature(fromBase64(signResponse.Signature));
+		return getConcatenatedSignature(fromBase64(signResponse.Signature), this.getKeyScheme());
 	}
 
 	/**
@@ -91,41 +89,6 @@ export class AwsKmsSigner extends Signer {
 	 */
 	signData(): never {
 		throw new Error('KMS Signer does not support sync signing');
-	}
-
-	/**
-	 * Generates a concatenated signature from a DER-encoded signature.
-	 *
-	 * This signature format is consumable by Sui's `toSerializedSignature` method.
-	 *
-	 * @param signature - A `Uint8Array` representing the DER-encoded signature.
-	 * @returns A `Uint8Array` containing the concatenated signature in compact form.
-	 *
-	 * @throws {Error} If the input signature is invalid or cannot be processed.
-	 */
-	#getConcatenatedSignature(signature: Uint8Array): Uint8Array {
-		if (!signature || signature.length === 0) {
-			throw new Error('Invalid signature');
-		}
-
-		// Initialize a DERElement to parse the DER-encoded signature
-		const derElement = new DERElement();
-		derElement.fromBytes(signature);
-
-		const [r, s] = derElement.toJSON() as [string, string];
-
-		switch (this.getKeyScheme()) {
-			case 'Secp256k1':
-				return new secp256k1.Signature(BigInt(r), BigInt(s)).normalizeS().toCompactRawBytes();
-			case 'Secp256r1':
-				return new secp256r1.Signature(BigInt(r), BigInt(s)).normalizeS().toCompactRawBytes();
-		}
-
-		// Create a Secp256k1Signature using the extracted r and s values
-		const secp256k1Signature = new secp256k1.Signature(BigInt(r), BigInt(s));
-
-		// Normalize the signature and convert it to compact raw bytes
-		return secp256k1Signature.normalizeS().toCompactRawBytes();
 	}
 
 	/**

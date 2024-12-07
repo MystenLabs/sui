@@ -58,6 +58,10 @@ jobs:
         uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # pin@v0.4.0
         with:
           version: 'latest'
+      - name: configure gcp/gke service user auth
+        uses: google-github-actions/auth@v1
+        with:
+            credentials_json: ${{ secrets.GKE_TEST_KMS_SVCUSER_CREDENTIALS }}
       - name: Build
         run: pnpm turbo build
       - name: Test
@@ -67,6 +71,12 @@ jobs:
           AWS_REGION: ${{ vars.AWS_KMS_AWS_REGION }}
           AWS_KMS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KMS_KEY_ID }}
           E2E_AWS_KMS_TEST_ENABLE: "true"
+          GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
+          GOOGLE_LOCATION: ${{ secrets.GOOGLE_LOCATION }}
+          GOOGLE_KEYRING: ${{ secrets.GOOGLE_KEYRING }}
+          GOOGLE_KEY_NAME: ${{ secrets.GOOGLE_KEY_NAME }}
+          GOOGLE_KEY_NAME_VERSION: ${{ secrets.GOOGLE_KEY_NAME_VERSION }}
+          E2E_GCP_KMS_TEST_ENABLE: "true"
         run: pnpm turbo test
 
       # Pack wallet extension and upload it as an artifact for easy developer use:

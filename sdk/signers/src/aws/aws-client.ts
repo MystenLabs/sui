@@ -4,10 +4,9 @@
 import { Secp256k1PublicKey } from '@mysten/sui/keypairs/secp256k1';
 import { Secp256r1PublicKey } from '@mysten/sui/keypairs/secp256r1';
 import { fromBase64 } from '@mysten/sui/utils';
-import { ASN1Construction, ASN1TagClass, DERElement } from 'asn1-ts';
 
+import { publicKeyFromDER } from '../utils/utils.js';
 import { AwsClient } from './aws4fetch.js';
-import { compressPublicKeyClamped } from './utils.js';
 
 interface KmsCommands {
 	Sign: {
@@ -66,30 +65,7 @@ export class AwsKmsClient extends AwsClient {
 			throw new Error('Public Key not found for the supplied `keyId`');
 		}
 
-		const publicKey = fromBase64(publicKeyResponse.PublicKey);
-
-		const encodedData: Uint8Array = publicKey;
-		const derElement = new DERElement();
-		derElement.fromBytes(encodedData);
-
-		// Validate the ASN.1 structure of the public key
-		if (
-			!(
-				derElement.tagClass === ASN1TagClass.universal &&
-				derElement.construction === ASN1Construction.constructed
-			)
-		) {
-			throw new Error('Unexpected ASN.1 structure');
-		}
-
-		const components = derElement.components;
-		const publicKeyElement = components[1];
-
-		if (!publicKeyElement) {
-			throw new Error('Public Key not found in the DER structure');
-		}
-
-		const compressedKey = compressPublicKeyClamped(publicKeyElement.bitString);
+		const compressedKey = publicKeyFromDER(fromBase64(publicKeyResponse.PublicKey));
 
 		switch (publicKeyResponse.KeySpec) {
 			case 'ECC_NIST_P256':

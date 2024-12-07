@@ -9,6 +9,10 @@
 		"./aws": {
 			"import": "./dist/esm/aws/index.js",
 			"require": "./dist/cjs/aws/index.js"
+		},
+		"./gcp": {
+			"import": "./dist/esm/gcp/index.js",
+			"require": "./dist/cjs/gcp/index.js"
 		}
 	},
 	"sideEffects": false,
@@ -18,6 +22,7 @@
 		"README.md",
 		"aws",
 		"dist",
+		"gcp",
 		"src"
 	],
 	"scripts": {
@@ -48,6 +53,7 @@
 		"vitest": "^2.0.1"
 	},
 	"dependencies": {
+		"@google-cloud/kms": "^4.5.0",
 		"@mysten/sui": "workspace:*",
 		"@noble/curves": "^1.4.2",
 		"@noble/hashes": "^1.4.0",
