@@ -1299,6 +1299,14 @@ mod tests {
         let _template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
     }
 
+    /// Tests that a legacy validator config (captured on 12/06/2024) can be parsed.
+    #[test]
+    fn legacy_validator_config() {
+        const FILE: &str = include_str!("../data/sui-node-legacy.yaml");
+
+        let _template: NodeConfig = serde_yaml::from_str(FILE).unwrap();
+    }
+
     #[test]
     fn load_key_pairs_to_node_config() {
         let protocol_key_pair: AuthorityKeyPair =

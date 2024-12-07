@@ -1,0 +1,169 @@
+protocol-key-pair:
+  path: /opt/sui/key-pairs/protocol.key
+worker-key-pair:
+  path: /opt/sui/key-pairs/worker.key
+network-key-pair:
+  path: /opt/sui/key-pairs/network.key
+db-path: /opt/sui/db/authorities_db
+network-address: /ip4/0.0.0.0/tcp/8080/http
+json-rpc-address: 0.0.0.0:9000
+enable-experimental-rest-api: true
+rest:
+  enable-unstable-apis: true
+metrics-address: 0.0.0.0:9184
+admin-interface-port: 1337
+consensus-config:
+  db-path: /opt/sui/db/consensus_db
+  db-retention-epochs: null
+  db-pruner-period-secs: null
+  max-pending-transactions: null
+  max-submit-position: null
+  submit-delay-step-override-millis: null
+  address: /ip4/127.0.0.1/tcp/8083/http
+  narwhal-config:
+    header_num_of_batches_threshold: 32
+    max_header_num_of_batches: 1000
+    max_header_delay: 2000ms
+    min_header_delay: 500ms
+    gc_depth: 50
+    sync_retry_delay: 5000ms
+    sync_retry_nodes: 3
+    batch_size: 5000000
+    max_batch_delay: 100ms
+    max_concurrent_requests: 500000
+    prometheus_metrics:
+      socket_addr: /ip4/127.0.0.1/tcp/38329/http
+    network_admin_server:
+      primary_network_admin_server_port: 43039
+      worker_network_admin_server_base_port: 33143
+    anemo:
+      send_certificate_rate_limit: null
+      report_batch_rate_limit: null
+      request_batches_rate_limit: null
+  parameters: null
+enable-index-processing: true
+jsonrpc-server-type: null
+grpc-load-shed: null
+grpc-concurrency-limit: 20000000000
+p2p-config:
+  listen-address: 0.0.0.0:8084
+  external-address: /dns/hello.sui.io/udp/8084
+  seed-peers:
+  - peer-id: 1cab034c3d3e43f8a33d39b3e358815537439ad8dc89c6660cac2e4ee994f017
+    address: /dns/test.sui.io/udp/8084
+  state-sync:
+    checkpoint-content-timeout-ms: 10000
+  anemo-config:
+    max-concurrent-connections: 0
+genesis:
+  genesis-file-location: /opt/sui/config/genesis.blob
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 0
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+end-of-epoch-broadcast-channel-capacity: 128
+checkpoint-executor-config:
+  checkpoint-execution-max-concurrency: 200
+  local-execution-timeout-sec: 30
+db-checkpoint-config:
+  perform-db-checkpoints-at-epoch-end: false
+indirect-objects-threshold: 18446744073709551615
+expensive-safety-check-config:
+  enable-epoch-sui-conservation-check: false
+  enable-deep-per-tx-sui-conservation-check: false
+  force-disable-epoch-sui-conservation-check: false
+  enable-state-consistency-check: false
+  force-disable-state-consistency-check: false
+  enable-secondary-index-checks: false
+  enable-move-vm-paranoid-checks: false
+transaction-deny-config:
+  package-publish-disabled: false
+  package-upgrade-disabled: false
+  shared-object-disabled: false
+  user-transaction-disabled: false
+  receiving-objects-disabled: false
+  zklogin-sig-disabled: false
+  zklogin-disabled-providers: []
+certificate-deny-config: {}
+state-debug-dump-config: {}
+state-archive-write-config:
+  concurrency: 0
+  use-for-pruning-watermark: false
+state-archive-read-config: []
+state-snapshot-write-config:
+  concurrency: 0
+indexer-max-subscriptions: null
+transaction-kv-store-read-config:
+  base-url: https://transactions.sui.io/
+  cache-size: 100000
+jwk-fetch-interval-seconds: 3600
+zklogin-oauth-providers:
+  Mainnet:
+  - Apple
+  - Playtron
+  - Twitch
+  Testnet:
+  - Apple
+  - Playtron
+  - Twitch
+  Unknown:
+  - Apple
+  - Playtron
+  - Twitch
+  - TestIssuer
+authority-overload-config:
+  max-txn-age-in-queue:
+    secs: 0
+    nanos: 500000000
+  overload-monitor-interval:
+    secs: 10
+    nanos: 0
+  execution-queue-latency-soft-limit:
+    secs: 1
+    nanos: 0
+  execution-queue-latency-hard-limit:
+    secs: 10
+    nanos: 0
+  max-load-shedding-percentage: 95
+  min-load-shedding-percentage-above-hard-limit: 50
+  safe-transaction-ready-rate: 100
+  check-system-overload-at-signing: true
+  max-transaction-manager-queue-length: 100000
+  max-transaction-manager-per-object-queue-length: 20
+execution-cache:
+  writeback-cache:
+    max_cache_size: null
+    package_cache_size: null
+    object_cache_size: null
+    marker_cache_size: null
+    object_by_id_cache_size: null
+    transaction_cache_size: null
+    executed_effect_cache_size: null
+    effect_cache_size: null
+    events_cache_size: null
+    transaction_objects_cache_size: null
+enable-soft-bundle: true
+enable-validator-tx-finalizer: true
+verifier-signing-config:
+  max-per-fun-meter-units: null
+  max-per-mod-meter-units: null
+  max-per-pkg-meter-units: null
+  max-back-edges-per-function: null
+  max-back-edges-per-module: null
+policy-config:
+  channel-capacity: 6000
+  connection-blocklist-ttl-sec: 60
+  dry-run: false
+  error-policy-type:
+    FreqThreshold:
+      client-threshold: 5000
+      update-interval-secs: 1
+      window-size-secs: 5
+  spam-policy-type:
+    FreqThreshold:
+      client-threshold: 5000
+      update-interval-secs: 1
+      window-size-secs: 5
+  spam-sample-rate: 1
