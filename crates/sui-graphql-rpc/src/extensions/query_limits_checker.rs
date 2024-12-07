@@ -29,6 +29,7 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
+const MULTI_GET_QUERY: &str = "multiGet";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Clone, Copy, Debug)]
@@ -122,6 +123,11 @@ impl<'a> LimitsTraversal<'a> {
             self.check_input_limits(op)?;
         }
 
+        // Next, check the size of the multiget queries inputs and outputs.
+        for (_name, op) in doc.operations.iter() {
+            self.check_multiget_queries(op)?;
+        }
+
         // Then gather inputs to transaction execution and dry-run nodes, and make sure these are
         // within budget, cumulatively.
         for (_name, op) in doc.operations.iter() {
@@ -144,6 +150,51 @@ impl<'a> LimitsTraversal<'a> {
             self.check_output_limits(op)?;
         }
 
+        Ok(())
+    }
+
+    fn check_multiget_queries(
+        &mut self,
+        op: &'a Positioned<OperationDefinition>,
+    ) -> ServerResult<()> {
+        for item in &op.node.selection_set.node.items {
+            self.traverse_multiget_queries(item)?;
+        }
+        Ok(())
+    }
+
+    fn traverse_multiget_queries(&mut self, item: &'a Positioned<Selection>) -> ServerResult<()> {
+        match &item.node {
+            Selection::Field(f) => {
+                let name = &f.node.name.node;
+                if name.starts_with(MULTI_GET_QUERY) {
+                    for (_, value) in &f.node.arguments {
+                        let m = self.check_multiget_args(value);
+                        for selection in &f.node.selection_set.node.items {
+                            self.traverse_selection_for_output(selection, m as u32, None)?;
+                        }
+                    }
+                }
+            }
+
+            Selection::InlineFragment(f) => {
+                for selection in &f.node.selection_set.node.items {
+                    self.traverse_multiget_queries(selection)?;
+                }
+            }
+
+            Selection::FragmentSpread(fs) => {
+                let name = &fs.node.fragment_name.node;
+                let def = self
+                    .fragments
+                    .get(name)
+                    .ok_or_else(|| self.reporter.fragment_not_found_error(name, fs.pos))?;
+
+                for selection in &def.node.selection_set.node.items {
+                    self.traverse_multiget_queries(selection)?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -227,6 +278,7 @@ impl<'a> LimitsTraversal<'a> {
         match &item.node {
             Selection::Field(f) => {
                 let name = &f.node.name.node;
+
                 if name == DRY_RUN_TX_BLOCK || name == EXECUTE_TX_BLOCK {
                     for (_name, value) in &f.node.arguments {
                         self.check_tx_arg(value)?;
@@ -253,6 +305,26 @@ impl<'a> LimitsTraversal<'a> {
             }
         }
         Ok(())
+    }
+
+    /// multiGet queries can only pass a number of keys that does not exceed the max
+    /// page size. This checks for the number of keys and deducts the raw size of the keys from
+    /// the payload size.
+    fn check_multiget_args(&mut self, value: &'a Positioned<Value>) -> usize {
+        use GqlValue as V;
+
+        match &value.node {
+            V::List(vs) => vs.len(),
+            V::Variable(var) => {
+                let v = self.variables.get(var);
+                if let Some(ConstValue::List(vs)) = v {
+                    vs.len()
+                } else {
+                    1
+                }
+            }
+            _ => 1,
+        }
     }
 
     /// Deduct the size of the transaction argument's `value` from the transaction payload budget.
