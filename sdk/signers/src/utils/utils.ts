@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { secp256r1 } from '@noble/curves/p256';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { ASN1Construction, ASN1TagClass, DERElement } from 'asn1-ts';
+
 /** The total number of bits in the DER bit string for the uncompressed public key. */
 export const DER_BIT_STRING_LENGTH = 520;
 
@@ -27,6 +31,52 @@ function bitsToBytes(bitsArray: Uint8ClampedArray): Uint8Array {
 		}
 	}
 	return bytes;
+}
+
+export function publicKeyFromDER(derBytes: Uint8Array) {
+	const encodedData: Uint8Array = derBytes;
+	const derElement = new DERElement();
+	derElement.fromBytes(encodedData);
+
+	// Validate the ASN.1 structure of the public key
+	if (
+		!(
+			derElement.tagClass === ASN1TagClass.universal &&
+			derElement.construction === ASN1Construction.constructed
+		)
+	) {
+		throw new Error('Unexpected ASN.1 structure');
+	}
+
+	const components = derElement.components;
+	const publicKeyElement = components[1];
+
+	if (!publicKeyElement) {
+		throw new Error('Public Key not found in the DER structure');
+	}
+
+	return compressPublicKeyClamped(publicKeyElement.bitString);
+}
+
+export function getConcatenatedSignature(signature: Uint8Array, keyScheme: string) {
+	if (!signature || signature.length === 0) {
+		throw new Error('Invalid signature');
+	}
+
+	// Initialize a DERElement to parse the DER-encoded signature
+	const derElement = new DERElement();
+	derElement.fromBytes(signature);
+
+	const [r, s] = derElement.toJSON() as [string, string];
+
+	switch (keyScheme) {
+		case 'Secp256k1':
+			return new secp256k1.Signature(BigInt(r), BigInt(s)).normalizeS().toCompactRawBytes();
+		case 'Secp256r1':
+			return new secp256r1.Signature(BigInt(r), BigInt(s)).normalizeS().toCompactRawBytes();
+		default:
+			throw new Error('Unsupported key scheme');
+	}
 }
 
 /**

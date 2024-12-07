@@ -1,7 +1,7 @@
 # Sui KMS Signers
 
 The Sui KMS Signers package provides a set of tools for securely signing transactions using Key
-Management Services (KMS) like AWS KMS.
+Management Services (KMS) like AWS KMS and GCP KMS.
 
 ## Table of Contents
 
@@ -11,6 +11,12 @@ Management Services (KMS) like AWS KMS.
     - [fromKeyId](#fromkeyid)
       - [Parameters](#parameters)
       - [Examples](#examples)
+- [GCP KMS Signer](#gcp-kms-signer)
+  - [Usage](#usage-1)
+  - [API](#api-1)
+    - [fromOptions](#fromoptions)
+      - [Parameters](#parameters-1)
+      - [Examples](#examples-1)
 
 ## AWS KMS Signer
 
@@ -73,3 +79,64 @@ Returns
 An instance of AwsKmsSigner.
 
 **Notice**: AWS Signer requires Node >=20 due to dependency on `crypto`
+
+## GCP KMS Signer
+
+The GCP KMS Signer allows you to leverage Google Cloud's Key Management Service to sign Sui
+transactions.
+
+### Usage
+
+#### fromOptions
+
+Create a GCP KMS signer from the provided options. This method initializes the signer with the
+necessary GCP credentials and configuration, allowing it to interact with GCP KMS to perform
+cryptographic operations.
+
+##### Parameters
+
+- `options`
+  **[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** An
+  object containing GCP credentials and configuration.
+  - `projectId`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The GCP project ID.
+  - `location`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The GCP location.
+  - `keyRing`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The GCP key ring.
+  - `cryptoKey`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The GCP crypto key.
+  - `cryptoKeyVersion`
+    **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+    The GCP crypto key version.
+
+##### Examples
+
+```typescript
+const signer = await GcpKmsSigner.fromOptions({
+	projectId: 'your-google-project-id',
+	location: 'your-google-location',
+	keyRing: 'your-google-keyring',
+	cryptoKey: 'your-google-key-name',
+	cryptoKeyVersion: 'your-google-key-name-version',
+});
+
+// Retrieve the public key and get the Sui address
+const publicKey = signer.getPublicKey();
+console.log(publicKey.toSuiAddress());
+
+// Define a test message
+const testMessage = 'Hello, GCP KMS Signer!';
+const messageBytes = new TextEncoder().encode(testMessage);
+
+// Sign the test message
+const { signature } = await signer.signPersonalMessage(messageBytes);
+
+// Verify the signature against the public key
+const isValid = await publicKey.verifyPersonalMessage(messageBytes, signature);
+console.log(isValid); // Should print true if the signature is valid
+```
