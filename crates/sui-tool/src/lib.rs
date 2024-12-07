@@ -890,6 +890,7 @@ pub async fn download_formal_snapshot(
             usize::MAX,
             NonZeroUsize::new(num_parallel_downloads).unwrap(),
             m_clone,
+            false, // skip_reset_local_store
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));

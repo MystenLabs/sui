@@ -80,6 +80,7 @@ impl IndexerFormalSnapshotRestorer {
             usize::MAX,
             NonZeroUsize::new(restore_config.object_store_concurrent_limit).unwrap(),
             m.clone(),
+            true, // skip_reset_local_store
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));

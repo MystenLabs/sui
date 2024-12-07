@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -55,17 +54,6 @@ impl IndexerFormalSnapshotRestorer {
 
         let base_path = PathBuf::from(restore_config.snapshot_download_dir.clone());
         let snapshot_dir = base_path.join("snapshot");
-        if snapshot_dir.exists() {
-            fs::remove_dir_all(snapshot_dir.clone()).unwrap();
-            info!(
-                "Deleted all files from snapshot directory: {:?}",
-                snapshot_dir
-            );
-        } else {
-            fs::create_dir(snapshot_dir.clone()).unwrap();
-            info!("Created snapshot directory: {:?}", snapshot_dir);
-        }
-
         let local_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
             directory: Some(snapshot_dir.clone().to_path_buf()),
@@ -80,6 +68,7 @@ impl IndexerFormalSnapshotRestorer {
             usize::MAX,
             NonZeroUsize::new(restore_config.object_store_concurrent_limit).unwrap(),
             m.clone(),
+            true, // skip_reset_local_store
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
