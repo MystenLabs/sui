@@ -1086,8 +1086,7 @@ impl CheckpointBuilder {
         let _scope = monitored_scope("CheckpointBuilder::causal_sort");
         let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
         if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
-            #[cfg(debug_assertions)]
-            {
+            if cfg!(debug_assertions) {
                 // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
                 for tx in unsorted.iter() {
                     assert!(tx.transaction_digest() != &ccp_digest);
