@@ -158,7 +158,8 @@ The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`clien
 <summary>
     TypeScript SDK queryEvents example
 </summary>
-```ts
+
+```
 import {
     useSignAndExecuteTransactionBlock,
     useSuiClient,
@@ -167,8 +168,8 @@ import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Button, Flex, Heading } from "@radix-ui/themes";
 
 export function Creategame({
-                               onCreated,
-                           }:{
+    onCreated,
+}:{
     onCreated: (id: string) => void;
 }) {
     const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
@@ -242,7 +243,8 @@ export function Creategame({
 <summary>
     TypeScript SDK queryEvents Response
 </summary>
-When the subscribed to event fires, the example displays the following JSON representation of the event.
+When the subscribed to event fires, the example displays the following JSON representation of the event.   
+
 ```
 {
 	"id": {
@@ -262,7 +264,6 @@ When the subscribed to event fires, the example displays the following JSON repr
 ```
 I can get the value of parsedJson in the example below, and its final value is {"msg":"You Win :)"} .
 </details>
-
 
 #### Filtering event queries
 
