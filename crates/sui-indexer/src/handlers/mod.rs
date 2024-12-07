@@ -288,8 +288,6 @@ pub enum CommitterTables {
     TxDigests,
     TxInputObjects,
     TxKinds,
-    TxRecipients,
-    TxSenders,
 
     Checkpoints,
     PrunerCpWatermark,
