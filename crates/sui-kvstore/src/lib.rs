@@ -34,6 +34,7 @@ pub trait KeyValueStoreReader {
     ) -> Result<Option<Checkpoint>>;
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
+    async fn get_watermark(&mut self, task_name: &str) -> Result<u64>;
 }
 
 #[async_trait]
@@ -41,6 +42,11 @@ pub trait KeyValueStoreWriter {
     async fn save_objects(&mut self, objects: &[&Object]) -> Result<()>;
     async fn save_transactions(&mut self, transactions: &[TransactionData]) -> Result<()>;
     async fn save_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()>;
+    async fn save_watermark(
+        &mut self,
+        name: &str,
+        watermark: CheckpointSequenceNumber,
+    ) -> Result<()>;
 }
 
 #[derive(Clone, Debug)]
