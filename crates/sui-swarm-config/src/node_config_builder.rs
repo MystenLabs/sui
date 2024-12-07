@@ -137,11 +137,9 @@ impl ValidatorConfigBuilder {
             .join(key_path.clone());
 
         let network_address = validator.network_address;
-        let consensus_address = validator.consensus_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
         let localhost = local_ip_utils::localhost_for_testing();
         let consensus_config = ConsensusConfig {
-            address: consensus_address,
             db_path: consensus_db_path,
             db_retention_epochs: None,
             db_pruner_period_secs: None,

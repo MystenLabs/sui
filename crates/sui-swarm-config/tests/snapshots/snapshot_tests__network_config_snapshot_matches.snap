@@ -26,7 +26,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -187,7 +186,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -348,7 +346,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -509,7 +506,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -670,7 +666,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -831,7 +826,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -992,7 +986,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~

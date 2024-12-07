@@ -128,7 +128,6 @@ fn network_config_snapshot_matches() {
         validator_config.p2p_config.external_address = None;
         validator_config.admin_interface_port = 8888;
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
-            consensus_config.address = Multiaddr::empty();
             consensus_config.db_path = PathBuf::from("/tmp/foo/");
         }
     }
