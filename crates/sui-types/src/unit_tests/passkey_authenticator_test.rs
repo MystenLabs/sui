@@ -161,7 +161,7 @@ async fn create_credential_and_sign_test_tx(
     }
 }
 
-fn make_credential_creation_option(origin: &Url) -> CredentialCreationOptions {
+pub fn make_credential_creation_option(origin: &Url) -> CredentialCreationOptions {
     let challenge_bytes_from_rp: Bytes = random_vec(32).into();
     let user_entity = PublicKeyCredentialUserEntity {
         id: random_vec(32).into(),
