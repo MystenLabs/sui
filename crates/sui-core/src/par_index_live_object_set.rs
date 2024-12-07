@@ -71,34 +71,34 @@ fn live_object_set_index_task<T: LiveObjectIndexer>(
     authority_store: &AuthorityStore,
     mut object_indexer: T,
 ) -> Result<(), StorageError> {
-    let mut id_bytes = [0; ObjectID::LENGTH];
-    id_bytes[0] = task_id << (8 - bits);
-    let start_id = ObjectID::new(id_bytes);
-
-    id_bytes[0] |= (1 << (8 - bits)) - 1;
-    for element in id_bytes.iter_mut().skip(1) {
-        *element = u8::MAX;
-    }
-    let end_id = ObjectID::new(id_bytes);
-
-    let mut object_scanned: u64 = 0;
-    for object in authority_store
-        .perpetual_tables
-        .range_iter_live_object_set(Some(start_id), Some(end_id), false)
-        .filter_map(LiveObject::to_normal)
-    {
-        object_scanned += 1;
-        if object_scanned % 2_000_000 == 0 {
-            info!(
-                "[Index] Task {}: object scanned: {}",
-                task_id, object_scanned
-            );
-        }
-
-        object_indexer.index_object(object)?
-    }
-
-    object_indexer.finish()?;
+    // let mut id_bytes = [0; ObjectID::LENGTH];
+    // id_bytes[0] = task_id << (8 - bits);
+    // let start_id = ObjectID::new(id_bytes);
+    //
+    // id_bytes[0] |= (1 << (8 - bits)) - 1;
+    // for element in id_bytes.iter_mut().skip(1) {
+    //     *element = u8::MAX;
+    // }
+    // let end_id = ObjectID::new(id_bytes);
+    //
+    // let mut object_scanned: u64 = 0;
+    // for object in authority_store
+    //     .perpetual_tables
+    //     .range_iter_live_object_set(Some(start_id), Some(end_id), false)
+    //     .filter_map(LiveObject::to_normal)
+    // {
+    //     object_scanned += 1;
+    //     if object_scanned % 2_000_000 == 0 {
+    //         info!(
+    //             "[Index] Task {}: object scanned: {}",
+    //             task_id, object_scanned
+    //         );
+    //     }
+    //
+    //     object_indexer.index_object(object)?
+    // }
+    //
+    // object_indexer.finish()?;
 
     Ok(())
 }
