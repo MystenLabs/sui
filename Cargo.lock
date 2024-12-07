@@ -8335,6 +8335,7 @@ name = "mysten-network"
 version = "0.2.0"
 dependencies = [
  "anemo",
+ "anemo-tower",
  "async-stream",
  "bcs",
  "bytes",
@@ -8346,6 +8347,7 @@ dependencies = [
  "multiaddr",
  "once_cell",
  "pin-project-lite",
+ "prometheus",
  "serde",
  "snap",
  "tokio",
@@ -15337,6 +15339,7 @@ dependencies = [
  "lru 0.10.0",
  "move-package",
  "msim",
+ "mysten-network",
  "rand 0.8.5",
  "serde",
  "sui-framework",
