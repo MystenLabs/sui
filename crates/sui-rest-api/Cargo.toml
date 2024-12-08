@@ -9,6 +9,7 @@ publish = false
 mime = "0.3.17"
 anyhow.workspace = true
 axum = { workspace = true, features = ["matched-path"] }
+base64.workspace = true
 bcs.workspace = true
 rand.workspace = true
 reqwest.workspace = true

@@ -15147,6 +15147,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.5",
+ "base64 0.21.7",
  "bcs",
  "diffy",
  "documented",

@@ -13,7 +13,7 @@ use test_cluster::TestClusterBuilder;
 async fn get_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let client = Client::new(test_cluster.rpc_url(), None).unwrap();
     let core_client = CoreClient::new(test_cluster.rpc_url());
 
     let _object = client.get_object("0x5".parse().unwrap()).await.unwrap();
