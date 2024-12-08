@@ -22,6 +22,8 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printFunctionParameters;
 		case FunctionDefinition.FunctionParameter:
 			return printFunctionParameter;
+		case FunctionDefinition.MutFunctionParameter:
+			return printMutFunctionParameter;
 		case FunctionDefinition.ReturnType:
 			return printReturnType;
 		case FunctionDefinition.TypeArguments:
@@ -54,6 +56,7 @@ export enum FunctionDefinition {
 	VisibilityModifier = 'visibility_modifier',
 	FunctionParameters = 'function_parameters',
 	FunctionParameter = 'function_parameter',
+	MutFunctionParameter = 'mut_function_parameter',
 	ReturnType = 'ret_type',
 	TypeArguments = 'type_arguments',
 	TypeParameters = 'type_parameters',
@@ -197,6 +200,17 @@ export function printFunctionParameter(
 		': ',
 		path.call(print, 'nonFormattingChildren', 1), // type
 	]);
+}
+
+/**
+ * Print `mut` function parameter.
+ */
+export function printMutFunctionParameter(
+	path: AstPath<Node>,
+	_opt: MoveOptions,
+	print: printFn,
+): Doc {
+	return ['mut ', path.call(print, 'nonFormattingChildren', 0)];
 }
 
 /**
