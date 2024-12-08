@@ -10,7 +10,7 @@ use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::{
-    base_types::{EpochId, ObjectRef, TransactionDigest},
+    base_types::{EpochId, ObjectRef, SequenceNumber, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
     storage::{GetSharedLocks, ObjectKey},
     transaction::{
@@ -156,7 +156,11 @@ impl TransactionInputLoader {
                     object_keys.push(objref.into());
                     fetches.push((i, input));
                 }
-                InputObjectKind::SharedMoveObject { id, .. } => {
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } => {
                     let shared_locks = shared_locks_cell
                         .get_or_init(|| {
                             shared_lock_store
@@ -172,8 +176,16 @@ impl TransactionInputLoader {
                             fatal!("Failed to get shared locks for transaction {tx_key:?}");
                         });
 
+                    let initial_shared_version =
+                        if shared_lock_store.is_initial_shared_version_unknown() {
+                            // (before ConsensusV2 objects, we didn't track initial shared
+                            // version for shared object locks)
+                            SequenceNumber::UNKNOWN
+                        } else {
+                            *initial_shared_version
+                        };
                     // If we find a set of locks but an object is missing, it indicates a serious inconsistency:
-                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                    let version = shared_locks.get(&(*id, initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });
                     if version.is_cancelled() {
