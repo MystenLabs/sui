@@ -205,6 +205,10 @@ const config = {
         },
         items: [
           {
+            label: "Get Started",
+            to: "get-started",
+          },
+          {
             label: "Guides",
             to: "guides",
           },
