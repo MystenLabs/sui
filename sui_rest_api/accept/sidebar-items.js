@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["APPLICATION_BCS","APPLICATION_PROTOBUF"],"enum":["AcceptFormat","AcceptJsonProtobufBcs"],"struct":["Accept"]};
