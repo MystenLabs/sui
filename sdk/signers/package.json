@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/signers",
-	"version": "0.0.10",
+	"version": "0.1.0",
 	"description": "A collection of KMS signers for various cloud providers",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",

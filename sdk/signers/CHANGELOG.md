@@ -1,5 +1,12 @@
 # @mysten/signers
 
+## 0.1.0
+
+### Minor Changes
+
+- 2349920: Introduces GCP KMS signer at `@mysten/signers/gcp`
+- e0885ca: renamed package to @mysten/signers and inlines aws4fetch
+
 ## 0.0.10
 
 ### Patch Changes
