@@ -44,7 +44,7 @@ runs:
           - 'external-crates/**'
           - 'narwhal/**'
           - 'sui-execution/**'
-          - '.github/workflows/codecov.yml'
+          - '.github/workflows/cargo-llvm-cov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
           - 'Cargo.lock'
