@@ -9,8 +9,8 @@ use sui_field_count::FieldCount;
 use sui_types::base_types::ObjectID;
 
 use crate::schema::{
-    kv_objects, obj_info, obj_versions, sum_coin_balances, sum_obj_types, wal_coin_balances,
-    wal_obj_types,
+    coin_balance_buckets, kv_objects, obj_info, obj_versions, sum_coin_balances, sum_obj_types,
+    wal_coin_balances, wal_obj_types,
 };
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
@@ -146,4 +146,15 @@ pub struct StoredObjInfo {
     pub module: Option<String>,
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
+}
+
+#[derive(Insertable, Debug, Clone, FieldCount)]
+#[diesel(table_name = coin_balance_buckets, primary_key(object_id, cp_sequence_number))]
+pub struct StoredCoinBalanceBucket {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
+    pub owner_kind: Option<StoredCoinOwnerKind>,
+    pub owner_id: Option<Vec<u8>>,
+    pub coin_type: Option<Vec<u8>>,
+    pub coin_balance_bucket: Option<i16>,
 }
