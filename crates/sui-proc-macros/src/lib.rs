@@ -67,16 +67,15 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                         .get_package_bytes(/* with_unpublished_deps */ false);
                 }
 
+                use std::sync::Arc;
 
                 use ::sui_simulator::anemo_tower::callback::CallbackLayer;
                 use ::sui_simulator::anemo_tower::trace::DefaultMakeSpan;
                 use ::sui_simulator::anemo_tower::trace::DefaultOnFailure;
                 use ::sui_simulator::anemo_tower::trace::TraceLayer;
-                use ::sui_simulator::narwhal_network::metrics::MetricsMakeCallbackHandler;
-                use ::sui_simulator::narwhal_network::metrics::NetworkMetrics;
-
-                use std::sync::Arc;
                 use ::sui_simulator::fastcrypto::traits::KeyPair;
+                use ::sui_simulator::mysten_network::metrics::MetricsMakeCallbackHandler;
+                use ::sui_simulator::mysten_network::metrics::NetworkMetrics;
                 use ::sui_simulator::rand_crate::rngs::{StdRng, OsRng};
                 use ::sui_simulator::rand::SeedableRng;
                 use ::sui_simulator::tower::ServiceBuilder;

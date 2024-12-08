@@ -31,9 +31,10 @@ sui-framework.workspace = true
 sui-framework-snapshot.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-[target.'cfg(msim)'.dependencies]
-sui-simulator.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
 tempfile.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator.workspace = true

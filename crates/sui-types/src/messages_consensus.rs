@@ -26,8 +26,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// The value should be the same in Sui committee.
 pub type AuthorityIndex = u32;
 
-/// Consensus round number.
-pub type Round = u32;
+/// Consensus round number in u64 instead of u32 for compatibility with Narwhal.
+pub type Round = u64;
 
 /// The index of a transaction in a consensus block.
 pub type TransactionIndex = u16;
