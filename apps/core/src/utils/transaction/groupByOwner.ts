@@ -10,6 +10,7 @@ const getOwner = (change: SuiObjectChangeWithDisplay) => {
 		if ('AddressOwner' in change.owner) return change.owner.AddressOwner;
 		if ('ObjectOwner' in change.owner) return change.owner.ObjectOwner;
 		if ('Shared' in change.owner) return change.objectId;
+		if ('ConsensusV2' in change.owner) return change.owner.ConsensusV2.authenticator.SingleOwner;
 	}
 	return '';
 };

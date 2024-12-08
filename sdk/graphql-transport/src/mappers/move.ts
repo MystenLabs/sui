@@ -5,6 +5,7 @@ import type {
 	MoveStruct,
 	MoveValue,
 	SuiMoveAbility,
+	SuiMoveNormalizedEnum,
 	SuiMoveNormalizedFunction,
 	SuiMoveNormalizedModule,
 	SuiMoveNormalizedStruct,
@@ -156,6 +157,7 @@ export function mapNormalizedMoveModule(
 ): SuiMoveNormalizedModule {
 	const exposedFunctions: Record<string, SuiMoveNormalizedFunction> = {};
 	const structs: Record<string, SuiMoveNormalizedStruct> = {};
+	const enums: Record<string, SuiMoveNormalizedEnum> = {}; // TODO: Implement
 
 	module.functions?.nodes
 		.filter((func) => func.visibility === 'PUBLIC' || func.isEntry || func.visibility === 'FRIEND')
@@ -177,6 +179,7 @@ export function mapNormalizedMoveModule(
 				name: friend.name,
 			})) ?? [],
 		structs,
+		enums,
 		exposedFunctions,
 	};
 }
