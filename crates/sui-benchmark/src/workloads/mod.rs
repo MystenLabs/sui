@@ -6,6 +6,7 @@ pub mod batch_payment;
 pub mod delegation;
 pub mod expected_failure;
 pub mod payload;
+pub mod randomized_transaction;
 pub mod randomness;
 pub mod shared_counter;
 pub mod shared_object_deletion;
