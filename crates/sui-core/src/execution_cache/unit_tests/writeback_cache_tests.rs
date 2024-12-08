@@ -1217,6 +1217,7 @@ async fn test_concurrent_lockers_same_tx() {
 
 #[tokio::test]
 async fn latest_object_cache_race_test() {
+    telemetry_subscribers::init_for_testing();
     let authority = TestAuthorityBuilder::new().build().await;
 
     let store = authority.database_for_testing().clone();
@@ -1258,11 +1259,19 @@ async fn latest_object_cache_race_test() {
         let start = Instant::now();
         std::thread::spawn(move || {
             while start.elapsed() < Duration::from_secs(2) {
-                let Some(latest_version) = cache
+                // If you move the get_ticket_for_read to after we get the latest version,
+                // the test will fail! (this is good, it means the test is doing something)
+                let ticket = cache
                     .cached
                     .object_by_id_cache
+                    .get_ticket_for_read(&object_id);
+
+                // get the latest version, but then let it become stale
+                let Some(latest_version) = cache
+                    .dirty
+                    .objects
                     .get(&object_id)
-                    .and_then(|e| e.lock().version())
+                    .and_then(|e| e.value().get_highest().map(|v| v.0))
                 else {
                     continue;
                 };
@@ -1275,10 +1284,26 @@ async fn latest_object_cache_race_test() {
                 let object =
                     Object::with_id_owner_version_for_testing(object_id, latest_version, owner);
 
+                // because we obtained the ticket before reading the object, we will not write a stale
+                // version to the cache.
                 cache.cache_latest_object_by_id(
                     &object_id,
                     LatestObjectCacheEntry::Object(latest_version, object.into()),
+                    ticket,
                 );
+            }
+        })
+    };
+
+    // a thread that just invalidates the cache as fast as it can
+    let invalidator = {
+        let cache = cache.clone();
+        let start = Instant::now();
+        std::thread::spawn(move || {
+            while start.elapsed() < Duration::from_secs(2) {
+                cache.cached.object_by_id_cache.invalidate(&object_id);
+                // sleep for 1 to 10µs
+                std::thread::sleep(Duration::from_micros(rand::thread_rng().gen_range(1..10)));
             }
         })
     };
@@ -1300,7 +1325,7 @@ async fn latest_object_cache_race_test() {
                     continue;
                 };
 
-                assert!(cur >= latest);
+                assert!(cur >= latest, "{} >= {}", cur, latest);
                 latest = cur;
             }
         })
@@ -1309,4 +1334,5 @@ async fn latest_object_cache_race_test() {
     writer.join().unwrap();
     reader.join().unwrap();
     checker.join().unwrap();
+    invalidator.join().unwrap();
 }

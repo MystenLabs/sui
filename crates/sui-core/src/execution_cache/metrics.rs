@@ -4,8 +4,8 @@
 use tracing::trace;
 
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_gauge_with_registry, IntCounterVec,
-    IntGauge, Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 
 pub struct ExecutionCacheMetrics {
@@ -15,6 +15,7 @@ pub struct ExecutionCacheMetrics {
     pub(crate) cache_negative_hits: IntCounterVec,
     pub(crate) cache_misses: IntCounterVec,
     pub(crate) cache_writes: IntCounterVec,
+    pub(crate) expired_tickets: IntCounter,
 }
 
 impl ExecutionCacheMetrics {
@@ -62,6 +63,13 @@ impl ExecutionCacheMetrics {
                 "execution_cache_writes",
                 "Execution cache writes",
                 &["collection"],
+                registry,
+            )
+            .unwrap(),
+
+            expired_tickets: register_int_counter_with_registry!(
+                "execution_cache_expired_tickets",
+                "Failed inserts to monotonic caches because of expired tickets",
                 registry,
             )
             .unwrap(),
@@ -120,5 +128,9 @@ impl ExecutionCacheMetrics {
 
     pub(crate) fn record_cache_write(&self, collection: &'static str) {
         self.cache_writes.with_label_values(&[collection]).inc();
+    }
+
+    pub(crate) fn record_ticket_expiry(&self) {
+        self.expired_tickets.inc();
     }
 }
