@@ -38,7 +38,7 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rest_api::RestMetrics;
+use sui_rpc_api::RpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -91,7 +91,7 @@ use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
-use sui_core::rest_index::RestIndexStore;
+use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -588,12 +588,12 @@ impl SuiNode {
             None
         };
 
-        let rest_index = if is_full_node
+        let rpc_index = if is_full_node
             && config.enable_experimental_rest_api
-            && config.enable_index_processing
+            && config.rpc.as_ref().is_some_and(|rpc| rpc.enable_indexing())
         {
-            Some(Arc::new(RestIndexStore::new(
-                config.db_path().join("rest_index"),
+            Some(Arc::new(RpcIndexStore::new(
+                &config.db_path(),
                 &store,
                 &checkpoint_store,
                 &epoch_store,
@@ -696,7 +696,7 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            rest_index,
+            rpc_index,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
@@ -2094,16 +2094,16 @@ pub async fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let mut rest_service = sui_rest_api::RestService::new(
+        let mut rest_service = sui_rpc_api::RpcService::new(
             Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );
 
-        if let Some(config) = config.rest.clone() {
+        if let Some(config) = config.rpc.clone() {
             rest_service.with_config(config);
         }
 
-        rest_service.with_metrics(RestMetrics::new(prometheus_registry));
+        rest_service.with_metrics(RpcMetrics::new(prometheus_registry));
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
             rest_service.with_executor(transaction_orchestrator.clone())
@@ -2112,7 +2112,7 @@ pub async fn build_http_server(
         router = router.merge(rest_service.into_router());
     }
     // TODO: Remove this health check when experimental REST API becomes default
-    // This is a copy of the health check in crates/sui-rest-api/src/health.rs
+    // This is a copy of the health check in crates/sui-rpc-api/src/health.rs
     router = router
         .route("/health", axum::routing::get(health_check_handler))
         .route_layer(axum::Extension(state));

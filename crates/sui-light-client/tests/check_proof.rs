@@ -10,7 +10,7 @@ use sui_types::event::{Event, EventID};
 
 use sui_types::{committee::Committee, effects::TransactionEffectsAPI, object::Object};
 
-use sui_rest_api::CheckpointData;
+use sui_rpc_api::CheckpointData;
 
 use std::io::Read;
 use std::{fs, path::PathBuf};

@@ -9,7 +9,7 @@ use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio::sync::Mutex;
 
 use sui_package_resolver::Resolver;
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
 
 use crate::handlers::{get_move_struct, parse_struct, AnalyticsHandler};

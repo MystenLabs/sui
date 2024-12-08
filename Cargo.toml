@@ -148,8 +148,8 @@ members = [
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-replay",
-    "crates/sui-rest-api",
     "crates/sui-rosetta",
+    "crates/sui-rpc-api",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-security-watchdog",
@@ -605,7 +605,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f769
 
 # core-types with json format for REST api
 # sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "31bd9da32a8057edc45da8f5e6a8f25b83919b93", features = ["hash", "serde", "schemars"] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "24c34933c421319e9aa1c48b3b7108c756e1422f", features = ["hash", "serde", "schemars"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -691,7 +691,7 @@ sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
-sui-rest-api = { path = "crates/sui-rest-api" }
+sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }

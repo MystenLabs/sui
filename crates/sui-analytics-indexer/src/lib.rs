@@ -19,7 +19,7 @@ use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_data_ingestion_core::Worker;
-use sui_rest_api::CheckpointData;
+use sui_rpc_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };

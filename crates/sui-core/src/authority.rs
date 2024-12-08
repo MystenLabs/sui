@@ -6,7 +6,7 @@ use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::jsonrpc_index::CoinIndexKey2;
-use crate::rest_index::RestIndexStore;
+use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
@@ -792,7 +792,7 @@ pub struct AuthorityState {
     execution_lock: RwLock<EpochId>,
 
     pub indexes: Option<Arc<IndexStore>>,
-    pub rest_index: Option<Arc<RestIndexStore>>,
+    pub rpc_index: Option<Arc<RpcIndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
     checkpoint_store: Arc<CheckpointStore>,
@@ -2834,7 +2834,7 @@ impl AuthorityState {
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
-        rest_index: Option<Arc<RestIndexStore>>,
+        rpc_index: Option<Arc<RpcIndexStore>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         genesis_objects: &[Object],
@@ -2866,7 +2866,7 @@ impl AuthorityState {
         let _pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
-            rest_index.clone(),
+            rpc_index.clone(),
             store.objects_lock_table.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
@@ -2886,7 +2886,7 @@ impl AuthorityState {
             input_loader,
             execution_cache_trait_pointers,
             indexes,
-            rest_index,
+            rpc_index,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
             checkpoint_store,
             committee_store,
@@ -2978,7 +2978,7 @@ impl AuthorityState {
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
-            self.rest_index.as_deref(),
+            self.rpc_index.as_deref(),
             &self.database_for_testing().objects_lock_table,
             config.authority_store_pruning_config,
             metrics,

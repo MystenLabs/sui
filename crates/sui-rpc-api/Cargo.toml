@@ -1,0 +1,54 @@
+[package]
+name = "sui-rpc-api"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+mime = "0.3.17"
+anyhow.workspace = true
+axum = { workspace = true, features = ["matched-path"] }
+bcs.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+url.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+serde_with.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+itertools.workspace = true
+sui-sdk-types.workspace = true
+prometheus.workspace = true
+openapiv3 = { git = "https://github.com/bmwill/openapiv3.git", rev = "ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963" }
+schemars.workspace = true
+documented = "0.6.0"
+http.workspace = true
+tower.workspace = true
+
+fastcrypto.workspace = true
+sui-types.workspace = true
+mysten-network.workspace = true
+sui-protocol-config.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+
+# dependencies for the protobuf definitions
+roaring.workspace = true
+tonic.workspace = true
+prost.workspace = true
+prost-types = "0.13.3"
+bytes.workspace = true
+
+[dev-dependencies]
+diffy = "0.3"
+prost-build = "0.13.3"
+tonic-build = "0.12.3"
+sui-sdk-types = { workspace = true, features = ["proptest"] }
+test-strategy = "0.4.0"
+proptest.workspace = true
+paste = "1.0.15"

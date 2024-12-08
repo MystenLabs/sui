@@ -4,7 +4,7 @@
 use crate::proof::{Proof, ProofTarget, TransactionProof};
 
 use anyhow::anyhow;
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffectsAPI;
 
 /// Construct a proof from the given checkpoint data and proof targets.

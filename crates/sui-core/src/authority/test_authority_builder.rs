@@ -13,7 +13,7 @@ use crate::execution_cache::build_execution_cache;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::rest_index::RestIndexStore;
+use crate::rpc_index::RpcIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -277,11 +277,11 @@ impl<'a> TestAuthorityBuilder<'a> {
                 &authority_store,
             )))
         };
-        let rest_index = if self.disable_indexer {
+        let rpc_index = if self.disable_indexer {
             None
         } else {
-            Some(Arc::new(RestIndexStore::new(
-                path.join("rest_index"),
+            Some(Arc::new(RpcIndexStore::new(
+                &path,
                 &authority_store,
                 &checkpoint_store,
                 &epoch_store,
@@ -315,7 +315,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_store.clone(),
             committee_store,
             index_store,
-            rest_index,
+            rpc_index,
             checkpoint_store,
             &registry,
             genesis.objects(),
