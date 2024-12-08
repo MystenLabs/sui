@@ -160,6 +160,11 @@ pub fn handle_lint_results_exclude_external_crate_checks(
                 continue;
             }
         }
+        if let LintKind::Package { name, .. } = source.kind() {
+            if name == "builder" {
+                continue;
+            }
+        }
         println!(
             "[{}] [{}] [{}]: {}\n",
             message.level(),
