@@ -63,7 +63,7 @@ use crate::{
         type_filter::{FqNameFilter, ModuleFilter},
     },
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{CombineDsl, ExpressionMethods, QueryDsl};
 use std::fmt::Write;
 use sui_indexer::schema::checkpoints;
 
@@ -103,7 +103,8 @@ use sui_indexer::schema::checkpoints;
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TxBounds {
     /// The inclusive lower bound tx_sequence_number derived from checkpoint bounds. If checkpoint
-    /// bounds are not provided, this will default to `0`.
+    /// bounds are not provided, this will default to the smallest transaction sequence number of
+    /// the earliest checkpoint that has not been pruned.
     tx_lo: u64,
 
     /// The exclusive upper bound tx_sequence_number derived from checkpoint bounds. If checkpoint
@@ -129,20 +130,30 @@ impl TxBounds {
     /// Determines the `tx_sequence_number` range from the checkpoint bounds for a transaction block
     /// query. If no checkpoint range is specified, the default is between 0 and the
     /// `checkpoint_viewed_at`. The corresponding `tx_sequence_number` range is fetched from db, and
-    /// further adjusted by cursors and scan limit. If there are any inconsistencies or invalid
-    /// combinations, i.e. `after` cursor is greater than the upper bound, return None.
+    /// further adjusted by cursors and scan limit. If the checkpoints cannot be found, or if there
+    /// are any inconsistencies or invalid combinations, i.e. `after` cursor is greater than the
+    /// upper bound, return None.
     pub(crate) async fn query(
         conn: &mut Conn<'_>,
         cp_after: Option<u64>,
         cp_at: Option<u64>,
         cp_before: Option<u64>,
+        min_unpruned_checkpoint: u64,
         checkpoint_viewed_at: u64,
         scan_limit: Option<u64>,
         page: &Page<Cursor>,
     ) -> Result<Option<Self>, diesel::result::Error> {
-        // Lowerbound in terms of checkpoint sequence number. We want to get the total transaction
-        // count of the checkpoint before this one, or 0 if there is no previous checkpoint.
-        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]).unwrap_or(0);
+        // Inclusive lowerbound in terms of checkpoint sequence number. If a lower bound is not set,
+        // we will default to the smallest checkpoint available from the database, retrieved from
+        // the watermark.
+        //
+        // SAFETY: we can unwrap because of the `Some(min_unpruned_checkpoint)`
+        let cp_lo = max_option([
+            cp_after.map(|x| x.saturating_add(1)),
+            cp_at,
+            Some(min_unpruned_checkpoint),
+        ])
+        .unwrap();
 
         let cp_before_inclusive = match cp_before {
             // There are no results strictly before checkpoint 0.
@@ -151,65 +162,88 @@ impl TxBounds {
             None => None,
         };
 
-        // Upperbound in terms of checkpoint sequence number. We want to get the total transaction
-        // count at the end of this checkpoint. If no upperbound is given, use
-        // `checkpoint_viewed_at`.
+        // Inclusive upper bound in terms of checkpoint sequence number. If no upperbound is given,
+        // use `checkpoint_viewed_at`.
         //
         // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)
         let cp_hi = min_option([cp_before_inclusive, cp_at, Some(checkpoint_viewed_at)]).unwrap();
 
+        // Read from the `checkpoints` table rather than the `pruner_cp_watermark` table, because
+        // the `checkpoints` table is pruned first.
         use checkpoints::dsl;
-        let (tx_lo, tx_hi) = if let Some(cp_prev) = cp_lo.checked_sub(1) {
-            let res: Vec<i64> = conn
+        // Inclusive lower bound and exclusive upper bound of the transaction sequence number range.
+        let (tx_lo, tx_hi) = {
+            let res: Vec<(i64, Option<i64>, i64)> = conn
                 .results(move || {
-                    dsl::checkpoints
-                        .select(dsl::network_total_transactions)
-                        .filter(dsl::sequence_number.eq_any([cp_prev as i64, cp_hi as i64]))
-                        .order_by(dsl::network_total_transactions.asc())
+                    let min_cp_range = dsl::checkpoints
+                        .select((
+                            dsl::sequence_number,
+                            dsl::min_tx_sequence_number,
+                            dsl::network_total_transactions,
+                        ))
+                        .filter(dsl::sequence_number.eq(cp_lo as i64))
+                        .limit(1);
+
+                    let max_cp_range = dsl::checkpoints
+                        .select((
+                            dsl::sequence_number,
+                            dsl::min_tx_sequence_number,
+                            dsl::network_total_transactions,
+                        ))
+                        .filter(dsl::sequence_number.eq(cp_hi as i64))
+                        .limit(1);
+
+                    min_cp_range.union_all(max_cp_range)
                 })
                 .await?;
 
-            // If there are not two distinct results, it means that the transaction bounds are
-            // empty (lo and hi are the same), or it means that the one or other of the checkpoints
-            // doesn't exist, so we can return early.
-            let &[lo, hi] = res.as_slice() else {
+            let Some(hi_record) = res
+                .iter()
+                .find(|&(checkpoint, _, _)| *checkpoint == cp_hi as i64)
+            else {
                 return Ok(None);
             };
 
-            (lo as u64, hi as u64)
-        } else {
-            let res: Option<i64> = conn
-                .first(move || {
-                    dsl::checkpoints
-                        .select(dsl::network_total_transactions)
-                        .filter(dsl::sequence_number.eq(cp_hi as i64))
-                })
-                .await
-                .optional()?;
-
-            // If there is no result, it means that the checkpoint doesn't exist, so we can return
-            // early.
-            let Some(hi) = res else {
+            let Some(lo_record) = res
+                .iter()
+                .find(|&(checkpoint, _, _)| *checkpoint == cp_lo as i64)
+            else {
                 return Ok(None);
             };
 
-            (0, hi as u64)
+            let tx_lo = match lo_record.1 {
+                Some(lo) => Ok(lo),
+                None => Err(diesel::result::Error::DatabaseError(
+                    diesel::result::DatabaseErrorKind::Unknown,
+                    Box::new(
+                        "min_tx_sequence_number should never be None in production".to_string(),
+                    ),
+                )),
+            }? as u64;
+
+            (tx_lo, hi_record.2 as u64)
         };
 
-        // If the cursors point outside checkpoint bounds, we can return early.
-        if matches!(page.after(), Some(a) if tx_hi <= a.tx_sequence_number.saturating_add(1)) {
-            return Ok(None);
-        }
+        let cursor_lo_exclusive = page.after().map(|a| a.tx_sequence_number);
+        let cursor_lo = cursor_lo_exclusive.map(|a| a.saturating_add(1));
+        let cursor_hi = page.before().map(|b| b.tx_sequence_number);
 
-        if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
-            return Ok(None);
+        match (cursor_lo, cursor_hi) {
+            (Some(lo), _) if tx_hi <= lo => return Ok(None),
+            (_, Some(hi)) if hi <= tx_lo => return Ok(None),
+            (Some(lo), Some(hi)) if hi <= lo => return Ok(None),
+            _ => {
+                if tx_hi <= tx_lo {
+                    return Ok(None);
+                }
+            }
         }
 
         Ok(Some(Self {
             tx_lo,
             tx_hi,
-            cursor_lo_exclusive: page.after().map(|a| a.tx_sequence_number),
-            cursor_hi: page.before().map(|b| b.tx_sequence_number),
+            cursor_lo_exclusive,
+            cursor_hi,
             scan_limit,
             end: page.end(),
         }))

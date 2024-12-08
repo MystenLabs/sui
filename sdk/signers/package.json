@@ -1,5 +1,5 @@
 {
-	"name": "@mysten/kms",
+	"name": "@mysten/signers",
 	"version": "0.0.10",
 	"description": "A collection of KMS signers for various cloud providers",
 	"license": "Apache-2.0",
@@ -9,6 +9,10 @@
 		"./aws": {
 			"import": "./dist/esm/aws/index.js",
 			"require": "./dist/cjs/aws/index.js"
+		},
+		"./gcp": {
+			"import": "./dist/esm/gcp/index.js",
+			"require": "./dist/cjs/gcp/index.js"
 		}
 	},
 	"sideEffects": false,
@@ -18,6 +22,7 @@
 		"README.md",
 		"aws",
 		"dist",
+		"gcp",
 		"src"
 	],
 	"scripts": {
@@ -43,15 +48,16 @@
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.14.10",
+		"dotenv": "^16.4.5",
 		"typescript": "^5.5.3",
 		"vitest": "^2.0.1"
 	},
 	"dependencies": {
+		"@google-cloud/kms": "^4.5.0",
 		"@mysten/sui": "workspace:*",
 		"@noble/curves": "^1.4.2",
 		"@noble/hashes": "^1.4.0",
-		"asn1-ts": "^8.0.2",
-		"aws4fetch": "^1.0.20"
+		"asn1-ts": "^8.0.2"
 	},
 	"engines": {
 		"node": ">=20"

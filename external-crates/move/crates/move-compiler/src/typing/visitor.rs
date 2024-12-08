@@ -4,11 +4,11 @@
 use crate::{
     command_line::compiler::Visitor,
     diagnostics::warning_filters::WarningFilters,
-    expansion::ast::ModuleIdent,
+    expansion::ast::{Fields, ModuleIdent},
     naming::ast::{self as N, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
     shared::CompilationEnv,
-    typing::ast as T,
+    typing::ast::{self as T, BuiltinFunction_},
 };
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
@@ -1283,6 +1283,128 @@ fn same_local_(lhs: &Var, rhs: &T::UnannotatedExp_) -> bool {
     use T::UnannotatedExp_ as E;
     match &rhs {
         E::Copy { var: r, .. } | E::Move { var: r, .. } | E::BorrowLocal(_, r) => lhs == r,
+        _ => false,
+    }
+}
+
+/// Assumes equal types and as such will not check type arguments for equality.
+/// Assumes function calls, assignments, and similar expressions are effectful and thus not equal.
+pub fn same_value_exp(e1: &T::Exp, e2: &T::Exp) -> bool {
+    same_value_exp_(&e1.exp.value, &e2.exp.value)
+}
+
+#[growing_stack]
+pub fn same_value_exp_(e1: &T::UnannotatedExp_, e2: &T::UnannotatedExp_) -> bool {
+    use T::UnannotatedExp_ as E;
+    macro_rules! effectful {
+        () => {
+            E::Builtin(_, _)
+                | E::ModuleCall(_)
+                | E::Assign(_, _, _)
+                | E::Mutate(_, _)
+                | E::Return(_)
+                | E::Abort(_)
+                | E::Give(_, _)
+        };
+    }
+    macro_rules! brittle {
+        () => {
+            E::ErrorConstant { .. }
+                | E::IfElse(_, _, _)
+                | E::Match(_, _)
+                | E::VariantMatch(_, _, _)
+                | E::While(_, _, _)
+                | E::Loop { .. }
+        };
+    }
+    match (e1, e2) {
+        (E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _), other)
+        | (other, E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _)) => {
+            same_value_exp_(&e.exp.value, other)
+        }
+        (E::NamedBlock(_, s) | E::Block(s), other) | (other, E::NamedBlock(_, s) | E::Block(s)) => {
+            same_value_seq_exp_(s, other)
+        }
+        (E::ExpList(l), other) | (other, E::ExpList(l)) if l.len() == 1 => match &l[0] {
+            T::ExpListItem::Single(e, _) => same_value_exp_(&e.exp.value, other),
+            T::ExpListItem::Splat(_, e, _) => same_value_exp_(&e.exp.value, other),
+        },
+
+        (E::Value(v1), E::Value(v2)) => v1 == v2,
+        (E::Unit { .. }, E::Unit { .. }) => true,
+        (E::Constant(m1, c1), E::Constant(m2, c2)) => m1 == m2 && c1 == c2,
+        (
+            E::Move { var, .. } | E::Copy { var, .. } | E::Use(var) | E::BorrowLocal(_, var),
+            other,
+        )
+        | (
+            other,
+            E::Move { var, .. } | E::Copy { var, .. } | E::Use(var) | E::BorrowLocal(_, var),
+        ) => same_local_(var, other),
+
+        (E::Vector(_, _, _, e1), E::Vector(_, _, _, e2)) => same_value_exp(e1, e2),
+
+        (E::Builtin(b, e), other) | (other, E::Builtin(b, e))
+            if matches!(&b.value, BuiltinFunction_::Freeze(_)) =>
+        {
+            same_value_exp_(&e.exp.value, other)
+        }
+
+        (E::ExpList(l1), E::ExpList(l2)) => same_value_exp_list(l1, l2),
+
+        (E::UnaryExp(op1, e1), E::UnaryExp(op2, e2)) => op1 == op2 && same_value_exp(e1, e2),
+        (E::BinopExp(l1, op1, _, r1), E::BinopExp(l2, op2, _, r2)) => {
+            op1 == op2 && same_value_exp(l1, l2) && same_value_exp(r1, r2)
+        }
+
+        (E::Pack(m1, n1, _, fields1), E::Pack(m2, n2, _, fields2)) => {
+            m1 == m2 && n1 == n2 && same_value_fields(fields1, fields2)
+        }
+        (E::PackVariant(m1, n1, v1, _, fields1), E::PackVariant(m2, n2, v2, _, fields2)) => {
+            m1 == m2 && n1 == n2 && v1 == v2 && same_value_fields(fields1, fields2)
+        }
+
+        (E::Borrow(_, e1, f1), E::Borrow(_, e2, f2)) => f1 == f2 && same_value_exp(e1, e2),
+
+        // false for anything effectful
+        (effectful!(), _) | (_, effectful!()) => false,
+
+        // TODO there is some potential for equality here, but a bit too brittle now
+        (brittle!(), _) | (_, brittle!()) => false,
+
+        _ => false,
+    }
+}
+
+fn same_value_fields(
+    fields1: &Fields<(N::Type, T::Exp)>,
+    fields2: &Fields<(N::Type, T::Exp)>,
+) -> bool {
+    fields1.key_cloned_iter().all(|(f1, (_, (_, e1)))| {
+        fields2
+            .get(&f1)
+            .is_some_and(|(_, (_, e2))| same_value_exp(e1, e2))
+    })
+}
+
+fn same_value_exp_list(l1: &[T::ExpListItem], l2: &[T::ExpListItem]) -> bool {
+    l1.len() == l2.len()
+        && l1.iter().zip(l2).all(|(i1, i2)| match (i1, i2) {
+            (T::ExpListItem::Single(e1, _), T::ExpListItem::Single(e2, _)) => {
+                same_value_exp(e1, e2)
+            }
+            // TODO handle splat
+            _ => false,
+        })
+}
+
+fn same_value_seq_exp_((_, seq_): &T::Sequence, other: &T::UnannotatedExp_) -> bool {
+    match seq_.len() {
+        0 => panic!("ICE should not have empty sequence"),
+        1 => match &seq_[0].value {
+            T::SequenceItem_::Seq(e) => same_value_exp_(&e.exp.value, other),
+            _ => false,
+        },
         _ => false,
     }
 }

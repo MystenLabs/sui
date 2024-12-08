@@ -34,7 +34,12 @@ impl New {
             r#"/*
 /// Module: {name}
 module {name}::{name};
-*/"#,
+*/
+
+// For Move coding conventions, see
+// https://docs.sui.io/concepts/sui-move-concepts/conventions
+
+"#,
             name = name
         )?;
 

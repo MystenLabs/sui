@@ -85,6 +85,7 @@ pub(crate) struct IndexerMetrics {
     pub handler_checkpoint_latency: HistogramVec,
 
     // Statistics related to individual ingestion pipelines.
+    pub total_collector_checkpoints_received: IntCounterVec,
     pub total_collector_rows_received: IntCounterVec,
     pub total_collector_batches_created: IntCounterVec,
     pub total_committer_batches_attempted: IntCounterVec,
@@ -302,6 +303,13 @@ impl IndexerMetrics {
                 "Time taken to process a checkpoint by this handler",
                 &["pipeline"],
                 PROCESSING_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_collector_checkpoints_received: register_int_counter_vec_with_registry!(
+                "indexer_total_collector_checkpoints_received",
+                "Total number of checkpoints received by this collector",
+                &["pipeline"],
                 registry,
             )
             .unwrap(),

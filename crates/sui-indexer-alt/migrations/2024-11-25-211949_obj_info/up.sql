@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS obj_info
     -- another object (kind 2), which relates to dynamic fields, and an object
     -- that is owned by another object's address (kind 1), which relates to
     -- transfer-to-object.
+    --
+    -- Warning: This column may look similar to the concept of "ObjectOwner"
+    -- but is NOT the same. For purposes of determining owner_kind, ConsensusV2
+    -- objects are mapped onto the variants described above based on their
+    -- authenticator.
     owner_kind                  SMALLINT,
     -- The address for address-owned objects, and the parent object for
     -- object-owned objects.

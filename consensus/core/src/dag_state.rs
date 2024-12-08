@@ -452,7 +452,13 @@ impl DagState {
         blocks.first().cloned().unwrap()
     }
 
-    /// Retrieves the last block proposed for the specified `authority`. If no block is found in cache
+    /// Gets the last proposed block from this authority.
+    /// If no block is proposed yet, returns the genesis block.
+    pub(crate) fn get_last_proposed_block(&self) -> VerifiedBlock {
+        self.get_last_block_for_authority(self.context.own_index)
+    }
+
+    /// Retrieves the last accepted block from the specified `authority`. If no block is found in cache
     /// then the genesis block is returned as no other block has been received from that authority.
     pub(crate) fn get_last_block_for_authority(&self, authority: AuthorityIndex) -> VerifiedBlock {
         if let Some(last) = self.recent_refs_by_authority[authority].last() {
@@ -2209,12 +2215,7 @@ mod test {
                 .find(|block| block.author() == context.own_index)
                 .unwrap();
 
-            assert_eq!(
-                dag_state
-                    .read()
-                    .get_last_block_for_authority(context.own_index),
-                my_genesis
-            );
+            assert_eq!(dag_state.read().get_last_proposed_block(), my_genesis);
         }
 
         // WHEN adding some blocks for authorities, only the last ones should be returned

@@ -44,6 +44,9 @@ module Test::M1 {
 
 //# run-graphql --wait-for-checkpoint-pruned 4
 {
+  epoch {
+    epochId
+  }
   checkpoints {
     nodes {
       epoch {

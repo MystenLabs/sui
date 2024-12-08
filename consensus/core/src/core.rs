@@ -131,10 +131,7 @@ impl Core {
         .with_pipeline(true)
         .build();
 
-        // Recover the last proposed block
-        let last_proposed_block = dag_state
-            .read()
-            .get_last_block_for_authority(context.own_index);
+        let last_proposed_block = dag_state.read().get_last_proposed_block();
 
         // Recover the last included ancestor rounds based on the last proposed block. That will allow
         // to perform the next block proposal by using ancestor blocks of higher rounds and avoid
@@ -207,10 +204,6 @@ impl Core {
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
             );
-            println!(
-                "Waiting for {} ms while recovering ancestors from storage",
-                wait_ms
-            );
             std::thread::sleep(Duration::from_millis(wait_ms));
         }
         // Recover the last available quorum to correctly advance the threshold clock.
@@ -223,13 +216,10 @@ impl Core {
         {
             last_proposed_block
         } else {
-            let last_proposed_block = self
-                .dag_state
-                .read()
-                .get_last_block_for_authority(self.context.own_index);
+            let last_proposed_block = self.dag_state.read().get_last_proposed_block();
 
             if self.should_propose() {
-                assert!(last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
+                assert!(last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher than genesis should have been produced during recovery");
             }
 
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
@@ -1001,9 +991,7 @@ impl Core {
     }
 
     fn last_proposed_block(&self) -> VerifiedBlock {
-        self.dag_state
-            .read()
-            .get_last_block_for_authority(self.context.own_index)
+        self.dag_state.read().get_last_proposed_block()
     }
 }
 

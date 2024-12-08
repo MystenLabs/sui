@@ -51,6 +51,14 @@ pub enum StoredOwnerKind {
     Shared = 3,
 }
 
+#[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[diesel(sql_type = SmallInt)]
+#[repr(i16)]
+pub enum StoredCoinOwnerKind {
+    Fastpath = 0,
+    Consensus = 1,
+}
+
 #[derive(Insertable, Debug, Clone, FieldCount)]
 #[diesel(table_name = sum_coin_balances, primary_key(object_id))]
 pub struct StoredSumCoinBalance {
@@ -59,6 +67,7 @@ pub struct StoredSumCoinBalance {
     pub owner_id: Vec<u8>,
     pub coin_type: Vec<u8>,
     pub coin_balance: i64,
+    pub coin_owner_kind: StoredCoinOwnerKind,
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount)]
@@ -83,6 +92,7 @@ pub struct StoredWalCoinBalance {
     pub coin_type: Option<Vec<u8>>,
     pub coin_balance: Option<i64>,
     pub cp_sequence_number: i64,
+    pub coin_owner_kind: Option<StoredCoinOwnerKind>,
 }
 
 #[derive(Insertable, Debug, Clone)]
@@ -101,7 +111,9 @@ pub struct StoredWalObjType {
 
 /// StoredObjectUpdate is a wrapper type, we want to count the fields of the inner type.
 impl<T: FieldCount> FieldCount for StoredObjectUpdate<T> {
-    const FIELD_COUNT: usize = T::FIELD_COUNT;
+    // Add one here for cp_sequence_number field, because StoredObjectUpdate is used for
+    // wal_* handlers, where the actual type to commit has an additional field besides fields of T.
+    const FIELD_COUNT: usize = T::FIELD_COUNT.saturating_add(1);
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
@@ -129,6 +141,31 @@ where
             2 => StoredOwnerKind::Object,
             3 => StoredOwnerKind::Shared,
             o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
+        })
+    }
+}
+
+impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredCoinOwnerKind
+where
+    i16: serialize::ToSql<SmallInt, DB>,
+{
+    fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
+        match self {
+            StoredCoinOwnerKind::Fastpath => 0.to_sql(out),
+            StoredCoinOwnerKind::Consensus => 1.to_sql(out),
+        }
+    }
+}
+
+impl<DB: Backend> deserialize::FromSql<SmallInt, DB> for StoredCoinOwnerKind
+where
+    i16: deserialize::FromSql<SmallInt, DB>,
+{
+    fn from_sql(raw: DB::RawValue<'_>) -> deserialize::Result<Self> {
+        Ok(match i16::from_sql(raw)? {
+            0 => StoredCoinOwnerKind::Fastpath,
+            1 => StoredCoinOwnerKind::Consensus,
+            o => return Err(format!("Unexpected StoredCoinOwnerKind: {o}").into()),
         })
     }
 }

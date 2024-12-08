@@ -80,6 +80,7 @@ impl<H: Handler> From<Indexed<H>> for Pending<H> {
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
+    checkpoint_lag: Option<u64>,
     mut rx: mpsc::Receiver<Indexed<H>>,
     tx: mpsc::Sender<Batched<H>>,
     metrics: Arc<IndexerMetrics>,
@@ -91,7 +92,11 @@ pub(super) fn collector<H: Handler + 'static>(
         let mut poll = interval(config.collect_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // Data for checkpoints that haven't been written yet.
+        // Data for checkpoints that have been received but not yet ready to be sent to committer due to lag constraint.
+        let mut received: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
+        let checkpoint_lag = checkpoint_lag.unwrap_or_default();
+
+        // Data for checkpoints that are ready to be sent but haven't been written yet.
         let mut pending: BTreeMap<u64, Pending<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
@@ -165,9 +170,13 @@ pub(super) fn collector<H: Handler + 'static>(
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
                         .inc_by(indexed.len() as u64);
+                    metrics
+                        .total_collector_checkpoints_received
+                        .with_label_values(&[H::NAME])
+                        .inc();
 
-                    pending_rows += indexed.len();
-                    pending.insert(indexed.checkpoint(), indexed.into());
+                    received.insert(indexed.checkpoint(), indexed);
+                    pending_rows += move_ready_checkpoints(&mut received, &mut pending, checkpoint_lag);
 
                     if pending_rows >= H::MIN_EAGER_ROWS {
                         poll.reset_immediately()
@@ -176,4 +185,135 @@ pub(super) fn collector<H: Handler + 'static>(
             }
         }
     })
+}
+
+/// Move all checkpoints from `received` that are within the lag range into `pending`.
+/// Returns the number of rows moved.
+fn move_ready_checkpoints<H: Handler>(
+    received: &mut BTreeMap<u64, Indexed<H>>,
+    pending: &mut BTreeMap<u64, Pending<H>>,
+    checkpoint_lag: u64,
+) -> usize {
+    let tip = match (received.last_key_value(), pending.last_key_value()) {
+        (Some((cp, _)), None) | (None, Some((cp, _))) => *cp,
+        (Some((cp1, _)), Some((cp2, _))) => std::cmp::max(*cp1, *cp2),
+        (None, None) => return 0,
+    };
+
+    let mut moved_rows = 0;
+    while let Some(entry) = received.first_entry() {
+        let cp = *entry.key();
+        if cp + checkpoint_lag > tip {
+            break;
+        }
+
+        let indexed = entry.remove();
+        moved_rows += indexed.len();
+        pending.insert(cp, indexed.into());
+    }
+
+    moved_rows
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_field_count::FieldCount;
+    use sui_types::full_checkpoint_content::CheckpointData;
+
+    use crate::{db, pipeline::Processor};
+
+    use super::*;
+
+    #[derive(FieldCount)]
+    struct Entry;
+
+    struct TestHandler;
+    impl Processor for TestHandler {
+        type Value = Entry;
+        const NAME: &'static str = "test";
+
+        fn process(&self, _: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Handler for TestHandler {
+        const MAX_PENDING_ROWS: usize = 1000;
+        const MIN_EAGER_ROWS: usize = 100;
+
+        async fn commit(_: &[Self::Value], _: &mut db::Connection<'_>) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn test_move_ready_checkpoints_empty() {
+        let mut received = BTreeMap::new();
+        let mut pending = BTreeMap::new();
+        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 10);
+        assert_eq!(moved, 0);
+        assert!(received.is_empty());
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn test_move_ready_checkpoints_within_lag() {
+        let mut received = BTreeMap::new();
+        let mut pending = BTreeMap::new();
+
+        // Add checkpoints 1-5 to received
+        for i in 1..=5 {
+            received.insert(i, Indexed::new(0, i, 0, 0, vec![Entry, Entry, Entry]));
+        }
+
+        // With lag of 2 and tip at 5, only checkpoints 1-3 should move
+        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 2);
+
+        assert_eq!(moved, 9); // 3 checkpoints * 3 rows each
+        assert_eq!(received.len(), 2); // 4,5 remain
+        assert_eq!(pending.len(), 3); // 1,2,3 moved
+        assert!(pending.contains_key(&1));
+        assert!(pending.contains_key(&2));
+        assert!(pending.contains_key(&3));
+    }
+
+    #[test]
+    fn test_move_ready_checkpoints_tip_from_pending() {
+        let mut received = BTreeMap::new();
+        let mut pending = BTreeMap::new();
+
+        // Add checkpoint 10 to pending to establish tip
+        pending.insert(10, Pending::from(Indexed::new(0, 10, 0, 0, vec![Entry])));
+
+        // Add checkpoints 1-5 to received
+        for i in 1..=5 {
+            received.insert(i, Indexed::new(0, i, 0, 0, vec![Entry]));
+        }
+
+        // With lag of 3 and tip at 10, checkpoints 1-7 can move
+        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 3);
+
+        assert_eq!(moved, 5); // All 5 checkpoints moved, 1 row each
+        assert!(received.is_empty());
+        assert_eq!(pending.len(), 6); // Original + 5 new
+    }
+
+    #[test]
+    fn test_move_ready_checkpoints_no_eligible() {
+        let mut received = BTreeMap::new();
+        let mut pending = BTreeMap::new();
+
+        // Add checkpoints 8-10 to received
+        for i in 8..=10 {
+            received.insert(i, Indexed::new(0, i, 0, 0, vec![Entry]));
+        }
+
+        // With lag of 5 and tip at 10, no checkpoints can move
+        let moved = move_ready_checkpoints::<TestHandler>(&mut received, &mut pending, 5);
+
+        assert_eq!(moved, 0);
+        assert_eq!(received.len(), 3);
+        assert!(pending.is_empty());
+    }
 }
