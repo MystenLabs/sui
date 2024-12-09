@@ -70,7 +70,7 @@ After an object `c` has been sent to another object `p`, `p` must then receive `
 To explain further, look at the core of the receiving interface in Move, which is defined in the `transfer` module in the Sui framework:
 
 ```move
-module transfer;
+module sui::transfer;
 
 /// Represents the ability to receive an object of type `T`. Cannot be stored.
 public struct Receiving<phantom T: key> has drop { ... }
