@@ -55,7 +55,7 @@ const HOME_ADDRESS = @0xCAFE;
 
 public fun transfer_locked(object: Object) {
     assert!(!object.unlocked, EObjectNotLocked);
-    sui::transfer::transfer(object, HOME_ADDRESS)
+    transfer::transfer(object, HOME_ADDRESS)
 }
 ```
 
