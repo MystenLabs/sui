@@ -175,7 +175,7 @@ Response: {
         "activeValidators": {
           "nodes": [
             {
-              "apy": 1,
+              "apy": 0,
               "name": "validator-0",
               "reportRecords": {
                 "nodes": []
