@@ -43,6 +43,10 @@ pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
+pub const TICKER_PATH: &str = "/ticker";
+pub const TRADES_PATH: &str = "/trades/:pool_name";
+pub const ASSETS_PATH: &str = "/assets";
+pub const SUMMARY_PATH: &str = "/summary";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
@@ -72,6 +76,10 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         )
         .route(LEVEL2_PATH, get(orderbook))
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
+        .route(TICKER_PATH, get(ticker))
+        .route(TRADES_PATH, get(trades))
+        .route(ASSETS_PATH, get(assets))
+        .route(SUMMARY_PATH, get(summary))
         .with_state(state)
 }
 
@@ -159,7 +167,7 @@ async fn historical_volume(
     let volume_in_base = params
         .get("volume_in_base")
         .map(|v| v == "true")
-        .unwrap_or(true);
+        .unwrap_or(false);
     let column_to_query = if volume_in_base {
         sql::<diesel::sql_types::BigInt>("base_quantity")
     } else {
@@ -236,7 +244,7 @@ async fn get_historical_volume_by_balance_manager_id(
     let volume_in_base = params
         .get("volume_in_base")
         .map(|v| v == "true")
-        .unwrap_or(true);
+        .unwrap_or(false);
     let column_to_query = if volume_in_base {
         sql::<diesel::sql_types::BigInt>("base_quantity")
     } else {
@@ -325,7 +333,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
         let volume_in_base = params
             .get("volume_in_base")
             .map(|v| v == "true")
-            .unwrap_or(true);
+            .unwrap_or(false);
         let column_to_query = if volume_in_base {
             sql::<diesel::sql_types::BigInt>("base_quantity")
         } else {
@@ -373,6 +381,455 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
     }
 
     Ok(Json(metrics_by_interval))
+}
+
+async fn ticker(
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, HashMap<String, Value>>>, DeepBookError> {
+    // Fetch base and quote historical volumes
+    let base_volumes = fetch_historical_volume(&params, true, &state).await?;
+    let quote_volumes = fetch_historical_volume(&params, false, &state).await?;
+
+    // Fetch pools data for metadata
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_map: HashMap<String, &Pools> = pools
+        .0
+        .iter()
+        .map(|pool| (pool.pool_id.clone(), pool))
+        .collect();
+
+    // Fetch last prices for all pools in a single query
+    let connection = &mut state.pool.get().await?;
+    let last_prices: Vec<(String, i64)> = schema::order_fills::table
+        .select((schema::order_fills::pool_id, schema::order_fills::price))
+        .order_by((
+            schema::order_fills::pool_id.asc(),
+            schema::order_fills::checkpoint_timestamp_ms.desc(),
+        ))
+        .distinct_on(schema::order_fills::pool_id)
+        .load(connection)
+        .await?;
+
+    let last_price_map: HashMap<String, i64> = last_prices.into_iter().collect();
+
+    let mut response = HashMap::new();
+
+    for (pool_id, pool) in &pool_map {
+        let pool_name = &pool.pool_name;
+        let base_volume = base_volumes.get(pool_name).copied().unwrap_or(0);
+        let quote_volume = quote_volumes.get(pool_name).copied().unwrap_or(0);
+        let last_price = last_price_map.get(pool_id).copied();
+
+        // Conversion factors based on decimals
+        let base_factor = 10u64.pow(pool.base_asset_decimals as u32);
+        let quote_factor = 10u64.pow(pool.quote_asset_decimals as u32);
+        let price_factor =
+            10u64.pow((9 - pool.base_asset_decimals + pool.quote_asset_decimals) as u32);
+
+        response.insert(
+            pool_name.clone(),
+            HashMap::from([
+                (
+                    "last_price".to_string(),
+                    Value::from(
+                        last_price
+                            .map(|price| price as f64 / price_factor as f64)
+                            .unwrap_or(0.0),
+                    ),
+                ),
+                (
+                    "base_volume".to_string(),
+                    Value::from(base_volume as f64 / base_factor as f64),
+                ),
+                (
+                    "quote_volume".to_string(),
+                    Value::from(quote_volume as f64 / quote_factor as f64),
+                ),
+                ("isFrozen".to_string(), Value::from(0)), // Fixed to 0 because all pools in pools table are active
+            ]),
+        );
+    }
+
+    Ok(Json(response))
+}
+
+async fn fetch_historical_volume(
+    params: &HashMap<String, String>,
+    volume_in_base: bool,
+    state: &PgDeepbookPersistent,
+) -> Result<HashMap<String, u64>, DeepBookError> {
+    let mut params_with_volume = params.clone();
+    params_with_volume.insert("volume_in_base".to_string(), volume_in_base.to_string());
+
+    all_historical_volume(Query(params_with_volume), State(state.clone()))
+        .await
+        .map(|Json(volumes)| volumes)
+}
+
+#[allow(clippy::get_first)]
+async fn summary(
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
+    // Call the ticker function to get volumes and last price
+    let ticker_data = ticker(Query(HashMap::new()), State(state.clone())).await?;
+    let Json(ticker_map) = ticker_data;
+
+    // Prepare pool metadata (including decimals and pool_id <-> pool_name mapping)
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_metadata: HashMap<String, (String, (i16, i16))> = pools
+        .0
+        .into_iter()
+        .map(|pool| {
+            (
+                pool.pool_name.clone(),
+                (
+                    pool.pool_id.clone(),
+                    (pool.base_asset_decimals, pool.quote_asset_decimals),
+                ),
+            )
+        })
+        .collect();
+
+    // Prepare pool decimals for scaling
+    let pool_decimals: HashMap<String, (i16, i16)> = pool_metadata
+        .iter()
+        .map(|(_, (pool_id, decimals))| (pool_id.clone(), *decimals))
+        .collect();
+
+    // Call the price_change_24h function to get price changes
+    let price_change_map = price_change_24h(&pool_metadata, State(state.clone())).await?;
+
+    // Call the high_low_prices_24h function to get the highest and lowest prices
+    let high_low_map = high_low_prices_24h(&pool_decimals, State(state.clone())).await?;
+
+    let mut response = Vec::new();
+
+    for (pool_name, ticker_info) in &ticker_map {
+        if let Some((pool_id, _)) = pool_metadata.get(pool_name) {
+            // Extract data from the ticker function response
+            let last_price = ticker_info
+                .get("last_price")
+                .and_then(|price| price.as_f64())
+                .unwrap_or(0.0);
+
+            let base_volume = ticker_info
+                .get("base_volume")
+                .and_then(|volume| volume.as_f64())
+                .unwrap_or(0.0);
+
+            let quote_volume = ticker_info
+                .get("quote_volume")
+                .and_then(|volume| volume.as_f64())
+                .unwrap_or(0.0);
+
+            // Fetch the 24-hour price change percent
+            let price_change_percent = price_change_map.get(pool_name).copied().unwrap_or(0.0);
+
+            // Fetch the highest and lowest prices in the last 24 hours
+            let (highest_price, lowest_price) =
+                high_low_map.get(pool_id).copied().unwrap_or((0.0, 0.0));
+
+            // Fetch the highest bid and lowest ask from the orderbook
+            let orderbook_data = orderbook(
+                Path(pool_name.clone()),
+                Query(HashMap::from([("level".to_string(), "1".to_string())])),
+                State(state.clone()),
+            )
+            .await
+            .ok()
+            .map(|Json(data)| data);
+
+            let highest_bid = orderbook_data
+                .as_ref()
+                .and_then(|data| data.get("bids"))
+                .and_then(|bids| bids.as_array())
+                .and_then(|bids| bids.get(0))
+                .and_then(|bid| bid.as_array())
+                .and_then(|bid| bid.get(0))
+                .and_then(|price| price.as_str()?.parse::<f64>().ok())
+                .unwrap_or(0.0);
+
+            let lowest_ask = orderbook_data
+                .as_ref()
+                .and_then(|data| data.get("asks"))
+                .and_then(|asks| asks.as_array())
+                .and_then(|asks| asks.get(0))
+                .and_then(|ask| ask.as_array())
+                .and_then(|ask| ask.get(0))
+                .and_then(|price| price.as_str()?.parse::<f64>().ok())
+                .unwrap_or(0.0);
+
+            let mut summary_data = HashMap::new();
+            summary_data.insert(
+                "trading_pairs".to_string(),
+                Value::String(pool_name.clone()),
+            );
+            let parts: Vec<&str> = pool_name.split('_').collect();
+            let base_currency = parts.get(0).unwrap_or(&"Unknown").to_string();
+            let quote_currency = parts.get(1).unwrap_or(&"Unknown").to_string();
+
+            summary_data.insert("base_currency".to_string(), Value::String(base_currency));
+            summary_data.insert("quote_currency".to_string(), Value::String(quote_currency));
+            summary_data.insert("last_price".to_string(), Value::from(last_price));
+            summary_data.insert("base_volume".to_string(), Value::from(base_volume));
+            summary_data.insert("quote_volume".to_string(), Value::from(quote_volume));
+            summary_data.insert(
+                "price_change_percent_24h".to_string(),
+                Value::from(price_change_percent),
+            );
+            summary_data.insert("highest_price_24h".to_string(), Value::from(highest_price));
+            summary_data.insert("lowest_price_24h".to_string(), Value::from(lowest_price));
+            summary_data.insert("highest_bid".to_string(), Value::from(highest_bid));
+            summary_data.insert("lowest_ask".to_string(), Value::from(lowest_ask));
+
+            response.push(summary_data);
+        }
+    }
+
+    Ok(Json(response))
+}
+
+async fn high_low_prices_24h(
+    pool_decimals: &HashMap<String, (i16, i16)>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<HashMap<String, (f64, f64)>, DeepBookError> {
+    // Get the current timestamp in milliseconds
+    let end_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| DeepBookError::InternalError("System time error".to_string()))?
+        .as_millis() as i64;
+
+    // Calculate the start time for 24 hours ago
+    let start_time = end_time - (24 * 60 * 60 * 1000);
+
+    let connection = &mut state.pool.get().await?;
+
+    // Query for trades within the last 24 hours for all pools
+    let results: Vec<(String, i64)> = schema::order_fills::table
+        .select((schema::order_fills::pool_id, schema::order_fills::price))
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
+        .order_by(schema::order_fills::pool_id.asc())
+        .load(connection)
+        .await?;
+
+    // Aggregate the highest and lowest prices for each pool
+    let mut price_map: HashMap<String, (f64, f64)> = HashMap::new();
+
+    for (pool_id, price) in results {
+        if let Some((base_decimals, quote_decimals)) = pool_decimals.get(&pool_id) {
+            let scaling_factor = 10f64.powi((9 - base_decimals + quote_decimals) as i32);
+            let price_f64 = price as f64 / scaling_factor;
+
+            let entry = price_map.entry(pool_id).or_insert((f64::MIN, f64::MAX));
+            // Update the highest and lowest prices
+            entry.0 = entry.0.max(price_f64); // Highest price
+            entry.1 = entry.1.min(price_f64); // Lowest price
+        }
+    }
+
+    Ok(price_map)
+}
+
+async fn price_change_24h(
+    pool_metadata: &HashMap<String, (String, (i16, i16))>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<HashMap<String, f64>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+
+    // Calculate the timestamp for 24 hours ago
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| DeepBookError::InternalError("System time error".to_string()))?
+        .as_millis() as i64;
+
+    let timestamp_24h_ago = now - (24 * 60 * 60 * 1000); // 24 hours in milliseconds
+
+    let mut response = HashMap::new();
+
+    for (pool_name, (pool_id, (base_decimals, quote_decimals))) in pool_metadata.iter() {
+        // Get the latest price <= 24 hours ago
+        let earliest_trade_24h = schema::order_fills::table
+            .filter(schema::order_fills::pool_id.eq(pool_id))
+            .filter(schema::order_fills::checkpoint_timestamp_ms.le(timestamp_24h_ago))
+            .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+            .select(schema::order_fills::price)
+            .first::<i64>(connection)
+            .await;
+
+        // Get the most recent price
+        let most_recent_trade = schema::order_fills::table
+            .filter(schema::order_fills::pool_id.eq(pool_id))
+            .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+            .select(schema::order_fills::price)
+            .first::<i64>(connection)
+            .await;
+
+        if let (Ok(earliest_price), Ok(most_recent_price)) = (earliest_trade_24h, most_recent_trade)
+        {
+            let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
+
+            // Scale the prices
+            let earliest_price_scaled = earliest_price as f64 / price_factor as f64;
+            let most_recent_price_scaled = most_recent_price as f64 / price_factor as f64;
+
+            // Calculate price change percentage
+            let price_change_percent =
+                ((most_recent_price_scaled / earliest_price_scaled) - 1.0) * 100.0;
+
+            response.insert(pool_name.clone(), price_change_percent);
+        } else {
+            // If there's no price data for 24 hours or recent trades, insert 0.0 as price change
+            response.insert(pool_name.clone(), 0.0);
+        }
+    }
+
+    Ok(response)
+}
+
+async fn trades(
+    Path(pool_name): Path<String>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
+    // Fetch all pools to map names to IDs and decimals
+    let connection = &mut state.pool.get().await?;
+    let pool_data = schema::pools::table
+        .filter(schema::pools::pool_name.eq(pool_name.clone()))
+        .select((
+            schema::pools::pool_id,
+            schema::pools::base_asset_decimals,
+            schema::pools::quote_asset_decimals,
+        ))
+        .first::<(String, i16, i16)>(connection)
+        .await
+        .map_err(|_| DeepBookError::InternalError(format!("Pool '{}' not found", pool_name)))?;
+
+    let (pool_id, base_decimals, quote_decimals) = pool_data;
+    let base_decimals = base_decimals as u8;
+    let quote_decimals = quote_decimals as u8;
+
+    // Fetch the last trade for the pool from the order_fills table
+    let last_trade = schema::order_fills::table
+        .filter(schema::order_fills::pool_id.eq(pool_id))
+        .order_by(schema::order_fills::checkpoint_timestamp_ms.desc())
+        .select((
+            schema::order_fills::maker_order_id,
+            schema::order_fills::taker_order_id,
+            schema::order_fills::price,
+            schema::order_fills::base_quantity,
+            schema::order_fills::quote_quantity,
+            schema::order_fills::checkpoint_timestamp_ms,
+            schema::order_fills::taker_is_bid,
+        ))
+        .first::<(String, String, i64, i64, i64, i64, bool)>(connection)
+        .await
+        .map_err(|_| {
+            DeepBookError::InternalError(format!("No trades found for pool '{}'", pool_name))
+        })?;
+
+    let (
+        maker_order_id,
+        taker_order_id,
+        price,
+        base_quantity,
+        quote_quantity,
+        timestamp,
+        taker_is_bid,
+    ) = last_trade;
+
+    // Calculate the `trade_id` using the external function
+    let trade_id = calculate_trade_id(&maker_order_id, &taker_order_id)?;
+
+    // Conversion factors for decimals
+    let base_factor = 10u64.pow(base_decimals as u32);
+    let quote_factor = 10u64.pow(quote_decimals as u32);
+    let price_factor = 10u64.pow((9 - base_decimals + quote_decimals) as u32);
+    let trade_type = if taker_is_bid { "buy" } else { "sell" };
+
+    // Prepare the trade data
+    let trade = HashMap::from([
+        ("trade_id".to_string(), Value::from(trade_id.to_string())), // Computed from `maker_id` and `taker_id`
+        (
+            "price".to_string(),
+            Value::from(price as f64 / price_factor as f64),
+        ),
+        (
+            "base_volume".to_string(),
+            Value::from(base_quantity as f64 / base_factor as f64),
+        ),
+        (
+            "quote_volume".to_string(),
+            Value::from(quote_quantity as f64 / quote_factor as f64),
+        ),
+        ("timestamp".to_string(), Value::from(timestamp as u64)),
+        ("type".to_string(), Value::from(trade_type)), // Trade type (buy/sell)
+    ]);
+
+    Ok(Json(vec![trade]))
+}
+
+fn calculate_trade_id(maker_id: &str, taker_id: &str) -> Result<u128, DeepBookError> {
+    // Parse maker_id and taker_id as u128
+    let maker_id = maker_id
+        .parse::<u128>()
+        .map_err(|_| DeepBookError::InternalError("Invalid maker_id".to_string()))?;
+    let taker_id = taker_id
+        .parse::<u128>()
+        .map_err(|_| DeepBookError::InternalError("Invalid taker_id".to_string()))?;
+
+    // Ignore the most significant bit for both IDs
+    let maker_id = maker_id & !(1 << 127);
+    let taker_id = taker_id & !(1 << 127);
+
+    // Return the sum of the modified IDs as the trade_id
+    Ok(maker_id + taker_id)
+}
+
+pub async fn assets(
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, HashMap<String, Value>>>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+    let assets = schema::assets::table
+        .select((
+            schema::assets::symbol,
+            schema::assets::name,
+            schema::assets::ucid,
+            schema::assets::package_address_url,
+            schema::assets::package_id,
+        ))
+        .load::<(String, String, Option<i32>, Option<String>, Option<String>)>(connection)
+        .await
+        .map_err(|err| DeepBookError::InternalError(format!("Failed to query assets: {}", err)))?;
+
+    let mut response = HashMap::new();
+
+    for (symbol, name, ucid, package_address_url, package_id) in assets {
+        let mut asset_info = HashMap::new();
+        asset_info.insert("name".to_string(), Value::String(name));
+        asset_info.insert(
+            "can_withdraw".to_string(),
+            Value::String("true".to_string()),
+        );
+        asset_info.insert("can_deposit".to_string(), Value::String("true".to_string()));
+
+        if let Some(ucid) = ucid {
+            asset_info.insert(
+                "unified_cryptoasset_id".to_string(),
+                Value::String(ucid.to_string()),
+            );
+        }
+        if let Some(addresses) = package_address_url {
+            asset_info.insert("contractAddressUrl".to_string(), Value::String(addresses));
+        }
+
+        if let Some(addresses) = package_id {
+            asset_info.insert("contractAddress".to_string(), Value::String(addresses));
+        }
+
+        response.insert(symbol, asset_info);
+    }
+
+    Ok(Json(response))
 }
 
 /// Level2 data for all pools
