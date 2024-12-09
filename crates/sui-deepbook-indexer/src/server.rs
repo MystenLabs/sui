@@ -37,9 +37,9 @@ use sui_types::{
 pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
-    "/get_historical_volume_by_balance_manager_id_with_interval/:pool_ids/:balance_manager_id";
+    "/historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
-    "/get_historical_volume_by_balance_manager_id/:pool_ids/:balance_manager_id";
+    "/historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id";
 pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
@@ -216,14 +216,31 @@ async fn all_historical_volume(
 }
 
 async fn get_historical_volume_by_balance_manager_id(
-    Path((pool_ids, balance_manager_id)): Path<(String, String)>,
+    Path((pool_names, balance_manager_id)): Path<(String, String)>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, Vec<i64>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
-    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
 
-    // Get start_time and end_time from query parameters (in seconds)
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_name_to_id: HashMap<String, String> = pools
+        .0
+        .into_iter()
+        .map(|pool| (pool.pool_name, pool.pool_id))
+        .collect();
+
+    let pool_ids_list: Vec<String> = pool_names
+        .split(',')
+        .filter_map(|name| pool_name_to_id.get(name).cloned())
+        .collect();
+
+    if pool_ids_list.is_empty() {
+        return Err(DeepBookError::InternalError(
+            "No valid pool names provided".to_string(),
+        ));
+    }
+
+    // Parse start_time and end_time
     let end_time = params
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
@@ -270,14 +287,20 @@ async fn get_historical_volume_by_balance_manager_id(
 
     let mut volume_by_pool: HashMap<String, Vec<i64>> = HashMap::new();
     for order_fill in results {
-        let entry = volume_by_pool
-            .entry(order_fill.pool_id.clone())
-            .or_insert(vec![0, 0]);
-        if order_fill.maker_balance_manager_id == balance_manager_id {
-            entry[0] += order_fill.quantity;
-        }
-        if order_fill.taker_balance_manager_id == balance_manager_id {
-            entry[1] += order_fill.quantity;
+        if let Some(pool_name) = pool_name_to_id
+            .iter()
+            .find(|(_, id)| **id == order_fill.pool_id)
+            .map(|(name, _)| name)
+        {
+            let entry = volume_by_pool
+                .entry(pool_name.clone())
+                .or_insert(vec![0, 0]);
+            if order_fill.maker_balance_manager_id == balance_manager_id {
+                entry[0] += order_fill.quantity;
+            }
+            if order_fill.taker_balance_manager_id == balance_manager_id {
+                entry[1] += order_fill.quantity;
+            }
         }
     }
 
@@ -285,14 +308,31 @@ async fn get_historical_volume_by_balance_manager_id(
 }
 
 async fn get_historical_volume_by_balance_manager_id_with_interval(
-    Path((pool_ids, balance_manager_id)): Path<(String, String)>,
+    Path((pool_names, balance_manager_id)): Path<(String, String)>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, HashMap<String, Vec<i64>>>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
-    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
 
-    // Parse interval from query parameters (in seconds), default to 1 hour (3600 seconds)
+    let pools: Json<Vec<Pools>> = get_pools(State(state.clone())).await?;
+    let pool_name_to_id: HashMap<String, String> = pools
+        .0
+        .into_iter()
+        .map(|pool| (pool.pool_name, pool.pool_id))
+        .collect();
+
+    let pool_ids_list: Vec<String> = pool_names
+        .split(',')
+        .filter_map(|name| pool_name_to_id.get(name).cloned())
+        .collect();
+
+    if pool_ids_list.is_empty() {
+        return Err(DeepBookError::InternalError(
+            "No valid pool names provided".to_string(),
+        ));
+    }
+
+    // Parse interval
     let interval = params
         .get("interval")
         .and_then(|v| v.parse::<i64>().ok())
@@ -306,7 +346,7 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
     let interval_ms = interval * 1000;
 
-    // Parse start_time and end_time (in seconds) and convert to milliseconds
+    // Parse start_time and end_time
     let end_time = params
         .get("end_time")
         .and_then(|v| v.parse::<i64>().ok())
@@ -361,14 +401,20 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
 
         let mut volume_by_pool: HashMap<String, Vec<i64>> = HashMap::new();
         for order_fill in results {
-            let entry = volume_by_pool
-                .entry(order_fill.pool_id.clone())
-                .or_insert(vec![0, 0]);
-            if order_fill.maker_balance_manager_id == balance_manager_id {
-                entry[0] += order_fill.quantity;
-            }
-            if order_fill.taker_balance_manager_id == balance_manager_id {
-                entry[1] += order_fill.quantity;
+            if let Some(pool_name) = pool_name_to_id
+                .iter()
+                .find(|(_, id)| **id == order_fill.pool_id)
+                .map(|(name, _)| name)
+            {
+                let entry = volume_by_pool
+                    .entry(pool_name.clone())
+                    .or_insert(vec![0, 0]);
+                if order_fill.maker_balance_manager_id == balance_manager_id {
+                    entry[0] += order_fill.quantity;
+                }
+                if order_fill.taker_balance_manager_id == balance_manager_id {
+                    entry[1] += order_fill.quantity;
+                }
             }
         }
 
