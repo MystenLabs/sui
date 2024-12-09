@@ -12661,6 +12661,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlparser"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a875d8cd437cc8a97e9aeaeea352ec9a19aea99c23e9effb17757291de80b08"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15219,6 +15228,21 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+]
+
+[[package]]
+name = "sui-rpc-benchmark"
+version = "1.39.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "futures",
+ "sqlparser",
+ "sui-pg-temp-db",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
 ]
 
 [[package]]
