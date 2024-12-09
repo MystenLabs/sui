@@ -100,6 +100,7 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 }
 
 /**
+ * @experimental
  * A passkey signer used for signing transactions. This is a client side implementation for [SIP-9](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md).
  */
 export class PasskeyKeypair extends Signer {
