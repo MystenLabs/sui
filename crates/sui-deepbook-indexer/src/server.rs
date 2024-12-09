@@ -292,7 +292,9 @@ async fn get_historical_volume_by_balance_manager_id(
             .find(|(_, id)| **id == order_fill.pool_id)
             .map(|(name, _)| name)
         {
-            let entry = volume_by_pool.entry(pool_name.clone()).or_insert(vec![0, 0]);
+            let entry = volume_by_pool
+                .entry(pool_name.clone())
+                .or_insert(vec![0, 0]);
             if order_fill.maker_balance_manager_id == balance_manager_id {
                 entry[0] += order_fill.quantity;
             }
@@ -404,7 +406,9 @@ async fn get_historical_volume_by_balance_manager_id_with_interval(
                 .find(|(_, id)| **id == order_fill.pool_id)
                 .map(|(name, _)| name)
             {
-                let entry = volume_by_pool.entry(pool_name.clone()).or_insert(vec![0, 0]);
+                let entry = volume_by_pool
+                    .entry(pool_name.clone())
+                    .or_insert(vec![0, 0]);
                 if order_fill.maker_balance_manager_id == balance_manager_id {
                     entry[0] += order_fill.quantity;
                 }
