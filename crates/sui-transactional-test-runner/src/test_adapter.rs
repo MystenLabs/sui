@@ -68,7 +68,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ReadStore;
-use sui_types::storage::{ObjectStore, RestStateReader};
+use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
@@ -152,9 +152,9 @@ pub struct SuiTestAdapter {
     is_simulator: bool,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
     /// If `is_simulator` is true, the executor will be a `Simulacrum`, and this will be a
-    /// `RestStateReader` that can be used to spawn the equivalent of a fullnode rest api. This can
+    /// `RpcStateReader` that can be used to spawn the equivalent of a fullnode rest api. This can
     /// then be used to serve an indexer that reads from said rest api service.
-    pub read_replica: Option<Arc<dyn RestStateReader + Send + Sync>>,
+    pub read_replica: Option<Arc<dyn RpcStateReader + Send + Sync>>,
     /// Configuration for offchain state reader read from the file itself, and can be passed to the
     /// specific indexing and reader flavor.
     pub offchain_config: Option<OffChainConfig>,
@@ -2111,7 +2111,7 @@ async fn init_val_fullnode_executor(
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
-    Option<Arc<dyn RestStateReader + Send + Sync>>,
+    Option<Arc<dyn RpcStateReader + Send + Sync>>,
 ) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -2181,7 +2181,7 @@ async fn init_sim_executor(
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
-    Option<Arc<dyn RestStateReader + Send + Sync>>,
+    Option<Arc<dyn RpcStateReader + Send + Sync>>,
 ) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
