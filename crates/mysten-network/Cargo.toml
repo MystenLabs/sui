@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 anemo.workspace = true
+anemo-tower.workspace = true
 async-stream.workspace = true
 bcs.workspace = true
 bytes.workspace = true
@@ -16,6 +17,7 @@ eyre.workspace = true
 futures.workspace = true
 http.workspace = true
 multiaddr.workspace = true
+prometheus.workspace = true
 serde.workspace = true
 once_cell.workspace = true
 snap.workspace = true

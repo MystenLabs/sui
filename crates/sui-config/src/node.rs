@@ -10,7 +10,6 @@ use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
 use mysten_common::fatal;
-use narwhal_config::Parameters as NarwhalParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -640,18 +639,10 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
-    // Deprecated: Narwhal specific configs.
-    pub address: Multiaddr,
-    pub narwhal_config: NarwhalParameters,
-
     pub parameters: Option<ConsensusParameters>,
 }
 
 impl ConsensusConfig {
-    pub fn address(&self) -> &Multiaddr {
-        &self.address
-    }
-
     pub fn db_path(&self) -> &Path {
         &self.db_path
     }
@@ -663,10 +654,6 @@ impl ConsensusConfig {
     pub fn submit_delay_step_override(&self) -> Option<Duration> {
         self.submit_delay_step_override_millis
             .map(Duration::from_millis)
-    }
-
-    pub fn narwhal_config(&self) -> &NarwhalParameters {
-        &self.narwhal_config
     }
 
     pub fn db_retention_epochs(&self) -> u64 {
@@ -1310,6 +1297,14 @@ mod tests {
         const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
 
         let _template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
+    }
+
+    /// Tests that a legacy validator config (captured on 12/06/2024) can be parsed.
+    #[test]
+    fn legacy_validator_config() {
+        const FILE: &str = include_str!("../data/sui-node-legacy.yaml");
+
+        let _template: NodeConfig = serde_yaml::from_str(FILE).unwrap();
     }
 
     #[test]
