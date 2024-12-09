@@ -8,7 +8,7 @@ use crate::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
             set_err_info,
-            state::{MachineState, ResolvableType, CallStack},
+            state::{CallStack, MachineState, ResolvableType},
         },
         values::{
             IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
@@ -94,11 +94,20 @@ pub(super) fn run(
     }
 
     // When we are done, grab the operand stack as the return type.
-    let MachineState { operand_stack, call_stack } = state;
-    let CallStack { mut heap, current_frame, frames } = call_stack;
-    heap.free_stack_frame(current_frame.stack_frame).map_err(|e| e.finish(Location::Undefined))?;
+    let MachineState {
+        operand_stack,
+        call_stack,
+    } = state;
+    let CallStack {
+        mut heap,
+        current_frame,
+        frames,
+    } = call_stack;
+    heap.free_stack_frame(current_frame.stack_frame)
+        .map_err(|e| e.finish(Location::Undefined))?;
     for frame in frames.into_iter().rev() {
-        heap.free_stack_frame(frame.stack_frame).map_err(|e| e.finish(Location::Undefined))?;
+        heap.free_stack_frame(frame.stack_frame)
+            .map_err(|e| e.finish(Location::Undefined))?;
     }
     Ok(operand_stack.value)
 }
@@ -376,7 +385,7 @@ fn op_step_impl(
         Bytecode::LdConst(idx) => {
             let constant = state.call_stack.current_frame.resolver.constant_at(*idx);
             gas_meter.charge_ld_const(NumBytes::new(constant.size))?;
-            let val = Value::from_constant_value(constant.value.clone());
+            let val = constant.value.clone().to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
             state.push_operand(val)?
         }
@@ -915,7 +924,8 @@ fn call_function(
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
-        push_call_frame(state, run_context, function, ty_args).map_err(|err| state.maybe_core_dump(err))?;
+        push_call_frame(state, run_context, function, ty_args)
+            .map_err(|err| state.maybe_core_dump(err))?;
     }
     Ok(())
 }
