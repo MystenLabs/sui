@@ -29,3 +29,4 @@ packages:
   - '!sdk/signers/aws'
   - '!sdk/signers/gcp'
   - '!sdk/typescript/zklogin'
+  - '!sdk/typescript/keypairs/passkey'
