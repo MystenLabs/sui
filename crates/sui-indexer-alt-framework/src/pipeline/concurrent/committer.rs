@@ -16,7 +16,7 @@ use crate::{
     task::TrySpawnStreamExt,
 };
 
-use super::{Batched, Handler};
+use super::{BatchedRows, Handler};
 
 /// If the committer needs to retry a commit, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -37,7 +37,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 pub(super) fn committer<H: Handler + 'static>(
     config: CommitterConfig,
     skip_watermark: bool,
-    rx: mpsc::Receiver<Batched<H>>,
+    rx: mpsc::Receiver<BatchedRows<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
@@ -47,7 +47,7 @@ pub(super) fn committer<H: Handler + 'static>(
         info!(pipeline = H::NAME, "Starting committer");
 
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(config.write_concurrency, |Batched { values, watermark }| {
+            .try_for_each_spawned(config.write_concurrency, |BatchedRows { values, watermark }| {
                 let values = Arc::new(values);
                 let tx = tx.clone();
                 let db = db.clone();
