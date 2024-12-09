@@ -740,8 +740,8 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         panic!("Expected metadata to exists and error");
     };
 
-    let details = Some(json!({
-    "error": format!("Invalid input: Address {sender} does not have enough Sui balance to transfer {recipient_change} with needed budget: {expected_budget}. Sui balance: {}.", recipient_change + expected_budget - 1)
+    let details = Some(json!({ "error":
+        format!("Invalid input: Address {sender} does not have amount: {recipient_change} + budget: {expected_budget} balance. SUI balance: {}.", recipient_change + expected_budget - 1)
     }));
     assert_eq!(
         err,

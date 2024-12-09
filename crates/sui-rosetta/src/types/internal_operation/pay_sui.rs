@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 use sui_sdk::SuiClient;
@@ -13,8 +12,8 @@ use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransacti
 use crate::errors::Error;
 
 use super::{
-    budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
-    MAX_GAS_COINS, START_GAS_UNITS,
+    collect_coins_until_budget_met, TransactionObjectData, TryConstructTransaction,
+    MAX_COMMAND_ARGS, MAX_GAS_COINS,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -61,59 +60,11 @@ impl TryConstructTransaction for PaySui {
             });
         };
 
-        let gas_price = match gas_price {
-            Some(p) => p,
-            None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-        };
-
-        let mut coins_stream = Box::pin(client.coin_read_api().get_coins_stream(sender, None));
-
-        let mut all_coins = vec![];
-        let mut gas_coins: Vec<_>;
-        let mut extra_gas_coins: Vec<_>;
         let total_amount = amounts.iter().sum::<u64>();
-        let mut gathered = 0;
-        let mut budget = START_GAS_UNITS * gas_price;
-        // We need to dry-run in a loop, because depending on the amount of coins used the tx might
-        // differ slightly: (merge / no merge / number of merge-coins)
-        loop {
-            while let Some(coin) = coins_stream.next().await {
-                gathered += coin.balance;
-                all_coins.push(coin);
-                if gathered >= total_amount + budget {
-                    break;
-                }
-            }
-            if gathered < total_amount + budget {
-                return Err(Error::InvalidInput(
-                    format!("Address {sender} does not have enough Sui balance to transfer {total_amount} with needed budget: {budget}. Sui balance: {gathered}.")
-                ));
-            }
-
-            // The coins to merge should be used as transaction object inputs, as
-            // `TransactionData::new_programmable` used in `InternalOperation::try_into_data`,
-            // uses all coins passed as gas payment.
-            let mut iter = all_coins.iter().map(|c| c.object_ref());
-            gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
-            extra_gas_coins = iter.collect();
-            let pt = pay_sui_pt(recipients.clone(), amounts.clone(), &extra_gas_coins)?;
-            budget = budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
-
-            // If we have already gathered the needed amount of coins we don't need to dry run again,
-            // as the transaction will be the same.
-            if budget + total_amount <= gathered {
-                break;
-            }
-        }
-        let total_sui_balance = all_coins.iter().map(|c| c.balance).sum::<u64>() as i128;
-
-        Ok(TransactionObjectData {
-            gas_coins,
-            extra_gas_coins,
-            objects: vec![],
-            total_sui_balance,
-            budget,
-        })
+        let pay_sui_pt = |extra_gas_coins: &[ObjectRef]| {
+            pay_sui_pt(recipients.clone(), amounts.clone(), extra_gas_coins)
+        };
+        collect_coins_until_budget_met(client, sender, pay_sui_pt, total_amount, gas_price).await
     }
 }
 
