@@ -409,7 +409,7 @@ impl InclusionCheck {
         for mark in compare_ord_iters(old_module.enums.iter(), new_module.enums.iter()) {
             match mark {
                 Mark::New(name, new) => context.enum_new(name, new),
-                Mark::Missing(name, _) => context.enum_missing(name),
+                Mark::Missing(name, old) => context.enum_missing(name, old),
                 Mark::Existing(name, old, new) => {
                     if old != new {
                         context.enum_change(name, old);
