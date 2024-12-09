@@ -29,3 +29,4 @@ packages:
   - '!sdk/typescript/graphql/schemas/2024.4'
   - '!sdk/signers/aws'
   - '!sdk/signers/gcp'
+  - '!sdk/typescript/keypairs/passkey'
