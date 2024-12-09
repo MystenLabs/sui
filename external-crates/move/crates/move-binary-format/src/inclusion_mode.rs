@@ -15,7 +15,7 @@ pub trait InclusionCheckMode: Default {
     fn file_format_version_downgrade(&mut self, old_version: u32, new_version: u32);
     fn struct_new(&mut self, name: &Identifier, new_struct: &Struct);
     fn struct_change(&mut self, name: &Identifier, old_struct: &Struct, new_struct: &Struct);
-    fn struct_missing(&mut self, name: &Identifier);
+    fn struct_missing(&mut self, name: &Identifier, old_struct: &Struct);
     fn enum_new(&mut self, name: &Identifier, new_enum: &Enum);
     fn enum_change(&mut self, name: &Identifier, new_enum: &Enum);
     fn enum_missing(&mut self, name: &Identifier, old_enum: &Enum);
@@ -75,7 +75,7 @@ impl InclusionCheckMode for InclusionCheckExecutionMode {
         self.is_equal = false;
     }
 
-    fn struct_missing(&mut self, _name: &Identifier) {
+    fn struct_missing(&mut self, _name: &Identifier, _old_struct: &Struct) {
         self.is_subset = false;
         self.is_equal = false;
     }
