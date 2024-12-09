@@ -16,7 +16,7 @@ use crate::{
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
 };
 
-use super::{Batched, Handler};
+use super::{BatchedRows, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
@@ -39,7 +39,7 @@ impl<H: Handler> PendingCheckpoint<H> {
 
     /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
     /// chunk size.
-    fn batch_into(&mut self, batch: &mut Batched<H>) {
+    fn batch_into(&mut self, batch: &mut BatchedRows<H>) {
         let max_chunk_rows = super::max_chunk_rows::<H>();
         if batch.values.len() + self.values.len() > max_chunk_rows {
             let mut for_batch = self.values.split_off(max_chunk_rows - batch.values.len());
@@ -85,7 +85,7 @@ pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     checkpoint_lag: Option<u64>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
-    tx: mpsc::Sender<Batched<H>>,
+    tx: mpsc::Sender<BatchedRows<H>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -119,7 +119,7 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let mut batch = Batched::new();
+                    let mut batch = BatchedRows::new();
                     while !batch.is_full() {
                         let Some(mut entry) = pending.first_entry() else {
                             break;
