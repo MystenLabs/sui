@@ -23,10 +23,14 @@ import {
 } from './publickey.js';
 
 export interface PasskeyCreateOptions {
-	timeout: number; // The timeout for the passkey creation dialog.
-	name: string; // The name of the user
-	displayName: string; // The display name of the user, this is shown at creation dialog
-	rpName: string; // The name of the relying party, this is shown to user in the passkey creation dialog.
+	/** The timeout for the passkey creation dialog. */
+	timeout: number;
+	/** The name of the user. */
+	name: string;
+	/** The display name of the user, this is shown at creation dialog. */
+	displayName: string;
+	/** The name of the relying party, this is shown to user in the passkey creation dialog. */
+	rpName: string;
 }
 type DeepPartialConfigKeys = 'rp' | 'user' | 'authenticatorSelection';
 
