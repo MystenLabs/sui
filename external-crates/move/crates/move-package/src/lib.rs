@@ -56,6 +56,10 @@ pub struct BuildConfig {
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 
+    /// Compile in 'verification' mode. Extends 'test' mode with verification code.
+    #[clap(name = "verify-mode", long = "verify", global = true)]
+    pub verify_mode: bool,
+
     /// Generate documentation for packages
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
@@ -250,11 +254,14 @@ impl BuildConfig {
         path: &Path,
         model_config: ModelConfig,
     ) -> Result<GlobalEnv> {
+        let flags = self.compiler_flags();
+
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
         let _mutx = PackageLock::lock(); // held until function returns
-        ModelBuilder::create(resolved_graph, model_config).build_model()
+
+        ModelBuilder::create(resolved_graph, model_config).build_model(flags)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {
@@ -330,6 +337,7 @@ impl BuildConfig {
             Flags::empty()
         };
         flags
+            .set_verify(self.verify_mode)
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)

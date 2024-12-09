@@ -128,6 +128,16 @@ impl<T> Spanned<T> {
             loc: Loc::new(FileHash::empty(), 0, 0),
         }
     }
+
+    pub fn map<U, F>(self, f: F) -> Spanned<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        Spanned {
+            loc: self.loc,
+            value: f(self.value),
+        }
+    }
 }
 
 impl<T: PartialEq> PartialEq for Spanned<T> {

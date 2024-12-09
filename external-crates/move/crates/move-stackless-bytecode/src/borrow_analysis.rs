@@ -13,7 +13,7 @@ use move_model::{
     ast::TempIndex,
     model::{FunctionEnv, GlobalEnv, QualifiedInstId},
     ty::Type,
-    well_known::VECTOR_BORROW_MUT,
+    well_known::{BORROW_CHILD_OBJECT_MUT, VECTOR_BORROW_MUT},
 };
 
 use crate::{
@@ -505,6 +505,9 @@ fn get_custom_annotation_or_none(
             // check whether this borrow has known special semantics
             if fun_env.is_well_known(VECTOR_BORROW_MUT) {
                 Some(summarize_custom_borrow(IndexEdgeKind::Vector, &[0], &[0]))
+            } else if fun_env.is_well_known(BORROW_CHILD_OBJECT_MUT) {
+                // TODO: use table for dynamic fields--is that what we wabt
+                Some(summarize_custom_borrow(IndexEdgeKind::Table, &[0], &[0]))
             } else if fun_env.is_native() {
                 // non-borrow related native/intrinsic has no borrow semantics
                 Some(BorrowAnnotation::default())

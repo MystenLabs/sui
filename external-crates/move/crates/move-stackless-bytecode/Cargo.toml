@@ -15,7 +15,9 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
+move-symbol-pool.workspace = true
 
+bimap.workspace = true
 codespan.workspace = true
 codespan-reporting = { workspace = true, features = ["serde", "serialization"] }
 ethnum.workspace = true
@@ -24,6 +26,7 @@ im.workspace = true
 itertools.workspace = true
 log.workspace = true
 serde.workspace = true
+paste.workspace = true
 petgraph.workspace = true
 
 [dev-dependencies]

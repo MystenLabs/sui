@@ -25,28 +25,33 @@ use move_compiler::{
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, TargetKind},
-    parser::ast as P,
+    parser::ast::{self as P},
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
-    typing::ast as T,
+    typing::ast::{self as T},
     Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol as MoveSymbol;
 
 use crate::{
-    ast::ModuleName,
+    ast::{ModuleName, Spec},
     builder::model_builder::ModelBuilder,
     model::{DatatypeId, FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId},
     options::ModelBuilderOptions,
+    simplifier::{SpecRewriter, SpecRewriterPipeline},
 };
 
 pub mod ast;
 mod builder;
 pub mod code_writer;
 pub mod exp_generator;
+pub mod exp_rewriter;
+pub mod intrinsics;
 pub mod model;
 pub mod options;
 pub mod pragmas;
+pub mod simplifier;
+pub mod spec_translator;
 pub mod symbol;
 pub mod ty;
 pub mod well_known;
@@ -226,7 +231,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         }
     }
 
-    // Step 3: selective compilation.
+    // Step 3: selective compilation
     let expansion_ast = {
         let E::Program {
             warning_filters_table,
@@ -294,6 +299,10 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     // Now that it is known that the program has no errors, run the spec checker on verified units
     // plus expanded AST. This will populate the environment including any errors.
     run_spec_checker(&mut env, units, expansion_ast);
+
+    env.add_stub_prover_module();
+    env.add_stub_spec_module();
+
     Ok(env)
 }
 
@@ -343,8 +352,14 @@ pub fn run_bytecode_model_builder<'a>(
             let name = m.identifier_at(m.datatype_handle_at(def.struct_handle).name);
             let symbol = env.symbol_pool().make(name.as_str());
             let struct_id = DatatypeId::new(symbol);
-            let data =
-                env.create_move_struct_data(m, def_idx, symbol, Loc::default(), Vec::default());
+            let data = env.create_move_struct_data(
+                m,
+                def_idx,
+                symbol,
+                Loc::default(),
+                Vec::default(),
+                Spec::default(),
+            );
             module_data.struct_data.insert(struct_id, data);
             module_data.struct_idx_to_id.insert(def_idx, struct_id);
         }
@@ -415,10 +430,13 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                 expanded_module,
                 unit.named_module.module,
                 unit.named_module.source_map,
+                unit.function_infos,
             ))
         })
         .enumerate();
-    for (module_count, (module_id, expanded_module, compiled_module, source_map)) in modules {
+    for (module_count, (module_id, expanded_module, compiled_module, source_map, function_infos)) in
+        modules
+    {
         let loc = builder.to_loc(&expanded_module.loc);
         let addr_bytes = builder.resolve_address(&loc, &module_id.value.address);
         let module_name = ModuleName::from_address_bytes_and_name(
@@ -430,8 +448,33 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
         );
         let module_id = ModuleId::new(module_count);
         let mut module_translator = ModuleBuilder::new(&mut builder, module_id, module_name);
-        module_translator.translate(loc, expanded_module, compiled_module, source_map);
+        module_translator.translate(
+            loc,
+            expanded_module,
+            compiled_module,
+            source_map,
+            function_infos,
+        );
     }
+
+    // Populate GlobalEnv with model-level information
+    builder.populate_env();
+
+    // After all specs have been processed, warn about any unused schemas.
+    builder.warn_unused_schemas();
+
+    // Apply simplification passes
+    run_spec_simplifier(env);
+}
+
+fn run_spec_simplifier(env: &mut GlobalEnv) {
+    let options = env
+        .get_extension::<ModelBuilderOptions>()
+        .expect("options for model builder");
+    let mut rewriter = SpecRewriterPipeline::new(&options.simplification_pipeline);
+    rewriter
+        .override_with_rewrite(env)
+        .unwrap_or_else(|e| panic!("Failed to run spec simplification: {}", e))
 }
 
 // =================================================================================================

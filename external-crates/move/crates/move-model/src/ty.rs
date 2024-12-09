@@ -15,7 +15,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 
 use crate::{
     ast::QualifiedSymbol,
-    model::{DatatypeId, GlobalEnv, ModuleId},
+    model::{DatatypeId, GlobalEnv, ModuleId, QualifiedId},
     symbol::{Symbol, SymbolPool},
 };
 
@@ -186,6 +186,19 @@ impl Type {
             )
         )
     }
+
+    pub fn get_bit_width(&self) -> Option<usize> {
+        match self {
+            Type::Primitive(PrimitiveType::U8) => Some(8),
+            Type::Primitive(PrimitiveType::U16) => Some(16),
+            Type::Primitive(PrimitiveType::U32) => Some(32),
+            Type::Primitive(PrimitiveType::U64) => Some(64),
+            Type::Primitive(PrimitiveType::U128) => Some(128),
+            Type::Primitive(PrimitiveType::U256) => Some(256),
+            _ => None,
+        }
+    }
+
     /// Returns true if this is an address or signer type.
     pub fn is_signer_or_address(&self) -> bool {
         matches!(
@@ -246,6 +259,14 @@ impl Type {
             (*mid, *sid, targs.as_slice())
         } else {
             panic!("expected `Type::Struct`, found: `{:?}`", self)
+        }
+    }
+
+    pub fn get_datatype(&self) -> Option<(QualifiedId<DatatypeId>, &[Type])> {
+        if let Type::Datatype(mid, sid, targs) = self {
+            Some((mid.qualified(*sid), targs.as_slice()))
+        } else {
+            None
         }
     }
 

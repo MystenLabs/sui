@@ -139,7 +139,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
 
         // Initialize and print function targets
         let mut text = String::new();
-        let mut targets = FunctionTargetsHolder::default();
+        let mut targets = FunctionTargetsHolder::new();
         for module_env in env.get_modules() {
             for func_env in module_env.get_functions() {
                 targets.add_target(&func_env);

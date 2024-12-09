@@ -8,8 +8,11 @@ use crate::{
 };
 use anyhow::Result;
 use itertools::Itertools;
-use move_compiler::shared::PackagePaths;
-use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
+use move_compiler::{shared::PackagePaths, Flags};
+use move_model::{
+    model::GlobalEnv, options::ModelBuilderOptions,
+    run_model_builder_with_options_and_compilation_flags,
+};
 
 use super::compiled_package::{DependencyInfo, ModuleFormat};
 
@@ -32,7 +35,7 @@ impl ModelBuilder {
     // across all packages and build the Move model from that.
     // TODO: In the future we will need a better way to do this to support renaming in packages
     // where we want to support building a Move model.
-    pub fn build_model(&self) -> Result<GlobalEnv> {
+    pub fn build_model(&self, flags: Flags) -> Result<GlobalEnv> {
         // Make sure no renamings have been performed
         if let Some(pkg_name) = self.resolution_graph.contains_renaming() {
             anyhow::bail!(
@@ -129,6 +132,12 @@ impl ModelBuilder {
             ),
         };
 
-        run_model_builder_with_options(all_targets, all_deps, ModelBuilderOptions::default(), None)
+        run_model_builder_with_options_and_compilation_flags(
+            all_targets,
+            all_deps,
+            ModelBuilderOptions::default(),
+            flags,
+            None,
+        )
     }
 }

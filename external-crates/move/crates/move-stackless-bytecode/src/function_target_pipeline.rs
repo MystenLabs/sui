@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use bimap::btree::BiBTreeMap;
 use core::fmt;
 use std::{
     collections::{btree_map::Entry as MapEntry, BTreeMap, BTreeSet},
@@ -13,7 +14,16 @@ use itertools::{Either, Itertools};
 use log::{debug, info};
 use petgraph::graph::{DiGraph, NodeIndex};
 
-use move_model::model::{FunId, FunctionEnv, GlobalEnv, QualifiedId};
+use move_compiler::shared::known_attributes::{
+    KnownAttribute::Verification, VerificationAttribute,
+};
+use move_compiler::{
+    expansion::ast::{AttributeName_, Attribute_},
+    shared::unique_map::UniqueMap,
+};
+use move_symbol_pool::Symbol;
+
+use move_model::model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId};
 
 use crate::{
     function_target::{FunctionData, FunctionTarget},
@@ -24,9 +34,14 @@ use crate::{
 
 /// A data structure which holds data for multiple function targets, and allows to
 /// manipulate them as part of a transformation pipeline.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FunctionTargetsHolder {
     targets: BTreeMap<QualifiedId<FunId>, BTreeMap<FunctionVariant, FunctionData>>,
+    function_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
+    no_verify_specs: BTreeSet<QualifiedId<FunId>>,
+    ignore_aborts: BTreeSet<QualifiedId<FunId>>,
+    scenario_specs: BTreeSet<QualifiedId<FunId>>,
+    datatype_invs: BiBTreeMap<QualifiedId<DatatypeId>, QualifiedId<FunId>>,
 }
 
 /// Describes a function verification flavor.
@@ -158,6 +173,17 @@ pub struct FunctionTargetPipeline {
 }
 
 impl FunctionTargetsHolder {
+    pub fn new() -> Self {
+        Self {
+            targets: BTreeMap::new(),
+            function_specs: BiBTreeMap::new(),
+            no_verify_specs: BTreeSet::new(),
+            ignore_aborts: BTreeSet::new(),
+            scenario_specs: BTreeSet::new(),
+            datatype_invs: BiBTreeMap::new(),
+        }
+    }
+
     /// Get an iterator for all functions this holder.
     pub fn get_funs(&self) -> impl Iterator<Item = QualifiedId<FunId>> + '_ {
         self.targets.keys().cloned()
@@ -172,6 +198,59 @@ impl FunctionTargetsHolder {
             .flat_map(|(id, vs)| vs.keys().map(move |v| (*id, v.clone())))
     }
 
+    pub fn function_specs(&self) -> &BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>> {
+        &self.function_specs
+    }
+
+    pub fn get_fun_by_spec(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
+        self.function_specs.get_by_left(id)
+    }
+
+    pub fn get_spec_by_fun(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
+        self.function_specs.get_by_right(id)
+    }
+
+    pub fn no_verify_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.no_verify_specs
+    }
+
+    pub fn ignore_aborts(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.ignore_aborts
+    }
+
+    pub fn scenario_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.scenario_specs
+    }
+
+    pub fn is_spec(&self, id: &QualifiedId<FunId>) -> bool {
+        self.get_fun_by_spec(id).is_some() || self.scenario_specs.contains(id)
+    }
+
+    pub fn is_verified_spec(&self, id: &QualifiedId<FunId>) -> bool {
+        self.is_spec(id) && !self.no_verify_specs.contains(id)
+    }
+
+    pub fn specs(&self) -> impl Iterator<Item = &QualifiedId<FunId>> {
+        self.function_specs
+            .left_values()
+            .chain(self.scenario_specs.iter())
+    }
+
+    pub fn has_no_verify_spec(&self, id: &QualifiedId<FunId>) -> bool {
+        match self.get_spec_by_fun(id) {
+            Some(spec_id) => self.no_verify_specs.contains(spec_id),
+            None => false,
+        }
+    }
+
+    pub fn get_inv_by_datatype(&self, id: &QualifiedId<DatatypeId>) -> Option<&QualifiedId<FunId>> {
+        self.datatype_invs.get_by_left(id)
+    }
+
+    pub fn get_datatype_by_inv(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<DatatypeId>> {
+        self.datatype_invs.get_by_right(id)
+    }
+
     /// Adds a new function target. The target will be initialized from the Move byte code.
     pub fn add_target(&mut self, func_env: &FunctionEnv<'_>) {
         let generator = StacklessBytecodeGenerator::new(func_env);
@@ -180,6 +259,49 @@ impl FunctionTargetsHolder {
             .entry(func_env.get_qualified_id())
             .or_default()
             .insert(FunctionVariant::Baseline, data);
+        func_env.get_name_str().strip_suffix("_spec").map(|name| {
+            if let Some(spec_attr) = func_env
+                .get_toplevel_attributes()
+                .get_(&Verification(VerificationAttribute::Spec))
+            {
+                let inner_attrs = match &spec_attr.value {
+                    Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
+                    _ => &UniqueMap::new(),
+                };
+                if !inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify"))) {
+                    self.no_verify_specs.insert(func_env.get_qualified_id());
+                }
+                if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort")))
+                {
+                    self.ignore_aborts.insert(func_env.get_qualified_id());
+                }
+            }
+
+            match func_env
+                .module_env
+                .find_function(func_env.symbol_pool().make(name))
+            {
+                Some(target_func_env) => {
+                    self.function_specs.insert(
+                        func_env.get_qualified_id(),
+                        target_func_env.get_qualified_id(),
+                    );
+                }
+                None => {
+                    self.scenario_specs.insert(func_env.get_qualified_id());
+                }
+            }
+        });
+
+        func_env.get_name_str().strip_suffix("_inv").map(|name| {
+            if let Some(struct_env) = func_env
+                .module_env
+                .find_struct(func_env.symbol_pool().make(name))
+            {
+                self.datatype_invs
+                    .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
+            }
+        });
     }
 
     /// Gets a function target for read-only consumption, for the given variant.
@@ -266,7 +388,13 @@ impl FunctionTargetsHolder {
         variant: FunctionVariant,
         data: FunctionData,
     ) {
-        self.targets.entry(*id).or_default().insert(variant, data);
+        self.targets
+            .get_mut(id)
+            .expect(&format!(
+                "function qualified id {:#?} not found in targets",
+                id
+            ))
+            .insert(variant, data);
     }
 
     /// Processes the function target data for given function.
@@ -287,6 +415,65 @@ impl FunctionTargetsHolder {
                 self.insert_target_data(&id, variant, processed_data);
             }
         }
+    }
+
+    pub fn dump_spec_info(&self, env: &GlobalEnv, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "=== function target holder ===")?;
+        writeln!(f)?;
+        writeln!(f, "Verification specs:")?;
+        for spec in self.specs() {
+            let fun_env = env.get_function(*spec);
+            if self.is_verified_spec(spec)
+                && self.has_target(
+                    &fun_env,
+                    &FunctionVariant::Verification(VerificationFlavor::Regular),
+                )
+            {
+                writeln!(f, "  {}", fun_env.get_full_name_str())?;
+            }
+        }
+        writeln!(f, "Opaque specs:")?;
+        for (spec, fun) in self.function_specs.iter() {
+            writeln!(
+                f,
+                "  {} -> {}",
+                env.get_function(*spec).get_full_name_str(),
+                env.get_function(*fun).get_full_name_str()
+            )?;
+        }
+        writeln!(f, "No verify specs:")?;
+        for spec in self.no_verify_specs.iter() {
+            writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
+        }
+        writeln!(f, "No asserts specs:")?;
+        for spec in self.ignore_aborts.iter() {
+            writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
+        }
+        writeln!(f, "Scenario specs:")?;
+        for spec in self.scenario_specs.iter() {
+            writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
+        }
+        writeln!(f, "Datatype invariants:")?;
+        for (datatype, inv) in self.datatype_invs.iter() {
+            writeln!(
+                f,
+                "  {} -> {}",
+                env.get_struct(*datatype).get_full_name_str(),
+                env.get_function(*inv).get_full_name_str(),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+pub struct FunctionTargetsHolderDisplay<'a> {
+    pub targets: &'a FunctionTargetsHolder,
+    pub env: &'a GlobalEnv,
+}
+
+impl<'a> fmt::Display for FunctionTargetsHolderDisplay<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.targets.dump_spec_info(self.env, f)
     }
 }
 
@@ -464,7 +651,6 @@ impl FunctionTargetPipeline {
         H2: Fn(usize, &dyn FunctionTargetProcessor, &FunctionTargetsHolder),
     {
         let topological_order = Self::sort_targets_in_topological_order(env, targets);
-        info!("transforming bytecode");
         hook_before_pipeline(targets);
         for (step_count, processor) in self.processors.iter().enumerate() {
             if processor.is_single_run() {

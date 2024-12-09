@@ -212,6 +212,11 @@ public fun id_address<T: key>(obj: &T): address {
 /// restrictable in the object's module.
 native fun borrow_uid<T: key>(obj: &T): &UID;
 
+#[spec]
+fun borrow_uid_spec<T: key>(obj: &T): &UID {
+    borrow_uid(obj)
+}
+
 /// Generate a new UID specifically used for creating a UID from a hash
 public(package) fun new_uid_from_hash(bytes: address): UID {
     record_new_uid(bytes);
@@ -223,8 +228,18 @@ public(package) fun new_uid_from_hash(bytes: address): UID {
 // helper for delete
 native fun delete_impl(id: address);
 
+#[spec]
+fun delete_impl_spec(id: address) {
+    delete_impl(id)
+}
+
 // marks newly created UIDs from hash
 native fun record_new_uid(id: address);
+
+#[spec]
+fun record_new_uid_spec(id: address) {
+    record_new_uid(id)
+}
 
 #[test_only]
 /// Return the most recent created object ID.

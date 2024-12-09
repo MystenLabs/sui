@@ -61,6 +61,10 @@ impl CodeWriter {
         }))
     }
 
+    pub fn get_loc(&self) -> Loc {
+        self.0.borrow().current_location.clone()
+    }
+
     pub fn set_emit_hook<F>(&self, f: F)
     where
         F: Fn(&str) -> Option<String>,

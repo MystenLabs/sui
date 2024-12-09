@@ -14,7 +14,7 @@ error[E01002]: unexpected token
    │ ^^^^^^
    │ │
    │ Unexpected 'module'
-   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+   │ Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/recovery_parse_module_attributes.move:11:36
@@ -43,7 +43,7 @@ error[E01002]: unexpected token
    │ ^^^^^^
    │ │
    │ Unexpected 'module'
-   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+   │ Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E03002]: unbound module
    ┌─ tests/move_check/parser/recovery_parse_module_attributes.move:27:9

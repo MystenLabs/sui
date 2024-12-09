@@ -10,6 +10,9 @@
 pub const VECTOR_BORROW_MUT: &str = "vector::borrow_mut";
 pub const EVENT_EMIT_EVENT: &str = "event::emit_event";
 
+pub const BORROW_CHILD_OBJECT: &str = "dynamic_field::borrow_child_object";
+pub const BORROW_CHILD_OBJECT_MUT: &str = "dynamic_field::borrow_child_object_mut";
+
 pub const TYPE_NAME_MOVE: &str = "type_info::type_name";
 pub const TYPE_NAME_SPEC: &str = "type_info::$type_name";
 pub const TYPE_INFO_MOVE: &str = "type_info::type_of";

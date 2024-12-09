@@ -6,6 +6,7 @@ use anyhow::{anyhow, bail};
 use move_command_line_common::testing::{
     add_update_baseline_fix, format_diff, read_env_update_baseline,
 };
+use move_compiler::Flags;
 use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackageInfo, model_builder::ModelBuilder,
@@ -161,7 +162,7 @@ impl Test<'_> {
                         target_filter: None,
                     },
                 )
-                .build_model()?;
+                .build_model(Flags::empty())?;
                 "Built model\n".to_string()
             }
 
