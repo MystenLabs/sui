@@ -319,9 +319,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     fn default_syntax(&self) -> SyntaxChoice {
         self.default_syntax
     }
-    async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
+
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,

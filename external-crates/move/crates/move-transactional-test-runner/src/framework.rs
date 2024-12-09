@@ -125,7 +125,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         path: &Path,
     ) -> (Self, Option<String>);
 
-    async fn cleanup_resources(&mut self) -> Result<()>;
     async fn publish_modules(
         &mut self,
         modules: Vec<MaybeNamedCompiledModule>,
@@ -759,14 +758,11 @@ where
         }
     };
 
-    let (mut adapter, result_opt) =
+    let (adapter, result_opt) =
         Adapter::init(default_syntax, fully_compiled_program_opt, init_opt, path).await;
 
     if let Some(result) = result_opt {
         if let Err(e) = writeln!(output, "\ninit:\n{}", result) {
-            // TODO: if this fails, it masks the actual error, need better error handling in case
-            // cleanup_resources() fails
-            adapter.cleanup_resources().await?;
             return Err(Box::new(e));
         }
     }
@@ -801,7 +797,8 @@ where
     .collect::<VecDeque<_>>();
     assert!(!tasks.is_empty());
 
-    // Pop off init command if present
+    // Pop off init command if present, this has already been handled before this function was
+    // called to initialize the adapter
     if let Some(TaskCommand::Init(_, _)) = tasks.front().map(|t| &t.command) {
         tasks.pop_front();
     }
@@ -809,7 +806,6 @@ where
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;
     }
-    adapter.cleanup_resources().await?;
 
     handle_expected_output(path, output)?;
     Ok(())
