@@ -857,24 +857,29 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         if commit_lagging {
             // As node is commit lagging try to sync only the missing blocks that are within the acceptable round thresholds to sync. The rest we don't attempt to
             // sync yet.
-            let highest_accepted_round = dag_state.read().highest_accepted_round();
-            missing_blocks = missing_blocks
-                .into_iter()
-                .take_while(|b| {
-                    b.round <= highest_accepted_round + SYNC_MISSING_BLOCK_ROUND_THRESHOLD
-                })
-                .collect::<BTreeSet<_>>();
-
-            // If no missing blocks are within the acceptable thresholds to sync while we commit lag, then we disable the scheduler completely for this run.
-            if missing_blocks.is_empty() {
-                trace!("Scheduled synchronizer temporarily disabled as local commit is falling behind from quorum {last_commit_index} << {quorum_commit_index} and missing blocks are too far in the future.");
-                self.context
-                    .metrics
-                    .node_metrics
-                    .fetch_blocks_scheduler_skipped
-                    .with_label_values(&["commit_lagging"])
-                    .inc();
+            if true {
+                debug!("Scheduled sync disabled as local commit is falling behind from quorum {last_commit_index} << {quorum_commit_index}.");
                 return Ok(());
+            } else {
+                let highest_accepted_round = dag_state.read().highest_accepted_round();
+                missing_blocks = missing_blocks
+                    .into_iter()
+                    .take_while(|b| {
+                        b.round <= highest_accepted_round + SYNC_MISSING_BLOCK_ROUND_THRESHOLD
+                    })
+                    .collect::<BTreeSet<_>>();
+
+                // If no missing blocks are within the acceptable thresholds to sync while we commit lag, then we disable the scheduler completely for this run.
+                if missing_blocks.is_empty() {
+                    trace!("Scheduled synchronizer temporarily disabled as local commit is falling behind from quorum {last_commit_index} << {quorum_commit_index} and missing blocks are too far in the future.");
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .fetch_blocks_scheduler_skipped
+                        .with_label_values(&["commit_lagging"])
+                        .inc();
+                    return Ok(());
+                }
             }
         }
 
