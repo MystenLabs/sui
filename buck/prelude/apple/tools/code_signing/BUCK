@@ -1,0 +1,40 @@
+load("@prelude//apple/tools/defs.bzl", "meta_python_test")
+
+native.python_library(
+    name = "lib",
+    srcs = glob(
+        [
+            "*.py",
+        ],
+        exclude = [
+            "*_test.py",
+            "main.py",
+        ],
+    ),
+    deps = [
+        "prelude//apple/tools:plistlib_utils",
+        "prelude//apple/tools/info_plist_processor:process",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+meta_python_test(
+    name = "tests",
+    srcs = glob(["*_test.py"]),
+    resources = glob([
+        "test_resources/*",
+    ]),
+    deps = [
+        "fbsource//third-party/pkg_resources:pkg_resources",
+        ":lib",
+    ],
+)
+
+native.python_binary(
+    name = "codesign_bundle",
+    main = "main.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":lib",
+    ],
+)

@@ -1,0 +1,13 @@
+[env]
+# this is terrible, it prefixes bin/protoc but it is what the build script uses
+# TODO revisit this because it's very fragile and won't work well
+# no clear option other than to define a place we install the vendored protoc binary
+# OUT_DIR = "/opt/buck2/rust/crates/protobuf_src"
+# the install_dir is used in the rust code's lib.rs to find the vendored protoc binary
+# INSTALL_DIR = "$(location :protobuf-src-1.1.0+21.5-build-script-run[out_dir])/install"
+INSTALL_DIR = ""
+[[buildscript]]
+[buildscript.rustc_flags]
+# [[buildscript]]
+# [buildscript.gen_srcs]
+
