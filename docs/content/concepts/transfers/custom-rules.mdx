@@ -54,8 +54,8 @@ const EObjectNotLocked: u64 = 1;
 const HOME_ADDRESS = @0xCAFE;
 
 public fun transfer_locked(object: Object) {
-   assert!(!object.unlocked, EObjectNotLocked);
-   sui::transfer::transfer(object, HOME_ADDRESS)
+    assert!(!object.unlocked, EObjectNotLocked);
+    sui::transfer::transfer(object, HOME_ADDRESS)
 }
 ```
 
