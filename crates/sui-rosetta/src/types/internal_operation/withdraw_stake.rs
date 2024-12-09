@@ -117,6 +117,8 @@ pub fn withdraw_stake_pt(
     for stake_id in stake_objs {
         // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for selected stake_ids or None (all stakes) using the index of the call args.
         // if stake_ids is not empty, id input will be created after the system object input
+        // TODO: Investigate whether using asimple input argument with relevant metadata, similar
+        // to PayCoinOperation, would work as well or even better. Would help with consistency.
         let (system_state, id) = if !withdraw_all {
             let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
             let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
