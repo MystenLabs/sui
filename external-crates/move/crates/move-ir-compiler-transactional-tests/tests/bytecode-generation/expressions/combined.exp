@@ -5,9 +5,6 @@ task 0, lines 1-13:
 // Move bytecode v6
 module 6.m {
 
-
-
-
 entry foo() {
 L0:	loc0: u64
 L1:	loc1: u64
@@ -26,6 +23,7 @@ B0:
 	10: Sub
 	11: StLoc[2](loc2: u64)
 	12: Ret
+}
 
 }
-}
+

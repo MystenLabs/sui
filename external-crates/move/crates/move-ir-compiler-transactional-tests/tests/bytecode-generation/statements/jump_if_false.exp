@@ -5,9 +5,6 @@ task 0, lines 1-20:
 // Move bytecode v6
 module 6.m {
 
-
-
-
 entry foo() {
 L0:	loc0: u64
 B0:
@@ -26,17 +23,15 @@ B2:
 	10: Branch(2)
 B3:
 	11: Ret
+}
 
 }
-}
+
 
 task 1, lines 22-36:
 //# print-bytecode
 // Move bytecode v6
 module 7.m {
-
-
-
 
 entry foo() {
 L0:	loc0: u64
@@ -52,17 +47,15 @@ B3:
 	5: Branch(2)
 B4:
 	6: Ret
+}
 
 }
-}
+
 
 task 2, lines 38-48:
 //# print-bytecode
 // Move bytecode v6
 module 8.m {
-
-
-
 
 entry foo() {
 B0:
@@ -72,17 +65,15 @@ B1:
 	2: Branch(3)
 B2:
 	3: Ret
+}
 
 }
-}
+
 
 task 3, lines 50-63:
 //# print-bytecode
 // Move bytecode v6
 module 9.m {
-
-
-
 
 entry foo() {
 B0:
@@ -95,6 +86,7 @@ B3:
 	3: Branch(0)
 B4:
 	4: Ret
+}
 
 }
-}
+
