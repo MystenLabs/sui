@@ -68,11 +68,20 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
         let start = Instant::now();
         let metrics = self.metrics.clone();
 
-        let path = if let Some(path) = request.extensions.get::<axum::extract::MatchedPath>() {
-            Cow::Owned(path.as_str().to_owned())
-        } else {
-            Cow::Borrowed("unknown")
-        };
+        let path =
+            if let Some(matched_path) = request.extensions.get::<axum::extract::MatchedPath>() {
+                if request
+                    .headers
+                    .get(&http::header::CONTENT_TYPE)
+                    .is_some_and(|header| header == tonic::metadata::GRPC_CONTENT_TYPE)
+                {
+                    Cow::Owned(request.uri.path().to_owned())
+                } else {
+                    Cow::Owned(matched_path.as_str().to_owned())
+                }
+            } else {
+                Cow::Borrowed("unknown")
+            };
 
         metrics
             .inflight_requests
