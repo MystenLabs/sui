@@ -13,6 +13,7 @@ import { PasskeyKeypair } from '../../../src/keypairs/passkey';
 import { PasskeyCreateOptions, PasskeyProvider } from '../../../src/keypairs/passkey/keypair';
 import {
 	parseSerializedPasskeySignature,
+	PasskeyPublicKey,
 	SECP256R1_SPKI_HEADER,
 } from '../../../src/keypairs/passkey/publickey';
 import { fromBase64 } from '../../../src/utils';
@@ -303,5 +304,35 @@ describe('passkey signer E2E testing', () => {
 			await signerWrongSignature.signTransaction(intentMessage);
 		isValid = await publicKey.verifyTransaction(messageBytes, wrongSignature4);
 		expect(isValid).toBe(false);
+	});
+
+	it('should verify a transaction from rust implementation', async () => {
+		// generated test vector from `test_passkey_authenticator` in crates/sui-types/src/unit_tests/passkey_authenticator_test.rs
+		let sig = fromBase64(
+			'BiVYDmenOnqS+thmz5m5SrZnWaKXZLVxgh+rri6LHXs25B0AAAAAgwF7InR5cGUiOiJ3ZWJhdXRobi5nZXQiLCJjaGFsbGVuZ2UiOiJ4NkszMGNvSGlGMF9iczVVVjNzOEVfcGNPNkhMZ0xBb1A3ZE1uU0U5eERNIiwib3JpZ2luIjoiaHR0cHM6Ly93d3cuc3VpLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfWICAJqKTgco/tSNg4BuVg/f3x+I8NLYN6QqvxHahKNe0PIhBe3EuhfZf8OL4hReW8acT1TVwmPMcnv4SWiAHaX2dAKBYTKkrLK2zLcfP/hD1aiAn/E0L3XLC4epejnzGRhTuA==',
+		);
+		let txBytes = fromBase64(
+			'AAABACACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQABAAAt3HtjT61oHCWWztGfhSC2ianNwi6LL2eOLPvZTdJWMgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAIMqiyOLCIblSqii0TkS8PjMoj3tmA7S24hBMyonz2Op/Ldx7Y0+taBwlls7Rn4UgtompzcIuiy9njiz72U3SVjLoAwAAAAAAAICWmAAAAAAAAA==',
+		);
+		const parsed = parseSerializedPasskeySignature(sig);
+		expect(parsed.signatureScheme).toEqual('Passkey');
+		const pubkey = new PasskeyPublicKey(parsed.publicKey!);
+		const isValid = await pubkey.verifyTransaction(txBytes, sig);
+		expect(isValid).toBe(true);
+	});
+
+	it('should verify a transaction from a real passkey output', async () => {
+		// generated test vector from a real iphone passkey output from broswer app: https://github.com/joyqvq/sui-webauthn-poc
+		let sig = fromBase64(
+			'BiVJlg3liA6MaHQ0Fw9kdmBbj+SuuaKGMseZXPO6gx2XYx0AAAAAhgF7InR5cGUiOiJ3ZWJhdXRobi5nZXQiLCJjaGFsbGVuZ2UiOiJZRG9vQ2RGRnRLLVJBZ3JzaUZqM1hpU1VPQ2pzWXJPWnRGcHVISGhvNDhZIiwib3JpZ2luIjoiaHR0cDovL2xvY2FsaG9zdDo1MTczIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfWIChCx2fLGV+dwNRbTqfCvii70DMj1HiHij5oR9KjZmFMpGQJz3l0ZsNpi0zGQtw81Hj+X+CSshhkcteCzVOJlpKAN2ZM3l9Wxn5TYJFdHc9VphEGzoyTTOfUjpZ7fQV2gt6A==',
+		);
+		let txBytes = fromBase64(
+			'AAAAAFTTJ1JTZKCS6Q6aQS2bkY5gsmP//JTTwIzqsKqnltvLAS6VBPgonu3+e2qJUje77aMw0hTzv7mfKxBglq17ccifBgIAAAAAAAAgb2Je8hW/vUH9otcR+oc1RdjZ2W2oaCNgMu0gTpAVfbNU0ydSU2SgkukOmkEtm5GOYLJj//yU08CM6rCqp5bby+gDAAAAAAAAgIQeAAAAAAAA',
+		);
+		const parsed = parseSerializedPasskeySignature(sig);
+		expect(parsed.signatureScheme).toEqual('Passkey');
+		const pubkey = new PasskeyPublicKey(parsed.publicKey!);
+		const isValid = await pubkey.verifyTransaction(txBytes, sig);
+		expect(isValid).toBe(true);
 	});
 });

@@ -28,52 +28,62 @@ export interface PasskeyCreateOptions {
 	displayName: string; // The display name of the user, this is shown at creation dialog
 	rpName: string; // The name of the relying party, this is shown to user in the passkey creation dialog.
 }
+type DeepPartialConfigKeys = 'rp' | 'user' | 'authenticatorSelection';
 
-export interface PasskeySignOptions {
-	timeout: number; // The timeout for the passkey authentication dialog.
-}
+type DeepPartial<T> = T extends object
+	? {
+			[P in keyof T]?: DeepPartial<T[P]>;
+		}
+	: T;
 
-function validateCreateOptions(options: PasskeyCreateOptions) {
-	if (options.timeout <= 0) throw new Error('Timeout must be positive');
-	if (!options.displayName?.trim()) throw new Error('Display name cannot be empty');
-	if (!options.rpName?.trim()) throw new Error('RP name cannot be empty');
-	if (options.timeout > 300000) throw new Error('Timeout cannot exceed 5 minutes');
-}
+type BrowserPasswordProviderOptions = Pick<
+	DeepPartial<PublicKeyCredentialCreationOptions>,
+	DeepPartialConfigKeys
+> &
+	Omit<
+		Partial<PublicKeyCredentialCreationOptions>,
+		DeepPartialConfigKeys | 'pubKeyCredParams' | 'challenge'
+	>;
 
 export interface PasskeyProvider {
-	options: PasskeyCreateOptions;
 	create(): Promise<RegistrationCredential>;
 	get(challenge: Uint8Array): Promise<AuthenticationCredential>;
 }
 
 // Default browser implementation
 export class BrowserPasskeyProvider implements PasskeyProvider {
-	options: PasskeyCreateOptions;
-	constructor(options: PasskeyCreateOptions) {
-		validateCreateOptions(options);
-		this.options = options;
+	#name: string;
+	#options: BrowserPasswordProviderOptions;
+
+	constructor(name: string, options: BrowserPasswordProviderOptions) {
+		this.#name = name;
+		this.#options = options;
 	}
 
 	async create(): Promise<RegistrationCredential> {
 		return (await navigator.credentials.create({
 			publicKey: {
-				challenge: new TextEncoder().encode('Create passkey wallet on Sui'),
+				timeout: 60000,
+				...this.#options,
 				rp: {
-					name: this.options.rpName,
+					name: this.#name,
+					...this.#options.rp,
 				},
 				user: {
+					name: this.#name,
+					displayName: this.#name,
+					...this.#options.user,
 					id: randomBytes(10),
-					name: this.options.name,
-					displayName: this.options.displayName,
 				},
+				challenge: new TextEncoder().encode('Create passkey wallet on Sui'),
 				pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
 				authenticatorSelection: {
+					...this.#options.authenticatorSelection,
 					authenticatorAttachment: 'cross-platform',
 					residentKey: 'required',
 					requireResidentKey: true,
 					userVerification: 'required',
 				},
-				timeout: this.options.timeout,
 			},
 		})) as RegistrationCredential;
 	}
@@ -83,7 +93,7 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 			publicKey: {
 				challenge,
 				userVerification: 'required',
-				timeout: this.options.timeout,
+				timeout: this.#options.timeout,
 			},
 		})) as AuthenticationCredential;
 	}
@@ -120,11 +130,8 @@ export class PasskeyKeypair extends Signer {
 	 * Creates an instance of Passkey signer invoking the passkey from navigator.
 	 */
 	static async getPasskeyInstance(
-		provider: PasskeyProvider = new BrowserPasskeyProvider({
+		provider: PasskeyProvider = new BrowserPasskeyProvider('Sui Wallet', {
 			timeout: 60000,
-			displayName: 'Sui Wallet User',
-			rpName: 'Sui Wallet',
-			name: 'Sui Wallet User',
 		}),
 	): Promise<PasskeyKeypair> {
 		// create a passkey secp256r1 with the provider.
