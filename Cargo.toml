@@ -367,6 +367,7 @@ hyper = "1"
 hyper-util = "0.1.6"
 hyper-rustls = { version = "0.27", default-features = false, features = [
     "webpki-roots",
+    "http1",
     "http2",
     "ring",
     "tls12",

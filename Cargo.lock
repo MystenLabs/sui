@@ -8342,6 +8342,7 @@ dependencies = [
  "eyre",
  "futures",
  "http 1.1.0",
+ "http-body 1.0.1",
  "hyper-rustls 0.27.2",
  "hyper-util",
  "multiaddr",

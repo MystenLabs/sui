@@ -725,12 +725,12 @@ impl MakeCallbackHandler for MetricsCallbackMaker {
 }
 
 impl ResponseHandler for MetricsResponseCallback {
-    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
-        self.on_response(response)
+    fn on_response(mut self, response: &anemo::Response<bytes::Bytes>) {
+        MetricsResponseCallback::on_response(&mut self, response)
     }
 
-    fn on_error<E>(self, err: &E) {
-        self.on_error(err)
+    fn on_error<E>(mut self, err: &E) {
+        MetricsResponseCallback::on_error(&mut self, err)
     }
 }
 

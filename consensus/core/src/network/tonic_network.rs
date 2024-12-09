@@ -1115,12 +1115,12 @@ impl MakeCallbackHandler for MetricsCallbackMaker {
 }
 
 impl ResponseHandler for MetricsResponseCallback {
-    fn on_response(self, response: &http::response::Parts) {
-        self.on_response(response)
+    fn on_response(&mut self, response: &http::response::Parts) {
+        MetricsResponseCallback::on_response(self, response)
     }
 
-    fn on_error<E>(self, err: &E) {
-        self.on_error(err)
+    fn on_error<E>(&mut self, err: &E) {
+        MetricsResponseCallback::on_error(self, err)
     }
 }
 
