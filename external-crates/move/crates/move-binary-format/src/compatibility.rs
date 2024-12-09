@@ -422,7 +422,7 @@ impl InclusionCheck {
         for mark in compare_ord_iters(old_module.functions.iter(), new_module.functions.iter()) {
             match mark {
                 Mark::New(name, new) => context.function_new(name, new),
-                Mark::Missing(name, _) => context.function_missing(name),
+                Mark::Missing(name, old) => context.function_missing(name, old),
                 Mark::Existing(name, old, new) => {
                     if old != new {
                         context.function_change(name, old);

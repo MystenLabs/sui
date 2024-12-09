@@ -21,7 +21,7 @@ pub trait InclusionCheckMode: Default {
     fn enum_missing(&mut self, name: &Identifier, old_enum: &Enum);
     fn function_new(&mut self, name: &Identifier, new_func: &Function);
     fn function_change(&mut self, name: &Identifier, new_func: &Function);
-    fn function_missing(&mut self, name: &Identifier);
+    fn function_missing(&mut self, name: &Identifier, old_func: &Function);
 
     fn friend_new(&mut self, _new_friend: &ModuleId);
     fn friend_missing(&mut self, _old_friend: &ModuleId);
@@ -103,7 +103,7 @@ impl InclusionCheckMode for InclusionCheckExecutionMode {
         self.is_equal = false;
     }
 
-    fn function_missing(&mut self, _name: &Identifier) {
+    fn function_missing(&mut self, _name: &Identifier, _old_func: &Function) {
         self.is_subset = false;
         self.is_equal = false;
     }
