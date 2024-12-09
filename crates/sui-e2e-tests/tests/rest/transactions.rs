@@ -15,7 +15,7 @@ async fn get_transaction() {
 
     let transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let client = Client::new(test_cluster.rpc_url(), None).unwrap();
 
     let _transaction = client.get_transaction(&transaction_digest).await.unwrap();
 
@@ -68,7 +68,7 @@ async fn list_checkpoint() {
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let client = Client::new(test_cluster.rpc_url(), None).unwrap();
 
     let transactions = client
         .list_transactions(&ListTransactionsQueryParameters::default())

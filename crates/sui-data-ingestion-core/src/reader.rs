@@ -187,9 +187,15 @@ impl CheckpointReader {
                 self.options.timeout_secs,
             )
             .expect("failed to create remote store client");
-            RemoteStore::Hybrid(object_store, sui_rest_api::Client::new(fn_url))
+            RemoteStore::Hybrid(
+                object_store,
+                Client::new_with_auth(fn_url, self.remote_store_options.last().cloned()),
+            )
         } else if url.ends_with("/rest") {
-            RemoteStore::Rest(sui_rest_api::Client::new(url))
+            RemoteStore::Rest(Client::new_with_auth(
+                url,
+                self.remote_store_options.last().cloned(),
+            ))
         } else {
             let object_store = create_remote_store_client(
                 url,
