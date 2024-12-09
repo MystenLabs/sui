@@ -1,5 +1,11 @@
 # @mysten/zklogin
 
+## 0.8.1
+
+### Patch Changes
+
+- @mysten/sui@1.16.1
+
 ## 0.8.0
 
 ### Minor Changes
