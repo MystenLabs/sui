@@ -393,6 +393,10 @@ impl From<SuiPublicKey> for PublicKey {
                 hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256r1,
             },
+            SuiPublicKey::PasskeySession(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(&k.0),
+                curve_type: CurveType::Secp256r1,
+            },
         }
     }
 }
