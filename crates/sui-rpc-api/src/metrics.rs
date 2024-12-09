@@ -98,7 +98,7 @@ pub struct RpcMetricsCallbackHandler {
 }
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
-    fn on_response(mut self, response: &http::response::Parts) {
+    fn on_response(&mut self, response: &http::response::Parts) {
         self.metrics
             .num_requests
             .with_label_values(&[self.path.as_ref(), response.status.as_str()])
@@ -107,7 +107,7 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         self.counted_response = true;
     }
 
-    fn on_error<E>(self, _error: &E) {
+    fn on_error<E>(&mut self, _error: &E) {
         // Do nothing if the whole service errored
         //
         // in Axum this isn't possible since all services are required to have an error type of
