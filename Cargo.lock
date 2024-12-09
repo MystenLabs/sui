@@ -14424,7 +14424,7 @@ dependencies = [
 
 [[package]]
 name = "sui-mvr-graphql-rpc"
-version = "1.38.2"
+version = "1.38.3"
 dependencies = [
  "anyhow",
  "async-graphql",
