@@ -42,8 +42,8 @@ function validateCreateOptions(options: PasskeyCreateOptions) {
 
 export interface PasskeyProvider {
 	options: PasskeyCreateOptions;
-	create(options: PasskeyCreateOptions): Promise<RegistrationCredential>;
-	get(challenge: Uint8Array, timeout: number): Promise<AuthenticationCredential>;
+	create(): Promise<RegistrationCredential>;
+	get(challenge: Uint8Array): Promise<AuthenticationCredential>;
 }
 
 // Default browser implementation
@@ -78,12 +78,12 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 		})) as RegistrationCredential;
 	}
 
-	async get(challenge: Uint8Array, timeout: number): Promise<AuthenticationCredential> {
+	async get(challenge: Uint8Array): Promise<AuthenticationCredential> {
 		return (await navigator.credentials.get({
 			publicKey: {
 				challenge,
 				userVerification: 'required',
-				timeout,
+				timeout: this.options.timeout,
 			},
 		})) as AuthenticationCredential;
 	}
@@ -120,7 +120,7 @@ export class PasskeyKeypair extends Signer {
 	 * Creates an instance of Passkey signer invoking the passkey from navigator.
 	 */
 	static async getPasskeyInstance(
-		provider = new BrowserPasskeyProvider({
+		provider: PasskeyProvider = new BrowserPasskeyProvider({
 			timeout: 60000,
 			displayName: 'Sui Wallet User',
 			rpName: 'Sui Wallet',
@@ -130,8 +130,8 @@ export class PasskeyKeypair extends Signer {
 		// create a passkey secp256r1 with the provider.
 		const credential = await provider.create();
 
-		if (!credential.response.getPublicKey) {
-			throw new Error('Invalid credential createresponse');
+		if (!credential.response.getPublicKey()) {
+			throw new Error('Invalid credential create response');
 		} else {
 			const derSPKI = credential.response.getPublicKey()!;
 			const pubkeyUncompressed = parseDerSPKI(new Uint8Array(derSPKI));
@@ -152,9 +152,9 @@ export class PasskeyKeypair extends Signer {
 	 * Return the signature for the provided data (i.e. blake2b(intent_message)).
 	 * This is sent to passkey as the challenge field.
 	 */
-	async sign(data: Uint8Array, options: PasskeySignOptions = { timeout: 60000 }) {
+	async sign(data: Uint8Array) {
 		// sendss the passkey to sign over challenge as the data.
-		const credential = await this.provider.get(data, options.timeout);
+		const credential = await this.provider.get(data);
 
 		// parse authenticatorData (as bytes), clientDataJSON (decoded as string).
 		const authenticatorData = new Uint8Array(credential.response.authenticatorData);
