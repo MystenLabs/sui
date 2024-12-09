@@ -98,11 +98,11 @@ public native fun public_receive<T: key + store>(parent: &mut UID, object: Recei
 ...
 ```
 
-Each Receiving argument referring to a sent object of type `T` in a PTB results in exactly one argument with a Move type of `transfer::Receiving<T>`. You can then use this argument to receive the sent object of type `T` with the `transfer::receive` function.
+Each Receiving argument referring to a sent object of type `T` in a PTB results in exactly one argument with a Move type of `sui::transfer::Receiving<T>`. You can then use this argument to receive the sent object of type `T` with the `transfer::receive` function.
 
 When you call the `transfer::receive` function, you must pass a mutable reference to the parent object's `UID`. You can't get a mutable reference to the `UID` of an object, though, unless the defining module of the object exposes it. Consequently, the module that defines the type of the parent object that is receiving the child object defines access control policies and other restrictions on receiving objects that are sent to it. See the [authorization example](#receive-shared-example) for a demonstration of this pattern. The fact that the passed-in `UID` actually owns the object referenced by the `Receiving` parameter is dynamically checked and enforced. This allows access to objects that have been sent to, for example, dynamic fields where the ownership chain can only be established dynamically.
 
-Because `transfer::Receiving` has only the `drop` ability, the existence of a `Receiving<T>` argument represents the ability, but not the obligation to receive the object of type `T` specified by the object reference in the PTB `Receiving` argument during that transaction. You can use some, none, or all `Receiving` arguments in a PTB without issue. Any object that corresponds to a `Receiving` argument remains untouched (in particular, its object reference remain the same) unless it is received.
+Because `sui::transfer::Receiving` has only the `drop` ability, the existence of a `Receiving<T>` argument represents the ability, but not the obligation to receive the object of type `T` specified by the object reference in the PTB `Receiving` argument during that transaction. You can use some, none, or all `Receiving` arguments in a PTB without issue. Any object that corresponds to a `Receiving` argument remains untouched (in particular, its object reference remain the same) unless it is received.
 
 ## Custom receiving rules
 
