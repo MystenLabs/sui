@@ -4,11 +4,10 @@ task 0, lines 1-31:
 //# print-bytecode
 // Move bytecode v6
 module 3d10.Example {
+
 struct Coin {
 	value: u64
 }
-
-
 
 public value(Arg0: &Coin): u64 {
 B0:
@@ -18,8 +17,8 @@ B0:
 	3: MoveLoc[1](loc0: &u64)
 	4: ReadRef
 	5: Ret
-
 }
+
 public deposit(Arg0: &mut Coin, Arg1: Coin) {
 L0:	loc2: &Coin
 L1:	loc3: u64
@@ -48,27 +47,26 @@ B0:
 	19: Unpack[0](Coin)
 	20: StLoc[7](loc5: u64)
 	21: Ret
+}
 
 }
-}
+
 
 task 1, lines 33-46:
 //# print-bytecode
 // Move bytecode v6
 module 4d10.M {
 
-
-
-
 entry public f() {
 B0:
 	0: Ret
-
 }
+
 entry public g() {
 B0:
 	0: Call f()
 	1: Ret
+}
 
 }
-}
+

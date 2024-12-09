@@ -5,7 +5,6 @@ task 0, lines 1-22:
 // Move bytecode v7
 module 6.InfiniteSwith {
 
-
 enum EnumWithOneVariant {
 	One {  }
 }
@@ -21,6 +20,7 @@ Jump tables:
 		Variant0 => jump 0
 	}
 }
+
 public start(): EnumWithOneVariant {
 L0:	loc0: EnumWithOneVariant
 B0:
@@ -28,9 +28,10 @@ B0:
 	1: StLoc[0](loc0: EnumWithOneVariant)
 	2: MoveLoc[0](loc0: EnumWithOneVariant)
 	3: Ret
+}
 
 }
-}
+
 
 task 2, lines 48-58:
 //# run --gas-budget 10000

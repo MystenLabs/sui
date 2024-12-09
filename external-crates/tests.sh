@@ -1,4 +1,5 @@
 # Run tests for external crates
+set -e
 echo "Running Move tests in external-crates"
 cd move
 echo "Excluding prover Move tests"
