@@ -830,6 +830,9 @@ fn missing_module_diag(
     // read Move.toml to get the hash and first line start and end
     let toml_path = package_path.join("Move.toml");
     let toml_str = fs::read_to_string(&toml_path).context("Unable to read Move.toml")?;
+
+    let r = toml_str.find("module").unwrap();
+
     let hash = FileHash::new(&toml_str);
     let chars: Vec<char> = toml_str.chars().collect();
 
