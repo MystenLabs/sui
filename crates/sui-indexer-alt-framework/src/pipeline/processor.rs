@@ -12,7 +12,7 @@ use tracing::{debug, error, info};
 
 use crate::{metrics::IndexerMetrics, pipeline::Break, task::TrySpawnStreamExt};
 
-use super::Indexed;
+use super::IndexedCheckpoint;
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
 /// table. The `FANOUT` associated value controls how many concurrent workers will be used to
@@ -43,7 +43,7 @@ pub trait Processor {
 pub(super) fn processor<P: Processor + Send + Sync + 'static>(
     processor: P,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
-    tx: mpsc::Sender<Indexed<P>>,
+    tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -119,7 +119,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .inc_by(values.len() as u64);
 
-                    tx.send(Indexed::new(
+                    tx.send(IndexedCheckpoint::new(
                         epoch,
                         cp_sequence_number,
                         tx_hi,
