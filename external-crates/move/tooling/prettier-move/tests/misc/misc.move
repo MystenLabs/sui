@@ -23,6 +23,7 @@ module suitears::timelock {
 
     fun calculate_pending_rewards<StakeCoin, RewardCoin>(
         acc: &Account<StakeCoin, RewardCoin>,
+        an_acc: &mut Account<StakeCoin, RewardCoin>,
         stake_factor: u64,
         accrued_rewards_per_share: u256,
     ): u64 {

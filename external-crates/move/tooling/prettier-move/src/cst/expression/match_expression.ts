@@ -100,14 +100,5 @@ function printMatchCondition(path: AstPath<Node>, options: MoveOptions, print: p
 		throw new Error('`match_condition` expects 1 child');
 	}
 
-	return ['if (', path.call((path) => {
-		if (path.node.type === 'block') {
-			return conditionalGroup([
-				printBreakableBlock(path, options, print),
-				printNonBreakingBlock(path, options, print),
-			]);
-		}
-
-		return print(path);
-	}, 'nonFormattingChildren', 0), ')'];
+	return ['if (', path.call(print, 'nonFormattingChildren', 0), ')'];
 }

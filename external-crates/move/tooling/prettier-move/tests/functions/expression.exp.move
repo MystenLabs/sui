@@ -18,9 +18,7 @@ module prettier::expression {
     }
 
     fun identified_expression() {
-        'a: {
-            call_something()
-        };
+        'a: { call_something() };
     }
 
     fun name_expression() {
@@ -338,9 +336,7 @@ module prettier::expression {
 
     fun block() {
         {};
-        {
-            say_something();
-        };
+        { say_something(); };
         {
             should_this_be_so_long_or_not();
         };
