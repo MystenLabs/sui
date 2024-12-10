@@ -1,0 +1,7 @@
+processed 1 task
+
+task 0, lines 1-10:
+//# publish-and-call --call 0x42::m::a --call 0x42::m::b
+return values: 0
+return values: 0
+

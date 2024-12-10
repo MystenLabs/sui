@@ -8,7 +8,7 @@
 // should not be exposed.
 
 use crate::{
-    cache::move_cache::{self, MoveCache},
+    cache::move_cache::{self, MoveCache, Package},
     dbg_println, jit,
     natives::functions::NativeFunctions,
     shared::{
@@ -100,6 +100,27 @@ pub fn load_and_verify_packages(
         .into_iter()
         .map(|pkg| validate_package(natives, vm_config, pkg))
         .collect()
+}
+
+// Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.
+pub fn jit_package_for_publish(
+    cache: &MoveCache,
+    natives: &NativeFunctions,
+    link_context: &LinkageContext,
+    verified_pkg: verification::ast::Package,
+) -> VMResult<Arc<move_cache::Package>> {
+    let storage_id = verified_pkg.storage_id;
+    if cache.cached_package_at(storage_id).is_some() {
+        panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
+    }
+
+    let runtime_pkg = jit::translate_package(natives, link_context, verified_pkg.clone())
+        .map_err(|err| err.finish(Location::Undefined))?;
+
+    Ok(Arc::new(Package::new(
+        verified_pkg.into(),
+        runtime_pkg.into(),
+    )))
 }
 
 // Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.

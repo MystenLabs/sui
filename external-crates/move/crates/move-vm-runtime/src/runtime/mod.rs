@@ -8,23 +8,17 @@ use crate::{
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     shared::{gas::GasMeter, linkage_context::LinkageContext, types::RuntimePackageId},
-    try_block,
-    validation::{validate_for_publish, validate_for_vm_execution},
+    validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
-use move_binary_format::{
-    errors::{Location, PartialVMResult, VMResult},
-    CompiledModule,
-};
-use move_core_types::{
-    effects::ChangeSet,
-    resolver::{MoveResolver, SerializedPackage},
-};
+
+use move_binary_format::errors::VMResult;
+use move_core_types::resolver::{MoveResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
+
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-use tracing::warn;
 
 // FIXME(cswords): This is only public for testing...
 pub mod package_resolution;
@@ -159,34 +153,18 @@ impl MoveRuntime {
     ///
     /// In case an invariant violation occurs, the provided data cache should be considered
     /// corrupted and discarded; a change set will not be returned.
-    pub fn validate_package<DataCache: MoveResolver>(
+    pub fn validate_package<'extensions, DataCache: MoveResolver>(
         &mut self,
         data_cache: DataCache,
         pkg_runtime_id: RuntimePackageId,
         pkg: SerializedPackage,
         _gas_meter: &mut impl GasMeter,
-    ) -> (VMResult<ChangeSet>, DataCache) {
+        native_extensions: NativeContextExtensions<'extensions>,
+    ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
         let storage_id = pkg.storage_id;
         dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
-        // TODO: Don't deserialize just for names. Reserialize off the verified ones or something.
-        let compiled_modules = match pkg
-            .modules
-            .iter()
-            .map(|blob| {
-                CompiledModule::deserialize_with_config(blob, &self.vm_config.binary_config)
-                    .map(|m| (m.self_id().name().to_owned(), blob.clone()))
-            })
-            .collect::<PartialVMResult<Vec<_>>>()
-        {
-            Ok(modules) => modules,
-            Err(err) => {
-                warn!("[VM] module deserialization failed {:?}", err);
-                return (Err(err.finish(Location::Undefined)), data_cache);
-            }
-        };
-        dbg_println!("\n\nGrabbed modules\n\n");
 
-        let mut data_cache = TransactionDataCache::new(data_cache);
+        let data_cache = TransactionDataCache::new(data_cache);
         let link_context = LinkageContext::new(
             pkg.storage_id,
             HashMap::from_iter(pkg.linkage_table.clone()),
@@ -197,43 +175,49 @@ impl MoveRuntime {
         // dependencies in the provided linkage context. This returns the loaded package in the
         // case an `init` function or similar will need to run. This will load the dependencies
         // into the package cache.
-        let package = try_block! {
-            let dependencies = package_resolution::resolve_packages(
-                &self.cache,
-                &self.natives,
-                &self.vm_config,
-                &data_cache,
-                &link_context,
-                link_context.all_package_dependencies()?,
-            )?;
-            let dependencies = dependencies.iter().map(|(id, pkg)| (*id, &*pkg.verified)).collect();
-            validate_for_publish(
-                &self.natives,
-                &self.vm_config,
-                pkg_runtime_id,
-                pkg,
-                dependencies
-            )
-        };
-        if let Err(err) = package {
-            let data_cache = data_cache.into_remote();
-            return (Err(err), data_cache);
-        }
+        let pkg_dependencies = package_resolution::resolve_packages(
+            &self.cache,
+            &self.natives,
+            &self.vm_config,
+            &data_cache,
+            &link_context,
+            link_context.all_package_dependencies()?,
+        )?;
+        let verified_pkg = {
+            let deps = pkg_dependencies
+                .iter()
+                .map(|(id, pkg)| (*id, &*pkg.verified))
+                .collect();
+            validate_for_publish(&self.natives, &self.vm_config, pkg_runtime_id, pkg, deps)
+        }?;
         dbg_println!("\n\nVerified package\n\n");
 
-        data_cache.publish_package(storage_id, compiled_modules);
-        dbg_println!("\n\nUpdated data cache\n\n");
+        let published_package = package_resolution::jit_package_for_publish(
+            &self.cache,
+            &self.natives,
+            &link_context,
+            verified_pkg.clone(),
+        )?;
 
-        let (result, remote) = data_cache.into_effects();
-        (result.map_err(|e| e.finish(Location::Undefined)), remote)
+        // Generates  a one-off package for executing `init` functions.
+        let runtime_packages = pkg_dependencies
+            .into_values()
+            .chain([published_package])
+            .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
+            .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
+
+        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
+
+        let base_heap = BaseHeap::new();
+
+        // Called and checked linkage, etc.
+        let instance = MoveVM {
+            virtual_tables,
+            vm_config: self.vm_config.clone(),
+            link_context,
+            native_extensions,
+            base_heap,
+        };
+        Ok((verified_pkg, instance))
     }
 }
-
-// TODO: Do this next.
-// Let's talk about what this looks like -- and what and when the overlaid cache is used to
-// update the main cache.
-// struct OverlaidMoveRuntime {}
-//
-// fn make_overlay_instance(_runtime: MoveRuntime) -> OverlaidMoveRuntime {
-//     OverlaidMoveRuntime {}
-// }

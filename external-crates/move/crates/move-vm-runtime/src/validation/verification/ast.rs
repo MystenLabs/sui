@@ -44,3 +44,9 @@ impl Package {
         self.modules.values()
     }
 }
+
+impl Module {
+    pub fn to_compiled_module(&self) -> CompiledModule {
+        self.value.clone()
+    }
+}

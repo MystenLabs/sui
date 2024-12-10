@@ -2,7 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::{linkage_context::LinkageContext, types::PackageStorageId};
+use crate::{
+    shared::{linkage_context::LinkageContext, types::PackageStorageId},
+    validation::verification::ast as verif_ast,
+};
 use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_core_types::{
@@ -129,21 +132,25 @@ impl StoredPackage {
         })
     }
 
-    pub fn from_serialized_package(serialized_package: SerializedPackage) -> Self {
+    pub fn from_verified_package(verified_package: verif_ast::Package) -> Self {
         Self {
-            modules: serialized_package
-                .modules
+            modules: verified_package
+                .as_modules()
                 .into_iter()
                 .map(|m| {
-                    let dm = CompiledModule::deserialize_with_defaults(&m).unwrap();
-                    (dm.self_id().name().to_owned(), m)
+                    let dm = m.to_compiled_module();
+                    let name = dm.self_id().name().to_owned();
+                    let mut serialized = vec![];
+                    dm.serialize_with_version(dm.version, &mut serialized)
+                        .unwrap();
+                    (name, serialized)
                 })
                 .collect(),
             linkage_context: LinkageContext::new(
-                serialized_package.storage_id,
-                serialized_package.linkage_table.into_iter().collect(),
+                verified_package.storage_id,
+                verified_package.linkage_table.into_iter().collect(),
             ),
-            type_origin_table: serialized_package.type_origin_table,
+            type_origin_table: verified_package.type_origin_table,
         }
     }
 

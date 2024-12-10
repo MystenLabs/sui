@@ -14,6 +14,7 @@ mod leak_tests;
 mod loader_tests;
 mod nested_loop_tests;
 mod package_cache_tests;
+mod publish_tests;
 mod return_value_tests;
 mod value_tests;
 

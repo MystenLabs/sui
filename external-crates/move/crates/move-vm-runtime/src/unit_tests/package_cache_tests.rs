@@ -513,6 +513,7 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
 }
 
 // Test that we properly publish and relink (and reuse) packages.
+// FIXME FIXME FIXME
 #[test]
 fn relink() {
     /*

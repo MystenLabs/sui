@@ -1,0 +1,11 @@
+processed 1 task
+
+task 0, lines 1-10:
+//# publish-and-call --call 0x42::m::a --call 0x42::m::d
+Error: Function execution failed with VMError: {
+    major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [],
+}
