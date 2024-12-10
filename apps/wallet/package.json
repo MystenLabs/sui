@@ -124,7 +124,6 @@
 		"@mysten/ledgerjs-hw-app-sui": "workspace:*",
 		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
-		"@mysten/zklogin": "workspace:*",
 		"@noble/hashes": "^1.4.0",
 		"@radix-ui/react-checkbox": "^1.0.4",
 		"@radix-ui/react-collapsible": "^1.0.3",

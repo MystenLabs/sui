@@ -31,7 +31,6 @@
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
-		"@mysten/zklogin": "workspace:*",
 		"@mysten/zksend": "workspace:*",
 		"@tanstack/react-query": "^5.50.1",
 		"@types/node": "^20.14.10",

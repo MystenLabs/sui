@@ -50,7 +50,6 @@
 			"@mysten/dapp-kit": ["../../sdk/dapp-kit/src/"],
 			"@mysten/ledgerjs-hw-app-sui": ["../../sdk/ledgerjs-hw-app-sui/src/Sui.ts"],
 			"@mysten/wallet-standard": ["../../sdk/wallet-standard/src/"],
-			"@mysten/zklogin": ["../../sdk/zklogin/src/"],
 			"@mysten/deepbook": ["../../sdk/deepbook/src/"]
 		}
 	},

@@ -17,7 +17,6 @@ packages:
   - '!sdk/typescript/multisig'
   - '!sdk/typescript/utils'
   - '!sdk/typescript/bcs'
-  - '!sdk/typescript/zklogin'
   - '!sdk/enoki/react'
   - '!sdk/move-bytecode-template/pkg'
   - '!sdk/move-bytecode-template/pkg'
@@ -29,3 +28,4 @@ packages:
   - '!sdk/typescript/graphql/schemas/2024.4'
   - '!sdk/signers/aws'
   - '!sdk/signers/gcp'
+  - '!sdk/typescript/zklogin'
