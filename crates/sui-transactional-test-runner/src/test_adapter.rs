@@ -65,6 +65,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
@@ -732,7 +733,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     0,
                     timestamp_ms,
                     ConsensusCommitDigest::default(),
-                    Vec::new(),
+                    ConsensusDeterminedVersionAssignments::empty_for_testing(),
                 );
                 let summary = self.execute_txn(transaction.into()).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);

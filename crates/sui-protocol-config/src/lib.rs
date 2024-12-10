@@ -584,6 +584,11 @@ struct FeatureFlags {
     // Enable v2 native charging for natives.
     #[serde(skip_serializing_if = "is_false")]
     native_charging_v2: bool,
+
+    // Enable support for ConsensusV2 objects.
+    // WARNING: This feature is experimental and incomplete.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_v2_objects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1712,6 +1717,10 @@ impl ProtocolConfig {
 
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
+    }
+
+    pub fn consensus_v2_objects(&self) -> bool {
+        self.feature_flags.consensus_v2_objects
     }
 }
 

@@ -44,7 +44,7 @@ impl InMemoryObjectStore {
     // We will need a trait to unify the these functions. (similarly the one in simulacrum)
     pub(crate) fn read_objects_for_execution(
         &self,
-        shared_locks: &dyn GetSharedLocks,
+        shared_locks_source: &dyn GetSharedLocks,
         tx_key: &TransactionKey,
         input_object_kinds: &[InputObjectKind],
     ) -> SuiResult<InputObjects> {
@@ -57,10 +57,14 @@ impl InMemoryObjectStore {
                     self.get_object_by_key(&objref.0, objref.1)
                 }
 
-                InputObjectKind::SharedMoveObject { id, .. } => {
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } => {
                     let shared_locks = shared_locks_cell
                         .get_or_init(|| {
-                            shared_locks
+                            shared_locks_source
                                 .get_shared_locks(tx_key)
                                 .expect("get_shared_locks should not fail")
                                 .map(|l| l.into_iter().collect())
@@ -69,7 +73,15 @@ impl InMemoryObjectStore {
                         .ok_or_else(|| SuiError::GenericAuthorityError {
                             error: "Shared object locks should have been set.".to_string(),
                         })?;
-                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                    let initial_shared_version =
+                        if shared_locks_source.is_initial_shared_version_unknown() {
+                            // (before ConsensusV2 objects, we didn't track initial shared
+                            // version for shared object locks)
+                            SequenceNumber::UNKNOWN
+                        } else {
+                            *initial_shared_version
+                        };
+                    let version = shared_locks.get(&(*id, initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });
 
@@ -170,7 +182,11 @@ impl GetSharedLocks for InMemoryObjectStore {
     fn get_shared_locks(
         &self,
         _key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+    ) -> SuiResult<Option<Vec<((ObjectID, SequenceNumber), SequenceNumber)>>> {
+        unreachable!()
+    }
+
+    fn is_initial_shared_version_unknown(&self) -> bool {
         unreachable!()
     }
 }
