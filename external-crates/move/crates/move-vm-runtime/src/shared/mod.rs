@@ -10,6 +10,7 @@ pub mod logging;
 pub mod serialization;
 pub mod types;
 pub mod views;
+pub mod vm_pointer;
 
 #[macro_export]
 macro_rules! try_block {
