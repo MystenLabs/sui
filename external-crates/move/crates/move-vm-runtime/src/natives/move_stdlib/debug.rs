@@ -4,7 +4,7 @@
 
 #[allow(unused_imports)]
 use crate::{
-    execution::values::{Reference, Value},
+    execution::values::{Reference, VMValueCast, Value},
     jit::execution::ast::Type,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},
@@ -59,12 +59,12 @@ fn native_print(
         let include_int_types = false;
 
         let mut out = "[debug] ".to_string();
-        let val = _val.value_as::<Reference>()?.read_ref()?;
+        let ref_ = VMValueCast::<Reference>::cast(_val)?.read_ref()?;
 
         testing::print_value(
             _context,
             &mut out,
-            val,
+            ref_,
             _ty,
             &_move_std_addr,
             0,
@@ -190,7 +190,9 @@ pub fn make_all(
 #[cfg(feature = "testing")]
 mod testing {
     use crate::{
-        execution::values::Value, jit::execution::ast::Type, natives::functions::NativeContext,
+        execution::values::{VMValueCast, Value},
+        jit::execution::ast::Type,
+        natives::functions::NativeContext,
     };
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{
@@ -332,7 +334,7 @@ mod testing {
                     // to `print_move_value`.
                     R::MoveTypeLayout::Vector(_) | R::MoveTypeLayout::Struct(_) => {
                         // `val` is either a `Vec<Vec<Value>>`, a `Vec<Struct>`,  or a `Vec<signer>`, so we cast `val` as a `Vec<Value>` and call ourselves recursively
-                        let vec = val.value_as::<Vec<Value>>()?;
+                        let vec = VMValueCast::<Vec<Value>>::cast(val)?;
 
                         let print_inner_value =
                             |out: &mut String,

@@ -112,7 +112,7 @@ pub trait ValueView {
                 self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
-            fn visit_ref(&mut self, _depth: usize, _is_global: bool) -> bool {
+            fn visit_ref(&mut self, _depth: usize) -> bool {
                 self.0 += LEGACY_REFERENCE_SIZE;
                 false
             }
@@ -220,7 +220,7 @@ pub trait ValueView {
                 self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
-            fn visit_ref(&mut self, _depth: usize, _is_global: bool) -> bool {
+            fn visit_ref(&mut self, _depth: usize) -> bool {
                 self.0 += LEGACY_REFERENCE_SIZE;
                 false
             }
@@ -248,7 +248,7 @@ pub trait ValueVisitor {
     fn visit_variant(&mut self, depth: usize, len: usize) -> bool;
     fn visit_vec(&mut self, depth: usize, len: usize) -> bool;
 
-    fn visit_ref(&mut self, depth: usize, is_global: bool) -> bool;
+    fn visit_ref(&mut self, depth: usize) -> bool;
 
     fn visit_vec_u8(&mut self, depth: usize, vals: &[u8]) {
         self.visit_vec(depth, vals.len());

@@ -60,7 +60,32 @@ impl<T> ArenaPointer<T> {
 
     #[inline]
     pub fn to_ref<'a>(self) -> &'a T {
-        to_ref(self.0)
+        to_ref(self.ptr_clone().0)
+    }
+
+    #[inline]
+    pub fn to_mut_ref<'a>(self) -> &'a mut T {
+        to_mut_ref(self.ptr_clone().0)
+    }
+
+    #[inline]
+    pub fn from_ref(t: &T) -> Self {
+        Self(t as *const T)
+    }
+
+    #[inline]
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+
+    #[inline]
+    pub fn ptr_clone(&self) -> Self {
+        Self(self.0)
+    }
+
+    #[inline]
+    pub fn replace_ptr(&mut self, other: ArenaPointer<T>) {
+        self.0 = other.0;
     }
 }
 
@@ -98,6 +123,12 @@ pub fn to_ref<'a, T>(value: *const T) -> &'a T {
     unsafe { &*value as &T }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[inline]
+pub fn to_mut_ref<'a, T>(value: *const T) -> &'a mut T {
+    unsafe { &mut *(value as *mut T) }
+}
+
 // -----------------------------------------------
 // Trait Implementations
 // -----------------------------------------------
@@ -120,16 +151,27 @@ impl<T: ::std::fmt::Debug> ::std::fmt::Debug for ArenaPointer<T> {
 // Pointer equality
 impl<T> PartialEq for ArenaPointer<T> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.0, other.0)
+        self.ptr_eq(other)
     }
 }
 
 impl<T> Eq for ArenaPointer<T> {}
 
 impl<T> Clone for ArenaPointer<T> {
+    #[allow(clippy::non_canonical_clone_impl)]
     fn clone(&self) -> Self {
-        *self
+        self.ptr_clone()
     }
 }
 
 impl<T> Copy for ArenaPointer<T> {}
+
+impl<T> From<Box<T>> for ArenaPointer<T> {
+    fn from(boxed: Box<T>) -> Self {
+        // Use `Box::into_raw` to extract the raw pointer from the box.
+        let raw_ptr: *const T = Box::into_raw(boxed);
+
+        // Create an `ArenaPointer` from the raw pointer.
+        ArenaPointer(raw_ptr)
+    }
+}

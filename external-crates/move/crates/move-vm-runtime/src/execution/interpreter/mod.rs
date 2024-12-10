@@ -5,7 +5,7 @@ use crate::{
     cache::arena::ArenaPointer,
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
+        interpreter::state::{CallStack, MachineState, ModuleDefinitionResolver},
         values::Value,
     },
     jit::execution::ast::{Function, Type},
@@ -18,6 +18,7 @@ use move_vm_profiler::{profile_close_frame, profile_open_frame};
 use std::sync::Arc;
 
 mod eval;
+pub mod locals;
 pub(crate) mod state;
 
 /// Entrypoint into the interpreter. All external calls need to be routed through this
@@ -57,8 +58,21 @@ pub(crate) fn run(
         let module_id = function.to_ref().module_id();
         let resolver = ModuleDefinitionResolver::new(vtables, module_id)
             .map_err(|err| err.finish(Location::Module(fun_ref.module_id().clone())))?;
-        let initial_frame = CallFrame::new(resolver, function, ty_args, args);
-        let state = MachineState::new(initial_frame);
+        let call_stack = CallStack::new(resolver, function, ty_args, args).map_err(|e| {
+            e.at_code_offset(fun_ref.index(), 0)
+                .finish(Location::Module(fun_ref.module_id().clone()))
+        })?;
+        let state = MachineState::new(call_stack);
         eval::run(state, vtables, vm_config, extensions, gas_meter)
     }
 }
+
+macro_rules! set_err_info {
+    ($frame:expr, $e:expr) => {{
+        let function = $frame.function();
+        $e.at_code_offset(function.index(), $frame.pc)
+            .finish($frame.location())
+    }};
+}
+
+pub(crate) use set_err_info;

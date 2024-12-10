@@ -64,7 +64,7 @@ impl CrossVersionPackageCache {
         type_args: Vec<Type>,
         datatype: DatatypeInfo,
     ) -> PartialVMResult<&DatatypeInfo> {
-        if self.cached_types.contains(&key) {
+        if self.cached_types.contains(key) {
             let module_name = string_interner.resolve_string(&key.module_name, "module name")?;
             let member_name = string_interner.resolve_string(&key.module_name, "member name")?;
             return Err(
@@ -89,7 +89,7 @@ impl CrossVersionPackageCache {
     }
 
     pub fn contains_cached_type(&self, key: &IntraPackageKey) -> bool {
-        self.cached_types.contains(&key)
+        self.cached_types.contains(key)
     }
 
     pub fn resolve_type_by_name(

@@ -6,7 +6,10 @@ use crate::{
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::state::{CallFrame, MachineState, ResolvableType},
+        interpreter::{
+            set_err_info,
+            state::{CallStack, MachineState, ResolvableType},
+        },
         values::{
             IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
             Vector, VectorRef,
@@ -51,14 +54,6 @@ impl RunContext<'_, '_, '_> {
     }
 }
 
-macro_rules! set_err_info {
-    ($frame:expr, $e:expr) => {{
-        let function = $frame.function();
-        $e.at_code_offset(function.index(), $frame.pc)
-            .finish($frame.location())
-    }};
-}
-
 /// Main loop for the execution of a function.
 ///
 /// This runs a newly-made Machine until it is complete. It expects the Machine to have a current
@@ -79,7 +74,7 @@ pub(super) fn run(
 
     let mut state = start_state;
 
-    dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.current_frame);
+    dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.call_stack.current_frame);
     dbg_println!(flag: eval_step, "{}", {
         let mut buf = String::new();
         let _ = state.debug_print_stack_trace(&mut buf, run_context.vtables);
@@ -89,7 +84,7 @@ pub(super) fn run(
     // Run until we're done or we produce an error and bail.
     while step(&mut state, &mut run_context, gas_meter)? != StepStatus::Done {
         dbg_println!(flag: eval_step, "-------------------------------------");
-        dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.current_frame);
+        dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.call_stack.current_frame);
         dbg_println!(flag: eval_step, "{}", {
             let mut buf = String::new();
             let _ = state.debug_print_stack_trace(&mut buf, run_context.vtables);
@@ -99,7 +94,21 @@ pub(super) fn run(
     }
 
     // When we are done, grab the operand stack as the return type.
-    let MachineState { operand_stack, .. } = state;
+    let MachineState {
+        operand_stack,
+        call_stack,
+    } = state;
+    let CallStack {
+        mut heap,
+        current_frame,
+        frames,
+    } = call_stack;
+    heap.free_stack_frame(current_frame.stack_frame)
+        .map_err(|e| e.finish(Location::Undefined))?;
+    for frame in frames.into_iter().rev() {
+        heap.free_stack_frame(frame.stack_frame)
+            .map_err(|e| e.finish(Location::Undefined))?;
+    }
     Ok(operand_stack.value)
 }
 
@@ -108,9 +117,9 @@ fn step(
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
 ) -> VMResult<StepStatus> {
-    let fun_ref = state.current_frame.function();
+    let fun_ref = state.call_stack.current_frame.function();
     let instructions = fun_ref.code();
-    let pc = state.current_frame.pc as usize;
+    let pc = state.call_stack.current_frame.pc as usize;
     assert!(
         pc <= instructions.len(),
         "PC beyond instruction count for {}",
@@ -137,8 +146,9 @@ fn step(
 
             partial_error_to_error(state, run_context, charge_result)?;
             let non_ref_vals = state
+                .call_stack
                 .current_frame
-                .locals
+                .stack_frame
                 .drop_all_values()
                 .map(|(_idx, val)| val);
 
@@ -152,10 +162,10 @@ fn step(
                 arena::to_ref(current_frame.function).pretty_string()
             );
 
-            if let Some(frame) = state.pop_call_frame() {
+            if state.can_pop_call_frame() {
+                state.pop_call_frame()?;
                 // Note: the caller will find the callee's return values at the top of the shared operand stack
-                state.current_frame = frame;
-                state.current_frame.pc += 1; // advance past the Call instruction in the caller
+                state.call_stack.current_frame.pc += 1; // advance past the Call instruction in the caller
                 Ok(StepStatus::Running)
             } else {
                 // end of execution. `state` should no longer be used afterward
@@ -165,16 +175,18 @@ fn step(
         Bytecode::CallGeneric(idx) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
             let ty_args = state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_generic_function(*idx, state.current_frame.ty_args())
-                .map_err(|e| set_err_info!(state.current_frame, e))?;
+                .instantiate_generic_function(*idx, state.call_stack.current_frame.ty_args())
+                .map_err(|e| set_err_info!(state.call_stack.current_frame, e))?;
             let call_type = state
+                .call_stack
                 .current_frame
                 .resolver
                 .function_from_instantiation(*idx);
             let function = call_type_to_function(run_context, call_type)
-                .map_err(|err| set_err_info!(state.current_frame, err))?;
+                .map_err(|err| set_err_info!(state.call_stack.current_frame, err))?;
             call_function(state, run_context, gas_meter, function, ty_args)?;
             Ok(StepStatus::Running)
         }
@@ -183,7 +195,7 @@ fn step(
             let function = run_context
                 .vtables
                 .resolve_function(vtable_key)
-                .map_err(|err| set_err_info!(state.current_frame, err))?;
+                .map_err(|err| set_err_info!(state.call_stack.current_frame, err))?;
             call_function(state, run_context, gas_meter, function, vec![])?;
             Ok(StepStatus::Running)
         }
@@ -313,32 +325,33 @@ fn op_step_impl(
         // These all update the current frame's program counter.
         Bytecode::BrTrue(offset) => {
             gas_meter.charge_simple_instr(S::BrTrue)?;
-            state.current_frame.pc = if state.pop_operand_as::<bool>()? {
+            state.call_stack.current_frame.pc = if state.pop_operand_as::<bool>()? {
                 *offset
             } else {
-                state.current_frame.pc + 1
+                state.call_stack.current_frame.pc + 1
             };
         }
         Bytecode::BrFalse(offset) => {
             gas_meter.charge_simple_instr(S::BrFalse)?;
-            state.current_frame.pc = if !state.pop_operand_as::<bool>()? {
+            state.call_stack.current_frame.pc = if !state.pop_operand_as::<bool>()? {
                 *offset
             } else {
-                state.current_frame.pc + 1
+                state.call_stack.current_frame.pc + 1
             };
         }
         Bytecode::Branch(offset) => {
             gas_meter.charge_simple_instr(S::Branch)?;
-            state.current_frame.pc = *offset;
+            state.call_stack.current_frame.pc = *offset;
         }
         Bytecode::VariantSwitch(jump_table_index) => {
             let reference = state.pop_operand_as::<VariantRef>()?;
             gas_meter.charge_variant_switch(&reference)?;
             let tag = reference.get_tag()?;
-            let JumpTableInner::Full(jump_table) = &state.current_frame.function().jump_tables()
-                [jump_table_index.0 as usize]
-                .jump_table;
-            state.current_frame.pc = jump_table[tag as usize];
+            let JumpTableInner::Full(jump_table) =
+                &state.call_stack.current_frame.function().jump_tables()
+                    [jump_table_index.0 as usize]
+                    .jump_table;
+            state.call_stack.current_frame.pc = jump_table[tag as usize];
         }
         // -- OTHER OPCODES ----------------------
         Bytecode::Pop => {
@@ -370,7 +383,7 @@ fn op_step_impl(
             state.push_operand(Value::u256(**int_const))?;
         }
         Bytecode::LdConst(idx) => {
-            let constant = state.current_frame.resolver.constant_at(*idx);
+            let constant = state.call_stack.current_frame.resolver.constant_at(*idx);
             gas_meter.charge_ld_const(NumBytes::new(constant.size))?;
             let val = Value::from_constant_value(constant.value.clone());
             gas_meter.charge_ld_const_after_deserialization(&val)?;
@@ -386,17 +399,20 @@ fn op_step_impl(
         }
         Bytecode::CopyLoc(idx) => {
             // TODO(Gas): We should charge gas before copying the value.
-            let local = state.current_frame.locals.copy_loc(*idx as usize)?;
+            let local = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .copy_loc(*idx as usize)?;
             gas_meter.charge_copy_loc(&local)?;
             state.push_operand(local)?;
         }
         Bytecode::MoveLoc(idx) => {
-            let local = state.current_frame.locals.move_loc(
-                *idx as usize,
-                run_context
-                    .vm_config()
-                    .enable_invariant_violation_check_in_swap_loc,
-            )?;
+            let local = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .move_loc(*idx as usize)?;
             gas_meter.charge_move_loc(&local)?;
 
             state.push_operand(local)?;
@@ -404,13 +420,11 @@ fn op_step_impl(
         Bytecode::StLoc(idx) => {
             let value_to_store = state.pop_operand()?;
             gas_meter.charge_store_loc(&value_to_store)?;
-            state.current_frame.locals.store_loc(
-                *idx as usize,
-                value_to_store,
-                run_context
-                    .vm_config()
-                    .enable_invariant_violation_check_in_swap_loc,
-            )?;
+            state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .store_loc(*idx as usize, value_to_store)?;
         }
         Bytecode::MutBorrowLoc(idx) | Bytecode::ImmBorrowLoc(idx) => {
             let instr = match instruction {
@@ -418,7 +432,13 @@ fn op_step_impl(
                 _ => S::ImmBorrowLoc,
             };
             gas_meter.charge_simple_instr(instr)?;
-            state.push_operand(state.current_frame.locals.borrow_loc(*idx as usize)?)?;
+            state.push_operand(
+                state
+                    .call_stack
+                    .current_frame
+                    .stack_frame
+                    .borrow_loc(*idx as usize)?,
+            )?;
         }
         Bytecode::ImmBorrowField(fh_idx) | Bytecode::MutBorrowField(fh_idx) => {
             let instr = match instruction {
@@ -429,7 +449,11 @@ fn op_step_impl(
 
             let reference = state.pop_operand_as::<StructRef>()?;
 
-            let offset = state.current_frame.resolver.field_offset(*fh_idx);
+            let offset = state
+                .call_stack
+                .current_frame
+                .resolver
+                .field_offset(*fh_idx);
             let field_ref = reference.borrow_field(offset)?;
             state.push_operand(field_ref)?;
         }
@@ -443,6 +467,7 @@ fn op_step_impl(
             let reference = state.pop_operand_as::<StructRef>()?;
 
             let offset = state
+                .call_stack
                 .current_frame
                 .resolver
                 .field_instantiation_offset(*fi_idx);
@@ -450,8 +475,12 @@ fn op_step_impl(
             state.push_operand(field_ref)?;
         }
         Bytecode::Pack(sd_idx) => {
-            let field_count = state.current_frame.resolver.field_count(*sd_idx);
-            let struct_type = state.current_frame.resolver.get_struct_type(*sd_idx);
+            let field_count = state.call_stack.current_frame.resolver.field_count(*sd_idx);
+            let struct_type = state
+                .call_stack
+                .current_frame
+                .resolver
+                .get_struct_type(*sd_idx);
             check_depth_of_type(run_context, &struct_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -459,13 +488,15 @@ fn op_step_impl(
         }
         Bytecode::PackGeneric(si_idx) => {
             let field_count = state
+                .call_stack
                 .current_frame
                 .resolver
                 .field_instantiation_count(*si_idx);
             let ty = state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_struct_type(*si_idx, state.current_frame.ty_args())?;
+                .instantiate_struct_type(*si_idx, state.call_stack.current_frame.ty_args())?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -610,8 +641,8 @@ fn op_step_impl(
                 .with_sub_status(error_code)
                 .with_message(format!(
                     "{} at offset {}",
-                    state.current_frame.function().pretty_string(),
-                    state.current_frame.pc,
+                    state.call_stack.current_frame.function().pretty_string(),
+                    state.call_stack.current_frame.pc,
                 ));
             return Err(error);
         }
@@ -642,9 +673,10 @@ fn op_step_impl(
         }
         Bytecode::VecPack(si, num) => {
             let ty = state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_vec_pack(make_ty!(&ty), state.last_n_operands(*num as usize)?)?;
             let elements = state.pop_n_operands(*num as u16)?;
@@ -654,9 +686,10 @@ fn op_step_impl(
         Bytecode::VecLen(si) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = &state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_len(ResolvableType {
                 ty,
                 vtables: run_context.vtables,
@@ -668,9 +701,10 @@ fn op_step_impl(
             let idx = state.pop_operand_as::<u64>()? as usize;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(false, make_ty!(&ty), res.is_ok())?;
             state.push_operand(res?)?;
@@ -679,9 +713,10 @@ fn op_step_impl(
             let idx = state.pop_operand_as::<u64>()? as usize;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = &state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, ty);
             gas_meter.charge_vec_borrow(true, make_ty!(ty), res.is_ok())?;
             state.push_operand(res?)?;
@@ -690,9 +725,10 @@ fn op_step_impl(
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = &state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_push_back(make_ty!(ty), &elem)?;
             vec_ref.push_back(
                 elem,
@@ -703,9 +739,10 @@ fn op_step_impl(
         Bytecode::VecPopBack(si) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = &state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.pop(ty);
             gas_meter.charge_vec_pop_back(make_ty!(ty), res.as_ref().ok())?;
             state.push_operand(res?)?;
@@ -713,9 +750,10 @@ fn op_step_impl(
         Bytecode::VecUnpack(si, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
             let ty = &state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_unpack(make_ty!(ty), NumArgs::new(*num), vec_val.elem_views())?;
             let elements = vec_val.unpack(ty, *num)?;
             for value in elements {
@@ -727,18 +765,20 @@ fn op_step_impl(
             let idx1 = state.pop_operand_as::<u64>()? as usize;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = &state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_single_type(*si, state.current_frame.ty_args())?;
+                .instantiate_single_type(*si, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_swap(make_ty!(ty))?;
             vec_ref.swap(idx1, idx2, ty)?;
         }
         Bytecode::PackVariant(vidx) => {
             let (field_count, variant_tag) = state
+                .call_stack
                 .current_frame
                 .resolver
                 .variant_field_count_and_tag(*vidx);
-            let enum_type = state.current_frame.resolver.get_enum_type(*vidx);
+            let enum_type = state.call_stack.current_frame.resolver.get_enum_type(*vidx);
             check_depth_of_type(run_context, &enum_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -746,13 +786,15 @@ fn op_step_impl(
         }
         Bytecode::PackVariantGeneric(vidx) => {
             let (field_count, variant_tag) = state
+                .call_stack
                 .current_frame
                 .resolver
                 .variant_instantiantiation_field_count_and_tag(*vidx);
             let ty = state
+                .call_stack
                 .current_frame
                 .resolver
-                .instantiate_enum_type(*vidx, state.current_frame.ty_args())?;
+                .instantiate_enum_type(*vidx, state.call_stack.current_frame.ty_args())?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -761,6 +803,7 @@ fn op_step_impl(
         Bytecode::UnpackVariant(vidx) => {
             let variant = state.pop_operand_as::<Variant>()?;
             let (_, variant_tag) = state
+                .call_stack
                 .current_frame
                 .resolver
                 .variant_field_count_and_tag(*vidx);
@@ -773,6 +816,7 @@ fn op_step_impl(
         Bytecode::UnpackVariantImmRef(vidx) | Bytecode::UnpackVariantMutRef(vidx) => {
             let reference = state.pop_operand_as::<VariantRef>()?;
             let (_, variant_tag) = state
+                .call_stack
                 .current_frame
                 .resolver
                 .variant_field_count_and_tag(*vidx);
@@ -787,6 +831,7 @@ fn op_step_impl(
             let variant = state.pop_operand_as::<Variant>()?;
             gas_meter.charge_unpack(true, variant.field_views())?;
             let (_, variant_tag) = state
+                .call_stack
                 .current_frame
                 .resolver
                 .variant_instantiantiation_field_count_and_tag(*vidx);
@@ -798,6 +843,7 @@ fn op_step_impl(
         Bytecode::UnpackVariantGenericImmRef(vidx) | Bytecode::UnpackVariantGenericMutRef(vidx) => {
             let reference = state.pop_operand_as::<VariantRef>()?;
             let (_, variant_tag) = state
+                .call_stack
                 .current_frame
                 .resolver
                 .variant_instantiantiation_field_count_and_tag(*vidx);
@@ -811,7 +857,7 @@ fn op_step_impl(
     }
     profile_close_instr!(gas_meter, format!("{:?}", instruction));
     if !control_flow_instruction(instruction) {
-        state.current_frame.pc += 1;
+        state.call_stack.current_frame.pc += 1;
     }
     Ok(())
 }
@@ -841,7 +887,7 @@ fn call_function(
     let module_id = fun_ref.module_id();
     let last_n_operands = state
         .last_n_operands(fun_ref.arg_count())
-        .map_err(|e| set_err_info!(state.current_frame, e))?;
+        .map_err(|e| set_err_info!(state.call_stack.current_frame, e))?;
 
     if ty_args.is_empty() {
         // Charge for a non-generic call
@@ -852,7 +898,7 @@ fn call_function(
                 last_n_operands,
                 (fun_ref.local_count() as u64).into(),
             )
-            .map_err(|e| set_err_info!(state.current_frame, e))?;
+            .map_err(|e| set_err_info!(state.call_stack.current_frame, e))?;
     } else {
         // Charge for a generic call
         gas_meter
@@ -866,22 +912,20 @@ fn call_function(
                 last_n_operands,
                 (fun_ref.local_count() as u64).into(),
             )
-            .map_err(|e| set_err_info!(state.current_frame, e))?;
+            .map_err(|e| set_err_info!(state.call_stack.current_frame, e))?;
     }
 
     if fun_ref.is_native() {
         call_native(state, run_context, gas_meter, fun_ref, ty_args)?;
 
-        state.current_frame.pc += 1; // advance past the Call instruction in the caller
+        state.call_stack.current_frame.pc += 1; // advance past the Call instruction in the caller
 
         profile_close_frame!(gas_meter, func_name.clone());
     } else {
-        let new_frame = make_call_frame(state, run_context, function, ty_args)
-            .map_err(|e| state.set_location(e))
-            .map_err(|err| state.maybe_core_dump(err))?;
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
-        state.push_call_frame(new_frame)?;
+        push_call_frame(state, run_context, function, ty_args)
+            .map_err(|err| state.maybe_core_dump(err))?;
     }
     Ok(())
 }
@@ -1047,16 +1091,19 @@ where
     binop(state, |lhs, rhs| Ok(Value::bool(f(lhs, rhs)?)))
 }
 
-fn make_call_frame(
+fn push_call_frame(
     state: &mut MachineState,
     run_context: &RunContext,
     function: ArenaPointer<Function>,
     ty_args: Vec<Type>,
-) -> PartialVMResult<CallFrame> {
-    let fun_ref = function.to_ref();
-    let resolver = ModuleDefinitionResolver::new(run_context.vtables, fun_ref.module_id())?;
-    let args = state.pop_n_operands(fun_ref.arg_count() as u16)?;
-    Ok(CallFrame::new(resolver, function, ty_args, args))
+) -> VMResult<()> {
+    let fun_ref = function.ptr_clone().to_ref();
+    let resolver = ModuleDefinitionResolver::new(run_context.vtables, fun_ref.module_id())
+        .map_err(|e| set_err_info!(&state.call_stack.current_frame, e))?;
+    let args = state
+        .pop_n_operands(fun_ref.arg_count() as u16)
+        .map_err(|e| set_err_info!(&state.call_stack.current_frame, e))?;
+    state.push_call_frame(resolver, function, ty_args, args)
 }
 
 fn partial_error_to_error<T>(
@@ -1071,8 +1118,8 @@ fn partial_error_to_error<T>(
             err
         };
         let err = state.set_location(err.at_code_offset(
-            state.current_frame.function().index(),
-            state.current_frame.pc,
+            state.call_stack.current_frame.function().index(),
+            state.call_stack.current_frame.pc,
         ));
         state.maybe_core_dump(err)
     })

@@ -2134,6 +2134,7 @@ dependencies = [
  "move-core-types",
  "move-ir-compiler",
  "move-ir-to-bytecode",
+ "move-proc-macros",
  "move-stdlib",
  "move-vm-config",
  "move-vm-profiler",

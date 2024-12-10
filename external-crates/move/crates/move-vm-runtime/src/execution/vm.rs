@@ -4,7 +4,10 @@
 use crate::{
     cache::arena::ArenaPointer,
     dbg_println,
-    execution::{dispatch_tables::VMDispatchTables, interpreter},
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        interpreter::{self, locals::BaseHeap},
+    },
     jit::execution::ast::{Function, IntraPackageKey, Type, VTableKey},
     natives::extensions::NativeContextExtensions,
     shared::{
@@ -46,6 +49,8 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
+    /// Move VM Base Heap, which holds base arguments, including reference return values, etc.
+    pub(crate) base_heap: BaseHeap,
 }
 
 pub struct MoveVMFunction {
@@ -200,7 +205,7 @@ impl<'extensions> MoveVM<'extensions> {
             .get_identifier(&module_id)
             .map_err(|err| err.finish(Location::Undefined))?;
         let member_name = string_interner
-            .get_ident_str(&function_name)
+            .get_ident_str(function_name)
             .map_err(|err| err.finish(Location::Undefined))?;
         let vtable_key = VTableKey {
             package_key,
@@ -263,9 +268,14 @@ impl<'extensions> MoveVM<'extensions> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let (mut dummy_locals, deserialized_args) = deserialize_args(
+        // TODO: Lift deserialization out to the PTB layer, and expose the Base Heap to that layer
+        // so that it can allocate values into it for usage in function calls.
+        // The external calls in should eventually just call `Value`; serialization and
+        // deserialization should be done outside of the VM calls.
+        let (ref_ids, deserialized_args) = deserialize_args(
             &self.virtual_tables,
             &self.vm_config,
+            &mut self.base_heap,
             arg_types,
             serialized_args,
         )
@@ -295,21 +305,17 @@ impl<'extensions> MoveVM<'extensions> {
         .map_err(|e| e.finish(Location::Undefined))?;
         let serialized_mut_ref_outputs = mut_ref_args
             .into_iter()
-            .map(|(idx, ty)| {
-                // serialize return values first in the case that a value points into this local
-                let local_val = dummy_locals.move_loc(
-                    idx,
-                    self.vm_config.enable_invariant_violation_check_in_swap_loc,
-                )?;
+            .map(|(ndx, ty)| {
+                let heap_ref_id = ref_ids.get(&ndx).expect("No heap ref for ref argument");
+                // take the value of each reference; return values first in the case that a value
+                // points into this local
+                let local_val = self.base_heap.take_loc(*heap_ref_id)?;
                 let (bytes, layout) =
                     serialize_return_value(&self.virtual_tables, &self.vm_config, &ty, local_val)?;
-                Ok((idx as LocalIndex, bytes, layout))
+                Ok((ndx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()
             .map_err(|e| e.finish(Location::Undefined))?;
-
-        // locals should not be dropped until all return values are serialized
-        std::mem::drop(dummy_locals);
 
         Ok(SerializedReturnValues {
             mutable_reference_outputs: serialized_mut_ref_outputs,

@@ -45,6 +45,7 @@ move-compiler.workspace = true
 memory-stats.workspace = true
 tempfile.workspace = true
 move-stdlib.workspace = true
+move-proc-macros.workspace = true
 
 [features]
 default = []
