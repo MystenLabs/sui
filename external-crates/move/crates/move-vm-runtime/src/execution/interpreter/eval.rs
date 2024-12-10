@@ -385,7 +385,7 @@ fn op_step_impl(
         Bytecode::LdConst(idx) => {
             let constant = state.call_stack.current_frame.resolver.constant_at(*idx);
             gas_meter.charge_ld_const(NumBytes::new(constant.size))?;
-            let val = Value::from_constant_value(constant.value.clone());
+            let val = constant.value.clone().to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
             state.push_operand(val)?
         }

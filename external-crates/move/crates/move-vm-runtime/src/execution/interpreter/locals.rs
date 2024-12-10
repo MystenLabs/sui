@@ -3,7 +3,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::execution::values::values_impl::{Value, ValueImpl};
+use crate::execution::values::values_impl::Value;
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
@@ -104,7 +104,7 @@ impl BaseHeap {
     pub fn is_invalid(&self, ndx: BaseHeapId) -> PartialVMResult<bool> {
         self.values
             .get(&ndx)
-            .map(|value| matches!(value.as_ref(), &Value(ValueImpl::Invalid)))
+            .map(|value| matches!(value.as_ref(), &Value::Invalid))
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Invalid index: {}", ndx))
@@ -225,7 +225,7 @@ impl StackFrame {
     pub fn is_invalid(&self, ndx: usize) -> PartialVMResult<bool> {
         self.slice
             .get(ndx)
-            .map(|value| matches!(value, Value(ValueImpl::Invalid)))
+            .map(|value| matches!(value, Value::Invalid))
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                     .with_message(format!("Local index out of bounds: {}", ndx))
@@ -238,20 +238,20 @@ impl StackFrame {
         let mut res = vec![];
 
         for (ndx, value) in self.slice.iter_mut().enumerate() {
-            match &value.0 {
-                ValueImpl::Invalid => (),
-                ValueImpl::Reference(_) => {
+            match &value {
+                Value::Invalid => (),
+                Value::Reference(_) => {
                     let _ = std::mem::replace(value, Value::invalid());
                 }
-                ValueImpl::U8(_)
-                | ValueImpl::U16(_)
-                | ValueImpl::U32(_)
-                | ValueImpl::U64(_)
-                | ValueImpl::U128(_)
-                | ValueImpl::U256(_)
-                | ValueImpl::Bool(_)
-                | ValueImpl::Address(_)
-                | ValueImpl::Container(_) => {
+                Value::U8(_)
+                | Value::U16(_)
+                | Value::U32(_)
+                | Value::U64(_)
+                | Value::U128(_)
+                | Value::U256(_)
+                | Value::Bool(_)
+                | Value::Address(_)
+                | Value::Container(_) => {
                     res.push((ndx, std::mem::replace(value, Value::invalid())))
                 }
             }

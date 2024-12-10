@@ -15,3 +15,7 @@ mod loader_tests;
 mod nested_loop_tests;
 mod package_cache_tests;
 mod return_value_tests;
+mod value_tests;
+
+#[cfg(all(test, feature = "fuzzing"))]
+mod value_prop_tests;
