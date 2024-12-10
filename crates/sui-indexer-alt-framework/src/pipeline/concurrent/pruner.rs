@@ -11,7 +11,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db, metrics::IndexerMetrics, pipeline::LOUD_WATERMARK_UPDATE_INTERVAL,
+    db::Db,
+    metrics::IndexerMetrics,
+    pipeline::logging::{LoggerWatermark, WatermarkLogger},
     watermarks::PrunerWatermark,
 };
 
@@ -51,7 +53,7 @@ pub(super) fn pruner<H: Handler + 'static>(
 
         // The pruner task will periodically output a log message at a higher log level to
         // demonstrate that it is making progress.
-        let mut next_loud_watermark_update = 0;
+        let mut logger = WatermarkLogger::new("pruner", LoggerWatermark::default());
 
         'outer: loop {
             // (1) Get the latest pruning bounds from the database.
@@ -186,37 +188,16 @@ pub(super) fn pruner<H: Handler + 'static>(
                     )
                 }
 
-                Ok(updated) => {
+                Ok(true) => {
                     let elapsed = guard.stop_and_record();
+                    logger.log::<H>(&watermark, elapsed);
 
-                    if updated {
-                        metrics
-                            .watermark_pruner_hi_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.pruner_hi);
-                    }
-
-                    if watermark.pruner_hi > next_loud_watermark_update {
-                        next_loud_watermark_update =
-                            watermark.pruner_hi + LOUD_WATERMARK_UPDATE_INTERVAL;
-
-                        info!(
-                            pipeline = H::NAME,
-                            pruner_hi = watermark.pruner_hi,
-                            updated,
-                            elapsed_ms = elapsed * 1000.0,
-                            "Watermark"
-                        );
-                    } else {
-                        debug!(
-                            pipeline = H::NAME,
-                            pruner_hi = watermark.pruner_hi,
-                            updated,
-                            elapsed_ms = elapsed * 1000.0,
-                            "Watermark"
-                        );
-                    }
+                    metrics
+                        .watermark_pruner_hi_in_db
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.pruner_hi);
                 }
+                Ok(false) => {}
             }
         }
 
