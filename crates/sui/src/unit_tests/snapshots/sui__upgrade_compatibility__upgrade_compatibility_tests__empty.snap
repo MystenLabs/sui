@@ -3,7 +3,7 @@ source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
 expression: output
 ---
 error[Compatibility E01007]: module missing
-  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/malformed_move_toml/empty/Move.toml:1:1
+  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/missing_module_toml/empty/Move.toml:1:1
   │
 1 │ 
   │ ^ Package is missing module 'identifier'

@@ -96,10 +96,11 @@ fn test_missing_module_toml() {
     // since a Move.toml which is empty will not build
     for malformed_pkg in [
         "emoji",
-        // "whitespace",
         "addresses_first",
         "starts_second_line",
         "package_no_name",
+        "whitespace",
+        "empty",
     ] {
         let move_pkg_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/")
@@ -108,7 +109,7 @@ fn test_missing_module_toml() {
             missing_module_diag(&Identifier::from_str("identifier").unwrap(), &move_pkg_path);
 
         let move_toml: Arc<str> = fs::read_to_string(move_pkg_path.join("Move.toml"))
-            .unwrap()
+            .unwrap_or_default()
             .into();
         let file_hash = FileHash::new(&move_toml);
         let mut files = FilesSourceText::new();
@@ -129,20 +130,13 @@ fn test_missing_module_toml() {
 #[test]
 
 fn test_malformed_toml() {
-    // whitespace example
+    // no_file example
     let move_pkg_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/whitespace/");
+        .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/no_file/");
 
     let result = missing_module_diag(&Identifier::from_str("identifier").unwrap(), &move_pkg_path);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().to_string(), "Malformed Move.toml");
-
-    // empty example
-    let move_pkg_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/empty/");
-    let result = missing_module_diag(&Identifier::from_str("identifier").unwrap(), &move_pkg_path);
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err().to_string(), "Malformed Move.toml");
+    assert_eq!(result.unwrap_err().to_string(), "Unable to read Move.toml");
 }
 
 fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage, PathBuf) {
