@@ -4,6 +4,8 @@
 use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{ConsistencyConfig, IndexerConfig, PipelineLayer};
+use handlers::coin_balance_buckets::CoinBalanceBuckets;
+use handlers::coin_balance_buckets_pruner::CoinBalanceBucketsPruner;
 use handlers::obj_info_pruner::ObjInfoPruner;
 use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
@@ -63,6 +65,8 @@ pub async fn start_indexer(
         sum_packages,
         obj_info,
         obj_info_pruner,
+        coin_balance_buckets,
+        coin_balance_buckets_pruner,
         ev_emit_mod,
         ev_struct_inst,
         kv_checkpoints,
@@ -253,6 +257,11 @@ pub async fn start_indexer(
     add_concurrent_with_lagged_pruner!(
         ObjInfo, obj_info;
         ObjInfoPruner, obj_info_pruner
+    );
+
+    add_concurrent_with_lagged_pruner!(
+        CoinBalanceBuckets, coin_balance_buckets;
+        CoinBalanceBucketsPruner, coin_balance_buckets_pruner
     );
 
     // Unpruned concurrent pipelines
