@@ -104,7 +104,6 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     committer: Option<CommitterLayer>,
     pruner: Option<PrunerLayer>,
-    checkpoint_lag: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -147,6 +146,10 @@ pub struct PipelineLayer {
     pub sum_displays: Option<SequentialLayer>,
     pub sum_packages: Option<SequentialLayer>,
 
+    // Concurrent pipelines with a lagged consistent pruner which is also a concurrent pipeline.
+    pub obj_info: Option<CommitterLayer>,
+    pub obj_info_pruner: Option<CommitterLayer>,
+
     // All concurrent pipelines
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -157,7 +160,6 @@ pub struct PipelineLayer {
     pub kv_objects: Option<ConcurrentLayer>,
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
-    pub obj_info: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
@@ -246,7 +248,7 @@ impl ConcurrentLayer {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)),
             },
-            checkpoint_lag: self.checkpoint_lag.or(base.checkpoint_lag),
+            checkpoint_lag: base.checkpoint_lag,
         }
     }
 }
@@ -296,6 +298,7 @@ impl PipelineLayer {
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
             obj_info: Some(Default::default()),
+            obj_info_pruner: Some(Default::default()),
             obj_versions: Some(Default::default()),
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
@@ -375,7 +378,6 @@ impl Merge for ConcurrentLayer {
         ConcurrentLayer {
             committer: self.committer.merge(other.committer),
             pruner: self.pruner.merge(other.pruner),
-            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
             extra: Default::default(),
         }
     }
@@ -435,6 +437,7 @@ impl Merge for PipelineLayer {
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
             obj_info: self.obj_info.merge(other.obj_info),
+            obj_info_pruner: self.obj_info_pruner.merge(other.obj_info_pruner),
             obj_versions: self.obj_versions.merge(other.obj_versions),
             tx_affected_addresses: self
                 .tx_affected_addresses
@@ -506,7 +509,6 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
-            checkpoint_lag: config.checkpoint_lag,
             extra: Default::default(),
         }
     }
@@ -757,7 +759,6 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
-            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -790,7 +791,6 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
-            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -826,7 +826,6 @@ mod tests {
                 interval_ms: Some(1000),
                 ..Default::default()
             }),
-            checkpoint_lag: Some(200),
             extra: Default::default(),
         };
 
@@ -859,7 +858,7 @@ mod tests {
                     retention: 300,
                     max_chunk_size: 400,
                 }),
-                checkpoint_lag: Some(200),
+                checkpoint_lag: None,
             },
         );
     }
