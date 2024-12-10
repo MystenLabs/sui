@@ -219,7 +219,7 @@ module sui_system::validator_set {
 
     /// Called by `sui_system` to add a new validator to `pending_active_validators`, which will be
     /// processed at the end of epoch.
-    public(package) fun request_add_validator(self: &mut ValidatorSet, min_joining_stake_amount: u64, ctx: &TxContext) {
+    public(package) fun request_add_validator(self: &mut ValidatorSet, ctx: &TxContext) {
         let validator_address = ctx.sender();
         assert!(
             self.validator_candidates.contains(validator_address),
@@ -233,9 +233,35 @@ module sui_system::validator_set {
             EDuplicateValidator
         );
         assert!(validator.is_preactive(), EValidatorNotCandidate);
-        assert!(validator.total_stake_amount() >= min_joining_stake_amount, EMinJoiningStakeNotReached);
+        assert!(can_join(self, validator.total_stake_amount(), ctx), EMinJoiningStakeNotReached);
 
         self.pending_active_validators.push_back(validator);
+    }
+
+    /// Return `true` if a  candidate validator with `stake` will have sufficeint voting power to join the validator set
+    fun can_join(self: &ValidatorSet, stake: u64, ctx: &TxContext): bool {
+        let (min_joining_voting_power, _, _) = get_voting_power_thresholds(ctx);
+        // if the validator will have at least `min_joining_voting_power` after joining, they can join.
+        // this formula comes from SIP-39 TODO link once landed
+        let future_total_stake = self.total_stake + stake;
+        let future_validator_voting_power = voting_power::derive_voting_power(stake, future_total_stake);
+        future_validator_voting_power >= min_joining_voting_power
+    }
+
+    /// return (min, low, very low voting power) thresholds
+    fun get_voting_power_thresholds(ctx: &TxContext): (u64, u64, u64) {
+        // TODO: adjust as needed depending on when this will ship. and how will we deal with the devnet/testnet/mainnet differences?
+        let start_epoch = 550;
+        // these numbers come from SIP-39 TODO link once landed
+        let phase_length = 14; // phases are 14 days = 14 epochs
+        let epoch = ctx.epoch();
+        if (epoch < start_epoch + phase_length) { // phase 1
+            (12, 8, 4)
+        } else if (epoch < start_epoch + (2 * phase_length)) { // phase 2
+            (6, 4, 2)
+        } else { // phase 3
+            (3, 2, 1)
+        }
     }
 
     public(package) fun assert_no_pending_or_active_duplicates(self: &ValidatorSet, validator: &Validator) {
@@ -376,8 +402,6 @@ module sui_system::validator_set {
         storage_fund_reward: &mut Balance<SUI>,
         validator_report_records: &mut VecMap<address, VecSet<address>>,
         reward_slashing_rate: u64,
-        low_stake_threshold: u64,
-        very_low_stake_threshold: u64,
         low_stake_grace_period: u64,
         ctx: &mut TxContext,
     ) {
@@ -453,14 +477,10 @@ module sui_system::validator_set {
         // kick low stake validators out.
         update_and_process_low_stake_departures(
             self,
-            low_stake_threshold,
-            very_low_stake_threshold,
             low_stake_grace_period,
             validator_report_records,
             ctx
         );
-
-        self.total_stake = calculate_total_stakes(&self.active_validators);
 
         voting_power::set_voting_power(&mut self.active_validators);
 
@@ -471,25 +491,33 @@ module sui_system::validator_set {
 
     fun update_and_process_low_stake_departures(
         self: &mut ValidatorSet,
-        low_stake_threshold: u64,
-        very_low_stake_threshold: u64,
         low_stake_grace_period: u64,
         validator_report_records: &mut VecMap<address, VecSet<address>>,
         ctx: &mut TxContext
     ) {
+        let initial_total_stake = calculate_total_stakes(&self.active_validators);
+        // set to the total stake of the current active validators. if a validator kicked out, `total_stake` will be decreased
+        // by `process_validator_departure`. otherwise, `total_stake` will be unchanged.
+        self.total_stake = initial_total_stake;
+        let (_, low_voting_power_threshold, very_low_voting_power_threshold) = get_voting_power_thresholds(ctx);
+
         // Iterate through all the active validators, record their low stake status, and kick them out if the condition is met.
         let mut i = self.active_validators.length();
         while (i > 0) {
             i = i - 1;
             let validator_ref = &self.active_validators[i];
             let validator_address = validator_ref.sui_address();
-            let stake = validator_ref.total_stake_amount();
-            if (stake >= low_stake_threshold) {
+            let validator_stake = validator_ref.total_stake_amount();
+            //let new_total_stake = initial_total_stake + validator_stake;
+            // calculate the voting power for this validator in the next epoch if no validators are removed
+            // if one of more low stake validators are removed, it's possible this validator will have higher voting power--that's ok.
+            let voting_power = voting_power::derive_voting_power(validator_stake, initial_total_stake);
+            if (voting_power > low_voting_power_threshold) {
                 // The validator is safe. We remove their entry from the at_risk map if there exists one.
                 if (self.at_risk_validators.contains(&validator_address)) {
                    self.at_risk_validators.remove(&validator_address);
                 }
-            } else if (stake >= very_low_stake_threshold) {
+            } else if (voting_power > very_low_voting_power_threshold) {
                 // The stake is a bit below the threshold so we increment the entry of the validator in the map.
                 let new_low_stake_period =
                     if (self.at_risk_validators.contains(&validator_address)) {
@@ -504,12 +532,12 @@ module sui_system::validator_set {
                 // If the grace period has passed, the validator has to leave us.
                 if (new_low_stake_period > low_stake_grace_period) {
                     let validator = self.active_validators.remove(i);
-                    process_validator_departure(self, validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
+                    self.process_validator_departure(validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
                 }
             } else {
                 // The validator's stake is lower than the very low threshold so we kick them out immediately.
                 let validator = self.active_validators.remove(i);
-                process_validator_departure(self, validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
+                self.process_validator_departure(validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
             }
         }
     }
@@ -1287,9 +1315,19 @@ module sui_system::validator_set {
         self.validator_candidates.contains(addr)
     }
 
+    /// Returns true if `addr` is an active validator
+    public fun is_active_validator(self: &ValidatorSet, addr: address): bool {
+        self.active_validators.any!(|v| v.sui_address() == addr)
+    }
+
     /// Returns true if the staking pool identified by `staking_pool_id` is of an inactive validator.
     public fun is_inactive_validator(self: &ValidatorSet, staking_pool_id: ID): bool {
         self.inactive_validators.contains(staking_pool_id)
+    }
+
+    /// Return true if `addr` is currently an at-risk validator below the minimum stake for removal
+    public(package) fun is_at_risk_validator(self: &ValidatorSet, addr: address): bool {
+        self.at_risk_validators.contains(&addr)
     }
 
     public(package) fun active_validator_addresses(self: &ValidatorSet): vector<address> {
@@ -1303,5 +1341,13 @@ module sui_system::validator_set {
             i = i + 1;
         };
         res
+    }
+
+    #[test_only]
+    public fun find_for_testing(self: &ValidatorSet, validator_address: address): &Validator {
+        let mut validator_index_opt = find_validator(&self.active_validators, validator_address);
+        assert!(validator_index_opt.is_some(), ENotAValidator);
+        let validator_index = validator_index_opt.extract();
+        &self.active_validators[validator_index]
     }
 }
