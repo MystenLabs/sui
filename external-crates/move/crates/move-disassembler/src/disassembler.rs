@@ -409,25 +409,25 @@ impl<'a> Disassembler<'a> {
 
         Self::disassemble_abilites(buffer, enum_handle.abilities)?;
 
-        any_writeln!(buffer, " {{")?;
-
         delimited_list(
             &enum_definition.variants,
             " {",
             ",",
-            "}",
+            "\n}\n",
             buffer,
             |buffer, variant| {
                 let variant_name = self
                     .source_mapper
                     .bytecode
                     .identifier_at(variant.variant_name);
-                any_write!(buffer, "\n\t{variant_name} {{")?;
+
+                any_write!(buffer, "\n\t{variant_name} {{ ")?;
+
                 delimited_list(
                     &variant.fields,
                     "",
                     ", ",
-                    "\n",
+                    "",
                     buffer,
                     |buffer, field_definition| {
                         let type_sig = &field_definition.signature;
@@ -444,11 +444,11 @@ impl<'a> Disassembler<'a> {
                         )
                     },
                 )?;
-                any_writeln!(buffer, "}}")
+
+                any_write!(buffer, " }}")
             },
         )?;
 
-        any_writeln!(buffer, "}}")?;
         Ok(())
     }
 
@@ -583,7 +583,7 @@ impl<'a> Disassembler<'a> {
             .skip(parameter_len)
             .enumerate()
         {
-            any_write!(buffer, "\t{name}: ")?;
+            any_write!(buffer, "L{local_idx}:\t{name}: ")?;
             self.disassemble_type_for_local(
                 buffer,
                 function_source_map,

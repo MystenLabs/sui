@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zklogin",
-	"version": "0.8.0",
+	"version": "0.8.1",
 	"description": "Deprecated: use @mysten/sui/zklogin instead",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",

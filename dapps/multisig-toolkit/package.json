@@ -19,6 +19,7 @@
 		"@fontsource-variable/inter": "^5.0.19",
 		"@fontsource-variable/red-hat-mono": "^5.0.19",
 		"@hookform/resolvers": "^3.9.0",
+		"@markdoc/markdoc": "^0.4.0",
 		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/sui": "workspace:*",
 		"@noble/hashes": "^1.4.0",
@@ -29,6 +30,7 @@
 		"@radix-ui/react-slot": "^1.1.0",
 		"@radix-ui/react-tabs": "^1.1.0",
 		"@tanstack/react-query": "^5.50.1",
+		"add": "^2.0.6",
 		"class-variance-authority": "^0.7.0",
 		"clsx": "^2.1.1",
 		"cmdk": "^1.0.0",
@@ -38,6 +40,7 @@
 		"react-hook-form": "^7.52.1",
 		"react-hot-toast": "^2.4.1",
 		"react-router-dom": "^6.24.1",
+		"react-scrollspy-navigation": "^2.0.6",
 		"tailwind-merge": "^2.4.0",
 		"zod": "^3.23.8"
 	},

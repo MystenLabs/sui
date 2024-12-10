@@ -1,0 +1,352 @@
+syntax = "proto3";
+
+package sui.node.v2;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "sui.types.proto";
+
+//
+// Rpc Node interface
+//
+
+service Node {
+  rpc GetNodeInfo(google.protobuf.Empty) returns (GetNodeInfoResponse);
+  rpc GetCommittee(GetCommitteeRequest) returns (GetCommitteeResponse);
+
+  rpc GetObject(GetObjectRequest) returns (GetObjectResponse);
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse);
+  rpc GetCheckpoint(GetCheckpointRequest) returns (GetCheckpointResponse);
+  rpc GetFullCheckpoint(GetFullCheckpointRequest) returns (GetFullCheckpointResponse);
+
+  rpc ExecuteTransaction(ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
+}
+
+message GetNodeInfoResponse {
+  // The chain identifier of the chain that this Node is on
+  optional sui.types.Digest chain_id = 1;
+
+  // Human readable name of the chain that this Node is on
+  optional string chain = 2;
+
+  // Current epoch of the Node based on its highest executed checkpoint
+  optional uint64 epoch = 3;
+
+  // Checkpoint height of the most recently executed checkpoint
+  optional uint64 checkpoint_height = 4;
+
+  // Unix timestamp of the most recently executed checkpoint
+  optional google.protobuf.Timestamp timestamp = 5;
+
+  // The lowest checkpoint for which checkpoints and transaction data is available
+  optional uint64 lowest_available_checkpoint = 6;
+
+  // The lowest checkpoint for which object data is available
+  optional uint64 lowest_available_checkpoint_objects = 7;
+
+  optional string software_version = 8;
+}
+
+message GetCommitteeRequest {
+  optional uint64 epoch = 1;
+}
+
+message GetCommitteeResponse {
+  optional sui.types.ValidatorCommittee committee = 1;
+}
+
+message GetTransactionRequest {
+  optional sui.types.Digest digest = 1;
+
+  optional GetTransactionOptions options = 3;
+}
+
+message GetTransactionOptions {
+  // Include the sui.types.Transaction message in the response.
+  //
+  // Defaults to true if not included
+  optional bool transaction = 1;
+  // Include the Transaction formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool transaction_bcs = 2;
+  // Include the set of sui.types.UserSignature's in the response.
+  //
+  // Defaults to true if not included
+  optional bool signatures = 3;
+  // Include the sui.types.TransactionEffects message in the response.
+  //
+  // Defaults to true if not included
+  optional bool effects = 4;
+  // Include the TransactionEffects formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool effects_bcs = 5;
+  // Include the sui.types.TransactionEvents message in the response.
+  //
+  // Defaults to true if not included
+  optional bool events = 6;
+  // Include the TransactionEvents formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool events_bcs = 7;
+}
+
+message GetTransactionResponse {
+  // The digest of this transaction
+  optional sui.types.Digest digest = 1;
+  optional sui.types.Transaction transaction = 2;
+  optional sui.types.Bcs transaction_bcs = 3;
+  optional UserSignatures signatures = 4;
+  optional sui.types.TransactionEffects effects = 5;
+  optional sui.types.Bcs effects_bcs = 6;
+  optional sui.types.TransactionEvents events = 7;
+  optional sui.types.Bcs events_bcs = 8;
+  optional uint64 checkpoint = 9;
+  optional google.protobuf.Timestamp timestamp = 10;
+}
+
+message UserSignatures {
+  repeated sui.types.UserSignature signatures = 1;
+}
+
+message GetObjectRequest {
+  optional sui.types.ObjectId object_id = 1;
+  optional uint64 version = 2;
+
+  optional GetObjectOptions options = 3;
+}
+
+message GetObjectOptions {
+  // Include the sui.types.Object message in the response.
+  //
+  // Defaults to true if not included
+  optional bool object = 1;
+  // Include the Object formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool object_bcs = 2;
+}
+
+message GetObjectResponse {
+  optional sui.types.ObjectId object_id = 1;
+  optional uint64 version = 2;
+  // The digest of this object
+  optional sui.types.Digest digest = 3;
+
+  optional sui.types.Object object = 4;
+  optional sui.types.Bcs object_bcs = 5;
+}
+
+message GetCheckpointRequest {
+  optional uint64 sequence_number = 1;
+  optional sui.types.Digest digest = 2;
+
+  optional GetCheckpointOptions options = 3;
+}
+
+message GetCheckpointOptions {
+  // Include the sui.types.CheckpointSummary in the response.
+  //
+  // Defaults to true if not included
+  optional bool summary = 3;
+  // Include the CheckpointSummary formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool summary_bcs = 4;
+  // Include the sui.types.ValidatorAggregatedSignature in the response.
+  //
+  // Defaults to true if not included
+  optional bool signature = 5;
+  // Include the sui.types.CheckpointContents message in the response.
+  //
+  // Defaults to false if not included
+  optional bool contents = 6;
+  // Include the CheckpointContents formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool contents_bcs = 7;
+}
+
+message GetCheckpointResponse {
+  // The sequence number of this Checkpoint
+  optional uint64 sequence_number = 1;
+  // The digest of this Checkpoint's CheckpointSummary
+  optional sui.types.Digest digest = 2;
+
+  optional sui.types.CheckpointSummary summary = 3;
+  optional sui.types.Bcs summary_bcs = 4;
+  optional sui.types.ValidatorAggregatedSignature signature = 5;
+  optional sui.types.CheckpointContents contents = 6;
+  optional sui.types.Bcs contents_bcs = 7;
+}
+
+message GetFullCheckpointRequest {
+  optional uint64 sequence_number = 1;
+  optional sui.types.Digest digest = 2;
+
+  optional GetFullCheckpointOptions options = 3;
+}
+
+message GetFullCheckpointOptions {
+  // Include the sui.types.CheckpointSummary in the response.
+  //
+  // Defaults to true if not included
+  optional bool summary = 3;
+  // Include the CheckpointSummary formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool summary_bcs = 4;
+  // Include the sui.types.ValidatorAggregatedSignature in the response.
+  //
+  // Defaults to true if not included
+  optional bool signature = 5;
+  // Include the sui.types.CheckpointContents message in the response.
+  //
+  // Defaults to false if not included
+  optional bool contents = 6;
+  // Include the CheckpointContents formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool contents_bcs = 7;
+
+  // Include the sui.types.Transaction message in the response.
+  //
+  // Defaults to true if not included
+  optional bool transaction = 8;
+  // Include the Transaction formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool transaction_bcs = 9;
+  // Include the sui.types.TransactionEffects message in the response.
+  //
+  // Defaults to true if not included
+  optional bool effects = 10;
+  // Include the TransactionEffects formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool effects_bcs = 11;
+  // Include the sui.types.TransactionEvents message in the response.
+  //
+  // Defaults to true if not included
+  optional bool events = 12;
+  // Include the TransactionEvents formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool events_bcs = 13;
+
+  optional bool input_objects = 14;
+  optional bool output_objects = 15;
+
+  // Include the sui.types.Object message in the response.
+  //
+  // Defaults to true if not included
+  optional bool object = 16;
+  // Include the Object formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool object_bcs = 17;
+}
+
+message GetFullCheckpointResponse {
+  // The sequence number of this Checkpoint
+  optional uint64 sequence_number = 1;
+  // The digest of this Checkpoint's CheckpointSummary
+  optional sui.types.Digest digest = 2;
+
+  optional sui.types.CheckpointSummary summary = 3;
+  optional sui.types.Bcs summary_bcs = 4;
+  optional sui.types.ValidatorAggregatedSignature signature = 5;
+  optional sui.types.CheckpointContents contents = 6;
+  optional sui.types.Bcs contents_bcs = 7;
+
+  repeated FullCheckpointTransaction transactions = 8;
+}
+
+message FullCheckpointTransaction {
+  // The digest of this transaction
+  optional sui.types.Digest digest = 1;
+  optional sui.types.Transaction transaction = 2;
+  optional sui.types.Bcs transaction_bcs = 3;
+
+  optional sui.types.TransactionEffects effects = 5;
+  optional sui.types.Bcs effects_bcs = 6;
+  optional sui.types.TransactionEvents events = 7;
+  optional sui.types.Bcs events_bcs = 8;
+
+  optional FullCheckpointObjects input_objects = 11;
+  optional FullCheckpointObjects output_objects = 12;
+}
+
+message FullCheckpointObjects {
+  repeated FullCheckpointObject objects = 1;
+}
+
+message FullCheckpointObject {
+  optional sui.types.ObjectId object_id = 1;
+  optional uint64 version = 2;
+  // The digest of this object
+  optional sui.types.Digest digest = 3;
+
+  optional sui.types.Object object = 4;
+  optional sui.types.Bcs object_bcs = 5;
+}
+
+message BalanceChange {
+  optional sui.types.Address address = 1;
+  optional sui.types.TypeTag coin_type = 2;
+  optional sui.types.I128 amount = 3;
+}
+
+message BalanceChanges {
+  repeated BalanceChange balance_changes = 4;
+}
+
+message EffectsFinality {
+  oneof finality {
+    sui.types.ValidatorAggregatedSignature certified = 1;
+    uint64 checkpointed = 2;
+    google.protobuf.Empty quorum_executed = 3;
+  }
+}
+
+message ExecuteTransactionResponse {
+  optional EffectsFinality finality = 1;
+  optional sui.types.TransactionEffects effects = 2;
+  optional sui.types.Bcs effects_bcs = 3;
+  optional sui.types.TransactionEvents events = 4;
+  optional sui.types.Bcs events_bcs = 5;
+  optional BalanceChanges balance_changes = 6;
+}
+
+message ExecuteTransactionRequest {
+  optional sui.types.Transaction transaction = 1;
+  optional sui.types.Bcs transaction_bcs = 2;
+  repeated sui.types.UserSignature signatures = 3;
+
+  optional ExecuteTransactionOptions options = 4;
+}
+
+message ExecuteTransactionOptions {
+  // Include the sui.types.TransactionEffects message in the response.
+  //
+  // Defaults to true if not included
+  optional bool effects = 4;
+  // Include the TransactionEffects formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool effects_bcs = 5;
+  // Include the sui.types.TransactionEvents message in the response.
+  //
+  // Defaults to true if not included
+  optional bool events = 6;
+  // Include the TransactionEvents formatted as BCS in the response.
+  //
+  // Defaults to false if not included
+  optional bool events_bcs = 7;
+
+  // Include the BalanceChanges in the response.
+  //
+  // Defaults to false if not included
+  optional bool balance_changes = 8;
+}

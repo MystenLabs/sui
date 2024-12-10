@@ -98,9 +98,8 @@ impl Processor for SumObjTypes {
                                     Owner::ObjectOwner(_) => StoredOwnerKind::Object,
                                     Owner::Shared { .. } => StoredOwnerKind::Shared,
                                     Owner::Immutable => StoredOwnerKind::Immutable,
-                                    // ConsensusV2 objects are treated as address-owned for now in indexers.
-                                    // This will need to be updated if additional Authenticators are added.
-                                    Owner::ConsensusV2 { .. } => StoredOwnerKind::Address,
+                                    // TODO: Implement support for ConsensusV2 objects.
+                                    Owner::ConsensusV2 { .. } => todo!(),
                                 },
 
                                 owner_id: match object.owner() {

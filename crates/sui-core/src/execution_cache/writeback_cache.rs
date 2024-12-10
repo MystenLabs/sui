@@ -77,6 +77,7 @@ use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
+use super::cache_types::Ticket;
 use super::ExecutionCacheAPI;
 use super::{
     cache_types::{CachedVersionMap, IsNewer, MonotonicCache},
@@ -487,10 +488,16 @@ impl WritebackCache {
         //   the tx finalizer, plus checkpoint executor, consensus, and RPCs from fullnodes.
         let mut entry = self.dirty.objects.entry(*object_id).or_default();
 
-        self.cached.object_by_id_cache.insert(
-            object_id,
-            LatestObjectCacheEntry::Object(version, object.clone()),
-        );
+        self.cached
+            .object_by_id_cache
+            .insert(
+                object_id,
+                LatestObjectCacheEntry::Object(version, object.clone()),
+                Ticket::Write,
+            )
+            // While Ticket::Write cannot expire, this insert may still fail.
+            // See the comment in `MonotonicCache::insert`.
+            .ok();
 
         entry.insert(version, object);
     }
@@ -731,6 +738,7 @@ impl WritebackCache {
     }
 
     fn get_object_impl(&self, request_type: &'static str, id: &ObjectID) -> Option<Object> {
+        let ticket = self.cached.object_by_id_cache.get_ticket_for_read(id);
         match self.get_object_by_id_cache_only(request_type, id) {
             CacheResult::Hit((_, object)) => Some(object),
             CacheResult::NegativeHit => None,
@@ -740,9 +748,10 @@ impl WritebackCache {
                     self.cache_latest_object_by_id(
                         id,
                         LatestObjectCacheEntry::Object(obj.version(), obj.clone().into()),
+                        ticket,
                     );
                 } else {
-                    self.cache_object_not_found(id);
+                    self.cache_object_not_found(id, ticket);
                 }
                 obj
             }
@@ -1075,14 +1084,28 @@ impl WritebackCache {
     }
 
     // Updates the latest object id cache with an entry that was read from the db.
-    fn cache_latest_object_by_id(&self, object_id: &ObjectID, object: LatestObjectCacheEntry) {
+    fn cache_latest_object_by_id(
+        &self,
+        object_id: &ObjectID,
+        object: LatestObjectCacheEntry,
+        ticket: Ticket,
+    ) {
         trace!("caching object by id: {:?} {:?}", object_id, object);
-        self.metrics.record_cache_write("object_by_id");
-        self.cached.object_by_id_cache.insert(object_id, object);
+        if self
+            .cached
+            .object_by_id_cache
+            .insert(object_id, object, ticket)
+            .is_ok()
+        {
+            self.metrics.record_cache_write("object_by_id");
+        } else {
+            trace!("discarded cache write due to expired ticket");
+            self.metrics.record_ticket_expiry();
+        }
     }
 
-    fn cache_object_not_found(&self, object_id: &ObjectID) {
-        self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent);
+    fn cache_object_not_found(&self, object_id: &ObjectID, ticket: Ticket) {
+        self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent, ticket);
     }
 
     fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
@@ -1432,6 +1455,7 @@ impl ObjectCacheRead for WritebackCache {
                             .cloned()
                             .tap_none(|| panic!("dirty set cannot be empty"))
                     } else {
+                        // TODO: we should try not to read from the db while holding the locks.
                         self.record_db_get("object_lt_or_eq_version_latest")
                             .get_latest_object_or_tombstone(object_id)
                             .expect("db error")
@@ -1444,9 +1468,18 @@ impl ObjectCacheRead for WritebackCache {
                     // we can always cache the latest object (or tombstone), even if it is not within the
                     // version_bound. This is done in order to warm the cache in the case where a sequence
                     // of transactions all read the same child object without writing to it.
+
+                    // Note: no need to call with_object_by_id_cache_update here, because we are holding
+                    // the lock on the dirty cache entry, and `latest` cannot become out-of-date
+                    // while we hold that lock.
                     self.cache_latest_object_by_id(
                         &object_id,
                         LatestObjectCacheEntry::Object(obj_version, obj_entry.clone()),
+                        // We can get a ticket at the last second, because we are holding the lock
+                        // on dirty, so there cannot be any concurrent writes.
+                        self.cached
+                            .object_by_id_cache
+                            .get_ticket_for_read(&object_id),
                     );
 
                     if obj_version <= version_bound {
@@ -1470,7 +1503,13 @@ impl ObjectCacheRead for WritebackCache {
                     // cache
                     let highest = cached_entry.and_then(|c| c.get_highest());
                     assert!(highest.is_none() || highest.unwrap().1.is_tombstone());
-                    self.cache_object_not_found(&object_id);
+                    self.cache_object_not_found(
+                        &object_id,
+                        // okay to get ticket at last second - see above
+                        self.cached
+                            .object_by_id_cache
+                            .get_ticket_for_read(&object_id),
+                    );
                     None
                 }
             },

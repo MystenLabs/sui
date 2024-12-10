@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use narwhal_types::Round;
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::ObjectID;
+use sui_types::{base_types::ObjectID, messages_consensus::Round};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DeferralKey {
