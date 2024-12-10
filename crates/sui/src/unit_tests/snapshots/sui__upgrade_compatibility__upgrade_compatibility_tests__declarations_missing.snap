@@ -40,11 +40,13 @@ error[Compatibility E01001]: missing public declaration
 
 error[Compatibility E01007]: module missing
   ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/declaration_errors_v2/Move.toml:1:1
-  │
-1 │ [package]
-  │ ^^^^^^^^^ Package is missing module 'missing_module'
-  │
-  = Modules are part of a package and cannot be removed or changed during an upgrade.
+  │  
+1 │ ╭ [package]
+2 │ │ name = "upgrades"
+3 │ │ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+  │ ╰────────────────────────────────────────────────────────────────────────^ Package is missing module 'missing_module'
+  │  
+  = Modules which are part package cannot be removed during an upgrade.
   = add missing module 'missing_module' back to the package.
 
 
