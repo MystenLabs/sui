@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { bcs } from '../../../src/bcs';
 import { messageWithIntent } from '../../../src/cryptography';
 import { PasskeyKeypair } from '../../../src/keypairs/passkey';
-import { PasskeyCreateOptions, PasskeyProvider } from '../../../src/keypairs/passkey/keypair';
+import { PasskeyProvider } from '../../../src/keypairs/passkey/keypair';
 import {
 	parseSerializedPasskeySignature,
 	PasskeyPublicKey,
@@ -25,7 +25,6 @@ function compressedPubKeyToDerSPKI(compressedPubKey: Uint8Array): Uint8Array {
 }
 
 class MockPasskeySigner implements PasskeyProvider {
-	options: PasskeyCreateOptions;
 	private sk: Uint8Array;
 	private authenticatorData: Uint8Array;
 	private pk: Uint8Array | null;
@@ -40,16 +39,9 @@ class MockPasskeySigner implements PasskeyProvider {
 		authenticatorData?: Uint8Array;
 		changeDigest?: boolean;
 		changeClientDataJson?: boolean;
-		passkeyOptions?: PasskeyCreateOptions;
 		changeAuthenticatorData?: boolean;
 		changeSignature?: boolean;
 	}) {
-		this.options = options?.passkeyOptions ?? {
-			timeout: 60000,
-			displayName: 'Mock User',
-			rpName: 'Mock RP',
-			name: 'Mock User',
-		};
 		this.sk = options?.sk ?? secp256r1.utils.randomPrivateKey();
 		this.pk = options?.pk ?? null;
 		this.authenticatorData =
