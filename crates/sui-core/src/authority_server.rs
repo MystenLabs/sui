@@ -473,6 +473,7 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
+        let signers: NonEmpty<_> = transaction.clone().intent_message().value.signers();
         let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
@@ -548,6 +549,7 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_v2_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
+        let signers: NonEmpty<_> = transaction.clone().intent_message().value.signers();
         let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
@@ -711,14 +713,19 @@ impl ValidatorService {
             }
         }
 
-        let verified_certificates = {
+        let verified_certificates_and_senders = {
             let _timer = self.metrics.cert_verification_latency.start_timer();
-            epoch_store
+            let verified_certs = epoch_store
                 .signature_verifier
                 .multi_verify_certs(certificates.into())
                 .await
                 .into_iter()
-                .collect::<Result<Vec<_>, _>>()?
+                .collect::<Result<Vec<_>, _>>()?;
+            let signers = certificates
+                .iter()
+                .map(|cert| cert.clone().intent_message().value.signers())
+                .collect::<Vec<_>>();
+            verified_certs.into_iter().zip(signers).collect::<Vec<_>>()
         };
         let consensus_transactions =
             NonEmpty::collect(verified_certificates.iter().map(|certificate| {
@@ -1415,13 +1422,14 @@ impl Validator for ValidatorService {
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let validator_service = self.clone();
+        let sender = request.get_ref().intent_message().value.signers();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         spawn_monitored_task!(async move {
             // NB: traffic tally wrapping handled within the task rather than on task exit
             // to prevent an attacker from subverting traffic control by severing the connection
-            handle_with_decoration!(validator_service, transaction_impl, request)
+            handle_with_decoration!(validator_service, transaction_impl, request, Some(sender))
         })
         .await
         .unwrap()
@@ -1432,13 +1440,24 @@ impl Validator for ValidatorService {
         request: tonic::Request<HandleTransactionRequestV2>,
     ) -> Result<tonic::Response<HandleTransactionResponseV2>, tonic::Status> {
         let validator_service = self.clone();
+        let sender = request
+            .get_ref()
+            .transaction
+            .intent_message()
+            .value
+            .signers();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         spawn_monitored_task!(async move {
             // NB: traffic tally wrapping handled within the task rather than on task exit
             // to prevent an attacker from subverting traffic control by severing the connection
-            handle_with_decoration!(validator_service, transaction_v2_impl, request)
+            handle_with_decoration!(
+                validator_service,
+                transaction_v2_impl,
+                request,
+                Some(sender)
+            )
         })
         .await
         .unwrap()
@@ -1449,13 +1468,19 @@ impl Validator for ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let validator_service = self.clone();
+        let sender = request.get_ref().intent_message().value.signers();
 
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         spawn_monitored_task!(async move {
             // NB: traffic tally wrapping handled within the task rather than on task exit
             // to prevent an attacker from subverting traffic control by severing the connection.
-            handle_with_decoration!(validator_service, submit_certificate_impl, request)
+            handle_with_decoration!(
+                validator_service,
+                submit_certificate_impl,
+                request,
+                Some(sender)
+            )
         })
         .await
         .unwrap()
@@ -1465,14 +1490,22 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
-        handle_with_decoration!(self, handle_certificate_v2_impl, request)
+        let sender = request.get_ref().intent_message().value.signers();
+        handle_with_decoration!(self, handle_certificate_v2_impl, request, Some(sender))
     }
 
     async fn handle_certificate_v3(
         &self,
         request: tonic::Request<HandleCertificateRequestV3>,
     ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
-        handle_with_decoration!(self, handle_certificate_v3_impl, request)
+        let sender = request
+            .certificate
+            .transaction
+            .get_ref()
+            .intent_message()
+            .value
+            .signers();
+        handle_with_decoration!(self, handle_certificate_v3_impl, request, Some(sender))
     }
 
     async fn handle_soft_bundle_certificates_v3(
