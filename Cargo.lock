@@ -3799,6 +3799,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel-update-from"
+version = "1.40.0"
+dependencies = [
+ "diesel",
+ "diesel-async",
+ "insta",
+ "sui-pg-temp-db",
+ "tokio",
+]
+
+[[package]]
 name = "diesel_derives"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14151,6 +14162,7 @@ dependencies = [
  "clap",
  "diesel",
  "diesel-async",
+ "diesel-update-from",
  "diesel_migrations",
  "futures",
  "itertools 0.13.0",
