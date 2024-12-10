@@ -163,7 +163,6 @@ The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`clien
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading } from "@radix-ui/themes";
-import { SICBOGAME_PACKAGE_ID } from "./constants.ts";
 
 export function Creategame({ onCreated }: { onCreated: (id: string) => void }) {
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -219,7 +218,7 @@ export function Creategame({ onCreated }: { onCreated: (id: string) => void }) {
   );
 }
 ```
-When the subscribed to event fires, the example displays the following JSON representation of the event. 
+The example displays the following JSON representation of the event. 
 ```
 {
   "id": {
