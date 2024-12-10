@@ -65,6 +65,8 @@ pub async fn start_indexer(
         sum_packages,
         obj_info,
         obj_info_pruner,
+        coin_balance_buckets,
+        coin_balance_buckets_pruner,
         ev_emit_mod,
         ev_struct_inst,
         kv_checkpoints,
@@ -255,6 +257,11 @@ pub async fn start_indexer(
     add_concurrent_with_lagged_pruner!(
         ObjInfo, obj_info;
         ObjInfoPruner, obj_info_pruner
+    );
+
+    add_concurrent_with_lagged_pruner!(
+        CoinBalanceBuckets, coin_balance_buckets;
+        CoinBalanceBucketsPruner, coin_balance_buckets_pruner
     );
 
     // Unpruned concurrent pipelines
