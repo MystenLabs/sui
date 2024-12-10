@@ -205,6 +205,10 @@ impl<C> ConsensusHandler<C> {
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        // This may block until one of two conditions happens:
+        // - Number of uncommitted transactions in the writeback cache goes below the
+        //   backpressure threshold.
+        // - The highest executed checkpoint catches up to the highest certified checkpoint.
         self.backpressure_subscriber.await_backpressure().await;
 
         let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
