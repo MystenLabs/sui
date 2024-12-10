@@ -27,6 +27,10 @@ jobs:
     name: Lint, Build, and Test
     runs-on: ubuntu-latest
     environment: sui-typescript-aws-kms-test-env
+    env:
+      E2E_AWS_KMS_TEST_ENABLE: "false"
+      E2E_GCP_KMS_TEST_ENABLE: "false"
+      E2E_SIGNER_TEST_ENABLE: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -59,6 +63,7 @@ jobs:
         with:
           version: 'latest'
       - name: configure gcp/gke service user auth
+        if: env.E2E_SIGNER_TEST_ENABLE == 'true'
         uses: google-github-actions/auth@v1
         with:
             credentials_json: ${{ secrets.GKE_TEST_KMS_SVCUSER_CREDENTIALS }}
@@ -70,13 +75,13 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_KMS_TEST_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_KMS_AWS_REGION }}
           AWS_KMS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KMS_KEY_ID }}
-          E2E_AWS_KMS_TEST_ENABLE: "false"
+          E2E_AWS_KMS_TEST_ENABLE: ${{ env.E2E_AWS_KMS_TEST_ENABLE }}
           GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
           GOOGLE_LOCATION: ${{ secrets.GOOGLE_LOCATION }}
           GOOGLE_KEYRING: ${{ secrets.GOOGLE_KEYRING }}
           GOOGLE_KEY_NAME: ${{ secrets.GOOGLE_KEY_NAME }}
           GOOGLE_KEY_NAME_VERSION: ${{ secrets.GOOGLE_KEY_NAME_VERSION }}
-          E2E_GCP_KMS_TEST_ENABLE: "false"
+          E2E_GCP_KMS_TEST_ENABLE: ${{ env.E2E_GCP_KMS_TEST_ENABLE }}
         run: pnpm turbo test
 
       # Pack wallet extension and upload it as an artifact for easy developer use:
