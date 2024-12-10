@@ -6,7 +6,7 @@ import { AwsKmsSigner } from '../src/aws/aws-kms-signer';
 
 const { E2E_AWS_KMS_TEST_ENABLE } = process.env;
 
-describe.runIf(E2E_AWS_KMS_TEST_ENABLE)('Aws KMS signer E2E testing', () => {
+describe.runIf(E2E_AWS_KMS_TEST_ENABLE === 'true')('Aws KMS signer E2E testing', () => {
 	let signer: AwsKmsSigner;
 	beforeAll(async () => {
 		const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_KMS_KEY_ID } = process.env;
