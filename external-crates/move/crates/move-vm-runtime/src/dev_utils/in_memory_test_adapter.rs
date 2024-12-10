@@ -14,6 +14,7 @@ use crate::{
         linkage_context::LinkageContext,
         types::{PackageStorageId, RuntimePackageId},
     },
+    validation::verification::ast as verif_ast,
 };
 use move_binary_format::errors::{Location, PartialVMError, VMResult};
 use move_binary_format::file_format::CompiledModule;
@@ -113,28 +114,39 @@ impl InMemoryTestAdapter {
 }
 
 impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
-    fn publish_package<'extensions>(
+    fn verify_package<'extensions>(
         &mut self,
         runtime_id: RuntimePackageId,
         package: SerializedPackage,
-    ) -> VMResult<MoveVM<'extensions>> {
+    ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
         let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
             // TODO: VM error instead?
             panic!("Did not find runtime ID {runtime_id} in linkage context.");
         };
         assert!(storage_id == package.storage_id);
         let mut gas_meter = GasStatus::new_unmetered();
-        let (changeset_and_vm, _) = self.runtime.validate_package(
+        self.runtime.validate_package(
             &self.storage,
             runtime_id,
             package.clone(),
             &mut gas_meter,
             NativeContextExtensions::default(),
-        );
-        let (_changeset, vm) = changeset_and_vm?;
+        )
+    }
+
+    fn publish_verified_package(
+        &mut self,
+        runtime_id: RuntimePackageId,
+        package: verif_ast::Package,
+    ) -> VMResult<()> {
+        let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
+            // TODO: VM error instead?
+            panic!("Did not find runtime ID {runtime_id} in linkage context.");
+        };
+        assert!(storage_id == package.storage_id);
         self.storage
-            .publish_package(StoredPackage::from_serialized_package(package));
-        Ok(vm)
+            .publish_package(StoredPackage::from_verified_package(package));
+        Ok(())
     }
 
     fn make_vm<'extensions>(

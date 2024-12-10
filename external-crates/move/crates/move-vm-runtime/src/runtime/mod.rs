@@ -8,23 +8,17 @@ use crate::{
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     shared::{gas::GasMeter, linkage_context::LinkageContext, types::RuntimePackageId},
-    try_block,
-    validation::{validate_for_publish, validate_for_vm_execution},
+    validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
-use move_binary_format::{
-    errors::{Location, PartialVMResult, VMResult},
-    CompiledModule,
-};
-use move_core_types::{
-    effects::ChangeSet,
-    resolver::{MoveResolver, SerializedPackage},
-};
+
+use move_binary_format::errors::VMResult;
+use move_core_types::resolver::{MoveResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
+
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-use tracing::warn;
 
 // FIXME(cswords): This is only public for testing...
 pub mod package_resolution;
@@ -166,97 +160,64 @@ impl MoveRuntime {
         pkg: SerializedPackage,
         _gas_meter: &mut impl GasMeter,
         native_extensions: NativeContextExtensions<'extensions>,
-    ) -> (VMResult<(ChangeSet, MoveVM<'extensions>)>, DataCache) {
+    ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
         let storage_id = pkg.storage_id;
         dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
-        // TODO: Don't deserialize just for names. Reserialize off the verified ones or something.
-        let compiled_modules = match pkg
-            .modules
-            .iter()
-            .map(|blob| {
-                CompiledModule::deserialize_with_config(blob, &self.vm_config.binary_config)
-                    .map(|m| (m.self_id().name().to_owned(), blob.clone()))
-            })
-            .collect::<PartialVMResult<Vec<_>>>()
-        {
-            Ok(modules) => modules,
-            Err(err) => {
-                warn!("[VM] module deserialization failed {:?}", err);
-                return (Err(err.finish(Location::Undefined)), data_cache);
-            }
+
+        let data_cache = TransactionDataCache::new(data_cache);
+        let link_context = LinkageContext::new(
+            pkg.storage_id,
+            HashMap::from_iter(pkg.linkage_table.clone()),
+        );
+
+        // Verify a provided serialized package. This will validate the provided serialized
+        // package, including attempting to jit-compile the package and verify linkage with its
+        // dependencies in the provided linkage context. This returns the loaded package in the
+        // case an `init` function or similar will need to run. This will load the dependencies
+        // into the package cache.
+        let pkg_dependencies = package_resolution::resolve_packages(
+            &self.cache,
+            &self.natives,
+            &self.vm_config,
+            &data_cache,
+            &link_context,
+            link_context.all_package_dependencies()?,
+        )?;
+        let verified_pkg = {
+            let deps = pkg_dependencies
+                .iter()
+                .map(|(id, pkg)| (*id, &*pkg.verified))
+                .collect();
+            validate_for_publish(&self.natives, &self.vm_config, pkg_runtime_id, pkg, deps)
+        }?;
+        dbg_println!("\n\nVerified package\n\n");
+
+        let published_package = package_resolution::jit_package_for_publish(
+            &self.cache,
+            &self.natives,
+            &link_context,
+            verified_pkg.clone(),
+        )?;
+
+        // Generates  a one-off package for executing `init` functions.
+        let runtime_packages = pkg_dependencies
+            .into_values()
+            .chain([published_package])
+            .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
+            .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
+
+        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
+
+        let base_heap = BaseHeap::new();
+
+        // Called and checked linkage, etc.
+        let instance = MoveVM {
+            virtual_tables,
+            vm_config: self.vm_config.clone(),
+            link_context,
+            native_extensions,
+            base_heap,
         };
-        dbg_println!("\n\nGrabbed modules\n\n");
-
-        let mut data_cache = TransactionDataCache::new(data_cache);
-        let package_vm_result = try_block! {
-            let link_context = LinkageContext::new(
-                pkg.storage_id,
-                HashMap::from_iter(pkg.linkage_table.clone()),
-            );
-
-            // Verify a provided serialized package. This will validate the provided serialized
-            // package, including attempting to jit-compile the package and verify linkage with its
-            // dependencies in the provided linkage context. This returns the loaded package in the
-            // case an `init` function or similar will need to run. This will load the dependencies
-            // into the package cache.
-            let pkg_dependencies = package_resolution::resolve_packages(
-                &self.cache,
-                &self.natives,
-                &self.vm_config,
-                &data_cache,
-                &link_context,
-                link_context.all_package_dependencies()?,
-            )?;
-            let verified_pkg = {
-                let deps = pkg_dependencies
-                    .iter()
-                    .map(|(id, pkg)| (*id, &*pkg.verified))
-                    .collect();
-                validate_for_publish(&self.natives, &self.vm_config, pkg_runtime_id, pkg, deps)
-            }?;
-            dbg_println!("\n\nVerified package\n\n");
-
-            let published_package = package_resolution::jit_package_for_publish(
-                &self.cache,
-                &self.natives,
-                &link_context,
-                verified_pkg,
-            )?;
-
-            // Generates  a one-off package for executing `init` functions.
-            let runtime_packages = pkg_dependencies
-                .into_values()
-                .chain([published_package])
-                .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
-                .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
-
-            let virtual_tables = VMDispatchTables::new(runtime_packages)?;
-
-            let base_heap = BaseHeap::new();
-
-            // Called and checked linkage, etc.
-            let instance = MoveVM {
-                virtual_tables,
-                vm_config: self.vm_config.clone(),
-                link_context,
-                native_extensions,
-                base_heap,
-            };
-            Ok(instance)
-        };
-
-        let package_vm = match package_vm_result {
-            Ok(package_vm) => package_vm,
-            Err(err) => return (Err(err), data_cache.into_remote()),
-        };
-
-        data_cache.publish_package(storage_id, compiled_modules);
-        dbg_println!("\n\nUpdated data cache\n\n");
-
-        let (changeset, remote) = data_cache.into_effects();
-        match changeset {
-            Ok(changeset) => (Ok((changeset, package_vm)), remote),
-            Err(err) => (Err(err.finish(Location::Undefined)), remote),
-        }
+        Ok((verified_pkg, instance))
     }
 }

@@ -12,7 +12,7 @@ use anyhow::{bail, Result};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
-    natives::{functions::NativeFunctions, extensions::NativeContextExtensions},
+    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
@@ -90,13 +90,18 @@ pub fn publish(
     .unwrap();
 
     let ser_pkg = pkg.into_serialized_package();
-    // Publish the package using the VM
-    let (publish_result, _) =
-        runtime.validate_package(state, package_runtime_id, ser_pkg.clone(), &mut gas_status, NativeContextExtensions::default());
-    let (changeset, _vm) = publish_result?;
-    if verbose {
-        explain_publish_changeset(&changeset);
-    }
+    // Validate the package using the VM
+    runtime.validate_package(
+        state,
+        package_runtime_id,
+        ser_pkg.clone(),
+        &mut gas_status,
+        NativeContextExtensions::default(),
+    )?;
+    // TODO: Fix this?
+    // if verbose {
+    //     explain_publish_changeset(&changeset);
+    // }
     state.save_package(ser_pkg)?;
 
     Ok(())

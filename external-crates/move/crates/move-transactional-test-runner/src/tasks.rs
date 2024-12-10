@@ -231,7 +231,7 @@ pub struct PublishCommand {
     pub syntax: Option<SyntaxChoice>,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     #[clap(
         long = "signers",
@@ -259,9 +259,58 @@ pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     pub name: Option<(ParsedAddress, Identifier, Identifier)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PublishRunCommand<ExtraValueArgs: ParsableValue> {
+    pub name: (ParsedAddress, Identifier, Identifier), // Parse `NAME`
+    pub args: Vec<ParsedValue<ExtraValueArgs>>,
+}
+
+impl<ExtraValueArgs: ParsableValue> PublishRunCommand<ExtraValueArgs> {
+    pub fn from_calls(calls: Vec<String>) -> Result<Vec<Self>, anyhow::Error> {
+        fn group_by_call(calls: Vec<String>) -> Vec<Vec<String>> {
+            let mut grouped_calls = Vec::new();
+            let mut current_call = Vec::new();
+
+            for arg in calls.clone() {
+                if arg == "--call" {
+                    // Start a new call if we already have an ongoing call
+                    if !current_call.is_empty() {
+                        grouped_calls.push(current_call);
+                        current_call = Vec::new();
+                    }
+                } else {
+                    current_call.push(arg);
+                }
+            }
+
+            // Push the last call if it exists
+            if !current_call.is_empty() {
+                grouped_calls.push(current_call);
+            }
+
+            grouped_calls
+        }
+
+        let calls = group_by_call(calls);
+        calls
+            .into_iter()
+            .map(|call| {
+                let name = parse_qualified_module_access(&call[0])?;
+                let args: Vec<ParsedValue<ExtraValueArgs>> = call[1..]
+                    .into_iter()
+                    .map(|arg| {
+                        ParsedValue::<ExtraValueArgs>::parse(arg)
+                            .map_err(|e| anyhow!("Failed to parse argument: {}", e))
+                    })
+                    .collect::<Result<_, _>>()?;
+                Ok(PublishRunCommand { name, args })
+            })
+            .collect::<Result<_, _>>()
+    }
+}
+
 #[derive(Debug, Parser)]
-#[command(group = ArgGroup::new("calls").multiple(true))]
-pub struct PublishAndCallsCommand<ExtraValueArgs: ParsableValue> {
+pub struct PublishAndCallsCommand {
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
 
@@ -275,16 +324,8 @@ pub struct PublishAndCallsCommand<ExtraValueArgs: ParsableValue> {
     )]
     pub signers: Vec<ParsedAddress>,
 
-    #[clap(
-        long = "call",
-        value_parser = ParsedValue::<ExtraValueArgs>::parse,
-        num_args(1..),
-    )]
-    pub calls:
-        Vec<(
-            (ParsedAddress, Identifier, Identifier),
-            Vec<ParsedValue<ExtraValueArgs>>,
-        )>,
+    #[clap(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub calls: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -298,7 +339,7 @@ pub enum TaskCommand<
     Init(InitCommand, ExtraInitArgs),
     PrintBytecode(PrintBytecodeCommand),
     Publish(PublishCommand, ExtraPublishArgs),
-    PublishAndCall(PublishAndCallsCommand<ExtraValueArgs>, ExtraPublishArgs),
+    PublishAndCall(PublishAndCallsCommand, ExtraPublishArgs),
     Run(RunCommand<ExtraValueArgs>, ExtraRunArgs),
     Subcommand(SubCommands),
 }
@@ -321,11 +362,11 @@ impl<
             Some(("print-bytecode", matches)) => {
                 TaskCommand::PrintBytecode(FromArgMatches::from_arg_matches(matches)?)
             }
-            Some(("publish", matches)) => TaskCommand::Publish(
+            Some(("publish-and-call", matches)) => TaskCommand::PublishAndCall(
                 FromArgMatches::from_arg_matches(matches)?,
                 FromArgMatches::from_arg_matches(matches)?,
             ),
-            Some(("publish-and-call", matches)) => TaskCommand::PublishAndCall(
+            Some(("publish", matches)) => TaskCommand::Publish(
                 FromArgMatches::from_arg_matches(matches)?,
                 FromArgMatches::from_arg_matches(matches)?,
             ),
@@ -358,6 +399,10 @@ impl<
             .subcommand(InitCommand::augment_args(ExtraInitArgs::command()).name("init"))
             .subcommand(PrintBytecodeCommand::command().name("print-bytecode"))
             .subcommand(PublishCommand::augment_args(ExtraPublishArgs::command()).name("publish"))
+            .subcommand(
+                PublishAndCallsCommand::augment_args(ExtraPublishArgs::command())
+                    .name("publish-and-call"),
+            )
             .subcommand(
                 RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("run"),
             )
