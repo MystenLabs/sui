@@ -1,1 +1,0 @@
-DROP INDEX CONCURRENTLY IF EXISTS event_emit_package_tx_sequence_number;
