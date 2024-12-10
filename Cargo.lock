@@ -13955,6 +13955,8 @@ dependencies = [
 name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "datatest-stable",
  "msim",
  "sui-graphql-rpc",
@@ -15805,6 +15807,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
+ "http 1.1.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
@@ -15836,6 +15839,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
+ "tracing",
  "typed-store",
 ]
 
