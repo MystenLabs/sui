@@ -72,11 +72,11 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 				challenge: new TextEncoder().encode('Create passkey wallet on Sui'),
 				pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
 				authenticatorSelection: {
-					...this.#options.authenticatorSelection,
 					authenticatorAttachment: 'cross-platform',
 					residentKey: 'required',
 					requireResidentKey: true,
 					userVerification: 'required',
+					...this.#options.authenticatorSelection,
 				},
 			},
 		})) as RegistrationCredential;
