@@ -823,6 +823,7 @@ fn module_compatibility_error_diag(
     Ok(diags)
 }
 
+const PACKAGE_TABLE: &str = "[package]";
 fn missing_module_diag(
     module_name: &Identifier,
     package_path: &PathBuf,
@@ -832,25 +833,21 @@ fn missing_module_diag(
     // read Move.toml to get the hash and first line start and end
     let toml_path = package_path.join("Move.toml");
     let toml_str = fs::read_to_string(&toml_path).context("Unable to read Move.toml")?;
-
-    let r = toml_str.find("module").unwrap();
-
     let hash = FileHash::new(&toml_str);
-    let chars: Vec<char> = toml_str.chars().collect();
 
-    let start = toml_str
-        .chars()
-        .enumerate()
-        .find(|(_, c)| !c.is_whitespace())
-        .map(|(i, _)| i)
-        .unwrap_or_default();
+    let start: usize = toml_str
+        .find(PACKAGE_TABLE)
+        .context("Malformed Move.toml")?;
+    // default to the end of the package table definition
+    let mut end = start + PACKAGE_TABLE.len();
 
-    let end = chars[start..]
-        .iter()
-        .enumerate()
-        .find(|(_, c)| c.is_whitespace())
-        .map(|(i, _)| i)
-        .unwrap_or_default();
+    // get the third newline after the start of the package table declaration if it exists
+    toml_str
+        .match_indices('\n')
+        .filter(|(idx, _)| *idx > start)
+        .take(3)
+        .last()
+        .map(|(idx, _)| end = idx);
 
     let loc = Loc::new(hash, start as ByteIndex, end as ByteIndex);
 

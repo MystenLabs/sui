@@ -91,17 +91,18 @@ fn test_entry_linking_ok() {
 }
 
 #[test]
-fn test_malformed_toml() {
-    /// note: the first examples empty and whitespace shouldn't occur in practice
-    /// since a Move.toml which is empty will not build
+fn test_missing_module_toml() {
+    // note: the first examples empty and whitespace shouldn't occur in practice
+    // since a Move.toml which is empty will not build
     for malformed_pkg in [
-        "empty",
-        "whitespace",
+        "emoji",
+        // "whitespace",
         "addresses_first",
         "starts_second_line",
+        "package_no_name",
     ] {
         let move_pkg_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src/unit_tests/fixtures/upgrade_errors/malformed_move_toml/")
+            .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/")
             .join(malformed_pkg);
         let result =
             missing_module_diag(&Identifier::from_str("identifier").unwrap(), &move_pkg_path);
@@ -122,6 +123,26 @@ fn test_malformed_toml() {
         .unwrap();
         assert_snapshot!(malformed_pkg, output);
     }
+}
+
+// should raise
+#[test]
+
+fn test_malformed_toml() {
+    // whitespace example
+    let move_pkg_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/whitespace/");
+
+    let result = missing_module_diag(&Identifier::from_str("identifier").unwrap(), &move_pkg_path);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().to_string(), "Malformed Move.toml");
+
+    // empty example
+    let move_pkg_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/unit_tests/fixtures/upgrade_errors/missing_module_toml/empty/");
+    let result = missing_module_diag(&Identifier::from_str("identifier").unwrap(), &move_pkg_path);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().to_string(), "Malformed Move.toml");
 }
 
 fn get_packages(name: &str) -> (Vec<CompiledModule>, CompiledPackage, PathBuf) {
