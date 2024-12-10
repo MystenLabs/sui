@@ -23,7 +23,7 @@ use comments::*;
 use move_command_line_common::files::FileHash;
 use move_symbol_pool::Symbol;
 use rayon::iter::*;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 use vfs::VfsPath;
 
 struct ParsedFile {
@@ -167,8 +167,19 @@ fn parse_file(
             text: source_str,
         });
     }
-    let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
-    {
+    let interface_only = if let Some(files_to_compile) = compilation_env.files_to_compile() {
+        !files_to_compile.contains(&PathBuf::from(path.as_str()))
+    } else {
+        false
+    };
+
+    let (defs, comments) = match parse_file_string(
+        compilation_env,
+        file_hash,
+        &source_str,
+        package,
+        interface_only,
+    ) {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
             reporter.add_diags(ds);
