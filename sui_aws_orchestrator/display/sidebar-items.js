@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["action","config","default_table_format","done","error","header","newline","status","warn"]};

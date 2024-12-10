@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NUM_SHUTDOWN_RECEIVERS"],"mod":["metrics"],"struct":["LazyNarwhalClient","LocalNarwhalClient","TrivialTransactionValidator","Worker"],"trait":["TransactionValidator"]};

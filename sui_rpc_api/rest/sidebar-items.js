@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["APPLICATION_BCS","APPLICATION_JSON","DEFAULT_PAGE_SIZE","ENDPOINTS","MAX_PAGE_SIZE","TEXT_PLAIN_UTF_8"],"fn":["build_rest_router","info"],"mod":["accept","accounts","checkpoints","coins","content_type","health","info","objects","openapi","system","transactions"],"struct":["Page","PageCursor"]};
