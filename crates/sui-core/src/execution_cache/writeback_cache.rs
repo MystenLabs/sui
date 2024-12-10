@@ -967,6 +967,18 @@ impl WritebackCache {
         self.set_backpressure(pending_count);
     }
 
+    fn approximate_pending_transaction_count(&self) -> u64 {
+        let num_commits = self
+            .dirty
+            .total_transaction_commits
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        self.dirty
+            .total_transaction_inserts
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .saturating_sub(num_commits)
+    }
+
     fn set_backpressure(&self, pending_count: u64) {
         let backpressure = pending_count > self.backpressure_threshold;
         let backpressure_changed = self.backpressure_manager.set_backpressure(backpressure);
@@ -1253,6 +1265,10 @@ impl ExecutionCacheCommit for WritebackCache {
 
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
         WritebackCache::persist_transactions(self, digests).boxed()
+    }
+
+    fn approximate_pending_transaction_count(&self) -> u64 {
+        WritebackCache::approximate_pending_transaction_count(self)
     }
 }
 

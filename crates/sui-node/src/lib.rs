@@ -712,7 +712,6 @@ impl SuiNode {
             config.indirect_objects_threshold,
             archive_readers,
             validator_tx_finalizer,
-            backpressure_manager.subscribe(),
         )
         .await;
         // ensure genesis txn was executed

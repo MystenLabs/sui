@@ -198,6 +198,9 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// we have done that, crash recovery will be done by re-processing consensus commits
     /// and pending_consensus_transactions, and this method can be removed.
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()>;
+
+    // Number of pending uncommitted transactions
+    fn approximate_pending_transaction_count(&self) -> u64;
 }
 
 pub trait ObjectCacheRead: Send + Sync {
