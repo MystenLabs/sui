@@ -32,7 +32,7 @@ use super::{Handler, SequentialConfig};
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
 ///
-/// The committer can be configured to lag behind the ingestion serice by a fixed number of
+/// The committer can be configured to lag behind the ingestion service by a fixed number of
 /// checkpoints (configured by `checkpoint_lag`). A value of `0` means no lag.
 ///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
@@ -80,11 +80,7 @@ pub(super) fn committer<H: Handler + 'static>(
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
-        let mut logger = WatermarkLogger::new(
-            "Sequential Committer",
-            watermark.checkpoint_hi_inclusive,
-            Some(watermark.tx_hi),
-        );
+        let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
@@ -269,11 +265,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         "Wrote batch",
                     );
 
-                    logger.log::<H>(
-                        watermark.checkpoint_hi_inclusive,
-                        Some(watermark.tx_hi),
-                        elapsed,
-                    );
+                    logger.log::<H>(&watermark, elapsed);
 
                     metrics
                         .total_committer_batches_succeeded

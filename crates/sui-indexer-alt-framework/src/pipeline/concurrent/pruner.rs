@@ -11,7 +11,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db, metrics::IndexerMetrics, pipeline::logging::WatermarkLogger,
+    db::Db,
+    metrics::IndexerMetrics,
+    pipeline::logging::{LoggerWatermark, WatermarkLogger},
     watermarks::PrunerWatermark,
 };
 
@@ -51,7 +53,7 @@ pub(super) fn pruner<H: Handler + 'static>(
 
         // The pruner task will periodically output a log message at a higher log level to
         // demonstrate that it is making progress.
-        let mut logger = WatermarkLogger::new("Pruner", 0, None);
+        let mut logger = WatermarkLogger::new("pruner", LoggerWatermark::default());
 
         'outer: loop {
             // (1) Get the latest pruning bounds from the database.
@@ -186,17 +188,16 @@ pub(super) fn pruner<H: Handler + 'static>(
                     )
                 }
 
-                Ok(updated) => {
-                    if updated {
-                        let elapsed = guard.stop_and_record();
-                        logger.log::<H>(watermark.pruner_hi, None, elapsed);
+                Ok(true) => {
+                    let elapsed = guard.stop_and_record();
+                    logger.log::<H>(&watermark, elapsed);
 
-                        metrics
-                            .watermark_pruner_hi_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.pruner_hi);
-                    }
+                    metrics
+                        .watermark_pruner_hi_in_db
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.pruner_hi);
                 }
+                Ok(false) => {}
             }
         }
 
