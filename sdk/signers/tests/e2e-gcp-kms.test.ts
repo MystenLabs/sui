@@ -6,7 +6,7 @@ import { GcpKmsSigner } from '../src/gcp/gcp-kms-client';
 
 const { E2E_GCP_KMS_TEST_ENABLE } = process.env;
 
-describe.runIf(E2E_GCP_KMS_TEST_ENABLE)('GCP KMS signer E2E testing', () => {
+describe.runIf(E2E_GCP_KMS_TEST_ENABLE === 'true')('GCP KMS signer E2E testing', () => {
 	let signer: GcpKmsSigner;
 	beforeAll(async () => {
 		const {
