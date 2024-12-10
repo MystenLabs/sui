@@ -40,6 +40,7 @@ use move_core_types::{
     runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
+use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -75,10 +76,34 @@ const ADDR6: AccountAddress = {
     AccountAddress::new(address)
 };
 
+static ADDR2_FUNCTIONS: Lazy<Vec<(ModuleId, Identifier)>> = Lazy::new(|| {
+    vec![
+        (
+            ModuleId::new(ADDR2, Identifier::new("A").unwrap()),
+            Identifier::new("entry_a").unwrap(),
+        ),
+        (
+            ModuleId::new(ADDR2, Identifier::new("D").unwrap()),
+            Identifier::new("entry_d").unwrap(),
+        ),
+        (
+            ModuleId::new(ADDR2, Identifier::new("E").unwrap()),
+            Identifier::new("entry_e").unwrap(),
+        ),
+        (
+            ModuleId::new(ADDR2, Identifier::new("F").unwrap()),
+            Identifier::new("entry_f").unwrap(),
+        ),
+        (
+            ModuleId::new(ADDR2, Identifier::new("C").unwrap()),
+            Identifier::new("just_c").unwrap(),
+        ),
+    ]
+});
+
 struct Adapter {
-    vm: Arc<RwLock<InMemoryTestAdapter>>,
+    runtime_adapter: Arc<RwLock<InMemoryTestAdapter>>,
     store: RelinkingStore,
-    functions: Vec<(ModuleId, Identifier)>,
 }
 
 #[derive(Clone)]
@@ -90,28 +115,6 @@ struct RelinkingStore {
 
 impl Adapter {
     fn new(store: InMemoryStorage) -> Self {
-        let functions = vec![
-            (
-                ModuleId::new(ADDR2, Identifier::new("A").unwrap()),
-                Identifier::new("entry_a").unwrap(),
-            ),
-            (
-                ModuleId::new(ADDR2, Identifier::new("D").unwrap()),
-                Identifier::new("entry_d").unwrap(),
-            ),
-            (
-                ModuleId::new(ADDR2, Identifier::new("E").unwrap()),
-                Identifier::new("entry_e").unwrap(),
-            ),
-            (
-                ModuleId::new(ADDR2, Identifier::new("F").unwrap()),
-                Identifier::new("entry_f").unwrap(),
-            ),
-            (
-                ModuleId::new(ADDR2, Identifier::new("C").unwrap()),
-                Identifier::new("just_c").unwrap(),
-            ),
-        ];
         let config = VMConfig {
             verifier: VerifierConfig {
                 max_dependency_depth: Some(100),
@@ -131,12 +134,11 @@ impl Adapter {
                     type_origin: vec![],
                 }
             },
-            vm,
-            functions,
+            runtime_adapter: vm,
         }
     }
 
-    fn linkage(
+    fn with_linkage(
         &self,
         context: PackageStorageId,
         linkage: HashMap<RuntimePackageId, PackageStorageId>,
@@ -161,8 +163,7 @@ impl Adapter {
                     type_origin,
                 }
             },
-            vm: self.vm.clone(),
-            functions: self.functions.clone(),
+            runtime_adapter: self.runtime_adapter.clone(),
         }
     }
 
@@ -188,7 +189,7 @@ impl Adapter {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
         let runtime_id = Self::runtime_id_for_link_context(&pkg.linkage_context);
-        self.vm
+        self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
             .unwrap_or_else(|e| panic!("failure publishing modules: {e:?}"));
@@ -202,14 +203,14 @@ impl Adapter {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
         let runtime_id = Self::runtime_id_for_link_context(&pkg.linkage_context);
-        self.vm
+        self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
             .expect_err("publishing must fail");
     }
 
     fn load_type(&self, type_tag: &TypeTag) -> Type {
-        let vm = self.vm.write();
+        let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .load_type(type_tag)
@@ -221,7 +222,7 @@ impl Adapter {
         module_id: &ModuleId,
         struct_name: &IdentStr,
     ) -> DepthFormula {
-        let vm = self.vm.write();
+        let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .virtual_tables
@@ -240,7 +241,7 @@ impl Adapter {
     }
 
     fn get_type_tag(&self, ty: &Type) -> TypeTag {
-        let vm = self.vm.write();
+        let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .virtual_tables
@@ -248,17 +249,17 @@ impl Adapter {
             .expect("Converting to type tag should succeed")
     }
 
-    fn call_functions(&self) {
-        for (module_id, name) in &self.functions {
+    fn call_functions(&self, functions: &[(ModuleId, Identifier)]) {
+        for (module_id, name) in functions {
             self.call_function(module_id, name);
         }
     }
 
-    fn call_functions_async(&self, reps: usize) {
+    fn call_functions_async(&self, functions: Vec<(ModuleId, Identifier)>, reps: usize) {
         let mut children = vec![];
         for _ in 0..reps {
-            for (module_id, name) in self.functions.clone() {
-                let vm = self.vm.clone();
+            for (module_id, name) in functions.clone() {
+                let vm = self.runtime_adapter.clone();
                 let data_store = self.store.clone();
                 children.push(thread::spawn(move || {
                     let bind = vm.write();
@@ -294,14 +295,14 @@ impl Adapter {
     }
 
     fn validate_linkage_with_err(&self) {
-        let vm = self.vm.write();
+        let vm = self.runtime_adapter.write();
         let Err(_) = vm.make_vm(self.store.linkage.clone()) else {
             panic!("Should fail to make VM since function is missing");
         };
     }
 
     fn call_function(&self, module: &ModuleId, name: &IdentStr) -> SerializedReturnValues {
-        let vm = self.vm.write();
+        let vm = self.runtime_adapter.write();
         let mut session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .execute_function_bypass_visibility(
@@ -359,19 +360,20 @@ fn get_relinker_tests_modules_with_deps<'s>(
 #[test]
 fn load() {
     let data_store = InMemoryStorage::new();
+
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
     let pkg = get_loader_tests_modules();
     adapter.publish_package(pkg);
     // calls all functions sequentially
-    adapter.call_functions();
+    adapter.call_functions(&ADDR2_FUNCTIONS);
 }
 
 #[test]
 fn test_depth() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
     let modules = get_depth_tests_modules();
     let structs = vec![
         (
@@ -574,29 +576,29 @@ fn test_depth() {
 fn load_concurrent() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
     let modules = get_loader_tests_modules();
     adapter.publish_package(modules);
     // makes 15 threads
-    adapter.call_functions_async(3);
+    adapter.call_functions_async(ADDR2_FUNCTIONS.clone(), 3);
 }
 
 #[test]
 fn load_concurrent_many() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
     let modules = get_loader_tests_modules();
     adapter.publish_package(modules);
     // makes 150 threads
-    adapter.call_functions_async(30);
+    adapter.call_functions_async(ADDR2_FUNCTIONS.clone(), 30);
 }
 
 #[test]
 fn relink() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let a0 = ModuleId::new(ADDR4, ident_str!("a").to_owned());
     let b0 = ModuleId::new(ADDR3, ident_str!("b").to_owned());
@@ -611,7 +613,7 @@ fn relink() {
     // Publish the first version of C, and B which is published depending on it.
     adapter.publish_package(c0_modules);
     adapter
-        .linkage(
+        .with_linkage(
             ADDR3,
             HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
             vec![],
@@ -621,7 +623,7 @@ fn relink() {
     assert_eq!(
         vec![MoveValue::U64(42 + 1)],
         adapter
-            .linkage(
+            .with_linkage(
                 ADDR3,
                 HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3),]),
                 vec![],
@@ -629,7 +631,7 @@ fn relink() {
             .call_function_with_return(&b0, ident_str!("b")),
     );
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR5,
         /* linkage */ HashMap::from_iter([(ADDR2, ADDR5)]),
         /* type origin */
@@ -642,7 +644,7 @@ fn relink() {
     // Publish the next version of C, and then A which depends on the new version of C, but also B.
     // B will be relinked to use C when executed in the adapter relinking against A.
     adapter.publish_package(c1_modules);
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR4,
         HashMap::from([(ADDR2, ADDR5), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
         vec![],
@@ -659,7 +661,7 @@ fn relink() {
 fn relink_publish_err() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
     let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v1", ["c_v1"]).unwrap();
@@ -668,7 +670,7 @@ fn relink_publish_err() {
     // which should fail because a function is missing.
     adapter.publish_package(c0_modules);
     adapter
-        .linkage(
+        .with_linkage(
             ADDR3,
             HashMap::from_iter([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
             vec![],
@@ -693,13 +695,13 @@ fn relink_load_err() {
 
     // B v0 works with C v0
     adapter
-        .linkage(
+        .with_linkage(
             *c0.address(),
             HashMap::from([(*c0.address(), *c0.address())]),
             vec![],
         )
         .publish_package(c0_modules);
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         *b0.address(),
         HashMap::from([
             (*c0.address(), *c0.address()),
@@ -715,7 +717,7 @@ fn relink_load_err() {
     );
 
     adapter
-        .linkage(
+        .with_linkage(
             *c1.address(),
             /* linkage */
             HashMap::from_iter([(*c0.address(), *c1.address())]),
@@ -728,7 +730,7 @@ fn relink_load_err() {
         .publish_package(c1_modules);
 
     // B v1 works with C v1
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         *b1.address(),
         /* linkage */
         HashMap::from_iter([
@@ -751,7 +753,7 @@ fn relink_load_err() {
 
     // But B v1 *does not* work with C v0
     adapter
-        .linkage(
+        .with_linkage(
             *b1.address(),
             /* linkage */
             HashMap::from_iter([
@@ -781,7 +783,7 @@ fn relink_type_identity() {
     let c1_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v1", []).unwrap();
     let b1_modules = get_relinker_tests_modules_with_deps(ADDR3, "b_v1", ["c_v1"]).unwrap();
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         *c0.address(),
         HashMap::from([(*c0.address(), *c0.address())]),
         vec![],
@@ -790,7 +792,7 @@ fn relink_type_identity() {
     let c0_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
 
     adapter
-        .linkage(
+        .with_linkage(
             *c1.address(),
             /* linkage */
             HashMap::from_iter([(*c0.address(), *c1.address())]),
@@ -802,7 +804,7 @@ fn relink_type_identity() {
         )
         .publish_package(c1_modules);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         *b1.address(),
         /* linkage */
         HashMap::from_iter([
@@ -833,7 +835,7 @@ fn relink_defining_module_successive() {
     let c2 = ModuleId::new(ADDR6, ident_str!("c").to_owned());
     // This test simulates building up a sequence of upgraded packages over a number of publishes
     let data_store = InMemoryStorage::new();
-    let mut adapter = Adapter::new(data_store).linkage(
+    let mut adapter = Adapter::new(data_store).with_linkage(
         *c0.address(),
         HashMap::from([(ADDR2, ADDR2)]),
         vec![((c0.name(), ident_str!("S")), *c0.address())],
@@ -846,7 +848,7 @@ fn relink_defining_module_successive() {
     adapter.publish_package(c0_modules);
     let c0_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         *c1.address(),
         /* linkage */ HashMap::from_iter([(*c0.address(), *c1.address())]),
         /* type origin */
@@ -860,7 +862,7 @@ fn relink_defining_module_successive() {
     let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
     let c1_r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         *c2.address(),
         /* linkage */ HashMap::from_iter([(*c0.address(), *c2.address())]),
         /* type origin */
@@ -915,7 +917,7 @@ fn relink_defining_module_oneshot() {
 
     let c2_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v2", []).unwrap();
 
-    let mut adapter = Adapter::new(data_store).linkage(
+    let mut adapter = Adapter::new(data_store).with_linkage(
         *c2.address(),
         /* linkage */ HashMap::from_iter([(*c0.address(), *c2.address())]),
         /* type origin */
@@ -1010,18 +1012,18 @@ fn publish_bundle_and_load() {
     let a0_modules = get_relinker_tests_modules_with_deps(ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
 
     adapter
-        .linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![])
+        .with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![])
         .publish_package(c1_modules);
 
     adapter
-        .linkage(
+        .with_linkage(
             ADDR3,
             HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
             vec![],
         )
         .publish_package(b0_modules);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR4,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
         vec![],
@@ -1037,7 +1039,8 @@ fn publish_bundle_and_load() {
 #[test]
 fn publish_bundle_with_err_retry() {
     let data_store = InMemoryStorage::new();
-    let adapter = Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+    let adapter =
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let a0 = ModuleId::new(ADDR4, ident_str!("a").to_owned());
     let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, "c_v0", []).unwrap();
@@ -1046,11 +1049,11 @@ fn publish_bundle_with_err_retry() {
     let a0_modules = get_relinker_tests_modules_with_deps(ADDR4, "a_v0", ["b_v0", "c_v1"]).unwrap();
 
     adapter
-        .linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![])
+        .with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![])
         .publish_package(c0_modules);
 
     adapter
-        .linkage(
+        .with_linkage(
             ADDR3,
             HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
             vec![],
@@ -1059,7 +1062,7 @@ fn publish_bundle_with_err_retry() {
 
     // Publishing the bundle should fail, because `a0` should not link with `c0`.
     adapter
-        .linkage(
+        .with_linkage(
             ADDR4,
             HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
             vec![],
@@ -1068,10 +1071,10 @@ fn publish_bundle_with_err_retry() {
 
     // publish the upgrade of c0 to ADDR5
     adapter
-        .linkage(ADDR5, HashMap::from([(ADDR2, ADDR5)]), vec![])
+        .with_linkage(ADDR5, HashMap::from([(ADDR2, ADDR5)]), vec![])
         .publish_package(c1_modules);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR4,
         HashMap::from([(ADDR2, ADDR5), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
         vec![],
@@ -1091,7 +1094,7 @@ fn publish_bundle_with_err_retry() {
 fn deep_dependency_list_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1101,7 +1104,7 @@ fn deep_dependency_list_0() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1118,7 +1121,7 @@ fn deep_dependency_list_0() {
 fn deep_dependency_list_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1128,7 +1131,7 @@ fn deep_dependency_list_1() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1145,7 +1148,7 @@ fn deep_dependency_list_1() {
 fn deep_dependency_list_ok_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1155,7 +1158,7 @@ fn deep_dependency_list_ok_0() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1172,7 +1175,7 @@ fn deep_dependency_list_ok_0() {
 fn deep_dependency_list_ok_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1182,7 +1185,7 @@ fn deep_dependency_list_ok_1() {
     let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
     adapter.publish_package(pkg);
 
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1199,7 +1202,7 @@ fn deep_dependency_list_ok_1() {
 fn deep_dependency_tree_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1211,7 +1214,7 @@ fn deep_dependency_tree_0() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1228,7 +1231,7 @@ fn deep_dependency_tree_0() {
 fn deep_dependency_tree_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1240,7 +1243,7 @@ fn deep_dependency_tree_1() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1257,7 +1260,7 @@ fn deep_dependency_tree_1() {
 fn deep_dependency_tree_ok_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1269,7 +1272,7 @@ fn deep_dependency_tree_ok_0() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],
@@ -1286,7 +1289,7 @@ fn deep_dependency_tree_ok_0() {
 fn deep_dependency_tree_ok_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter =
-        Adapter::new(data_store).linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
+        Adapter::new(data_store).with_linkage(ADDR2, HashMap::from([(ADDR2, ADDR2)]), vec![]);
 
     let mut modules = vec![];
 
@@ -1298,7 +1301,7 @@ fn deep_dependency_tree_ok_1() {
     adapter.publish_package(pkg);
 
     // use one of the module in the tree
-    let mut adapter = adapter.linkage(
+    let mut adapter = adapter.with_linkage(
         ADDR3,
         HashMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]),
         vec![],

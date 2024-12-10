@@ -9,6 +9,7 @@ use crate::{
         linkage_context::LinkageContext,
         types::{PackageStorageId, RuntimePackageId},
     },
+    validation::verification::ast as verif_ast,
 };
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_core_types::resolver::{MoveResolver, SerializedPackage};
@@ -19,13 +20,32 @@ use std::collections::HashMap;
 /// A VM Test Adaptor holds storage and a VM, and can handle publishing packages and executing
 /// functions. Based on its needs, it may also provide ways to generate linkage contexts.
 pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
-    /// Perform a publication, including package verification and updating the relevant storage in
-    /// the test adapter so that it is available for subsequent calls.
-    fn publish_package<'extensions>(
+    /// Verify a package for publication, and receive a VM that can be used to call functions
+    /// inside of it (such as ).
+    fn verify_package<'extensions>(
         &mut self,
         runtime_id: RuntimePackageId,
         package: SerializedPackage,
-    ) -> VMResult<MoveVM<'extensions>>;
+    ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)>;
+
+    /// Perform a publication. THIS DOES NOT PERFORM PACKAGE VERIFICATION.
+    /// This publishes the package to the adapter so that it is available for subsequent calls.
+    fn publish_verified_package(
+        &mut self,
+        runtime_id: RuntimePackageId,
+        package: verif_ast::Package,
+    ) -> VMResult<()>;
+
+    /// Perform package verification and publication.
+    /// This publishes the package to the adapter so that it is available for subsequent calls.
+    fn publish_package(
+        &mut self,
+        runtime_id: RuntimePackageId,
+        package: SerializedPackage,
+    ) -> VMResult<()> {
+        let (verif_pkg, _vm) = self.verify_package(runtime_id, package)?;
+        self.publish_verified_package(runtime_id, verif_pkg)
+    }
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
     /// context.

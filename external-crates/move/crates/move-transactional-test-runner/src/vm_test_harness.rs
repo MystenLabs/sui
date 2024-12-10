@@ -228,14 +228,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                     move_stdlib,
                 )
                 .unwrap();
-                inner_adapter
-                    .publish_package(
-                        sender,
-                        pkg.into_serialized_package(),
-                        // FIXME(cswords): support gas
-                        // gas_status,
-                    )
-                    .unwrap();
+                let pkg = pkg.into_serialized_package();
+                inner_adapter.publish_package(sender, pkg).unwrap();
                 Ok(())
             })
             .unwrap();
@@ -286,7 +280,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
             pub_modules.clone(),
         )?;
         let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
-            inner_adapter.publish_package(sender, pkg.into_serialized_package())?;
+            let pkg = pkg.into_serialized_package();
+            inner_adapter.publish_package(sender, pkg)?;
             println!("done");
             Ok(())
         });
@@ -307,8 +302,12 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
         signers: Vec<ParsedAddress>,
         gas_budget: Option<u64>,
         extra_args: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
-        println!("---- PUBLISHING MODULE --------------------------------------------------------");
+    ) -> Result<(
+        Option<String>,
+        Vec<MaybeNamedCompiledModule>,
+        Vec<SerializedReturnValues>,
+    )> {
+        println!("---- PUBLISHING MODULE WITH CALLS ---------------------------------------------");
         let pub_modules = modules
             .iter()
             .map(|module| module.module.clone())
@@ -326,22 +325,26 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
         )?)?;
         println!("linkage: {linkage_context:#?}");
         let mut gas_meter = Self::make_gas_status(gas_budget);
-        println!("doing publish");
+        println!("doing verification");
         let pkg = StoredPackage::from_module_for_testing_with_linkage(
             sender,
             linkage_context,
             pub_modules.clone(),
         )?;
-        let mut publish_vm = self.perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
-            inner_adapter.publish_package(sender, pkg.into_serialized_package())
-        })?;
-
+        let pkg = pkg.into_serialized_package();
+        let (verif_pkg, mut publish_vm) = self
+            .perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
+                inner_adapter.verify_package(sender, pkg)
+            })?;
         println!("doing calls");
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
             .collect();
-        for (module, function, txn_args) in calls {
+        let call_results = calls
+            .into_iter()
+            .map(|(module, function, txn_args)| {
+                println!("calling {module}::{function}");
                 call_vm_function(
                     &mut publish_vm,
                     &module,
@@ -350,10 +353,22 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                     signers.clone(),
                     txn_args,
                     &mut gas_meter,
-                )?;
-        }
+                )
+                .map_err(|e| {
+                    anyhow!(
+                        "Function execution failed with VMError: {}",
+                        format_vm_error(&e)
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        println!("doing publish");
+        let publish_result = self
+            .perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
+                inner_adapter.publish_verified_package(sender, verif_pkg)
+            });
         match publish_result {
-            Ok(()) => Ok((None, modules)),
+            Ok(()) => Ok((None, modules, call_results)),
             Err(e) => Err(anyhow!(
                 "Unable to publish module '{}'. Got VMError: {}",
                 id,
@@ -456,11 +471,8 @@ impl SimpleRuntimeTestAdapter {
 
     fn make_gas_status<'gas>(gas_budget: Option<u64>) -> GasStatus<'gas> {
         println!("creating gas_status");
-        move_cli::sandbox::utils::get_gas_status(
-            &gas_schedule::INITIAL_COST_SCHEDULE,
-            gas_budget,
-        )
-        .unwrap()
+        move_cli::sandbox::utils::get_gas_status(&gas_schedule::INITIAL_COST_SCHEDULE, gas_budget)
+            .unwrap()
     }
 
     fn perform_action_with_gas<Ret>(
