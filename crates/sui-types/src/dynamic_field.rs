@@ -66,7 +66,7 @@ where
 pub struct DynamicFieldInfo {
     pub name: DynamicFieldName,
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, _>")]
+    #[serde_as(as = "Readable<crate::sui_serde::Base64orBase58, _>")]
     pub bcs_name: Vec<u8>,
     pub type_: DynamicFieldType,
     pub object_type: String,
