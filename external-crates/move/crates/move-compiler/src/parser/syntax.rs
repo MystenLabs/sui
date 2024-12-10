@@ -3221,6 +3221,7 @@ fn parse_function_decl(
     start_loc: usize,
     modifiers: Modifiers,
     context: &mut Context,
+    interface_only: bool,
 ) -> Result<Function, Box<Diagnostic>> {
     let Modifiers {
         visibility,
@@ -3261,7 +3262,7 @@ fn parse_function_decl(
 
     context.stop_set.remove(Tok::LBrace);
 
-    let body = parse_body(context, native)
+    let body = parse_body(context, native, macro_.is_some(), interface_only)
         .inspect_err(|diag| {
             context.advance_until_stop_set(Some(*diag.clone()));
         })
@@ -3320,7 +3321,12 @@ fn parse_ret_type(context: &mut Context, name: FunctionName) -> Result<Type, Box
     }
 }
 
-fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody, Box<Diagnostic>> {
+fn parse_body(
+    context: &mut Context,
+    native: Option<Loc>,
+    is_macro: bool,
+    interface_only: bool,
+) -> Result<FunctionBody, Box<Diagnostic>> {
     match native {
         Some(loc) => {
             if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
@@ -3370,12 +3376,17 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
                     ))),
                 )
             };
-
             let end_loc = context.tokens.previous_end_loc();
-            Ok(sp(
-                make_loc(context.tokens.file_hash(), start_loc, end_loc),
-                FunctionBody_::Defined(seq),
-            ))
+            let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+            if interface_only && !is_macro {
+                // we parsed function body correctly but we are dropping it with respect
+                // to subsequent compiler passes, unless it's a macro that may
+                // have to be inlined in fully compiled code
+                // TODO: consider eating the body rather than fully parsing it
+                Ok(sp(loc, FunctionBody_::Native))
+            } else {
+                Ok(sp(loc, FunctionBody_::Defined(seq)))
+            }
         }
     }
 }
@@ -3972,6 +3983,7 @@ fn parse_constant_decl(
 fn parse_address_block(
     attributes: Vec<Attributes>,
     context: &mut Context,
+    interface_only: bool,
 ) -> Result<AddressDefinition, Box<Diagnostic>> {
     const UNEXPECTED_TOKEN: &str = "Invalid code unit. Expected 'address' or 'module'";
     let in_migration_mode =
@@ -4022,7 +4034,8 @@ fn parse_address_block(
 
                 let mut attributes = parse_attributes(context)?;
                 loop {
-                    let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                    let (module, next_mod_attributes) =
+                        parse_module(attributes, context, interface_only)?;
 
                     if in_migration_mode {
                         context.add_diag(diag!(
@@ -4384,6 +4397,7 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 fn parse_module(
     attributes: Vec<Attributes>,
     context: &mut Context,
+    interface_only: bool,
 ) -> Result<(ModuleDefinition, Option<Vec<Attributes>>), Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
 
@@ -4443,7 +4457,7 @@ fn parse_module(
             break;
         }
         context.stop_set.union(&MODULE_MEMBER_OR_MODULE_START_SET);
-        match parse_module_member(context) {
+        match parse_module_member(context, interface_only) {
             Ok(m) => {
                 context
                     .stop_set
@@ -4516,7 +4530,10 @@ fn skip_to_next_desired_tok_or_eof(context: &mut Context, desired_tokens: &Token
 /// encounter the next module which also should be parsed. While this is a member parsing error,
 /// (optional) attributes for this presumed member (but in fact the next module) had already been
 /// parsed and should be returned as part of the result to allow further parsing of the next module.
-fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
+fn parse_module_member(
+    context: &mut Context,
+    interface_only: bool,
+) -> Result<ModuleMember, ErrCase> {
     let attributes = parse_attributes(context)?;
     match context.tokens.peek() {
         // Top-level specification constructs
@@ -4560,7 +4577,11 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                     attributes, start_loc, modifiers, context,
                 )?)),
                 Tok::Fun => Ok(ModuleMember::Function(parse_function_decl(
-                    attributes, start_loc, modifiers, context,
+                    attributes,
+                    start_loc,
+                    modifiers,
+                    context,
+                    interface_only,
                 )?)),
                 Tok::Struct => Ok(ModuleMember::Struct(parse_struct_decl(
                     attributes, start_loc, modifiers, context,
@@ -4691,10 +4712,10 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
 // Parse a file:
 //      File =
 //          (<Attributes> (<AddressBlock> | <Module> ))*
-fn parse_file(context: &mut Context) -> Vec<Definition> {
+fn parse_file(context: &mut Context, interface_only: bool) -> Vec<Definition> {
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
-        if let Err(diag) = parse_file_def(context, &mut defs) {
+        if let Err(diag) = parse_file_def(context, &mut defs, interface_only) {
             context.add_diag(*diag);
             // skip to the next def and try parsing it if it's there (ignore address blocks as they
             // are pretty much defunct anyway)
@@ -4707,12 +4728,14 @@ fn parse_file(context: &mut Context) -> Vec<Definition> {
 fn parse_file_def(
     context: &mut Context,
     defs: &mut Vec<Definition>,
+    interface_only: bool,
 ) -> Result<(), Box<Diagnostic>> {
     let mut attributes = parse_attributes(context)?;
     match context.tokens.peek() {
         Tok::Spec | Tok::Module => {
             loop {
-                let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                let (module, next_mod_attributes) =
+                    parse_module(attributes, context, interface_only)?;
                 if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
                     if let Some(prev) = defs.last() {
                         let msg =
@@ -4736,7 +4759,9 @@ fn parse_file_def(
             }
         }
         _ => defs.push(Definition::Address(parse_address_block(
-            attributes, context,
+            attributes,
+            context,
+            interface_only,
         )?)),
     }
     Ok(())
@@ -4750,6 +4775,7 @@ pub fn parse_file_string(
     file_hash: FileHash,
     input: &str,
     package: Option<Symbol>,
+    interface_only: bool,
 ) -> Result<(Vec<Definition>, MatchedFileCommentMap), Diagnostics> {
     let edition = env.edition(package);
     let mut tokens = Lexer::new(input, file_hash, edition);
@@ -4758,7 +4784,7 @@ pub fn parse_file_string(
         Ok(..) => Ok(()),
     }?;
     Ok((
-        parse_file(&mut Context::new(env, &mut tokens, package)),
+        parse_file(&mut Context::new(env, &mut tokens, package), interface_only),
         tokens.check_and_get_doc_comments(env),
     ))
 }

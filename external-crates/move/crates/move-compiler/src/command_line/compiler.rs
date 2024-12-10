@@ -34,7 +34,7 @@ use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -68,6 +68,8 @@ pub struct Compiler {
     vfs_root: Option<VfsPath>,
     /// Hooks to save the ASTs
     save_hooks: Vec<SaveHook>,
+    // Files to fully compile (as opposed to omitting function bodies)
+    files_to_compile: Option<BTreeSet<PathBuf>>,
 }
 
 pub struct SteppedCompiler<const P: Pass> {
@@ -200,6 +202,7 @@ impl Compiler {
             default_config: None,
             vfs_root,
             save_hooks: vec![],
+            files_to_compile: None,
         })
     }
 
@@ -309,6 +312,12 @@ impl Compiler {
         self
     }
 
+    pub fn set_files_to_compile(mut self, files: Option<BTreeSet<PathBuf>>) -> Self {
+        assert!(self.files_to_compile.is_none());
+        self.files_to_compile = files;
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -330,6 +339,7 @@ impl Compiler {
             default_config,
             vfs_root,
             save_hooks,
+            files_to_compile,
         } = self;
         let vfs_root = match vfs_root {
             Some(p) => p,
@@ -384,6 +394,7 @@ impl Compiler {
             warning_filter,
             package_configs,
             default_config,
+            files_to_compile,
         );
         for (prefix, filters) in known_warning_filters {
             compilation_env.add_custom_known_filters(prefix, filters)?;
