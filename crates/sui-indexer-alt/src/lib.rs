@@ -219,11 +219,11 @@ pub async fn start_indexer(
                 indexer
                     .concurrent_pipeline(
                         $lagged_handler,
-                        ConcurrentConfig {
-                            committer: $lagged_config.unwrap_or_default().finish(committer.clone()),
+                        $lagged_config.unwrap_or_default().finish(ConcurrentConfig {
+                            committer: committer.clone(),
                             pruner: None,
                             checkpoint_lag: Some(consistent_range),
-                        },
+                        }),
                     )
                     .await?;
             }

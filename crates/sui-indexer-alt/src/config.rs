@@ -104,6 +104,7 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     committer: Option<CommitterLayer>,
     pruner: Option<PrunerLayer>,
+    checkpoint_lag: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -148,7 +149,7 @@ pub struct PipelineLayer {
 
     // Concurrent pipelines with a lagged consistent pruner which is also a concurrent pipeline.
     pub obj_info: Option<CommitterLayer>,
-    pub obj_info_pruner: Option<CommitterLayer>,
+    pub obj_info_pruner: Option<ConcurrentLayer>,
 
     // All concurrent pipelines
     pub ev_emit_mod: Option<ConcurrentLayer>,
@@ -248,7 +249,7 @@ impl ConcurrentLayer {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)),
             },
-            checkpoint_lag: base.checkpoint_lag,
+            checkpoint_lag: self.checkpoint_lag.or(base.checkpoint_lag),
         }
     }
 }
@@ -378,6 +379,7 @@ impl Merge for ConcurrentLayer {
         ConcurrentLayer {
             committer: self.committer.merge(other.committer),
             pruner: self.pruner.merge(other.pruner),
+            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
             extra: Default::default(),
         }
     }
@@ -509,6 +511,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
+            checkpoint_lag: config.checkpoint_lag,
             extra: Default::default(),
         }
     }
@@ -759,6 +762,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -769,7 +773,7 @@ mod tests {
                 watermark_interval_ms: 500,
             },
             pruner: Some(PrunerConfig::default()),
-            checkpoint_lag: None,
+            checkpoint_lag: Some(100),
         };
 
         assert_matches!(
@@ -781,7 +785,7 @@ mod tests {
                     watermark_interval_ms: 500,
                 },
                 pruner: None,
-                checkpoint_lag: None,
+                checkpoint_lag: Some(100),
             },
         );
     }
@@ -791,6 +795,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
@@ -801,7 +806,7 @@ mod tests {
                 watermark_interval_ms: 500,
             },
             pruner: None,
-            checkpoint_lag: None,
+            checkpoint_lag: Some(100),
         };
 
         assert_matches!(
@@ -813,7 +818,7 @@ mod tests {
                     watermark_interval_ms: 500,
                 },
                 pruner: None,
-                checkpoint_lag: None,
+                checkpoint_lag: Some(100),
             },
         );
     }
@@ -826,6 +831,7 @@ mod tests {
                 interval_ms: Some(1000),
                 ..Default::default()
             }),
+            checkpoint_lag: None,
             extra: Default::default(),
         };
 
