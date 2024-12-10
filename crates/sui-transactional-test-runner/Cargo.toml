@@ -16,6 +16,7 @@ bcs.workspace = true
 bimap.workspace = true
 clap.workspace = true
 eyre.workspace = true
+http.workspace = true
 once_cell.workspace = true
 rand.workspace = true
 regex.workspace = true
@@ -25,6 +26,7 @@ tokio.workspace = true
 serde_json.workspace = true
 futures.workspace = true
 criterion.workspace = true
+tracing.workspace = true
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
