@@ -8,7 +8,7 @@ use crate::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
             set_err_info,
-            state::{MachineState, ResolvableType, CallStack},
+            state::{CallStack, MachineState, ResolvableType},
         },
         values::{
             IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
@@ -94,11 +94,20 @@ pub(super) fn run(
     }
 
     // When we are done, grab the operand stack as the return type.
-    let MachineState { operand_stack, call_stack } = state;
-    let CallStack { mut heap, current_frame, frames } = call_stack;
-    heap.free_stack_frame(current_frame.stack_frame).map_err(|e| e.finish(Location::Undefined))?;
+    let MachineState {
+        operand_stack,
+        call_stack,
+    } = state;
+    let CallStack {
+        mut heap,
+        current_frame,
+        frames,
+    } = call_stack;
+    heap.free_stack_frame(current_frame.stack_frame)
+        .map_err(|e| e.finish(Location::Undefined))?;
     for frame in frames.into_iter().rev() {
-        heap.free_stack_frame(frame.stack_frame).map_err(|e| e.finish(Location::Undefined))?;
+        heap.free_stack_frame(frame.stack_frame)
+            .map_err(|e| e.finish(Location::Undefined))?;
     }
     Ok(operand_stack.value)
 }
@@ -915,7 +924,8 @@ fn call_function(
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
-        push_call_frame(state, run_context, function, ty_args).map_err(|err| state.maybe_core_dump(err))?;
+        push_call_frame(state, run_context, function, ty_args)
+            .map_err(|err| state.maybe_core_dump(err))?;
     }
     Ok(())
 }
@@ -1093,7 +1103,7 @@ fn push_call_frame(
     let args = state
         .pop_n_operands(fun_ref.arg_count() as u16)
         .map_err(|e| set_err_info!(&state.call_stack.current_frame, e))?;
-    state.push_call(resolver, function, ty_args, args)
+    state.push_call_frame(resolver, function, ty_args, args)
 }
 
 fn partial_error_to_error<T>(

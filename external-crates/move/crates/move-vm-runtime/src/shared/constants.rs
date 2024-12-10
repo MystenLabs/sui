@@ -10,7 +10,7 @@ pub const OPERAND_STACK_SIZE_LIMIT: usize = 1024;
 pub const CALL_STACK_SIZE_LIMIT: usize = 1024;
 
 /// Maximal number of locals any individual call can have.
-pub const LOCALS_PER_FRAME_LIMIT: usize = 2_048;
+pub const LOCALS_PER_FRAME_LIMIT: usize = 2048;
 
 /// Maximum type depth when applying a type substitution.
 pub const TYPE_DEPTH_MAX: usize = 256;

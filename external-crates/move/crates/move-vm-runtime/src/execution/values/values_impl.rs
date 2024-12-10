@@ -298,6 +298,10 @@ impl FixedSizeVec {
     pub fn as_slice(&self) -> &[ValueImpl] {
         &self.0
     }
+
+    pub fn get(&self, ndx: usize) -> Option<&ValueImpl> {
+        self.0.get(ndx)
+    }
 }
 
 impl std::iter::IntoIterator for FixedSizeVec {
@@ -824,7 +828,7 @@ impl ValueImpl {
             // Containers are converted to `ContainerReference`.
             ValueImpl::Container(val) => Ok(ReferenceImpl::Container(ArenaPointer::from_ref(val))),
 
-            // If the value is already a reference, return it directly.
+            // If the value is already a reference, error.
             ValueImpl::Reference(_) => Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
             )
@@ -864,14 +868,22 @@ impl StructRef {
         // Ensure the container is a struct and return the field at the specified index.
         match container {
             Container::Struct(container) => {
-                Ok(Value(ValueImpl::Reference(container[index].take_ref()?)))
+                let Some(field) = container.get(index) else {
+                    return Err(
+                          PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                              format!(
+                                  "index out of bounds when borrowing container element: got: {}, len: {}",
+                                  index, container.len()
+                              ),
+                          ),
+                      );
+                };
+                Ok(Value(ValueImpl::Reference(field.take_ref()?)))
             }
 
             // If the container is not a struct, return an error.
-            _ => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Container is not a struct".to_string()),
-            ),
+            _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("expected struct container, got {:?}", self.0))),
         }
     }
 }
@@ -1911,7 +1923,7 @@ impl Vector {
     pub fn to_vec_u8(self) -> PartialVMResult<Vec<u8>> {
         check_elem_layout(&Type::U8, &self.0)?;
         if let Container::VecU8(r) = self.0 {
-            Ok(r.into_iter().collect())
+            Ok(r.clone())
         } else {
             Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2128,8 +2140,7 @@ impl GlobalValueImpl {
     }
 
     fn move_from(&mut self) -> PartialVMResult<ValueImpl> {
-        let value = std::mem::replace(self, Self::None);
-        let container = match value {
+        let container = match self {
             Self::None | Self::Deleted => {
                 return Err(PartialVMError::new(StatusCode::MISSING_DATA))
             }
@@ -2641,9 +2652,8 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
                     (MoveTypeLayout::Address, Container::VecAddress(r)) => r.serialize(serializer),
 
                     (_, Container::Vec(r)) => {
-                        let v = r;
-                        let mut t = serializer.serialize_seq(Some(v.len()))?;
-                        for val in v.iter() {
+                        let mut t = serializer.serialize_seq(Some(r.len()))?;
+                        for val in r.iter() {
                             t.serialize_element(&AnnotatedValue {
                                 layout,
                                 val: &**val,
@@ -2665,16 +2675,15 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
                 let Container::Struct(r) = &**c else {
                     unreachable!()
                 };
-                let v = r;
-                if v.len() != 1 {
+                if r.len() != 1 {
                     return Err(invariant_violation::<S>(format!(
                         "cannot serialize container as a signer -- expected 1 field got {}",
-                        v.len()
+                        r.len()
                     )));
                 }
                 (AnnotatedValue {
                     layout: &MoveTypeLayout::Address,
-                    val: &v[0],
+                    val: &r[0],
                 })
                 .serialize(serializer)
             }

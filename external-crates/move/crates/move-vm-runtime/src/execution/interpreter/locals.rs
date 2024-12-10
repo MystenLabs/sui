@@ -3,16 +3,12 @@
 
 #![allow(unsafe_code)]
 
-use crate::{
-    cache::arena,
-    execution::values::values_impl::{Value, ValueImpl},
-    shared::constants::{CALL_STACK_SIZE_LIMIT, LOCALS_PER_FRAME_LIMIT},
-};
+use crate::execution::values::values_impl::{Value, ValueImpl};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
 // Heap
@@ -23,7 +19,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct BaseHeap {
     next_id: usize,
-    values: HashMap<BaseHeapId, Box<Value>>,
+    values: BTreeMap<BaseHeapId, Box<Value>>,
 }
 
 /// An ID for an entry in a Base Heap.
@@ -34,8 +30,7 @@ pub struct BaseHeapId(usize);
 /// like. Note that this isn't a _true_ heap (crrently), it only allows for allocating and freeing
 /// stackframes.
 #[derive(Debug)]
-pub struct MachineHeap {
-}
+pub struct MachineHeap {}
 
 /// A stack frame is an allocated frame. It was allocated starting at `start` in the heap. When it
 /// is freed, we need to check that we are freeing the one on the end of the heap.
@@ -57,7 +52,7 @@ impl Default for BaseHeap {
 impl BaseHeap {
     pub fn new() -> Self {
         Self {
-            values: HashMap::new(),
+            values: BTreeMap::new(),
             next_id: 0,
         }
     }
@@ -69,7 +64,7 @@ impl BaseHeap {
     ) -> PartialVMResult<(BaseHeapId, Value)> {
         let next_id = BaseHeapId(self.next_id);
         self.next_id += 1;
-        self.values.insert(next_id, Box::new(value));
+        debug_assert!(self.values.insert(next_id, Box::new(value)).is_none());
         let ref_ = self.borrow_loc(next_id)?;
         Ok((next_id, ref_))
     }
@@ -127,10 +122,11 @@ impl Default for MachineHeap {
     }
 }
 
+// TODO: allocation and freeing should od something nicer here than just grabbing and dropping
+// vectors over and over.
 impl MachineHeap {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 
     /// Allocates a stack frame with the given size.
@@ -149,7 +145,9 @@ impl MachineHeap {
             .chain((0..invalids_len).map(|_| Value::invalid())) // Fill the rest with `Invalid`
             .collect::<Vec<Value>>();
 
-        Ok(StackFrame { slice: local_values })
+        Ok(StackFrame {
+            slice: local_values,
+        })
     }
 
     /// Frees the given stack frame, ensuring that it is the last frame on the heap.
@@ -193,10 +191,7 @@ impl StackFrame {
             );
         }
 
-        let value = std::mem::replace(
-            &mut self.slice[ndx],
-            Value::invalid(),
-        );
+        let value = std::mem::replace(&mut self.slice[ndx], Value::invalid());
         Ok(value)
     }
 
@@ -248,19 +243,16 @@ impl StackFrame {
                 ValueImpl::Reference(_) => {
                     let _ = std::mem::replace(value, Value::invalid());
                 }
-                ValueImpl::U8(_) |
-                ValueImpl::U16(_) |
-                ValueImpl::U32(_) |
-                ValueImpl::U64(_) |
-                ValueImpl::U128(_) |
-                ValueImpl::U256(_) |
-                ValueImpl::Bool(_) |
-                ValueImpl::Address(_) |
-                ValueImpl::Container(_) => {
-                    res.push((
-                        ndx,
-                        std::mem::replace(value, Value::invalid())
-                    ))
+                ValueImpl::U8(_)
+                | ValueImpl::U16(_)
+                | ValueImpl::U32(_)
+                | ValueImpl::U64(_)
+                | ValueImpl::U128(_)
+                | ValueImpl::U256(_)
+                | ValueImpl::Bool(_)
+                | ValueImpl::Address(_)
+                | ValueImpl::Container(_) => {
+                    res.push((ndx, std::mem::replace(value, Value::invalid())))
                 }
             }
         }
@@ -274,11 +266,7 @@ impl StackFrame {
 
 impl std::fmt::Display for StackFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "StackFrame(size: {})",
-            self.slice.len()
-        )?;
+        writeln!(f, "StackFrame(size: {})", self.slice.len())?;
         for (i, value) in self.slice.iter().enumerate() {
             writeln!(f, "  [{}]: {:?}", i, value)?;
         }
