@@ -44,9 +44,9 @@ The list of addresses that aren't able to use a particular regulated coin is hel
 
 ### Global pause switch
 
-Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type is able to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network disallows all addresses from receiving the coin type. 
+Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network disallows all addresses from receiving the coin type. 
 
-When the bearer of the `DenyCapV2` object for the coin type removes the pause, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.  
+When the bearer of the `DenyCapV2` object for the coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.  
 
 The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.  
 
@@ -187,7 +187,15 @@ Globally pausing coin activity is only applicable to regulated coin types.
 
 ### Pause coin activity
 
+To pause activity across the network for a regulated coin type with the `allow_global_pause` field set to `true`, use `coin::deny_list_v2_enable_global_pause`. You must provide the `DenyCapV2` object for the coin type to initiate the pause. Transaction activity is paused immediately, and no addresses can receive the coin in the epoch that follows the call to pause.
+
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_enable_global_pause noComments}
+
 ### Unpause coin activity
+
+To restart network activity for a paused regulated coin, use the `coin::deny_list_v2_disable_global_pause` function. As with pausing, you must provide the `DenyCapV2` object for the coin type. Transaction activity resumes immediately, and addresses can begin receiving the coin in the epoch that follows the call to remove the pause.
+
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_disable_global_pause noComments}
 
 ## Query coin data
 
@@ -218,6 +226,10 @@ Use the `coin::deny_list_v2_contains_current_epoch` and `coin::deny_list_v2_cont
 {@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_contains_next_epoch noComments}
 
 The functions return `true` if the address is found on the coin's list, otherwise they return `false`.
+
+### Check if global pause is active
+
+Use the `coin::deny_list_v2_is_global_pause_enabled_current_epoch` and `coin::deny_list_v2_is_global_pause_enabled_next_epoch` functions to check if a global pause is currently active or becomes active in the next epoch. 
 
 ## Update coin metadata
 
