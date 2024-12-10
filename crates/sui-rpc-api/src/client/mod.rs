@@ -32,7 +32,13 @@ impl Client {
         T::Error: Into<BoxError>,
     {
         let uri = uri.try_into().map_err(Error::from_error)?;
-        let channel = tonic::transport::Endpoint::from(uri.clone()).connect_lazy();
+        let mut endpoint = tonic::transport::Endpoint::from(uri.clone());
+        if uri.scheme() == Some(&http::uri::Scheme::HTTPS) {
+            endpoint = endpoint
+                .tls_config(tonic::transport::channel::ClientTlsConfig::new().with_enabled_roots())
+                .map_err(Error::from_error)?;
+        }
+        let channel = endpoint.connect_lazy();
 
         Ok(Self { uri, channel })
     }
