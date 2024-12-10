@@ -35,16 +35,16 @@ impl Handler for ObjInfoPruner {
         // For each object_id, we first get the highest cp_sequence_number_exclusive.
         // TODO: We could consider make this more efficient by doing some grouping in the collector
         // so that we could merge as many objects as possible across checkpoints.
-        let to_prune = values.iter().fold(BTreeMap::new(), |mut acc, v| {
+        let mut to_prune = BTreeMap::new();
+        for v in values {
             let object_id = v.object_id();
             let cp_sequence_number_exclusive = match v.update {
                 ProcessedObjInfoUpdate::Insert(_) => v.cp_sequence_number,
                 ProcessedObjInfoUpdate::Delete(_) => v.cp_sequence_number + 1,
             } as i64;
-            let cp = acc.entry(object_id).or_default();
+            let cp = to_prune.entry(object_id).or_default();
             *cp = std::cmp::max(*cp, cp_sequence_number_exclusive);
-            acc
-        });
+        }
         let mut committed_rows = 0;
         for (object_id, cp_sequence_number_exclusive) in to_prune {
             committed_rows += diesel::delete(obj_info::table)
