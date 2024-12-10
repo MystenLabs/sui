@@ -50,7 +50,7 @@ jobs:
         run: pnpm manypkg check
       - name: Turbo Cache
         id: turbo-cache
-        uses: actions/cache@v3
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # pin@v4.2.0
         with:
           path: node_modules/.cache/turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
