@@ -22,16 +22,6 @@ import {
 	PasskeyPublicKey,
 } from './publickey.js';
 
-export interface PasskeyCreateOptions {
-	/** The timeout for the passkey creation dialog. */
-	timeout: number;
-	/** The name of the user. */
-	name: string;
-	/** The display name of the user, this is shown at creation dialog. */
-	displayName: string;
-	/** The name of the relying party, this is shown to user in the passkey creation dialog. */
-	rpName: string;
-}
 type DeepPartialConfigKeys = 'rp' | 'user' | 'authenticatorSelection';
 
 type DeepPartial<T> = T extends object
@@ -40,7 +30,7 @@ type DeepPartial<T> = T extends object
 		}
 	: T;
 
-type BrowserPasswordProviderOptions = Pick<
+export type BrowserPasswordProviderOptions = Pick<
 	DeepPartial<PublicKeyCredentialCreationOptions>,
 	DeepPartialConfigKeys
 > &
@@ -67,7 +57,7 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 	async create(): Promise<RegistrationCredential> {
 		return (await navigator.credentials.create({
 			publicKey: {
-				timeout: 60000,
+				timeout: this.#options.timeout ?? 60000,
 				...this.#options,
 				rp: {
 					name: this.#name,
@@ -96,8 +86,8 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
 		return (await navigator.credentials.get({
 			publicKey: {
 				challenge,
-				userVerification: 'required',
-				timeout: this.#options.timeout,
+				userVerification: this.#options.authenticatorSelection?.userVerification || 'required',
+				timeout: this.#options.timeout ?? 60000,
 			},
 		})) as AuthenticationCredential;
 	}
@@ -134,11 +124,7 @@ export class PasskeyKeypair extends Signer {
 	/**
 	 * Creates an instance of Passkey signer invoking the passkey from navigator.
 	 */
-	static async getPasskeyInstance(
-		provider: PasskeyProvider = new BrowserPasskeyProvider('Sui Wallet', {
-			timeout: 60000,
-		}),
-	): Promise<PasskeyKeypair> {
+	static async getPasskeyInstance(provider: PasskeyProvider): Promise<PasskeyKeypair> {
 		// create a passkey secp256r1 with the provider.
 		const credential = await provider.create();
 
