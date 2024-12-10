@@ -229,8 +229,8 @@ struct UncommittedData {
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
 
-    pending_transaction_inserts: AtomicU64,
-    pending_transaction_commits: AtomicU64,
+    total_transaction_inserts: AtomicU64,
+    total_transaction_commits: AtomicU64,
 }
 
 impl UncommittedData {
@@ -242,8 +242,8 @@ impl UncommittedData {
             executed_effects_digests: DashMap::new(),
             pending_transaction_writes: DashMap::new(),
             transaction_events: DashMap::new(),
-            pending_transaction_inserts: AtomicU64::new(0),
-            pending_transaction_commits: AtomicU64::new(0),
+            total_transaction_inserts: AtomicU64::new(0),
+            total_transaction_commits: AtomicU64::new(0),
         }
     }
 
@@ -254,9 +254,9 @@ impl UncommittedData {
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
         self.transaction_events.clear();
-        self.pending_transaction_inserts
+        self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
-        self.pending_transaction_commits
+        self.total_transaction_commits
             .store(0, std::sync::atomic::Ordering::Relaxed);
     }
 
@@ -270,10 +270,10 @@ impl UncommittedData {
                     && self.executed_effects_digests.is_empty()
                     && self.transaction_events.is_empty()
                     && self
-                        .pending_transaction_inserts
+                        .total_transaction_inserts
                         .load(std::sync::atomic::Ordering::Relaxed)
                         == self
-                            .pending_transaction_commits
+                            .total_transaction_commits
                             .load(std::sync::atomic::Ordering::Relaxed),
             );
         }
@@ -896,17 +896,16 @@ impl WritebackCache {
 
         let prev = self
             .dirty
-            .pending_transaction_inserts
+            .total_transaction_inserts
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let pending_count = prev.saturating_sub(
             self.dirty
-                .pending_transaction_commits
+                .total_transaction_commits
                 .load(std::sync::atomic::Ordering::Relaxed),
         );
 
-        self.backpressure_manager
-            .set_backpressure(pending_count > self.backpressure_threshold);
+        self.set_backpressure(pending_count);
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
@@ -955,18 +954,28 @@ impl WritebackCache {
         let num_outputs = all_outputs.len() as u64;
         let num_commits = self
             .dirty
-            .pending_transaction_commits
+            .total_transaction_commits
             .fetch_add(num_outputs, std::sync::atomic::Ordering::Relaxed)
             + num_outputs;
 
         let pending_count = self
             .dirty
-            .pending_transaction_inserts
+            .total_transaction_inserts
             .load(std::sync::atomic::Ordering::Relaxed)
             .saturating_sub(num_commits);
 
-        self.backpressure_manager
-            .set_backpressure(pending_count < self.backpressure_threshold);
+        self.set_backpressure(pending_count);
+    }
+
+    fn set_backpressure(&self, pending_count: u64) {
+        let backpressure = pending_count > self.backpressure_threshold;
+        let backpressure_changed = self.backpressure_manager.set_backpressure(backpressure);
+        if backpressure_changed {
+            self.metrics.backpressure_toggles.inc();
+        }
+        self.metrics
+            .backpressure_status
+            .set(if backpressure { 1 } else { 0 });
     }
 
     fn flush_transactions_from_dirty_to_cached(

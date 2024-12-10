@@ -18,7 +18,8 @@ struct Watermarks {
 
 impl Watermarks {
     // we can only permit backpressure if the certified checkpoint is ahead of the executed
-    // checkpoint. Otherwise, backpressure might prevent construction of the next checkpoint.
+    // checkpoint. Otherwise, backpressure might prevent construction of the next checkpoint,
+    // because it could stop consensus commits from being processed.
     fn is_backpressure_suppressed(&self) -> bool {
         self.certified <= self.executed
     }
@@ -100,7 +101,8 @@ impl BackpressureManager {
         });
     }
 
-    pub fn set_backpressure(&self, backpressure: bool) {
+    // Returns true if the backpressure state was changed.
+    pub fn set_backpressure(&self, backpressure: bool) -> bool {
         self.backpressure_sender.send_if_modified(|bp| {
             if *bp != backpressure {
                 debug!(?backpressure, "setting backpressure");
@@ -109,7 +111,7 @@ impl BackpressureManager {
             } else {
                 false
             }
-        });
+        })
     }
 
     pub fn subscribe(self: &Arc<Self>) -> BackpressureSubscriber {
