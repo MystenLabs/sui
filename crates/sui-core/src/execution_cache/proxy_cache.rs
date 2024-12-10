@@ -312,6 +312,10 @@ impl ExecutionCacheCommit for ProxyCache {
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
         delegate_method!(self.persist_transactions(digests))
     }
+
+    fn approximate_pending_transaction_count(&self) -> u64 {
+        delegate_method!(self.approximate_pending_transaction_count())
+    }
 }
 
 impl CheckpointCache for ProxyCache {

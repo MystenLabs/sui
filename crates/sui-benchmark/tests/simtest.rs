@@ -891,9 +891,13 @@ mod test {
         match &mut cache_config {
             ExecutionCacheConfig::WritebackCache {
                 backpressure_threshold,
+                backpressure_threshold_for_rpc,
                 ..
             } => {
                 *backpressure_threshold = Some(1);
+                // for the tests to pass we still need to be able to submit transactions
+                // during backpressure.
+                *backpressure_threshold_for_rpc = Some(10000);
             }
             _ => panic!(),
         }

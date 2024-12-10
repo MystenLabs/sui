@@ -329,7 +329,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             usize::MAX,
             ArchiveReaderBalancer::default(),
             None,
-            backpressure_manager.subscribe(),
         )
         .await;
 
