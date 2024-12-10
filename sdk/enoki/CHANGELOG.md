@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.4.16
+
+### Patch Changes
+
+- 69ee5cc: remove @mysten/zklogin dependency
+
 ## 0.4.15
 
 ### Patch Changes
