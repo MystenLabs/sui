@@ -1,23 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use rand::rngs::OsRng;
+use rand::seq::IteratorRandom;
+use rosetta_client::start_rosetta_test_server;
 use serde_json::json;
+use shared_crypto::intent::Intent;
 use std::num::NonZeroUsize;
 use std::time::Duration;
-
-use rosetta_client::start_rosetta_test_server;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::{
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponseOptions,
+};
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, NetworkIdentifier,
     SubAccount, SubAccountType, SuiEnv,
 };
-use sui_rosetta::types::{Currencies, TransactionIdentifierResponse};
+use sui_rosetta::types::{Currencies, OperationType, TransactionIdentifierResponse};
 use sui_rosetta::CoinMetadataCache;
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
+use sui_sdk::SuiClient;
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::{
+    Argument, InputObjectKind, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
 use sui_types::utils::to_sender_signed_transaction;
 use test_cluster::TestClusterBuilder;
 
@@ -533,4 +544,118 @@ async fn test_pay_sui_multiple_times() {
             serde_json::to_string(&ops2).unwrap()
         );
     }
+}
+
+async fn get_random_sui(
+    client: &SuiClient,
+    sender: SuiAddress,
+    except: Vec<ObjectID>,
+) -> ObjectRef {
+    let coins = client
+        .read_api()
+        .get_owned_objects(
+            sender,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            /* cursor */ None,
+            /* limit */ None,
+        )
+        .await
+        .unwrap()
+        .data;
+
+    let coin_resp = coins
+        .iter()
+        .filter(|object| {
+            let obj = object.object().unwrap();
+            obj.is_gas_coin() && !except.contains(&obj.object_id)
+        })
+        .choose(&mut OsRng)
+        .unwrap();
+
+    let coin = coin_resp.object().unwrap();
+    (coin.object_id, coin.version, coin.digest)
+}
+#[tokio::test]
+async fn test_transfer_single_gas_coin() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_arg(recipient, Argument::GasCoin);
+        builder.finish()
+    };
+
+    let input_objects = pt
+        .input_objects()
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|obj| {
+            if let InputObjectKind::ImmOrOwnedMoveObject((id, ..)) = obj {
+                Some(*id)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    let gas = vec![get_random_sui(&client, sender, input_objects).await];
+    let gas_price = client
+        .governance_api()
+        .get_reference_gas_price()
+        .await
+        .unwrap();
+
+    let data = TransactionData::new_programmable(
+        sender,
+        gas,
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        gas_price,
+    );
+
+    let signature = keystore
+        .sign_secure(&sender, &data, Intent::sui_transaction())
+        .unwrap();
+
+    let response = client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            Transaction::from_data(data.clone(), vec![signature]),
+            SuiTransactionBlockResponseOptions::new()
+                .with_effects()
+                .with_object_changes()
+                .with_balance_changes()
+                .with_input(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
+        .unwrap();
+
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let operations = Operations::try_from_response(response, &coin_cache)
+        .await
+        .unwrap();
+    println!("operations: {operations:#?}");
+
+    let mut balance = 0;
+    operations
+        .into_iter()
+        .for_each(|op| {
+            if op.type_ == OperationType::Gas {
+                assert_eq!(op.account.unwrap().address, sender);
+            }
+            if op.type_ == OperationType::PaySui {
+                balance += op.amount.unwrap().value;
+            }
+        });
+    assert_eq!(balance, 0);
 }
