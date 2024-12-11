@@ -2,7 +2,6 @@ use crate::compatibility::InclusionCheck;
 use crate::normalized::{Enum, Function, Struct};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::ModuleId;
 
 pub trait InclusionCheckMode: Default {
     type Error;
@@ -23,8 +22,7 @@ pub trait InclusionCheckMode: Default {
     fn function_change(&mut self, name: &Identifier, new_func: &Function);
     fn function_missing(&mut self, name: &Identifier, old_func: &Function);
 
-    fn friend_new(&mut self, _new_friend: &ModuleId);
-    fn friend_missing(&mut self, _old_friend: &ModuleId);
+    fn friend_mismatch(&mut self, old_count: usize, new_count: usize);
 
     fn finish(&self, inclusion: &InclusionCheck) -> Result<(), Self::Error>;
 }
@@ -108,12 +106,7 @@ impl InclusionCheckMode for InclusionCheckExecutionMode {
         self.is_equal = false;
     }
 
-    fn friend_new(&mut self, _new_friend: &ModuleId) {
-        self.is_equal = false;
-    }
-
-    fn friend_missing(&mut self, _old_friend: &ModuleId) {
-        self.is_subset = false;
+    fn friend_mismatch(&mut self, _old_count: usize, _new_count: usize) {
         self.is_equal = false;
     }
 

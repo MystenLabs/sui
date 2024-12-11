@@ -603,7 +603,7 @@ fn mk_module_with_defs(
 
     for name in &friend_defs {
         identifiers.push(name.0.clone());
-        address_identifiers.push(name.1.clone());
+        address_identifiers.push(name.1);
         friend_decls.push(ModuleHandle {
             address: AddressIdentifierIndex(address_identifiers.len() as TableIndex - 1),
             name: IdentifierIndex(identifiers.len() as TableIndex - 1),
@@ -1229,7 +1229,7 @@ fn check_new_changed_missing_declarations() {
 
 #[test]
 fn test_friend_linking() {
-    let friend_modules = vec![
+    let friend_modules = [
         (Identifier::new("M1").unwrap(), AccountAddress::random()),
         (Identifier::new("M2").unwrap(), AccountAddress::random()),
         (Identifier::new("M3").unwrap(), AccountAddress::random()),

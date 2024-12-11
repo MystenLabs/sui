@@ -431,16 +431,10 @@ impl InclusionCheck {
             }
         }
 
-        // compare friends
-        for mark in compare_ord_iters(
-            old_module.friends.iter().map(|f| (f, &())),
-            new_module.friends.iter().map(|f| (f, &())),
-        ) {
-            match mark {
-                Mark::New(name, _) => context.friend_new(name),
-                Mark::Missing(name, _) => context.friend_missing(name),
-                Mark::Existing(_, _, _) => {}
-            }
+        // friend checks, keeping in line with the previous implementation only checking for length differences.
+        // will need followup work and a protocol version for more detailed friend checks.
+        if self == &Self::Equal && old_module.friends.len() != new_module.friends.len() {
+            context.friend_mismatch(old_module.friends.len(), new_module.friends.len());
         }
 
         context.finish(self)
