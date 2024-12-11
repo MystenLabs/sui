@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod coin_balance_buckets;
+pub(crate) mod coin_balance_buckets_pruner;
 pub(crate) mod ev_emit_mod;
 pub(crate) mod ev_struct_inst;
 pub(crate) mod kv_checkpoints;
