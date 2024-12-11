@@ -118,6 +118,7 @@ members = [
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
     "crates/sui-indexer-alt-framework",
+    "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -142,7 +143,7 @@ members = [
     "crates/sui-package-dump",
     "crates/sui-package-management",
     "crates/sui-package-resolver",
-    "crates/sui-pg-temp-db",
+    "crates/sui-pg-db",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
@@ -508,7 +509,7 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.12", features = ["transport"] }
+tonic = { version = "0.12", features = ["transport", "tls-webpki-roots"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
 tonic-rustls = "0.1.0"
@@ -648,6 +649,7 @@ sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
+sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
@@ -669,7 +671,7 @@ sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
-sui-pg-temp-db = { path = "crates/sui-pg-temp-db" }
+sui-pg-db = { path = "crates/sui-pg-db" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }

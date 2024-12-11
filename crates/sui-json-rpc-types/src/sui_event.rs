@@ -51,7 +51,7 @@ pub struct SuiEvent {
     pub type_: StructTag,
     /// Parsed json value of the event
     pub parsed_json: Value,
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "sui_types::sui_serde::Base64orBase58")]
     #[schemars(with = "Base64")]
     /// Base64 encoded bcs bytes of the move event
     pub bcs: Vec<u8>,

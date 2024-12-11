@@ -298,3 +298,9 @@ export const SenderSignedTransaction = bcs.struct('SenderSignedTransaction', {
 export const SenderSignedData = bcs.vector(SenderSignedTransaction, {
 	name: 'SenderSignedData',
 });
+
+export const PasskeyAuthenticator = bcs.struct('PasskeyAuthenticator', {
+	authenticatorData: bcs.vector(bcs.u8()),
+	clientDataJson: bcs.string(),
+	userSignature: bcs.vector(bcs.u8()),
+});

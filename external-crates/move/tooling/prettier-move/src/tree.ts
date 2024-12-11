@@ -174,6 +174,7 @@ export class Tree {
 			// 'call_expression',
 			// 'macro_call_expression',
 			'dot_expression',
+			'index_expression',
 			'vector_expression',
 			'expression_list',
 			'if_expression',

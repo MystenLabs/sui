@@ -15,8 +15,6 @@ use handlers::{
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
 };
-use models::MIGRATIONS;
-use sui_indexer_alt_framework::db::DbArgs;
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
     concurrent::{ConcurrentConfig, PrunerConfig},
@@ -24,14 +22,14 @@ use sui_indexer_alt_framework::pipeline::{
     CommitterConfig,
 };
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
+use sui_indexer_alt_schema::MIGRATIONS;
+use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
 pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod handlers;
-pub mod models;
-pub mod schema;
 
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
@@ -219,11 +217,11 @@ pub async fn start_indexer(
                 indexer
                     .concurrent_pipeline(
                         $lagged_handler,
-                        ConcurrentConfig {
-                            committer: $lagged_config.unwrap_or_default().finish(committer.clone()),
+                        $lagged_config.unwrap_or_default().finish(ConcurrentConfig {
+                            committer: committer.clone(),
                             pruner: None,
                             checkpoint_lag: Some(consistent_range),
-                        },
+                        }),
                     )
                     .await?;
             }

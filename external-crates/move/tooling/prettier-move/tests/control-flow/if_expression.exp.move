@@ -53,9 +53,7 @@ module test::if_expression {
         };
 
         // should keep as is, no additions;
-        if (true) {
-            let a = b;
-        };
+        if (true) { let a = b; };
 
         if (very_very_long_if_condition)
             very_very_long_if_condition > very_very_long_if_condition;

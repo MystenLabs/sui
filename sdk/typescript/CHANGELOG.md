@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 1.16.2
+
+### Patch Changes
+
+- 100207f: Fixes replacements on `namedPackagesPlugin` to only replace the package target if it is a
+  mvr name.
+
 ## 1.16.1
 
 ### Patch Changes
