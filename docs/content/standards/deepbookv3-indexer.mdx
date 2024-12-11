@@ -49,14 +49,15 @@ Following are the decimal places (scalars) used to determine the base unit for e
 
 | Asset | Scalar |
 | --- | --- |
-| Deepbook Token (DEEP) | 6 |
-| SUI | 9 |
-| Native USDC | 6 |
-| Wrapped USDC (wUSDC) | 6 |
+| AUSD | 6 |
 | Bridged Eth (bETH) | 8 |
-| Wrapped USDT (wUSDT) | 6 |
+| Deepbook Token (DEEP) | 6 |
+| Native USDC | 6 |
+| SUI | 9 |
 | SuiNS Token (NS) | 6 |
 | TYPUS | 9 |
+| Wrapped USDC (wUSDC) | 6 |
+| Wrapped USDT (wUSDT) | 6 |
 
 To convert the returned volume to the standard asset unit, divide the value by 10^SCALAR. For example:
 
@@ -207,7 +208,7 @@ produces a response similar to
 
 Use this endpoint to get historical volume for all pools. Include the optional `start_time` and `end_time` values as Unix timestamp seconds to retrieve the volume within that time range.
 
-By default, this endpoint retrieves the last 24-hour trading volume in the base asset. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+By default, this endpoint retrieves the last 24-hour trading volume in the quote asset. If you want to query the base asset instead, set `volume_in_base` to `true`.
 
 #### Response
 
@@ -250,7 +251,7 @@ produces a response similar to
 
 Get historical volume by balance manager for a specific time range. Delimit the	`pool_names` with commas, and use Unix timestamp seconds for the optional `start_time` and `end_time` values.
 
-By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the base asset for specified pools. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the quote asset for specified pools. If you want to query the base asset instead, set `volume_in_base` to `true`.
 
 #### Response
 
@@ -292,7 +293,7 @@ produces a response similar to
 
 Get historical volume by `BalanceManager` for a specific time range with intervals. Delimit `pool_names` with commas and use Unix timestamp seconds for the optional `start_time` and `end_time` values. Use number of seconds for the `interval` value. As a simplified interval example, if `start_time` is 5, `end_time` is 10, and `interval` is 2, then the response includes volume from 5 to 7 and 7 to 9, with start time of the periods as keys.
 
-By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the base asset for specified pools. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+By default, this endpoint retrieves the last 24-hour trading volume for the balance manager in the quote asset for specified pools. If you want to query the base asset instead, set `volume_in_base` to `true`.
 
 #### Response
 
