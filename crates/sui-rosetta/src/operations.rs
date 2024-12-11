@@ -566,6 +566,74 @@ impl Operations {
         };
         balance_change.chain(gas)
     }
+
+    fn process_single_gascoin_transfer(
+        coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
+        tx: SuiTransactionBlockKind,
+        sender: SuiAddress,
+        gas_used: i128,
+    ) -> Vec<Operation> {
+        let mut is_single_gascoin_transfer = false;
+        match tx {
+            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
+                let SuiProgrammableTransactionBlock {
+                    inputs: _,
+                    commands,
+                } = &pt;
+                for command in commands {
+                    match command {
+                        SuiCommand::TransferObjects(objs, _) => {
+                            if objs.len() == 1 {
+                                match objs[0] {
+                                    SuiArgument::GasCoin => {
+                                        is_single_gascoin_transfer = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        if !is_single_gascoin_transfer {
+            return vec![];
+        };
+        let mut operations = vec![];
+        coin_change_operations.into_iter().for_each(|operation| {
+            match operation.type_ {
+                OperationType::Gas => {
+                    // change gas account back to sender as the sender is the one
+                    // who paid for the txn (this is the format Rosetta wants to process)
+                    operations.push(Operation::gas(sender, gas_used))
+                }
+                OperationType::SuiBalanceChange => {
+                    operation.account.map(|account| {
+                        let mut amount = match operation.amount {
+                            Some(amount) => amount.value,
+                            None => 0,
+                        };
+                        if account.address == sender {
+                            // sender's balance needs to be adjusted for gas
+                            amount -= gas_used;
+                        } else {
+                            // recipient's balance needs to be adjusted for gas
+                            amount += gas_used;
+                        }
+                        operations.push(Operation::pay_sui(
+                            operation.status,
+                            account.address,
+                            amount,
+                        ));
+                    });
+                }
+                _ => {}
+            }
+        });
+        operations
+    }
 }
 
 impl Operations {
@@ -600,7 +668,7 @@ impl Operations {
             - gas_summary.computation_cost as i128;
 
         let status = Some(effect.into_status().into());
-        let ops = Operations::try_from_data(tx.data, status)?;
+        let ops = Operations::try_from_data(tx.data.clone(), status)?;
         let ops = ops.into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -670,17 +738,28 @@ impl Operations {
         }
 
         // Extract coin change operations from balance changes
-        let coin_change_operations = Self::process_balance_change(
+        let mut coin_change_operations = Self::process_balance_change(
             gas_owner,
             gas_used,
             balance_changes,
             status,
-            accounted_balances,
+            accounted_balances.clone(),
         );
+
+        let mut single_gascoin_transfer = vec![];
+        if gas_owner != sender && accounted_balances.is_empty() {
+            single_gascoin_transfer = Self::process_single_gascoin_transfer(
+                &mut coin_change_operations,
+                tx.data.transaction().clone(),
+                sender,
+                gas_used,
+            );
+        }
 
         let ops: Operations = ops
             .into_iter()
             .chain(coin_change_operations)
+            .chain(single_gascoin_transfer)
             .chain(staking_balance)
             .collect();
 
