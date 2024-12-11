@@ -377,32 +377,55 @@ async fn test_transaction_execution() {
 
 #[tokio::test]
 async fn test_zklogin_sig_verify() {
+    use chrono::Utc;
     use shared_crypto::intent::Intent;
     use shared_crypto::intent::IntentMessage;
+    use std::time::Instant;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::SuiAddress;
     use sui_types::crypto::Signature;
     use sui_types::signature::GenericSignature;
     use sui_types::utils::load_test_vectors;
     use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+    use tracing::warn;
+
+    let start_time = Utc::now();
+    let timer = Instant::now();
+
+    warn!("starting test {}", start_time.format("%Y-%m-%d %H:%M:%S"));
 
     telemetry_subscribers::init_for_testing();
 
+    warn!(
+        "initialized telemetry subscribers, elapsed: {:?}",
+        timer.elapsed()
+    );
+
     let cluster = start_cluster(ServiceConfig::test_defaults()).await;
+
+    warn!("started cluster, elapsed: {:?}", timer.elapsed());
 
     let test_cluster = &cluster.network.validator_fullnode_handle;
     test_cluster.wait_for_epoch_all_nodes(1).await;
+    warn!("waited for epoch, elapsed: {:?}", timer.elapsed());
     test_cluster.wait_for_authenticator_state_update().await;
+    warn!(
+        "waited for authenticator state update, elapsed: {:?}",
+        timer.elapsed()
+    );
 
     // Construct a valid zkLogin transaction data, signature.
     let (kp, pk_zklogin, inputs) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    warn!("loaded test vectors, elapsed: {:?}", timer.elapsed());
 
     let zklogin_addr = (pk_zklogin).into();
     let rgp = test_cluster.get_reference_gas_price().await;
+    warn!("got reference gas price, elapsed: {:?}", timer.elapsed());
     let gas = test_cluster
         .fund_address_and_return_gas(rgp, Some(20000000000), zklogin_addr)
         .await;
+    warn!("funded address, elapsed: {:?}", timer.elapsed());
     let tx_data = TestTransactionBuilder::new(zklogin_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -413,6 +436,7 @@ async fn test_zklogin_sig_verify() {
         2,
         eph_sig.clone(),
     ));
+    warn!("Built tx data, elapsed: {:?}", timer.elapsed());
 
     // construct all parameters for the query
     let bytes = Base64::encode(bcs::to_bytes(&tx_data).unwrap());
@@ -444,17 +468,24 @@ async fn test_zklogin_sig_verify() {
             value: json!(author),
         },
     ];
+    warn!("constructed graphql query, elapsed: {:?}", timer.elapsed());
     let res = cluster
         .graphql_client
         .execute_to_graphql(query.to_string(), true, variables, vec![])
         .await
         .unwrap();
+    warn!("executed graphql query, elapsed: {:?}", timer.elapsed());
 
     // a valid signature with tx bytes returns success as true.
     let binding = res.response_body().data.clone().into_json().unwrap();
     tracing::info!("tktkbinding: {:?}", binding);
     let res = binding.get("verifyZkloginSignature").unwrap();
     assert_eq!(res.get("success").unwrap(), true);
+
+    warn!(
+        "first part of test completed, elapsed: {:?}",
+        timer.elapsed()
+    );
 
     // set up an invalid intent scope.
     let incorrect_intent_scope = "PERSONAL_MESSAGE";
@@ -480,12 +511,20 @@ async fn test_zklogin_sig_verify() {
             value: json!(author),
         },
     ];
+    warn!(
+        "constructed incorrect variables, elapsed: {:?}",
+        timer.elapsed()
+    );
     //  returns a non-empty errors list in response
     let res = cluster
         .graphql_client
         .execute_to_graphql(query.to_string(), true, incorrect_variables, vec![])
         .await
         .unwrap();
+    warn!(
+        "executed incorrect graphql query, elapsed: {:?}",
+        timer.elapsed()
+    );
     let binding = res.response_body().data.clone().into_json().unwrap();
     let res = binding.get("verifyZkloginSignature").unwrap();
     assert_eq!(res.get("success").unwrap(), false);
