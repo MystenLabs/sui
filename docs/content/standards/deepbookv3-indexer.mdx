@@ -38,7 +38,14 @@ https://deepbook-indexer.mainnet.mystenlabs.com/
 
 ## Asset conversions
 
-All volumes that the indexer returns are expressed in the smallest unit of the corresponding asset. Following are the decimal places (scalars) used to determine the base unit for each asset.
+Volumes returned by the following endpoints are expressed in the smallest unit of the corresponding asset. 
+
+- `/all_historical_volume`
+- `/historical_volume`
+- `/historical_volume_by_balance_manager_id`
+- `/historical_volume_by_balance_manager_id_with_interval`
+
+Following are the decimal places (scalars) used to determine the base unit for each asset.
 
 | Asset | Scalar |
 | --- | --- |
@@ -156,12 +163,12 @@ produces a response similar to
 ### Get historical volume for pool in a specific time range
 
 ```http
-/historical_volume/:pool_names?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
+/historical_volume/:pool_names?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
 Use this endpoint to get historical volume for pools for a specific time range. Delimit the	`pool_names` with commas, and use Unix timestamp seconds for `start_time` and `end_time` values. 
 
-By default, this endpoint retrieves the last 24-hour trading volume in the base asset for specified pools. If you want to query the quote asset instead, set `volume_in_base` to `false`.
+By default, this endpoint retrieves the last 24-hour trading volume in the quote asset for specified pools. If you want to query the base asset instead, set `volume_in_base` to `true`.
 
 #### Response
 
@@ -195,7 +202,7 @@ produces a response similar to
 ### Get historical volume for all pools
 
 ```http
-/all_historical_volume?start_time=1731260703&end_time=1731692703&volume_in_base=true
+/all_historical_volume?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
 Use this endpoint to get historical volume for all pools. Include the optional `start_time` and `end_time` values as Unix timestamp seconds to retrieve the volume within that time range.
@@ -218,7 +225,7 @@ Returns the historical volume for all available pools within the time range (if 
 A successful request to the following endpoint
 
 ```http
-/all_historical_volume?start_time=1731260703&end_time=1731692703&volume_in_base=true
+/all_historical_volume?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
 produces a response similar to
@@ -238,7 +245,7 @@ produces a response similar to
 ### Get historical volume by balance manager
 
 ```
-/historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
+/historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
 Get historical volume by balance manager for a specific time range. Delimit the	`pool_names` with commas, and use Unix timestamp seconds for the optional `start_time` and `end_time` values.
@@ -249,8 +256,8 @@ By default, this endpoint retrieves the last 24-hour trading volume for the bala
 
 ```json
 {
-	"pool_id_1": [maker_volume, taker_volume],
-	"pool_id_2": …
+	"pool_name_1": [maker_volume, taker_volume],
+	"pool_name_2": …
 }
 ```
 
@@ -280,7 +287,7 @@ produces a response similar to
 ### Get historical volume by balance manager within a specific time range and intervals
 
 ```
-/historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id?start_time=<UNIX-TIMESTAMP>&end_time=<UNIX-TIMESTAMP>&interval=<UNIX-TIMESTAMP>&volume_in_base=<BOOLEAN>
+/historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&interval=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
 Get historical volume by `BalanceManager` for a specific time range with intervals. Delimit `pool_names` with commas and use Unix timestamp seconds for the optional `start_time` and `end_time` values. Use number of seconds for the `interval` value. As a simplified interval example, if `start_time` is 5, `end_time` is 10, and `interval` is 2, then the response includes volume from 5 to 7 and 7 to 9, with start time of the periods as keys.
@@ -344,14 +351,14 @@ Each summary object has the following form. The order of fields in the JSON obje
 {
 	"trading_pairs": "string",
 	"quote_currency": "string",
-	"last_price": integer,
-	"lowest_price_24h": integer,
-	"highest_bid": integer,
-	"base_volume": integer,
-	"price_change_percent_24h":integer,
-	"quote_volume": integer,
-	"lowest_ask": integer,
-	"highest_price_24h": integer,
+	"last_price": float,
+	"lowest_price_24h": float,
+	"highest_bid": float,
+	"base_volume": float,
+	"price_change_percent_24h": float,
+	"quote_volume": float,
+	"lowest_ask": float,
+	"highest_price_24h": float,
 	"base_currency": "string"
 }
 ```
@@ -424,9 +431,9 @@ Returns all trading pairs volume (already scaled), last price, and `isFrozen` va
 ```json
 {
   "TRADING_PAIR": {
-    "base_volume": integer,
-    "quote_volume": integer,
-    "last_price": integer,
+    "base_volume": float,
+    "quote_volume": float,
+    "last_price": float,
     "isFrozen": integer (0 | 1)
   }
 }
