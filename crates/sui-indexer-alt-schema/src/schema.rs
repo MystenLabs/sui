@@ -3,6 +3,17 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    coin_balance_buckets (object_id, cp_sequence_number) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+        owner_kind -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        coin_type -> Nullable<Bytea>,
+        coin_balance_bucket -> Nullable<Int2>,
+    }
+}
+
+diesel::table! {
     ev_emit_mod (package, module, tx_sequence_number) {
         package -> Bytea,
         module -> Text,
@@ -240,6 +251,7 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    coin_balance_buckets,
     ev_emit_mod,
     ev_struct_inst,
     kv_checkpoints,
