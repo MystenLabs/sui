@@ -6,20 +6,17 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::{anyhow, bail, Result};
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::{
-    db,
-    pipeline::{concurrent::Handler, Processor},
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_schema::{
+    objects::{StoredCoinBalanceBucket, StoredCoinOwnerKind},
+    schema::coin_balance_buckets,
 };
+use sui_pg_db as db;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     full_checkpoint_content::CheckpointData,
     object::{Object, Owner},
     TypeTag,
-};
-
-use crate::{
-    models::objects::{StoredCoinBalanceBucket, StoredCoinOwnerKind},
-    schema::coin_balance_buckets,
 };
 
 pub(crate) struct CoinBalanceBuckets;
@@ -48,11 +45,11 @@ impl Processor for CoinBalanceBuckets {
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
-        let latest_live_output_objects = checkpoint
+        let latest_live_output_objects: BTreeMap<_, _> = checkpoint
             .latest_live_output_objects()
             .into_iter()
             .map(|o| (o.id(), o))
-            .collect::<BTreeMap<_, _>>();
+            .collect();
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         for (object_id, input_object) in checkpoint_input_objects.iter() {
             // This loop processes all coins that were owned by a single address prior to the checkpoint,
@@ -82,22 +79,14 @@ impl Processor for CoinBalanceBuckets {
 
             let (input_bucket, input_owner) = match checkpoint_input_objects.get(object_id) {
                 Some(input_object) => {
-                    let Some(input_coin) = input_object.as_coin_maybe() else {
-                        bail!("Failed to deserialize Coin for {object_id} in the checkpoint input objects");
-                    };
-                    let bucket = (input_coin.balance.value() as f64).log10() as i16;
+                    let bucket = get_coin_balance_bucket(input_object)?;
                     let owner = get_coin_owner(input_object);
                     (Some(bucket), owner)
                 }
                 None => (None, None),
             };
 
-            let Some(output_coin) = output_object.as_coin_maybe() else {
-                bail!(
-                    "Failed to deserialize Coin for {object_id} in the latest live output objects"
-                );
-            };
-            let output_balance_bucket = (output_coin.balance.value() as f64).log10() as i16;
+            let output_balance_bucket = get_coin_balance_bucket(output_object)?;
             let output_owner = get_coin_owner(output_object);
 
             match (input_owner, output_owner) {
@@ -207,4 +196,16 @@ fn get_coin_owner(object: &Object) -> Option<(StoredCoinOwnerKind, SuiAddress)> 
         )),
         Owner::Immutable | Owner::ObjectOwner(_) | Owner::Shared { .. } => None,
     }
+}
+
+fn get_coin_balance_bucket(coin: &Object) -> anyhow::Result<i16> {
+    let Some(coin) = coin.as_coin_maybe() else {
+        bail!("Failed to deserialize Coin for {}", coin.id());
+    };
+    let balance = coin.balance.value();
+    if balance == 0 {
+        return Ok(0);
+    }
+    let bucket = balance.ilog10() as i16;
+    Ok(bucket)
 }
