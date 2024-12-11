@@ -78,7 +78,6 @@ impl BackpressureManager {
     pub fn update_highest_certified_checkpoint(&self, seq: CheckpointSequenceNumber) {
         self.watermarks_sender.send_if_modified(|watermarks| {
             if seq > watermarks.certified {
-                debug_assert_eq!(seq, watermarks.certified + 1);
                 watermarks.certified = seq;
                 debug!(?watermarks, "updating highest certified checkpoint");
                 true
