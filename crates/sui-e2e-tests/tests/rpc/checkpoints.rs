@@ -55,33 +55,8 @@ async fn get_full_checkpoint() {
     let core_client = CoreClient::new(test_cluster.rpc_url()).unwrap();
 
     let latest = client.get_latest_checkpoint().await.unwrap().into_inner();
-    let _ = client
-        .get_full_checkpoint(latest.checkpoint.sequence_number)
-        .await
-        .unwrap();
     let _ = core_client
         .get_full_checkpoint(latest.checkpoint.sequence_number)
         .await
         .unwrap();
-
-    let client = reqwest::Client::new();
-    let url = format!(
-        "{}/v2/checkpoints/{}/full",
-        test_cluster.rpc_url(),
-        latest.checkpoint.sequence_number
-    );
-
-    // TODO remove this once the BCS format is no longer supported by the rest endpoint and clients
-    // wanting binary have migrated to grpc
-    let bytes = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
-        .send()
-        .await
-        .unwrap()
-        .bytes()
-        .await
-        .unwrap();
-    let _checkpoints =
-        bcs::from_bytes::<sui_types::full_checkpoint_content::CheckpointData>(&bytes).unwrap();
 }
