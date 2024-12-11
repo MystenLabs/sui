@@ -12,7 +12,11 @@ mod token_set;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{
-    parser::{self, ast::PackageDefinition, syntax::parse_file_string},
+    parser::{
+        self,
+        ast::{PackageDefinition, PkgDefKind},
+        syntax::parse_file_string,
+    },
     shared::{
         files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex,
         NamedAddressMaps,
@@ -23,7 +27,7 @@ use comments::*;
 use move_command_line_common::files::FileHash;
 use move_symbol_pool::Symbol;
 use rayon::iter::*;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 use vfs::VfsPath;
 
 struct ParsedFile {
@@ -94,10 +98,14 @@ pub(crate) fn parse_program(
         } = file;
         files.add(hash, fname, text);
         source_comments.insert(hash, comments);
-        let defs = defs.into_iter().map(|def| PackageDefinition {
-            package,
-            named_address_map,
-            def,
+        let defs = defs.into_iter().map(|def| {
+            let pkg_def_kind = pkg_def_kind(compilation_env, is_dep, PathBuf::from(fname.as_str()));
+            PackageDefinition {
+                package,
+                named_address_map,
+                def,
+                def_kind: pkg_def_kind,
+            }
         });
         if is_dep {
             lib_definitions.extend(defs);
@@ -112,6 +120,20 @@ pub(crate) fn parse_program(
         lib_definitions,
     };
     Ok((files, pprog, source_comments))
+}
+
+fn pkg_def_kind(compilation_env: &CompilationEnv, is_dep: bool, path: PathBuf) -> PkgDefKind {
+    if is_dep {
+        PkgDefKind::Library
+    } else if let Some(files_to_compile) = compilation_env.files_to_compile() {
+        if files_to_compile.contains(&path) {
+            PkgDefKind::Source
+        } else {
+            PkgDefKind::Skipped
+        }
+    } else {
+        PkgDefKind::Source
+    }
 }
 
 fn ensure_targets_deps_dont_intersect(
