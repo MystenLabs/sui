@@ -433,7 +433,7 @@ impl InclusionCheck {
 
         // friend checks, keeping in line with the previous implementation only checking for length differences.
         // will need followup work and a protocol version for more detailed friend checks.
-        if self == &Self::Equal && old_module.friends.len() != new_module.friends.len() {
+        if old_module.friends.len() != new_module.friends.len() {
             context.friend_mismatch(old_module.friends.len(), new_module.friends.len());
         }
 
