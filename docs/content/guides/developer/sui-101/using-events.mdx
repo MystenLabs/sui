@@ -154,6 +154,90 @@ A successful `curl` return
 
 The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`client.queryEvents`](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#queryEvents).
 
+<details>
+<summary>
+    TypeScript SDK queryEvents example
+</summary>
+
+```
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { Button, Flex, Heading } from "@radix-ui/themes";
+
+export function Creategame({ onCreated }: { onCreated: (id: string) => void }) {
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
+  const client = useSuiClient();
+
+  const executeMoveCall = async (method: "small" | "large") => {
+    if (!currentAccount?.address) {
+      console.error("No connected account found.");
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+
+      tx.moveCall({
+        arguments: [tx.pure.u64(method === "small" ? 0 : 1)],
+        target: `<PACKAGE-ID>::<MODULE>::create_game`,
+      });
+
+      const txResult = await signAndExecute({
+        transaction: tx,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const eventsResult = await client.queryEvents({
+        query: { Transaction: txResult.digest },
+      });
+
+      if (eventsResult.data.length > 0) {
+        const firstEvent = eventsResult.data[0]?.parsedJson as { msg?: string };
+        const result = firstEvent?.msg || "No events found for the given criteria.";
+        onCreated(result);
+      } else {
+        onCreated("No events found for the given criteria.");
+      }
+    } catch (error) {
+      console.error("Error creating game or querying events:", error);
+    }
+  };
+
+  return (
+    <>
+      <Heading size="3">Game Start</Heading>
+      <Flex direction="column" gap="2">
+        <Flex direction="row" gap="2">
+          <Button onClick={() => executeMoveCall("small")}>small</Button>
+          <Button onClick={() => executeMoveCall("large")}>large</Button>
+        </Flex>
+      </Flex>
+    </>
+  );
+}
+```
+The example displays the following JSON representation of the event. 
+```
+{
+  "id": {
+    "txDigest": "46vSzYS9PaTWZDju2N8ECebAGLrXBdrP9NmvvydtDW2c",
+    "eventSeq": "0"
+  },
+  "packageId": "<PACKAGE-ID>",
+  "transactionModule": "<MODULE>",
+  "sender": "<SENDER-ADDRESS>",
+  "type": "<PACKAGE-ID>::<MODULE>::Result",
+  "parsedJson": {
+    "msg": "You Lose :("
+  },
+  "bcs": "DRUZAsJK2DLrBj27"
+}
+```
+</details>
+
+
 #### Filtering event queries
 
 To filter the events returned from your queries, use the following data structures.
