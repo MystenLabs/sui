@@ -95,8 +95,9 @@ pub struct SequentialConfig {
 /// channels close, or any of its independent tasks fail.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_watermark: Option<CommitterWatermark<'static>>,
+    initial_watermark: CommitterWatermark<'static>,
     config: SequentialConfig,
+    skip_watermark: bool,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -116,6 +117,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let committer = committer::<H>(
         config,
         initial_watermark,
+        skip_watermark,
         committer_rx,
         watermark_tx,
         db.clone(),
