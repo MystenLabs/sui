@@ -96,11 +96,7 @@ pub async fn start_faucet(
     let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
