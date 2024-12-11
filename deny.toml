@@ -75,6 +75,7 @@ allow = [
     "Unlicense",
     "BSL-1.0",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     #"Apache-2.0 WITH LLVM-exception",
 ]
 # The confidence threshold for detecting a license from license text.
