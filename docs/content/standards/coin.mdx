@@ -231,6 +231,10 @@ The functions return `true` if the address is found on the coin's list, otherwis
 
 Use the `coin::deny_list_v2_is_global_pause_enabled_current_epoch` and `coin::deny_list_v2_is_global_pause_enabled_next_epoch` functions to check if a global pause is currently active or becomes active in the next epoch. 
 
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_is_global_pause_enabled_current_epoch noComments}
+
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_is_global_pause_enabled_next_epoch noComments}
+
 ## Update coin metadata
 
 If the `CoinMetadata` object was not frozen upon creation, you can use the following functions to update its values.
