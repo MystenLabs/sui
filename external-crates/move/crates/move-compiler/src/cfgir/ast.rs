@@ -230,11 +230,11 @@ impl AstDebug for ModuleDefinition {
         w.writeln(match target_kind {
             TargetKind::Source {
                 is_root_package: true,
-            } => "root module",
+            } => "root module".to_string(),
             TargetKind::Source {
                 is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
+            } => "dependency module".to_string(),
+            TargetKind::External(k) => format!("external module {:?}", k),
         });
         w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {

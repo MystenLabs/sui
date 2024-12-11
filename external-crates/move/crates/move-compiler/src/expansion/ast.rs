@@ -109,7 +109,7 @@ pub enum TargetKind {
     Source { is_root_package: bool },
     /// A dependency only used for linking.
     /// No bytecode or CompiledModules are generated
-    External,
+    External(P::PkgDefKind),
 }
 
 #[derive(Clone, Copy)]
@@ -1133,11 +1133,11 @@ impl AstDebug for ModuleDefinition {
         w.writeln(match target_kind {
             TargetKind::Source {
                 is_root_package: true,
-            } => "root module",
+            } => "root module".to_string(),
             TargetKind::Source {
                 is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
+            } => "dependency module".to_string(),
+            TargetKind::External(k) => format!("external module {:?}", k),
         });
         use_funs.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {

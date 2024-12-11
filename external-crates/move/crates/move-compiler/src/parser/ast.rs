@@ -72,11 +72,22 @@ pub struct Program {
     pub lib_definitions: Vec<PackageDefinition>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum PkgDefKind {
+    /// source - full compilation
+    Source,
+    /// library - skip function bodies
+    Library,
+    /// skipped source - skip function bodies
+    Skipped,
+}
+
 #[derive(Debug, Clone)]
 pub struct PackageDefinition {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
     pub def: Definition,
+    pub def_kind: PkgDefKind,
 }
 
 #[derive(Debug, Clone)]
@@ -1347,6 +1358,7 @@ fn ast_debug_package_definition(
         package,
         named_address_map,
         def,
+        def_kind: _,
     } = pkg;
     match package {
         Some(n) => w.writeln(format!("package: {}", n)),

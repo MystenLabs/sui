@@ -1210,11 +1210,11 @@ impl AstDebug for ModuleDefinition {
         w.writeln(match target_kind {
             TargetKind::Source {
                 is_root_package: true,
-            } => "root module",
+            } => "root module".to_string(),
             TargetKind::Source {
                 is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
+            } => "dependency module".to_string(),
+            TargetKind::External(k) => format!("external module {:?}", k),
         });
         use_funs.ast_debug(w);
         syntax_methods.ast_debug(w);
