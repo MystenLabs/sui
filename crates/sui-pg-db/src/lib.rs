@@ -44,6 +44,14 @@ impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
         Duration::from_millis(self.connection_timeout_ms)
     }
+
+    pub fn new(database_url: Url) -> Self {
+        Self {
+            database_url,
+            connection_pool_size: 10,
+            connection_timeout_ms: 1000,
+        }
+    }
 }
 
 impl Db {

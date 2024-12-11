@@ -255,3 +255,303 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
         );
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{pipeline::Processor, MIGRATIONS};
+    use prometheus::Registry;
+    use std::time::Duration;
+    use sui_field_count::FieldCount;
+    use sui_pg_db::{self as db, temp::TempDb, Db, DbArgs};
+    use tokio::sync::mpsc;
+
+    struct TestHandler;
+
+    struct Entry;
+
+    impl FieldCount for Entry {
+        const FIELD_COUNT: usize = 1;
+    }
+
+    impl Processor for TestHandler {
+        const NAME: &'static str = "test";
+
+        type Value = Entry;
+
+        fn process(
+            &self,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Handler for TestHandler {
+        async fn commit(
+            _values: &[Self::Value],
+            _conn: &mut db::Connection<'_>,
+        ) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    async fn test_db() -> (TempDb, Db) {
+        let temp_db = TempDb::new().unwrap();
+        let db_config = DbArgs::new(temp_db.database().url().clone());
+        let db = Db::new(db_config).await.unwrap();
+        db.run_migrations(MIGRATIONS).await.unwrap();
+        (temp_db, db)
+    }
+
+    // Create a new commit watermark with the given checkpoint.
+    // For the testing done here, only checkpoint matters so all other fields are arbitrary.
+    async fn new_commit_watermark(checkpoint: i64) -> CommitterWatermark<'static> {
+        CommitterWatermark {
+            pipeline: "test".into(),
+            epoch_hi_inclusive: 1,
+            checkpoint_hi_inclusive: checkpoint,
+            tx_hi: 10,
+            timestamp_ms_hi_inclusive: 100,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_commit_watermark_basic() {
+        let (_temp_db, db) = test_db().await;
+        let registry = Registry::new_custom(Some("indexer_alt".to_string()), None).unwrap();
+        let metrics = Arc::new(IndexerMetrics::new(&registry));
+        let cancel = CancellationToken::new();
+        let (tx, rx) = mpsc::channel(100);
+
+        let initial_watermark = new_commit_watermark(5).await;
+
+        let handle = commit_watermark::<TestHandler>(
+            Some(initial_watermark),
+            CommitterConfig::default(),
+            false,
+            rx,
+            db.clone(),
+            metrics,
+            cancel.clone(),
+        );
+
+        // Send some watermark parts
+        let part = WatermarkPart {
+            watermark: new_commit_watermark(6).await,
+            batch_rows: 0,
+            total_rows: 0,
+        };
+        tx.send(vec![part]).await.unwrap();
+
+        // Let the task process the watermark
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 6);
+
+        // Cancel and wait for shutdown
+        cancel.cancel();
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_commit_watermark_skip() {
+        let (_temp_db, db) = test_db().await;
+        let registry = Registry::new_custom(Some("indexer_alt".to_string()), None).unwrap();
+        let metrics = Arc::new(IndexerMetrics::new(&registry));
+        let cancel = CancellationToken::new();
+        let (_tx, rx) = mpsc::channel(100);
+
+        let handle = commit_watermark::<TestHandler>(
+            None,
+            CommitterConfig::default(),
+            true,
+            rx,
+            db,
+            metrics,
+            cancel,
+        );
+
+        // Task should exit immediately when skip_watermark is true
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_commit_watermark_out_of_order() {
+        let (_temp_db, db) = test_db().await;
+        let registry = Registry::new_custom(Some("indexer_alt".to_string()), None).unwrap();
+        let metrics = Arc::new(IndexerMetrics::new(&registry));
+        let cancel = CancellationToken::new();
+        let (tx, rx) = mpsc::channel(100);
+
+        let handle = commit_watermark::<TestHandler>(
+            None,
+            CommitterConfig::default(),
+            false,
+            rx,
+            db.clone(),
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Send a correct watermark part first
+        let part1 = WatermarkPart {
+            watermark: new_commit_watermark(0).await,
+            batch_rows: 10,
+            total_rows: 10,
+        };
+        tx.send(vec![part1]).await.unwrap();
+        // Let the task process the watermark
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
+
+        // Send an out of order watermark part
+        let part2 = WatermarkPart {
+            watermark: new_commit_watermark(2).await,
+            batch_rows: 10,
+            total_rows: 10,
+        };
+        tx.send(vec![part2]).await.unwrap();
+
+        // Let the task process the watermark
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Verify watermark not updated since checkpoint 1 has not been received yet.
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
+
+        // Send the correct watermark part for checkpoint 1
+        let part1 = WatermarkPart {
+            watermark: new_commit_watermark(1).await,
+            batch_rows: 10,
+            total_rows: 10,
+        };
+        tx.send(vec![part1]).await.unwrap();
+
+        // Let the task process the watermark
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        // Now we should write both checkponts 1 and 2, and the watermark should be updated to checkpoint 2
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+
+        // Now try sending watermark for checkpoint 1 again.
+        let part1_again = WatermarkPart {
+            watermark: new_commit_watermark(1).await,
+            batch_rows: 10,
+            total_rows: 10,
+        };
+        tx.send(vec![part1_again]).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // This should increment the out of order metric but not change the watermark in the db.
+        assert_eq!(
+            metrics
+                .total_watermarks_out_of_order
+                .with_label_values(&["test"])
+                .get(),
+            1
+        );
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+
+        cancel.cancel();
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_commit_watermark_multiple_parts() {
+        // Test that the watermark is updated correctly when one checkpoint has multiple parts.
+        let (_temp_db, db) = test_db().await;
+        let registry = Registry::new_custom(Some("indexer_alt".to_string()), None).unwrap();
+        let metrics = Arc::new(IndexerMetrics::new(&registry));
+        let cancel = CancellationToken::new();
+
+        let (tx, rx) = mpsc::channel(100);
+
+        let initial_watermark = new_commit_watermark(5).await;
+
+        let handle = commit_watermark::<TestHandler>(
+            Some(initial_watermark),
+            CommitterConfig::default(),
+            false,
+            rx,
+            db.clone(),
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Send first and sencond part of checkpoint 6
+        let part1 = WatermarkPart {
+            watermark: new_commit_watermark(6).await,
+            batch_rows: 5,
+            total_rows: 10,
+        };
+        let part2 = WatermarkPart {
+            watermark: new_commit_watermark(6).await,
+            batch_rows: 3,
+            total_rows: 10,
+        };
+        tx.send(vec![part1, part2]).await.unwrap();
+
+        // Now send a complete watermark for checkpoint 1
+        let part3 = WatermarkPart {
+            watermark: new_commit_watermark(7).await,
+            batch_rows: 10,
+            total_rows: 10,
+        };
+        tx.send(vec![part3]).await.unwrap();
+
+        // Let the task process the first part
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Verify watermark not updated since checkpoint incomplete
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap();
+        assert!(watermark.is_none());
+        // Now send the last part of checkpoint 6
+        let part4 = WatermarkPart {
+            watermark: new_commit_watermark(6).await,
+            batch_rows: 2,
+            total_rows: 10,
+        };
+        tx.send(vec![part4]).await.unwrap();
+
+        // Let the task process the second part
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // With the last part of checkpoint 6, the watermark should be updated to checkpoint 7
+        let watermark =
+            CommitterWatermark::read_highest_watermark(&mut db.connect().await.unwrap(), "test")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 7);
+
+        cancel.cancel();
+        handle.await.unwrap();
+    }
+}
