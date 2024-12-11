@@ -92,6 +92,10 @@ pub(super) fn committer<H: Handler + 'static>(
                                     pipeline = H::NAME,
                                     "Committed failed to get connection for DB"
                                 );
+                                metrics
+                                    .total_committer_batches_failed
+                                    .with_label_values(&[H::NAME])
+                                    .inc();
                                 BE::transient(Break::Err(e.into()))
                             })?;
 
@@ -138,6 +142,11 @@ pub(super) fn committer<H: Handler + 'static>(
                                         committed = values.len(),
                                         "Error writing batch: {e}",
                                     );
+
+                                    metrics
+                                        .total_committer_batches_failed
+                                        .with_label_values(&[H::NAME])
+                                        .inc();
 
                                     Err(BE::transient(Break::Err(e)))
                                 }

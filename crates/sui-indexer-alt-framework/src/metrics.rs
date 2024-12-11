@@ -91,6 +91,7 @@ pub(crate) struct IndexerMetrics {
     pub total_collector_batches_created: IntCounterVec,
     pub total_committer_batches_attempted: IntCounterVec,
     pub total_committer_batches_succeeded: IntCounterVec,
+    pub total_committer_batches_failed: IntCounterVec,
     pub total_committer_rows_committed: IntCounterVec,
     pub total_committer_rows_affected: IntCounterVec,
     pub total_watermarks_out_of_order: IntCounterVec,
@@ -338,6 +339,13 @@ impl IndexerMetrics {
             total_committer_batches_succeeded: register_int_counter_vec_with_registry!(
                 "indexer_total_committer_batches_succeeded",
                 "Total number of successful batches writes by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_batches_failed: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_batches_failed",
+                "Total number of failed batches writes by this committer",
                 &["pipeline"],
                 registry,
             )
