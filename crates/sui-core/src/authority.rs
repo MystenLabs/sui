@@ -214,6 +214,7 @@ pub mod test_authority_builder;
 pub mod transaction_deferral;
 
 pub(crate) mod authority_store;
+pub mod backpressure;
 
 pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
@@ -1096,6 +1097,16 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("consensus");
             })?;
+
+        let pending_tx_count = self
+            .get_cache_commit()
+            .approximate_pending_transaction_count();
+        if pending_tx_count > self.config.execution_cache.backpressure_threshold_for_rpc() {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 10,
+            });
+        }
+
         Ok(())
     }
 

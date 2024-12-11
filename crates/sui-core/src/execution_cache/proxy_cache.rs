@@ -3,6 +3,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigTrait};
 use crate::authority::AuthorityStore;
@@ -60,12 +61,17 @@ impl ProxyCache {
         epoch_start_config: &EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         metrics: Arc<ExecutionCacheMetrics>,
+        backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
         let cache_type = epoch_start_config.execution_cache_type();
         tracing::info!("using cache impl {:?}", cache_type);
         let passthrough_cache = PassthroughCache::new(store.clone(), metrics.clone());
-        let writeback_cache =
-            WritebackCache::new(&Default::default(), store.clone(), metrics.clone());
+        let writeback_cache = WritebackCache::new(
+            &Default::default(),
+            store.clone(),
+            metrics.clone(),
+            backpressure_manager,
+        );
 
         Self {
             passthrough_cache,
@@ -305,6 +311,10 @@ impl ExecutionCacheCommit for ProxyCache {
 
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
         delegate_method!(self.persist_transactions(digests))
+    }
+
+    fn approximate_pending_transaction_count(&self) -> u64 {
+        delegate_method!(self.approximate_pending_transaction_count())
     }
 }
 

@@ -55,6 +55,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 use self::metrics::CheckpointExecutorMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::backpressure::BackpressureManager;
 use crate::authority::AuthorityState;
 use crate::checkpoints::checkpoint_executor::data_ingestion_handler::{
     load_checkpoint_data, store_checkpoint_locally,
@@ -146,6 +147,7 @@ pub struct CheckpointExecutor {
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     tx_manager: Arc<TransactionManager>,
     accumulator: Arc<StateAccumulator>,
+    backpressure_manager: Arc<BackpressureManager>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
@@ -156,6 +158,7 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         state: Arc<AuthorityState>,
         accumulator: Arc<StateAccumulator>,
+        backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
     ) -> Self {
@@ -167,6 +170,7 @@ impl CheckpointExecutor {
             transaction_cache_reader: state.get_transaction_cache_reader().clone(),
             tx_manager: state.transaction_manager().clone(),
             accumulator,
+            backpressure_manager,
             config,
             metrics,
         }
@@ -183,6 +187,7 @@ impl CheckpointExecutor {
             checkpoint_store,
             state,
             accumulator,
+            BackpressureManager::new_for_tests(),
             Default::default(),
             CheckpointExecutorMetrics::new_for_tests(),
         )
@@ -305,6 +310,7 @@ impl CheckpointExecutor {
                     let _process_scope = mysten_metrics::monitored_scope("ProcessExecutedCheckpoint");
 
                     self.process_executed_checkpoint(&epoch_store, &checkpoint, checkpoint_acc, &tx_digests).await;
+                    self.backpressure_manager.update_highest_executed_checkpoint(*checkpoint.sequence_number());
                     highest_executed = Some(checkpoint.clone());
 
                     // Estimate TPS every 10k transactions or 30 sec
@@ -333,6 +339,9 @@ impl CheckpointExecutor {
                             "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age(&self.metrics.checkpoint_contents_age, &self.metrics.checkpoint_contents_age_ms);
+                        // Note: checkpoints arrive in increasing order by sequence number, but they are not
+                        // necessarily consecutive.
+                        self.backpressure_manager.update_highest_certified_checkpoint(*checkpoint.sequence_number());
                     },
                     Err(RecvError::Lagged(num_skipped)) => {
                         debug!(

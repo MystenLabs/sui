@@ -25,6 +25,7 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::node::AuthorityOverloadConfig;
+    use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
@@ -877,6 +878,51 @@ mod test {
         });
 
         test_simulated_load(test_cluster, 60).await
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_backpressure() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let mut cache_config: ExecutionCacheConfig = Default::default();
+        // make sure we don't halt even with absurdly low backpressure threshold
+        // To validate this, change backpressure::Watermarks::is_backpressure_suppressed() to
+        // always return false and verify the test fails.
+        match &mut cache_config {
+            ExecutionCacheConfig::WritebackCache {
+                backpressure_threshold,
+                backpressure_threshold_for_rpc,
+                ..
+            } => {
+                *backpressure_threshold = Some(1);
+                // for the tests to pass we still need to be able to submit transactions
+                // during backpressure.
+                *backpressure_threshold_for_rpc = Some(10000);
+            }
+            _ => panic!(),
+        }
+
+        let test_cluster = init_test_cluster_builder(4, 10000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_execution_cache_config(cache_config)
+            .with_submit_delay_step_override_millis(3000)
+            .build()
+            .await
+            .into();
+
+        tokio::time::timeout(
+            Duration::from_secs(120),
+            test_simulated_load(test_cluster, 60),
+        )
+        .await
+        .expect("test_backpressure timed out");
     }
 
     fn handle_bool_failpoint(
