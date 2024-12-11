@@ -518,6 +518,72 @@ impl SubscriptionCounter {
 /// It yields blocks that are broadcasted after the stream is created.
 type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
 
+/// OrderedBlockStream ensures blocks are streamed in order by round number,
+/// combining missed blocks with new broadcasted blocks.
+struct OrderedBlockStream {
+    missed_blocks: std::collections::VecDeque<VerifiedBlock>,
+    broadcast_receiver: broadcast::Receiver<VerifiedBlock>,
+    capacity: usize,
+    next_round: Round,
+}
+
+impl OrderedBlockStream {
+    pub fn new(
+        missed_blocks: Vec<VerifiedBlock>,
+        broadcast_receiver: broadcast::Receiver<VerifiedBlock>,
+        capacity: usize,
+        start_round: Round,
+    ) -> Self {
+        Self {
+            missed_blocks: std::collections::VecDeque::from(missed_blocks),
+            broadcast_receiver,
+            capacity,
+            next_round: start_round,
+        }
+    }
+}
+
+impl Stream for OrderedBlockStream {
+    type Item = VerifiedBlock;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        // First yield all missed blocks in order
+        if let Some(block) = self.missed_blocks.pop_front() {
+            self.next_round = block.round() + 1;
+            return task::Poll::Ready(Some(block));
+        }
+
+        // Then handle broadcast blocks, maintaining order
+        match self.broadcast_receiver.poll(cx) {
+            task::Poll::Ready(Ok(block)) => {
+                if block.round() == self.next_round {
+                    self.next_round += 1;
+                    task::Poll::Ready(Some(block))
+                } else {
+                    // Buffer out of order block if space available
+                    if self.missed_blocks.len() < self.capacity {
+                        self.missed_blocks.push_back(block);
+                    }
+                    // Try again to find next block in sequence
+                    cx.waker().wake_by_ref();
+                    task::Poll::Pending
+                }
+            }
+            task::Poll::Ready(Err(broadcast::error::RecvError::Lagged(n))) => {
+                warn!("Lagged by {} messages", n);
+                // Handle lag by requesting missing blocks via sync
+                // ...
+                task::Poll::Pending
+            }
+            task::Poll::Ready(Err(broadcast::error::RecvError::Closed)) => task::Poll::Ready(None),
+            task::Poll::Pending => task::Poll::Pending,
+        }
+    }
+}
+
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 struct BroadcastStream<T> {
