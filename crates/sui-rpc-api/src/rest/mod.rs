@@ -9,7 +9,7 @@ use axum::{
     Router,
 };
 
-use crate::{reader::StateReader, response, RpcService};
+use crate::{reader::StateReader, RpcService};
 use openapi::ApiEndpoint;
 
 pub mod accept;
@@ -75,12 +75,6 @@ pub fn build_rest_router(service: RpcService) -> axum::Router {
         .route("/rest/", get(|| async { Redirect::permanent("/v2/") }))
 }
 
-#[derive(Debug)]
-pub struct Page<T, C> {
-    pub entries: response::ResponseContent<Vec<T>>,
-    pub cursor: Option<C>,
-}
-
 pub struct PageCursor<C>(pub Option<C>);
 
 impl<C: std::fmt::Display> axum::response::IntoResponseParts for PageCursor<C> {
@@ -105,16 +99,6 @@ impl<C: std::fmt::Display> axum::response::IntoResponse for PageCursor<C> {
 
 pub const DEFAULT_PAGE_SIZE: usize = 50;
 pub const MAX_PAGE_SIZE: usize = 100;
-
-impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for Page<T, C> {
-    fn into_response(self) -> axum::response::Response {
-        let cursor = self
-            .cursor
-            .map(|cursor| [(crate::types::X_SUI_CURSOR, cursor.to_string())]);
-
-        (cursor, self.entries).into_response()
-    }
-}
 
 // Enable StateReader to be used as axum::extract::State
 impl axum::extract::FromRef<RpcService> for StateReader {

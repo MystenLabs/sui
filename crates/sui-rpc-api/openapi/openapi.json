@@ -275,8 +275,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/ObjectResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "404": {
@@ -342,8 +341,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/ObjectResponse"
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "404": {
@@ -529,8 +527,7 @@
                     "$ref": "#/components/schemas/CheckpointResponse"
                   }
                 }
-              },
-              "application/bcs": {}
+              }
             }
           },
           "410": {
