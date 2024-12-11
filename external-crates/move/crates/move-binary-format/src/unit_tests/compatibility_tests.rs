@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compatibility::{compare_ord_iters, Compatibility, InclusionCheck, Mark},
+    compatibility::{compare_ord_iters, Mark},
+    compatibility::{Compatibility, InclusionCheck},
     file_format::*,
     normalized::{self, Type},
 };
@@ -542,6 +543,7 @@ fn mk_module_with_defs(
     struct_defs: Vec<(Identifier, StructDefinition)>,
     enum_defs: Vec<(Identifier, EnumDefinition)>,
     function_defs: Vec<(Identifier, FunctionDefinition)>,
+    friend_defs: Vec<(Identifier, AccountAddress)>,
 ) -> normalized::Module {
     let mut identifiers = vec![
         Identifier::new("M").unwrap(), // Module name
@@ -594,6 +596,20 @@ fn mk_module_with_defs(
         })
         .collect();
 
+    let mut address_identifiers = vec![
+        AccountAddress::ZERO, // self
+    ];
+    let mut friend_decls = vec![];
+
+    for name in &friend_defs {
+        identifiers.push(name.0.clone());
+        address_identifiers.push(name.1.clone());
+        friend_decls.push(ModuleHandle {
+            address: AddressIdentifierIndex(address_identifiers.len() as TableIndex - 1),
+            name: IdentifierIndex(identifiers.len() as TableIndex - 1),
+        });
+    }
+
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_MAX,
         module_handles: vec![
@@ -605,9 +621,7 @@ fn mk_module_with_defs(
         ],
         self_module_handle_idx: ModuleHandleIndex(0),
         identifiers,
-        address_identifiers: vec![
-            AccountAddress::ZERO, // Module address
-        ],
+        address_identifiers,
         function_handles: vec![
             // fun fn()
             FunctionHandle {
@@ -641,7 +655,7 @@ fn mk_module_with_defs(
         ],
         metadata: vec![],
         field_handles: vec![],
-        friend_decls: vec![],
+        friend_decls,
         struct_def_instantiations: vec![],
         function_instantiations: vec![],
         field_instantiations: vec![],
@@ -1007,7 +1021,7 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
 
 #[test]
 fn check_new_changed_missing_declarations() {
-    let empty = mk_module_with_defs(vec![], vec![], vec![]);
+    let empty = mk_module_with_defs(vec![], vec![], vec![], vec![]);
     // struct
     let m1 = mk_module_with_defs(
         vec![(
@@ -1020,6 +1034,7 @@ fn check_new_changed_missing_declarations() {
                 }]),
             },
         )],
+        vec![],
         vec![],
         vec![],
     );
@@ -1038,6 +1053,7 @@ fn check_new_changed_missing_declarations() {
         )],
         vec![],
         vec![],
+        vec![],
     );
 
     // same name different type
@@ -1053,6 +1069,7 @@ fn check_new_changed_missing_declarations() {
                 }]),
             },
         )],
+        vec![],
         vec![],
         vec![],
     );
@@ -1082,6 +1099,7 @@ fn check_new_changed_missing_declarations() {
             },
         )],
         vec![],
+        vec![],
     );
 
     // change enum E1 to E2
@@ -1100,6 +1118,7 @@ fn check_new_changed_missing_declarations() {
                 }],
             },
         )],
+        vec![],
         vec![],
     );
 
@@ -1120,6 +1139,7 @@ fn check_new_changed_missing_declarations() {
                 }],
             },
         )],
+        vec![],
         vec![],
     );
 
@@ -1151,6 +1171,7 @@ fn check_new_changed_missing_declarations() {
                 }),
             },
         )],
+        vec![],
     );
 
     // change function fn1 to fn2
@@ -1171,6 +1192,7 @@ fn check_new_changed_missing_declarations() {
                 }),
             },
         )],
+        vec![],
     );
 
     // change fn1 bytecode to abort from return
@@ -1191,6 +1213,7 @@ fn check_new_changed_missing_declarations() {
                 }),
             },
         )],
+        vec![],
     );
 
     assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
@@ -1202,6 +1225,87 @@ fn check_new_changed_missing_declarations() {
 
     assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
     assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+}
+
+#[test]
+fn test_friend_linking() {
+    let friend_modules = vec![
+        (Identifier::new("M1").unwrap(), AccountAddress::random()),
+        (Identifier::new("M2").unwrap(), AccountAddress::random()),
+        (Identifier::new("M3").unwrap(), AccountAddress::random()),
+        (Identifier::new("M4").unwrap(), AccountAddress::random()),
+    ];
+
+    // zero friends
+    let m0 = mk_module_with_defs(vec![], vec![], vec![], vec![]);
+
+    // two friends
+    let m1 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![friend_modules[0].clone(), friend_modules[1].clone()],
+    );
+
+    // 3 friends
+    let m2 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![
+            friend_modules[0].clone(),
+            friend_modules[1].clone(),
+            friend_modules[2].clone(),
+        ],
+    );
+
+    // 2 friends from m1, but different order
+    let m3 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![friend_modules[1].clone(), friend_modules[0].clone()],
+    );
+
+    // 2 friends, different from m1
+    let m4 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![friend_modules[2].clone(), friend_modules[3].clone()],
+    );
+
+    // Subset, all changes are allowed
+    // same module, no friends
+    assert!(InclusionCheck::Subset.check(&m0, &m0).is_ok());
+    // start with empty and add friend
+    assert!(InclusionCheck::Subset.check(&m0, &m1).is_ok());
+    // start with two, keep the two and add one more
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_ok());
+    // start with two, remove them
+    assert!(InclusionCheck::Subset.check(&m3, &m0).is_ok());
+    // start with three remove one
+    assert!(InclusionCheck::Subset.check(&m2, &m1).is_ok());
+    // change order
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_ok());
+    // 2 friends, changed to 2 different friends
+    assert!(InclusionCheck::Subset.check(&m1, &m4).is_ok());
+
+    // Equal, can only keep the same number of friends
+    // same module, no friends
+    assert!(InclusionCheck::Equal.check(&m0, &m0).is_ok());
+    // start with empty and add friends
+    assert!(InclusionCheck::Equal.check(&m0, &m1).is_err());
+    // start with two, keep the two and add one more
+    assert!(InclusionCheck::Equal.check(&m1, &m2).is_err());
+    // start with two, remove them
+    assert!(InclusionCheck::Equal.check(&m3, &m0).is_err());
+    // start with three remove one
+    assert!(InclusionCheck::Equal.check(&m2, &m1).is_err());
+    // change order
+    assert!(InclusionCheck::Equal.check(&m1, &m3).is_ok());
+    // 2 friends, changed to 2 different friends
+    assert!(InclusionCheck::Equal.check(&m1, &m4).is_ok());
 }
 
 #[test]
