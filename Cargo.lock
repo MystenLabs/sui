@@ -14661,6 +14661,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-mvr-graphql-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "datatest-stable",
+ "msim",
+ "sui-mvr-graphql-rpc",
+ "sui-transactional-test-runner",
+ "telemetry-subscribers",
+ "tokio",
+]
+
+[[package]]
 name = "sui-mvr-graphql-rpc"
 version = "1.40.0"
 dependencies = [
