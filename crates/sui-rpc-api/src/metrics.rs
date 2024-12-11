@@ -113,8 +113,15 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         let status = if response
             .headers
             .get(&http::header::CONTENT_TYPE)
-            .is_some_and(|header| header == tonic::metadata::GRPC_CONTENT_TYPE)
-        {
+            .is_some_and(|content_type| {
+                content_type
+                    .as_bytes()
+                    // check if the content-type starts_with 'application/grpc' in order to
+                    // consider this as a gRPC request. A prefix comparison is done instead of a
+                    // full equality check in order to account for the various types of
+                    // content-types that are considered as gRPC traffic.
+                    .starts_with(tonic::metadata::GRPC_CONTENT_TYPE.as_bytes())
+            }) {
             let code = response
                 .headers
                 .get(&GRPC_STATUS)
