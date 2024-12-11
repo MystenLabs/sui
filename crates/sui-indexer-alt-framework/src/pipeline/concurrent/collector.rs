@@ -280,7 +280,10 @@ mod tests {
 
         // Add checkpoints 1-5 to received
         for i in 1..=5 {
-            received.insert(i, IndexedCheckpoint::new(0, i, 0, 0, vec![Entry, Entry, Entry]));
+            received.insert(
+                i,
+                IndexedCheckpoint::new(0, i, 0, 0, vec![Entry, Entry, Entry]),
+            );
         }
 
         // With lag of 2 and tip at 5, only checkpoints 1-3 should move
@@ -300,7 +303,10 @@ mod tests {
         let mut pending = BTreeMap::new();
 
         // Add checkpoint 10 to pending to establish tip
-        pending.insert(10, PendingCheckpoint::from(IndexedCheckpoint::new(0, 10, 0, 0, vec![Entry])));
+        pending.insert(
+            10,
+            PendingCheckpoint::from(IndexedCheckpoint::new(0, 10, 0, 0, vec![Entry])),
+        );
 
         // Add checkpoints 1-5 to received
         for i in 1..=5 {
