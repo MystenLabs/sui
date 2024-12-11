@@ -6,10 +6,9 @@ use axum::extract::{Path, State};
 use axum::Json;
 use sui_sdk_types::types::{CheckpointSequenceNumber, SignedCheckpointSummary};
 use sui_types::storage::ReadStore;
-use tap::Pipe;
 
 use crate::reader::StateReader;
-use crate::response::{Bcs, ResponseContent};
+use crate::response::Bcs;
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
 use crate::service::checkpoints::{CheckpointId, CheckpointNotFoundError};
@@ -124,7 +123,6 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
                 200,
                 ResponseBuilder::new()
                     .json_content::<Vec<CheckpointResponse>>(generator)
-                    .bcs_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
             )
@@ -141,11 +139,10 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
 async fn list_checkpoints(
     Query(parameters): Query<ListCheckpointsPaginationParameters>,
     Query(options): Query<GetCheckpointOptions>,
-    accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<(
     PageCursor<CheckpointSequenceNumber>,
-    ResponseContent<Vec<SignedCheckpointSummary>, Vec<CheckpointResponse>>,
+    Json<Vec<CheckpointResponse>>,
 )> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
@@ -202,23 +199,7 @@ async fn list_checkpoints(
         }
     });
 
-    match accept {
-        AcceptFormat::Json => ResponseContent::Json(checkpoints),
-        // In order to work around compatibility issues with existing clients, keep the BCS form as
-        // the old format without contents
-        AcceptFormat::Bcs => {
-            let checkpoints = checkpoints
-                .into_iter()
-                .map(|c| SignedCheckpointSummary {
-                    checkpoint: c.summary.unwrap(),
-                    signature: c.signature.unwrap(),
-                })
-                .collect();
-            ResponseContent::Bcs(checkpoints)
-        }
-    }
-    .pipe(|entries| (PageCursor(cursor), entries))
-    .pipe(Ok)
+    Ok((PageCursor(cursor), Json(checkpoints)))
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]

@@ -108,25 +108,6 @@ impl axum::response::IntoResponse for BcsRejection {
     }
 }
 
-#[derive(Debug)]
-pub enum ResponseContent<T, J = T> {
-    Bcs(T),
-    Json(J),
-}
-
-impl<T, J> axum::response::IntoResponse for ResponseContent<T, J>
-where
-    T: serde::Serialize,
-    J: serde::Serialize,
-{
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            ResponseContent::Bcs(inner) => Bcs(inner).into_response(),
-            ResponseContent::Json(inner) => axum::Json(inner).into_response(),
-        }
-    }
-}
-
 pub async fn append_info_headers(
     State(state): State<RpcService>,
     response: Response,

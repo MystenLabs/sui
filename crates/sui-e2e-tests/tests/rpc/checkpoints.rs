@@ -4,8 +4,6 @@
 use sui_macros::sim_test;
 use sui_rpc_api::client::sdk::Client;
 use sui_rpc_api::client::Client as CoreClient;
-use sui_rpc_api::CheckpointResponse;
-use sui_sdk_types::types::SignedCheckpointSummary;
 use test_cluster::TestClusterBuilder;
 
 use crate::transfer_coin;
@@ -30,34 +28,6 @@ async fn list_checkpoint() {
     let _latest = client.get_latest_checkpoint().await.unwrap().into_inner();
 
     let _latest = core_client.get_latest_checkpoint().await.unwrap();
-
-    let client = reqwest::Client::new();
-    let url = format!("{}/v2/checkpoints", test_cluster.rpc_url());
-    // Make sure list works with json
-    let _checkpoints = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_JSON)
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<CheckpointResponse>>()
-        .await
-        .unwrap();
-
-    // TODO remove this once the BCS format is no longer supported by the rest endpoint and clients
-    // wanting binary have migrated to grpc
-    //
-    // Make sure list works with BCS and the old format of only a SignedCheckpoint with no contents
-    let bytes = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, sui_rpc_api::rest::APPLICATION_BCS)
-        .send()
-        .await
-        .unwrap()
-        .bytes()
-        .await
-        .unwrap();
-    let _checkpoints = bcs::from_bytes::<Vec<SignedCheckpointSummary>>(&bytes).unwrap();
 }
 
 #[sim_test]

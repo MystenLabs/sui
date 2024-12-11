@@ -3,10 +3,11 @@
 
 use crate::reader::StateReader;
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
-use crate::{response::ResponseContent, Result};
-use crate::{rest::Page, RpcService, RpcServiceError};
+use crate::Result;
+use crate::{rest::PageCursor, RpcService, RpcServiceError};
 use axum::extract::Query;
 use axum::extract::{Path, State};
+use axum::Json;
 use openapiv3::v3_1::Operation;
 use sui_sdk_types::types::{Address, ObjectId, StructTag, Version};
 use sui_types::sui_sdk_types_conversions::struct_tag_core_to_sdk;
@@ -48,7 +49,7 @@ async fn list_account_objects(
     Path(address): Path<Address>,
     Query(parameters): Query<ListAccountOwnedObjectsQueryParameters>,
     State(state): State<StateReader>,
-) -> Result<Page<AccountOwnedObjectInfo, ObjectId>> {
+) -> Result<(PageCursor<ObjectId>, Json<Vec<AccountOwnedObjectInfo>>)> {
     let indexes = state
         .inner()
         .indexes()
@@ -78,10 +79,7 @@ async fn list_account_objects(
         None
     };
 
-    object_info
-        .pipe(ResponseContent::Json)
-        .pipe(|entries| Page { entries, cursor })
-        .pipe(Ok)
+    Ok((PageCursor(cursor), Json(object_info)))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
