@@ -339,7 +339,8 @@ impl CheckpointExecutor {
                             "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age(&self.metrics.checkpoint_contents_age, &self.metrics.checkpoint_contents_age_ms);
-                        // checkpoints arrive in consecutive order by sequence number
+                        // Note: checkpoints arrive in increasing order by sequence number, but they are not
+                        // necessarily consecutive.
                         self.backpressure_manager.update_highest_certified_checkpoint(*checkpoint.sequence_number());
                     },
                     Err(RecvError::Lagged(num_skipped)) => {
