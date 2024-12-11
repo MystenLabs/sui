@@ -5114,6 +5114,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "forwarded-header-value"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835f84f38484cc86f110a805655697908257fb9a7af005234060891557198e9"
+dependencies = [
+ "nonempty 0.7.0",
+ "thiserror",
+]
+
+[[package]]
 name = "fragile"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9031,6 +9041,12 @@ checksum = "ae01545c9c7fc4486ab7debaf2aad7003ac19431791868fb2e8066df97fad2f8"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "nonempty"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
 
 [[package]]
 name = "nonempty"
@@ -13630,7 +13646,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "nonempty",
+ "nonempty 0.9.0",
  "num-bigint 0.4.4",
  "num_cpus",
  "object_store",
@@ -13992,6 +14008,7 @@ dependencies = [
  "tonic 0.12.3",
  "tower 0.4.13",
  "tower-http 0.5.2",
+ "tower_governor",
  "tracing",
  "ttl_cache",
  "typed-store",
@@ -16046,7 +16063,7 @@ dependencies = [
  "move-vm-types",
  "mysten-metrics",
  "mysten-network",
- "nonempty",
+ "nonempty 0.9.0",
  "num-bigint 0.4.4",
  "num-traits",
  "num_enum 0.6.1",
@@ -17360,6 +17377,22 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "tower_governor"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aea939ea6cfa7c4880f3e7422616624f97a567c16df67b53b11f0d03917a8e46"
+dependencies = [
+ "axum 0.7.5",
+ "forwarded-header-value",
+ "governor",
+ "http 1.1.0",
+ "pin-project",
+ "thiserror",
+ "tower 0.5.1",
+ "tracing",
+]
 
 [[package]]
 name = "tracing"

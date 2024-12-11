@@ -26,7 +26,8 @@ use std::{
 };
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_sdk::wallet_context::WalletContext;
-use tower::{limit::RateLimitLayer, ServiceBuilder};
+use tower::ServiceBuilder;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -53,6 +54,24 @@ pub async fn start_faucet(
         ..
     } = app_state.config;
 
+    // Max request per second as bursts, and replenishes one after 3600 seconds based on Peer IP.
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(3600)
+            .burst_size(max_request_per_second as u32)
+            .finish()
+            .unwrap(),
+    );
+
+    let governor_limiter = governor_conf.limiter().clone();
+    let interval = Duration::from_secs(60);
+    // a separate background task to clean up
+    std::thread::spawn(move || loop {
+        tokio::time::sleep(interval).await;
+        info!("rate limiting storage size: {}", governor_limiter.len());
+        governor_limiter.retain_recent();
+    });
+
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
@@ -65,10 +84,9 @@ pub async fn start_faucet(
                 .layer(cors)
                 .load_shed()
                 .buffer(request_buffer_size)
-                .layer(RateLimitLayer::new(
-                    max_request_per_second,
-                    Duration::from_secs(1),
-                ))
+                .layer(GovernorLayer {
+                    config: governor_conf,
+                })
                 .concurrency_limit(concurrency_limit)
                 .layer(Extension(app_state.clone()))
                 .into_inner(),
@@ -86,7 +104,11 @@ pub async fn start_faucet(
     let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 

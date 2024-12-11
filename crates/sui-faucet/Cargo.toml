@@ -29,6 +29,7 @@ eyre.workspace = true
 tempfile.workspace = true
 parking_lot.workspace = true
 tonic.workspace = true
+tower_governor = "0.4.3"
 
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true
