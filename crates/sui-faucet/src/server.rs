@@ -27,7 +27,9 @@ use std::{
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_sdk::wallet_context::WalletContext;
 use tower::ServiceBuilder;
-use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_governor::{
+    governor::GovernorConfigBuilder, key_extractor::GlobalKeyExtractor, GovernorLayer,
+};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -54,23 +56,13 @@ pub async fn start_faucet(
         ..
     } = app_state.config;
 
-    // Max request per second as bursts, and replenishes one after 3600 seconds based on Peer IP.
-    let governor_conf = Arc::new(
+    let governor_cfg = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(3600)
-            .burst_size(max_request_per_second as u32)
+            .per_second(max_request_per_second)
+            .key_extractor(GlobalKeyExtractor)
             .finish()
             .unwrap(),
     );
-
-    let governor_limiter = governor_conf.limiter().clone();
-    let interval = Duration::from_secs(60);
-    // a separate background task to clean up
-    std::thread::spawn(move || loop {
-        tokio::time::sleep(interval).await;
-        info!("rate limiting storage size: {}", governor_limiter.len());
-        governor_limiter.retain_recent();
-    });
 
     let app = Router::new()
         .route("/", get(health))
@@ -85,7 +77,7 @@ pub async fn start_faucet(
                 .load_shed()
                 .buffer(request_buffer_size)
                 .layer(GovernorLayer {
-                    config: governor_conf,
+                    config: governor_cfg,
                 })
                 .concurrency_limit(concurrency_limit)
                 .layer(Extension(app_state.clone()))
