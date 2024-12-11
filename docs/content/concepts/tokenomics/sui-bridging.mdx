@@ -10,6 +10,12 @@ Sui supports bridging through [Wormhole Connect](#wormhole-connect) and [Wormhol
 
 Use to bridge tokens from any Wormhole supported chain into Sui and get dropped off with extra Sui to pay gas fees. Developers can also embed the Connect Token Bridge directly into their own websites and dApps.
 
+:::tip
+
+Wormhole provides a tutorial for cross-chain transfers of Sui using a Wormhole Connect integration. Visit [Cross-Chain Token Transfers with Wormhole Connect](https://wormhole.com/docs/tutorials/messaging/sui-connect/) on the Wormhole website to get started.
+
+:::
+
 ### Wormhole Connect asset support {#asset-support}
 
 Initially, Wormhole Connect supports only lock-and-mint bridging for ETH, WETH, USDC, MATIC, WMATIC, BNB, WBNB, AVAX, WAVAX, FTM, WFTM, CELO, GLMR, WGLRM, AND SOL across Ethereum, Polygon, BSC, Avalanche, Celo, Moonbeam, Solana and Sui. This means that any native token bridged through Wormhole Connect and the underlying Wormhole Token Bridge are received as a Wormhole-minted token on the destination chain. In some cases, Wormhole-minted tokens are the canonical representation on the chain. See the [Wormhole token list](https://github.com/wormhole-foundation/wormhole-token-list) on GitHub. Some Wormhole-minted tokens support swapping on the destination chain's DEX(s) for whichever assets you need.
@@ -23,12 +29,6 @@ On EVM-based chains and Sui, Wormhole Connect lets you bridge assets while havin
 The gas drop-off feature enables users to pay an additional fee on the source chain to request a small amount of native gas on the destination chain. For example, a user bridging USDC from Ethereum to Sui can pay a fee denominated in USDC from their sending wallet to receive some native SUI in their receiving wallet. This is in addition to the USDC they are bridging over. Gas drop-off is currently supported on EVM-based chains and Sui.
 
 To learn more about Wormhole Connect, see their [FAQ](https://docs.wormhole.com/wormhole/faqs) page.
-
-:::tip
-
-Wormhole provides a tutorial for cross-chain transfers of Sui using a Wormhole Connect integration. Visit [Cross-Chain Token Transfers with Wormhole Connect](https://wormhole.com/docs/tutorials/messaging/sui-connect/) on the Wormhole website to get started.
-
-:::
 
 ## Wormhole Portal Bridge
 
