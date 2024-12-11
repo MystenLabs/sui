@@ -1,5 +1,5 @@
-When resolving dependencies for package Root-rename, conflicting versions of package C-resolved found:
-At A-rename -> C-resolved
-	C-resolved = { local = "deps_only/C-rename-v2" }
-At B -> C-resolved
-	C-resolved = { local = "deps_only/C-rename-v1" }
+When resolving dependencies for package Root-rename, conflicting versions of package C-rename found:
+At A-rename -> C-rename
+	C-rename = { local = "deps_only/C-rename-v2" }
+At B -> C-rename
+	C-rename = { local = "deps_only/C-rename-v1" }

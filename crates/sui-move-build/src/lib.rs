@@ -15,7 +15,7 @@ use move_binary_format::{
     normalized::{self, Type},
     CompiledModule,
 };
-use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
+use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics},
@@ -33,10 +33,11 @@ use move_package::{
     },
     package_hooks::{PackageHooks, PackageIdentifier},
     resolution::resolution_graph::ResolvedGraph,
+    source_package::parsed_manifest::PackageName,
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
-    resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
+    resolution::resolution_graph::Package, source_package::parsed_manifest::OnChainInfo,
     source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
@@ -65,6 +66,9 @@ pub struct CompiledPackage {
     pub published_at: Result<ObjectID, PublishedAtError>,
     /// The dependency IDs of this package
     pub dependency_ids: PackageDependencies,
+    /// The bytecode modules that this package depends on (both directly and transitively),
+    /// i.e. on-chain dependencies.
+    pub bytecode_deps: Vec<(PackageName, CompiledModule)>,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -234,6 +238,39 @@ pub fn build_from_resolution_graph(
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph, chain_id);
 
+    // collect bytecode dependencies as these are not returned as part of core
+    // `CompiledPackage`
+    let mut bytecode_deps = vec![];
+    for (name, pkg) in resolution_graph.package_table.iter() {
+        if !pkg
+            .get_sources(&resolution_graph.build_options)
+            .unwrap()
+            .is_empty()
+        {
+            continue;
+        }
+        let modules =
+            pkg.get_bytecodes_bytes()
+                .map_err(|error| SuiError::ModuleDeserializationFailure {
+                    error: format!(
+                        "Deserializing bytecode dependency for package {}: {:?}",
+                        name, error
+                    ),
+                })?;
+        for module in modules {
+            let module =
+                CompiledModule::deserialize_with_defaults(module.as_ref()).map_err(|error| {
+                    SuiError::ModuleDeserializationFailure {
+                        error: format!(
+                            "Deserializing bytecode dependency for package {}: {:?}",
+                            name, error
+                        ),
+                    }
+                })?;
+            bytecode_deps.push((*name, module));
+        }
+    }
+
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
@@ -268,6 +305,7 @@ pub fn build_from_resolution_graph(
         package,
         published_at,
         dependency_ids,
+        bytecode_deps,
     })
 }
 
@@ -297,12 +335,16 @@ impl CompiledPackage {
             .deps_compiled_units
             .iter()
             .map(|(_, m)| &m.unit.module)
+            .chain(self.bytecode_deps.iter().map(|(_, m)| m))
     }
 
     /// Return all of the bytecode modules in this package and the modules of its direct and transitive dependencies.
     /// Note: these are not topologically sorted by dependency.
     pub fn get_modules_and_deps(&self) -> impl Iterator<Item = &CompiledModule> {
-        self.package.all_modules().map(|m| &m.unit.module)
+        self.package
+            .all_modules()
+            .map(|m| &m.unit.module)
+            .chain(self.bytecode_deps.iter().map(|(_, m)| m))
     }
 
     /// Return the bytecode modules in this package, topologically sorted in dependency order.
@@ -313,11 +355,10 @@ impl CompiledPackage {
         &self,
         with_unpublished_deps: bool,
     ) -> Vec<CompiledModule> {
-        let all_modules = self.package.all_modules_map();
-        let graph = all_modules.compute_dependency_graph();
+        let all_modules = Modules::new(self.get_modules_and_deps());
 
         // SAFETY: package built successfully
-        let modules = graph.compute_topological_order().unwrap();
+        let modules = all_modules.compute_topological_order().unwrap();
 
         if with_unpublished_deps {
             // For each transitive dependent module, if they are not to be published, they must have
@@ -590,14 +631,10 @@ impl PackageHooks for SuiPackageHooks {
         ]
     }
 
-    fn custom_dependency_key(&self) -> Option<String> {
-        None
-    }
-
-    fn resolve_custom_dependency(
+    fn resolve_on_chain_dependency(
         &self,
         _dep_name: move_symbol_pool::Symbol,
-        _info: &CustomDepInfo,
+        _info: &OnChainInfo,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -606,7 +643,9 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
-        if !cfg!(debug_assertions) && manifest.package.edition == Some(Edition::DEVELOPMENT) {
+        if (!cfg!(debug_assertions) || cfg!(test))
+            && manifest.package.edition == Some(Edition::DEVELOPMENT)
+        {
             return Err(Edition::DEVELOPMENT.unknown_edition_error());
         }
         Ok(manifest.package.name)

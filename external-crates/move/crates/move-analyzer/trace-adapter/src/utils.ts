@@ -8,3 +8,10 @@ export interface ModuleInfo {
     addr: string;
     name: string;
 }
+
+/**
+ * If end of lifetime for a local has this value,
+ * it means that it lives until the end of the current
+ * frame.
+ */
+export const FRAME_LIFETIME = -1;

@@ -23,22 +23,29 @@ clap.workspace = true
 mysten-metrics.workspace = true
 prometheus.workspace = true
 serde_yaml.workspace = true
+serde_json.workspace = true
+strum_macros.workspace = true
 sui-bridge.workspace = true
 sui-sdk.workspace = true
 sui-json-rpc-types.workspace = true
 sui-data-ingestion-core.workspace = true
+sui-pg-temp-db.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
 backoff.workspace = true
 sui-config.workspace = true
+tempfile.workspace = true
 sui-indexer-builder.workspace = true
 
 [dev-dependencies]
-sui-types = { workspace = true, features = ["test-utils"] }
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
+sui-indexer.workspace = true
+diesel_migrations = "2.2.0"
+sui-indexer-builder = { workspace = true, features = ["test-utils"] }
+sui-bridge = { workspace = true, features = ["test-utils"] }
 
 [[bin]]
 name = "bridge-indexer"

@@ -174,24 +174,18 @@ impl TestSetup {
             self.setup_authority_state
                 .get_object(&self.package.0)
                 .await
-                .unwrap()
                 .unwrap(),
         ));
         genesis_objects.push(TestSetup::convert_to_genesis_obj(
             self.setup_authority_state
                 .get_object(&self.gas_object_id)
                 .await
-                .unwrap()
                 .unwrap(),
         ));
 
         for obj in objects {
             genesis_objects.push(TestSetup::convert_to_genesis_obj(
-                self.setup_authority_state
-                    .get_object(obj)
-                    .await
-                    .unwrap()
-                    .unwrap(),
+                self.setup_authority_state.get_object(obj).await.unwrap(),
             ));
         }
         genesis_objects
@@ -297,12 +291,18 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     register_fail_point_arg("initial_congestion_tracker", move || {
-        Some(
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(
-                &[(shared_object_1.0, 10)],
-                PerObjectCongestionControlMode::TotalGasBudget,
+        Some(SharedObjectCongestionTracker::new(
+            [(shared_object_1.0, 10)],
+            PerObjectCongestionControlMode::TotalGasBudget,
+            Some(
+                test_setup
+                    .protocol_config
+                    .max_accumulated_txn_cost_per_object_in_mysticeti_commit(),
             ),
-        )
+            Some(1000), // Not used.
+            None,       // Not used.
+            0,          // Disable overage.
+        ))
     });
 
     // Runs a transaction that touches shared_object_1, shared_object_2 and a owned object.
@@ -317,7 +317,6 @@ async fn test_congestion_control_execution_cancellation() {
         &authority_state
             .get_object(&owned_object.0)
             .await
-            .unwrap()
             .unwrap()
             .compute_object_reference(),
     )

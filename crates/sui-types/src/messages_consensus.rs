@@ -4,17 +4,15 @@
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
-use crate::messages_checkpoint::{
-    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
-};
+use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
-use crate::transaction::CertifiedTransaction;
+use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{dkg, dkg_v1};
+use fastcrypto_tbls::dkg_v1;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,16 +22,29 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// The index of an authority in the consensus committee.
+/// The value should be the same in Sui committee.
+pub type AuthorityIndex = u32;
+
+/// Consensus round number in u64 instead of u32 for compatibility with Narwhal.
+pub type Round = u64;
+
+/// The index of a transaction in a consensus block.
+pub type TransactionIndex = u16;
+
+/// Non-decreasing timestamp produced by consensus in ms.
+pub type TimestampMs = u64;
+
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ConsensusCommitPrologue {
     /// Epoch of the commit prologue transaction
     pub epoch: u64,
-    /// Consensus round of the commit
+    /// Consensus round of the commit. Using u64 for compatibility.
     pub round: u64,
-    /// Unix timestamp from consensus
-    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -42,8 +53,8 @@ pub struct ConsensusCommitPrologueV2 {
     pub epoch: u64,
     /// Consensus round of the commit
     pub round: u64,
-    /// Unix timestamp from consensus
-    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
@@ -64,8 +75,8 @@ pub struct ConsensusCommitPrologueV3 {
     /// The sub DAG index of the consensus commit. This field will be populated if there
     /// are multiple consensus commits per round.
     pub sub_dag_index: Option<u64>,
-    /// Unix timestamp from consensus
-    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
     /// Stores consensus handler determined shared object version assignments.
@@ -273,6 +284,8 @@ pub enum ConsensusTransactionKind {
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
 
     CapabilityNotificationV2(AuthorityCapabilitiesV2),
+
+    UserTransaction(Box<Transaction>),
 }
 
 impl ConsensusTransactionKind {
@@ -295,7 +308,7 @@ pub enum VersionedDkgMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersionedDkgConfirmation {
     V0(), // deprecated
-    V1(dkg::Confirmation<bls12381::G2Element>),
+    V1(dkg_v1::Confirmation<bls12381::G2Element>),
 }
 
 impl Debug for VersionedDkgMessage {
@@ -323,10 +336,10 @@ impl VersionedDkgMessage {
 
     pub fn create(
         dkg_version: u64,
-        party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
+        party: Arc<dkg_v1::Party<bls12381::G2Element, bls12381::G2Element>>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
         assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
-        let msg = party.create_message_v1(&mut rand::thread_rng())?;
+        let msg = party.create_message(&mut rand::thread_rng())?;
         Ok(VersionedDkgMessage::V1(msg))
     }
 
@@ -361,7 +374,7 @@ impl VersionedDkgConfirmation {
         }
     }
 
-    pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+    pub fn unwrap_v1(&self) -> &dkg_v1::Confirmation<bls12381::G2Element> {
         match self {
             VersionedDkgConfirmation::V1(msg) => msg,
             _ => panic!("BUG: expected V1 confirmation"),
@@ -386,6 +399,18 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
+        }
+    }
+
+    pub fn new_user_transaction_message(authority: &AuthorityName, tx: Transaction) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let tx_digest = tx.digest();
+        tx_digest.hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
         }
     }
 
@@ -527,11 +552,22 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgConfirmation(*authority)
             }
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                // Use the same key format as ConsensusTransactionKind::CertifiedTransaction,
+                // because existing usages of ConsensusTransactionKey should not differentiate
+                // between CertifiedTransaction and UserTransaction.
+                ConsensusTransactionKey::Certificate(*tx.digest())
+            }
         }
     }
 
-    pub fn is_user_certificate(&self) -> bool {
+    pub fn is_executable_transaction(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
+            || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    }
+
+    pub fn is_user_transaction(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

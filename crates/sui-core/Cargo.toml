@@ -71,7 +71,6 @@ telemetry-subscribers.workspace = true
 typed-store.workspace = true
 
 mysten-metrics.workspace = true
-narwhal-types.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
 sui-config.workspace = true
@@ -88,6 +87,7 @@ sui-protocol-config.workspace = true
 sui-transaction-checks.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
+sui-tls.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
 nonempty.workspace = true
@@ -107,7 +107,6 @@ num-bigint = "0.4.4"
 move-symbol-pool.workspace = true
 
 sui-test-transaction-builder.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
 sui-move.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
@@ -138,6 +137,3 @@ harness = false
 [[bench]]
 name = "batch_verification_bench"
 harness = false
-
-[features]
-test-utils = []

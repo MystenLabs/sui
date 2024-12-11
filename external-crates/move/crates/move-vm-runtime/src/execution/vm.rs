@@ -119,7 +119,7 @@ impl<'extensions> MoveVM<'extensions> {
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(

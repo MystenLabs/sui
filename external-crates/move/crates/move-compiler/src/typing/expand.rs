@@ -9,7 +9,7 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
-    shared::{ide::IDEAnnotation, string_utils::debug_print, AstDebug},
+    shared::{ide::IDEAnnotation, string_utils::debug_print},
     typing::{
         ast::{self as T},
         core::{self, Context},
@@ -69,14 +69,12 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                         ty.loc,
                         "ICE unfold_type_base failed to expand type inf. var"
                     ));
-                    context.env.add_diag(diag);
+                    context.add_diag(diag);
                     sp(loc, UnresolvedError)
                 }
                 sp!(loc, Anything) => {
                     let msg = "Could not infer this type. Try adding an annotation";
-                    context
-                        .env
-                        .add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
+                    context.add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
                     sp(loc, UnresolvedError)
                 }
                 sp!(loc, Fun(_, _)) if !context.in_macro_function => {
@@ -96,7 +94,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 ty.loc,
                 format!("ICE expanding pre-expanded type {}", debug_display!(aty))
             ));
-            context.env.add_diag(diag);
+            context.add_diag(diag);
             *ty = sp(ty.loc, UnresolvedError)
         }
         Apply(None, _, _) => {
@@ -108,7 +106,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 }
                 _ => {
                     let diag = ice!((ty.loc, "ICE type-apply switched to non-apply"));
-                    context.env.add_diag(diag);
+                    context.add_diag(diag);
                     *ty = sp(ty.loc, UnresolvedError)
                 }
             }
@@ -126,15 +124,10 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
 }
 
 fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
-    if context
-        .env
-        .check_feature(context.current_package, FeatureGate::MacroFuns, loc)
-    {
+    if context.check_feature(context.current_package, FeatureGate::MacroFuns, loc) {
         let msg = "Unexpected lambda type. \
             Lambdas can only be used with 'macro' functions, as parameters or direct arguments";
-        context
-            .env
-            .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
+        context.add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
     }
 }
 
@@ -234,10 +227,12 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, args);
         }
 
-        E::IfElse(eb, et, ef) => {
+        E::IfElse(eb, et, ef_opt) => {
             exp(context, eb);
             exp(context, et);
-            exp(context, ef);
+            if let Some(ef) = ef_opt {
+                exp(context, ef)
+            }
         }
         E::Match(esubject, arms) => {
             exp(context, esubject);
@@ -246,7 +241,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             }
         }
         E::VariantMatch(subject, _, arms) => {
-            context.env.add_diag(ice!((
+            context.add_diag(ice!((
                 e.exp.loc,
                 "shouldn't find variant match before match compilation"
             )));
@@ -355,7 +350,7 @@ fn inferred_numerical_value(
             "Annotating the literal might help inference: '{value}{type}'",
             type=fix_bt,
         );
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             TypeSafety::InvalidNum,
             (eloc, "Invalid numerical literal"),
             (ty.loc, msg),

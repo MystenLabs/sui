@@ -20,7 +20,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:9
    │
 17 │         foo().bar().X::bar()
-   │         ^^^^^^^^^^^ Method syntax is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^^^^^^^^^^ Method syntax is not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

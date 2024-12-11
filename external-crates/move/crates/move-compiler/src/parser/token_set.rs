@@ -94,9 +94,17 @@ const EXP_STARTS: &[Tok] = &[
     Tok::Return,
     Tok::While,
     Tok::BlockLabel,
+    Tok::Match,
 ];
 
 pub static EXP_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(EXP_STARTS));
+
+pub static SEQ_ITEM_START_SET: Lazy<TokenSet> = Lazy::new(|| {
+    let mut token_set = TokenSet::new();
+    token_set.add_all(EXP_STARTS);
+    token_set.add(Tok::Let);
+    token_set
+});
 
 const TYPE_STARTS: &[Tok] = &[
     Tok::Identifier,

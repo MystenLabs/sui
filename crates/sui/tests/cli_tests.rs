@@ -16,8 +16,7 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
-#[cfg(feature = "indexer")]
-use sui::sui_commands::IndexerFeatureArgs;
+use sui::sui_commands::IndexerArgs;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -70,14 +69,15 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Start network without authorities
     let start = SuiCommand::Start {
+        data_ingestion_dir: None,
         config_dir: Some(config),
         force_regenesis: false,
         with_faucet: None,
         fullnode_rpc_port: 9000,
         epoch_duration_ms: None,
         no_full_node: false,
-        #[cfg(feature = "indexer")]
-        indexer_feature_args: IndexerFeatureArgs::for_testing(),
+        committee_size: None,
+        indexer_feature_args: IndexerArgs::for_testing(),
     }
     .execute()
     .await;
@@ -91,6 +91,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         benchmark_ips: None,
         with_faucet: false,
+        committee_size: None,
     }
     .execute()
     .await?;
@@ -130,6 +131,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         benchmark_ips: None,
         with_faucet: false,
+        committee_size: None,
     }
     .execute()
     .await;
@@ -2197,7 +2199,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         panic!();
     };
 
-    let (gas, obj) = if mut_obj1.owner.unwrap().get_owner_address().unwrap() == address {
+    let (gas, obj) = if mut_obj1.owner.clone().unwrap().get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
     } else {
         (mut_obj2, mut_obj1)
@@ -2899,6 +2901,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: true,
             serialize_signed_transaction: false,
         },
@@ -2913,6 +2916,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: true,
         },
@@ -2928,6 +2932,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: true,
         },
@@ -3103,7 +3108,7 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
     // assert that all the objects_returned are owned by the address
     for resp in &object_responses.data {
-        let obj_owner = resp.object().unwrap().owner.unwrap();
+        let obj_owner = resp.object().unwrap().owner.clone().unwrap();
         assert_eq!(
             obj_owner.get_owner_address().unwrap().to_string(),
             address.to_string()
@@ -3764,7 +3769,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     let sender = context.active_address().unwrap();
     let tx_builder = client.transaction_builder();
     let tx_kind = tx_builder.transfer_sui_tx_kind(address2, Some(amount));
-    let gas_estimate = estimate_gas_budget(&client, sender, tx_kind, rgp, None, None).await;
+    let gas_estimate = estimate_gas_budget(context, sender, tx_kind, rgp, None, None).await;
     assert!(gas_estimate.is_ok());
 
     let transfer_sui_cmd = SuiClientCommands::TransferSui {
@@ -3774,6 +3779,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         opts: Opts {
             gas_budget: None,
             dry_run: false,
+            dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
         },

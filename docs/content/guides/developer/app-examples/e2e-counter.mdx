@@ -1,5 +1,7 @@
 ---
 title: Distributed Counter
+description: An app that allows users to create counters that anyone can increment, but only the owner can reset.
+effort: small
 ---
 
 This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. The app allows users to create counters that anyone can increment, but only the owner can reset. 
@@ -18,6 +20,7 @@ The guide is split into two parts:
 ## What the guide teaches
 
 - **Shared objects:** The guide teaches you how to use [shared objects](../../../concepts/object-ownership/shared.mdx), in this case to create globally accessible `Counter` objects.
+- **Programmable transaction blocks (PTBs):** You learn how to use PTBs to interact with your Move module from your frontend.
 
 ## What you need
 
@@ -25,17 +28,46 @@ Before getting started, make sure you have:
 
 - [Installed the latest version of Sui](../getting-started/sui-install.mdx).
 
-## Smart contracts {#smart-contracts}
+## Directory structure
 
-In this part of the guide, you write the Move contracts that create, increment, and reset counters. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
+To begin, create a new folder on your system titled `react-e2e-counter` to hold all your project files. You can name this directory differently, but the rest of the guide references this file structure. Inside that folder, create two more folders: `move` and `src`. Inside the `move` folder, create a `counter` directory. Finally, create a `sources` folder inside `counter`. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance. See [Write a Move Package](../first-app/write-package.mdx) to learn more about package structure and how to use the Sui CLI to scaffold a new project.
 
-:::info
+:::checkpoint
 
-To follow along with this guide, set your new Move package to `counter`.
+- You have the latest version of Sui installed. If you run `sui --version` in your terminal or console, it responds with the currently installed version.
+- Your active environment is pointing to the expected network. Run `sui client active-env` to make sure. If you receive a warning about a client and server API version mismatch, update Sui using the version in the relevant branch (`mainnet`, `testnet`, `devent`) of the Sui repo.
+- Your active address has SUI. Run `sui client balance` in your terminal or console. If there is no balance, [acquire SUI](../getting-started/get-coins.mdx) from the faucet (not available in Mainnet).
+- You have a directory to place the files you create in. The top-level directory is named `react-e2e-counter` if you want to match the directory structure in this guide. 
 
 :::
 
+## Smart contracts {#smart-contracts}
+
+In this part of the guide, you write the Move contracts that create, increment, and reset counters.
+
+### Move.toml
+
+To begin writing your smart contracts, create a file inside `react-e2e-counter/move/counter` named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
+
+:::info
+
+If you are targeting a network other than Testnet, be sure to update the `rev` value for the Sui dependency.
+
+:::
+
+{@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/Move.toml}
+
 ### `Counter` struct
+
+To begin creating the smart contract that defines the on-chain counter, create a `counter.move` file inside your `react-e2e-counter/move/counter` folder. Define the module that holds your smart contract logic.
+
+```move
+module counter::counter {
+  // Code goes here
+}
+```
+
+Add the `Counter` struct and elements described in the following sections to the module. 
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#struct=Counter noComments}
 
@@ -50,11 +82,12 @@ In the `create` function, a new `Counter` object is created and [shared](../../.
 ### Incrementing and resetting `Counter`
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=increment noComments}
-The `increment` function accepts a mutable reference to any shared `Counter` object and will increments its `value` field.
+
+The `increment` function accepts a mutable reference to any shared `Counter` object and increments its `value` field.
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=set_value noComments}
 
-The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. This function can only be ran by the `Counter`'s `owner`.
+The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. The `Counter` `owner` is the only one that can run this function.
 
 :::tip Additional resources
 
@@ -67,6 +100,19 @@ Learn more about taking [object references as input](../../../concepts/sui-move-
 The final module should look like this
 
 {@inject: sdk/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move noComments}
+
+:::checkpoint
+
+Your smart contract is complete. You should be able to run the `sui move build` command from `react-e2e-counter/move/counter` and receive a response similar to the following:
+```sh
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING counter
+```
+You always run `sui move build` at the same level as your `Move.toml` file. After a successful build, you now have a `build` folder inside `react-e2e-counter/move/counter`.
+
+:::
 
 ### Deployment {#deployment}
 
@@ -140,15 +186,18 @@ In this final part of the app example, you build a frontend (UI) that allows end
 
 To skip building the frontend and test out your newly deployed package, create this example using the following template and follow the instructions in the template's `README.md` file: 
 
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
 ```bash
 pnpm create @mysten/dapp --template react-e2e-counter
 ```
-
-or
-
-```bash
-yarn create @mysten/dapp --template react-e2e-counter
-```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn create @mysten/dapp --template react-e2e-counter
+    ```
+  </TabItem>
+</Tabs>
 
 :::
 
@@ -179,124 +228,196 @@ The UI design consists of two parts:
 
 The first step is to set up the client app. Run the following command to scaffold a new app.
 
-```bash
-pnpm create @mysten/dapp --template react-client-dapp
-```
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm create @mysten/dapp --template react-client-dapp
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn create @mysten/dapp --template react-client-dapp
+    ```
+  </TabItem>
+</Tabs>
 
-or
+### Install new dependencies
 
-```bash
-yarn create @mysten/dapp --template react-client-dapp
-```
+This app uses the `react-spinners` package for icons. Install it by running the following command:
+
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm add react-spinners
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn add react-spinners
+    ```
+  </TabItem>
+</Tabs>
 
 ### Connecting your deployed package {#connecting-your-package}
 
-Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
+<details>
+  <summary>
+    Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
+  </summary>
+  ```ts
+    export const DEVNET_COUNTER_PACKAGE_ID = "0xTODO";
+    export const TESTNET_COUNTER_PACKAGE_ID = "0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa";
+    export const MAINNET_COUNTER_PACKAGE_ID = "0xTODO";
+  ```
+</details>
 
-```ts
-  export const DEVNET_COUNTER_PACKAGE_ID = "0xTODO";
-  export const TESTNET_COUNTER_PACKAGE_ID = "0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa";
-  export const MAINNET_COUNTER_PACKAGE_ID = "0xTODO";
-```
-
-Update the `src/networkConfig.ts` file to include the `packageID` constants.
-
-{@inject: sdk/create-dapp/templates/react-e2e-counter/src/networkConfig.ts noComments}
-
+<details>
+  <summary>
+    Update the `src/networkConfig.ts` file to include the `packageID` constants.
+  </summary>
+  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/networkConfig.ts noComments}
+</details>
 
 ### Creating `Counter`
 
-You need a way to create a new `Counter` object. Do this by creating a new `CreateCounter` component in the new `src/CreateCounter.tsx` file:
+You need a way to create a new `Counter` object. 
 
-```tsx
-import { Button, Container } from '@radix-ui/themes';
+<details>
+  <summary>
+    Create `src/CreateCounter.tsx` and add the following code:
+  </summary>
+  ```tsx
+    import { Button, Container } from "@radix-ui/themes";
+    import { useState } from "react";
+    import ClipLoader from "react-spinners/ClipLoader";
 
-export function CreateCounter( { onCreated }: { onCreated: (id: string) => void; } ) {
+    export function CreateCounter({
+      onCreated,
+    }: {
+      onCreated: (id: string) => void;
+    }) {
+      const [waitingForTxn, setWaitingForTxn] = useState(false);
 
-  function create() {
-    // TODO
-  }
+      function create() {
+        // TODO
+      }
 
-  return (
-    <Container>
-      <Button
-        size="3"
-        onClick={() => {
-          create();
-        }}
-      >
-        Create Counter
-      </Button>
-    </Container>
-  );
-}
-```
+      return (
+        <Container>
+          <Button
+            size="3"
+            onClick={() => {
+              create();
+            }}
+            disabled={waitingForTxn}
+          >
+            {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
+          </Button>
+        </Container>
+      );
+    }
+  ```
+</details>
 
-This component renders a button that enables the user to create a counter. Now, update your `create` function so that it calls the `create` function in your Move module.
+This component renders a button that enables the user to create a counter. Now, update your `create` function so that it calls the `create` function from your Move module.
 
-To do this, you need to construct a `Transaction`, with the appropriate `moveCall` transaction, and then sign and execute the programmable transaction block (PTB).
+<details>
+  <summary>
+    Update the `create` function in the `src/CreateCounter.tsx` file:
+  </summary>
+  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx noComments}
+</details>
 
-First, import `Transaction` from `@mysten/sui`, `COUNTER_PACKAGE_ID` from your constants.ts file created previously, and `useSignAndExecuteTransaction` from `@mysten/dapp-kit`.
-
-```tsx
-import { useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
-
-import { useNetworkVariable } from "./networkConfig";
-```
-
-Next, call the `useSignAndExecuteTransaction` hook in your component, which provides a `mutate` function you can use in your `create` function:
-
-```tsx
-export function CreateCounter( { onCreated }: { onCreated: (id: string) => void; } ) {
-  const counterPackageId = useNetworkVariable("counterPackageId");
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
-    execute: async ({ bytes, signature }) =>
-      await suiClient.executeTransactionBlock({
-        transactionBlock: bytes,
-        signature,
-        options: {
-          // Raw effects are required so the effects can be reported back to the wallet
-          showRawEffects: true,
-          showEffects: true,
-        },
-      }),
-  });	
-
-  function create() {
-    // TODO
-  }
-
-  return (
-    <Container>
-      <Button
-        size="3"
-        onClick={() => {
-          create();
-        }}
-      >
-        Create Counter
-      </Button>
-    </Container>
-  );
-
-}
-```
-
-Finally, construct your `Transaction`:
-
-{@inject: sdk/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx noComments}
-
-You now have a functional component that can create a new `Counter` object, and because the `showRawEffects` and `showEffects` options are toggled on, the transaction results ensure finality. The `SuiClient` is used to set this up.
+The `create` function now creates a new Sui `Transaction` and calls the `create` function from your Move module. The PTB is then signed and executed via the `useSignAndExecuteTransaction` hook. The `onCreated` callback is called with the new counter's ID when the transaction is successful.
 
 ### Set up routing
 
-Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. Set up your `src/App.tsx` file so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
+Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. 
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/src/App.tsx noComments}
+<details>
+  <summary>
+    Set up your `src/App.tsx` file so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
+  </summary>
+  ```tsx
+    import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+    import { isValidSuiObjectId } from "@mysten/sui/utils";
+    import { Box, Container, Flex, Heading } from "@radix-ui/themes";
+    import { useState } from "react";
+    import { CreateCounter } from "./CreateCounter";
 
-This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, it either renders a `Counter` (which you define in the next step) if you have a counter ID, or the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
+    function App() {
+      const currentAccount = useCurrentAccount();
+      const [counterId, setCounter] = useState(() => {
+        const hash = window.location.hash.slice(1);
+        return isValidSuiObjectId(hash) ? hash : null;
+      });
+
+      return (
+        <>
+          <Flex
+            position="sticky"
+            px="4"
+            py="2"
+            justify="between"
+            style={{
+              borderBottom: "1px solid var(--gray-a2)",
+            }}
+          >
+            <Box>
+              <Heading>dApp Starter Template</Heading>
+            </Box>
+
+            <Box>
+              <ConnectButton />
+            </Box>
+          </Flex>
+          <Container>
+            <Container
+              mt="5"
+              pt="2"
+              px="4"
+              style={{ background: "var(--gray-a2)", minHeight: 500 }}
+            >
+              {currentAccount ? (
+                counterId ? (
+                  null
+                ) : (
+                  <CreateCounter
+                    onCreated={(id) => {
+                      window.location.hash = id;
+                      setCounter(id);
+                    }}
+                  />
+                )
+              ) : (
+                <Heading>Please connect your wallet</Heading>
+              )}
+            </Container>
+          </Container>
+        </>
+      );
+    }
+
+    export default App;
+  ```
+</details>
+
+This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, if you have a counter ID, it renders a `Counter` (which you define in the next step). If you don't have a counter ID, then it renders the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
+
+Currently, the `Counter` component doesn't exist, so the app displays an empty page if you navigate to a counter ID.
+
+:::checkpoint
+
+At this point, you have a basic routing setup. Run your app and ensure you can:
+
+- Create a new counter.
+- See the counter ID in the URL.
+
+The `create counter` button should look like this: 
+
+![Create Counter Button](./images/distributed-create-counter-button.png)
+
+:::
 
 ### Building your counter user interface
 
@@ -305,71 +426,124 @@ Create a new file: `src/Counter.tsx`.
 For your counter, you want to display three elements:
 
 - The current count, which you fetch from the object using the `getObject` RPC method.
-- An increment button, which calls the increment Move function.
+- An increment button, which calls the `increment` Move function.
 - A reset button, which calls the `set_value` Move function with `0`. This is only shown if the current user owns the counter.
 
-```tsx
-import {
-  useCurrentAccount,
-  useSuiClientQuery,
-} from "@mysten/dapp-kit";
-import { Button, Flex, Heading, Text } from "@radix-ui/themes";
+<details>
+  <summary>
+    Add the following code to your `src/Counter.tsx` file:
+  </summary>
+  ```tsx
+    import {
+      useCurrentAccount,
+      useSuiClientQuery,
+    } from "@mysten/dapp-kit";
+    import { SuiObjectData } from "@mysten/sui/client";
+    import { Button, Flex, Heading, Text } from "@radix-ui/themes";
+    import { useState } from "react";
+    import ClipLoader from "react-spinners/ClipLoader";
 
 
-export function Counter({ id }: { id: string }) {
-  const currentAccount = useCurrentAccount();
-  const { data, isPending, error, refetch } = useSuiClientQuery("getObject", {
-    id,
-    options: {
-      showContent: true,
-      showOwner: true,
-    },
-  });
+    export function Counter({ id }: { id: string }) {
+      const currentAccount = useCurrentAccount();
+      const { data, isPending, error, refetch } = useSuiClientQuery("getObject", {
+        id,
+        options: {
+          showContent: true,
+          showOwner: true,
+        },
+      });
 
-  const executeMoveCall = (method: "increment" | "reset") => {
-    // TODO
-  };
+      const [waitingForTxn, setWaitingForTxn] = useState("");
 
-  if (isPending) return <Text>Loading...</Text>;
+      const executeMoveCall = (method: "increment" | "reset") => {
+        // TODO
+      };
 
-  if (error) return <Text>Error: {error.message}</Text>;
+      if (isPending) return <Text>Loading...</Text>;
 
-  if (!data.data) return <Text>Not found</Text>;
+      if (error) return <Text>Error: {error.message}</Text>;
 
-  const ownedByCurrentAccount =
-    getCounterFields(data.data)?.owner === currentAccount?.address;
+      if (!data.data) return <Text>Not found</Text>;
 
-  return (
-    <>
-      <Heading size="3">Counter {id}</Heading>
+      const ownedByCurrentAccount =
+        getCounterFields(data.data)?.owner === currentAccount?.address;
 
-      <Flex direction="column" gap="2">
-        <Text>Count: {getCounterFields(data.data)?.value}</Text>
-        <Flex direction="row" gap="2">
-          <Button onClick={() => executeMoveCall("increment")}>
-            Increment
-          </Button>
-          {ownedByCurrentAccount ? (
-            <Button onClick={() => executeMoveCall("reset")}>Reset</Button>
-          ) : null}
-        </Flex>
-      </Flex>
-    </>
-  );
-}
-function getCounterFields(data: SuiObjectData) {
-  if (data.content?.dataType !== "moveObject") {
-    return null;
-  }
+      return (
+        <>
+          <Heading size="3">Counter {id}</Heading>
 
-  return data.content.fields as { value: number; owner: string };
-}
-```
+          <Flex direction="column" gap="2">
+            <Text>Count: {getCounterFields(data.data)?.value}</Text>
+            <Flex direction="row" gap="2">
+              <Button
+                onClick={() => executeMoveCall("increment")}
+                disabled={waitingForTxn !== ""}
+              >
+                {waitingForTxn === "increment" ? (
+                  <ClipLoader size={20} />
+                ) : (
+                  "Increment"
+                )}
+              </Button>
+              {ownedByCurrentAccount ? (
+                <Button
+                  onClick={() => executeMoveCall("reset")}
+                  disabled={waitingForTxn !== ""}
+                >
+                  {waitingForTxn === "reset" ? (
+                    <ClipLoader size={20} />
+                  ) : (
+                    "Reset"
+                  )}
+                </Button>
+              ) : null}
+            </Flex>
+          </Flex>
+        </>
+      );
+    }
+    function getCounterFields(data: SuiObjectData) {
+      if (data.content?.dataType !== "moveObject") {
+        return null;
+      }
+
+      return data.content.fields as { value: number; owner: string };
+    }
+  ```
+</details>
 
 This snippet has a few new concepts to examine. It uses the `useSuiClientQuery` hook to make the `getObject` RPC call. This returns a data object representing your counter. dApp Kit doesn't know which fields your counter object has, so define a `getCounterFields` helper that gets the counter fields, and adds a type-cast so that you can access the expected `value` and `owner` fields in your component.
 
 The code also adds an `executeMoveCall` function that still needs implementing. This works just like the `create` function you used to create the counter. Instead of using a callback prop like you did for `CreateCounter`, you can use the refetch provided by `useSuiClientQuery` to reload your `Counter` object after you've executed your PTB.
 
-{@inject: sdk/create-dapp/templates/react-e2e-counter/src/Counter.tsx noComments}
+<details>
+  <summary>
+    Update the `executeMoveCall` function in the `src/Counter.tsx` file:
+  </summary>
+  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/Counter.tsx noComments}
+</details>
 
-Your counter app is now ready to count. To learn more about dApp Kit, check out the [dApp Kit docs](https://sdk.mystenlabs.com/dapp-kit).
+### Updating the routing
+
+Now that you have a `Counter` component, you need to update your `App` component to render it when you have a counter ID.
+
+<details>
+  <summary>
+    Update the `src/App.tsx` file to render the `Counter` component when you have a counter ID:
+  </summary>
+  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/App.tsx noComments}
+</details>
+
+:::checkpoint
+
+At this point, you have the complete app! Run it and ensure you can:
+
+- Create counters
+- Increment and reset counters
+
+The `Counter` component should look like this:
+
+![Counter Component](./images/distributed-counter-ui.png)
+
+:::

@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This test exists to make sure that the feature gating for all the code under `gas-profiler`
-/// remains fully connected such that if and only if we enable the feature here, the `gas-profiler`
+/// This test exists to make sure that the feature gating for all the code under `tracing`
+/// remains fully connected such that if and only if we enable the feature here, the `tracing`
 /// feature gets enabled anywhere.
 ///
 /// If this test fails, check for the following.
 ///
-/// Any crate that has code decorated with #[cfg(feature = "gas-profiler")] needs to have
-/// a feature declared in its Cargo.toml named `gas-profiler`. If moving / refactoring code with
+/// Any crate that has code decorated with #[cfg(feature = "tracing")] needs to have
+/// a feature declared in its Cargo.toml named `tracing`. If moving / refactoring code with
 /// this decorator from a crate to a different crate, it is likely needed to copy over some of the
 /// feature declaration defined in the original crate. Also ensure we do not include the feature in
 /// any dependency of the dependencies section so that the feature won't get partially enabled as
@@ -21,18 +21,18 @@
 /// defined in all the other crates that the decorated code in the current crate depends on.
 ///
 /// Note this crate will always have the feature enabled in testing due to the addition of
-/// `sui = { path = ".", features = ["gas-profiler"] }` to our dev-dependencies.
+/// `sui = { path = ".", features = ["tracing"] }` to our dev-dependencies.
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 #[test]
 fn test_macro_shows_feature_enabled() {
-    move_vm_profiler::gas_profiler_feature_disabled! {
+    move_vm_profiler::tracing_feature_disabled! {
         panic!("gas profile feature graph became disconnected");
     }
 }
 
 #[ignore]
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_profiler() {
     use std::fs;

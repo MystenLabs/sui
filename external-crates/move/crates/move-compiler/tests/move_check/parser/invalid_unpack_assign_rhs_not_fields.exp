@@ -8,7 +8,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9
   │
 9 │         X::S () = 0;
-  │         ^^^^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │         ^^^^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -37,5 +37,5 @@ error[E01002]: unexpected token
    ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:13:16
    │
 13 │         X::S { 0 } = 0;
-   │                ^ Expected a field expression
+   │                ^ Unexpected '<Number>'. Expected a field expression
 

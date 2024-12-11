@@ -22,7 +22,7 @@ export function WalletListItem({ name, icon, onClick, isSelected = false }: Wall
 				type="button"
 				onClick={onClick}
 			>
-				{typeof icon === 'string' ? (
+				{icon && typeof icon === 'string' ? (
 					<img className={styles.walletIcon} src={icon} alt={`${name} logo`} />
 				) : (
 					icon

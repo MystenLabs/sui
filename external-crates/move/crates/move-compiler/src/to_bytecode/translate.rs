@@ -7,6 +7,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
+    diagnostics::DiagnosticReporter,
     expansion::ast::{
         AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
     },
@@ -38,7 +39,7 @@ type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
 type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &G::Program,
 ) -> (
@@ -127,15 +128,16 @@ fn extract_decls(
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = vec![];
-
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
+        warning_filters_table,
         info: _,
     } = prog;
 
@@ -145,15 +147,27 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
+        if let Some(unit) = module(
+            compilation_env,
+            &reporter,
+            m,
+            mdef,
+            &orderings,
+            &ddecls,
+            &fdecls,
+        ) {
             units.push(unit)
         }
     }
+    // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
+    // are gone, the table can safely be dropped.
+    drop(warning_filters_table);
     units
 }
 
 fn module(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
+    reporter: &DiagnosticReporter,
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
@@ -227,7 +241,7 @@ fn module(
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
             Err(e) => {
-                compilation_env.add_diag(diag!(
+                reporter.add_diag(diag!(
                     Bug::BytecodeGeneration,
                     (ident_loc, format!("IR ERROR: {}", e))
                 ));
@@ -552,6 +566,7 @@ fn function(
         warning_filter: _warning_filter,
         index: _index,
         attributes,
+        loc,
         compiled_visibility: v,
         // original, declared visibility is ignored. This is primarily for marking entry functions
         // as public in tests
@@ -583,15 +598,16 @@ fn function(
             IR::FunctionBody::Bytecode { locals, code }
         }
     };
-    let loc = f.loc();
+    let name_loc = f.loc();
     let name = context.function_definition_name(m, f);
     let ir_function = IR::Function_ {
+        loc,
         visibility: v,
         is_entry: entry.is_some(),
         signature,
         body,
     };
-    ((name, sp(loc, ir_function)), (parameters, attributes))
+    ((name, sp(name_loc, ir_function)), (parameters, attributes))
 }
 
 fn visibility(_context: &mut Context, v: Visibility) -> IR::FunctionVisibility {
@@ -811,11 +827,11 @@ fn base_types(context: &mut Context, bs: Vec<H::BaseType>) -> Vec<IR::Type> {
     bs.into_iter().map(|b| base_type(context, b)).collect()
 }
 
-fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
+fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
     use BuiltinTypeName_ as BT;
     use H::{BaseType_ as B, TypeName_ as TN};
-    use IR::Type as IRT;
-    match bt_ {
+    use IR::Type_ as IRT;
+    let type_ = match bt_ {
         B::Unreachable | B::UnresolvedError => {
             panic!("ICE should not have reached compilation if there are errors")
         }
@@ -845,15 +861,19 @@ fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
             user_specified_name,
             ..
         }) => IRT::TypeParameter(type_var(user_specified_name).value),
-    }
+    };
+    sp(bt_loc, type_)
 }
 
-fn single_type(context: &mut Context, sp!(_, st_): H::SingleType) -> IR::Type {
+fn single_type(context: &mut Context, sp!(st_loc, st_): H::SingleType) -> IR::Type {
     use H::SingleType_ as S;
-    use IR::Type as IRT;
+    use IR::Type_ as IRT;
     match st_ {
         S::Base(bt) => base_type(context, bt),
-        S::Ref(mut_, bt) => IRT::Reference(mut_, Box::new(base_type(context, bt))),
+        S::Ref(mut_, bt) => sp(
+            st_loc,
+            IRT::Reference(mut_, Box::new(base_type(context, bt))),
+        ),
     }
 }
 

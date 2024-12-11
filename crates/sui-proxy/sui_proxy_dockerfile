@@ -1,0 +1,3 @@
+FROM gcr.io/distroless/cc-debian12
+
+COPY --chmod=755 sui-proxy /opt/sui/bin/sui-proxy

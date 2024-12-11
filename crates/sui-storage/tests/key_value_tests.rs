@@ -190,12 +190,10 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         checkpoint_summaries: &[CheckpointSequenceNumber],
         checkpoint_contents: &[CheckpointSequenceNumber],
         checkpoint_summaries_by_digest: &[CheckpointDigest],
-        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
     ) -> SuiResult<(
         Vec<Option<CertifiedCheckpointSummary>>,
         Vec<Option<CheckpointContents>>,
         Vec<Option<CertifiedCheckpointSummary>>,
-        Vec<Option<CheckpointContents>>,
     )> {
         let mut summaries = Vec::new();
         for digest in checkpoint_summaries {
@@ -212,12 +210,7 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
             summaries_by_digest.push(self.checkpoint_summaries_by_digest.get(digest).cloned());
         }
 
-        let mut contents_by_digest = Vec::new();
-        for digest in checkpoint_contents_by_digest {
-            contents_by_digest.push(self.checkpoint_contents_by_digest.get(digest).cloned());
-        }
-
-        Ok((summaries, contents, summaries_by_digest, contents_by_digest))
+        Ok((summaries, contents, summaries_by_digest))
     }
 
     async fn deprecated_get_transaction_checkpoint(
@@ -243,6 +236,13 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
             .iter()
             .map(|digest| self.tx_to_checkpoint.get(digest).cloned())
             .collect())
+    }
+
+    async fn multi_get_events_by_tx_digests(
+        &self,
+        _: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        Ok(vec![])
     }
 }
 
@@ -357,7 +357,6 @@ async fn test_checkpoints() {
             &[s1.sequence_number, s2.sequence_number],
             &[s1.sequence_number, s2.sequence_number],
             &[*s1.digest(), *s2.digest()],
-            &[s1.content_digest, s2.content_digest],
         )
         .now_or_never()
         .unwrap()
@@ -366,12 +365,10 @@ async fn test_checkpoints() {
     let summaries_by_seq = result.0;
     let contents_by_seq = result.1;
     let summaries_by_digest = result.2;
-    let contents_by_digest = result.3;
 
     assert_eq!(summaries_by_seq[0].as_ref().unwrap().data(), s1.data());
     assert_eq!(contents_by_seq[1].as_ref().unwrap(), &c2);
     assert_eq!(summaries_by_digest[0].as_ref().unwrap().data(), s1.data());
-    assert_eq!(contents_by_digest[1].as_ref().unwrap(), &c2);
 }
 
 #[tokio::test]
@@ -560,7 +557,7 @@ mod simtests {
         assert_eq!(
             metrics
                 .key_value_store_num_fetches_success
-                .get_metric_with_label_values(&["http_cache", "url"])
+                .get_metric_with_label_values(&["http_cache", "tx"])
                 .unwrap()
                 .get(),
             1
@@ -575,14 +572,14 @@ mod simtests {
 fn test_key_to_path_and_back() {
     let tx = TransactionDigest::random();
     let key = Key::Tx(tx);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
     );
 
     let key = Key::Fx(TransactionDigest::random());
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
@@ -590,21 +587,21 @@ fn test_key_to_path_and_back() {
 
     let events = TransactionEventsDigest::random();
     let key = Key::Events(events);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
     );
 
     let key = Key::CheckpointSummary(42);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
     );
 
     let key = Key::CheckpointContents(42);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
@@ -612,7 +609,7 @@ fn test_key_to_path_and_back() {
 
     let ckpt_contents = CheckpointContentsDigest::random();
     let key = Key::CheckpointContentsByDigest(ckpt_contents);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
@@ -620,21 +617,21 @@ fn test_key_to_path_and_back() {
 
     let ckpt_summary = CheckpointDigest::random();
     let key = Key::CheckpointSummaryByDigest(ckpt_summary);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
     );
 
     let key = Key::TxToCheckpoint(tx);
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key
     );
 
     let key = Key::ObjectKey(ObjectID::random(), SequenceNumber::from_u64(42));
-    let path_elts = key_to_path_elements(&key).unwrap();
+    let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
         key

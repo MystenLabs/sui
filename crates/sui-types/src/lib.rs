@@ -76,7 +76,7 @@ pub mod randomness_state;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;
-pub mod sui_sdk2_conversions;
+pub mod sui_sdk_types_conversions;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod supported_protocol_versions;
@@ -84,18 +84,18 @@ pub mod traffic_control;
 pub mod transaction;
 pub mod transaction_executor;
 pub mod transfer;
+pub mod type_input;
 pub mod versioned;
 pub mod zk_login_authenticator;
 pub mod zk_login_util;
 
-#[cfg(any(test, feature = "test-utils"))]
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 
 macro_rules! built_in_ids {
     ($($addr:ident / $id:ident = $init:expr);* $(;)?) => {
         $(
-            pub const $addr: AccountAddress = builtin_address($init);
+            pub const $addr: AccountAddress = AccountAddress::from_suffix($init);
             pub const $id: ObjectID = ObjectID::from_address($addr);
         )*
     }
@@ -132,14 +132,6 @@ pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 pub const SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
-const fn builtin_address(suffix: u16) -> AccountAddress {
-    let mut addr = [0u8; AccountAddress::LENGTH];
-    let [hi, lo] = suffix.to_be_bytes();
-    addr[AccountAddress::LENGTH - 2] = hi;
-    addr[AccountAddress::LENGTH - 1] = lo;
-    AccountAddress::new(addr)
-}
-
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
 }
@@ -152,7 +144,7 @@ pub fn sui_framework_address_concat_string(suffix: &str) -> String {
 /// Parsing succeeds if and only if `s` matches one of these formats exactly, with no remaining
 /// suffix. This function is intended for use within the authority codebases.
 pub fn parse_sui_address(s: &str) -> anyhow::Result<SuiAddress> {
-    use move_command_line_common::address::ParsedAddress;
+    use move_core_types::parsing::address::ParsedAddress;
     Ok(ParsedAddress::parse(s)?
         .into_account_address(&resolve_address)?
         .into())
@@ -162,7 +154,7 @@ pub fn parse_sui_address(s: &str) -> anyhow::Result<SuiAddress> {
 /// module name (an identifier). Parsing succeeds if and only if `s` matches this format exactly,
 /// with no remaining input. This function is intended for use within the authority codebases.
 pub fn parse_sui_module_id(s: &str) -> anyhow::Result<ModuleId> {
-    use move_command_line_common::types::ParsedModuleId;
+    use move_core_types::parsing::types::ParsedModuleId;
     ParsedModuleId::parse(s)?.into_module_id(&resolve_address)
 }
 
@@ -171,7 +163,7 @@ pub fn parse_sui_module_id(s: &str) -> anyhow::Result<ModuleId> {
 /// format exactly, with no remaining input. This function is intended for use within the authority
 /// codebases.
 pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
-    use move_command_line_common::types::ParsedFqName;
+    use move_core_types::parsing::types::ParsedFqName;
     ParsedFqName::parse(s)?.into_fq_name(&resolve_address)
 }
 
@@ -180,7 +172,7 @@ pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
 /// brackets). Parsing succeeds if and only if `s` matches this format exactly, with no remaining
 /// input. This function is intended for use within the authority codebase.
 pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
-    use move_command_line_common::types::ParsedStructType;
+    use move_core_types::parsing::types::ParsedStructType;
     ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
 }
 
@@ -188,7 +180,7 @@ pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
 /// vector with a type parameter. Parsing succeeds if and only if `s` matches this format exactly,
 /// with no remaining input. This function is intended for use within the authority codebase.
 pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
-    use move_command_line_common::types::ParsedType;
+    use move_core_types::parsing::types::ParsedType;
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
 }
 
@@ -383,7 +375,7 @@ mod tests {
     #[test]
     fn test_parse_sui_struct_tag_long_account_addr() {
         let result = parse_sui_struct_tag(
-            "0x00000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
         )
         .expect("should not error");
 

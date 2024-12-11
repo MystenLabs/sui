@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
-use std::mem::size_of;
 use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
@@ -314,7 +313,7 @@ impl MoveObject {
             }
         })?;
         match layout {
-            MoveTypeLayout::Struct(l) => Ok(l),
+            MoveTypeLayout::Struct(l) => Ok(*l),
             _ => unreachable!(
                 "We called build_with_types on Struct type, should get a struct layout"
             ),
@@ -466,7 +465,7 @@ impl Data {
 }
 
 #[derive(
-    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+    Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum Owner {
@@ -482,6 +481,38 @@ pub enum Owner {
     },
     /// Object is immutable, and hence ownership doesn't matter.
     Immutable,
+    /// Object is sequenced via consensus. Ownership is managed by the configured authenticator.
+    ///
+    /// Note: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.
+    ConsensusV2 {
+        /// The version at which the object most recently became a consensus object.
+        /// This serves the same function as `initial_shared_version`, except it may change
+        /// if the object's Owner type changes.
+        start_version: SequenceNumber,
+        /// The authentication mode of the object
+        authenticator: Box<Authenticator>,
+    },
+}
+
+#[derive(
+    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
+pub enum Authenticator {
+    /// The contained SuiAddress exclusively has all permissions: read, write, delete, transfer
+    SingleOwner(SuiAddress),
+}
+
+impl Authenticator {
+    pub fn as_single_owner(&self) -> &SuiAddress {
+        // NOTE: Existing callers are written assuming that only singly-owned
+        // ConsensusV2 objects exist. If additional Authenticator variants are
+        // added, do not simply panic here. Instead, change the return type of
+        // this function and update callers accordingly.
+        match self {
+            Self::SingleOwner(address) => address,
+        }
+    }
 }
 
 impl Owner {
@@ -490,9 +521,10 @@ impl Owner {
     pub fn get_address_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) => Ok(*address),
-            Self::Shared { .. } | Self::Immutable | Self::ObjectOwner(_) => {
-                Err(SuiError::UnexpectedOwnerType)
-            }
+            Self::Shared { .. }
+            | Self::Immutable
+            | Self::ObjectOwner(_)
+            | Self::ConsensusV2 { .. } => Err(SuiError::UnexpectedOwnerType),
         }
     }
 
@@ -501,7 +533,9 @@ impl Owner {
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable | Self::ConsensusV2 { .. } => {
+                Err(SuiError::UnexpectedOwnerType)
+            }
         }
     }
 
@@ -522,21 +556,15 @@ impl Owner {
     }
 }
 
-impl PartialEq<SuiAddress> for Owner {
-    fn eq(&self, other: &SuiAddress) -> bool {
-        match self {
-            Self::AddressOwner(address) => address == other,
-            Self::ObjectOwner(_) | Self::Shared { .. } | Self::Immutable => false,
-        }
-    }
-}
-
 impl PartialEq<ObjectID> for Owner {
     fn eq(&self, other: &ObjectID) -> bool {
         let other_id: SuiAddress = (*other).into();
         match self {
             Self::ObjectOwner(id) => id == &other_id,
-            Self::AddressOwner(_) | Self::Shared { .. } | Self::Immutable => false,
+            Self::AddressOwner(_)
+            | Self::Shared { .. }
+            | Self::Immutable
+            | Self::ConsensusV2 { .. } => false,
         }
     }
 }
@@ -558,6 +586,27 @@ impl Display for Owner {
             } => {
                 write!(f, "Shared( {} )", initial_shared_version.value())
             }
+            Self::ConsensusV2 {
+                start_version,
+                authenticator,
+            } => {
+                write!(
+                    f,
+                    "ConsensusV2( {}, {} )",
+                    start_version.value(),
+                    authenticator
+                )
+            }
+        }
+    }
+}
+
+impl Display for Authenticator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SingleOwner(address) => {
+                write!(f, "SingleOwner({})", address)
+            }
         }
     }
 }
@@ -578,6 +627,7 @@ pub struct ObjectInner {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[serde(from = "ObjectInner")]
 pub struct Object(Arc<ObjectInner>);
 
 impl From<ObjectInner> for Object {
@@ -757,7 +807,7 @@ impl ObjectInner {
     // It's a common pattern to retrieve both the owner and object ID
     // together, if it's owned by a singler owner.
     pub fn get_owner_and_id(&self) -> Option<(Owner, ObjectID)> {
-        Some((self.owner, self.id()))
+        Some((self.owner.clone(), self.id()))
     }
 
     /// Return true if this object is a Move package, false if it is a Move value
@@ -843,11 +893,27 @@ impl ObjectInner {
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
-    /// This will be slgihtly different from the serialized size, but
+    /// This will be slightly different from the serialized size, but
     /// we also don't want to serialize the object just to get the size.
     /// This approximation should be good enough for gas metering.
     pub fn object_size_for_gas_metering(&self) -> usize {
-        let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>() + size_of::<u64>();
+        const DEFAULT_OWNER_SIZE: usize = 40;
+        const TRANSACTION_DIGEST_SIZE: usize = 32;
+        const STORAGE_REBATE_SIZE: usize = 8;
+
+        let owner_size = match &self.owner {
+            Owner::AddressOwner(_)
+            | Owner::ObjectOwner(_)
+            | Owner::Shared { .. }
+            | Owner::Immutable => DEFAULT_OWNER_SIZE,
+            Owner::ConsensusV2 { authenticator, .. } => {
+                DEFAULT_OWNER_SIZE
+                    + match authenticator.as_ref() {
+                        Authenticator::SingleOwner(_) => 8, // marginal cost to store both SuiAddress and SequenceNumber
+                    }
+            }
+        };
+        let meta_data_size = owner_size + TRANSACTION_DIGEST_SIZE + STORAGE_REBATE_SIZE;
         let data_size = match &self.data {
             Data::Move(m) => m.object_size_for_gas_metering(),
             Data::Package(p) => p.object_size_for_gas_metering(),
@@ -1204,73 +1270,83 @@ impl Display for PastObjectRead {
     }
 }
 
-// Ensure that object digest computation and bcs serialized format are not inadvertently changed.
-#[test]
-fn test_object_digest_and_serialized_format() {
-    let g = GasCoin::new_for_testing_with_id(ObjectID::ZERO, 123).to_object(OBJECT_START_VERSION);
-    let o = Object::new_move(
-        g,
-        Owner::AddressOwner(SuiAddress::ZERO),
-        TransactionDigest::ZERO,
-    );
-    let bytes = bcs::to_bytes(&o).unwrap();
+#[cfg(test)]
+mod tests {
+    use crate::object::{Object, Owner, OBJECT_START_VERSION};
+    use crate::{
+        base_types::{ObjectID, SuiAddress, TransactionDigest},
+        gas_coin::GasCoin,
+    };
 
-    assert_eq!(
-        bytes,
-        [
-            0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-        ]
-    );
+    // Ensure that object digest computation and bcs serialized format are not inadvertently changed.
+    #[test]
+    fn test_object_digest_and_serialized_format() {
+        let g =
+            GasCoin::new_for_testing_with_id(ObjectID::ZERO, 123).to_object(OBJECT_START_VERSION);
+        let o = Object::new_move(
+            g,
+            Owner::AddressOwner(SuiAddress::ZERO),
+            TransactionDigest::ZERO,
+        );
+        let bytes = bcs::to_bytes(&o).unwrap();
 
-    let objref = format!("{:?}", o.compute_object_reference());
-    assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
-}
+        assert_eq!(
+            bytes,
+            [
+                0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
 
-#[test]
-fn test_get_coin_value_unsafe() {
-    fn test_for_value(v: u64) {
-        let g = GasCoin::new_for_testing(v).to_object(OBJECT_START_VERSION);
-        assert_eq!(g.get_coin_value_unsafe(), v);
-        assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+        let objref = format!("{:?}", o.compute_object_reference());
+        assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
     }
 
-    test_for_value(0);
-    test_for_value(1);
-    test_for_value(8);
-    test_for_value(9);
-    test_for_value(u8::MAX as u64);
-    test_for_value(u8::MAX as u64 + 1);
-    test_for_value(u16::MAX as u64);
-    test_for_value(u16::MAX as u64 + 1);
-    test_for_value(u32::MAX as u64);
-    test_for_value(u32::MAX as u64 + 1);
-    test_for_value(u64::MAX);
-}
+    #[test]
+    fn test_get_coin_value_unsafe() {
+        fn test_for_value(v: u64) {
+            let g = GasCoin::new_for_testing(v).to_object(OBJECT_START_VERSION);
+            assert_eq!(g.get_coin_value_unsafe(), v);
+            assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+        }
 
-#[test]
-fn test_set_coin_value_unsafe() {
-    fn test_for_value(v: u64) {
-        let mut g = GasCoin::new_for_testing(u64::MAX).to_object(OBJECT_START_VERSION);
-        g.set_coin_value_unsafe(v);
-        assert_eq!(g.get_coin_value_unsafe(), v);
-        assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
-        assert_eq!(g.version(), OBJECT_START_VERSION);
-        assert_eq!(g.contents().len(), 40);
+        test_for_value(0);
+        test_for_value(1);
+        test_for_value(8);
+        test_for_value(9);
+        test_for_value(u8::MAX as u64);
+        test_for_value(u8::MAX as u64 + 1);
+        test_for_value(u16::MAX as u64);
+        test_for_value(u16::MAX as u64 + 1);
+        test_for_value(u32::MAX as u64);
+        test_for_value(u32::MAX as u64 + 1);
+        test_for_value(u64::MAX);
     }
 
-    test_for_value(0);
-    test_for_value(1);
-    test_for_value(8);
-    test_for_value(9);
-    test_for_value(u8::MAX as u64);
-    test_for_value(u8::MAX as u64 + 1);
-    test_for_value(u16::MAX as u64);
-    test_for_value(u16::MAX as u64 + 1);
-    test_for_value(u32::MAX as u64);
-    test_for_value(u32::MAX as u64 + 1);
-    test_for_value(u64::MAX);
+    #[test]
+    fn test_set_coin_value_unsafe() {
+        fn test_for_value(v: u64) {
+            let mut g = GasCoin::new_for_testing(u64::MAX).to_object(OBJECT_START_VERSION);
+            g.set_coin_value_unsafe(v);
+            assert_eq!(g.get_coin_value_unsafe(), v);
+            assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+            assert_eq!(g.version(), OBJECT_START_VERSION);
+            assert_eq!(g.contents().len(), 40);
+        }
+
+        test_for_value(0);
+        test_for_value(1);
+        test_for_value(8);
+        test_for_value(9);
+        test_for_value(u8::MAX as u64);
+        test_for_value(u8::MAX as u64 + 1);
+        test_for_value(u16::MAX as u64);
+        test_for_value(u16::MAX as u64 + 1);
+        test_for_value(u32::MAX as u64);
+        test_for_value(u32::MAX as u64 + 1);
+        test_for_value(u64::MAX);
+    }
 }

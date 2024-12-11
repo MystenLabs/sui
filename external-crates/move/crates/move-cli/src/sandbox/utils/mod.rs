@@ -10,8 +10,7 @@ use move_binary_format::{
 };
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
-    effects::{ChangeSet, Op},
-    language_storage::{ModuleId, TypeTag},
+    language_storage::TypeTag,
     transaction_argument::TransactionArgument,
     vm_status::{StatusCode, StatusType},
 };
@@ -37,40 +36,6 @@ pub fn get_gas_status(cost_table: &CostTable, gas_budget: Option<u64>) -> Result
         GasStatus::new_unmetered()
     };
     Ok(gas_status)
-}
-
-pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
-    // total bytes written across all accounts
-    let mut total_bytes_written = 0;
-    for (addr, name, blob_op) in changeset.modules() {
-        match blob_op {
-            Op::New(module_bytes) => {
-                let bytes_written = addr.len() + name.len() + module_bytes.len();
-                total_bytes_written += bytes_written;
-                let module_id = ModuleId::new(addr, name.clone());
-                println!(
-                    "Publishing a new module {} (wrote {:?} bytes)",
-                    module_id, bytes_written
-                );
-            }
-            Op::Modify(module_bytes) => {
-                let bytes_written = addr.len() + name.len() + module_bytes.len();
-                total_bytes_written += bytes_written;
-                let module_id = ModuleId::new(addr, name.clone());
-                println!(
-                    "Updating an existing module {} (wrote {:?} bytes)",
-                    module_id, bytes_written
-                );
-            }
-            Op::Delete => {
-                panic!("Deleting a module is not supported")
-            }
-        }
-    }
-    println!(
-        "Wrote {:?} bytes of module ID's and code",
-        total_bytes_written
-    )
 }
 
 pub(crate) fn explain_type_error(

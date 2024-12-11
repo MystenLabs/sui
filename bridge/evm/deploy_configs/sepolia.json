@@ -137,9 +137,11 @@
   ],
   "minCommitteeStakeRequired": 7600,
   "sourceChainId": 11,
-  "supportedChainIDs": [1],
+  "supportedChainIds": [1],
   "supportedChainLimitsInDollars": [18446744073709551615],
   "supportedTokens": ["0x0000000000000000000000000000000000000000", "0xBe9566f1bc9a6a18ad1ed5620Ccb76ff639534d5", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "0x8140EBa492e02Dbf137080E2E4eC0Bd3e10784a0", "0x4E9D6D3dbFFc32399D514A5a03268e5860b6769d"],
+  "tokenIds": [0, 1, 2, 3, 4],
   "tokenPrices": [100000000, 7000000000000, 400000000000, 100000000, 100000000],
-  "wETHAddress": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+  "suiDecimals": [9, 8, 8, 6, 6],
+  "weth": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
 }

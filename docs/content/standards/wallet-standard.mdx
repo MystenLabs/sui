@@ -179,7 +179,7 @@ registerWallet(new YourWallet());
 
 ### Best practices for efficient transaction execution
 
-The Wallet standard has been updated from its original design to better support changes in the Sui ecosystem. For example, the GraphQL service was introduced after Mainnet launched. The `sui:signAndExecuteTransactionBlock` feature is closely tied to the JSON RPC options and data structures, so its continued maintenance becomes increasingly difficult as the GraphQL service becomes more ubiquitous.  
+The Wallet standard has been updated from its original design to better support changes in the Sui ecosystem. For example, the GraphQL service was introduced after Mainnet launched. The `sui:signAndExecuteTransactionBlock` feature is closely tied to the JSON RPC options and data structures, so its continued maintenance becomes increasingly difficult as the GraphQL service becomes more ubiquitous.
 
 Consequently, the Wallet standard introduced the `sui:signAndExecuteTransaction` feature. The features of this method are more useful, regardless of which API you use to execute transactions. This usefulness comes at the expense
 of flexibility in what `sui:signAndExecuteTransaction` returns.
@@ -214,12 +214,12 @@ The Wallet standard includes features to help your apps interact with wallets.
 To query the installed wallets in a user's browser, use the `get` function of `getWallets`.
 
 ```tsx
-import { getWallets } from "@mysten/wallet-standard"; 
+import { getWallets } from '@mysten/wallet-standard';
 
 const availableWallets = getWallets().get();
 ```
 
-The return from this call (`availableWallets` in the previous code) is an array of `Wallet` types. 
+The return from this call (`availableWallets` in the previous code) is an array of `Wallet` types.
 
 Use the `Wallet.icon` and `Wallet.name` attributes to display the wallet details on your web page.
 
@@ -238,7 +238,7 @@ Connecting in the context of a wallet refers to a user that joins the web site f
 The feature that provides this functionality is called `standard:connect`. To connect using this feature, make the following call:
 
 ```tsx
-wallet.features['standard:connect'].connect() // connect call
+wallet.features['standard:connect'].connect(); // connect call
 ```
 
 This call results in the wallet opening a pop-up dialog for the user to continue the connection process.
@@ -277,8 +277,10 @@ client.executeTransactionBlock({
 Your app then sends the transaction effects back to the wallet, which reports results to the user. The wallet expects the effects to be `b64` encoded.
 
 ```tsx
+import { toBase64 } from '@mysten/sui/utils';
+
 wallet.features['sui:reportTransactionEffects'].reportTransactionEffects(
-    effects: Array.isArray(transactionResponse.effects) ? toB64(
+    effects: Array.isArray(transactionResponse.effects) ? toBase64(
         Uint8Array.from(transactionResponse.effects) : transactionResponse.effects,
         account: wallet.accounts[0], // for example
         chain: wallet.chains[0]
@@ -309,7 +311,7 @@ The wallet standard only defines the change event that can apply to chains, feat
 To subscribe your apps to events with the following call:
 
 ```tsx
-const unsubscribe = wallet.features['standard:events'].on ('change', callback);
+const unsubscribe = wallet.features['standard:events'].on('change', callback);
 ```
 
 This call returns a function that can be called to unsubscribe from listening to the events.

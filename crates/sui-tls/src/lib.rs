@@ -5,19 +5,60 @@ mod acceptor;
 mod certgen;
 mod verifier;
 
-pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
-
 pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
+use rustls::ClientConfig;
 pub use verifier::{
-    public_key_from_certificate, AllowAll, Allower, ClientCertVerifier, HashSetAllow,
-    ServerCertVerifier, ValidatorAllowlist,
+    public_key_from_certificate, AllowAll, AllowPublicKeys, Allower, ClientCertVerifier,
+    ServerCertVerifier,
 };
 
 pub use rustls;
 
+use fastcrypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
+use tokio_rustls::rustls::ServerConfig;
+
+pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
+
+pub fn create_rustls_server_config<A: Allower + 'static>(
+    private_key: Ed25519PrivateKey,
+    server_name: String,
+    allower: A,
+) -> ServerConfig {
+    let verifier = ClientCertVerifier::new(allower, server_name.clone());
+    // TODO: refactor to use key bytes
+    let self_signed_cert = SelfSignedCertificate::new(private_key, server_name.as_str());
+    let tls_cert = self_signed_cert.rustls_certificate();
+    let tls_private_key = self_signed_cert.rustls_private_key();
+    let mut tls_config = verifier
+        .rustls_server_config(vec![tls_cert], tls_private_key)
+        .unwrap_or_else(|e| panic!("Failed to create TLS server config: {:?}", e));
+    tls_config.alpn_protocols = vec![b"h2".to_vec()];
+    tls_config
+}
+
+pub fn create_rustls_client_config(
+    target_public_key: Ed25519PublicKey,
+    server_name: String,
+    client_key: Option<Ed25519PrivateKey>, // optional self-signed cert for client verification
+) -> ClientConfig {
+    let tls_config = ServerCertVerifier::new(target_public_key, server_name.clone());
+    let tls_config = if let Some(private_key) = client_key {
+        let self_signed_cert = SelfSignedCertificate::new(private_key, server_name.as_str());
+        let tls_cert = self_signed_cert.rustls_certificate();
+        let tls_private_key = self_signed_cert.rustls_private_key();
+        tls_config.rustls_client_config_with_client_auth(vec![tls_cert], tls_private_key)
+    } else {
+        tls_config.rustls_client_config_with_no_client_auth()
+    }
+    .unwrap_or_else(|e| panic!("Failed to create TLS client config: {e:?}"));
+    tls_config
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::traits::KeyPair;
@@ -100,22 +141,15 @@ mod tests {
         let allowed = Ed25519KeyPair::generate(&mut rng);
         let disallowed = Ed25519KeyPair::generate(&mut rng);
 
-        let allowed_public_key = allowed.public().to_owned();
+        let allowed_public_keys = BTreeSet::from([allowed.public().to_owned()]);
         let allowed_cert = SelfSignedCertificate::new(allowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
         let disallowed_cert =
             SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
-        let mut allowlist = HashSetAllow::new();
+        let allowlist = AllowPublicKeys::new(allowed_public_keys);
         let verifier =
             ClientCertVerifier::new(allowlist.clone(), SUI_VALIDATOR_SERVER_NAME.to_string());
-
-        // Add our public key to the allower
-        allowlist
-            .inner_mut()
-            .write()
-            .unwrap()
-            .insert(allowed_public_key);
 
         // The allowed cert passes validation
         verifier
@@ -132,7 +166,7 @@ mod tests {
         );
 
         // After removing the allowed public key from the set it now fails validation
-        allowlist.inner_mut().write().unwrap().clear();
+        allowlist.update(BTreeSet::new());
         let err = verifier
             .verify_client_cert(&allowed_cert.rustls_certificate(), &[], UnixTime::now())
             .unwrap_err();
@@ -149,16 +183,9 @@ mod tests {
         let public_key = keypair.public().to_owned();
         let cert = SelfSignedCertificate::new(keypair.private(), "not-sui");
 
-        let mut allowlist = HashSetAllow::new();
+        let allowlist = AllowPublicKeys::new(BTreeSet::from([public_key.clone()]));
         let client_verifier =
             ClientCertVerifier::new(allowlist.clone(), SUI_VALIDATOR_SERVER_NAME.to_string());
-
-        // Add our public key to the allower
-        allowlist
-            .inner_mut()
-            .write()
-            .unwrap()
-            .insert(public_key.clone());
 
         // Allowed public key but the server-name in the cert is not the required "sui"
         let err = client_verifier
@@ -210,7 +237,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let mut allowlist = HashSetAllow::new();
+        let allowlist = AllowPublicKeys::new(BTreeSet::new());
         let tls_config =
             ClientCertVerifier::new(allowlist.clone(), SUI_VALIDATOR_SERVER_NAME.to_string())
                 .rustls_server_config(
@@ -240,11 +267,7 @@ mod tests {
         client.get(&server_url).send().await.unwrap_err();
 
         // Insert the client's public key into the allowlist and verify the request is successful
-        allowlist
-            .inner_mut()
-            .write()
-            .unwrap()
-            .insert(client_public_key.clone());
+        allowlist.update(BTreeSet::from([client_public_key.clone()]));
 
         let res = client.get(&server_url).send().await.unwrap();
         let body = res.text().await.unwrap();

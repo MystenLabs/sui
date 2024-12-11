@@ -34,6 +34,7 @@ move-vm-config.workspace = true
 move-binary-format.workspace = true
 move-vm-profiler.workspace = true
 petgraph.workspace = true
+move-trace-format.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -51,12 +52,10 @@ move-proc-macros.workspace = true
 default = []
 fuzzing = []
 failpoints = ["fail/failpoints"]
-# Enable tracing and debugging also for release builds. By default, it is only enabled for debug builds.
-debugging = []
 testing = []
 lazy_natives = []
 tiered-gas = []
-gas-profiler = [
-    "move-vm-config/gas-profiler",
-    "move-vm-profiler/gas-profiler",
+tracing = [
+    "move-vm-config/tracing",
+    "move-vm-profiler/tracing",
 ]

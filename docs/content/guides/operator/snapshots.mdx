@@ -70,14 +70,14 @@ To restore from a RocksDB snapshot, follow these steps:
    * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
    * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
 
-1. When using `sui-tool download-db-snapshot` the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Move this directory to the `live/` Full node database directory, for example `/opt/sui/db/authorities_db/full_node_db/live`.
+1. When using `sui-tool download-db-snapshot` the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Rename the `epoch_[NUM]` directory to `live/` under your node's `db_path`, for example `cp -r /tmp/epoch_[NUM] /opt/sui/db/authorities_db/full_node_db/live`.
 1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
    `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
 1. Start the Sui node.
 
 :::info
 
-When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. When restoring a Validator node, you can shorten the database destination to `/opt/sui/db/authorities_db/live`.
+When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. When restoring a Validator node, you can shorten the database destination to `/opt/sui/db/authorities_db/live`. Check the `db_path` field of your Full node or Validator configs to confirm the path location.
 
 :::
 

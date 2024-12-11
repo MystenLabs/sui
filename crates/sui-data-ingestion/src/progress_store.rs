@@ -16,6 +16,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 pub struct DynamoDBProgressStore {
     client: Client,
     table_name: String,
+    is_backfill: bool,
 }
 
 impl DynamoDBProgressStore {
@@ -24,6 +25,7 @@ impl DynamoDBProgressStore {
         aws_secret_access_key: &str,
         aws_region: String,
         table_name: String,
+        is_backfill: bool,
     ) -> Self {
         let credentials = Credentials::new(
             aws_access_key_id,
@@ -44,7 +46,11 @@ impl DynamoDBProgressStore {
             .load()
             .await;
         let client = Client::new(&aws_config);
-        Self { client, table_name }
+        Self {
+            client,
+            table_name,
+            is_backfill,
+        }
     }
 }
 
@@ -70,6 +76,9 @@ impl ProgressStore for DynamoDBProgressStore {
         task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<()> {
+        if self.is_backfill && checkpoint_number % 1000 != 0 {
+            return Ok(());
+        }
         let backoff = backoff::ExponentialBackoff::default();
         backoff::future::retry(backoff, || async {
             let result = self

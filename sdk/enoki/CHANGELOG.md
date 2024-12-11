@@ -1,5 +1,132 @@
 # @mysten/enoki
 
+## 0.4.17
+
+### Patch Changes
+
+- Updated dependencies [100207f]
+  - @mysten/sui@1.16.2
+
+## 0.4.16
+
+### Patch Changes
+
+- 69ee5cc: remove @mysten/zklogin dependency
+
+## 0.4.15
+
+### Patch Changes
+
+- @mysten/sui@1.16.1
+- @mysten/zklogin@0.8.1
+
+## 0.4.14
+
+### Patch Changes
+
+- Updated dependencies [ec2dc7f]
+- Updated dependencies [ec2dc7f]
+  - @mysten/sui@1.16.0
+  - @mysten/zklogin@0.8.0
+
+## 0.4.13
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+- @mysten/zklogin@0.7.30
+
+## 0.4.12
+
+### Patch Changes
+
+- Updated dependencies [6460e45]
+  - @mysten/sui@1.15.0
+  - @mysten/zklogin@0.7.29
+
+## 0.4.11
+
+### Patch Changes
+
+- Updated dependencies [938fb6e]
+  - @mysten/sui@1.14.4
+  - @mysten/zklogin@0.7.28
+
+## 0.4.10
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/zklogin@0.7.27
+
+## 0.4.9
+
+### Patch Changes
+
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+  - @mysten/zklogin@0.7.26
+
+## 0.4.8
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+  - @mysten/zklogin@0.7.25
+
+## 0.4.7
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+  - @mysten/zklogin@0.7.24
+
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+  - @mysten/zklogin@0.7.23
+
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+  - @mysten/zklogin@0.7.22
+
+## 0.4.4
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+  - @mysten/zklogin@0.7.21
+
+## 0.4.3
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+  - @mysten/zklogin@0.7.20
+
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [2c96b06]
+- Updated dependencies [1fd22cc]
+  - @mysten/sui@1.9.0
+  - @mysten/zklogin@0.7.19
+
 ## 0.4.1
 
 ### Patch Changes

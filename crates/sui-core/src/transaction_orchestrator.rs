@@ -31,16 +31,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
-use sui_types::effects::{TransactionEffectsAPI, VerifiedCertifiedTransactionEffects};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
     FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverEffectsQueueResult,
     QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
+use sui_types::transaction_executor::SimulateTransactionResult;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
@@ -99,15 +98,14 @@ where
         prometheus_registry: &Registry,
         reconfig_observer: OnsiteReconfigObserver,
     ) -> Self {
+        let metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
         let notifier = Arc::new(NotifyRead::new());
+        let reconfig_observer = Arc::new(reconfig_observer);
         let quorum_driver_handler = Arc::new(
-            QuorumDriverHandlerBuilder::new(
-                validators,
-                Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
-            )
-            .with_notifier(notifier.clone())
-            .with_reconfig_observer(Arc::new(reconfig_observer))
-            .start(),
+            QuorumDriverHandlerBuilder::new(validators.clone(), metrics.clone())
+                .with_notifier(notifier.clone())
+                .with_reconfig_observer(reconfig_observer.clone())
+                .start(),
         );
 
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();
@@ -118,8 +116,7 @@ where
         let pending_tx_log_clone = pending_tx_log.clone();
         let _local_executor_handle = {
             spawn_monitored_task!(async move {
-                Self::loop_execute_finalized_tx_locally(effects_receiver, pending_tx_log_clone)
-                    .await;
+                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log_clone).await;
             })
         };
         Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
@@ -161,15 +158,9 @@ where
             request_type,
             ExecuteTransactionRequestType::WaitForLocalExecution
         ) {
-            let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                transaction,
-                response.effects_cert.executed_epoch(),
-            );
-            let executed_locally = Self::execute_finalized_tx_locally_with_timeout(
+            let executed_locally = Self::wait_for_finalized_tx_executed_locally_with_timeout(
                 &self.validator_state,
-                &epoch_store,
-                &executable_tx,
-                &response.effects_cert,
+                &transaction,
                 &self.metrics,
             )
             .await
@@ -350,27 +341,13 @@ where
         })
     }
 
-    #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
-    async fn execute_finalized_tx_locally_with_timeout(
+    #[instrument(name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
+    async fn wait_for_finalized_tx_executed_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: &VerifiedExecutableTransaction,
-        effects_cert: &VerifiedCertifiedTransactionEffects,
+        transaction: &VerifiedTransaction,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
-        // TODO: attempt a finalized tx at most once per request.
-        // Every WaitForLocalExecution request will be attempted to execute twice,
-        // one from the subscriber queue, one from the proactive execution before
-        // returning results to clients. This is not insanely bad because:
-        // 1. it's possible that one attempt finishes before the other, so there's
-        //      zero extra work except DB checks
-        // 2. an up-to-date fullnode should have minimal overhead to sync parents
-        //      (for one extra time)
-        // 3. at the end of day, the tx will be executed at most once per lock guard.
-        let tx_digest = transaction.digest();
-        if validator_state.is_tx_already_executed(tx_digest)? {
-            return Ok(());
-        }
+        let tx_digest = *transaction.digest();
         metrics.local_execution_in_flight.inc();
         let _metrics_guard =
             scopeguard::guard(metrics.local_execution_in_flight.clone(), |in_flight| {
@@ -382,14 +359,15 @@ where
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
         };
-        debug!(?tx_digest, "Executing finalized tx locally.");
+        debug!(
+            ?tx_digest,
+            "Waiting for finalized tx to be executed locally."
+        );
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            validator_state.fullnode_execute_certificate_with_effects(
-                transaction,
-                effects_cert,
-                epoch_store,
-            ),
+            validator_state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects_digests(&[tx_digest]),
         )
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
@@ -400,30 +378,21 @@ where
             Err(_elapsed) => {
                 debug!(
                     ?tx_digest,
-                    "Executing tx locally by orchestrator timed out within {:?}.",
+                    "Waiting for finalized tx to be executed locally timed out within {:?}.",
                     LOCAL_EXECUTION_TIMEOUT
                 );
                 metrics.local_execution_timeout.inc();
                 Err(SuiError::TimeoutError)
             }
-            Ok(Err(err)) => {
-                debug!(
-                    ?tx_digest,
-                    "Executing tx locally by orchestrator failed with error: {:?}", err
-                );
-                metrics.local_execution_failure.inc();
-                Err(SuiError::TransactionOrchestratorLocalExecutionError {
-                    error: err.to_string(),
-                })
-            }
-            Ok(Ok(_)) => {
+            Ok(_) => {
                 metrics.local_execution_success.inc();
                 Ok(())
             }
         }
     }
 
-    async fn loop_execute_finalized_tx_locally(
+    // TODO: Potentially cleanup this function and pending transaction log.
+    async fn loop_pending_transaction_log(
         mut effects_receiver: Receiver<QuorumDriverEffectsQueueResult>,
         pending_transaction_log: Arc<WritePathPendingTransactionLog>,
     ) {
@@ -573,7 +542,6 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_in_flight: GenericGauge<AtomicI64>,
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
-    local_execution_failure: GenericCounter<AtomicU64>,
 
     request_latency_single_writer: Histogram,
     request_latency_shared_obj: Histogram,
@@ -693,12 +661,6 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
-            local_execution_failure: register_int_counter_with_registry!(
-                "tx_orchestrator_local_execution_failure",
-                "Total number of failed local execution txns Transaction Orchestrator handles",
-                registry,
-            )
-            .unwrap(),
             request_latency_single_writer: request_latency
                 .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
             request_latency_shared_obj: request_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
@@ -730,5 +692,12 @@ where
         client_addr: Option<std::net::SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
         self.execute_transaction_v3(request, client_addr).await
+    }
+
+    fn simulate_transaction(
+        &self,
+        transaction: TransactionData,
+    ) -> Result<SimulateTransactionResult, SuiError> {
+        self.validator_state.simulate_transaction(transaction)
     }
 }

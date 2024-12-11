@@ -18,7 +18,7 @@ const references = [
 		items: [
 			{
 				type: 'category',
-				label: 'GraphQL',
+				label: 'GraphQL (Beta)',
 				link: {
 					type: 'doc',
 					id: 'references/sui-graphql',
@@ -54,6 +54,15 @@ const references = [
 			'references/cli/keytool',
 			'references/cli/move',
 			'references/cli/validator',
+		],
+	},
+	{
+		type: 'category',
+		label: 'Sui IDE Support',
+		collapsed: false,
+		items: [
+			'references/ide/move',
+			'references/ide/debugger',
 		],
 	},
 	{

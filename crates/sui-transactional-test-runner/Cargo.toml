@@ -41,13 +41,13 @@ move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 
 simulacrum.workspace = true
 sui-graphql-rpc.workspace = true
-sui-rest-api.workspace = true
+sui-rpc-api.workspace = true
 sui-swarm-config.workspace = true
 sui-config.workspace = true
-sui-core = { workspace = true, features = ["test-utils"] }
+sui-core.workspace = true
 sui-framework.workspace = true
 sui-protocol-config.workspace = true
-sui-types = { workspace = true, features = ["test-utils"]}
+sui-types.workspace = true
 sui-json-rpc-types.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true

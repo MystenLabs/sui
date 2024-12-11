@@ -13,7 +13,8 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
-    Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
+    ExpectedFailureType, Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    STORAGE_COST_PER_COIN,
 };
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -79,6 +80,9 @@ impl Payload for TransferObjectTestPayload {
                 .borrow()
                 .reference_gas_price,
         )
+    }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 

@@ -4,7 +4,7 @@ use crate::admin::{Labels, ReqwestClient};
 use crate::consumer::{convert_to_remote_write, populate_labels, NodeMetric};
 use crate::histogram_relay::HistogramRelay;
 use crate::middleware::LenDelimProtobuf;
-use crate::peers::SuiPeer;
+use crate::peers::AllowedPeer;
 use axum::{
     extract::{ConnectInfo, Extension},
     http::StatusCode,
@@ -45,9 +45,7 @@ pub async fn publish_metrics(
     Extension(labels): Extension<Labels>,
     Extension(client): Extension<ReqwestClient>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(SuiPeer {
-        name, public_key, ..
-    }): Extension<SuiPeer>,
+    Extension(AllowedPeer { name, public_key }): Extension<AllowedPeer>,
     Extension(relay): Extension<HistogramRelay>,
     LenDelimProtobuf(data): LenDelimProtobuf,
 ) -> (StatusCode, &'static str) {

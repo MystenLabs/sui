@@ -117,6 +117,9 @@ impl SimpleFaucet {
             .filter(|coin| coin.0.balance.value() >= (config.amount * config.num_coins as u64))
             .collect::<Vec<GasCoin>>();
         let metrics = FaucetMetrics::new(prometheus_registry);
+        // set initial balance when faucet starts
+        let balance = coins.iter().map(|coin| coin.0.balance.value()).sum::<u64>();
+        metrics.balance.set(balance as i64);
 
         let wal = WriteAheadLog::open(wal_path);
         let mut pending = vec![];
@@ -482,6 +485,22 @@ impl SimpleFaucet {
                 } else {
                     self.recycle_gas_coin(coin_id, uuid).await;
                 }
+
+                if let Some(ref balances) = result.balance_changes {
+                    let sui_used = balances
+                        .iter()
+                        .find(|balance| {
+                            balance
+                                .owner
+                                .get_address_owner_address()
+                                .is_ok_and(|address| address == self.active_address)
+                        })
+                        .map(|b| b.amount)
+                        .unwrap_or_else(|| 0);
+                    info!("SUI used in this tx {}: {}", tx_digest, sui_used);
+                    self.metrics.balance.add(sui_used as i64);
+                }
+
                 Ok(result)
             }
         }
@@ -618,11 +637,14 @@ impl SimpleFaucet {
 
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
+
         Ok(client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
-                SuiTransactionBlockResponseOptions::new().with_effects(),
+                SuiTransactionBlockResponseOptions::new()
+                    .with_effects()
+                    .with_balance_changes(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
@@ -701,9 +723,12 @@ impl SimpleFaucet {
                 number_of_coins, created
             )));
         }
-        assert!(created
-            .iter()
-            .all(|created_coin_owner_ref| created_coin_owner_ref.owner == recipient));
+        assert!(created.iter().all(|created_coin_owner_ref| {
+            created_coin_owner_ref
+                .owner
+                .get_address_owner_address()
+                .is_ok_and(|address| address == recipient)
+        }));
         let coin_ids: Vec<ObjectID> = created
             .iter()
             .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
@@ -758,7 +783,7 @@ impl SimpleFaucet {
 
         let mut address_coins_map: HashMap<SuiAddress, Vec<OwnedObjectRef>> = HashMap::new();
         created.iter().for_each(|created_coin_owner_ref| {
-            let owner = created_coin_owner_ref.owner;
+            let owner = created_coin_owner_ref.owner.clone();
             let coin_obj_ref = created_coin_owner_ref.clone();
 
             // Insert the coins into the map based on the destination address
@@ -1636,7 +1661,7 @@ mod tests {
         let candidates = faucet.drain_gas_queue(gas_coins.len() - 1).await;
 
         assert_eq!(discarded, 1);
-        assert!(candidates.get(&tiny_coin_id).is_none());
+        assert!(!candidates.contains(&tiny_coin_id));
     }
 
     #[tokio::test]

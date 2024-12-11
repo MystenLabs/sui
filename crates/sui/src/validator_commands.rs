@@ -8,6 +8,7 @@ use std::{
     fmt::{self, Debug, Display, Formatter, Write},
     fs,
     path::PathBuf,
+    sync::Arc,
 };
 use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 use url::{ParseError, Url};
@@ -15,6 +16,7 @@ use url::{ParseError, Url};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID},
+    dynamic_field::Field,
     multiaddr::Multiaddr,
     object::Owner,
     sui_system_state::{
@@ -35,6 +37,7 @@ use fastcrypto::{
 };
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
+use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::{
     build_committee_register_transaction, build_committee_update_url_transaction,
@@ -543,7 +546,8 @@ impl SuiValidatorCommand {
                 }
                 println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {} and url: {}", ecdsa_keypair.public, bridge_authority_url);
                 let sui_rpc_url = &context.config.get_active_env().unwrap().rpc;
-                let bridge_client = SuiBridgeClient::new(sui_rpc_url).await?;
+                let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
+                let bridge_client = SuiBridgeClient::new(sui_rpc_url, bridge_metrics).await?;
                 let bridge = bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
@@ -604,7 +608,8 @@ impl SuiValidatorCommand {
                     print_unsigned_transaction_only,
                 )?;
                 let sui_rpc_url = &context.config.get_active_env().unwrap().rpc;
-                let bridge_client = SuiBridgeClient::new(sui_rpc_url).await?;
+                let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
+                let bridge_client = SuiBridgeClient::new(sui_rpc_url, bridge_metrics).await?;
                 let committee_members = bridge_client
                     .get_bridge_summary()
                     .await
@@ -1086,15 +1091,15 @@ async fn get_pending_candidate_summary(
                 object_id
             )
         })?;
-        let val = bcs::from_bytes::<ValidatorV1>(bcs).map_err(|e| {
+        let field = bcs::from_bytes::<Field<u64, ValidatorV1>>(bcs).map_err(|e| {
             anyhow::anyhow!(
                 "Can't convert bcs bytes of object {} to ValidatorV1: {}",
                 object_id,
                 e,
             )
         })?;
-        if val.verified_metadata().sui_address == validator_address {
-            return Ok(Some(val));
+        if field.value.verified_metadata().sui_address == validator_address {
+            return Ok(Some(field.value));
         }
     }
     Ok(None)

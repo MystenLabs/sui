@@ -4,20 +4,18 @@
 use atomic_float::AtomicF64;
 use crossterm::tty::IsTty;
 use once_cell::sync::Lazy;
-use opentelemetry::sdk::trace::Sampler;
-use opentelemetry::sdk::{
+use opentelemetry::{
+    trace::{Link, SamplingResult, SpanKind, TraceId, TracerProvider as _},
+    Context, KeyValue,
+};
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::trace::Sampler;
+use opentelemetry_sdk::{
     self, runtime,
     trace::{BatchSpanProcessor, ShouldSample, TracerProvider},
     Resource,
 };
-use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_api::{
-    trace::{Link, SamplingResult, SpanKind, TraceId},
-    Context, Key, OrderMap, Value,
-};
-use opentelemetry_otlp::WithExportConfig;
 use span_latency_prom::PrometheusSpanLatencyLayer;
-use std::collections::hash_map::RandomState;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{
@@ -385,7 +383,7 @@ impl TelemetryConfig {
         if config.enable_otlp_tracing {
             let trace_file = env::var("TRACE_FILE").ok();
 
-            let config = sdk::trace::config()
+            let config = opentelemetry_sdk::trace::Config::default()
                 .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
                     "service.name",
                     service_name.clone(),
@@ -413,7 +411,7 @@ impl TelemetryConfig {
                 let endpoint = env::var("OTLP_ENDPOINT")
                     .unwrap_or_else(|_| "http://localhost:4317".to_string());
 
-                let tracer = opentelemetry_otlp::new_pipeline()
+                let p = opentelemetry_otlp::new_pipeline()
                     .tracing()
                     .with_exporter(
                         opentelemetry_otlp::new_exporter()
@@ -421,15 +419,17 @@ impl TelemetryConfig {
                             .with_endpoint(endpoint),
                     )
                     .with_trace_config(config)
-                    .install_batch(sdk::runtime::Tokio)
+                    .install_batch(runtime::Tokio)
                     .expect("Could not create async Tracer");
+
+                let tracer = p.tracer(service_name);
 
                 tracing_opentelemetry::layer().with_tracer(tracer)
             };
 
             // Enable Trace Contexts for tying spans together
             opentelemetry::global::set_text_map_propagator(
-                opentelemetry::sdk::propagation::TraceContextPropagator::new(),
+                opentelemetry_sdk::propagation::TraceContextPropagator::new(),
             );
 
             let trace_env_filter = EnvFilter::try_from_env("TRACE_FILTER").unwrap();
@@ -517,7 +517,7 @@ impl ShouldSample for SamplingFilter {
         trace_id: TraceId,
         name: &str,
         span_kind: &SpanKind,
-        attributes: &OrderMap<Key, Value, RandomState>,
+        attributes: &[KeyValue],
         links: &[Link],
     ) -> SamplingResult {
         let sample_rate = self.sample_rate.load(Ordering::Relaxed);

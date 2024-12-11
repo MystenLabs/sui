@@ -7,6 +7,7 @@
 use crate::coverage_map::CoverageMap;
 use codespan::{Files, Span};
 use colored::*;
+use indexmap::IndexSet;
 use move_binary_format::{
     file_format::{CodeOffset, FunctionDefinitionIndex},
     CompiledModule,
@@ -34,7 +35,7 @@ pub struct SourceCoverageBuilder<'a> {
     source_map: &'a SourceMap,
 }
 
-#[derive(Debug, Serialize, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Serialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum AbstractSegment {
     Bounded { start: u32, end: u32 },
     BoundedRight { end: u32 },
@@ -150,7 +151,7 @@ impl<'a> SourceCoverageBuilder<'a> {
                 let end_line = end_loc.line.0;
                 let segments = uncovered_segments
                     .entry(start_line)
-                    .or_insert_with(Vec::new);
+                    .or_insert_with(IndexSet::new);
                 if start_line == end_line {
                     let segment = AbstractSegment::Bounded {
                         start: start_loc.column.0,
@@ -159,18 +160,20 @@ impl<'a> SourceCoverageBuilder<'a> {
                     // TODO: There is some issue with the source map where we have multiple spans
                     // from different functions. This can be seen in the source map for `Roles.move`
                     if !segments.contains(&segment) {
-                        segments.push(segment);
+                        segments.insert(segment);
                     }
                 } else {
-                    segments.push(AbstractSegment::BoundedLeft {
+                    segments.insert(AbstractSegment::BoundedLeft {
                         start: start_loc.column.0,
                     });
                     for i in start_line + 1..end_line {
-                        let segment = uncovered_segments.entry(i).or_insert_with(Vec::new);
-                        segment.push(AbstractSegment::BoundedLeft { start: 0 });
+                        let segment = uncovered_segments.entry(i).or_insert_with(IndexSet::new);
+                        segment.insert(AbstractSegment::BoundedLeft { start: 0 });
                     }
-                    let last_segment = uncovered_segments.entry(end_line).or_insert_with(Vec::new);
-                    last_segment.push(AbstractSegment::BoundedRight {
+                    let last_segment = uncovered_segments
+                        .entry(end_line)
+                        .or_insert_with(IndexSet::new);
+                    last_segment.insert(AbstractSegment::BoundedRight {
                         end: end_loc.column.0,
                     });
                 }

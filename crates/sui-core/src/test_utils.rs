@@ -85,9 +85,11 @@ pub async fn send_and_confirm_transaction(
         .epoch_store_for_testing()
         .protocol_config()
         .simplified_unwrap_then_delete();
-    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let mut state =
+        state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
-    let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let state_after =
+        state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
         vec![result.inner().data().clone()],
         epoch_store.protocol_config(),

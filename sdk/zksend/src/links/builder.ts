@@ -8,7 +8,7 @@ import type { Keypair, Signer } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { TransactionObjectArgument, TransactionObjectInput } from '@mysten/sui/transactions';
 import { Transaction } from '@mysten/sui/transactions';
-import { normalizeStructTag, normalizeSuiAddress, SUI_TYPE_ARG, toB64 } from '@mysten/sui/utils';
+import { normalizeStructTag, normalizeSuiAddress, SUI_TYPE_ARG, toBase64 } from '@mysten/sui/utils';
 
 import type { ZkBagContractOptions } from './zk-bag.js';
 import { getContractIds, ZkBag } from './zk-bag.js';
@@ -30,7 +30,7 @@ export interface ZkSendLinkBuilderOptions {
 }
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
-	host: 'https://zksend.com',
+	host: 'https://getstashed.com',
 	path: '/claim',
 	network: 'mainnet' as const,
 };
@@ -106,7 +106,7 @@ export class ZkSendLinkBuilder {
 	getLink(): string {
 		const link = new URL(this.#host);
 		link.pathname = this.#path;
-		link.hash = `${this.#contract ? '$' : ''}${toB64(
+		link.hash = `${this.#contract ? '$' : ''}${toBase64(
 			decodeSuiPrivateKey(this.keypair.getSecretKey()).secretKey,
 		)}`;
 
@@ -136,7 +136,14 @@ export class ZkSendLinkBuilder {
 		const result = await this.#client.signAndExecuteTransaction({
 			transaction: await tx.build({ client: this.#client }),
 			signer,
+			options: {
+				showEffects: true,
+			},
 		});
+
+		if (result.effects?.status.status !== 'success') {
+			throw new Error(`Transaction failed: ${result.effects?.status.error ?? 'Unknown error'}`);
+		}
 
 		if (options.waitForTransaction) {
 			await this.#client.waitForTransaction({ digest: result.digest });
@@ -156,6 +163,7 @@ export class ZkSendLinkBuilder {
 
 		return ZkSendLinkBuilder.createLinks({
 			transaction,
+			network: this.network,
 			client: this.#client,
 			contract: this.#contract.ids,
 			links: [this],

@@ -5,9 +5,9 @@ sandbox generate struct-layouts --module storage/0x00000000000000000000000000000
 sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M2.mv --struct C --type-args address
 sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M2.mv --struct C --type-args vector<u8>
 
-# across package deep
+# across modules deep
 sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct B --type-args bool
-# across package shallow
+# across modules shallow
 sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct B --type-args bool --shallow
 
 # with fancy type parameters

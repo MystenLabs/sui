@@ -4,7 +4,6 @@
 use crate::sui_client_config::SuiClientConfig;
 use crate::SuiClient;
 use anyhow::anyhow;
-use colored::Colorize;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -20,7 +19,6 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
-use tracing::warn;
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
@@ -68,10 +66,6 @@ impl WalletContext {
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
                 .await?;
-            if let Err(e) = client.check_api_version() {
-                warn!("{e}");
-                eprintln!("{}", format!("[warn] {e}").yellow().bold());
-            }
             self.client.write().await.insert(client).clone()
         })
     }

@@ -10,6 +10,10 @@
 
 #![deny(unsafe_code)]
 
+// #[macro_use]
+// mod tracing;
+// mod tracing2;
+
 mod jit;
 pub mod shared;
 
@@ -26,8 +30,8 @@ mod unit_tests;
 // #[macro_use]
 // mod tracing;
 
-// Only include debugging functionality in debug builds
-// #[cfg(any(debug_assertions, feature = "debugging"))]
+// Only include debugging functionality in debug or tracing builds
+// #[cfg(any(debug_assertions, feature = "tracing"))]
 // mod debug;
 
 use cache::identifier_interner::IdentifierInterner;

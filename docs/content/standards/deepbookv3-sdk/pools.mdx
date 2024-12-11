@@ -13,9 +13,58 @@ The DeepBookV3 SDK exposes functions that you can call to read the state of a po
 Decimal adjust all input quantities. All outputs are decimal adjusted.
 :::
 
+### account
+
+Use `account` to retrieve the account information for a `BalanceManager` in a pool, which has the following form:
+
+```tsx
+{
+  epoch: '511',
+  open_orders: {
+    constants: [
+      '170141211130585342296014727715884105730',
+      '18446744092156295689709543266',
+      '18446744092156295689709543265'
+    ]
+  },
+  taker_volume: 0,
+  maker_volume: 0,
+  active_stake: 0,
+  inactive_stake: 0,
+  created_proposal: false,
+  voted_proposal: null,
+  unclaimed_rebates: { base: 0, quote: 0, deep: 0 },
+  settled_balances: { base: 0, quote: 0, deep: 0 },
+  owed_balances: { base: 0, quote: 0, deep: 0 }
+}
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query. 
+- `balanceManagerKey`: key of the balance manager defined in the SDK.
+
+```tsx
+async account(poolKey: string, managerKey: string) {}
+```
+
+### accountOpenOrders
+
+Use `accountOpenOrders` to retrieve open orders for the balance manager and pool with the IDs you provide. The call returns a `Promise` that contains an array of open order IDs.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `managerKey`: String that identifies the balance manager to query.
+
+```tsx
+async accountOpenOrders(poolKey: string, managerKey: string) {}
+```
+
 ### checkManagerBalance
 
 Use `checkManagerBalance` to check the balance manager for a specific coin. The call returns a `Promise` in the form:
+
 ```
 { 
   coinType: string,
@@ -61,7 +110,6 @@ Use `getOrder` to retrieve an order's information. The call returns a `Promise` 
 ```tsx
 async getOrder(poolKey: string, orderId: string) {}
 ```
-
 
 ### getQuoteQuantityOut
 
@@ -131,19 +179,6 @@ where `deepRequired` is the amount of DEEP required for the dry run.
 async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {}
 ```
 
-### accountOpenOrders
-
-Use `accountOpenOrders` to retrieve open orders for the balance manager and pool with the IDs you provide. The call returns a `Promise` that contains an array of open order IDs.
-
-**Parameters**
-
-- `poolKey`: String that identifies the pool to query.
-- `managerKey`: String that identifies the balance manager to query.
-
-```tsx
-async accountOpenOrders(poolKey: string, managerKey: string) {}
-```
-
 ### getLevel2Range
 
 Use `getLevel2Range` to retrieve level 2 order book within the boundary price range you provide. The call returns a `Promise` in the form:
@@ -186,10 +221,51 @@ Use `getLevel2TicksFromMid` to retrieve level 2 order book ticks from mid-price 
 async getLevel2TicksFromMid(poolKey: string, ticks: number) {}
 ```
 
+### lockedBalance
+
+Use `lockedBalance` to retrieve a `BalanceManager` locked balance in the pool. The call returns a `Promise` in the `Order` struct, which has the following form:
+
+```tsx
+{
+  base: 5.5,
+	quote: 2,
+	deep: 0.15,
+}
+```
+
+**Parameters**
+
+`poolKey`: String that identifies the pool to query. `balanceManagerKey`: key of the balance manager defined in the SDK.
+
+```tsx
+async lockedBalance(poolKey: string, balanceManagerKey: string) {}
+```
+
+### poolTradeParams
+
+Use `poolTradeParams` to retrieve the trade params for the pool, which has the following form:
+
+```tsx
+{
+  takerFee: 0.001,
+	makerFee: 0.0005,
+	stakeRequired: 100,
+}
+```
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async poolTradeParams(poolKey: string) {}
+```
+
 ### vaultBalances
 
 Use `vaultBalances` to get the vault balances for a pool with the ID you provide. The call returns a `Promise` in the form:
-```
+
+```tsx
 {
   base: number, 
   quote: number, 

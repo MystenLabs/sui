@@ -1,212 +1,212 @@
 [
   {
-    "type": "function",
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "target",
+        "type": "address"
+      }
+    ],
+    "name": "AddressEmptyCode",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "ERC1967InvalidImplementation",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ERC1967NonPayable",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "FailedInnerCall",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "version",
+        "type": "uint64"
+      }
+    ],
+    "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidInitialization",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotInitializing",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "UPGRADE_INTERFACE_VERSION",
-    "inputs": [],
     "outputs": [
       {
+        "internalType": "string",
         "name": "",
-        "type": "string",
-        "internalType": "string"
+        "type": "string"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [],
+    "name": "UUPSUnauthorizedCallContext",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "slot",
+        "type": "bytes32"
+      }
+    ],
+    "name": "UUPSUnsupportedProxiableUUID",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "Upgraded",
+    "type": "event"
+  },
+  {
+    "inputs": [],
     "name": "committee",
-    "inputs": [],
     "outputs": [
       {
+        "internalType": "contract IBridgeCommittee",
         "name": "",
-        "type": "address",
-        "internalType": "contract IBridgeCommittee"
+        "type": "address"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "nonces",
     "inputs": [
       {
+        "internalType": "uint8",
         "name": "messageType",
-        "type": "uint8",
-        "internalType": "uint8"
+        "type": "uint8"
       }
     ],
+    "name": "nonces",
     "outputs": [
       {
+        "internalType": "uint64",
         "name": "nonce",
-        "type": "uint64",
-        "internalType": "uint64"
+        "type": "uint64"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "proxiableUUID",
     "inputs": [],
+    "name": "proxiableUUID",
     "outputs": [
       {
+        "internalType": "bytes32",
         "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "type": "bytes32"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "upgradeToAndCall",
     "inputs": [
       {
+        "internalType": "address",
         "name": "newImplementation",
-        "type": "address",
-        "internalType": "address"
+        "type": "address"
       },
       {
+        "internalType": "bytes",
         "name": "data",
-        "type": "bytes",
-        "internalType": "bytes"
+        "type": "bytes"
       }
     ],
+    "name": "upgradeToAndCall",
     "outputs": [],
-    "stateMutability": "payable"
+    "stateMutability": "payable",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "upgradeWithSignatures",
     "inputs": [
       {
+        "internalType": "bytes[]",
         "name": "signatures",
-        "type": "bytes[]",
-        "internalType": "bytes[]"
+        "type": "bytes[]"
       },
       {
-        "name": "message",
-        "type": "tuple",
-        "internalType": "struct BridgeUtils.Message",
         "components": [
           {
+            "internalType": "uint8",
             "name": "messageType",
-            "type": "uint8",
-            "internalType": "uint8"
+            "type": "uint8"
           },
           {
+            "internalType": "uint8",
             "name": "version",
-            "type": "uint8",
-            "internalType": "uint8"
+            "type": "uint8"
           },
           {
+            "internalType": "uint64",
             "name": "nonce",
-            "type": "uint64",
-            "internalType": "uint64"
+            "type": "uint64"
           },
           {
+            "internalType": "uint8",
             "name": "chainID",
-            "type": "uint8",
-            "internalType": "uint8"
+            "type": "uint8"
           },
           {
+            "internalType": "bytes",
             "name": "payload",
-            "type": "bytes",
-            "internalType": "bytes"
+            "type": "bytes"
           }
-        ]
+        ],
+        "internalType": "struct BridgeUtils.Message",
+        "name": "message",
+        "type": "tuple"
       }
     ],
+    "name": "upgradeWithSignatures",
     "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "Initialized",
-    "inputs": [
-      {
-        "name": "version",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Upgraded",
-    "inputs": [
-      {
-        "name": "implementation",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AddressEmptyCode",
-    "inputs": [
-      {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ERC1967InvalidImplementation",
-    "inputs": [
-      {
-        "name": "implementation",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ERC1967NonPayable",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "FailedInnerCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidInitialization",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotInitializing",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "UUPSUnauthorizedCallContext",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "UUPSUnsupportedProxiableUUID",
-    "inputs": [
-      {
-        "name": "slot",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ]

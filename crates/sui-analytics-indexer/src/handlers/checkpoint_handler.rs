@@ -6,7 +6,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use tokio::sync::Mutex;
 
 use sui_data_ingestion_core::Worker;
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary};
 use sui_types::transaction::TransactionDataAPI;
@@ -25,13 +25,15 @@ struct State {
 
 #[async_trait::async_trait]
 impl Worker for CheckpointHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    type Result = ();
+
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        self.process_checkpoint_transactions(&checkpoint_summary, &checkpoint_transactions)
+        self.process_checkpoint_transactions(checkpoint_summary, checkpoint_transactions)
             .await;
         Ok(())
     }

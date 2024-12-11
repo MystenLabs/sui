@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Base64};
+use fastcrypto::encoding::Base64;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -23,7 +23,6 @@ use tabled::settings::Style as TableStyle;
 use crate::{type_and_fields_from_move_event_data, Page};
 use sui_types::sui_serde::SuiStructTag;
 
-#[cfg(any(feature = "test-utils", test))]
 use std::str::FromStr;
 
 pub type EventPage = Page<SuiEvent, EventID>;
@@ -52,9 +51,9 @@ pub struct SuiEvent {
     pub type_: StructTag,
     /// Parsed json value of the event
     pub parsed_json: Value,
-    #[serde_as(as = "Base58")]
-    #[schemars(with = "Base58")]
-    /// Base 58 encoded bcs bytes of the move event
+    #[serde_as(as = "sui_types::sui_serde::Base64orBase58")]
+    #[schemars(with = "Base64")]
+    /// Base64 encoded bcs bytes of the move event
     pub bcs: Vec<u8>,
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,7 +153,6 @@ impl Display for SuiEvent {
     }
 }
 
-#[cfg(any(feature = "test-utils", test))]
 impl SuiEvent {
     pub fn random_for_testing() -> Self {
         Self {
@@ -203,6 +201,12 @@ fn try_into_byte(v: &Value) -> Option<u8> {
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum EventFilter {
+    /// Return all events.
+    All([Box<EventFilter>; 0]),
+
+    /// Return events that match any of the given filters. Only supported on event subscriptions.
+    Any(Vec<EventFilter>),
+
     /// Query by sender address.
     Sender(SuiAddress),
     /// Return events emitted by the given transaction.
@@ -210,8 +214,6 @@ pub enum EventFilter {
         ///digest of the transaction, as base-64 encoded string
         TransactionDigest,
     ),
-    /// Return events emitted in a specified Package.
-    Package(ObjectID),
     /// Return events emitted in a specified Move module.
     /// If the event is defined in Module A but emitted in a tx with Module B,
     /// query `MoveModule` by module B returns the event.
@@ -244,10 +246,6 @@ pub enum EventFilter {
         #[serde_as(as = "DisplayFromStr")]
         module: Identifier,
     },
-    MoveEventField {
-        path: String,
-        value: Value,
-    },
     /// Return events emitted in [start_time, end_time] interval
     #[serde(rename_all = "camelCase")]
     TimeRange {
@@ -260,32 +258,18 @@ pub enum EventFilter {
         #[serde_as(as = "BigInt<u64>")]
         end_time: u64,
     },
-
-    All(Vec<EventFilter>),
-    Any(Vec<EventFilter>),
-    And(Box<EventFilter>, Box<EventFilter>),
-    Or(Box<EventFilter>, Box<EventFilter>),
 }
 
-impl EventFilter {
-    fn try_matches(&self, item: &SuiEvent) -> SuiResult<bool> {
-        Ok(match self {
+impl Filter<SuiEvent> for EventFilter {
+    fn matches(&self, item: &SuiEvent) -> bool {
+        let _scope = monitored_scope("EventFilter::matches");
+        match self {
+            EventFilter::All([]) => true,
+            EventFilter::Any(filters) => filters.iter().any(|f| f.matches(item)),
             EventFilter::MoveEventType(event_type) => &item.type_ == event_type,
-            EventFilter::MoveEventField { path, value } => {
-                matches!(item.parsed_json.pointer(path), Some(v) if v == value)
-            }
             EventFilter::Sender(sender) => &item.sender == sender,
-            EventFilter::Package(object_id) => &item.package_id == object_id,
             EventFilter::MoveModule { package, module } => {
                 &item.transaction_module == module && &item.package_id == package
-            }
-            EventFilter::All(filters) => filters.iter().all(|f| f.matches(item)),
-            EventFilter::Any(filters) => filters.iter().any(|f| f.matches(item)),
-            EventFilter::And(f1, f2) => {
-                EventFilter::All(vec![*(*f1).clone(), *(*f2).clone()]).matches(item)
-            }
-            EventFilter::Or(f1, f2) => {
-                EventFilter::Any(vec![*(*f1).clone(), *(*f2).clone()]).matches(item)
             }
             EventFilter::Transaction(digest) => digest == &item.id.tx_digest,
 
@@ -302,21 +286,7 @@ impl EventFilter {
             EventFilter::MoveEventModule { package, module } => {
                 &item.type_.module == module && &ObjectID::from(item.type_.address) == package
             }
-        })
-    }
-
-    pub fn and(self, other_filter: EventFilter) -> Self {
-        Self::All(vec![self, other_filter])
-    }
-    pub fn or(self, other_filter: EventFilter) -> Self {
-        Self::Any(vec![self, other_filter])
-    }
-}
-
-impl Filter<SuiEvent> for EventFilter {
-    fn matches(&self, item: &SuiEvent) -> bool {
-        let _scope = monitored_scope("EventFilter::matches");
-        self.try_matches(item).unwrap_or_default()
+        }
     }
 }
 

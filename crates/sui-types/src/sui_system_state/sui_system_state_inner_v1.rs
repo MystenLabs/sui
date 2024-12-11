@@ -88,14 +88,13 @@ pub struct ValidatorMetadataV1 {
     pub extra_fields: Bag,
 }
 
-#[derive(derivative::Derivative, Clone, Eq, PartialEq)]
-#[derivative(Debug)]
+#[derive(derive_more::Debug, Clone, Eq, PartialEq)]
 pub struct VerifiedValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: AuthorityPublicKey,
     pub network_pubkey: NetworkPublicKey,
     pub worker_pubkey: NetworkPublicKey,
-    #[derivative(Debug = "ignore")]
+    #[debug(ignore)]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
@@ -553,6 +552,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         NetworkMetadata {
                             network_address: verified_metadata.net_address.clone(),
                             narwhal_primary_address: verified_metadata.primary_address.clone(),
+                            network_public_key: Some(verified_metadata.network_pubkey.clone()),
                         },
                     ),
                 )

@@ -19,7 +19,7 @@ mod checked {
     };
     use move_core_types::{
         account_address::AccountAddress,
-        identifier::IdentStr,
+        identifier::{IdentStr, Identifier},
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
@@ -132,6 +132,11 @@ mod checked {
                         "input checker ensures if args are empty, there is a type specified"
                     );
                 };
+
+                // SAFETY: Preserving existing behaviour for identifier deserialization within type
+                // tags and inputs.
+                let tag = unsafe { tag.into_type_tag_unchecked() };
+
                 let elem_ty = context
                     .load_type(&tag)
                     .map_err(|e| context.convert_vm_error(e))?;
@@ -158,6 +163,10 @@ mod checked {
                 let mut arg_iter = args.into_iter().enumerate();
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
+                        // SAFETY: Preserving existing behaviour for identifier deserialization within type
+                        // tags and inputs.
+                        let tag = unsafe { tag.into_type_tag_unchecked() };
+
                         let elem_ty = context
                             .load_type(&tag)
                             .map_err(|e| context.convert_vm_error(e))?;
@@ -285,9 +294,17 @@ mod checked {
                     arguments,
                 } = *move_call;
 
+                // SAFETY: Preserving existing behaviour for identifier deserialization.
+                let module = unsafe { Identifier::new_unchecked(module) };
+                let function = unsafe { Identifier::new_unchecked(function) };
+
                 // Convert type arguments to `Type`s
                 let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
                 for (ix, type_arg) in type_arguments.into_iter().enumerate() {
+                    // SAFETY: Preserving existing behaviour for identifier deserialization within type
+                    // tags and inputs.
+                    let type_arg = unsafe { type_arg.into_type_tag_unchecked() };
+
                     let ty = context
                         .load_type(&type_arg)
                         .map_err(|e| context.convert_type_argument_error(ix, e))?;
@@ -670,15 +687,7 @@ mod checked {
             UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
             UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
             UpgradePolicy::Compatible => {
-                let compatibility = Compatibility {
-                    check_datatype_and_pub_function_linking: true,
-                    check_datatype_layout: true,
-                    check_friend_linking: false,
-                    check_private_entry_linking: false,
-                    disallowed_new_abilities: AbilitySet::ALL,
-                    disallow_change_datatype_type_params: true,
-                    disallow_new_variants: true,
-                };
+                let compatibility = Compatibility::upgrade_check();
 
                 compatibility.check(cur_module, new_module)
             }

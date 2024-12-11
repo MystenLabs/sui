@@ -1,0 +1,10 @@
+[package]
+name = "macro_inner_call"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+macro_inner_call = "0x0"
+std = "0x1"

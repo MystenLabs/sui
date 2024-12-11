@@ -132,7 +132,10 @@ macro_rules! fetch_child_object_unbounded {
                         ));
                     }
                 }
-                Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared { .. } => {
+                Owner::AddressOwner(_)
+                | Owner::Immutable
+                | Owner::Shared { .. }
+                | Owner::ConsensusV2 { .. } => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(
                             "Bad owner for {}. \
@@ -191,7 +194,7 @@ impl<'a> Inner<'a> {
                 version,
                 digest: object.digest(),
                 storage_rebate: object.storage_rebate,
-                owner: object.owner,
+                owner: object.owner.clone(),
                 previous_transaction: object.previous_transaction,
             };
 

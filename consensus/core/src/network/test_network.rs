@@ -91,4 +91,11 @@ impl NetworkService for Mutex<TestService> {
     ) -> ConsensusResult<Vec<Bytes>> {
         unimplemented!("Unimplemented")
     }
+
+    async fn handle_get_latest_rounds(
+        &self,
+        _peer: AuthorityIndex,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+        unimplemented!("Unimplemented")
+    }
 }

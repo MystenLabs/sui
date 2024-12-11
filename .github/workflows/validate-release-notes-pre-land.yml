@@ -25,6 +25,7 @@ concurrency:
 jobs:
   diff:
     name: Determine PR eligibility for ${{ github.event.pull_request.number }}
+    if: github.event.pull_request.number != ''
     runs-on: [ ubuntu-latest ]
     outputs:
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
@@ -39,7 +40,7 @@ jobs:
   release-notes-description-check:
     name: Validate Release Notes in ${{ github.event.pull_request.number }}
     needs: diff
-    if: needs.diff.outputs.isReleaseNotesEligible == 'true'
+    if: needs.diff.outputs.isReleaseNotesEligible == 'true' && github.event.pull_request.number != ''
     runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1

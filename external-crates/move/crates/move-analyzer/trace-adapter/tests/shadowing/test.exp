@@ -1,0 +1,63 @@
+current frame stack:
+  function: test (m.move:25)
+    scope 0 :
+  function: foo (m.move:10)
+    scope 0 :
+      val2 : 7
+      type: u64
+
+      shadowed_var : 7
+      type: u64
+
+      res : 0
+      type: u64
+
+    scope 1 :
+      shadowed_var : 14
+      type: u64
+
+current frame stack:
+  function: test (m.move:25)
+    scope 0 :
+  function: foo (m.move:12)
+    scope 0 :
+      shadowed_var : 7
+      type: u64
+
+      res : 0
+      type: u64
+
+    scope 1 :
+      shadowed_var : 14
+      type: u64
+
+    scope 2 :
+      shadowed_var : 21
+      type: u64
+
+current frame stack:
+  function: test (m.move:25)
+    scope 0 :
+  function: foo (m.move:17)
+    scope 0 :
+      shadowed_var : 7
+      type: u64
+
+      res : 84
+      type: u64
+
+    scope 1 :
+      shadowed_var : 14
+      type: u64
+
+current frame stack:
+  function: test (m.move:25)
+    scope 0 :
+  function: foo (m.move:20)
+    scope 0 :
+      shadowed_var : 7
+      type: u64
+
+      res : 98
+      type: u64
+

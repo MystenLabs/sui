@@ -93,6 +93,18 @@ pub(crate) enum TransactionBlockKindInput {
     ProgrammableTx = 1,
 }
 
+/// Filter for a point query of a TransactionBlock.
+pub(crate) enum TransactionBlockLookup {
+    ByDigest {
+        digest: Digest,
+        checkpoint_viewed_at: u64,
+    },
+    BySeq {
+        tx_sequence_number: u64,
+        checkpoint_viewed_at: u64,
+    },
+}
+
 type Query<ST, GB> = data::Query<ST, transactions::table, GB>;
 
 /// The cursor returned for each `TransactionBlock` in a connection's page of results. The
@@ -110,11 +122,19 @@ pub(crate) struct TransactionBlockCursor {
     pub tx_checkpoint_number: u64,
 }
 
-/// `DataLoader` key for fetching a `TransactionBlock` by its digest, optionally constrained by a
-/// consistency cursor.
+/// `DataLoader` key for fetching a `TransactionBlock` by its digest, constrained by a consistency
+/// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct DigestKey {
     pub digest: Digest,
+    pub checkpoint_viewed_at: u64,
+}
+
+/// `DataLoader` key for fetching a `TransactionBlock` by its sequence number, constrained by a
+/// consistency cursor.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct SeqKey {
+    pub tx_sequence_number: u64,
     pub checkpoint_viewed_at: u64,
 }
 
@@ -150,8 +170,8 @@ impl TransactionBlock {
             // Non-stored transactions have a sentinel checkpoint_viewed_at value that generally
             // prevents access to further queries, but inputs should generally be available so try
             // to access them at the high watermark.
-            let Watermark { checkpoint, .. } = *ctx.data_unchecked();
-            checkpoint
+            let Watermark { hi_cp, .. } = *ctx.data_unchecked();
+            hi_cp
         };
 
         Some(GasInput::from(
@@ -198,17 +218,18 @@ impl TransactionBlock {
             .extend()
     }
 
-    /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+    /// Serialized form of this transaction's `TransactionData`, BCS serialized and Base64 encoded.
     async fn bcs(&self) -> Option<Base64> {
         match &self.inner {
-            TransactionBlockInner::Stored { stored_tx, .. } => {
-                Some(Base64::from(&stored_tx.raw_transaction))
+            TransactionBlockInner::Stored { native, .. } => Some(Base64::from(
+                &bcs::to_bytes(native.transaction_data()).unwrap(),
+            )),
+            TransactionBlockInner::Executed { tx_data, .. } => Some(Base64::from(
+                &bcs::to_bytes(tx_data.transaction_data()).unwrap(),
+            )),
+            TransactionBlockInner::DryRun { tx_data, .. } => {
+                Some(Base64::from(&bcs::to_bytes(tx_data).unwrap()))
             }
-            TransactionBlockInner::Executed { tx_data, .. } => {
-                bcs::to_bytes(&tx_data).ok().map(Base64::from)
-            }
-            // Dry run transaction does not have signatures so no sender signed data.
-            TransactionBlockInner::DryRun { .. } => None,
         }
     }
 }
@@ -230,21 +251,60 @@ impl TransactionBlock {
         }
     }
 
+    /// Look-up the transaction block by its transaction digest.
+    pub(crate) fn by_digest(digest: Digest, checkpoint_viewed_at: u64) -> TransactionBlockLookup {
+        TransactionBlockLookup::ByDigest {
+            digest,
+            checkpoint_viewed_at,
+        }
+    }
+
+    /// Look-up the transaction block by its sequence number (this is not usually exposed through
+    /// the GraphQL schema, but internally, othe entities in the DB will refer to transactions at
+    /// their sequence number).
+    pub(crate) fn by_seq(
+        tx_sequence_number: u64,
+        checkpoint_viewed_at: u64,
+    ) -> TransactionBlockLookup {
+        TransactionBlockLookup::BySeq {
+            tx_sequence_number,
+            checkpoint_viewed_at,
+        }
+    }
+
     /// Look up a `TransactionBlock` in the database, by its transaction digest. Treats it as if it
     /// is being viewed at the `checkpoint_viewed_at` (e.g. the state of all relevant addresses will
     /// be at that checkpoint).
     pub(crate) async fn query(
         ctx: &Context<'_>,
-        digest: Digest,
-        checkpoint_viewed_at: u64,
+        lookup: TransactionBlockLookup,
     ) -> Result<Option<Self>, Error> {
         let DataLoader(loader) = ctx.data_unchecked();
-        loader
-            .load_one(DigestKey {
+
+        match lookup {
+            TransactionBlockLookup::ByDigest {
                 digest,
                 checkpoint_viewed_at,
-            })
-            .await
+            } => {
+                loader
+                    .load_one(DigestKey {
+                        digest,
+                        checkpoint_viewed_at,
+                    })
+                    .await
+            }
+            TransactionBlockLookup::BySeq {
+                tx_sequence_number,
+                checkpoint_viewed_at,
+            } => {
+                loader
+                    .load_one(SeqKey {
+                        tx_sequence_number,
+                        checkpoint_viewed_at,
+                    })
+                    .await
+            }
+        }
     }
 
     /// Look up multiple `TransactionBlock`s by their digests. Returns a map from those digests to
@@ -278,10 +338,13 @@ impl TransactionBlock {
     /// If the `Page<Cursor>` is set, then this function will defer to the `checkpoint_viewed_at` in
     /// the cursor if they are consistent.
     ///
-    /// Filters that involve a combination of `recvAddress`, `inputObject`, `changedObject`, and
-    /// `function` should provide a value for `scan_limit`. This modifies querying behavior by
+    /// Filters that involve a combination of `affectedAddress`, `inputObject`, `changedObject`,
+    /// and `function` should provide a value for `scan_limit`. This modifies querying behavior by
     /// limiting how many transactions to scan through before applying filters, and also affects
     /// pagination behavior.
+    ///
+    /// Queries for data that have been pruned will return an empty connection; we treat pruned data
+    /// as simply non-existent and thus no error is returned.
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         page: Page<Cursor>,
@@ -290,6 +353,10 @@ impl TransactionBlock {
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>, Error> {
         let limits = &ctx.data_unchecked::<ServiceConfig>().limits;
+        let db: &Db = ctx.data_unchecked();
+        // If we've entered this function, we already fetched `checkpoint_viewed_at` from the
+        // `Watermark`, and so we must be able to retrieve `lo_cp` as well.
+        let Watermark { lo_cp, .. } = *ctx.data_unchecked();
 
         // If the caller has provided some arbitrary combination of `function`, `kind`,
         // `recvAddress`, `inputObject`, or `changedObject`, we require setting a `scanLimit`.
@@ -315,16 +382,18 @@ impl TransactionBlock {
             }
         }
 
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let is_from_front = page.is_from_front();
+        let cp_after = filter.after_checkpoint.map(u64::from);
+        let cp_at = filter.at_checkpoint.map(u64::from);
+        let cp_before = filter.before_checkpoint.map(u64::from);
+
         // If page size or scan limit is 0, we want to standardize behavior by returning an empty
         // connection
         if filter.is_empty() || page.limit() == 0 || scan_limit.is_some_and(|v| v == 0) {
             return Ok(ScanConnection::new(false, false));
         }
-
-        let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
-        let db: &Db = ctx.data_unchecked();
-        let is_from_front = page.is_from_front();
 
         use transactions::dsl as tx;
         let (prev, next, transactions, tx_bounds): (
@@ -337,9 +406,10 @@ impl TransactionBlock {
                 async move {
                     let Some(tx_bounds) = TxBounds::query(
                         conn,
-                        filter.after_checkpoint.map(u64::from),
-                        filter.at_checkpoint.map(u64::from),
-                        filter.before_checkpoint.map(u64::from),
+                        cp_after,
+                        cp_at,
+                        cp_before,
+                        lo_cp,
                         checkpoint_viewed_at,
                         scan_limit,
                         &page,
@@ -473,6 +543,63 @@ impl Loader<DigestKey> for Db {
                 .get(key.digest.as_slice())
                 .cloned()
             else {
+                continue;
+            };
+
+            // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
+            // quite rare that this query actually filters something, but encoding it in SQL is
+            // complicated.
+            if key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
+                continue;
+            }
+
+            let inner = TransactionBlockInner::try_from(stored)?;
+            results.insert(
+                *key,
+                TransactionBlock {
+                    inner,
+                    checkpoint_viewed_at: key.checkpoint_viewed_at,
+                },
+            );
+        }
+
+        Ok(results)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<SeqKey> for Db {
+    type Value = TransactionBlock;
+    type Error = Error;
+
+    async fn load(&self, keys: &[SeqKey]) -> Result<HashMap<SeqKey, TransactionBlock>, Error> {
+        use transactions::dsl as tx;
+
+        let seqs: Vec<_> = keys.iter().map(|k| k.tx_sequence_number as i64).collect();
+
+        let transactions: Vec<StoredTransaction> = self
+            .execute(move |conn| {
+                async move {
+                    conn.results(move || {
+                        tx::transactions
+                            .select(StoredTransaction::as_select())
+                            .filter(tx::tx_sequence_number.eq_any(seqs.clone()))
+                    })
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
+
+        let seq_to_stored: BTreeMap<_, _> = transactions
+            .into_iter()
+            .map(|tx| (tx.tx_sequence_number as u64, tx))
+            .collect();
+
+        let mut results = HashMap::new();
+        for key in keys {
+            let Some(stored) = seq_to_stored.get(&key.tx_sequence_number).cloned() else {
                 continue;
             };
 

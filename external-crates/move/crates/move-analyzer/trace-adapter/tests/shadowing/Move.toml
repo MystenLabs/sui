@@ -1,0 +1,10 @@
+[package]
+name = "shadowing"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+shadowing = "0x0"
+std = "0x1"

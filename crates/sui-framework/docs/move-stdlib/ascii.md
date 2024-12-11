@@ -508,7 +508,7 @@ Returns <code><b>false</b></code> otherwise.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte: u8): bool {
     byte &gt;= 0x20 && // Disallow metacharacters
-    <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
+        <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
 }
 </code></pre>
 

@@ -27,7 +27,7 @@ query getCurrentEpoch {
 	}
 }
 
-query paginateEpochValidators($id: Int!, $after: String) {
+query paginateEpochValidators($id: UInt53!, $after: String) {
 	epoch(id: $id) {
 		validatorSet {
 			activeValidators(after: $after) {

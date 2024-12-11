@@ -93,7 +93,7 @@ module bridge::bridge {
     const EUnexpectedMessageVersion: u64 = 12;
     const EBridgeAlreadyPaused: u64 = 13;
     const EBridgeNotPaused: u64 = 14;
-    const ETokenAlreadyClaimed: u64 = 15;
+    const ETokenAlreadyClaimedOrHitLimit: u64 = 15;
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
     const EInvalidEvmAddress: u64 = 18;
@@ -314,7 +314,8 @@ module bridge::bridge {
     }
 
     // This function can only be called by the token recipient
-    // Abort if the token has already been claimed.
+    // Abort if the token has already been claimed or hits limiter currently,
+    // in which case, no event will be emitted and only abort code will be returned.
     public fun claim_token<T>(
         bridge: &mut Bridge,
         clock: &Clock,
@@ -330,12 +331,12 @@ module bridge::bridge {
         );
         // Only token owner can claim the token
         assert!(ctx.sender() == owner, EUnauthorisedClaim);
-        assert!(maybe_token.is_some(), ETokenAlreadyClaimed);
+        assert!(maybe_token.is_some(), ETokenAlreadyClaimedOrHitLimit);
         maybe_token.destroy_some()
     }
 
     // This function can be called by anyone to claim and transfer the token to the recipient
-    // If the token has already been claimed, it will return instead of aborting.
+    // If the token has already been claimed or hits limiter currently, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
         bridge: &mut Bridge,
         clock: &Clock,

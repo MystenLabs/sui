@@ -32,8 +32,6 @@ Running the extension's tests from the command-line is cumbersome because the te
 3. From the pull-down menu in the Run and Debug view, select "Launch with Extension" and click the green arrow button. This will launch a new VS Code window that has the `move-analyzer` extension installed. If you open a `.move` file, it will be highlighted according to the any changes you've made in your local checkout of this repository.
 4. Once you've launched the extension, in the original VS Code window you'll see a small box with pause, refresh, and stop buttons. Clicking these allows you to quickly refresh the extension window with your latest changes, or quit the window.
 
-To test the Move TextMate grammar, open a file with a `.move` file extension and use the command palette to run the "Developer: Inspect Editor Tokens and Scopes" command. This displays a large window that shows what token is detected below the typing cursor in the VS Code window.
-
 ## Running the tests from within VS Code
 
 You can run the extensions tests from within the "Run and Debug" view:
@@ -47,10 +45,10 @@ You can run the extensions tests from within the "Run and Debug" view:
 
 To add new versions of the move-analyzer Visual Studio Code extension, you will need to:
 
-1. Request to be added to the `move` publisher team.
+1. Request to be added to the `mysten` publisher team.
 2. Package and upload a new extension version.
 
-### 1: Become a member of the `move` publisher team
+### 1: Become a member of the `mysten` publisher team
 
 As [Visual Studio Code's documentation](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) explains, the Visual Studio Marketplace  uses [Azure DevOps](https://azure.microsoft.com/services/devops/) to authenticate users who are allowed to manage extensions. To register with Azure DevOps, you need a Microsoft account.
 
@@ -76,7 +74,7 @@ To publish a new version of the extension, you'll need to:
 
 Follow the instructions in [the Visual Studio Code documentation on creating a personal access token](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#get-a-personal-access-token). To summarize:
 
-1. From the [`move` publisher page](https://marketplace.visualstudio.com/manage/publishers/move), click on your username in the upper-right of the page. This will load [your Azure DevOps page](https://aex.dev.azure.com/me).
+1. From the [`move` publisher page](https://marketplace.visualstudio.com/manage/publishers/mysten), click on your username in the upper-right of the page. This will load [your Azure DevOps page](https://aex.dev.azure.com/me).
 2. On that page, click on the `dev.azure.com/<name>` link below "Azure DevOps Organizations." If you have more than one organization listed there, choose the one you feel is best. This will load the `https://dev.azure.com/<name>` organization page.
 3. On that page, click on the "User Settings" icon in the upper-right, and select "Personal access tokens" from the drop-down menu. This will load the "Personal Access Tokens" page.
 4. On that page, click "New Token." Name it whatever you like but make sure to select an expiration of 30 days, select "All accessible organizations" under the "Organization" drop-down menu, and click the "Custom defined" button under "Scopes" followed by setting (only) "Marketplace" scope on the list of custom scopes to "Manage". Click "Create," and copy the token that is presented on the following page to your clipboard.

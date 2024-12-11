@@ -57,7 +57,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::LIMITS_HEADER;
-use sui_indexer::db::{check_db_migration_consistency, get_pool_connection};
+use sui_indexer::db::check_db_migration_consistency;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -79,7 +79,6 @@ pub(crate) struct Server {
     system_package_task: SystemPackageTask,
     trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
-    db_reader: Db,
 }
 
 impl Server {
@@ -87,9 +86,6 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
-
-        let mut connection = get_pool_connection(&self.db_reader.inner.get_blocking_pool())?;
-        check_db_migration_consistency(&mut connection)?;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -222,7 +218,7 @@ impl ServerBuilder {
         self
     }
 
-    #[cfg(all(test, feature = "pg_integration"))]
+    #[cfg(test)]
     fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
@@ -259,12 +255,9 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
-                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
-                .route("/graphql/:version", post(graphql_handler))
                 .route("/health", get(health_check))
                 .route("/graphql/health", get(health_check))
-                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -339,7 +332,7 @@ impl ServerBuilder {
         );
 
         let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
-            db_reader.clone(),
+            db_reader,
             watermark_task.epoch_receiver(),
             state.cancellation_token.clone(),
         );
@@ -361,7 +354,6 @@ impl ServerBuilder {
             system_package_task,
             trigger_exchange_rates_task,
             state,
-            db_reader,
         })
     }
 
@@ -375,13 +367,13 @@ impl ServerBuilder {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
             "{}:{}",
-            config.connection.prom_url, config.connection.prom_port
+            config.connection.prom_host, config.connection.prom_port
         )
         .parse()
         .map_err(|_| {
             Error::Internal(format!(
                 "Failed to parse url {}, port {} into socket address",
-                config.connection.prom_url, config.connection.prom_port
+                config.connection.prom_host, config.connection.prom_port
             ))
         })?;
 
@@ -420,6 +412,17 @@ impl ServerBuilder {
         )
         .await
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+
+        if !config.connection.skip_migration_consistency_check {
+            check_db_migration_consistency(
+                &mut reader
+                    .pool()
+                    .get()
+                    .await
+                    .map_err(|e| Error::Internal(e.to_string()))?,
+            )
+            .await?;
+        }
 
         // DB
         let db = Db::new(
@@ -649,7 +652,7 @@ async fn health_check(
         .unwrap_or_else(|| DEFAULT_MAX_CHECKPOINT_LAG);
 
     let checkpoint_timestamp =
-        Duration::from_millis(watermark_lock.read().await.checkpoint_timestamp_ms);
+        Duration::from_millis(watermark_lock.read().await.hi_cp_timestamp_ms);
 
     let now_millis = Utc::now().timestamp_millis();
 
@@ -672,7 +675,7 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-#[cfg(all(test, feature = "pg_integration"))]
+#[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::test_infra::cluster::{prep_executor_cluster, start_cluster};
@@ -689,7 +692,7 @@ pub mod tests {
     use serde_json::json;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_indexer::tempdb::get_available_port;
+    use sui_pg_temp_db::get_available_port;
     use sui_sdk::SuiClient;
     use sui_types::digests::get_mainnet_chain_identifier;
     use sui_types::transaction::TransactionData;
@@ -703,8 +706,9 @@ pub mod tests {
             host: "127.0.0.1".to_owned(),
             db_url,
             db_pool_size: 5,
-            prom_url: "127.0.0.1".to_owned(),
+            prom_host: "127.0.0.1".to_owned(),
             prom_port: get_available_port(),
+            skip_migration_consistency_check: false,
         };
         let service_config = service_config.unwrap_or_default();
 
@@ -727,9 +731,11 @@ pub mod tests {
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
-            checkpoint: 1,
-            checkpoint_timestamp_ms: 1,
+            hi_cp: 1,
+            hi_cp_timestamp_ms: 1,
             epoch: 0,
+            lo_cp: 0,
+            lo_tx: 0,
         };
         let state = AppState::new(
             connection_config.clone(),
@@ -772,7 +778,7 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = start_cluster(ServiceConfig::test_defaults()).await;
         cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
             .await;
         // timeout test includes mutation timeout, which requires a [SuiClient] to be able to run
         // the test, and a transaction. [WalletContext] gives access to everything that's needed.

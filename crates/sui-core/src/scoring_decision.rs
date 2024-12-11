@@ -4,10 +4,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use sui_types::{base_types::AuthorityName, committee::Committee};
+use sui_types::{
+    base_types::AuthorityName, committee::Committee, messages_consensus::AuthorityIndex,
+};
 use tracing::debug;
 
-use crate::{authority::AuthorityMetrics, consensus_types::AuthorityIndex};
+use crate::authority::AuthorityMetrics;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.

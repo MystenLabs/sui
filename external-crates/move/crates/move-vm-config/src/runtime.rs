@@ -4,13 +4,13 @@
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format_common::VERSION_MAX;
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 use once_cell::sync::Lazy;
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
@@ -37,6 +37,9 @@ pub struct VMConfig {
     // Whether value serialization errors when generating type layouts should be rethrown or
     // converted to a different error.
     pub rethrow_serialization_type_layout_errors: bool,
+    /// Maximal nodes which are allowed when converting to layout. This includes the types of
+    /// fields for struct types.
+    pub max_type_to_layout_nodes: Option<u64>,
 }
 
 impl Default for VMConfig {
@@ -51,6 +54,7 @@ impl Default for VMConfig {
             error_execution_state: true,
             binary_config: BinaryConfig::with_extraneous_bytes_check(false),
             rethrow_serialization_type_layout_errors: false,
+            max_type_to_layout_nodes: Some(512),
         }
     }
 }
@@ -85,7 +89,7 @@ pub struct VMProfilerConfig {
     pub use_long_function_name: bool,
 }
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 impl std::default::Default for VMProfilerConfig {
     fn default() -> Self {
         Self {
@@ -96,7 +100,7 @@ impl std::default::Default for VMProfilerConfig {
     }
 }
 
-#[cfg(feature = "gas-profiler")]
+#[cfg(feature = "tracing")]
 impl VMProfilerConfig {
     pub fn get_default_config_if_enabled() -> Option<VMProfilerConfig> {
         if *PROFILER_ENABLED {

@@ -1,5 +1,146 @@
 # @mysten/sui.js
 
+## 1.16.2
+
+### Patch Changes
+
+- 100207f: Fixes replacements on `namedPackagesPlugin` to only replace the package target if it is a
+  mvr name.
+
+## 1.16.1
+
+### Patch Changes
+
+- Updated dependencies [ad24b95]
+  - @mysten/bcs@1.2.0
+
+## 1.16.0
+
+### Minor Changes
+
+- ec2dc7f: Add legacyAddress flag to zklogin methods that generate addresses
+- ec2dc7f: All functionality from `@mysten/zklogin` has been moved to `@mysten/sui/zklogin`
+
+  For most methods, simply replace the `@mysten/zklogin` import with `@mysten/sui/zklogin`
+
+  2 Methods require one small additional change:
+
+  `computeZkLoginAddress` and `jwtToAddress` have new `legacyAddress` flags which must be set to
+  true for backwards compatibility:
+
+  ```diff
+  - import { computeZkLoginAddress, jwtToAddress } from '@mysten/zklogin';
+  + import { computeZkLoginAddress, jwtToAddress } from '@mysten/sui/zklogin';
+
+    const address = jwtToAddress(
+     jwtAsString,
+     salt,
+  +  true
+    );
+    const address = computeZkLoginAddress({
+  	claimName,
+  	claimValue,
+  	iss,
+  	aud,
+  	userSalt: BigInt(salt),
+  +	legacyAddress: true,
+    });
+  ```
+
+## 1.15.1
+
+### Patch Changes
+
+- Updated dependencies [1dd7713]
+  - @mysten/bcs@1.1.1
+
+## 1.15.0
+
+### Minor Changes
+
+- 6460e45: Adding back 'Client-Request-Method' header
+
+## 1.14.4
+
+### Patch Changes
+
+- 938fb6e: fix bug in object cache's applyEffects method that doesn't correctly await cache deletes
+
+## 1.14.3
+
+### Patch Changes
+
+- d5a23d7: Add tx.object.option for creatnig object options in transaction builder
+
+## 1.14.2
+
+### Patch Changes
+
+- e7bc63e: Allow 0 amounts with `coinWithBalance` intent when the wallet has no coin objects of the
+  required type.
+
+## 1.14.1
+
+### Patch Changes
+
+- 69ef100: revert adding client-request-method header
+
+## 1.14.0
+
+### Minor Changes
+
+- c24814b: Adds a custom header; 'Client-Request-Method' which will contain the method name used in
+  each outgoing jsonrpc request
+
+## 1.13.0
+
+### Minor Changes
+
+- 477d2a4: Add new errors to ExecutionFailureStatus enum
+
+## 1.12.0
+
+### Minor Changes
+
+- 5436a90: Update GraphQL schemas
+- 5436a90: add deriveDynamicFieldID util
+
+## 1.11.0
+
+### Minor Changes
+
+- 489f421: Updated hex, base64, and base58 utility names for better consistency
+
+  All existing methods will continue to work, but the following methods have been deprecated and
+  replaced with methods with improved names:
+
+  - `toHEX` -> `toHEX`
+  - `fromHEX` -> `fromHex`
+  - `toB64` -> `toBase64`
+  - `fromB64` -> `fromBase64`
+  - `toB58` -> `toBase58`
+  - `fromB58` -> `fromBase58`
+
+- 489f421: support Bech32 secrets in the Keypair.fromSecretKey methods
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+  - @mysten/bcs@1.1.0
+
+## 1.10.0
+
+### Minor Changes
+
+- 830b8d8: Introduce new naming scheme for named packages plugin
+
+## 1.9.0
+
+### Minor Changes
+
+- 2c96b06: Adds experimental named packages plugin
+- 1fd22cc: Require name to register global transaction plugins
+
 ## 1.8.0
 
 ### Minor Changes

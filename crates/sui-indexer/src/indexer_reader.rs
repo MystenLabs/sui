@@ -1,24 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
-
-use anyhow::{anyhow, Result};
-use diesel::PgConnection;
+use anyhow::anyhow;
+use anyhow::Result;
 use diesel::{
-    dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
-    QueryDsl, TextExpressionMethods,
+    dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
+    OptionalExtension, QueryDsl, SelectableHelper, TextExpressionMethods,
 };
-use itertools::{any, Itertools};
-use tap::Pipe;
-use tap::TapFallible;
+use itertools::Itertools;
+use std::sync::Arc;
+use sui_types::dynamic_field::visitor as DFV;
+use sui_types::object::bounded_visitor::BoundedVisitor;
+use tap::{Pipe, TapFallible};
+use tracing::{debug, error, warn};
 
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use move_core_types::annotated_value::MoveStructLayout;
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_json_rpc_types::DisplayFieldsResponse;
-use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata};
+use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
     SuiTransactionBlockResponse, TransactionFilter,
@@ -29,9 +30,9 @@ use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_types::effects::TransactionEvents;
 use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
+    base_types::{ObjectID, SuiAddress, VersionNumber},
     committee::EpochId,
-    digests::{ObjectDigest, TransactionDigest},
+    digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
@@ -39,9 +40,14 @@ use sui_types::{
 use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::database::ConnectionPool;
-use crate::db::{ConnectionConfig, ConnectionPool as BlockingConnectionPool, ConnectionPoolConfig};
+use crate::db::ConnectionPoolConfig;
+use crate::models::objects::StoredHistoryObject;
+use crate::models::objects::StoredObjectSnapshot;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::store::diesel_macro::*;
+use crate::schema::objects_history;
+use crate::schema::objects_snapshot;
+use crate::schema::pruner_cp_watermark;
+use crate::schema::tx_digests;
 use crate::{
     errors::IndexerError,
     models::{
@@ -49,7 +55,7 @@ use crate::{
         display::StoredDisplay,
         epoch::StoredEpochInfo,
         events::StoredEvent,
-        objects::{CoinBalance, ObjectRefColumn, StoredObject},
+        objects::{CoinBalance, StoredObject},
         transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
@@ -64,7 +70,6 @@ pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
 #[derive(Clone)]
 pub struct IndexerReader {
-    blocking_pool: BlockingConnectionPool,
     pool: ConnectionPool,
     package_resolver: PackageResolver,
 }
@@ -73,12 +78,11 @@ pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePac
 
 // Impl for common initialization and utilities
 impl IndexerReader {
-    pub fn new(blocking_pool: BlockingConnectionPool, pool: ConnectionPool) -> Self {
+    pub fn new(pool: ConnectionPool) -> Self {
         let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
         Self {
-            blocking_pool,
             pool,
             package_resolver,
         }
@@ -89,19 +93,6 @@ impl IndexerReader {
         config: ConnectionPoolConfig,
     ) -> Result<Self> {
         let db_url = db_url.into();
-        let manager = ConnectionManager::<PgConnection>::new(db_url.clone());
-
-        let connection_config = ConnectionConfig {
-            statement_timeout: config.statement_timeout,
-            read_only: true,
-        };
-
-        let blocking_pool = diesel::r2d2::Pool::builder()
-            .max_size(config.pool_size)
-            .connection_timeout(config.connection_timeout)
-            .connection_customizer(Box::new(connection_config))
-            .build(manager)
-            .map_err(|e| anyhow!("Failed to initialize connection pool. Error: {:?}. If Error is None, please check whether the configured pool size (currently {}) exceeds the maximum number of connections allowed by the database.", e, config.pool_size))?;
 
         let pool = ConnectionPool::new(db_url.parse()?, config).await?;
 
@@ -109,32 +100,9 @@ impl IndexerReader {
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
         Ok(Self {
-            blocking_pool,
             pool,
             package_resolver,
         })
-    }
-
-    pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
-    where
-        F: FnOnce(Self) -> Result<R, E> + Send + 'static,
-        R: Send + 'static,
-        E: Send + 'static,
-    {
-        let this = self.clone();
-        let current_span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
-            CALLED_FROM_BLOCKING_POOL
-                .with(|in_blocking_pool| *in_blocking_pool.borrow_mut() = true);
-            let _guard = current_span.enter();
-            f(this)
-        })
-        .await
-        .expect("propagate any panics")
-    }
-
-    pub fn get_blocking_pool(&self) -> BlockingConnectionPool {
-        self.blocking_pool.clone()
     }
 
     pub fn pool(&self) -> &ConnectionPool {
@@ -364,15 +332,7 @@ impl IndexerReader {
             Some(stored_epoch) => stored_epoch,
             None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
         };
-
-        let system_state: SuiSystemStateSummary = bcs::from_bytes(&stored_epoch.system_state)
-            .map_err(|_| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Failed to deserialize `system_state` for epoch {:?}",
-                    epoch,
-                ))
-            })?;
-        Ok(system_state)
+        stored_epoch.get_json_system_state_summary()
     }
 
     async fn get_checkpoint_from_db(
@@ -490,7 +450,12 @@ impl IndexerReader {
             .collect::<Vec<_>>();
 
         transactions::table
-            .filter(transactions::transaction_digest.eq_any(digests))
+            .inner_join(
+                tx_digests::table
+                    .on(transactions::tx_sequence_number.eq(tx_digests::tx_sequence_number)),
+            )
+            .filter(tx_digests::tx_digest.eq_any(digests))
+            .select(StoredTransaction::as_select())
             .load::<StoredTransaction>(&mut connection)
             .await
             .map_err(Into::into)
@@ -515,10 +480,10 @@ impl IndexerReader {
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| tracing::error!("Failed to join all tx block futures: {}", e))?
+            .tap_err(|e| error!("Failed to join all tx block futures: {}", e))?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| tracing::error!("Failed to collect tx block futures: {}", e))?;
+            .tap_err(|e| error!("Failed to collect tx block futures: {}", e))?;
         Ok(tx_blocks)
     }
 
@@ -657,11 +622,19 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
+        let tx_range: (i64, i64) = pruner_cp_watermark::dsl::pruner_cp_watermark
+            .select((
+                pruner_cp_watermark::min_tx_sequence_number,
+                pruner_cp_watermark::max_tx_sequence_number,
+            ))
+            .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+            .first::<(i64, i64)>(&mut connection)
+            .await?;
+
         let mut query = transactions::table
-            .filter(transactions::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+            .filter(transactions::tx_sequence_number.between(tx_range.0, tx_range.1))
             .into_boxed();
 
-        // Translate transaction digest cursor to tx sequence number
         if let Some(cursor_tx_seq) = cursor_tx_seq {
             if is_descending {
                 query = query.filter(transactions::tx_sequence_number.lt(cursor_tx_seq));
@@ -695,9 +668,9 @@ impl IndexerReader {
         let mut connection = self.pool.get().await?;
 
         let cursor_tx_seq = if let Some(cursor) = cursor {
-            let tx_seq = transactions::table
-                .select(transactions::tx_sequence_number)
-                .filter(transactions::transaction_digest.eq(cursor.into_inner().to_vec()))
+            let tx_seq = tx_digests::table
+                .select(tx_digests::tx_sequence_number)
+                .filter(tx_digests::tx_digest.eq(cursor.into_inner().to_vec()))
                 .first::<i64>(&mut connection)
                 .await?;
             Some(tx_seq)
@@ -736,17 +709,15 @@ impl IndexerReader {
                 let package = Hex::encode(package.to_vec());
                 match (module, function) {
                     (Some(module), Some(function)) => (
-                        "tx_calls_fun".into(),
+                        "tx_calls_fun".to_owned(),
                         format!(
-                            "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
-                            package, module, function
+                            "package = '\\x{package}'::bytea AND module = '{module}' AND func = '{function}'",
                         ),
                     ),
                     (Some(module), None) => (
-                        "tx_calls_mod".into(),
+                        "tx_calls_mod".to_owned(),
                         format!(
-                            "package = '\\x{}'::bytea AND module = '{}'",
-                            package, module
+                            "package = '\\x{package}'::bytea AND module = '{module}'",
                         ),
                     ),
                     (None, Some(_)) => {
@@ -755,105 +726,39 @@ impl IndexerReader {
                         ));
                     }
                     (None, None) => (
-                        "tx_calls_pkg".into(),
-                        format!("package = '\\x{}'::bytea", package),
+                        "tx_calls_pkg".to_owned(),
+                        format!("package = '\\x{package}'::bytea"),
                     ),
                 }
             }
-            Some(TransactionFilter::InputObject(object_id)) => {
+            Some(TransactionFilter::AffectedObject(object_id)) => {
                 let object_id = Hex::encode(object_id.to_vec());
                 (
-                    "tx_input_objects".into(),
-                    format!("object_id = '\\x{}'::bytea", object_id),
-                )
-            }
-            Some(TransactionFilter::ChangedObject(object_id)) => {
-                let object_id = Hex::encode(object_id.to_vec());
-                (
-                    "tx_changed_objects".into(),
-                    format!("object_id = '\\x{}'::bytea", object_id),
+                    "tx_affected_objects".to_owned(),
+                    format!("affected = '\\x{object_id}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAddress(from_address)) => {
                 let from_address = Hex::encode(from_address.to_vec());
                 (
-                    "tx_senders".into(),
-                    format!("sender = '\\x{}'::bytea", from_address),
-                )
-            }
-            Some(TransactionFilter::ToAddress(to_address)) => {
-                let to_address = Hex::encode(to_address.to_vec());
-                (
-                    "tx_recipients".into(),
-                    format!("recipient = '\\x{}'::bytea", to_address),
+                    "tx_affected_addresses".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea AND affected = '\\x{from_address}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let from_address = Hex::encode(from.to_vec());
                 let to_address = Hex::encode(to.to_vec());
-                // Need to remove ambiguities for tx_sequence_number column
-                let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
-                    if is_descending {
-                        format!(
-                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} < {}",
-                            cursor_tx_seq
-                        )
-                    } else {
-                        format!(
-                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} > {}",
-                            cursor_tx_seq
-                        )
-                    }
-                } else {
-                    "".to_string()
-                };
-                let inner_query = format!(
-                    "(SELECT tx_senders.{TX_SEQUENCE_NUMBER_STR} \
-                    FROM tx_senders \
-                    JOIN tx_recipients \
-                    ON tx_senders.{TX_SEQUENCE_NUMBER_STR} = tx_recipients.{TX_SEQUENCE_NUMBER_STR} \
-                    WHERE tx_senders.sender = '\\x{}'::BYTEA \
-                    AND tx_recipients.recipient = '\\x{}'::BYTEA \
-                    {} \
-                    ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                    LIMIT {}) AS inner_query
-                    ",
-                    from_address,
-                    to_address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                );
-                (inner_query, "1 = 1".into())
+                (
+                    "tx_affected_addresses".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea AND affected = '\\x{to_address}'::bytea"),
+                )
             }
             Some(TransactionFilter::FromOrToAddress { addr }) => {
                 let address = Hex::encode(addr.to_vec());
-                let inner_query = format!(
-                    "( \
-                        ( \
-                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_senders \
-                            WHERE sender = '\\x{}'::BYTEA {} \
-                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                            LIMIT {} \
-                        ) \
-                        UNION \
-                        ( \
-                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_recipients \
-                            WHERE recipient = '\\x{}'::BYTEA {} \
-                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                            LIMIT {} \
-                        ) \
-                    ) AS combined",
-                    address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                    address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                );
-                (inner_query, "1 = 1".into())
+                (
+                    "tx_affected_addresses".to_owned(),
+                    format!("affected = '\\x{address}'::bytea"),
+                )
             }
             Some(
                 TransactionFilter::TransactionKind(_) | TransactionFilter::TransactionKindIn(_),
@@ -862,9 +767,19 @@ impl IndexerReader {
                     "TransactionKind filter is not supported.".into(),
                 ));
             }
+            Some(TransactionFilter::InputObject(_) | TransactionFilter::ChangedObject(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "InputObject and OutputObject filters are not supported, please use AffectedObject instead.".into()
+                ))
+            }
+            Some(TransactionFilter::ToAddress(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "ToAddress filter is not supported, please use FromOrToAddress instead.".into()
+                ))
+            }
             None => {
                 // apply no filter
-                ("transactions".into(), "1 = 1".into())
+                ("transactions".to_owned(), "1 = 1".into())
             }
         };
 
@@ -877,7 +792,7 @@ impl IndexerReader {
             limit,
         );
 
-        tracing::debug!("query transaction blocks: {}", query);
+        debug!("query transaction blocks: {}", query);
         let tx_sequence_numbers = diesel::sql_query(query.clone())
             .load::<TxSequenceNumber>(&mut connection)
             .await?
@@ -933,8 +848,17 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
+        // Use the tx_digests lookup table for the corresponding tx_sequence_number, and then fetch
+        // event-relevant data from the entry on the transactions table.
         let (timestamp_ms, serialized_events) = transactions::table
-            .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+            .filter(
+                transactions::tx_sequence_number
+                    .nullable()
+                    .eq(tx_digests::table
+                        .select(tx_digests::tx_sequence_number)
+                        .filter(tx_digests::tx_digest.eq(digest.into_inner().to_vec()))
+                        .single_value()),
+            )
             .select((transactions::timestamp_ms, transactions::events))
             .first::<(i64, StoredTransactionEvents)>(&mut connection)
             .await?;
@@ -952,43 +876,78 @@ impl IndexerReader {
         Ok(sui_tx_events.map_or(vec![], |ste| ste.data))
     }
 
-    fn query_events_by_tx_digest_query(
+    async fn query_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
         cursor: Option<EventID>,
+        cursor_tx_seq: i64,
         limit: usize,
         descending_order: bool,
-    ) -> IndexerResult<String> {
-        let cursor = if let Some(cursor) = cursor {
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let mut query = events::table.into_boxed();
+
+        if let Some(cursor) = cursor {
             if cursor.tx_digest != tx_digest {
                 return Err(IndexerError::InvalidArgumentError(
                     "Cursor tx_digest does not match the tx_digest in the query.".into(),
                 ));
             }
             if descending_order {
-                format!("e.{EVENT_SEQUENCE_NUMBER_STR} < {}", cursor.event_seq)
+                query = query.filter(events::event_sequence_number.lt(cursor.event_seq as i64));
             } else {
-                format!("e.{EVENT_SEQUENCE_NUMBER_STR} > {}", cursor.event_seq)
+                query = query.filter(events::event_sequence_number.gt(cursor.event_seq as i64));
             }
         } else if descending_order {
-            format!("e.{EVENT_SEQUENCE_NUMBER_STR} <= {}", i64::MAX)
+            query = query.filter(events::event_sequence_number.le(i64::MAX));
         } else {
-            format!("e.{EVENT_SEQUENCE_NUMBER_STR} >= {}", 0)
+            query = query.filter(events::event_sequence_number.ge(0));
         };
 
-        let order_clause = if descending_order { "DESC" } else { "ASC" };
-        Ok(format!(
-            "SELECT * \
-            FROM EVENTS e \
-            JOIN TRANSACTIONS t \
-            ON t.tx_sequence_number = e.tx_sequence_number \
-            AND t.transaction_digest = '\\x{}'::bytea \
-            WHERE {cursor} \
-            ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
-            LIMIT {limit}
-            ",
-            Hex::encode(tx_digest.into_inner()),
-        ))
+        if descending_order {
+            query = query.order(events::event_sequence_number.desc());
+        } else {
+            query = query.order(events::event_sequence_number.asc());
+        }
+
+        // If the cursor is provided and matches tx_digest, we've already fetched the
+        // tx_sequence_number and can query events table directly. Otherwise, we can just consult
+        // the tx_digests table for the tx_sequence_number to key into events table.
+        if cursor.is_some() {
+            query = query.filter(events::tx_sequence_number.eq(cursor_tx_seq));
+        } else {
+            query = query.filter(
+                events::tx_sequence_number.nullable().eq(tx_digests::table
+                    .select(tx_digests::tx_sequence_number)
+                    .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
+                    .single_value()),
+            );
+        }
+
+        let stored_events = query
+            .limit(limit as i64)
+            .load::<StoredEvent>(&mut connection)
+            .await?;
+
+        let mut sui_event_futures = vec![];
+        for stored_event in stored_events {
+            sui_event_futures.push(tokio::task::spawn(
+                stored_event.try_into_sui_event(self.package_resolver.clone()),
+            ));
+        }
+
+        let sui_events = futures::future::join_all(sui_event_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to join sui event futures: {}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to collect sui event futures: {}", e))?;
+        Ok(sui_events)
     }
 
     pub async fn query_events(
@@ -1009,17 +968,19 @@ impl IndexerReader {
             } = cursor;
             let tx_seq = transactions::table
                 .select(transactions::tx_sequence_number)
-                .filter(transactions::transaction_digest.eq(tx_digest.into_inner().to_vec()))
+                .filter(
+                    transactions::tx_sequence_number
+                        .nullable()
+                        .eq(tx_digests::table
+                            .select(tx_digests::tx_sequence_number)
+                            .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
+                            .single_value()),
+                )
                 .first::<i64>(&mut connection)
                 .await?;
-            (tx_seq, event_seq)
+            (tx_seq, event_seq as i64)
         } else if descending_order {
-            let max_tx_seq = events::table
-                .select(events::tx_sequence_number)
-                .order(events::tx_sequence_number.desc())
-                .first::<i64>(&mut connection)
-                .await?;
-            (max_tx_seq + 1, 0)
+            (i64::MAX, i64::MAX)
         } else {
             (-1, 0)
         };
@@ -1039,11 +1000,10 @@ impl IndexerReader {
             format!(
                 "( \
                     SELECT *
-                    FROM tx_senders s
+                    FROM event_senders s
                     JOIN events e
-                    ON e.tx_sequence_number = s.tx_sequence_number
-                    AND s.sender = '\\x{}'::bytea
-                    WHERE {} \
+                    USING (tx_sequence_number, event_sequence_number)
+                    WHERE s.sender = '\\x{}'::bytea AND {} \
                     ORDER BY {} \
                     LIMIT {}
                 )",
@@ -1053,11 +1013,14 @@ impl IndexerReader {
                 limit,
             )
         } else if let EventFilter::Transaction(tx_digest) = filter {
-            self.query_events_by_tx_digest_query(tx_digest, cursor, limit, descending_order)?
+            return self
+                .query_events_by_tx_digest(tx_digest, cursor, tx_seq, limit, descending_order)
+                .await;
         } else {
             let main_where_clause = match filter {
-                EventFilter::Package(package_id) => {
-                    format!("package = '\\x{}'::bytea", package_id.to_hex())
+                EventFilter::All([]) => {
+                    // No filter
+                    "1 = 1".to_string()
                 }
                 EventFilter::MoveModule { package, module } => {
                     format!(
@@ -1067,7 +1030,10 @@ impl IndexerReader {
                     )
                 }
                 EventFilter::MoveEventType(struct_tag) => {
-                    format!("event_type = '{}'", struct_tag)
+                    format!(
+                        "event_type = '{}'",
+                        struct_tag.to_canonical_display(/* with_prefix */ true),
+                    )
                 }
                 EventFilter::MoveEventModule { package, module } => {
                     let package_module_prefix = format!("{}::{}", package.to_hex_literal(), module);
@@ -1081,14 +1047,9 @@ impl IndexerReader {
                     // Processed above
                     unreachable!()
                 }
-                EventFilter::MoveEventField { .. }
-                | EventFilter::All(_)
-                | EventFilter::Any(_)
-                | EventFilter::And(_, _)
-                | EventFilter::Or(_, _)
-                | EventFilter::TimeRange { .. } => {
+                EventFilter::TimeRange { .. } | EventFilter::Any(_) => {
                     return Err(IndexerError::NotSupportedError(
-                        "This type of EventFilter is not supported.".into(),
+                        "This type of EventFilter is not supported.".to_owned(),
                     ));
                 }
             };
@@ -1114,7 +1075,7 @@ impl IndexerReader {
                 main_where_clause, cursor_clause, order_clause, limit,
             )
         };
-        tracing::debug!("query events: {}", query);
+        debug!("query events: {}", query);
         let stored_events = diesel::sql_query(query)
             .load::<StoredEvent>(&mut connection)
             .await?;
@@ -1130,10 +1091,10 @@ impl IndexerReader {
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| tracing::error!("Failed to join sui event futures: {}", e))?
+            .tap_err(|e| error!("Failed to join sui event futures: {}", e))?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| tracing::error!("Failed to collect sui event futures: {}", e))?;
+            .tap_err(|e| error!("Failed to collect sui event futures: {}", e))?;
         Ok(sui_events)
     }
 
@@ -1143,57 +1104,31 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
-        let objects = self
+        let stored_objects = self
             .get_dynamic_fields_raw(parent_object_id, cursor, limit)
             .await?;
-
-        if any(objects.iter(), |o| o.df_object_id.is_none()) {
-            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Dynamic field has empty df_object_id column for parent object {}",
-                parent_object_id
-            )));
-        }
-
-        // for Dynamic field objects, df_object_id != object_id, we need another look up
-        // to get the version and digests.
-        // TODO: simply store df_object_version and df_object_digest as well?
-        let dfo_ids = objects
-            .iter()
-            .filter_map(|o| {
-                // Unwrap safe: checked nullity above
-                if o.df_object_id.as_ref().unwrap() == &o.object_id {
-                    None
-                } else {
-                    Some(o.df_object_id.clone().unwrap())
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let object_refs = self.get_object_refs(dfo_ids).await?;
         let mut df_futures = vec![];
-        for object in objects {
-            let package_resolver_clone = self.package_resolver.clone();
-            df_futures.push(tokio::task::spawn(
-                object.try_into_expectant_dynamic_field_info(package_resolver_clone),
-            ));
+        let indexer_reader_arc = Arc::new(self.clone());
+        for stored_object in stored_objects {
+            let indexer_reader_arc_clone = Arc::clone(&indexer_reader_arc);
+            df_futures.push(tokio::task::spawn(async move {
+                indexer_reader_arc_clone
+                    .try_create_dynamic_field_info(stored_object)
+                    .await
+            }));
         }
-        let mut dynamic_fields = futures::future::join_all(df_futures)
+        let df_infos = futures::future::join_all(df_futures)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| tracing::error!("Error joining DF futures: {:?}", e))?
+            .tap_err(|e| error!("Error joining DF futures: {:?}", e))?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| tracing::error!("Error calling DF try_into function: {:?}", e))?;
-
-        for df in dynamic_fields.iter_mut() {
-            if let Some(obj_ref) = object_refs.get(&df.object_id) {
-                df.version = obj_ref.1;
-                df.digest = obj_ref.2;
-            }
-        }
-
-        Ok(dynamic_fields)
+            .tap_err(|e| error!("Error calling try_create_dynamic_field_info: {:?}", e))?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        Ok(df_infos)
     }
 
     pub async fn get_dynamic_fields_raw(
@@ -1223,6 +1158,88 @@ impl IndexerReader {
             .map_err(Into::into)
     }
 
+    async fn try_create_dynamic_field_info(
+        &self,
+        stored_object: StoredObject,
+    ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
+        if stored_object.df_kind.is_none() {
+            return Ok(None);
+        }
+
+        let object: Object = stored_object.try_into()?;
+        let move_object = match object.data.try_as_move().cloned() {
+            Some(move_object) => move_object,
+            None => {
+                return Err(IndexerError::ResolveMoveStructError(
+                    "Object is not a MoveObject".to_string(),
+                ));
+            }
+        };
+        let type_tag: TypeTag = move_object.type_().clone().into();
+        let layout = self
+            .package_resolver
+            .type_layout(type_tag.clone())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to get type layout for type {}: {e}",
+                    type_tag.to_canonical_display(/* with_prefix */ true),
+                ))
+            })?;
+
+        let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
+            .tap_err(|e| warn!("{e}"))?;
+
+        let type_ = field.kind;
+        let name_type: TypeTag = field.name_layout.into();
+        let bcs_name = field.name_bytes.to_owned();
+
+        let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
+            .tap_err(|e| warn!("{e}"))?;
+
+        let name = DynamicFieldName {
+            type_: name_type,
+            value: SuiMoveValue::from(name_value).to_json_value(),
+        };
+
+        let value_metadata = field.value_metadata().map_err(|e| {
+            warn!("{e}");
+            IndexerError::UncategorizedError(anyhow!(e))
+        })?;
+
+        Ok(Some(match value_metadata {
+            DFV::ValueMetadata::DynamicField(object_type) => DynamicFieldInfo {
+                name,
+                bcs_name,
+                type_,
+                object_type: object_type.to_canonical_string(/* with_prefix */ true),
+                object_id: object.id(),
+                version: object.version(),
+                digest: object.digest(),
+            },
+
+            DFV::ValueMetadata::DynamicObjectField(object_id) => {
+                let object = self.get_object(&object_id, None).await?.ok_or_else(|| {
+                    IndexerError::UncategorizedError(anyhow!(
+                        "Failed to find object_id {} when trying to create dynamic field info",
+                        object_id.to_canonical_display(/* with_prefix */ true),
+                    ))
+                })?;
+
+                let object_type = object.data.type_().unwrap().clone();
+                DynamicFieldInfo {
+                    name,
+                    bcs_name,
+                    type_,
+                    object_type: object_type.to_canonical_string(/* with_prefix */ true),
+                    object_id,
+                    version: object.version(),
+                    digest: object.digest(),
+                }
+            }
+        }))
+    }
+
     pub async fn bcs_name_from_dynamic_field_name(
         &self,
         name: &DynamicFieldName,
@@ -1240,45 +1257,6 @@ impl IndexerReader {
         let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
         let name_bcs_value = sui_json_value.to_bcs_bytes(&move_type_layout)?;
         Ok(name_bcs_value)
-    }
-
-    async fn get_object_refs(
-        &self,
-        object_ids: Vec<Vec<u8>>,
-    ) -> IndexerResult<HashMap<ObjectID, ObjectRef>> {
-        use diesel_async::RunQueryDsl;
-
-        let mut connection = self.pool.get().await?;
-
-        objects::table
-            .filter(objects::object_id.eq_any(object_ids))
-            .select((
-                objects::object_id,
-                objects::object_version,
-                objects::object_digest,
-            ))
-            .load::<ObjectRefColumn>(&mut connection)
-            .await?
-            .into_iter()
-            .map(|object_ref: ObjectRefColumn| {
-                let object_id =
-                    ObjectID::from_bytes(object_ref.object_id.clone()).map_err(|_e| {
-                        IndexerError::PersistentStorageDataCorruptionError(format!(
-                            "Can't convert {:?} to ObjectID",
-                            object_ref.object_id
-                        ))
-                    })?;
-                let seq = SequenceNumber::from_u64(object_ref.object_version as u64);
-                let object_digest = ObjectDigest::try_from(object_ref.object_digest.as_slice())
-                    .map_err(|e| {
-                        IndexerError::PersistentStorageDataCorruptionError(format!(
-                            "object {:?} has incompatible object digest. Error: {e}",
-                            object_ref.object_digest
-                        ))
-                    })?;
-                Ok((object_id, (object_id, seq, object_digest)))
-            })
-            .collect::<IndexerResult<HashMap<_, _>>>()
     }
 
     async fn get_display_object_by_type(
@@ -1371,8 +1349,7 @@ impl IndexerReader {
             coin_type_filter,
         );
 
-        tracing::debug!("get coin balances query: {query}");
-
+        debug!("get coin balances query: {query}");
         diesel::sql_query(query)
             .load::<CoinBalance>(&mut connection)
             .await?
@@ -1483,7 +1460,7 @@ impl ConnectionAsObjectStore {
         Ok(Self { inner: connection })
     }
 
-    fn get_object_from_db(
+    fn get_object_from_objects(
         &self,
         object_id: &ObjectID,
         version: Option<VersionNumber>,
@@ -1507,35 +1484,80 @@ impl ConnectionAsObjectStore {
             .map_err(Into::into)
     }
 
+    fn get_object_from_history(
+        &self,
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<StoredObject>, IndexerError> {
+        use diesel::RunQueryDsl;
+
+        let mut guard = self.inner.lock().unwrap();
+        let connection: &mut diesel_async::async_connection_wrapper::AsyncConnectionWrapper<_> =
+            &mut guard;
+
+        let mut history_query = objects_history::table
+            .filter(objects_history::dsl::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+
+        if let Some(version) = version {
+            history_query = history_query
+                .filter(objects_history::dsl::object_version.eq(version.value() as i64));
+        }
+
+        let history_latest = history_query
+            .order_by(objects_history::dsl::object_version.desc())
+            .first::<StoredHistoryObject>(connection)
+            .optional()?;
+
+        if let Some(history_record) = history_latest {
+            return Ok(Some(history_record.try_into()?));
+        }
+
+        let mut snapshot_query = objects_snapshot::table
+            .filter(objects_snapshot::dsl::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+
+        if let Some(version) = version {
+            snapshot_query = snapshot_query
+                .filter(objects_snapshot::dsl::object_version.eq(version.value() as i64));
+        }
+
+        snapshot_query
+            .first::<StoredObjectSnapshot>(connection)
+            .optional()?
+            .map(|o| o.try_into())
+            .transpose()
+            .map_err(Into::into)
+    }
+
     fn get_object(
         &self,
         object_id: &ObjectID,
         version: Option<VersionNumber>,
     ) -> Result<Option<Object>, IndexerError> {
-        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
-            return Ok(None);
-        };
+        let mut result = self.get_object_from_objects(object_id, version)?;
 
-        let object = stored_package.try_into()?;
-        Ok(Some(object))
+        // This is for mvr-mode, which doesn't maintain an `objects` table.
+        if result.is_none() {
+            result = self.get_object_from_history(object_id, version)?;
+        }
+
+        result.map(|o| o.try_into()).transpose().map_err(Into::into)
     }
 }
 
 impl sui_types::storage::ObjectStore for ConnectionAsObjectStore {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<sui_types::object::Object> {
         self.get_object(object_id, None)
-            .map_err(sui_types::storage::error::Error::custom)
+            .expect("Failed to get object")
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
+    ) -> Option<sui_types::object::Object> {
         self.get_object(object_id, Some(version))
-            .map_err(sui_types::storage::error::Error::custom)
+            .expect("Failed to get object")
     }
 }

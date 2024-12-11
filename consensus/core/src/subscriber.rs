@@ -59,11 +59,24 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let authority_service = self.authority_service.clone();
-        let last_received = self
-            .dag_state
-            .read()
-            .get_last_block_for_authority(peer)
-            .round();
+        let (mut last_received, gc_round, gc_enabled) = {
+            let dag_state = self.dag_state.read();
+            (
+                dag_state.get_last_block_for_authority(peer).round(),
+                dag_state.gc_round(),
+                dag_state.gc_enabled(),
+            )
+        };
+
+        // If the latest block we have accepted by an authority is older than the current gc round,
+        // then do not attempt to fetch any blocks from that point as they will simply be skipped. Instead
+        // do attempt to fetch from the gc round.
+        if gc_enabled && last_received < gc_round {
+            info!(
+                "Last received block for peer {peer} is older than GC round, {last_received} < {gc_round}, fetching from GC round"
+            );
+            last_received = gc_round;
+        }
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -93,7 +106,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         self.context
             .metrics
             .node_metrics
-            .subscriber_connections
+            .subscribed_to
             .with_label_values(&[peer_hostname])
             .set(0);
     }
@@ -117,7 +130,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             context
                 .metrics
                 .node_metrics
-                .subscriber_connections
+                .subscribed_to
                 .with_label_values(&[peer_hostname])
                 .set(0);
 
@@ -173,7 +186,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             context
                 .metrics
                 .node_metrics
-                .subscriber_connections
+                .subscribed_to
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
@@ -291,6 +304,14 @@ mod test {
             _authorities: Vec<AuthorityIndex>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
         }
     }

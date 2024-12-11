@@ -107,6 +107,7 @@
       { "source": "/standards/trade-and-swap", "destination": "/standards/deepbookv2/trade-and-swap", "permanent": true },
       { "source": "/standards/query-the-pool", "destination": "/standards/deepbookv2/query-the-pool", "permanent": true },
       { "source": "/standards/deepbook-design", "destination": "/standards/deepbookv2/design", "permanent": true },
-      { "source": "/standards/deepbook-orders", "destination": "/standards/deepbookv2/orders", "permanent": true }
+      { "source": "/standards/deepbook-orders", "destination": "/standards/deepbookv2/orders", "permanent": true },
+      { "source": "/concepts/events", "destination": "/guides/developer/sui-101/using-events", "permanent": true }
     ]
   }

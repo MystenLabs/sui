@@ -9,6 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
+use mysten_common::fatal;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
@@ -410,13 +411,7 @@ impl TransactionManager {
             .filter(|(cert, _)| {
                 let digest = *cert.digest();
                 // skip already executed txes
-                if self
-                    .transaction_cache_read
-                    .is_tx_already_executed(&digest)
-                    .unwrap_or_else(|err| {
-                        panic!("Failed to check if tx is already executed: {:?}", err)
-                    })
-                {
+                if self.transaction_cache_read.is_tx_already_executed(&digest) {
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -432,7 +427,7 @@ impl TransactionManager {
         let mut receiving_objects: HashSet<InputKey> = HashSet::new();
         let certs: Vec<_> = certs
             .into_iter()
-            .map(|(cert, fx_digest)| {
+            .filter_map(|(cert, fx_digest)| {
                 let input_object_kinds = cert
                     .data()
                     .intent_message()
@@ -440,7 +435,23 @@ impl TransactionManager {
                     .input_objects()
                     .expect("input_objects() cannot fail");
                 let mut input_object_keys =
-                    epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds);
+                    match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
+                        Ok(keys) => keys,
+                        Err(e) => {
+                            // Because we do not hold the transaction lock during enqueue, it is possible
+                            // that the transaction was executed and the shared version assignments deleted
+                            // since the earlier check. This is a rare race condition, and it is better to
+                            // handle it ad-hoc here than to hold tx locks for every cert for the duration
+                            // of this function in order to remove the race.
+                            if self
+                                .transaction_cache_read
+                                .is_tx_already_executed(cert.digest())
+                            {
+                                return None;
+                            }
+                            fatal!("Failed to get input object keys: {:?}", e);
+                        }
+                    };
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
@@ -467,7 +478,7 @@ impl TransactionManager {
                     }
                 }
 
-                (cert, fx_digest, input_object_keys)
+                Some((cert, fx_digest, input_object_keys))
             })
             .collect();
 
@@ -500,7 +511,6 @@ impl TransactionManager {
                 receiving_objects,
                 epoch_store.epoch(),
             )
-            .unwrap_or_else(|err| panic!("Checking object existence cannot fail: {:?}", err))
             .into_iter()
             .zip(input_object_cache_misses);
 
@@ -587,10 +597,8 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            let is_tx_already_executed = self
-                .transaction_cache_read
-                .is_tx_already_executed(&digest)
-                .expect("Check if tx is already executed should not fail");
+            let is_tx_already_executed =
+                self.transaction_cache_read.is_tx_already_executed(&digest);
             if is_tx_already_executed {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
@@ -829,9 +837,9 @@ impl TransactionManager {
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
                 .transaction_data()
-                .input_objects()?
+                .shared_input_objects()
                 .into_iter()
-                .map(|r| r.object_id())
+                .filter_map(|r| r.mutable.then_some(r.id))
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
@@ -849,7 +857,11 @@ impl TransactionManager {
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
                 if age >= overload_config.max_txn_age_in_queue {
-                    info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
+                    info!(
+                        "Overload detected on object {:?} with oldest transaction pending for {}ms",
+                        object_id,
+                        age.as_millis()
+                    );
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
@@ -863,7 +875,7 @@ impl TransactionManager {
 
     // Verify TM has no pending item for tests.
     #[cfg(test)]
-    fn check_empty_for_testing(&self) {
+    pub(crate) fn check_empty_for_testing(&self) {
         let reconfig_lock = self.inner.read();
         let inner = reconfig_lock.read();
         assert!(

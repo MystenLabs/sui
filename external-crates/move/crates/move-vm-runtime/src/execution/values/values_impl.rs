@@ -2546,7 +2546,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, Value> 
                     unreachable!()
                 };
                 (AnnotatedValue {
-                    layout: struct_layout,
+                    layout: &**struct_layout,
                     val: r,
                 })
                 .serialize(serializer)
@@ -2559,7 +2559,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, Value> 
                     unreachable!()
                 };
                 (AnnotatedValue {
-                    layout: enum_layout,
+                    layout: &**enum_layout,
                     val: &**r,
                 })
                 .serialize(serializer)
@@ -2728,12 +2728,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
             L::Struct(struct_layout) => Ok(SeedWrapper {
-                layout: struct_layout,
+                layout: &**struct_layout,
             }
             .deserialize(deserializer)?),
 
             L::Enum(enum_layout) => Ok(SeedWrapper {
-                layout: enum_layout,
+                layout: &**enum_layout,
             }
             .deserialize(deserializer)?),
 
@@ -3335,7 +3335,8 @@ impl Value {
             (L::Address, Value::Address(x)) => MoveValue::Address(**x),
 
             // Enum variant case with dereferencing the Box.
-            (L::Enum(MoveEnumLayout(variants)), Value::Container(container)) => {
+            (L::Enum(enum_layout), Value::Container(container)) => {
+                let MoveEnumLayout(variants) = &**enum_layout;
                 if let Container::Variant(r) = &**container {
                     let (tag, values) = &**r; // Dereference the Box to get the variant data
                     let tag = *tag; // Simply copy the u16 value, no need for dereferencing

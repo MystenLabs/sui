@@ -459,8 +459,8 @@ mod sim_only_tests {
                 &cluster,
                 ProgrammableMoveCall {
                     package: sui_extra,
-                    module: ident_str!("msim_extra_1").to_owned(),
-                    function: ident_str!("canary").to_owned(),
+                    module: "msim_extra_1".to_owned(),
+                    function: "canary".to_owned(),
                     type_arguments: vec![],
                     arguments: vec![],
                 }
@@ -489,8 +489,8 @@ mod sim_only_tests {
             cluster,
             ProgrammableMoveCall {
                 package: SUI_SYSTEM_PACKAGE_ID,
-                module: ident_str!("msim_extra_1").to_owned(),
-                function: ident_str!("canary").to_owned(),
+                module: "msim_extra_1".to_owned(),
+                function: "canary".to_owned(),
                 type_arguments: vec![],
                 arguments: vec![],
             },
@@ -656,10 +656,10 @@ mod sim_only_tests {
             .with_async(|node| async {
                 let store = node.state().get_object_cache_reader().clone();
                 let framework = store.get_object(package);
-                let digest = framework.unwrap().unwrap().previous_transaction;
+                let digest = framework.unwrap().previous_transaction;
                 let tx_store = node.state().get_transaction_cache_reader().clone();
                 let effects = tx_store.get_executed_effects(&digest);
-                effects.unwrap().unwrap()
+                effects.unwrap()
             })
             .await
     }
@@ -672,7 +672,6 @@ mod sim_only_tests {
                 node.state()
                     .get_object_cache_reader()
                     .get_object(object_id)
-                    .unwrap()
                     .unwrap()
             })
             .await

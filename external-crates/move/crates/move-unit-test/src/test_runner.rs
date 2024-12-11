@@ -28,6 +28,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
+use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::{dev_utils::storage::StoredPackage, shared::gas::GasMeter};
 use move_vm_runtime::{
     dev_utils::{
@@ -63,6 +64,7 @@ pub struct SharedTestingConfig {
     prng_seed: Option<u64>,
     num_iters: u64,
     deterministic_generation: bool,
+    trace_location: Option<String>,
 }
 
 pub struct TestRunner {
@@ -76,9 +78,10 @@ pub struct TestRunner {
 fn setup_test_storage<'a>(
     adapter: &mut InMemoryTestAdapter,
     modules: impl Iterator<Item = &'a CompiledModule>,
+    bytecode_deps_modules: impl Iterator<Item = &'a CompiledModule>,
 ) -> Result<()> {
     let mut packages = BTreeMap::new();
-    for module in modules {
+    for module in modules.chain(bytecode_deps_modules) {
         let entry = packages
             .entry(*module.self_id().address())
             .or_insert_with(Vec::new);
@@ -127,12 +130,24 @@ impl TestRunner {
         prng_seed: Option<u64>,
         num_iters: u64,
         deterministic_generation: bool,
+        trace_location: Option<String>,
         tests: TestPlan,
         // TODO: maybe we should require the clients to always pass in a list of native functions so
         // we don't have to make assumptions about their gas parameters.
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
     ) -> Result<Self> {
+        // If we want to trace the execution, check that the tracing compilation feature is
+        // enabled, otherwise we won't generate a trace.
+        move_vm_profiler::tracing_feature_disabled! {
+            if trace_location.is_some() {
+                return Err(anyhow::anyhow!(
+                    "Tracing is enabled but the binary was not compiled with the `tracing` \
+                     feature flag set. Rebuild binary with `--features tracing`"
+                ));
+            }
+        };
+
         let native_function_table = native_function_table.unwrap_or_else(|| {
             move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
@@ -146,7 +161,11 @@ impl TestRunner {
         let mut vm_test_adapter = InMemoryTestAdapter::new_with_runtime(runtime);
 
         let modules = tests.module_info.values().map(|info| &info.module);
-        setup_test_storage(&mut vm_test_adapter, modules)?;
+        setup_test_storage(
+            &mut vm_test_adapter,
+            modules,
+            tests.bytecode_deps_modules.iter(),
+        )?;
 
         Ok(Self {
             testing_config: SharedTestingConfig {
@@ -163,6 +182,7 @@ impl TestRunner {
                 prng_seed,
                 num_iters,
                 deterministic_generation,
+                trace_location,
             },
             num_threads,
             tests,
@@ -267,6 +287,8 @@ impl SharedTestingConfig {
         fn do_call<'extensions>(
             test_config: &SharedTestingConfig,
             gas_meter: &mut impl GasMeter,
+            // TODO: Plumb tracing in
+            _tracer: Option<&mut MoveTraceBuilder>,
             module_id: ModuleId,
             function_name: &str,
             arguments: Vec<MoveValue>,
@@ -300,8 +322,15 @@ impl SharedTestingConfig {
             })
         }
 
+        let mut move_tracer = MoveTraceBuilder::new();
+        let tracer = if self.trace_location.is_some() {
+            Some(&mut move_tracer)
+        } else {
+            None
+        };
+
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::gas_profiler_feature_enabled! {
+        move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
             use move_vm_types::gas::GasMeter;
             gas_meter.set_profiler(GasProfiler::init_default_cfg(
@@ -311,17 +340,28 @@ impl SharedTestingConfig {
         }
 
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
-
         let now = Instant::now();
         let module_id = test_plan.module_id.clone();
 
-        let mut return_result = do_call(self, &mut gas_meter, module_id, function_name, arguments);
+        let mut return_result = do_call(
+            self,
+            &mut gas_meter,
+            tracer,
+            module_id,
+            function_name,
+            arguments,
+        );
 
         if !self.report_stacktrace_on_abort {
             if let Err(err) = &mut return_result {
                 err.remove_exec_state();
             }
         }
+        let trace = if self.trace_location.is_some() {
+            Some(move_tracer.into_trace())
+        } else {
+            None
+        };
         let test_run_info = TestRunInfo::new(
             now.elapsed(),
             // TODO(Gas): This doesn't look quite right...
@@ -331,6 +371,7 @@ impl SharedTestingConfig {
                 .checked_sub(gas_meter.remaining_gas())
                 .unwrap()
                 .into(),
+            trace,
         );
         (return_result, test_run_info)
     }
@@ -449,6 +490,25 @@ impl SharedTestingConfig {
     ) -> bool {
         let (exec_result, test_run_info) =
             self.execute_via_move_vm(test_plan, function_name, arguments);
+
+        // Save the trace -- one per test -- for each test that we have traced (and if tracing is
+        // enabled).
+        if let Some(location) = &self.trace_location {
+            let trace_file_location = format!(
+                "{}/{}__{}{}.json",
+                location,
+                format_module_id(output.test_info, &output.test_plan.module_id).replace("::", "__"),
+                function_name,
+                if let Some(seed) = prng_seed {
+                    format!("_seed_{}", seed)
+                } else {
+                    "".to_string()
+                }
+            );
+            if let Err(e) = test_run_info.save_trace(&trace_file_location) {
+                eprintln!("Unable to save trace to {trace_file_location} -- {:?}", e);
+            }
+        }
 
         match exec_result {
             Err(err) => {

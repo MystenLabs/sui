@@ -192,7 +192,7 @@ async fn request_status(
             }
         }
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::BAD_REQUEST,
             Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
                 e.to_string(),
             ))),

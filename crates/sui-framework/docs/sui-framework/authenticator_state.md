@@ -308,9 +308,9 @@ Sender is not @0x0 the system address.
 
 <pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_jwk_equal">jwk_equal</a>(a: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_JWK">JWK</a>, b: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_JWK">JWK</a>): bool {
     (&a.kty == &b.kty) &&
-       (&a.e == &b.e) &&
-       (&a.n == &b.n) &&
-       (&a.alg == &b.alg)
+        (&a.e == &b.e) &&
+        (&a.n == &b.n) &&
+        (&a.alg == &b.alg)
 }
 </code></pre>
 
@@ -484,9 +484,7 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(
-    self: &<b>mut</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
-): &<b>mut</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
+<pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>): &<b>mut</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
     <b>let</b> version = self.version;
 
     // replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
@@ -518,9 +516,7 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner">load_inner</a>(
-    self: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
-): &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
+<pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner">load_inner</a>(self: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>): &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
     <b>let</b> version = self.version;
 
     // replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
@@ -709,7 +705,8 @@ indicate that the JWK has been validated in the current epoch and should not be 
     self: &<b>mut</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
     // any jwk below this epoch is not retained
     min_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    ctx: &TxContext) {
+    ctx: &TxContext,
+) {
     // This will only be called by sui_system::advance_epoch
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
 
@@ -793,10 +790,7 @@ JWK state from the chain.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_get_active_jwks">get_active_jwks</a>(
-    self: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
-    ctx: &TxContext,
-): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; {
+<pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_get_active_jwks">get_active_jwks</a>(self: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>, ctx: &TxContext): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
     self.<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner">load_inner</a>().active_jwks
 }

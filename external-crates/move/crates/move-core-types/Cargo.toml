@@ -29,6 +29,7 @@ move-proc-macros.workspace = true
 bcs.workspace = true
 leb128.workspace = true
 thiserror.workspace = true
+serde_with.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -19,7 +19,7 @@ use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_data_ingestion_core::Worker;
-use sui_rest_api::CheckpointData;
+use sui_rpc_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
@@ -158,6 +158,8 @@ pub struct AnalyticsIndexerConfig {
     pub sf_checkpoint_col_id: Option<String>,
     #[clap(long, global = true)]
     pub report_sf_max_table_checkpoint: bool,
+    #[clap(long, default_value = None, global = true)]
+    pub package_id_filter: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -487,14 +489,16 @@ impl FileMetadata {
 }
 
 pub struct Processor {
-    pub processor: Box<dyn Worker>,
+    pub processor: Box<dyn Worker<Result = ()>>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
 }
 
 #[async_trait::async_trait]
 impl Worker for Processor {
+    type Result = ();
+
     #[inline]
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         self.processor.process_checkpoint(checkpoint_data).await
     }
 }
@@ -688,6 +692,7 @@ pub async fn make_object_processor(
     let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new(
         &config.package_cache_path,
         &config.rest_url,
+        &config.package_id_filter,
     ));
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(config.clone(), FileType::Object).await?;

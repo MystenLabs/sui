@@ -23,6 +23,7 @@ lsp-types.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-ir-types.workspace = true
+move-core-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
 once_cell.workspace = true

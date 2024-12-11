@@ -74,7 +74,11 @@ impl Scenario {
         static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
             once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
 
-        let cache = Arc::new(WritebackCache::new(store.clone(), (*METRICS).clone()));
+        let cache = Arc::new(WritebackCache::new(
+            &Default::default(),
+            store.clone(),
+            (*METRICS).clone(),
+        ));
         Self {
             authority,
             store,
@@ -344,8 +348,7 @@ impl Scenario {
 
         self.cache()
             .write_transaction_outputs(1 /* epoch */, outputs.clone())
-            .await
-            .expect("write_transaction_outputs failed");
+            .await;
 
         self.count_action();
         tx
@@ -355,7 +358,7 @@ impl Scenario {
     pub async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
         let res = self.cache().commit_transaction_outputs(1, &[tx]).await;
         self.count_action();
-        res
+        Ok(res)
     }
 
     pub async fn clear_state_end_of_epoch(&self) {
@@ -370,6 +373,7 @@ impl Scenario {
 
     pub fn reset_cache(&mut self) {
         self.cache = Arc::new(WritebackCache::new(
+            &Default::default(),
             self.store.clone(),
             self.cache.metrics.clone(),
         ));
@@ -384,7 +388,7 @@ impl Scenario {
             };
             let id = o.id();
             // genesis objects are not managed by Scenario, ignore them
-            if reverse_id_map.get(&id).is_some() {
+            if reverse_id_map.contains_key(&id) {
                 self.objects.insert(id, o);
             }
         });
@@ -396,16 +400,10 @@ impl Scenario {
             let expected = self.objects.get(id).expect("no such object");
             let version = expected.version();
             assert_eq!(
-                self.cache()
-                    .get_object_by_key(id, version)
-                    .unwrap()
-                    .unwrap(),
+                self.cache().get_object_by_key(id, version).unwrap(),
                 *expected
             );
-            assert_eq!(
-                self.cache().get_object(&expected.id()).unwrap().unwrap(),
-                *expected
-            );
+            assert_eq!(self.cache().get_object(&expected.id()).unwrap(), *expected);
             // TODO: enable after lock caching is implemented
             // assert!(!self
             //  .cache()
@@ -485,14 +483,12 @@ impl Scenario {
             assert_eq!(
                 self.cache()
                     .get_object_by_key(id, object.version())
-                    .unwrap()
                     .unwrap(),
                 *object
             );
             assert!(self
                 .cache()
-                .have_received_object_at_version(id, object.version(), 1)
-                .unwrap());
+                .have_received_object_at_version(id, object.version(), 1));
         }
     }
 
@@ -501,7 +497,7 @@ impl Scenario {
             let id = self.id_map.get(short_id).expect("no such id");
 
             assert!(
-                self.cache().get_object(id).unwrap().is_none(),
+                self.cache().get_object(id).is_none(),
                 "object exists in cache"
             );
         }
@@ -555,10 +551,7 @@ async fn test_committed() {
 
         s.assert_live(&[1, 2]);
         s.assert_dirty(&[1, 2]);
-        s.cache()
-            .commit_transaction_outputs(1, &[tx])
-            .await
-            .expect("commit failed");
+        s.cache().commit_transaction_outputs(1, &[tx]).await;
         s.assert_not_dirty(&[1, 2]);
         s.assert_cached(&[1, 2]);
 
@@ -643,44 +636,44 @@ async fn test_extra_outputs() {
 
         let tx = s.do_tx().await;
 
-        s.cache.get_transaction_block(&tx).unwrap().unwrap();
-        let fx = s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        s.cache.get_transaction_block(&tx).unwrap();
+        let fx = s.cache.get_executed_effects(&tx).unwrap();
         let events_digest = fx.events_digest().unwrap();
-        s.cache.get_events(events_digest).unwrap().unwrap();
+        s.cache.get_events(events_digest).unwrap();
 
         s.commit(tx).await.unwrap();
 
-        s.cache.get_transaction_block(&tx).unwrap().unwrap();
-        s.cache.get_executed_effects(&tx).unwrap().unwrap();
-        s.cache.get_events(events_digest).unwrap().unwrap();
+        s.cache.get_transaction_block(&tx).unwrap();
+        s.cache.get_executed_effects(&tx).unwrap();
+        s.cache.get_events(events_digest).unwrap();
 
         // clear cache
         s.reset_cache();
 
-        s.cache.get_transaction_block(&tx).unwrap().unwrap();
-        s.cache.get_executed_effects(&tx).unwrap().unwrap();
-        s.cache.get_events(events_digest).unwrap().unwrap();
+        s.cache.get_transaction_block(&tx).unwrap();
+        s.cache.get_executed_effects(&tx).unwrap();
+        s.cache.get_events(events_digest).unwrap();
 
         s.with_created(&[3]);
         let tx = s.do_tx().await;
 
         // when Events is empty, it should be treated as None
-        let fx = s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        let fx = s.cache.get_executed_effects(&tx).unwrap();
         let events_digest = fx.events_digest().unwrap();
         assert!(
-            s.cache.get_events(events_digest).unwrap().is_none(),
+            s.cache.get_events(events_digest).is_none(),
             "empty events should be none"
         );
 
         s.commit(tx).await.unwrap();
         assert!(
-            s.cache.get_events(events_digest).unwrap().is_none(),
+            s.cache.get_events(events_digest).is_none(),
             "empty events should be none"
         );
 
         s.reset_cache();
         assert!(
-            s.cache.get_events(events_digest).unwrap().is_none(),
+            s.cache.get_events(events_digest).is_none(),
             "empty events should be none"
         );
     })
@@ -713,7 +706,6 @@ async fn test_lt_or_eq() {
                 assert_eq!(
                     s.cache()
                         .find_object_lt_or_eq_version(s.obj_id(1), v)
-                        .unwrap()
                         .unwrap()
                         .version(),
                     v
@@ -767,7 +759,6 @@ async fn test_lt_or_eq_caching() {
                 s.cache()
                     .find_object_lt_or_eq_version(s.obj_id(1), lookup_version)
                     .unwrap()
-                    .unwrap()
                     .version(),
                 expected_version
             );
@@ -780,7 +771,6 @@ async fn test_lt_or_eq_caching() {
         assert!(s
             .cache()
             .find_object_lt_or_eq_version(s.obj_id(1), 0.into())
-            .unwrap()
             .is_none());
 
         // query above populates cache
@@ -828,7 +818,6 @@ async fn test_lt_or_eq_with_cached_tombstone() {
             assert_eq!(
                 s.cache()
                     .find_object_lt_or_eq_version(s.obj_id(1), lookup_version)
-                    .unwrap()
                     .map(|v| v.version()),
                 expected_version.map(SequenceNumber::from_u64)
             );
@@ -860,7 +849,6 @@ async fn test_write_transaction_outputs_is_sync() {
         s.cache
             .write_transaction_outputs(1, outputs)
             .now_or_never()
-            .unwrap()
             .unwrap();
     })
     .await;
@@ -886,7 +874,7 @@ async fn test_revert_committed_tx_panics() {
         s.with_created(&[1]);
         let tx1 = s.do_tx().await;
         s.commit(tx1).await.unwrap();
-        s.cache().revert_state_update(&tx1).unwrap();
+        s.cache().revert_state_update(&tx1);
     })
     .await;
 }
@@ -901,7 +889,7 @@ async fn test_revert_unexecuted_tx() {
         let random_digest = TransactionDigest::random();
         // must not panic - pending_consensus_transactions is a super set of
         // executed but un-checkpointed transactions
-        s.cache().revert_state_update(&random_digest).unwrap();
+        s.cache().revert_state_update(&random_digest);
     })
     .await;
 }
@@ -915,7 +903,7 @@ async fn test_revert_state_update_created() {
         let tx1 = s.do_tx().await;
         s.assert_live(&[1]);
 
-        s.cache().revert_state_update(&tx1).unwrap();
+        s.cache().revert_state_update(&tx1);
         s.clear_state_end_of_epoch().await;
 
         s.assert_not_exists(&[1]);
@@ -931,25 +919,16 @@ async fn test_revert_state_update_mutated() {
             s.with_created(&[1]);
             let tx = s.do_tx().await;
             s.commit(tx).await.unwrap();
-            s.cache()
-                .get_object(&s.obj_id(1))
-                .unwrap()
-                .unwrap()
-                .version()
+            s.cache().get_object(&s.obj_id(1)).unwrap().version()
         };
 
         s.with_mutated(&[1]);
         let tx = s.do_tx().await;
 
-        s.cache().revert_state_update(&tx).unwrap();
+        s.cache().revert_state_update(&tx);
         s.clear_state_end_of_epoch().await;
 
-        let version_after_revert = s
-            .cache()
-            .get_object(&s.obj_id(1))
-            .unwrap()
-            .unwrap()
-            .version();
+        let version_after_revert = s.cache().get_object(&s.obj_id(1)).unwrap().version();
         assert_eq!(v1, version_after_revert);
     })
     .await;
@@ -966,7 +945,7 @@ async fn test_invalidate_package_cache_on_revert() {
         s.assert_live(&[1]);
         s.assert_packages(&[2]);
 
-        s.cache().revert_state_update(&tx1).unwrap();
+        s.cache().revert_state_update(&tx1);
         s.clear_state_end_of_epoch().await;
 
         assert!(s
@@ -1022,11 +1001,11 @@ async fn test_concurrent_readers() {
         tokio::task::spawn(async move {
             for (tx1, tx2, _, _) in txns {
                 println!("writing tx1");
-                cache.write_transaction_outputs(1, tx1).await.unwrap();
+                cache.write_transaction_outputs(1, tx1).await;
 
                 barrier.wait().await;
                 println!("writing tx2");
-                cache.write_transaction_outputs(1, tx2).await.unwrap();
+                cache.write_transaction_outputs(1, tx2).await;
             }
         })
     };
@@ -1041,9 +1020,7 @@ async fn test_concurrent_readers() {
 
                 println!("parent: {:?}", parent_ref);
                 loop {
-                    let parent = cache
-                        .get_object_by_key(&parent_ref.0, parent_ref.1)
-                        .unwrap();
+                    let parent = cache.get_object_by_key(&parent_ref.0, parent_ref.1);
                     if parent.is_none() {
                         tokio::task::yield_now().await;
                         continue;
@@ -1108,7 +1085,12 @@ async fn test_concurrent_lockers() {
             for (tx1, _, a_ref, b_ref) in txns {
                 results.push(
                     cache
-                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx1.digest(),
+                            Some(tx1.clone()),
+                        )
                         .await,
                 );
                 barrier.wait().await;
@@ -1127,7 +1109,12 @@ async fn test_concurrent_lockers() {
             for (_, tx2, a_ref, b_ref) in txns {
                 results.push(
                     cache
-                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx2)
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx2.digest(),
+                            Some(tx2.clone()),
+                        )
                         .await,
                 );
                 barrier.wait().await;
@@ -1145,8 +1132,92 @@ async fn test_concurrent_lockers() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_concurrent_lockers_same_tx() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
+    let mut txns = Vec::new();
+
+    for i in 0..1000 {
+        let a = i * 4;
+        let b = i * 4 + 1;
+        s.with_created(&[a, b]);
+        s.do_tx().await;
+
+        let a_ref = s.obj_ref(a);
+        let b_ref = s.obj_ref(b);
+
+        let tx1 = s.take_outputs();
+
+        let tx1 = s.make_signed_transaction(&tx1.transaction);
+
+        txns.push((tx1, a_ref, b_ref));
+    }
+
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+
+    let t1 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (tx1, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx1.digest(),
+                            Some(tx1.clone()),
+                        )
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let t2 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (tx1, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(
+                            &epoch_store,
+                            &[a_ref, b_ref],
+                            *tx1.digest(),
+                            Some(tx1.clone()),
+                        )
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let results1 = t1.await.unwrap();
+    let results2 = t2.await.unwrap();
+
+    for (r1, r2) in results1.into_iter().zip(results2) {
+        assert!(r1.is_ok());
+        assert!(r2.is_ok());
+    }
+}
+
 #[tokio::test]
 async fn latest_object_cache_race_test() {
+    telemetry_subscribers::init_for_testing();
     let authority = TestAuthorityBuilder::new().build().await;
 
     let store = authority.database_for_testing().clone();
@@ -1154,7 +1225,11 @@ async fn latest_object_cache_race_test() {
     static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
         once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
 
-    let cache = Arc::new(WritebackCache::new(store.clone(), (*METRICS).clone()));
+    let cache = Arc::new(WritebackCache::new(
+        &Default::default(),
+        store.clone(),
+        (*METRICS).clone(),
+    ));
 
     let object_id = ObjectID::random();
     let owner = SuiAddress::random_for_testing_only();
@@ -1184,11 +1259,19 @@ async fn latest_object_cache_race_test() {
         let start = Instant::now();
         std::thread::spawn(move || {
             while start.elapsed() < Duration::from_secs(2) {
-                let Some(latest_version) = cache
+                // If you move the get_ticket_for_read to after we get the latest version,
+                // the test will fail! (this is good, it means the test is doing something)
+                let ticket = cache
                     .cached
                     .object_by_id_cache
+                    .get_ticket_for_read(&object_id);
+
+                // get the latest version, but then let it become stale
+                let Some(latest_version) = cache
+                    .dirty
+                    .objects
                     .get(&object_id)
-                    .and_then(|e| e.lock().version())
+                    .and_then(|e| e.value().get_highest().map(|v| v.0))
                 else {
                     continue;
                 };
@@ -1201,10 +1284,26 @@ async fn latest_object_cache_race_test() {
                 let object =
                     Object::with_id_owner_version_for_testing(object_id, latest_version, owner);
 
+                // because we obtained the ticket before reading the object, we will not write a stale
+                // version to the cache.
                 cache.cache_latest_object_by_id(
                     &object_id,
                     LatestObjectCacheEntry::Object(latest_version, object.into()),
+                    ticket,
                 );
+            }
+        })
+    };
+
+    // a thread that just invalidates the cache as fast as it can
+    let invalidator = {
+        let cache = cache.clone();
+        let start = Instant::now();
+        std::thread::spawn(move || {
+            while start.elapsed() < Duration::from_secs(2) {
+                cache.cached.object_by_id_cache.invalidate(&object_id);
+                // sleep for 1 to 10µs
+                std::thread::sleep(Duration::from_micros(rand::thread_rng().gen_range(1..10)));
             }
         })
     };
@@ -1226,7 +1325,7 @@ async fn latest_object_cache_race_test() {
                     continue;
                 };
 
-                assert!(cur >= latest);
+                assert!(cur >= latest, "{} >= {}", cur, latest);
                 latest = cur;
             }
         })
@@ -1235,4 +1334,5 @@ async fn latest_object_cache_race_test() {
     writer.join().unwrap();
     reader.join().unwrap();
     checker.join().unwrap();
+    invalidator.join().unwrap();
 }

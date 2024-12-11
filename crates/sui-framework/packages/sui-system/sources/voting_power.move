@@ -127,7 +127,7 @@ module sui_system::voting_power {
 
     /// Update validators with the decided voting power.
     fun update_voting_power(validators: &mut vector<Validator>, mut info_list: vector<VotingPowerInfoV2>) {
-        while (!info_list.is_empty()) {
+        while (info_list.length() != 0) {
             let VotingPowerInfoV2 {
                 validator_index,
                 voting_power,

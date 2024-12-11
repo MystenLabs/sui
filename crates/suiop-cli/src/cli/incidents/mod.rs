@@ -1,16 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod incident;
 mod jira;
+pub(crate) mod notion;
 mod pd;
-mod slack;
+mod selection;
+mod user;
 
+use crate::cli::slack::Slack;
 use anyhow::Result;
 use chrono::{Duration, Local};
 use clap::Parser;
+use incident::Incident;
 use jira::generate_follow_up_tasks;
-use pd::{fetch_incidents, print_recent_incidents, review_recent_incidents};
+use pd::print_recent_incidents;
+use selection::review_recent_incidents;
 use std::path::PathBuf;
+use tracing::{debug, info};
 
 #[derive(Parser, Debug, Clone)]
 pub struct IncidentsArgs {
@@ -47,6 +54,29 @@ pub enum IncidentsAction {
     },
 }
 
+/// - Fetch incidents from the PagerDuty API.
+/// - Associate slack channels when they exist.
+/// - Return the combined incident list.
+async fn get_incidents(limit: &usize, days: &usize) -> Result<Vec<Incident>> {
+    let current_time = Local::now();
+    info!("going back {} days", days);
+    let start_time = current_time - Duration::days(*days as i64);
+    let slack = Slack::new().await;
+    Ok(pd::fetch_incidents(*limit, start_time, current_time)
+        .await?
+        .into_iter()
+        // Change into more robust Incident type
+        .map(incident::Incident::from)
+        .map(|mut incident| {
+            // Add associated slack channel if it exists
+            debug!("Checking if incidents list contains {}", incident.number);
+            incident.slack_channel = selection::get_channel_for(&incident, &slack).cloned();
+            debug!("Found channel: {:?}", incident.slack_channel);
+            incident
+        })
+        .collect())
+}
+
 pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
     match &args.action {
         IncidentsAction::GetRecentIncidents {
@@ -56,10 +86,7 @@ pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
             with_priority,
             interactive,
         } => {
-            let current_time = Local::now();
-            let start_time = current_time - Duration::days(*days as i64);
-
-            let incidents = fetch_incidents(*limit, start_time, current_time).await?;
+            let incidents = get_incidents(limit, days).await?;
             if *interactive {
                 review_recent_incidents(incidents).await?
             } else {

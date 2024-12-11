@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.34.0"
+    "version": "1.40.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "58",
+              "maxSupportedProtocolVersion": "70",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1304,10 +1304,15 @@
                 "ban_entry_init": false,
                 "bridge": false,
                 "commit_root_state_digest": false,
+                "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_order_end_of_epoch_last": true,
+                "consensus_round_prober": false,
+                "consensus_round_prober_probe_accepted_rounds": false,
+                "consensus_smart_ancestor_selection": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "disallow_new_modules_in_deps_only_packages": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
                 "enable_effects_v2": false,
@@ -1324,11 +1329,13 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
                 "mysticeti_use_committed_subdag_digest": false,
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
+                "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
@@ -1339,6 +1346,7 @@
                 "recompute_has_public_transfer_in_execution": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "reject_mutable_random_on_entry_functions": false,
+                "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
                 "rethrow_serialization_type_layout_errors": false,
@@ -1349,7 +1357,9 @@
                 "soft_bundle": false,
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
+                "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
+                "validate_identifier_inputs": false,
                 "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
               },
@@ -1418,9 +1428,11 @@
                 "config_read_setting_impl_cost_base": null,
                 "config_read_setting_impl_cost_per_byte": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_gc_depth": null,
                 "consensus_max_num_transactions_in_block": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
+                "consensus_voting_rounds": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
@@ -1586,6 +1598,8 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "gas_budget_based_txn_cost_absolute_cap_commit_count": null,
+                "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
@@ -1623,6 +1637,7 @@
                 "group_ops_bls12381_g1_msm_base_cost_per_input": null,
                 "group_ops_bls12381_g1_mul_cost": null,
                 "group_ops_bls12381_g1_sub_cost": null,
+                "group_ops_bls12381_g1_to_uncompressed_g1_cost": null,
                 "group_ops_bls12381_g2_add_cost": null,
                 "group_ops_bls12381_g2_div_cost": null,
                 "group_ops_bls12381_g2_hash_to_base_cost": null,
@@ -1641,6 +1656,10 @@
                 "group_ops_bls12381_scalar_div_cost": null,
                 "group_ops_bls12381_scalar_mul_cost": null,
                 "group_ops_bls12381_scalar_sub_cost": null,
+                "group_ops_bls12381_uncompressed_g1_sum_base_cost": null,
+                "group_ops_bls12381_uncompressed_g1_sum_cost_per_term": null,
+                "group_ops_bls12381_uncompressed_g1_sum_max_terms": null,
+                "group_ops_bls12381_uncompressed_g1_to_g1_cost": null,
                 "hash_blake2b256_cost_base": {
                   "u64": "52"
                 },
@@ -1674,6 +1693,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_narwhal_commit": null,
                 "max_age_of_jwk_in_epochs": null,
@@ -1804,6 +1824,7 @@
                 "max_tx_size_bytes": {
                   "u64": "131072"
                 },
+                "max_txn_cost_overage_per_object_in_commit": null,
                 "max_type_argument_depth": {
                   "u32": "16"
                 },
@@ -1813,6 +1834,7 @@
                 "max_type_nodes": {
                   "u64": "256"
                 },
+                "max_type_to_layout_nodes": null,
                 "max_value_stack_size": {
                   "u64": "1024"
                 },
@@ -3187,7 +3209,7 @@
           "name": "Coin Query API"
         }
       ],
-      "description": "Return metadata(e.g., symbol, decimals) for a coin",
+      "description": "Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was wrapped in the transaction that published its marker type, or the latest version of the metadata object is wrapped or deleted, it will not be found.",
       "params": [
         {
           "name": "coin_type",
@@ -3533,7 +3555,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x82b2fd67344691abd0efc771941b948ad35360b08e449fbbc28b0641175bf60b",
@@ -3545,7 +3567,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x21564fc5a68ace997461b098c1d1f3ccbde241d8fdf562db36bc1423ee10cecb",
@@ -3557,7 +3579,7 @@
                     "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                     "value": "some_value"
                   },
-                  "bcsName": "2F1KQ3miNpBx1RzoRr1MVYMraK7RV",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x7e00acf5386662fa062483ba507b1e9e3039750f0a270f2e12441ad7f611a5f7",
@@ -5229,6 +5251,23 @@
   ],
   "components": {
     "schemas": {
+      "Authenticator": {
+        "oneOf": [
+          {
+            "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
+            "type": "object",
+            "required": [
+              "SingleOwner"
+            ],
+            "properties": {
+              "SingleOwner": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "AuthorityPublicKeyBytes": {
         "description": "Defines the compressed version of the public key that we pass around in Sui",
         "allOf": [
@@ -5923,7 +5962,7 @@
         ],
         "properties": {
           "bcsName": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
@@ -6042,10 +6081,10 @@
         ],
         "properties": {
           "bcs": {
-            "description": "Base 58 encoded bcs bytes of the move event",
+            "description": "Base64 encoded bcs bytes of the move event",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               }
             ]
           },
@@ -6100,6 +6139,36 @@
       "EventFilter": {
         "oneOf": [
           {
+            "description": "Return all events.",
+            "type": "object",
+            "required": [
+              "All"
+            ],
+            "properties": {
+              "All": {
+                "type": "array",
+                "maxItems": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events that match any of the given filters. Only supported on event subscriptions.",
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by sender address.",
             "type": "object",
             "required": [
@@ -6121,19 +6190,6 @@
             "properties": {
               "Transaction": {
                 "$ref": "#/components/schemas/TransactionDigest"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Return events emitted in a specified Package.",
-            "type": "object",
-            "required": [
-              "Package"
-            ],
-            "properties": {
-              "Package": {
-                "$ref": "#/components/schemas/ObjectID"
               }
             },
             "additionalProperties": false
@@ -6214,28 +6270,6 @@
             "additionalProperties": false
           },
           {
-            "type": "object",
-            "required": [
-              "MoveEventField"
-            ],
-            "properties": {
-              "MoveEventField": {
-                "type": "object",
-                "required": [
-                  "path",
-                  "value"
-                ],
-                "properties": {
-                  "path": {
-                    "type": "string"
-                  },
-                  "value": true
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "Return events emitted in [start_time, end_time] interval",
             "type": "object",
             "required": [
@@ -6269,85 +6303,11 @@
               }
             },
             "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "All"
-            ],
-            "properties": {
-              "All": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Any"
-            ],
-            "properties": {
-              "Any": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "And"
-            ],
-            "properties": {
-              "And": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Or"
-            ],
-            "properties": {
-              "Or": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
           }
         ]
       },
       "EventID": {
-        "description": "Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number, the ID is local to this particular fullnode and will be different from other fullnode.",
+        "description": "Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number.",
         "type": "object",
         "required": [
           "eventSeq",
@@ -7672,6 +7632,41 @@
             "enum": [
               "Immutable"
             ]
+          },
+          {
+            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "type": "object",
+            "required": [
+              "ConsensusV2"
+            ],
+            "properties": {
+              "ConsensusV2": {
+                "type": "object",
+                "required": [
+                  "authenticator",
+                  "start_version"
+                ],
+                "properties": {
+                  "authenticator": {
+                    "description": "The authentication mode of the object",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Authenticator"
+                      }
+                    ]
+                  },
+                  "start_version": {
+                    "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/SequenceNumber2"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -8795,6 +8790,34 @@
           }
         }
       },
+      "SuiMoveNormalizedEnum": {
+        "type": "object",
+        "required": [
+          "abilities",
+          "typeParameters",
+          "variants"
+        ],
+        "properties": {
+          "abilities": {
+            "$ref": "#/components/schemas/SuiMoveAbilitySet"
+          },
+          "typeParameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variants": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedField"
+              }
+            }
+          }
+        }
+      },
       "SuiMoveNormalizedField": {
         "type": "object",
         "required": [
@@ -8859,6 +8882,12 @@
         "properties": {
           "address": {
             "type": "string"
+          },
+          "enums": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedEnum"
+            }
           },
           "exposedFunctions": {
             "type": "object",
@@ -10785,7 +10814,7 @@
       "TransactionFilter": {
         "oneOf": [
           {
-            "description": "Query by checkpoint.",
+            "description": "CURRENTLY NOT SUPPORTED. Query by checkpoint.",
             "type": "object",
             "required": [
               "Checkpoint"
@@ -10857,6 +10886,19 @@
             "additionalProperties": false
           },
           {
+            "description": "Query for transactions that touch this object.",
+            "type": "object",
+            "required": [
+              "AffectedObject"
+            ],
+            "properties": {
+              "AffectedObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by sender address.",
             "type": "object",
             "required": [
@@ -10908,7 +10950,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Query txs that have a given address as sender or recipient.",
+            "description": "CURRENTLY NOT SUPPORTED. Query txs that have a given address as sender or recipient.",
             "type": "object",
             "required": [
               "FromOrToAddress"

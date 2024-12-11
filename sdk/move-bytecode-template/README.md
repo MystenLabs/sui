@@ -19,7 +19,7 @@ This package is a perfect fit for the following applications:
 ## Example of a Template Module
 
 The following code is a close-copy of the `Coin` example from the
-[Move by Example](https://examples.sui.io/samples/coin.html) book.
+[Coins and Tokens](https://docs.sui.io/guides/developer/coin).
 
 ```move
 module 0x0::template {
@@ -51,7 +51,7 @@ module 0x0::template {
 To update the identifiers, you can use the `update_identifiers` function.
 
 ```ts
-import { fromHEX, update_identifiers } from '@mysten/move-bytecode-template';
+import { fromHex, update_identifiers } from '@mysten/move-bytecode-template';
 
 let bytecode = /* ... */;
 let updated = update_identifiers(bytecode, {
@@ -86,19 +86,23 @@ updated = update_constants(
 // Update SYMBOL
 updated = update_constants(
 	updated,
-	bcs.vector(bcs.string()).serialize('MYC').toBytes(), // new value
-	bcs.vector(bcs.string()).serialize('TMPL').toBytes(), // current value
+	bcs.string().serialize('MYC').toBytes(), // new value
+	bcs.string().serialize('TMPL').toBytes(), // current value
 	'Vector(U8)', // type of the constant
 );
 
 // Update NAME
 updated = update_constants(
 	updated,
-	bcs.vector(bcs.string()).serialize('My Coin').toBytes(), // new value
-	bcs.vector(bcs.string()).serialize('Template Coin').toBytes(), // current value
+	bcs.string().serialize('My Coin').toBytes(), // new value
+	bcs.string().serialize('Template Coin').toBytes(), // current value
 	'Vector(U8)', // type of the constant
 );
 ```
+
+After updating the bytecode, refer to the 
+[Asset Tokenization](https://docs.sui.io/guides/developer/nft/asset-tokenization#closer-view-of-the-template-module) 
+guide to deploy the contract. 
 
 ## Usage in Web applications
 
@@ -113,7 +117,7 @@ await init('path/to/move_binary_format_bg.wasm');
 // alternatively initSync(...);
 
 let version = template.version();
-let json = template.deserialize(fromHEX('a11ceb0b06....'));
+let json = template.deserialize(fromHex('a11ceb0b06....'));
 let bytes = template.serialize(json);
 
 console.assert(json == bytes, '(de)serialization failed!');
@@ -138,7 +142,7 @@ Lastly, once the package is initialized, you can use the functions as described 
 section.
 
 ```ts
-const templateBytecode = fromHEX('a11ceb0b06....');
+const templateBytecode = fromHex('a11ceb0b06....');
 
 template.deserialize(templateBytecode);
 template.version();

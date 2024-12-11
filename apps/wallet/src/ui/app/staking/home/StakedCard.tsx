@@ -8,6 +8,7 @@ import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
 import { type StakeObject } from '@mysten/sui/client';
 import { SUI_TYPE_ARG } from '@mysten/sui/utils';
+import BigNumber from 'bignumber.js';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -127,7 +128,7 @@ export function StakeCard({
 
 	// For inactive validator, show principal + rewards
 	const [principalStaked, symbol] = useFormatCoin(
-		inactiveValidator ? principal + rewards : principal,
+		inactiveValidator ? new BigNumber(principal).plus(rewards.toString()).toString() : principal,
 		SUI_TYPE_ARG,
 	);
 	const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);

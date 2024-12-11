@@ -5,6 +5,7 @@ use super::reroot_path;
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
+use move_binary_format::CompiledModule;
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     diagnostics::{self, Diagnostics},
@@ -67,6 +68,10 @@ pub struct Test {
     /// The number of iterations to run each test that uses generated values (only used with #[random_test]).
     #[clap(name = "rand-num-iters", long = "rand-num-iters")]
     pub rand_num_iters: Option<u64>,
+
+    // Enable tracing for tests
+    #[clap(long = "trace-execution", value_name = "PATH")]
+    pub trace_execution: Option<Option<String>>,
 }
 
 impl Test {
@@ -107,6 +112,7 @@ impl Test {
             compute_coverage: _,
             seed,
             rand_num_iters,
+            trace_execution,
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -117,6 +123,7 @@ impl Test {
             verbose: verbose_mode,
             seed,
             rand_num_iters,
+            trace_execution,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }
@@ -159,8 +166,27 @@ pub fn run_move_unit_tests<W: Write + Send>(
         })
         .collect();
 
+    // Collect all the bytecode modules that are dependencies of the package. We need to do this
+    // because they're not returned by the compilation result, but we need to add them in the
+    // VM storage.
+    let mut bytecode_deps_modules = vec![];
+    for pkg in resolution_graph.package_table.values() {
+        let source_available = !pkg
+            .get_sources(&resolution_graph.build_options)
+            .unwrap()
+            .is_empty();
+        if source_available {
+            continue;
+        }
+        for bytes in pkg.get_bytecodes_bytes()? {
+            let module = CompiledModule::deserialize_with_defaults(&bytes)?;
+            bytecode_deps_modules.push(module);
+        }
+    }
+
     let root_package = resolution_graph.root_package();
     let build_plan = BuildPlan::create(resolution_graph)?;
+
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
@@ -170,7 +196,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
-        let (mut compiler, cfgir) = compiler.into_ast();
+        let (compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
         let mapped_files = compilation_env.mapped_files().clone();
@@ -192,7 +218,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     let (test_plan, mapped_files, units) = test_plan.unwrap();
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
-    let test_plan = TestPlan::new(test_plan, mapped_files, units);
+    let test_plan = TestPlan::new(test_plan, mapped_files, units, bytecode_deps_modules);
 
     let trace_path = pkg_path.join(".trace");
     let coverage_map_path = pkg_path

@@ -173,19 +173,16 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
         .authority_state
         .get_object(&created_obj_id1)
         .await
-        .unwrap()
         .unwrap();
     let created_obj2 = res
         .authority_state
         .get_object(&created_obj_id2)
         .await
-        .unwrap()
         .unwrap();
     let created_obj3 = res
         .authority_state
         .get_object(&created_obj_id3)
         .await
-        .unwrap()
         .unwrap();
 
     let addr1 = effects.created()[0].1.get_owner_address()?;
@@ -207,9 +204,12 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     // make sure the first object still belongs to the sender,
     // the value is equal to all residual values after amounts transferred and gas payment.
     assert_eq!(effects.mutated()[0].0 .0, object_id);
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
     let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
-    let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
+    let gas_object = res.authority_state.get_object(&object_id).await.unwrap();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
         coin_amount - 100 - 200 - 300 - gas_used,
@@ -252,13 +252,11 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
         .authority_state
         .get_object(&created_obj_id1)
         .await
-        .unwrap()
         .unwrap();
     let created_obj2 = res
         .authority_state
         .get_object(&created_obj_id2)
         .await
-        .unwrap()
         .unwrap();
     let addr1 = effects.created()[0].1.get_owner_address()?;
     let addr2 = effects.created()[1].1.get_owner_address()?;
@@ -273,9 +271,12 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     // make sure the first input coin still belongs to the sender,
     // the value is equal to all residual values after amounts transferred and gas payment.
     assert_eq!(effects.mutated()[0].0 .0, object_id1);
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
     let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
-    let gas_object = res.authority_state.get_object(&object_id1).await?.unwrap();
+    let gas_object = res.authority_state.get_object(&object_id1).await.unwrap();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
         5002000 - 500 - 1500 - gas_used,
@@ -338,10 +339,13 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
     // the value is equal to all residual values after gas payment.
     let obj_ref = &effects.mutated()[0].0;
     assert_eq!(obj_ref.0, object_id);
-    assert_eq!(effects.mutated()[0].1, recipient);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        recipient
+    );
 
     let gas_used = effects.gas_cost_summary().gas_used();
-    let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
+    let gas_object = res.authority_state.get_object(&object_id).await.unwrap();
     assert_eq!(GasCoin::try_from(&gas_object)?.value(), 3000000 - gas_used,);
     Ok(())
 }
@@ -370,10 +374,13 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     // the value is equal to all residual values after gas payment.
     let obj_ref = &effects.mutated()[0].0;
     assert_eq!(obj_ref.0, object_id1);
-    assert_eq!(effects.mutated()[0].1, recipient);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        recipient
+    );
 
     let gas_used = effects.gas_cost_summary().gas_used();
-    let gas_object = res.authority_state.get_object(&object_id1).await?.unwrap();
+    let gas_object = res.authority_state.get_object(&object_id1).await.unwrap();
     assert_eq!(GasCoin::try_from(&gas_object)?.value(), 3002000 - gas_used,);
     Ok(())
 }

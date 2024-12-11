@@ -13,7 +13,7 @@ use crate::{
         translate::{display_var, DisplayVar},
     },
     parser::ast::BinOp_,
-    shared::{unique_map::UniqueMap, CompilationEnv},
+    shared::unique_map::UniqueMap,
 };
 use move_proc_macros::growing_stack;
 
@@ -90,7 +90,6 @@ impl TransferFunctions for BorrowSafety {
 impl AbstractInterpreter for BorrowSafety {}
 
 pub fn verify(
-    compilation_env: &mut CompilationEnv,
     context: &super::CFGContext,
     cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, BorrowState> {
@@ -100,21 +99,17 @@ pub fn verify(
     let mut safety = BorrowSafety::new(locals);
 
     // check for existing errors
-    let has_errors = compilation_env.has_errors();
+    let has_errors = context.env.has_errors();
     let mut initial_state = BorrowState::initial(locals, safety.mutably_used.clone(), has_errors);
     initial_state.bind_arguments(&signature.parameters);
     initial_state.canonicalize_locals(&safety.local_numbers);
     let (final_state, ds) = safety.analyze_function(cfg, initial_state);
-    compilation_env.add_diags(ds);
-    unused_mut_borrows(compilation_env, context, safety.mutably_used);
+    context.add_diags(ds);
+    unused_mut_borrows(context, safety.mutably_used);
     final_state
 }
 
-fn unused_mut_borrows(
-    compilation_env: &mut CompilationEnv,
-    context: &super::CFGContext,
-    mutably_used: RefExpInfoMap,
-) {
+fn unused_mut_borrows(context: &super::CFGContext, mutably_used: RefExpInfoMap) {
     const MSG: &str = "Mutable reference is never used mutably, \
     consider switching to an immutable reference '&' instead";
 
@@ -143,7 +138,7 @@ fn unused_mut_borrows(
             } else {
                 diag!(UnusedItem::MutReference, (*loc, MSG))
             };
-            compilation_env.add_diag(diag)
+            context.add_diag(diag)
         }
     }
 }

@@ -10,7 +10,6 @@ async fn cluster_test() {
     ClusterTest::run(ClusterTestOpt::new_local()).await;
 }
 
-#[cfg(feature = "pg_integration")]
 #[tokio::test]
 async fn test_sui_cluster() {
     use reqwest::StatusCode;

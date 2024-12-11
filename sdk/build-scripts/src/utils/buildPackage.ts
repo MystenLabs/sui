@@ -60,6 +60,7 @@ async function buildCJS(
 		entryPoints,
 		outdir: 'dist/cjs',
 		sourcemap: true,
+		outbase: 'src',
 		...buildOptions,
 	});
 	await buildTypes('tsconfig.json');
@@ -90,6 +91,7 @@ async function buildESM(
 		target: 'es2020',
 		entryPoints,
 		outdir: 'dist/esm',
+		outbase: 'src',
 		sourcemap: true,
 
 		...buildOptions,

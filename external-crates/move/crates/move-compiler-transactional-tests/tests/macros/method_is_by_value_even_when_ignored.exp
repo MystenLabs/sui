@@ -1,6 +1,6 @@
 processed 4 tasks
 
-task 2, line 26:
+task 2, line 29:
 //# run 42::m::aborts0
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
@@ -10,7 +10,7 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 3, line 28:
+task 3, line 31:
 //# run 42::m::aborts1
 Error: Function execution failed with VMError: {
     major_status: ABORTED,

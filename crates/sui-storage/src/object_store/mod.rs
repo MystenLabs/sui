@@ -36,10 +36,17 @@ as_ref_get_ext_impl!(Box<dyn ObjectStoreGetExt>);
 impl ObjectStoreGetExt for Arc<DynObjectStore> {
     async fn get_bytes(&self, src: &Path) -> Result<Bytes> {
         self.get(src)
-            .await?
+            .await
+            .map_err(|e| anyhow!("Failed to get file {} with error: {:?}", src, e))?
             .bytes()
             .await
-            .map_err(|e| anyhow!("Failed to get file: {} with error: {}", src, e.to_string()))
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to collect GET result for file {} into bytes with error: {:?}",
+                    src,
+                    e
+                )
+            })
     }
 }
 

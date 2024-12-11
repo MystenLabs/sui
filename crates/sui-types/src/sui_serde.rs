@@ -366,3 +366,36 @@ impl<'de> DeserializeAs<'de, ProtocolVersion> for AsProtocolVersion {
         Ok(ProtocolVersion::from(*b))
     }
 }
+
+/// Always serialize as base64, but deserialize from either Base64 or Base58
+pub struct Base64orBase58;
+
+impl<T> SerializeAs<T> for Base64orBase58
+where
+    T: AsRef<[u8]>,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use fastcrypto::encoding::Encoding;
+
+        let encoded_string = fastcrypto::encoding::Base64::encode(value);
+        encoded_string.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, Vec<u8>> for Base64orBase58 {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use fastcrypto::encoding::Encoding;
+
+        let s = String::deserialize(deserializer)?;
+
+        fastcrypto::encoding::Base64::decode(&s)
+            .or_else(|_| fastcrypto::encoding::Base58::decode(&s))
+            .map_err(|_| Error::custom("Deserialization failed"))
+    }
+}

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::WarningFilters,
+    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
         TargetKind,
@@ -34,6 +34,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: Arc<TypingProgramInfo>,
+    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -147,6 +149,7 @@ pub struct Function {
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    pub loc: Loc,
     /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
     /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
@@ -442,6 +445,20 @@ impl FunctionSignature {
     }
 }
 
+impl Value_ {
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::U8(v) => *v == 0,
+            Self::U16(v) => *v == 0,
+            Self::U32(v) => *v == 0,
+            Self::U64(v) => *v == 0,
+            Self::U128(v) => *v == 0,
+            Self::U256(v) => *v == move_core_types::u256::U256::zero(),
+            Self::Address(_) | Self::Bool(_) | Self::Vector(_, _) => false,
+        }
+    }
+}
+
 impl Var {
     pub fn loc(&self) -> Loc {
         self.0.loc
@@ -567,6 +584,10 @@ impl Exp {
     pub fn is_unreachable(&self) -> bool {
         self.exp.value.is_unreachable()
     }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        self.exp.value.as_value()
+    }
 }
 
 impl UnannotatedExp_ {
@@ -577,20 +598,32 @@ impl UnannotatedExp_ {
     pub fn is_unreachable(&self) -> bool {
         matches!(self, UnannotatedExp_::Unreachable)
     }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        match self {
+            UnannotatedExp_::Value(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 impl TypeName_ {
-    pub fn is(
-        &self,
-        address: impl AsRef<str>,
-        module: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> bool {
+    pub fn is<Addr>(&self, address: &Addr, module: impl AsRef<str>, name: impl AsRef<str>) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             TypeName_::Builtin(_) => false,
             TypeName_::ModuleType(mident, n) => {
                 mident.value.is(address, module) && n == name.as_ref()
             }
+        }
+    }
+
+    pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
+        match self {
+            TypeName_::Builtin(_) => None,
+            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
         }
     }
 }
@@ -661,12 +694,22 @@ impl BaseType_ {
         Self::builtin(loc, BuiltinTypeName_::U256, vec![])
     }
 
-    pub fn is_apply(
+    pub fn type_name(&self) -> Option<&TypeName> {
+        match self {
+            Self::Apply(_, tn, _) => Some(tn),
+            _ => None,
+        }
+    }
+
+    pub fn is_apply<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])>
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             Self::Apply(abs, n, tys) if n.value.is(address, module, name) => Some((abs, n, tys)),
             _ => None,
@@ -718,12 +761,15 @@ impl SingleType_ {
         }
     }
 
-    pub fn is_apply(
+    pub fn is_apply<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])>
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             Self::Ref(_, b) | Self::Base(b) => b.value.is_apply(address, module, name),
         }
@@ -794,12 +840,15 @@ impl Type_ {
         sp(loc, t_)
     }
 
-    pub fn is_apply(
+    pub fn is_apply<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])>
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         match self {
             Type_::Unit => None,
             Type_::Single(t) => t.value.is_apply(address, module, name),
@@ -843,12 +892,15 @@ impl TName for BlockLabel {
 }
 
 impl ModuleCall {
-    pub fn is(
+    pub fn is<Addr>(
         &self,
-        address: impl AsRef<str>,
+        address: &Addr,
         module: impl AsRef<str>,
         function: impl AsRef<str>,
-    ) -> bool {
+    ) -> bool
+    where
+        NumericalAddress: PartialEq<Addr>,
+    {
         let Self {
             module: sp!(_, mident),
             name: f,
@@ -898,10 +950,14 @@ impl std::fmt::Display for Label {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, info: _ } = self;
+        let Program {
+            modules,
+            info: _,
+            warning_filters_table: _,
+        } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
-            w.write(&format!("module {}", m));
+            w.write(format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
         }
@@ -924,7 +980,7 @@ impl AstDebug for ModuleDefinition {
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
+            w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
         w.writeln(match target_kind {
@@ -936,9 +992,9 @@ impl AstDebug for ModuleDefinition {
             } => "dependency module",
             TargetKind::External => "external module",
         });
-        w.writeln(&format!("dependency order #{}", dependency_order));
+        w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
-            w.write(&format!("friend {};", mident));
+            w.write(format!("friend {};", mident));
             w.new_line();
         }
         for sdef in structs.key_cloned_iter() {
@@ -979,13 +1035,13 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
             w.write("native ");
         }
 
-        w.write(&format!("struct#{index} {name}"));
+        w.write(format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
         if let StructFields::Defined(fields) = fields {
             w.block(|w| {
                 w.list(fields, ";", |w, (f, bt)| {
-                    w.write(&format!("{}: ", f));
+                    w.write(format!("{}: ", f));
                     bt.ast_debug(w);
                     true
                 })
@@ -1010,12 +1066,12 @@ impl AstDebug for (DatatypeName, &EnumDefinition) {
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
 
-        w.write(&format!("struct#{index} {name}"));
+        w.write(format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
         w.block(|w| {
             w.list(variants, ";", |w, (_, v, vdef)| {
-                w.write(&format!("{} {{ ", v));
+                w.write(format!("{} {{ ", v));
                 vdef.ast_debug(w);
                 w.write(" }");
                 true
@@ -1033,7 +1089,7 @@ impl AstDebug for VariantDefinition {
         } = self;
         w.write(format!("id:{}|", index));
         w.comma(fields, |w, (f, bt)| {
-            w.write(&format!("{}: ", f));
+            w.write(format!("{}: ", f));
             bt.ast_debug(w);
         })
     }
@@ -1047,6 +1103,7 @@ impl AstDebug for (FunctionName, &Function) {
                 warning_filter,
                 index,
                 attributes,
+                loc: _,
                 visibility,
                 compiled_visibility,
                 entry,
@@ -1062,12 +1119,12 @@ impl AstDebug for (FunctionName, &Function) {
         compiled_visibility.ast_debug(w);
         w.write(") ");
         if entry.is_some() {
-            w.write(&format!("{} ", ENTRY_MODIFIER));
+            w.write(format!("{} ", ENTRY_MODIFIER));
         }
         if let FunctionBody_::Native = &body.value {
             w.write("native ");
         }
-        w.write(&format!("fun#{index} {name}"));
+        w.write(format!("fun#{index} {name}"));
         signature.ast_debug(w);
         match &body.value {
             FunctionBody_::Defined { locals, body } => w.block(|w| (locals, body).ast_debug(w)),
@@ -1090,7 +1147,7 @@ impl AstDebug for (&UniqueMap<Var, (Mutability, SingleType)>, &Block) {
         w.indent(4, |w| {
             w.list(*locals, ",", |w, (_, v, (mut_, st))| {
                 mut_.ast_debug(w);
-                w.write(&format!("{}: ", v));
+                w.write(format!("{}: ", v));
                 st.ast_debug(w);
                 true
             })
@@ -1122,19 +1179,19 @@ impl AstDebug for FunctionSignature {
 
 impl AstDebug for Visibility {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(&format!("{} ", self))
+        w.write(format!("{} ", self))
     }
 }
 
 impl AstDebug for Var {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(&format!("{}", self.0))
+        w.write(format!("{}", self.0))
     }
 }
 
 impl AstDebug for BlockLabel {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(&format!("'{}", self.0))
+        w.write(format!("'{}", self.0))
     }
 }
 
@@ -1153,7 +1210,7 @@ impl AstDebug for (ConstantName, &Constant) {
         ) = self;
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
-        w.write(&format!("const#{index} {name}:"));
+        w.write(format!("const#{index} {name}:"));
         signature.ast_debug(w);
         w.write(" = ");
         w.block(|w| value.ast_debug(w));
@@ -1165,7 +1222,7 @@ impl AstDebug for TypeName_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             TypeName_::Builtin(bt) => bt.ast_debug(w),
-            TypeName_::ModuleType(m, s) => w.write(&format!("{}::{}", m, s)),
+            TypeName_::ModuleType(m, s) => w.write(format!("{}::{}", m, s)),
         }
     }
 }
@@ -1371,8 +1428,8 @@ impl AstDebug for Command_ {
                 w.write(" = ");
                 exp.ast_debug(w);
             }
-            C::Jump { target, from_user } if *from_user => w.write(&format!("jump@{}", target.0)),
-            C::Jump { target, .. } => w.write(&format!("jump {}", target.0)),
+            C::Jump { target, from_user } if *from_user => w.write(format!("jump@{}", target.0)),
+            C::Jump { target, .. } => w.write(format!("jump {}", target.0)),
             C::JumpIf {
                 cond,
                 if_true,
@@ -1380,7 +1437,7 @@ impl AstDebug for Command_ {
             } => {
                 w.write("jump_if(");
                 cond.ast_debug(w);
-                w.write(&format!(") {} else {}", if_true.0, if_false.0));
+                w.write(format!(") {} else {}", if_true.0, if_false.0));
             }
             C::VariantSwitch {
                 subject,
@@ -1404,14 +1461,14 @@ impl AstDebug for Value_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use Value_ as V;
         match self {
-            V::Address(addr) => w.write(&format!("@{}", addr)),
-            V::U8(u) => w.write(&format!("{}u8", u)),
-            V::U16(u) => w.write(&format!("{}u16", u)),
-            V::U32(u) => w.write(&format!("{}u32", u)),
-            V::U64(u) => w.write(&format!("{}u64", u)),
-            V::U128(u) => w.write(&format!("{}u128", u)),
-            V::U256(u) => w.write(&format!("{}u256", u)),
-            V::Bool(b) => w.write(&format!("{}", b)),
+            V::Address(addr) => w.write(format!("@{}", addr)),
+            V::U8(u) => w.write(format!("{}u8", u)),
+            V::U16(u) => w.write(format!("{}u16", u)),
+            V::U32(u) => w.write(format!("{}u32", u)),
+            V::U64(u) => w.write(format!("{}u64", u)),
+            V::U128(u) => w.write(format!("{}u128", u)),
+            V::U256(u) => w.write(format!("{}u256", u)),
+            V::Bool(b) => w.write(format!("{}", b)),
             V::Vector(ty, elems) => {
                 w.write("vector#value");
                 w.write("<");
@@ -1458,7 +1515,7 @@ impl AstDebug for UnannotatedExp_ {
                     MoveOpAnnotation::InferredLastUsage => "#last ",
                     MoveOpAnnotation::InferredNoCopy => "#no-copy ",
                 };
-                w.write(&format!("move{}", case));
+                w.write(format!("move{}", case));
                 v.ast_debug(w)
             }
             E::Copy {
@@ -1475,12 +1532,12 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("copy@");
                 v.ast_debug(w)
             }
-            E::Constant(c) => w.write(&format!("{}", c)),
+            E::Constant(c) => w.write(format!("{}", c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }
             E::Vector(_loc, n, ty, elems) => {
-                w.write(&format!("vector#{}", n));
+                w.write(format!("vector#{}", n));
                 w.write("<");
                 ty.ast_debug(w);
                 w.write(">");
@@ -1494,26 +1551,26 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(")");
             }
             E::Pack(s, tys, fields) => {
-                w.write(&format!("{}", s));
+                w.write(format!("{}", s));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (f, bt, e)| {
-                    w.annotate(|w| w.write(&format!("{}", f)), bt);
+                    w.annotate(|w| w.write(format!("{}", f)), bt);
                     w.write(": ");
                     e.ast_debug(w);
                 });
                 w.write("}");
             }
             E::PackVariant(e, v, tys, fields) => {
-                w.write(&format!("{}::{}", e, v));
+                w.write(format!("{}::{}", e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (f, bt, e)| {
-                    w.annotate(|w| w.write(&format!("{}", f)), bt);
+                    w.annotate(|w| w.write(format!("{}", f)), bt);
                     w.write(": ");
                     e.ast_debug(w);
                 });
@@ -1551,7 +1608,7 @@ impl AstDebug for UnannotatedExp_ {
                     w.write("mut ");
                 }
                 e.ast_debug(w);
-                w.write(&format!(".{}", f));
+                w.write(format!(".{}", f));
             }
             E::BorrowLocal(mut_, v) => {
                 w.write("&");
@@ -1575,7 +1632,7 @@ impl AstDebug for UnannotatedExp_ {
             } => {
                 w.write("ErrorConstant");
                 if let Some(c) = error_constant {
-                    w.write(&format!("({})", c))
+                    w.write(format!("({})", c))
                 }
             }
         }
@@ -1590,7 +1647,7 @@ impl AstDebug for ModuleCall {
             type_arguments,
             arguments,
         } = self;
-        w.write(&format!("{}::{}", module, name));
+        w.write(format!("{}::{}", module, name));
         w.write("<");
         type_arguments.ast_debug(w);
         w.write(">");
@@ -1634,19 +1691,19 @@ impl AstDebug for LValue_ {
                 );
             }
             L::Unpack(s, tys, fields) => {
-                w.write(&format!("{}", s));
+                w.write(format!("{}", s));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (f, l)| {
-                    w.write(&format!("{}: ", f));
+                    w.write(format!("{}: ", f));
                     l.ast_debug(w)
                 });
                 w.write("}");
             }
             L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, fields) => {
-                w.write(&format!("{}::{}", e, v));
+                w.write(format!("{}::{}", e, v));
                 match unpack_type {
                     UnpackType::ByMutRef => w.write(" &mut "),
                     UnpackType::ByImmRef => w.write(" &"),
@@ -1657,7 +1714,7 @@ impl AstDebug for LValue_ {
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (f, l)| {
-                    w.write(&format!("{}: ", f));
+                    w.write(format!("{}: ", f));
                     l.ast_debug(w)
                 });
                 w.write("}");

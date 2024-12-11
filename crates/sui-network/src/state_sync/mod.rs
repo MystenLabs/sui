@@ -296,13 +296,18 @@ impl PeerBalancer {
             .unwrap()
             .peers_on_same_chain()
             // Filter out any peers who we aren't connected with.
-            .filter_map(|(peer_id, info)| network.peer(*peer_id).map(|peer| (peer, *info)))
+            .filter_map(|(peer_id, info)| {
+                network
+                    .peer(*peer_id)
+                    .map(|peer| (peer.connection_rtt(), peer, *info))
+            })
             .collect();
-        peers.sort_by(|(peer_a, _), (peer_b, _)| {
-            peer_a.connection_rtt().cmp(&peer_b.connection_rtt())
-        });
+        peers.sort_by(|(rtt_a, _, _), (rtt_b, _, _)| rtt_a.cmp(rtt_b));
         Self {
-            peers: peers.into(),
+            peers: peers
+                .into_iter()
+                .map(|(_, peer, info)| (peer, info))
+                .collect(),
             requested_checkpoint: None,
             request_type,
         }
@@ -517,7 +522,6 @@ where
         // Always check previous_digest matches in case there is a gap between
         // state sync and consensus.
         let prev_digest = *self.store.get_checkpoint_by_sequence_number(checkpoint.sequence_number() - 1)
-            .expect("store operation should not fail")
             .unwrap_or_else(|| panic!("Got checkpoint {} from consensus but cannot find checkpoint {} in certified_checkpoints", checkpoint.sequence_number(), checkpoint.sequence_number() - 1))
             .digest();
         if checkpoint.previous_digest != Some(prev_digest) {
@@ -553,11 +557,9 @@ where
                     let checkpoint = self
                         .store
                         .get_checkpoint_by_sequence_number(n)
-                        .expect("store operation should not fail")
                         .unwrap_or_else(|| panic!("store should contain checkpoint {n}"));
                     self.store
                         .get_full_checkpoint_contents(&checkpoint.content_digest)
-                        .expect("store operation should not fail")
                         .unwrap_or_else(|| {
                             panic!(
                                 "store should contain checkpoint contents for {:?}",
@@ -629,7 +631,6 @@ where
             let genesis_checkpoint_digest = *self
                 .store
                 .get_checkpoint_by_sequence_number(0)
-                .expect("store operation should not fail")
                 .expect("store should contain genesis checkpoint")
                 .digest();
             let task = get_latest_from_peer(
@@ -1258,7 +1259,6 @@ async fn sync_checkpoint_contents<S>(
         {
             let next_checkpoint = store
                 .get_checkpoint_by_sequence_number(current_sequence)
-                .expect("store operation should not fail")
                 .expect(
                     "BUG: store should have all checkpoints older than highest_verified_checkpoint",
                 );
@@ -1358,12 +1358,7 @@ where
     let digest = checkpoint.content_digest;
     if let Some(contents) = store
         .get_full_checkpoint_contents_by_sequence_number(*checkpoint.sequence_number())
-        .expect("store operation should not fail")
-        .or_else(|| {
-            store
-                .get_full_checkpoint_contents(&digest)
-                .expect("store operation should not fail")
-        })
+        .or_else(|| store.get_full_checkpoint_contents(&digest))
     {
         debug!("store already contains checkpoint contents");
         return Some(contents);

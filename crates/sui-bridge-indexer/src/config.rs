@@ -8,7 +8,8 @@ use std::env;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IndexerConfig {
     pub remote_store_url: String,
-    pub checkpoints_path: String,
+    /// Only provide this if you use a colocated FN
+    pub checkpoints_path: Option<String>,
 
     pub sui_rpc_url: String,
     pub eth_rpc_url: String,

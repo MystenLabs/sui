@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import { useState } from "react";
 import { Tabs, Tooltip } from "@radix-ui/themes";
 import { LockedList } from "../components/locked/ApiLockedList";

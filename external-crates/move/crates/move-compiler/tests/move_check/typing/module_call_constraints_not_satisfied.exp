@@ -1,21 +1,6 @@
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:28:9
    │
- 2 │     struct S has copy, drop {}
-   │            - To satisfy the constraint, the 'key' ability would need to be added here
-   ·
-15 │     fun both<R: key, C: copy>(_r: R, _c: C) {
-   │                 --- 'key' constraint declared here
-   ·
-28 │         both(S{}, Coin{});
-   │         ^^^^^^^^^^^^^^^^^
-   │         │    │
-   │         │    The type '0x8675309::M::S' does not have the ability 'key'
-   │         'key' constraint not satisifed
-
-error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:28:9
-   │
  3 │     struct Coin has key {}
    │            ---- To satisfy the constraint, the 'copy' ability would need to be added here
    ·
@@ -29,15 +14,18 @@ error[E05001]: ability constraint not satisfied
    │         'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:29:9
+   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:28:9
    │
+ 2 │     struct S has copy, drop {}
+   │            - To satisfy the constraint, the 'key' ability would need to be added here
+   ·
 15 │     fun both<R: key, C: copy>(_r: R, _c: C) {
    │                 --- 'key' constraint declared here
    ·
-29 │         both(0, Coin{})
-   │         ^^^^^^^^^^^^^^^
+28 │         both(S{}, Coin{});
+   │         ^^^^^^^^^^^^^^^^^
    │         │    │
-   │         │    The type 'u64' does not have the ability 'key'
+   │         │    The type '0x8675309::M::S' does not have the ability 'key'
    │         'key' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
@@ -56,19 +44,16 @@ error[E05001]: ability constraint not satisfied
    │         'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:33:9
+   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:29:9
    │
- 4 │     struct Box<T> has copy, drop { f: T }
-   │            --- To satisfy the constraint, the 'key' ability would need to be added here
-   ·
- 7 │     fun new_box<T>(): Box<T> {
-   │                       ------ The type '0x8675309::M::Box<C>' does not have the ability 'key'
-   ·
 15 │     fun both<R: key, C: copy>(_r: R, _c: C) {
    │                 --- 'key' constraint declared here
    ·
-33 │         both(new_box<C>(), new_box<R>())
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'key' constraint not satisifed
+29 │         both(0, Coin{})
+   │         ^^^^^^^^^^^^^^^
+   │         │    │
+   │         │    The type 'u64' does not have the ability 'key'
+   │         'key' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:33:9
@@ -84,6 +69,21 @@ error[E05001]: ability constraint not satisfied
    │         │                          │
    │         │                          The type '0x8675309::M::Box<R>' can have the ability 'copy' but the type argument 'R' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:33:9
+   │
+ 4 │     struct Box<T> has copy, drop { f: T }
+   │            --- To satisfy the constraint, the 'key' ability would need to be added here
+   ·
+ 7 │     fun new_box<T>(): Box<T> {
+   │                       ------ The type '0x8675309::M::Box<C>' does not have the ability 'key'
+   ·
+15 │     fun both<R: key, C: copy>(_r: R, _c: C) {
+   │                 --- 'key' constraint declared here
+   ·
+33 │         both(new_box<C>(), new_box<R>())
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'key' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:37:9

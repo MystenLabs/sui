@@ -1,11 +1,13 @@
 ---
 title: Using Events
-description: Monitor Sui on-chain activity by subscribing to events that Move packages published on Sui emit.
+description: Use events to notify on-chain assets of activity your smart contracts initiate and query events from other packages to trigger logic based on emitted events.
 ---
 
 The Sui network stores countless objects on chain where Move code can perform actions using those objects. Tracking this activity is often desired, for example, to discover how many times a module mints an NFT or to tally the amount of SUI in transactions that a smart contract generates.
 
-To support activity monitoring, Move provides a structure to emit events on the Sui network. When you establish a connection with the Sui network, you create a two-way interactive communication session between your client and a Sui network node. With an open session, you can subscribe to specific events that the Sui network adds to the stream to create real-time monitoring of events.
+To support activity monitoring, Move provides a structure to emit events on the Sui network. You can then leverage a custom indexer to process checkpoint data that includes events that have been emitted. See the [custom indexer](../advanced/custom-indexer.mdx) topic in the Advanced section to learn how to stream checkpoints and filter events continuously. 
+
+If you don't want to run a custom indexer, you can poll the Sui network to query for emitted events instead. This approach typically includes a database to store the data retrieved from these calls. The [Poll events](#poll-events) section provides an example of using this method.
 
 ## Move event structure
 
@@ -20,14 +22,6 @@ An event object in Sui consists of the following attributes:
 - `bcs`: Binary canonical serialization value.
 - `timestampMs`: Unix epoch timestamp in milliseconds.
 
-## Discovering events
-
-If you want to subscribe to events on chain, you first need to know what events are available. You typically know or can discover the events your own code emits, but it's not as straightforward when you need to subscribe to on-chain events from packages you don't own. The Sui RPC provides a [queryEvents](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events that you can subscribe to.
-
-## Filter events
-
-You can filter the events your code targets for either querying or subscribing. Both filter options are similar but have some differences.
-
 ## Emit events in Move
 
 To create an event in your Move modules, add the `sui::event` dependency.
@@ -36,190 +30,137 @@ To create an event in your Move modules, add the `sui::event` dependency.
 use sui::event;
 ```
 
-With the dependency added, you can use the `emit` function to fire an event whenever the action you want to monitor fires. For example, the following code is part of an example application using digital donuts. The `collect_profits` function handles the collection of SUI and emits an event whenever the function is called. To act on that event, you need to subscribe to it.
+With the dependency added, you can use the `emit` function to trigger an event whenever the action you want to monitor fires. For example, the following code is part of an example application that enables the locking of objects. The `lock` function handles the locking of objects and emits an event whenever the function is called.
 
-```move
-/// Take coin from `DonutShop` and transfer it to tx sender.
-/// Requires authorization with `ShopOwnerCap`.
-public fun collect_profits( _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext ) {
-    let amount = balance::value(&shop.balance);
-    let profits = coin::take(&mut shop.balance, amount, ctx);
-    // simply create new type instance and emit it.
-    event::emit(ProfitsCollected { amount });
-    transfer::public_transfer(profits, tx_context::sender(ctx));
-}
+{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+
+### Query events with RPC
+
+The Sui RPC provides a [queryEvents](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. As an example, the following `curl` command queries the Deepbook package on Mainnet for a specific type of event:
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+-H "Content-Type: application/json" \
+-d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "suix_queryEvents",
+  "params": [
+    {
+      "MoveModule": {
+        "package": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
+        "module": "deepbook_utils",
+        "type": "0xdee9::clob_v2::DepositAsset<0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>"
+      }
+    },
+    null,
+    3,
+    false
+  ]
+}'
 ```
 
-## Subscribe to events in Move
-
-Firing events is not very useful in a vacuum. You also need the ability to listen for those events so that you can act on them. In Sui, you subscribe to those events and provide logic that triggers when the event fires.
-
-Sui Full nodes support subscribe functionality using JSON-RPC notifications transmitted through the WebSocket API. You can interact with the RPC directly ([suix_subscribeEvent](/sui-api-ref#suix_subscribeEvent), [suix_subscribeTransaction](/sui-api-ref#suix_subscribeTransaction)) or you can use an SDK like the Sui TypeScript SDK. The following excerpt from one of the examples uses the TypeScript SDK to create an asynchronous subscription to the filter identified in the filter.
-
-```move
-let unsubscribe = await provider.subscribeEvent({
-    filter: { <PACKAGE_ID> },
-    onMessage: (event) => {
-        console.log("subscribeEvent", JSON.stringify(event, null, 2))
-    }
-});
-```
-
-Move smart contracts can call other smart contracts that emit events. For example, `Deepbook_utils` can call the `dee9` smart contract and emit this event. Note that using package, transaction module to query for `dee9/clob_v2` misses the following event even though it is actually an event the `dee9` package emits. The current workaround for this issue is to know all the `packageId`s you care about and search those in the `queryEvent` call.
-
+<details>
+<summary>
+A successful `curl` return
+</summary>
 ```json
 {
-	"id": {
-		"txDigest": "bZnc1E7k1fJYLxWihfre5xCw1tX1CyAN6579zypJeiU",
-		"eventSeq": "0"
+	"jsonrpc": "2.0",
+	"result": {
+		"data": [
+			{
+				"id": {
+					"txDigest": "8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2",
+					"eventSeq": "0"
+				},
+				"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
+				"transactionModule": "deepbook_utils",
+				"sender": "0x8b35e67a519fffa11a9c74f169228ff1aa085f3a3d57710af08baab8c02211b9",
+				"type": "0xdee9::clob_v2::WithdrawAsset<0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
+				"parsedJson": {
+					"owner": "0x704c8c0d8052be7b5ca7174222a8980fb2ad3cd640f4482f931deb6436902627",
+					"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
+					"quantity": "6956"
+				},
+				"bcs": "2szz6igTRuGmD7YATo8BEg81VLaei4od62wehadwMXYJv63UzJE16USL9pHFYBAGbwNkDYLCk53d45eFj3tEZK1vDGqtXcqH5US",
+				"timestampMs": "1691757698019"
+			},
+			{
+				"id": {
+					"txDigest": "8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2",
+					"eventSeq": "1"
+				},
+				"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
+				"transactionModule": "deepbook_utils",
+				"sender": "0x8b35e67a519fffa11a9c74f169228ff1aa085f3a3d57710af08baab8c02211b9",
+				"type": "0xdee9::clob_v2::OrderFilled<0x2::sui::SUI, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
+				"parsedJson": {
+					"base_asset_quantity_filled": "0",
+					"base_asset_quantity_remaining": "1532800000000",
+					"is_bid": false,
+					"maker_address": "0x78a1ff467e9c15b56caa0dedfcfbdfe47c0c385f28b05fdc120b2de188cc8736",
+					"maker_client_order_id": "1691757243084",
+					"maker_rebates": "0",
+					"order_id": "9223372036854839628",
+					"original_quantity": "1614700000000",
+					"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
+					"price": "605100",
+					"taker_address": "0x704c8c0d8052be7b5ca7174222a8980fb2ad3cd640f4482f931deb6436902627",
+					"taker_client_order_id": "20082022",
+					"taker_commission": "0"
+				},
+				"bcs": "DcVGz85dWTLU4S33N7VYrhgbkm79ENhHVnp5kBfENEWEeMxHQuvsczg94teh6WHdYtwPqdEsPWdvSJ7ne5qiMxxn3kBm36KLyuuzHV1QdzF45GN8ZU1MDGU4XppiaqcMeRpPPiW8JpUDyeQoobKEV8fMqcyYpDq6KWtZ1WMoGvEDxFKDgFvW9Q7bt1JAzQehRkEKEDZ6dTwfiHw92QuFqczmZ5MKJLYzeysUsSw",
+				"timestampMs": "1691757698019"
+			},
+			{
+				"id": {
+					"txDigest": "8b3byDuRojHXqmSz16PsyzfdXJEY5nZBGTM23gMsMAY8",
+					"eventSeq": "0"
+				},
+				"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
+				"transactionModule": "deepbook_utils",
+				"sender": "0x8b35e67a519fffa11a9c74f169228ff1aa085f3a3d57710af08baab8c02211b9",
+				"type": "0xdee9::clob_v2::OrderFilled<0x2::sui::SUI, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
+				"parsedJson": {
+					"base_asset_quantity_filled": "700000000",
+					"base_asset_quantity_remaining": "0",
+					"is_bid": false,
+					"maker_address": "0x03b86e93d80b27763ee1fc2c37e285465dff835769de9462d9ad4ebcf46ac6df",
+					"maker_client_order_id": "20082022",
+					"maker_rebates": "634",
+					"order_id": "9223372036854839643",
+					"original_quantity": "1000000000",
+					"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
+					"price": "604100",
+					"taker_address": "0x704c8c0d8052be7b5ca7174222a8980fb2ad3cd640f4482f931deb6436902627",
+					"taker_client_order_id": "20082022",
+					"taker_commission": "1058"
+				},
+				"bcs": "DcVGz85dWTLU4S33N7VYrhgbkm79ENhHVnp5kBfENEWEjN45pa9U3AkNhxfTRZbaHTQLugLBXttE32hpJKRsbrZGdryXMPmNA8EpHJnVcnYMXZmWXkNXvY1XjEYnAKU4BnhyJ9BQuxRJDXLA4DEu5uWEpWjLPD2ZHuxqHCn7GpUxvxJjHkKjr9jVVfeR6sN2uRhUXkThEDjCekrqaqwidkyXNmTzmZG4fre3eoZ",
+				"timestampMs": "1691758372427"
+			}
+		],
+		"nextCursor": {
+			"txDigest": "8b3byDuRojHXqmSz16PsyzfdXJEY5nZBGTM23gMsMAY8",
+			"eventSeq": "0"
+		},
+		"hasNextPage": true
 	},
-	"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
-	"transactionModule": "deepbook_utils",
-	"sender": "0x4419ae182ac112bb065bda2146136ed02524ee2611478bfe8ca5d3835bee4af6",
-	"type": "0xdee9::clob_v2::OrderPlaced<0x2::sui::SUI, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
-	"parsedJson": {
-		"base_asset_quantity_placed": "1000000000",
-		"client_order_id": "20082022",
-		"expire_timestamp": "1697121171540",
-		"is_bid": false,
-		"order_id": "9223372036854945121",
-		"original_quantity": "1000000000",
-		"owner": "0x8c23e5e23c6eb654d69f8ae7de3be23584f435cad81fa4b9cb024b6c989b7818",
-		"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
-		"price": "500000"
-	},
-	"bcs": "2pWctGGQ9KULfmnzNtGuPpggLQrj1ZiUQaxva4neM6QWAtUAkuPAzU2eGrdZaGHti3bsUefDioUwwYoVR3bYBkG7Gxf5JVVSxxqTqzxdg5os5ESwFaP69ZcrNsya4G9rHK4KBac9i3m1MseN38xDwMvAMx3"
+	"id": 1
 }
 ```
+</details>
 
-```json
-{
-	"id": {
-		"txDigest": "896CKHod5GQ4kzhF7EwTAGyhQBdaTb9rQS41dcL76gj8",
-		"eventSeq": "0"
-	},
-	"packageId": "0x000000000000000000000000000000000000000000000000000000000000dee9",
-	"transactionModule": "clob_v2",
-	"sender": "0xf821d3483fc7725ebafaa5a3d12373d49901bdfce1484f219daa7066a30df77d",
-	"type": "0xdee9::clob_v2::OrderPlaced<0xbc3a676894871284b3ccfb2eec66f428612000e2a6e6d23f592ce8833c27c973::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
-	"parsedJson": {
-		"base_asset_quantity_placed": "5000000",
-		"client_order_id": "1696545636947311087",
-		"expire_timestamp": "1696549236947",
-		"is_bid": true,
-		"order_id": "562414",
-		"original_quantity": "5000000",
-		"owner": "0xf995d6df20e18421928ff0648bd583ccdf384ab05791d8be21d32977a37dacfc",
-		"pool_id": "0xf0f663cf87f1eb124da2fc9be813e0ce262146f3df60bc2052d738eb41a25899",
-		"price": "274518000000"
-	},
-	"bcs": "4SgemkCzrqEsTHLFgMcbUtttZCf2CrEH2njjFL1rizCHzvAoYsToGrbFLffQPtGxsSt96Xr4j2SLNeLcBGKeYXDrVYWqivhf3551Mqj71DZBxq5D1Qwfgh1TKeF43Jz4b4XH1nEpkya2Pr8515vzJbHUkpP"
-}
-```
+The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`client.queryEvents`](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#queryEvents).
 
-## Examples
-
-### Subscribe to event
-
-This example leverages the Sui TypeScript SDK to subscribe to events the package with ID `<PACKAGE_ID>` emits. Each time the event fires, the code displays the response to the console.
-
-#### TypeScript
-
-To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui` at the root of your project. In your TypeScript code, import `JsonRpcProvider` and a connection from the library.
-
-```ts
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-
-// Package is on Testnet.
-const client = new SuiClient({
-	url: getFullnodeUrl('testnet'),
-});
-const Package = '<PACKAGE_ID>';
-
-const MoveEventType = '<PACKAGE_ID>::<MODULE_NAME>::<METHOD_NAME>';
-
-console.log(
-	await client.getObject({
-		id: Package,
-		options: { showPreviousTransaction: true },
-	}),
-);
-
-let unsubscribe = await client.subscribeEvent({
-	filter: { Package },
-	onMessage: (event) => {
-		console.log('subscribeEvent', JSON.stringify(event, null, 2));
-	},
-});
-
-process.on('SIGINT', async () => {
-	console.log('Interrupted...');
-	if (unsubscribe) {
-		await unsubscribe();
-		unsubscribe = undefined;
-	}
-});
-```
-
-#### Response
-
-When the subscribed to event fires, the example displays the following JSON representation of the event.
-
-```json
-subscribeEvent {
-  "id": {
-    "txDigest": "HkCBeBLQbpKBYXmuQeTM98zprUqaACRkjKmmtvC6MiP1",
-    "eventSeq": "0"
-  },
-  "packageId": "0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1",
-  "transactionModule": "coin_flip",
-  "sender": "0x46f184f2d68007e4344fffe603c4ccacd22f4f28c47f321826e83619dede558e",
-  "type": "0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1::coin_flip::Outcome",
-  "parsedJson": {
-    "bet_amount": "4000000000",
-    "game_id": "0xa7e1fb3c18a88d048b75532de219645410705fa48bfb8b13e8dbdbb7f4b9bbce",
-    "guess": 0,
-    "player_won": true
-  },
-  "bcs": "3oWWjWKRVu115bnnZphyDcJ8EyF9X4pgVguwhEtcsVpBf74B6RywQupm2X",
-  "timestampMs": "1687912116638"
-}
-```
-
-#### Rust SDK
-
-```rust
-use futures::StreamExt;
-use sui_sdk::rpc_types::EventFilter;
-use sui_sdk::SuiClientBuilder;
-use anyhow::Result;
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let sui = SuiClientBuilder::default()
-        .ws_url("wss://fullnode.mainnet.sui.io:443")
-        .build("https://fullnode.mainnet.sui.io:443")
-        .await.unwrap();
-    let mut subscribe_all = sui.event_api().subscribe_event(EventFilter::All(vec![])).await?;
-    loop {
-        println!("{:?}", subscribe_all.next().await);
-    }
-}
-```
-
-### Filtering event queries
+#### Filtering event queries
 
 To filter the events returned from your queries, use the following data structures.
 
-:::info
-
-This set of filters applies only to event querying APIs. It differs from the filters offered for the subscriptions API (see following section). In particular, it does not support combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
-
-:::
-
 | Query             | Description                                              | JSON-RPC Parameter Example                                                                            |
 | ----------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `All`             | All events                                               | `{"All"}`                                                                                             |
+| `All`             | All events                                               | `{"All": []}`                                                                                             |
 | `Transaction`     | Events emitted from the specified transaction            | `{"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}`                                      |
 | `MoveModule`      | Events emitted from the specified Move module            | `{"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}`                                           |
 | `MoveEventModule` | Events emitted, defined on the specified Move module.    | `{"MoveEventModule": {"package": "<DEFINING-PACKAGE-ID>", "module": "nft"}}`                          |
@@ -228,34 +169,103 @@ This set of filters applies only to event querying APIs. It differs from the fil
 | `Sender`          | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
 | `Recipient`       | Query by recipient                                       | `{"Recipient":{"AddressOwner":"0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"}}` |
 | `Object`          | Return events associated with the given object           | `{"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}`                     |
-| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
+| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  | 
 
-### Filtering events for subscription (deprecated)
+### Query events in Rust
 
-:::warning
+The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to query events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events). 
 
-This section is deprecated beginning with Sui client version 1.28. Use the [custom indexer](../advanced/custom-indexer.mdx) section to learn about how to stream checkpoints and filter events continuously.
+```rust
+use sui_sdk::{rpc_types::EventFilter, types::Identifier, SuiClientBuilder};
 
-:::
+const PACKAGE_ID_CONST: &str = "0x279525274aa623ef31a25ad90e3b99f27c8dbbad636a6454918855c81d625abc";
 
-To create a subscription, you can set a filter to return only the set of events you're interested in listening for. 
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let sui_mainnet = SuiClientBuilder::default()
+        .build("https://fullnode.mainnet.sui.io:443")
+        .await?;
 
-:::info
+    let events = sui_mainnet
+        .event_api()
+        .query_events(
+            EventFilter::MoveModule {
+                package: PACKAGE_ID_CONST.parse()?,
+                module: Identifier::new("dev_trophy")?,
+            },
+            None,
+            None,
+            false,
+        )
+        .await?;
 
-This set of filters applies only to event subscription APIs. It differs from the filters offered for the query API (see previous section). In particular, it supports combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
+    for event in events.data {
+        println!("Event: {:?}", event.parsed_json);
+    }
 
-:::
+    Ok(())
+}
+```
 
+### Query events with GraphQL
 
+<BetaTag beta="true" slim="true"/>
 
-| Filter            | Description                                           | JSON-RPC Parameter Example                                                                   |
-| ----------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `Package`         | Move package ID                                       | `{"Package":"<PACKAGE-ID>"}`                                                                 |
-| `MoveModule`      | Move module where the event was emitted               | `{"MoveModule": {"package": "<PACKAGE-ID>", "module": "nft"}}`                               |
-| `MoveEventType`   | Move event type defined in the move code              | `{"MoveEventType":"<PACKAGE-ID>::nft::MintNFTEvent"}`                                        |
-| `MoveEventModule` | Move event module defined in the move code            | `{"MoveEventModule": {"package": "<PACKAGE-ID>", "module": "nft", "event": "MintNFTEvent"}}` |
-| `MoveEventField`  | Filter using the data fields in the move event object | `{"MoveEventField":{ "path":"/name", "value":"NFT"}}`                                        |
-| `SenderAddress`   | Address that started the transaction                  | `{"SenderAddress": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`    |
-| `Sender`          | Sender address                                        | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`            |
-| `Transaction`     | Transaction hash                                      | `{"Transaction":"ENmjG42TE4GyqYb1fGNwJe7oxBbbXWCdNfRiQhCNLBJQ"}`                             |
-| `TimeRange`       | Time range in millisecond                             | `{"TimeRange": {"start_time": "1685959791871", "end_time": "1685959791871"}}`                |
+You can use GraphQL to query events instead of JSON RPC. The following example queries are in the [`sui-graphql-rpc` crate](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/event_connection) in the Sui repo. 
+
+<details>
+<summary>
+Event connection
+</summary>
+{@inject: crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
+</details>
+
+<details>
+<summary>
+Filter events by sender
+</summary>
+{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
+</details>
+
+<details>
+<summary>
+Filter events by emitting package and type
+</summary>
+{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_emitting_package_module_and_event_type.graphql}
+</details>
+
+The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.graphql.html) provides functionality to interact with the Sui GraphQL service.
+
+## Monitoring events
+
+Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are two methods from which to choose when you need to monitor on-chain events:
+- Incorporate a [custom indexer](../advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
+- Poll the Sui network on a schedule to query events.
+
+Using a custom indexer provides a near-real time monitoring of events, so is most useful when your project requires immediate reaction to the firing of events. Polling the network is most useful when the events you're monitoring don't fire often or the need to act on those events are not immediate. The following section provides a polling example.
+
+### Poll events {#poll-events}
+
+To monitor events, you need a database to store checkpoint data. The [Trustless Swap](../app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
+
+<details>
+<summary>
+`event-indexer.ts` from Trustless Swap
+</summary>
+{@inject: examples/trading/api/indexer/event-indexer.ts noComments}
+</details>
+
+Trustless Swap incorporates handlers to process each event type that triggers. For the `locked` event, the handler in `locked-handler.ts` fires and updates the Prisma database accordingly.
+
+<details>
+<summary>
+`locked-handler.ts` from Trustless Swap
+</summary>
+{@inject: examples/trading/api/indexer/locked-handler.ts}
+</details>
+
+## Related links
+
+- [Custom Indexer](../advanced/custom-indexer.mdx): For near-real time monitoring of events, you can use a custom indexer.
+- [Events](https://move-book.com/programmability/events.html): The Move Book shows how to emit events in Move.
+- [Trustless Swap](../app-examples/trustless-swap.mdx): The Trustless Swap guide uses events to update the state of its frontend.

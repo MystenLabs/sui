@@ -3,9 +3,7 @@
 
 use std::{collections::BTreeMap, fmt::Display, sync::Arc};
 
-use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
-
+use self::known_attributes::AttributePosition;
 use crate::{
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, TargetKind, Visibility},
     naming::ast::{
@@ -15,11 +13,12 @@ use crate::{
     parser::ast::{ConstantName, DatatypeName, Field, FunctionName, VariantName},
     shared::unique_map::UniqueMap,
     shared::*,
+    sui_mode::info::SuiInfo,
     typing::ast::{self as T},
     FullyCompiledProgram,
 };
-
-use self::known_attributes::AttributePosition;
+use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 #[derive(Debug, Clone)]
 pub struct FunctionInfo {
@@ -52,6 +51,14 @@ pub struct ModuleInfo {
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProgramInfo<const AFTER_TYPING: bool> {
+    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
+    pub sui_flavor_info: Option<SuiInfo>,
+}
+pub type NamingProgramInfo = ProgramInfo<false>;
+pub type TypingProgramInfo = ProgramInfo<true>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatatypeKind {
     Struct,
@@ -65,13 +72,6 @@ pub enum NamedMemberKind {
     Function,
     Constant,
 }
-
-#[derive(Debug, Clone)]
-pub struct ProgramInfo<const AFTER_TYPING: bool> {
-    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
-}
-pub type NamingProgramInfo = ProgramInfo<false>;
-pub type TypingProgramInfo = ProgramInfo<true>;
 
 macro_rules! program_info {
     ($pre_compiled_lib:ident, $prog:ident, $pass:ident, $module_use_funs:ident) => {{
@@ -118,12 +118,16 @@ macro_rules! program_info {
                 }
             }
         }
-        ProgramInfo { modules }
+        ProgramInfo {
+            modules,
+            sui_flavor_info: None,
+        }
     }};
 }
 
 impl TypingProgramInfo {
     pub fn new(
+        env: &CompilationEnv,
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
@@ -133,7 +137,18 @@ impl TypingProgramInfo {
         }
         let mut module_use_funs = Some(&mut module_use_funs);
         let prog = Prog { modules };
-        program_info!(pre_compiled_lib, prog, typing, module_use_funs)
+        let pcl = pre_compiled_lib.clone();
+        let mut info = program_info!(pcl, prog, typing, module_use_funs);
+        // TODO we should really have an idea of root package flavor here
+        // but this feels roughly equivalent
+        if env
+            .package_configs()
+            .any(|(_, config)| config.flavor == Flavor::Sui)
+        {
+            let sui_flavor_info = SuiInfo::new(pre_compiled_lib, modules, &info);
+            info.sui_flavor_info = Some(sui_flavor_info);
+        };
+        info
     }
 }
 

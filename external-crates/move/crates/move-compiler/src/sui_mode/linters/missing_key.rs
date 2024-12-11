@@ -8,17 +8,11 @@ use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::DatatypeName;
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast::{StructDefinition, StructFields},
     parser::ast::Ability_,
-    shared::CompilationEnv,
-    typing::{
-        ast as T,
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
-    },
+    sui_mode::{ID_FIELD_NAME, OBJECT_MODULE_NAME, SUI_ADDR_VALUE, UID_TYPE_NAME},
+    typing::visitor::simple_visitor,
 };
 
 const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
@@ -29,48 +23,32 @@ const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
     "struct with id but missing key ability",
 );
 
-pub struct MissingKeyVisitor;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-impl TypingVisitorConstructor for MissingKeyVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    MissingKeyVisitor,
     fn visit_struct_custom(
         &mut self,
         _module: ModuleIdent,
         _struct_name: DatatypeName,
-        sdef: &mut StructDefinition,
+        sdef: &StructDefinition,
     ) -> bool {
         if first_field_has_id_field_of_type_uid(sdef) && lacks_key_ability(sdef) {
             let uid_msg =
                 "Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.";
             let diagnostic = diag!(MISSING_KEY_ABILITY_DIAG, (sdef.loc, uid_msg));
-            self.env.add_diag(diagnostic);
+            self.add_diag(diagnostic);
         }
         false
     }
-}
+);
 
 fn first_field_has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
     match &sdef.fields {
         StructFields::Defined(_, fields) => fields.iter().any(|(_, symbol, (idx, ty))| {
-            *idx == 0 && symbol == &symbol!("id") && ty.value.is("sui", "object", "UID")
+            *idx == 0
+                && symbol == &ID_FIELD_NAME
+                && ty
+                    .value
+                    .is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, UID_TYPE_NAME)
         }),
         StructFields::Native(_) => false,
     }

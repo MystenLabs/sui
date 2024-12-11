@@ -5,7 +5,7 @@ use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::transaction::TransactionDataAPI;
@@ -24,7 +24,9 @@ struct State {
 
 #[async_trait::async_trait]
 impl Worker for TransactionObjectsHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    type Result = ();
+
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
@@ -36,7 +38,7 @@ impl Worker for TransactionObjectsHandler {
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                &checkpoint_transaction,
+                checkpoint_transaction,
                 &checkpoint_transaction.effects,
                 &mut state,
             );

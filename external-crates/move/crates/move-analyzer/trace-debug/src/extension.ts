@@ -4,7 +4,14 @@
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken, DebugSession } from 'vscode';
+import { StackFrame } from '@vscode/debugadapter';
+import {
+    WorkspaceFolder,
+    DebugConfiguration,
+    CancellationToken,
+    TextDocument,
+    Position
+} from 'vscode';
 
 /**
  * Log level for the debug adapter.
@@ -15,6 +22,19 @@ const LOG_LEVEL = 'log';
  * Describes debugger configuration name defined in package.json
  */
 const DEBUGGER_TYPE = 'move-debug';
+
+/**
+ * Provider of on-hover information during debug session.
+ */
+class MoveEvaluatableExpressionProvider {
+    // TODO: implement a more sophisticated provider that actually provides correct on-hover information,
+    // at least for variable definitions whose locations are readily available in the source map
+    // (user can always use go-to-def to see the definition and the value)
+    provideEvaluatableExpression(_document: TextDocument, _position: Position, _token: CancellationToken) {
+        // suppress debug-time on hover information for now
+        return null;
+    }
+}
 
 /**
  * Called when the extension is activated.
@@ -35,6 +55,75 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    let previousSourcePath: string | undefined;
+    const decorationType = vscode.window.createTextEditorDecorationType({
+        color: 'grey',
+        backgroundColor: 'rgba(220, 220, 220, 0.5)' // grey with 50% opacity
+    });
+    context.subscriptions.push(
+        vscode.debug.onDidChangeActiveStackItem(async stackItem => {
+            if (stackItem instanceof vscode.DebugStackFrame) {
+                const session = vscode.debug.activeDebugSession;
+                if (session) {
+                    // Request the stack frame details from the debug adapter
+                    const stackTraceResponse = await session.customRequest('stackTrace', {
+                        threadId: stackItem.threadId,
+                        startFrame: stackItem.frameId,
+                        levels: 1
+                    });
+
+                    const stackFrame: StackFrame = stackTraceResponse.stackFrames[0];
+                    if (stackFrame && stackFrame.source && stackFrame.source.path !== previousSourcePath) {
+                        previousSourcePath = stackFrame.source.path;
+                        const source = stackFrame.source;
+                        const line = stackFrame.line;
+                        console.log(`Frame details: ${source?.name} at line ${line}`);
+
+                        const editor = vscode.window.activeTextEditor;
+                        if (editor) {
+                            const optimized_lines = stackTraceResponse.optimized_lines;
+                            const document = editor.document;
+                            let decorationsArray: vscode.DecorationOptions[] = [];
+
+                            optimized_lines.forEach((lineNumber: number) => {
+                                const line = document.lineAt(lineNumber);
+                                const lineLength = line.text.length;
+                                const lineText = line.text.trim();
+                                if (lineText.length !== 0 // ignore empty lines
+                                    && !lineText.startsWith("const") // ignore constant declarations (not in the source map)
+                                    && !lineText.startsWith("}")) { // ignore closing braces with nothing else on the same line
+                                    const decoration = {
+                                        range: new vscode.Range(lineNumber, 0, lineNumber, lineLength),
+                                    };
+                                    decorationsArray.push(decoration);
+                                }
+                            });
+
+                            editor.setDecorations(decorationType, decorationsArray);
+                        }
+                    }
+                }
+            }
+        })
+    );
+
+    // register a provider of on-hover information during debug session
+    const langSelector = { scheme: 'file', language: 'move' };
+    context.subscriptions.push(
+        vscode.languages.registerEvaluatableExpressionProvider(
+            langSelector,
+            new MoveEvaluatableExpressionProvider()
+        )
+    );
+
+    context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => {
+        // reset all decorations when the debug session is terminated
+        // to avoid showing lines for code that was optimized away
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            editor.setDecorations(decorationType, []);
+        }
+    }));
 }
 
 /**
@@ -97,18 +186,18 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
 async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
     const pkgRoot = await findPkgRoot(editor.document.uri.fsPath);
     if (!pkgRoot) {
-        throw new Error("Cannot find package root for file: " + editor.document.uri.fsPath);
+        throw new Error(`Cannot find package root for file  '${editor.document.uri.fsPath}'`);
     }
 
     const pkgModules = findModules(editor.document.getText());
     if (pkgModules.length === 0) {
-        throw new Error("Cannot find any modules in file: " + editor.document.uri.fsPath);
+        throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
     }
 
     const tracedFunctions = findTracedFunctions(pkgRoot, pkgModules);
 
     if (tracedFunctions.length === 0) {
-        throw new Error("No traced functions found for package at: " + pkgRoot);
+        throw new Error(`No traced functions found for package at '${pkgRoot}'`);
     }
 
     const fun = tracedFunctions.length === 1
@@ -116,7 +205,7 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         : await pickFunctionToDebug(tracedFunctions);
 
     if (!fun) {
-        throw new Error("No function to be debugged selected from\n" + tracedFunctions.join('\n'));
+        throw new Error(`No function to be trace-debugged selected from\n` + tracedFunctions.join('\n'));
     }
 
     return fun;
@@ -172,35 +261,44 @@ function findModules(file_content: string): string[] {
 /**
  * Find all functions that have a corresponding trace file.
  *
- * @param pkg_root root directory of the package.
- * @param pkg_modules modules in the package of the form `<package>::<module>`.
+ * @param pkgRoot root directory of the package.
+ * @param pkgModules modules in the package of the form `<package>::<module>`.
  * @returns list of functions of the form `<package>::<module>::<function>`.
+ * @throws Error (containing a descriptive message) if no trace files are found for the package.
  */
-function findTracedFunctions(pkg_root: string, pkg_modules: string[]): string[] {
-    try {
-        const traces_dir = path.join(pkg_root, 'traces');
-        const files = fs.readdirSync(traces_dir);
-        const result: [string, string[]][] = [];
+function findTracedFunctions(pkgRoot: string, pkgModules: string[]): string[] {
 
-        pkg_modules.forEach((module) => {
-            const prefix = module.replace(/:/g, '_') + '__';
-            const prefixFiles = files.filter((file) => file.startsWith(prefix));
-            const suffixes = prefixFiles.map((file) => {
-                const suffix = file.substring(module.length);
-                if (suffix.startsWith('__') && suffix.endsWith('.json')) {
-                    return suffix.substring(2, suffix.length - 5);
-                }
-                return suffix;
-            });
-            result.push([module, suffixes]);
-        });
-
-        return result.map(([module, functionName]) => {
-            return functionName.map((func) => module + "::" + func);
-        }).flat();
-    } catch (err) {
-        return [];
+    function getFiles(tracesDir: string): string[] {
+        try {
+            return fs.readdirSync(tracesDir);
+        } catch (err) {
+            throw new Error(`Error accessing 'traces' directory for package at '${pkgRoot}'`);
+        }
     }
+    const tracesDir = path.join(pkgRoot, 'traces');
+
+    const filePaths = getFiles(tracesDir);
+    if (filePaths.length === 0) {
+        throw new Error(`No trace files for package at ${pkgRoot}`);
+    }
+    const result: [string, string[]][] = [];
+
+    pkgModules.forEach((module) => {
+        const prefix = module.replace(/:/g, '_') + '__';
+        const prefixFiles = filePaths.filter((filePath) => filePath.startsWith(prefix));
+        const suffixes = prefixFiles.map((file) => {
+            const suffix = file.substring(module.length);
+            if (suffix.startsWith('__') && suffix.endsWith('.json')) {
+                return suffix.substring(2, suffix.length - 5);
+            }
+            return suffix;
+        });
+        result.push([module, suffixes]);
+    });
+
+    return result.map(([module, functionName]) => {
+        return functionName.map((func) => module + "::" + func);
+    }).flat();
 }
 
 /**

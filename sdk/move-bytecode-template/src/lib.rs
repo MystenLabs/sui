@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use move_binary_format::{file_format::StructFieldInformation, CompiledModule};
 use move_core_types::identifier::Identifier;
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::{from_value, to_value};
+use serde_wasm_bindgen::{Serializer, from_value, to_value};
 use wasm_bindgen::{prelude::*, JsValue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -29,7 +29,11 @@ pub fn version() -> String {
 /// ```
 pub fn deserialize(binary: &[u8]) -> Result<JsValue, JsErr> {
     let compiled_module = CompiledModule::deserialize_with_defaults(binary)?;
-    Ok(to_value(&compiled_module)?)
+    let serializer = Serializer::new().serialize_large_number_types_as_bigints(true);
+    Serialize::serialize(&compiled_module, &serializer).map_err(|err| JsErr {
+        display: format!("{}", err),
+        message: err.to_string(),
+    })
 }
 
 #[wasm_bindgen]

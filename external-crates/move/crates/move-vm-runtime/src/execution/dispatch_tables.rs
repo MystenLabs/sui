@@ -616,9 +616,9 @@ impl VMDispatchTables {
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     variant_layouts.push(field_layouts);
                 }
-                runtime_value::MoveDatatypeLayout::Enum(runtime_value::MoveEnumLayout(
-                    variant_layouts,
-                ))
+                runtime_value::MoveDatatypeLayout::Enum(Box::new(runtime_value::MoveEnumLayout(
+                    Box::new(variant_layouts),
+                )))
             }
             Datatype::Struct(ref sinfo) => {
                 let field_tys = sinfo
@@ -631,8 +631,8 @@ impl VMDispatchTables {
                     .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
                     .collect::<PartialVMResult<Vec<_>>>()?;
 
-                runtime_value::MoveDatatypeLayout::Struct(runtime_value::MoveStructLayout::new(
-                    field_layouts,
+                runtime_value::MoveDatatypeLayout::Struct(Box::new(
+                    runtime_value::MoveStructLayout::new(field_layouts),
                 ))
             }
         };
@@ -744,10 +744,12 @@ impl VMDispatchTables {
                         field_layouts,
                     );
                 }
-                annotated_value::MoveDatatypeLayout::Enum(annotated_value::MoveEnumLayout {
-                    type_: struct_tag.clone(),
-                    variants: variant_layouts,
-                })
+                annotated_value::MoveDatatypeLayout::Enum(Box::new(
+                    annotated_value::MoveEnumLayout {
+                        type_: struct_tag.clone(),
+                        variants: variant_layouts,
+                    },
+                ))
             }
             Datatype::Struct(struct_type) => {
                 if struct_type.fields.len() != struct_type.field_names.len() {
@@ -769,9 +771,8 @@ impl VMDispatchTables {
                         Ok(annotated_value::MoveFieldLayout::new(n.clone(), l))
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                annotated_value::MoveDatatypeLayout::Struct(annotated_value::MoveStructLayout::new(
-                    struct_tag,
-                    field_layouts,
+                annotated_value::MoveDatatypeLayout::Struct(Box::new(
+                    annotated_value::MoveStructLayout::new(struct_tag, field_layouts),
                 ))
             }
         };

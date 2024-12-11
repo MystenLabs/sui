@@ -435,10 +435,7 @@ and nowhere else.
 
 <pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &TxContext): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>);
-    <b>assert</b>!(
-        std::type_name::get&lt;T&gt;().into_string().into_bytes() == <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>,
-        <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>,
-    );
+    <b>assert</b>!(std::type_name::get&lt;T&gt;().into_string().into_bytes() == <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>, <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>);
     <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value }
 }
 </code></pre>
@@ -467,10 +464,7 @@ and nowhere else.
 
 <pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>);
-    <b>assert</b>!(
-        std::type_name::get&lt;T&gt;().into_string().into_bytes() == <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>,
-        <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>,
-    );
+    <b>assert</b>!(std::type_name::get&lt;T&gt;().into_string().into_bytes() == <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>, <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>);
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value: _ } = self;
 }
 </code></pre>

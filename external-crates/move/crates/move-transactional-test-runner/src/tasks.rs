@@ -6,14 +6,14 @@
 
 use anyhow::{anyhow, bail, Result};
 use clap::*;
-use move_command_line_common::{
+use move_command_line_common::files::{MOVE_EXTENSION, MOVE_IR_EXTENSION};
+use move_compiler::shared::NumericalAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::parsing::{
     address::ParsedAddress,
-    files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
     types::ParsedType,
     values::{ParsableValue, ParsedValue},
 };
-use move_compiler::shared::NumericalAddress;
-use move_core_types::identifier::Identifier;
 use std::{convert::TryInto, fmt::Debug, path::Path, str::FromStr};
 use tempfile::NamedTempFile;
 

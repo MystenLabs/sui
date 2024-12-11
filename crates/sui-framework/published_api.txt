@@ -25,6 +25,15 @@ PoolTokenExchangeRate
 StakedSui
 	public struct
 	0x3::staking_pool
+FungibleStakedSui
+	public struct
+	0x3::staking_pool
+FungibleStakedSuiData
+	public struct
+	0x3::staking_pool
+FungibleStakedSuiDataKey
+	public struct
+	0x3::staking_pool
 new
 	public(package) fun
 	0x3::staking_pool
@@ -32,6 +41,15 @@ request_add_stake
 	public(package) fun
 	0x3::staking_pool
 request_withdraw_stake
+	public(package) fun
+	0x3::staking_pool
+redeem_fungible_staked_sui
+	public(package) fun
+	0x3::staking_pool
+calculate_fungible_staked_sui_withdraw_amount
+	fun
+	0x3::staking_pool
+convert_to_fungible_staked_sui
 	public(package) fun
 	0x3::staking_pool
 withdraw_from_principal
@@ -67,6 +85,9 @@ sui_balance
 pool_id
 	public fun
 	0x3::staking_pool
+fungible_staked_sui_pool_id
+	public fun
+	0x3::staking_pool
 staked_sui_amount
 	public fun
 	0x3::staking_pool
@@ -77,6 +98,15 @@ is_preactive
 	public fun
 	0x3::staking_pool
 is_inactive
+	public fun
+	0x3::staking_pool
+fungible_staked_sui_value
+	public fun
+	0x3::staking_pool
+split_fungible_staked_sui
+	public fun
+	0x3::staking_pool
+join_fungible_staked_sui
 	public fun
 	0x3::staking_pool
 split
@@ -136,6 +166,12 @@ StakingRequestEvent
 UnstakingRequestEvent
 	public struct
 	0x3::validator
+ConvertingToFungibleStakedSuiEvent
+	public struct
+	0x3::validator
+RedeemingFungibleStakedSuiEvent
+	public struct
+	0x3::validator
 new_metadata
 	public(package) fun
 	0x3::validator
@@ -152,6 +188,12 @@ adjust_stake_and_gas_price
 	public(package) fun
 	0x3::validator
 request_add_stake
+	public(package) fun
+	0x3::validator
+convert_to_fungible_staked_sui
+	public(package) fun
+	0x3::validator
+redeem_fungible_staked_sui
 	public(package) fun
 	0x3::validator
 request_add_stake_at_genesis
@@ -457,6 +499,12 @@ request_add_stake
 request_withdraw_stake
 	public(package) fun
 	0x3::validator_set
+convert_to_fungible_staked_sui
+	public(package) fun
+	0x3::validator_set
+redeem_fungible_staked_sui
+	public(package) fun
+	0x3::validator_set
 request_set_commission_rate
 	public(package) fun
 	0x3::validator_set
@@ -488,6 +536,9 @@ validator_staking_pool_id
 	public fun
 	0x3::validator_set
 staking_pool_mappings
+	public fun
+	0x3::validator_set
+validator_address_by_pool_id
 	public fun
 	0x3::validator_set
 pool_exchange_rates
@@ -640,6 +691,9 @@ advance_epoch
 current_epoch_subsidy_amount
 	public fun
 	0x3::stake_subsidy
+get_distribution_counter
+	public(package) fun
+	0x3::stake_subsidy
 SystemParameters
 	public struct
 	0x3::sui_system_state_inner
@@ -695,6 +749,12 @@ request_add_stake_mul_coin
 	public(package) fun
 	0x3::sui_system_state_inner
 request_withdraw_stake
+	public(package) fun
+	0x3::sui_system_state_inner
+convert_to_fungible_staked_sui
+	public(package) fun
+	0x3::sui_system_state_inner
+redeem_fungible_staked_sui
 	public(package) fun
 	0x3::sui_system_state_inner
 report_validator
@@ -805,6 +865,9 @@ get_storage_fund_total_balance
 get_storage_fund_object_rebates
 	public(package) fun
 	0x3::sui_system_state_inner
+validator_address_by_pool_id
+	public(package) fun
+	0x3::sui_system_state_inner
 pool_exchange_rates
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -855,6 +918,12 @@ request_add_stake_mul_coin
 	0x3::sui_system
 request_withdraw_stake
 	public entry fun
+	0x3::sui_system
+convert_to_fungible_staked_sui
+	public fun
+	0x3::sui_system
+redeem_fungible_staked_sui
+	public fun
 	0x3::sui_system
 request_withdraw_stake_non_entry
 	public fun
@@ -922,6 +991,9 @@ update_validator_next_epoch_network_pubkey
 update_candidate_validator_network_pubkey
 	public entry fun
 	0x3::sui_system
+validator_address_by_pool_id
+	public fun
+	0x3::sui_system
 pool_exchange_rates
 	public fun
 	0x3::sui_system
@@ -985,48 +1057,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-Curve
-	public struct
-	0x2::groth16
-PreparedVerifyingKey
-	public struct
-	0x2::groth16
-PublicProofInputs
-	public struct
-	0x2::groth16
-ProofPoints
-	public struct
-	0x2::groth16
-bls12381
-	public fun
-	0x2::groth16
-bn254
-	public fun
-	0x2::groth16
-pvk_from_bytes
-	public fun
-	0x2::groth16
-pvk_to_bytes
-	public fun
-	0x2::groth16
-public_proof_inputs_from_bytes
-	public fun
-	0x2::groth16
-proof_points_from_bytes
-	public fun
-	0x2::groth16
-prepare_verifying_key
-	public fun
-	0x2::groth16
-prepare_verifying_key_internal
-	fun
-	0x2::groth16
-verify_groth16_proof
-	public fun
-	0x2::groth16
-verify_groth16_proof_internal
-	fun
-	0x2::groth16
 blake2b256
 	public fun
 	0x2::hash
@@ -1534,6 +1564,12 @@ multi_scalar_multiplication
 pairing
 	public(package) fun
 	0x2::group_ops
+convert
+	public(package) fun
+	0x2::group_ops
+sum
+	public(package) fun
+	0x2::group_ops
 internal_validate
 	fun
 	0x2::group_ops
@@ -1558,6 +1594,12 @@ internal_multi_scalar_mul
 internal_pairing
 	fun
 	0x2::group_ops
+internal_convert
+	fun
+	0x2::group_ops
+internal_sum
+	fun
+	0x2::group_ops
 set_as_prefix
 	public(package) fun
 	0x2::group_ops
@@ -1571,6 +1613,9 @@ G2
 	public struct
 	0x2::bls12381
 GT
+	public struct
+	0x2::bls12381
+UncompressedG1
 	public struct
 	0x2::bls12381
 bls12381_min_sig_verify
@@ -1639,6 +1684,9 @@ hash_to_g1
 g1_multi_scalar_multiplication
 	public fun
 	0x2::bls12381
+g1_to_uncompressed_g1
+	public fun
+	0x2::bls12381
 g2_from_bytes
 	public fun
 	0x2::bls12381
@@ -1691,6 +1739,12 @@ gt_neg
 	public fun
 	0x2::bls12381
 pairing
+	public fun
+	0x2::bls12381
+uncompressed_g1_to_g1
+	public fun
+	0x2::bls12381
+uncompressed_g1_sum
 	public fun
 	0x2::bls12381
 Referent
@@ -2332,6 +2386,48 @@ create_internal
 add_internal
 	fun
 	0x2::display
+Curve
+	public struct
+	0x2::groth16
+PreparedVerifyingKey
+	public struct
+	0x2::groth16
+PublicProofInputs
+	public struct
+	0x2::groth16
+ProofPoints
+	public struct
+	0x2::groth16
+bls12381
+	public fun
+	0x2::groth16
+bn254
+	public fun
+	0x2::groth16
+pvk_from_bytes
+	public fun
+	0x2::groth16
+pvk_to_bytes
+	public fun
+	0x2::groth16
+public_proof_inputs_from_bytes
+	public fun
+	0x2::groth16
+proof_points_from_bytes
+	public fun
+	0x2::groth16
+prepare_verifying_key
+	public fun
+	0x2::groth16
+prepare_verifying_key_internal
+	fun
+	0x2::groth16
+verify_groth16_proof
+	public fun
+	0x2::groth16
+verify_groth16_proof_internal
+	fun
+	0x2::groth16
 SUI
 	public struct
 	0x2::sui
@@ -4213,6 +4309,102 @@ sha2_256
 sha3_256
 	public fun
 	0x1::hash
+UQ32_32
+	public struct
+	0x1::uq32_32
+from_quotient
+	public fun
+	0x1::uq32_32
+from_int
+	public fun
+	0x1::uq32_32
+add
+	public fun
+	0x1::uq32_32
+sub
+	public fun
+	0x1::uq32_32
+mul
+	public fun
+	0x1::uq32_32
+div
+	public fun
+	0x1::uq32_32
+to_int
+	public fun
+	0x1::uq32_32
+int_mul
+	public fun
+	0x1::uq32_32
+int_div
+	public fun
+	0x1::uq32_32
+le
+	public fun
+	0x1::uq32_32
+lt
+	public fun
+	0x1::uq32_32
+ge
+	public fun
+	0x1::uq32_32
+gt
+	public fun
+	0x1::uq32_32
+to_raw
+	public fun
+	0x1::uq32_32
+from_raw
+	public fun
+	0x1::uq32_32
+UQ64_64
+	public struct
+	0x1::uq64_64
+from_quotient
+	public fun
+	0x1::uq64_64
+from_int
+	public fun
+	0x1::uq64_64
+add
+	public fun
+	0x1::uq64_64
+sub
+	public fun
+	0x1::uq64_64
+mul
+	public fun
+	0x1::uq64_64
+div
+	public fun
+	0x1::uq64_64
+to_int
+	public fun
+	0x1::uq64_64
+int_mul
+	public fun
+	0x1::uq64_64
+int_div
+	public fun
+	0x1::uq64_64
+le
+	public fun
+	0x1::uq64_64
+lt
+	public fun
+	0x1::uq64_64
+ge
+	public fun
+	0x1::uq64_64
+gt
+	public fun
+	0x1::uq64_64
+to_raw
+	public fun
+	0x1::uq64_64
+from_raw
+	public fun
+	0x1::uq64_64
 empty
 	public fun
 	0x1::vector
@@ -4262,6 +4454,9 @@ insert
 	public fun
 	0x1::vector
 swap_remove
+	public fun
+	0x1::vector
+flatten
 	public fun
 	0x1::vector
 Option

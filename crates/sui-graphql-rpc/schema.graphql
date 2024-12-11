@@ -97,7 +97,7 @@ type Address implements IOwner {
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
-	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+	`AddressTransactionBlockRelationship` filter, which defaults to `SENT`.
 	
 	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
 	results. It is required for queries that apply more than two complex filters (on function,
@@ -160,18 +160,24 @@ type AddressOwner {
 }
 
 """
-The possible relationship types for a transaction block: sign, sent, received, or paid.
+The possible relationship types for a transaction block: sent, or received.
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has signed either as a sender or as a sponsor.
+	Transactions this address has sent.
 	"""
-	SIGN
+	SENT
 	"""
-	Transactions that sent objects to this address.
+	Transactions that this address was involved in, either as the sender, sponsor, or as the
+	owner of some object that was created, modified or transfered.
 	"""
-	RECV
+	AFFECTED
 }
+
+"""
+An Authenticator represents the access control rules for a ConsensusV2 object.
+"""
+union Authenticator = Address
 
 """
 System transaction for creating the on-chain state used by zkLogin.
@@ -447,6 +453,10 @@ type Checkpoint {
 	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
+	"""
+	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+	"""
+	bcs: Base64
 }
 
 type CheckpointConnection {
@@ -848,6 +858,16 @@ type ConsensusCommitPrologueTransaction {
 }
 
 """
+A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
+and allows different authentication modes based on the chosen authenticator.
+(Initially, only single-owner authentication is supported.)
+"""
+type ConsensusV2 {
+	startVersion: UInt53!
+	authenticator: Authenticator
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
@@ -1188,7 +1208,42 @@ type Epoch {
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
+type EpochConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EpochEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Epoch!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EpochEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Epoch!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Event {
+	"""
+	The transaction block that emitted this event. This information is only available for
+	events from indexed transactions, and not from transactions that have just been executed or
+	dry-run.
+	"""
+	transactionBlock: TransactionBlock
 	"""
 	The Move module containing some function that when called by
 	a programmable transaction block (PTB) emitted this event.
@@ -1206,32 +1261,13 @@ type Event {
 	"""
 	timestamp: DateTime
 	"""
-	The value's Move type.
+	The event's contents as a Move value.
 	"""
-	type: MoveType!
+	contents: MoveValue!
 	"""
-	The BCS representation of this value, Base64 encoded.
+	The Base64 encoded BCS serialized bytes of the event.
 	"""
 	bcs: Base64!
-	"""
-	Structured contents of a Move value.
-	"""
-	data: MoveData!
-	"""
-	Representation of a Move value in JSON, where:
-	
-	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
-	- Bools are represented by JSON boolean literals.
-	- u8, u16, and u32 are represented as JSON numbers.
-	- u64, u128, and u256 are represented as JSON strings.
-	- Vectors are represented by JSON arrays.
-	- Structs are represented by JSON objects.
-	- Empty optional values are represented by `null`.
-	
-	This form is offered as a less verbose convenience in cases where the layout of the type is
-	known by the client.
-	"""
-	json: JSON!
 }
 
 type EventConnection {
@@ -1264,7 +1300,13 @@ type EventEdge {
 }
 
 input EventFilter {
+	"""
+	Filter down to events from transactions sent by this address.
+	"""
 	sender: SuiAddress
+	"""
+	Filter down to the events from this transaction (given by its transaction digest).
+	"""
 	transactionDigest: String
 	"""
 	Events emitted by a particular module. An event is emitted by a
@@ -2336,6 +2378,10 @@ type MovePackage implements IObject & IOwner {
 	"""
 	typeOrigins: [TypeOrigin!]
 	"""
+	BCS representation of the package itself, as a MovePackage.
+	"""
+	packageBcs: Base64
+	"""
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
@@ -2479,13 +2525,14 @@ type MoveType {
 	"""
 	signature: MoveTypeSignature!
 	"""
-	Structured representation of the "shape" of values that match this type.
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
 	"""
-	layout: MoveTypeLayout!
+	layout: MoveTypeLayout
 	"""
-	The abilities this concrete type has.
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
 	"""
-	abilities: [MoveAbility!]!
+	abilities: [MoveAbility!]
 }
 
 """
@@ -2504,11 +2551,11 @@ type MoveTypeLayout =
     }
   | { enum: [{
           type: string,
-          variants: [{ 
+          variants: [{
               name: string,
               fields: [{ name: string, layout: MoveTypeLayout }],
           }]
-      }] 
+      }]
   }
 """
 scalar MoveTypeLayout
@@ -2836,11 +2883,8 @@ objects are ones whose
 """
 input ObjectFilter {
 	"""
-	This field is used to specify the type of objects that should be included in the query
-	results.
-	
-	Objects can be filtered by their type's package, package::module, or their fully qualified
-	type name.
+	Filter objects by their type's `package`, `package::module`, or their fully qualified type
+	name.
 	
 	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
 	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
@@ -2875,17 +2919,12 @@ enum ObjectKind {
 	The object is fetched from the index.
 	"""
 	INDEXED
-	"""
-	The object is deleted or wrapped and only partial information can be loaded from the
-	indexer.
-	"""
-	WRAPPED_OR_DELETED
 }
 
 """
 The object's owner type: Immutable, Shared, Parent, or Address.
 """
-union ObjectOwner = Immutable | Shared | Parent | AddressOwner
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusV2
 
 input ObjectRef {
 	"""
@@ -3055,11 +3094,13 @@ type PageInfo {
 
 """
 If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
-the dynamic field, or the intermediate Field object itself). Also note that if the owner
-is a parent, then it's guaranteed to be an object.
+the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+
+Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+object could be wrapped and therefore not directly accessible.
 """
 type Parent {
-	parent: Object
+	parent: Owner
 }
 
 """
@@ -3290,6 +3331,7 @@ type Query {
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
+	epochs(first: Int, after: String, last: Int, before: String): EpochConnection!
 	"""
 	The checkpoints that exist in the network.
 	"""
@@ -3359,7 +3401,8 @@ type Query {
 	"""
 	typeByName(name: String!): MoveType!
 	"""
-	The coin metadata associated with the given coin type.
+	The coin metadata associated with the given coin type. Note that if the latest version of
+	the coin's metadata is wrapped or deleted, it will not be found.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 	"""
@@ -4187,7 +4230,7 @@ type TransactionBlock {
 	"""
 	expiration: Epoch
 	"""
-	Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+	Serialized form of this transaction's `TransactionData`, BCS serialized and Base64 encoded.
 	"""
 	bcs: Base64
 }
@@ -4288,18 +4331,55 @@ type TransactionBlockEffects {
 }
 
 input TransactionBlockFilter {
+	"""
+	Filter transactions by move function called. Calls can be filtered by the `package`,
+	`package::module`, or the `package::module::name` of their function.
+	"""
 	function: String
 	"""
 	An input filter selecting for either system or programmable transactions.
 	"""
 	kind: TransactionBlockKindInput
+	"""
+	Limit to transactions that occured strictly after the given checkpoint.
+	"""
 	afterCheckpoint: UInt53
+	"""
+	Limit to transactions in the given checkpoint.
+	"""
 	atCheckpoint: UInt53
+	"""
+	Limit to transaction that occured strictly before the given checkpoint.
+	"""
 	beforeCheckpoint: UInt53
-	signAddress: SuiAddress
-	recvAddress: SuiAddress
+	"""
+	Limit to transactions that interacted with the given address. The address could be a
+	sender, sponsor, or recipient of the transaction.
+	"""
+	affectedAddress: SuiAddress
+	"""
+	Limit to transactions that were sent by the given address.
+	"""
+	sentAddress: SuiAddress
+	"""
+	Limit to transactions that accepted the given object as an input. NOTE: this input filter
+	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedObject` is introduced, whichever is later.
+	"""
 	inputObject: SuiAddress
+	"""
+	Limit to transactions that output a versioon of this object. NOTE: this input filter has
+	been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedObject` is introduced, whichever is later.
+	"""
 	changedObject: SuiAddress
+	"""
+	Select transactions by their digest.
+	"""
 	transactionIds: [String!]
 }
 

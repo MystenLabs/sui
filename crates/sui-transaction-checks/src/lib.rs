@@ -12,7 +12,7 @@ mod checked {
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, ObjectRef};
-    use sui_types::error::{UserInputError, UserInputResult};
+    use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::transaction::{
@@ -22,7 +22,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
-        error::{SuiError, SuiResult},
+        error::SuiError,
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
         object::{Object, Owner},
@@ -307,7 +307,9 @@ mod checked {
                         }
                         .into())
                     }
-                    Owner::Shared { .. } => fp_bail!(UserInputError::NotSharedObjectError.into()),
+                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                        fp_bail!(UserInputError::NotSharedObjectError.into())
+                    }
                     Owner::Immutable => fp_bail!(UserInputError::MutableParameterExpected {
                         object_id: *object_id
                     }
@@ -479,10 +481,10 @@ mod checked {
                             parent_id: owner.into(),
                         });
                     }
-                    Owner::Shared { .. } => {
-                        // This object is a mutable shared object. However the transaction
+                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                        // This object is a mutable consensus object. However the transaction
                         // specifies it as an owned object. This is inconsistent.
-                        return Err(UserInputError::NotSharedObjectError);
+                        return Err(UserInputError::NotOwnedObjectError);
                     }
                 };
             }
@@ -544,6 +546,10 @@ mod checked {
                     }
                     Owner::Shared {
                         initial_shared_version: actual_initial_shared_version,
+                    }
+                    | Owner::ConsensusV2 {
+                        start_version: actual_initial_shared_version,
+                        ..
                     } => {
                         fp_ensure!(
                             input_initial_shared_version == actual_initial_shared_version,
@@ -588,7 +594,7 @@ mod checked {
             .try_for_each(|module_bytes| {
                 verifier.meter_module_bytes(protocol_config, module_bytes, meter.as_mut())
             })
-            .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
+            .map_err(|e| UserInputError::PackageVerificationTimeout { err: e.to_string() });
 
         match verifier_status {
             Ok(_) => {

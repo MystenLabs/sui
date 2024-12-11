@@ -137,7 +137,7 @@ Create a new <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code> s
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow_new">new</a>&lt;T: key + store&gt;(value: T, ctx: &<b>mut</b> TxContext): <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt; {
     <a href="borrow.md#0x2_borrow_Referent">Referent</a> {
         id: <a href="tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx),
-        value: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value)
+        value: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value),
     }
 }
 </code></pre>
@@ -167,10 +167,13 @@ hot potato.
     <b>let</b> value = self.value.extract();
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&value);
 
-    (value, <a href="borrow.md#0x2_borrow_Borrow">Borrow</a> {
-        ref: self.id,
-        obj: id
-    })
+    (
+        value,
+        <a href="borrow.md#0x2_borrow_Borrow">Borrow</a> {
+            ref: self.id,
+            obj: id,
+        },
+    )
 }
 </code></pre>
 

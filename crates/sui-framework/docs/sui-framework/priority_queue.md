@@ -119,7 +119,7 @@ Create a new priority queue from the input entry vectors.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_new">new</a>&lt;T: drop&gt;(<b>mut</b> entries: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt;) : <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_new">new</a>&lt;T: drop&gt;(<b>mut</b> entries: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt;): <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt; {
     <b>let</b> len = entries.length();
     <b>let</b> <b>mut</b> i = len / 2;
     // Max heapify from the first node that is a parent (node at len / 2).
@@ -151,7 +151,7 @@ Pop the entry with the highest priority value.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_pop_max">pop_max</a>&lt;T: drop&gt;(pq: &<b>mut</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt;) : (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, T) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_pop_max">pop_max</a>&lt;T: drop&gt;(pq: &<b>mut</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt;): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, T) {
     <b>let</b> len = pq.entries.length();
     <b>assert</b>!(len &gt; 0, <a href="../sui-framework/priority_queue.md#0x2_priority_queue_EPopFromEmptyHeap">EPopFromEmptyHeap</a>);
     // Swap the max element <b>with</b> the last element in the entries and remove the max element.
@@ -184,7 +184,7 @@ Insert a new entry into the queue.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_insert">insert</a>&lt;T: drop&gt;(pq: &<b>mut</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt;, priority: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, value: T) {
-    pq.entries.push_back(<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a> { priority, value});
+    pq.entries.push_back(<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a> { priority, value });
     <b>let</b> index = pq.entries.length() - 1;
     <a href="../sui-framework/priority_queue.md#0x2_priority_queue_restore_heap_recursive">restore_heap_recursive</a>(&<b>mut</b> pq.entries, index);
 }

@@ -1,0 +1,34 @@
+{
+  object(
+    address: "0xd6b9c261ab53d636760a104e4ab5f46c2a3e9cda58bd392488fc4efa6e43728c"
+  ) {
+    previousTransactionBlock {
+      sender {
+        address
+      }
+      kind {
+        __typename
+        ... on ConsensusCommitPrologueTransaction {
+          epoch {
+            epochId
+            referenceGasPrice
+          }
+          round
+          commitTimestamp
+          consensusCommitDigest
+        }
+        ... on ChangeEpochTransaction {
+          computationCharge
+          storageCharge
+          startTimestamp
+          storageRebate
+        }
+        ... on GenesisTransaction {
+          objects {
+            nodes { address }
+          }
+        }
+      }
+    }
+  }
+}

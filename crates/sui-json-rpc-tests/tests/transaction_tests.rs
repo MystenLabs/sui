@@ -257,7 +257,6 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert!(second_page.data.len() > 5);
-    assert!(!second_page.has_next_page);
 
     let mut all_txs = first_page.data.clone();
     all_txs.extend(second_page.data);

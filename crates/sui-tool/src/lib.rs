@@ -106,8 +106,14 @@ async fn make_clients(
 
     for validator in active_validators {
         let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
+        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
+        // let tls_config = sui_tls::create_rustls_client_config(
+        //     sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
+        //     sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        //     None,
+        // );
         let channel = net_config
-            .connect_lazy(&net_addr)
+            .connect_lazy(&net_addr, None)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =
@@ -180,7 +186,7 @@ impl GroupedObjectOutput {
                 Ok(r) => {
                     let obj_digest = r.object.compute_object_reference().2;
                     let parent_tx_digest = r.object.previous_transaction;
-                    let owner = r.object.owner;
+                    let owner = r.object.owner.clone();
                     let lock = r.lock_for_debugging.as_ref().map(|lock| *lock.digest());
                     if lock.is_none() {
                         available_voting_power += stake;
@@ -189,7 +195,7 @@ impl GroupedObjectOutput {
                 }
                 Err(_) => None,
             };
-            let entry = grouped_results.entry(key).or_insert_with(Vec::new);
+            let entry = grouped_results.entry(key.clone()).or_insert_with(Vec::new);
             entry.push(*name);
             let entry: &mut u64 = voting_power.entry(key).or_default();
             *entry += stake;
@@ -275,7 +281,7 @@ impl std::fmt::Display for ConciseObjectOutput {
                 Ok(resp) => {
                     let obj_digest = resp.object.compute_object_reference().2;
                     let parent = resp.object.previous_transaction;
-                    let owner = resp.object.owner;
+                    let owner = resp.object.owner.clone();
                     write!(f, " {:<66} {:<45} {:<51}", obj_digest, parent, owner)?;
                 }
             }
@@ -406,7 +412,7 @@ pub async fn get_transaction_block(
         .sorted_by(|(k1, err1, _), (k2, err2, _)| {
             Ord::cmp(k1, k2).then_with(|| Ord::cmp(err1, err2))
         })
-        .group_by(|(_, _err, r)| {
+        .chunk_by(|(_, _err, r)| {
             r.2.as_ref().map(|ok_result| match &ok_result.status {
                 TransactionStatus::Signed(_) => None,
                 TransactionStatus::Executed(_, effects, _) => Some((
@@ -498,8 +504,8 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
         .add_service(
             "Discovery",
             anemo_cli::ServiceInfo::new().add_method(
-                "GetKnownPeers",
-                anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
+                "GetKnownPeersV2",
+                anemo_cli::ron_method!(DiscoveryClient, get_known_peers_v2, ()),
             ),
         )
         // Sui state sync
@@ -743,12 +749,9 @@ fn start_summary_sync(
                     let epoch_last_checkpoint = checkpoint_store
                         .get_checkpoint_by_sequence_number(*epoch_last_cp_seq_num)?
                         .ok_or(anyhow!("Failed to read checkpoint"))?;
-                    let committee = state_sync_store
-                        .get_committee(cp_epoch as u64)
-                        .expect("store operation should not fail")
-                        .expect(
-                            "Expected committee to exist after syncing all end of epoch checkpoints",
-                        );
+                    let committee = state_sync_store.get_committee(cp_epoch as u64).expect(
+                        "Expected committee to exist after syncing all end of epoch checkpoints",
+                    );
                     epoch_last_checkpoint
                         .verify_authority_signatures(&committee)
                         .expect("Failed to verify checkpoint");
@@ -1155,7 +1158,7 @@ pub async fn dump_checkpoints_from_archive(
     {
         let mut content = serde_json::to_string(
             &store
-                .get_full_checkpoint_contents_by_sequence_number(key.sequence_number)?
+                .get_full_checkpoint_contents_by_sequence_number(key.sequence_number)
                 .unwrap(),
         )?;
         content.truncate(max_content_length);

@@ -8,6 +8,7 @@ use move_symbol_pool::Symbol;
 use crate::{
     command_line::compiler::FullyCompiledProgram,
     diag,
+    diagnostics::DiagnosticReporter,
     parser::{
         ast::{self as P, NamePath, PathEntry},
         filter::{filter_program, FilterContext},
@@ -18,13 +19,13 @@ use crate::{
 use std::sync::Arc;
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     is_source_def: bool,
     current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
-    fn new(env: &'env mut CompilationEnv) -> Self {
+    fn new(env: &'env CompilationEnv) -> Self {
         Self {
             env,
             is_source_def: false,
@@ -92,11 +93,12 @@ pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 // in `compilation_env` is not set. If the test flag is set, no filtering is performed, and instead
 // a test plan is created for use by the testing framework.
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: P::Program,
 ) -> P::Program {
-    if !check_has_unit_test_module(compilation_env, pre_compiled_lib, &prog) {
+    let reporter = compilation_env.diagnostic_reporter_at_top_level();
+    if !check_has_unit_test_module(compilation_env, &reporter, pre_compiled_lib, &prog) {
         return prog;
     }
 
@@ -127,7 +129,8 @@ fn has_unit_test_module(prog: &P::Program) -> bool {
 }
 
 fn check_has_unit_test_module(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
+    reporter: &DiagnosticReporter,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &P::Program,
 ) -> bool {
@@ -145,7 +148,7 @@ fn check_has_unit_test_module(
                 P::Definition::Module(P::ModuleDefinition { name, .. }) => name.0.loc,
                 P::Definition::Address(P::AddressDefinition { loc, .. }) => *loc,
             };
-            compilation_env.add_diag(diag!(
+            reporter.add_diag(diag!(
                 Attributes::InvalidTest,
                 (
                     loc,

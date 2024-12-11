@@ -40,6 +40,7 @@ use tracing::{error, info};
 
 pub type SnapshotChecksums = (DigestByBucketAndPartition, Accumulator);
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
+pub type Sha3DigestType = Arc<Mutex<BTreeMap<u32, BTreeMap<u32, [u8; 32]>>>>;
 pub struct StateSnapshotReaderV1 {
     epoch: u64,
     local_staging_dir_root: PathBuf,
@@ -177,6 +178,20 @@ impl StateSnapshotReaderV1 {
         // per *.obj file against this. We do this so during restore we can pre fetch object
         // references and start building state accumulator and fail early if the state root hash
         // doesn't match but we still need to ensure that objects match references exactly.
+        let (sha3_digests, num_part_files) = self.compute_checksum().await?;
+        let accum_handle =
+            sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
+        self.sync_live_objects(perpetual_db, abort_registration, sha3_digests)
+            .await?;
+        if let Some(handle) = accum_handle {
+            handle.await?;
+        }
+        Ok(())
+    }
+
+    pub async fn compute_checksum(
+        &mut self,
+    ) -> Result<(Arc<Mutex<BTreeMap<u32, BTreeMap<u32, [u8; 32]>>>>, usize), anyhow::Error> {
         let sha3_digests: Arc<Mutex<DigestByBucketAndPartition>> =
             Arc::new(Mutex::new(BTreeMap::new()));
 
@@ -224,17 +239,7 @@ impl StateSnapshotReaderV1 {
             }
         }
         checksum_progress_bar.finish_with_message("Checksumming complete");
-
-        let accum_handle =
-            sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
-
-        self.sync_live_objects(perpetual_db, abort_registration, sha3_digests)
-            .await?;
-
-        if let Some(handle) = accum_handle {
-            handle.await?;
-        }
-        Ok(())
+        Ok((sha3_digests, num_part_files))
     }
 
     fn spawn_accumulation_tasks(
@@ -364,53 +369,21 @@ impl StateSnapshotReaderV1 {
             async move {
                 futures::stream::iter(input_files.iter())
                     .map(|(bucket, (part_num, file_metadata))| {
-                        let epoch_dir = epoch_dir.clone();
-                        let file_path = file_metadata.file_path(&epoch_dir);
-                        let remote_object_store = remote_object_store.clone();
-                        let sha3_digests_cloned = sha3_digests.clone();
+                        let epoch_dir_clone = epoch_dir.clone();
+                        let remote_object_store_clone = remote_object_store.clone();
+                        let sha3_digests_clone = sha3_digests.clone();
                         async move {
                             // Download object file with retries
-                            let max_timeout = Duration::from_secs(30);
-                            let mut timeout = Duration::from_secs(2);
-                            timeout += timeout / 2;
-                            timeout = std::cmp::min(max_timeout, timeout);
-                            let mut attempts = 0usize;
-                            let bytes = loop {
-                                match remote_object_store.get_bytes(&file_path).await {
-                                    Ok(bytes) => {
-                                        break bytes;
-                                    }
-                                    Err(err) => {
-                                        error!(
-                                            "Obj {} .get failed (attempt {}): {}",
-                                            file_metadata.file_path(&epoch_dir),
-                                            attempts,
-                                            err,
-                                        );
-                                        if timeout > max_timeout {
-                                            panic!(
-                                                "Failed to get obj file {} after {} attempts",
-                                                file_metadata.file_path(&epoch_dir),
-                                                attempts,
-                                            );
-                                        } else {
-                                            attempts += 1;
-                                            tokio::time::sleep(timeout).await;
-                                            timeout += timeout / 2;
-                                            continue;
-                                        }
-                                    }
-                                }
-                            };
-
-                            let sha3_digest = sha3_digests_cloned.lock().await;
-                            let bucket_map = sha3_digest
-                                .get(bucket)
-                                .expect("Bucket not in digest map")
-                                .clone();
-                            let sha3_digest = *bucket_map
-                                .get(part_num)
-                                .expect("sha3 digest not in bucket map");
+                            let (bytes, sha3_digest) = download_bytes(
+                                remote_object_store_clone,
+                                file_metadata,
+                                epoch_dir_clone,
+                                sha3_digests_clone,
+                                bucket,
+                                part_num,
+                                None,
+                            )
+                            .await;
                             Ok::<(Bytes, FileMetadata, [u8; 32]), anyhow::Error>((
                                 bytes,
                                 (*file_metadata).clone(),
@@ -449,6 +422,35 @@ impl StateSnapshotReaderV1 {
         .await?;
         obj_progress_bar.finish_with_message("Objects download complete");
         ret
+    }
+
+    // NOTE: export these metadata for indexer restorer
+    pub async fn export_metadata(
+        &self,
+    ) -> Result<
+        (
+            Vec<(&u32, (u32, FileMetadata))>,
+            Path,
+            Arc<dyn ObjectStoreGetExt>,
+            usize,
+        ),
+        anyhow::Error,
+    > {
+        let epoch_dir = self.epoch_dir();
+        let concurrency = self.concurrency;
+        let remote_object_store = self.remote_object_store.clone();
+        let input_files: Vec<(&u32, (u32, FileMetadata))> = self
+            .object_files
+            .iter()
+            .flat_map(|(bucket, parts)| {
+                parts
+                    .clone()
+                    .into_iter()
+                    .map(|entry| (bucket, entry))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        Ok((input_files, epoch_dir, remote_object_store, concurrency))
     }
 
     pub fn ref_iter(&self, bucket_num: u32, part_num: u32) -> Result<ObjectRefIter> {
@@ -505,6 +507,59 @@ impl StateSnapshotReaderV1 {
         let manifest = bcs::from_bytes(&content_buf[MAGIC_BYTES..])?;
         Ok(manifest)
     }
+
+    pub fn get_multi_progress(&self) -> MultiProgress {
+        self.m.clone()
+    }
+}
+
+pub async fn download_bytes(
+    remote_object_store: Arc<dyn ObjectStoreGetExt>,
+    file_metadata: &FileMetadata,
+    epoch_dir: Path,
+    sha3_digests: Sha3DigestType,
+    bucket: &&u32,
+    part_num: &u32,
+    max_timeout_secs: Option<u64>,
+) -> (Bytes, [u8; 32]) {
+    let max_timeout = Duration::from_secs(max_timeout_secs.unwrap_or(60));
+    let mut timeout = Duration::from_secs(2);
+    timeout += timeout / 2;
+    timeout = std::cmp::min(max_timeout, timeout);
+    let mut attempts = 0usize;
+    let file_path = file_metadata.file_path(&epoch_dir);
+    let bytes = loop {
+        match remote_object_store.get_bytes(&file_path).await {
+            Ok(bytes) => {
+                break bytes;
+            }
+            Err(err) => {
+                error!(
+                    "Obj {} .get failed (attempt {}): {}",
+                    file_metadata.file_path(&epoch_dir),
+                    attempts,
+                    err,
+                );
+                if timeout > max_timeout {
+                    panic!("Failed to get obj file after {} attempts", attempts);
+                } else {
+                    attempts += 1;
+                    tokio::time::sleep(timeout).await;
+                    timeout += timeout / 2;
+                    continue;
+                }
+            }
+        }
+    };
+    let sha3_digest = sha3_digests.lock().await;
+    let bucket_map = sha3_digest
+        .get(bucket)
+        .expect("Bucket not in digest map")
+        .clone();
+    let sha3_digest = *bucket_map
+        .get(part_num)
+        .expect("sha3 digest not in bucket map");
+    (bytes, sha3_digest)
 }
 
 /// An iterator over all object refs in a .ref file.

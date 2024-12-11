@@ -1033,7 +1033,7 @@ impl EventApi {
     ///         .await?;
     ///     let mut subscribe_all = sui
     ///         .event_api()
-    ///         .subscribe_event(EventFilter::All(vec![]))
+    ///         .subscribe_event(EventFilter::All([]))
     ///         .await?;
     ///     loop {
     ///         println!("{:?}", subscribe_all.next().await);
@@ -1145,7 +1145,9 @@ impl QuorumDriverApi {
                 tx_bytes.clone(),
                 signatures.clone(),
                 Some(options.clone()),
-                Some(request_type.clone()),
+                // Ignore the request type as we emulate WaitForLocalExecution below.
+                // It will default to WaitForEffectsCert on the RPC nodes.
+                None,
             )
             .await?;
 
