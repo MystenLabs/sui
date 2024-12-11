@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ServiceAction"],"fn":["service_cmd"],"mod":["init"],"struct":["LogsArgs","ServiceArgs"]};

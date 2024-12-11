@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_connection_pool"],"mod":["indexer","models","schema"],"type":["PgConnectionPool","PgPoolConnection"]};

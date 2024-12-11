@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ExecuteTransaction","GetTransaction","ListTransactions","ListTransactionsCursorParameters","ResolveTransaction","ResolveTransactionQueryParameters","ResolveTransactionResponse","SimulateTransaction","SimulateTransactionQueryParameters","TransactionCursor","TransactionNotFoundError","TransactionSimulationResponse"]};

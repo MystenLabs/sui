@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Peer-to-peer data synchronization of checkpoints."><title>sui_network::state_sync - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_network" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_network/index.html">sui_network</a><span class="version">0.0.0</span></h2></div><h2 class="location"><a href="#">Module state_sync</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate sui_network</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">sui_network</a>::<wbr><a class="mod" href="#">state_sync</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/sui_network/state_sync/mod.rs.html#4-1420">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Peer-to-peer data synchronization of checkpoints.</p>
+<p>This StateSync module is responsible for the synchronization and dissemination of checkpoints
+and the transactions, and their effects, contained within. This module is <em>not</em> responsible for
+the execution of the transactions included in a checkpoint, that process is left to another
+component in the system.</p>
+<h2 id="high-level-overview-of-statesync"><a class="doc-anchor" href="#high-level-overview-of-statesync">§</a>High-level Overview of StateSync</h2>
+<p>StateSync discovers new checkpoints via a few different sources:</p>
+<ol>
+<li>If this node is a Validator, checkpoints will be produced via consensus at which point
+consensus can notify state-sync of the new checkpoint via <a href="struct.Handle.html#method.send_checkpoint" title="method sui_network::state_sync::Handle::send_checkpoint">Handle::send_checkpoint</a>.</li>
+<li>A peer notifies us of the latest checkpoint which they have synchronized. State-Sync will
+also periodically query its peers to discover what their latest checkpoint is.</li>
+</ol>
+<p>We keep track of two different watermarks:</p>
+<ul>
+<li>highest_verified_checkpoint - This is the highest checkpoint header that we’ve locally
+verified. This indicated that we have in our persistent store (and have verified) all
+checkpoint headers up to and including this value.</li>
+<li>highest_synced_checkpoint - This is the highest checkpoint that we’ve fully synchronized,
+meaning we’ve downloaded and have in our persistent stores all of the transactions, and their
+effects (but not the objects), for all checkpoints up to and including this point. This is
+the watermark that is shared with other peers, either via notification or when they query for
+our latest checkpoint, and is intended to be used as a guarantee of data availability.</li>
+</ul>
+<p>The <code>PeerHeights</code> struct is used to track the highest_synced_checkpoint watermark for all of
+our peers.</p>
+<p>When a new checkpoint is discovered, and we’ve determined that it is higher than our
+highest_verified_checkpoint, then StateSync will kick off a task to synchronize and verify all
+checkpoints between our highest_synced_checkpoint and the newly discovered checkpoint. This
+process is done by querying one of our peers for the checkpoints we’re missing (using the
+<code>PeerHeights</code> struct as a way to intelligently select which peers have the data available for
+us to query) at which point we will locally verify the signatures on the checkpoint header with
+the appropriate committee (based on the epoch). As checkpoints are verified, the
+highest_synced_checkpoint watermark will be ratcheted up.</p>
+<p>Once we’ve ratcheted up our highest_verified_checkpoint, and if it is higher than
+highest_synced_checkpoint, StateSync will then kick off a task to synchronize the contents of
+all of the checkpoints from highest_synced_checkpoint..=highest_verified_checkpoint. After the
+contents of each checkpoint is fully downloaded, StateSync will update our
+highest_synced_checkpoint watermark and send out a notification on a broadcast channel
+indicating that a new checkpoint has been fully downloaded. Notifications on this broadcast
+channel will always be made in order. StateSync will also send out a notification to its peers
+of the newly synchronized checkpoint so that it can help other peers synchronize.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct sui_network::state_sync::Builder">Builder</a></div></li><li><div class="item-name"><a class="struct" href="struct.GetCheckpointAvailabilityResponse.html" title="struct sui_network::state_sync::GetCheckpointAvailabilityResponse">GetCheckpointAvailabilityResponse</a></div></li><li><div class="item-name"><a class="struct" href="struct.Handle.html" title="struct sui_network::state_sync::Handle">Handle</a></div><div class="desc docblock-short">A handle to the StateSync subsystem.</div></li><li><div class="item-name"><a class="struct" href="struct.StateSyncClient.html" title="struct sui_network::state_sync::StateSyncClient">StateSyncClient</a></div></li><li><div class="item-name"><a class="struct" href="struct.StateSyncServer.html" title="struct sui_network::state_sync::StateSyncServer">StateSyncServer</a></div></li><li><div class="item-name"><a class="struct" href="struct.UnstartedStateSync.html" title="struct sui_network::state_sync::UnstartedStateSync">UnstartedStateSync</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.GetCheckpointSummaryRequest.html" title="enum sui_network::state_sync::GetCheckpointSummaryRequest">GetCheckpointSummaryRequest</a></div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.StateSync.html" title="trait sui_network::state_sync::StateSync">StateSync</a></div><div class="desc docblock-short">Generated trait containing RPC methods that should be implemented for use with StateSyncServer.</div></li></ul></section></div></main></body></html>

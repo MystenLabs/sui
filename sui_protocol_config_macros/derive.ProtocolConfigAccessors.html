@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This proc macro generates getters, attribute lookup, etc for protocol config fields of type `Option&lt;T&gt;` and for the feature flags Example for a field: `new_constant: Option&lt;u64&gt;`, and for feature flags `feature: bool`, we derive"><title>ProtocolConfigAccessors in sui_protocol_config_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sui_protocol_config_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../sui_protocol_config_macros/index.html">sui_protocol_config_macros</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">sui_protocol_config_macros</a>::<wbr><a class="derive" href="#">ProtocolConfigAccessors</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/sui_protocol_config_macros/lib.rs.html#43-225">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(ProtocolConfigAccessors)]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This proc macro generates getters, attribute lookup, etc for protocol config fields of type <code>Option&lt;T&gt;</code>
+and for the feature flags
+Example for a field: <code>new_constant: Option&lt;u64&gt;</code>, and for feature flags <code>feature: bool</code>, we derive</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>    <span class="doccomment">/// Returns the value of the field if exists at the given version, otherise panic
+    </span><span class="kw">pub fn </span>new_constant(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.new_constant.expect(<span class="self">Self</span>::CONSTANT_ERR_MSG)
+    }
+    <span class="doccomment">/// Returns the value of the field if exists at the given version, otherise None.
+    </span><span class="kw">pub fn </span>new_constant_as_option(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="self">self</span>.new_constant
+    }
+    <span class="comment">// We auto derive an enum such that the variants are all the types of the fields
+    </span><span class="kw">pub enum </span>ProtocolConfigValue {
+       u32(u32),
+       u64(u64),
+       ..............
+    }
+    <span class="comment">// This enum is used to return field values so that the type is also encoded in the response
+
+    </span><span class="doccomment">/// Returns the value of the field if exists at the given version, otherise None
+    </span><span class="kw">pub fn </span>lookup_attr(<span class="kw-2">&amp;</span><span class="self">self</span>, value: String) -&gt; <span class="prelude-ty">Option</span>&lt;ProtocolConfigValue&gt;;
+
+    <span class="doccomment">/// Returns a map of all configs to values
+    </span><span class="kw">pub fn </span>attr_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; std::collections::BTreeMap&lt;String, <span class="prelude-ty">Option</span>&lt;ProtocolConfigValue&gt;&gt;;
+
+    <span class="doccomment">/// Returns a feature by the string name or None if it doesn't exist
+    </span><span class="kw">pub fn </span>lookup_feature(<span class="kw-2">&amp;</span><span class="self">self</span>, value: String) -&gt; <span class="prelude-ty">Option</span>&lt;bool&gt;;
+
+    <span class="doccomment">/// Returns a map of all features to values
+    </span><span class="kw">pub fn </span>feature_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; std::collections::BTreeMap&lt;String, bool&gt;;</code></pre></div>
+</div></details></section></div></main></body></html>
