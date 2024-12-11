@@ -108,9 +108,28 @@ pub struct RpcMetricsCallbackHandler {
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
     fn on_response(&mut self, response: &http::response::Parts) {
+        const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
+
+        let status = if response
+            .headers
+            .get(&http::header::CONTENT_TYPE)
+            .is_some_and(|header| header == tonic::metadata::GRPC_CONTENT_TYPE)
+        {
+            let code = response
+                .headers
+                .get(&GRPC_STATUS)
+                .map(http::HeaderValue::as_bytes)
+                .map(tonic::Code::from_bytes)
+                .unwrap_or(tonic::Code::Ok);
+
+            code_as_str(code)
+        } else {
+            response.status.as_str()
+        };
+
         self.metrics
             .num_requests
-            .with_label_values(&[self.path.as_ref(), response.status.as_str()])
+            .with_label_values(&[self.path.as_ref(), status])
             .inc();
 
         self.counted_response = true;
@@ -143,5 +162,27 @@ impl Drop for RpcMetricsCallbackHandler {
                 .with_label_values(&[self.path.as_ref(), "canceled"])
                 .inc();
         }
+    }
+}
+
+fn code_as_str(code: tonic::Code) -> &'static str {
+    match code {
+        tonic::Code::Ok => "ok",
+        tonic::Code::Cancelled => "canceled",
+        tonic::Code::Unknown => "unknown",
+        tonic::Code::InvalidArgument => "invalid-argument",
+        tonic::Code::DeadlineExceeded => "deadline-exceeded",
+        tonic::Code::NotFound => "not-found",
+        tonic::Code::AlreadyExists => "already-exists",
+        tonic::Code::PermissionDenied => "permission-denied",
+        tonic::Code::ResourceExhausted => "resource-exhausted",
+        tonic::Code::FailedPrecondition => "failed-precondition",
+        tonic::Code::Aborted => "aborted",
+        tonic::Code::OutOfRange => "out-of-range",
+        tonic::Code::Unimplemented => "unimplemented",
+        tonic::Code::Internal => "internal",
+        tonic::Code::Unavailable => "unavailable",
+        tonic::Code::DataLoss => "data-loss",
+        tonic::Code::Unauthenticated => "unauthenticated",
     }
 }
