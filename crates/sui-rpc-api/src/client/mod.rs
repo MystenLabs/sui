@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod response_ext;
+pub use response_ext::ResponseExt;
+
 pub mod sdk;
 use sdk::BoxError;
 use sdk::Error;
