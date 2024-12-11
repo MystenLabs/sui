@@ -12,7 +12,11 @@ mod token_set;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{
-    parser::{self, ast::PackageDefinition, syntax::parse_file_string},
+    parser::{
+        self,
+        ast::{PackageDefinition, PkgDefKind},
+        syntax::parse_file_string,
+    },
     shared::{
         files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex,
         NamedAddressMaps,
@@ -94,10 +98,14 @@ pub(crate) fn parse_program(
         } = file;
         files.add(hash, fname, text);
         source_comments.insert(hash, comments);
-        let defs = defs.into_iter().map(|def| PackageDefinition {
-            package,
-            named_address_map,
-            def,
+        let defs = defs.into_iter().map(|def| {
+            let pkg_def_kind = pkg_def_kind(compilation_env, is_dep, PathBuf::from(fname.as_str()));
+            PackageDefinition {
+                package,
+                named_address_map,
+                def,
+                def_kind: pkg_def_kind,
+            }
         });
         if is_dep {
             lib_definitions.extend(defs);
@@ -112,6 +120,20 @@ pub(crate) fn parse_program(
         lib_definitions,
     };
     Ok((files, pprog, source_comments))
+}
+
+fn pkg_def_kind(compilation_env: &CompilationEnv, is_dep: bool, path: PathBuf) -> PkgDefKind {
+    if is_dep {
+        PkgDefKind::Library
+    } else if let Some(files_to_compile) = compilation_env.files_to_compile() {
+        if files_to_compile.contains(&path) {
+            PkgDefKind::Source
+        } else {
+            PkgDefKind::Skipped
+        }
+    } else {
+        PkgDefKind::Source
+    }
 }
 
 fn ensure_targets_deps_dont_intersect(
@@ -167,19 +189,8 @@ fn parse_file(
             text: source_str,
         });
     }
-    let interface_only = if let Some(files_to_compile) = compilation_env.files_to_compile() {
-        !files_to_compile.contains(&PathBuf::from(path.as_str()))
-    } else {
-        false
-    };
-
-    let (defs, comments) = match parse_file_string(
-        compilation_env,
-        file_hash,
-        &source_str,
-        package,
-        interface_only,
-    ) {
+    let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
+    {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
             reporter.add_diags(ds);
