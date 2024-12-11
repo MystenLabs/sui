@@ -26,7 +26,8 @@ use sui_types::{
     digests::ConsensusCommitDigest,
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
-        AuthorityIndex, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+        AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
+        ConsensusTransactionKey, ConsensusTransactionKind,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -821,26 +822,50 @@ impl ConsensusCommitInfo {
     fn consensus_commit_prologue_v3_transaction(
         &self,
         epoch: u64,
-        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
     ) -> VerifiedExecutableTransaction {
         let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
             epoch,
             self.round,
             self.timestamp,
             self.consensus_commit_digest,
-            cancelled_txn_version_assignment,
+            consensus_determined_version_assignments,
         );
         VerifiedExecutableTransaction::new_system(transaction, epoch)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn create_consensus_commit_prologue_transaction(
         &self,
         epoch: u64,
         protocol_config: &ProtocolConfig,
-        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+        cancelled_txn_version_assignment: Vec<(
+            TransactionDigest,
+            Vec<((ObjectID, SequenceNumber), SequenceNumber)>,
+        )>,
     ) -> VerifiedExecutableTransaction {
-        if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
-            self.consensus_commit_prologue_v3_transaction(epoch, cancelled_txn_version_assignment)
+        if protocol_config.consensus_v2_objects() {
+            self.consensus_commit_prologue_v3_transaction(
+                epoch,
+                ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
+                    cancelled_txn_version_assignment,
+                ),
+            )
+        } else if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
+            self.consensus_commit_prologue_v3_transaction(
+                epoch,
+                ConsensusDeterminedVersionAssignments::CancelledTransactions(
+                    cancelled_txn_version_assignment
+                        .into_iter()
+                        .map(|(tx_digest, versions)| {
+                            (
+                                tx_digest,
+                                versions.into_iter().map(|(id, v)| (id.0, v)).collect(),
+                            )
+                        })
+                        .collect(),
+                ),
+            )
         } else if protocol_config.include_consensus_digest_in_prologue() {
             self.consensus_commit_prologue_v2_transaction(epoch)
         } else {
