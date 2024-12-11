@@ -13679,12 +13679,15 @@ dependencies = [
  "eyre",
  "futures",
  "http 1.1.0",
+ "lazy_static",
  "mysten-metrics",
  "mysten-network",
  "parking_lot 0.12.1",
  "prometheus",
+ "reqwest 0.12.5",
  "scopeguard",
  "serde",
+ "serde_json",
  "shared-crypto",
  "sui-config",
  "sui-json-rpc-types",
@@ -13705,6 +13708,7 @@ dependencies = [
  "ttl_cache",
  "typed-store",
  "uuid 1.2.2",
+ "wiremock",
 ]
 
 [[package]]

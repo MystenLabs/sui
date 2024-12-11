@@ -29,7 +29,9 @@ eyre.workspace = true
 tempfile.workspace = true
 parking_lot.workspace = true
 tonic.workspace = true
+reqwest.workspace = true
 tower_governor = "0.4.3"
+lazy_static = "1"
 
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true
@@ -45,6 +47,8 @@ mysten-network.workspace = true
 
 [dev-dependencies]
 test-cluster.workspace = true
+wiremock.workspace = true
+serde_json.workspace = true
 
 [[bin]]
 name = "sui-faucet"
