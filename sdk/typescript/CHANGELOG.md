@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.17.0
+
+### Minor Changes
+
+- 20af12d: add passkey sdk
+
 ## 1.16.2
 
 ### Patch Changes
