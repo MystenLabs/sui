@@ -648,10 +648,6 @@ impl ResponseBuilder {
         self.content(mime::APPLICATION_JSON.as_ref(), media_type)
     }
 
-    pub fn bcs_content(&mut self) -> &mut Self {
-        self.content(crate::rest::APPLICATION_BCS, MediaType::default())
-    }
-
     pub fn text_content(&mut self) -> &mut Self {
         self.content(mime::TEXT_PLAIN_UTF_8.as_ref(), MediaType::default())
     }

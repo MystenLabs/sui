@@ -40,7 +40,6 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
     &objects::GetObjectWithVersion,
     &objects::ListDynamicFields,
     &checkpoints::ListCheckpoints,
-    &checkpoints::GetFullCheckpoint,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
     &committee::GetCommittee,

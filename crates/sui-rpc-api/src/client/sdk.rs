@@ -6,7 +6,6 @@ use reqwest::StatusCode;
 use reqwest::Url;
 use sui_sdk_types::types::unresolved::Transaction as UnresolvedTransaction;
 use sui_sdk_types::types::Address;
-use sui_sdk_types::types::CheckpointData;
 use sui_sdk_types::types::CheckpointDigest;
 use sui_sdk_types::types::CheckpointSequenceNumber;
 use sui_sdk_types::types::EpochId;
@@ -266,19 +265,6 @@ impl Client {
         self.json(request).await
     }
 
-    pub async fn get_full_checkpoint(
-        &self,
-        checkpoint_sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Response<CheckpointData>> {
-        let url = self
-            .url()
-            .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
-
-        let request = self.inner.get(url);
-
-        self.bcs(request).await
-    }
-
     pub async fn get_transaction(
         &self,
         transaction: &TransactionDigest,
@@ -401,24 +387,6 @@ impl Client {
 
         let json = response.json().await?;
         Ok(Response::new(json, parts))
-    }
-
-    pub(super) async fn bcs<T: serde::de::DeserializeOwned>(
-        &self,
-        request: reqwest::RequestBuilder,
-    ) -> Result<Response<T>> {
-        let response = request
-            .header(reqwest::header::ACCEPT, crate::rest::APPLICATION_BCS)
-            .send()
-            .await?;
-
-        let (response, parts) = self.check_response(response).await?;
-
-        let bytes = response.bytes().await?;
-        match bcs::from_bytes(&bytes) {
-            Ok(bcs) => Ok(Response::new(bcs, parts)),
-            Err(e) => Err(Error::from_error(e).with_parts(parts)),
-        }
     }
 }
 

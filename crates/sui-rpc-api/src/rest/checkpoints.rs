@@ -8,16 +8,13 @@ use sui_sdk_types::types::{CheckpointSequenceNumber, SignedCheckpointSummary};
 use sui_types::storage::ReadStore;
 
 use crate::reader::StateReader;
-use crate::response::Bcs;
 use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
-use crate::service::checkpoints::{CheckpointId, CheckpointNotFoundError};
+use crate::service::checkpoints::CheckpointId;
 use crate::types::{CheckpointResponse, GetCheckpointOptions};
+use crate::Result;
 use crate::{Direction, RpcService};
-use crate::{Result, RpcServiceError};
 use documented::Documented;
-
-use super::accept::AcceptFormat;
 
 /// Fetch a Checkpoint
 ///
@@ -232,99 +229,4 @@ impl ListCheckpointsPaginationParameters {
     pub fn direction(&self) -> Direction {
         self.direction.unwrap_or(Direction::Descending)
     }
-}
-
-/// Fetch a Full Checkpoint
-///
-/// Request a checkpoint and all data associated with it including:
-/// - CheckpointSummary
-/// - Validator Signature
-/// - CheckpointContents
-/// - Transactions, Effects, Events, as well as all input and output objects
-///
-/// If the requested checkpoint is below the Node's `lowest_available_checkpoint_objects`, a 410
-/// will be returned.
-#[derive(Documented)]
-pub struct GetFullCheckpoint;
-
-impl ApiEndpoint<RpcService> for GetFullCheckpoint {
-    fn method(&self) -> axum::http::Method {
-        axum::http::Method::GET
-    }
-
-    fn path(&self) -> &'static str {
-        "/checkpoints/{checkpoint}/full"
-    }
-
-    fn stable(&self) -> bool {
-        // TODO transactions are serialized with an intent message, do we want to change this
-        // format to remove it (and remove user signature duplication) prior to stabalizing the
-        // format?
-        false
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Checkpoint")
-            .operation_id("Get Full Checkpoint")
-            .description(Self::DOCS)
-            .path_parameter::<CheckpointId>("checkpoint", generator)
-            .response(200, ResponseBuilder::new().bcs_content().build())
-            .response(404, ResponseBuilder::new().build())
-            .response(410, ResponseBuilder::new().build())
-            .response(500, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> RouteHandler<RpcService> {
-        RouteHandler::new(self.method(), get_full_checkpoint)
-    }
-}
-
-async fn get_full_checkpoint(
-    Path(checkpoint_id): Path<CheckpointId>,
-    accept: AcceptFormat,
-    State(state): State<StateReader>,
-) -> Result<Bcs<sui_types::full_checkpoint_content::CheckpointData>> {
-    match accept {
-        AcceptFormat::Bcs => {}
-        _ => {
-            return Err(RpcServiceError::new(
-                axum::http::StatusCode::BAD_REQUEST,
-                "invalid accept type; only 'application/bcs' is supported",
-            ))
-        }
-    }
-
-    let verified_summary = match checkpoint_id {
-        CheckpointId::SequenceNumber(s) => {
-            // Since we need object contents we need to check for the lowest available checkpoint
-            // with objects that hasn't been pruned
-            let oldest_checkpoint = state.inner().get_lowest_available_checkpoint_objects()?;
-            if s < oldest_checkpoint {
-                return Err(crate::RpcServiceError::new(
-                    axum::http::StatusCode::GONE,
-                    "Old checkpoints have been pruned",
-                ));
-            }
-
-            state.inner().get_checkpoint_by_sequence_number(s)
-        }
-        CheckpointId::Digest(d) => state.inner().get_checkpoint_by_digest(&d.into()),
-    }
-    .ok_or(CheckpointNotFoundError(checkpoint_id))?;
-
-    let checkpoint_contents = state
-        .inner()
-        .get_checkpoint_contents_by_digest(&verified_summary.content_digest)
-        .ok_or(CheckpointNotFoundError(checkpoint_id))?;
-
-    let checkpoint_data = state
-        .inner()
-        .get_checkpoint_data(verified_summary, checkpoint_contents)?;
-
-    Ok(Bcs(checkpoint_data))
 }

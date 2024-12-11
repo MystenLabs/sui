@@ -539,43 +539,6 @@
         }
       }
     },
-    "/checkpoints/{checkpoint}/full": {
-      "get": {
-        "tags": [
-          "Checkpoint"
-        ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nFetch a Full Checkpoint\n\nRequest a checkpoint and all data associated with it including:\n- CheckpointSummary\n- Validator Signature\n- CheckpointContents\n- Transactions, Effects, Events, as well as all input and output objects\n\nIf the requested checkpoint is below the Node's `lowest_available_checkpoint_objects`, a 410\nwill be returned.",
-        "operationId": "Get Full Checkpoint",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "checkpoint",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CheckpointId"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/bcs": {}
-            }
-          },
-          "404": {
-            "description": ""
-          },
-          "410": {
-            "description": ""
-          },
-          "500": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/transactions/{transaction}": {
       "get": {
         "tags": [
