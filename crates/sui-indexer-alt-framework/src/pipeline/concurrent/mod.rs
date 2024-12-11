@@ -103,7 +103,10 @@ pub struct PrunerConfig {
 
 /// Values ready to be written to the database. This is an internal type used to communicate
 /// between the collector and the committer parts of the pipeline.
-struct Batched<H: Handler> {
+///
+/// Values inside each batch may or may not be from the same checkpoint. Values in the same
+/// checkpoint can also be split across multiple batches.
+struct BatchedRows<H: Handler> {
     /// The rows to write
     values: Vec<H::Value>,
     /// Proportions of all the watermarks that are represented in this chunk
@@ -120,7 +123,7 @@ impl PrunerConfig {
     }
 }
 
-impl<H: Handler> Batched<H> {
+impl<H: Handler> BatchedRows<H> {
     fn new() -> Self {
         Self {
             values: vec![],

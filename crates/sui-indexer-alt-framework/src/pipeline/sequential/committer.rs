@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
-    pipeline::{logging::WatermarkLogger, Indexed, WARN_PENDING_WATERMARKS},
+    pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
     watermarks::CommitterWatermark,
 };
 
@@ -42,7 +42,7 @@ use super::{Handler, SequentialConfig};
 pub(super) fn committer<H: Handler + 'static>(
     config: SequentialConfig,
     watermark: Option<CommitterWatermark<'static>>,
-    mut rx: mpsc::Receiver<Indexed<H>>,
+    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
@@ -84,7 +84,7 @@ pub(super) fn committer<H: Handler + 'static>(
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
-        let mut pending: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
+        let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         info!(pipeline = H::NAME, ?watermark, "Starting committer");
