@@ -25,13 +25,12 @@ use sui_macros::sim_test;
 use sui_network::default_mysten_network_config;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
+use sui_types::error::Weight;
 use sui_types::{
     crypto::Ed25519SuiSignature,
     quorum_driver_types::ExecuteTransactionRequestType,
     signature::GenericSignature,
-    traffic_control::{
-        FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig, Weight,
-    },
+    traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig},
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -368,6 +367,9 @@ async fn test_fullnode_traffic_control_error_blocked() -> Result<(), anyhow::Err
         if let Err(err) = response {
             if err.to_string().contains("Too many requests") {
                 return Ok(());
+            } else {
+                // Test that tallyable errors have a weight passed from QuorumDriver
+                assert!(err.to_string().contains("data: Some(RawValue(\"1.0\"))"));
             }
         } else {
             let SuiTransactionBlockResponse {

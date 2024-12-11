@@ -12,6 +12,7 @@ use jsonrpsee::types::ErrorObject;
 use std::collections::BTreeMap;
 use sui_json_rpc_api::{TRANSACTION_EXECUTION_CLIENT_ERROR_CODE, TRANSIENT_ERROR_CODE};
 use sui_types::committee::{QUORUM_THRESHOLD, TOTAL_VOTING_POWER};
+use sui_types::error::Weight;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -133,10 +134,11 @@ impl From<Error> for RpcError {
             Error::QuorumDriverError(err) => {
                 match err {
                     QuorumDriverError::InvalidUserSignature(err) => {
+                        let error_weight = Weight::from(err.clone());
                         let error_object = ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
                             format!("Invalid user signature: {err}"),
-                            None::<()>,
+                            serde_json::to_string(&error_weight).ok(),
                         );
                         RpcError::Call(CallError::Custom(error_object))
                     }
@@ -213,6 +215,20 @@ impl From<Error> for RpcError {
                         RpcError::Call(CallError::Custom(error_object))
                     }
                     QuorumDriverError::NonRecoverableTransactionError { errors } => {
+                        let total_error_stake =
+                            errors.iter().map(|(_, stake, _)| *stake).sum::<u64>();
+                        // compute average error weight by stake
+                        let avg_normalized_weight = if total_error_stake > 0 {
+                            errors
+                                .iter()
+                                .map(|(sui_error, stake, _)| {
+                                    Weight::from(sui_error.clone()).inner() * *stake as f64
+                                })
+                                .sum::<f64>()
+                                / total_error_stake as f64
+                        } else {
+                            0.0
+                        };
                         let new_errors: Vec<String> = errors
                             .into_iter()
                             // sort by total stake, descending, so users see the most prominent one first
@@ -257,15 +273,16 @@ impl From<Error> for RpcError {
                         let error_object = ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
                             error_msg,
-                            None::<()>,
+                            serde_json::to_string(&avg_normalized_weight).ok(),
                         );
                         RpcError::Call(CallError::Custom(error_object))
                     }
-                    QuorumDriverError::QuorumDriverInternalError(_) => {
+                    QuorumDriverError::QuorumDriverInternalError(error) => {
+                        let error_weight = Weight::from(error);
                         let error_object = ErrorObject::owned(
                             INTERNAL_ERROR_CODE,
                             "Internal error occurred while executing transaction.",
-                            None::<()>,
+                            serde_json::to_string(&error_weight).ok(),
                         );
                         RpcError::Call(CallError::Custom(error_object))
                     }
@@ -494,7 +511,7 @@ mod tests {
                                 needed_gas_amount: 100,
                             },
                         },
-                        0,
+                        5_000,
                         vec![],
                     ),
                     (
@@ -504,13 +521,15 @@ mod tests {
                                 current_version: 10.into(),
                             },
                         },
-                        0,
+                        5_000,
                         vec![],
                     ),
                 ],
             };
-
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
+            assert!(rpc_error
+                .to_string()
+                .contains("data: Some(RawValue(\"0.0\")"));
 
             let error_object: ErrorObjectOwned = rpc_error.into();
             let expected_code = expect!["-32002"];
@@ -518,6 +537,36 @@ mod tests {
             let expected_message =
                 expect!["Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Balance of gas object 10 is lower than the needed amount: 100\n- Object ID 0x0000000000000000000000000000000000000000000000000000000000000000 Version 0x0 Digest 11111111111111111111111111111111 is not available for consumption, current version: 0xa"];
             expected_message.assert_eq(error_object.message());
+
+            // Test stake weighted error weight. Given one fully weighted tallyable error with half stake
+            // and one non-tallyable error with full stake, the average weighted error should be 0.5
+            let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
+                errors: vec![
+                    (
+                        SuiError::UserInputError {
+                            error: UserInputError::IncorrectUserSignature {
+                                error: "Incorrect user signature".to_string(),
+                            },
+                        },
+                        5_000,
+                        vec![],
+                    ),
+                    (
+                        SuiError::UserInputError {
+                            error: UserInputError::ObjectVersionUnavailableForConsumption {
+                                provided_obj_ref: test_object_ref(),
+                                current_version: 10.into(),
+                            },
+                        },
+                        5_000,
+                        vec![],
+                    ),
+                ],
+            };
+            let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
+            assert!(rpc_error
+                .to_string()
+                .contains("data: Some(RawValue(\"0.5\")"));
         }
 
         #[test]
