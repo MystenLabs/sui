@@ -575,7 +575,7 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config, None, None)
+        test_simulated_load_with_test_config(test_cluster, 180, simulated_load_config, None, None)
             .await;
     }
 
@@ -947,6 +947,7 @@ mod test {
         shared_deletion_weight: u32,
         shared_counter_hotness_factor: u32,
         randomness_weight: u32,
+        randomized_transaction_weight: u32,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -965,6 +966,7 @@ mod test {
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
                 randomness_weight: 1,
+                randomized_transaction_weight: 1,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -1023,7 +1025,7 @@ mod test {
 
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
-        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 10));
+        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 20));
         let num_workers = num_workers.unwrap_or(get_var("SIM_STRESS_TEST_WORKERS", 10));
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
@@ -1053,6 +1055,7 @@ mod test {
             randomness: config.randomness_weight,
             adversarial: adversarial_weight,
             expected_failure: config.expected_failure_weight,
+            randomized_transaction: config.randomized_transaction_weight,
         };
 
         let workload_config = WorkloadConfig {
