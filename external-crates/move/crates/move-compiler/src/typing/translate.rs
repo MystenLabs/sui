@@ -8,7 +8,7 @@ use crate::{
     editions::{FeatureGate, Flavor},
     expansion::ast::{
         AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, TargetKind, Value_, Visibility,
+        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     ice, ice_assert,
     naming::ast::{
@@ -16,8 +16,8 @@ use crate::{
         TypeName, TypeName_, Type_,
     },
     parser::ast::{
-        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, UnaryOp_,
-        VariantName,
+        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, TargetKind,
+        UnaryOp_, VariantName,
     },
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},

@@ -1233,7 +1233,7 @@ impl PathExpander for LegacyPathExpander {
     }
 
     fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc) {
-        if context.env.ide_mode() && context.pkg_def_kind == P::PkgDefKind::Source {
+        if context.env.ide_mode() && matches!(context.target_kind, P::TargetKind::Source { .. }) {
             let mut info = AliasAutocompleteInfo::new();
             for (name, addr) in context.named_address_mapping.unwrap().iter() {
                 info.addresses.insert(*name, *addr);

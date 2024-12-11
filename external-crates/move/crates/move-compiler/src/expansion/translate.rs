@@ -17,7 +17,7 @@ use crate::{
             AliasEntry, AliasMapBuilder, ParserExplicitUseFun, UnnecessaryAlias, UseFunsBuilder,
         },
         aliases::AliasSet,
-        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, TargetKind},
+        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string,
         name_validation::{
             check_restricted_name_all_cases, check_valid_address_name,
@@ -75,7 +75,7 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) env: &'env CompilationEnv,
     pub(super) address_conflicts: BTreeSet<Symbol>,
     pub(super) current_package: Option<Symbol>,
-    pub(super) pkg_def_kind: P::PkgDefKind,
+    pub(super) target_kind: P::TargetKind,
     pub(super) reporter: DiagnosticReporter<'env>,
 }
 
@@ -110,7 +110,9 @@ impl<'env, 'map> Context<'env, 'map> {
             address_conflicts,
             module_members,
             current_package: None,
-            pkg_def_kind: P::PkgDefKind::Source,
+            target_kind: P::TargetKind::Source {
+                is_root_package: true,
+            },
             reporter,
         };
         Context {
@@ -495,7 +497,9 @@ pub fn program(
         module_members: UniqueMap::new(),
         address_conflicts,
         current_package: None,
-        pkg_def_kind: P::PkgDefKind::Source,
+        target_kind: P::TargetKind::Source {
+            is_root_package: true,
+        },
         reporter,
     };
 
@@ -544,10 +548,10 @@ pub fn program(
         package,
         named_address_map,
         def,
-        def_kind: pkg_def_kind,
+        target_kind,
     } in source_definitions
     {
-        context.defn_context.pkg_def_kind = pkg_def_kind;
+        context.defn_context.target_kind = target_kind;
         context.defn_context.current_package = package;
         let named_address_map = named_address_maps.get(named_address_map);
         if context
@@ -580,10 +584,10 @@ pub fn program(
         package,
         named_address_map,
         def,
-        def_kind: pkg_def_kind,
+        target_kind: pkg_def_kind,
     } in lib_definitions
     {
-        context.defn_context.pkg_def_kind = pkg_def_kind;
+        context.defn_context.target_kind = pkg_def_kind;
         context.defn_context.current_package = package;
         let named_address_map = named_address_maps.get(named_address_map);
         if context
@@ -943,7 +947,10 @@ fn module_(
             P::ModuleMember::Use(_) => unreachable!(),
             P::ModuleMember::Friend(f) => friend(context, &mut friends, f),
             P::ModuleMember::Function(mut f) => {
-                if context.defn_context.pkg_def_kind != P::PkgDefKind::Source && f.macro_.is_none()
+                if !matches!(
+                    context.defn_context.target_kind,
+                    P::TargetKind::Source { .. }
+                ) && f.macro_.is_none()
                 {
                     f.body.value = P::FunctionBody_::Native
                 }
@@ -965,20 +972,12 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
-    let target_kind = match context.defn_context.pkg_def_kind {
-        k @ (P::PkgDefKind::Library | P::PkgDefKind::Skipped) => TargetKind::External(k),
-        P::PkgDefKind::Source => {
-            let is_root_package = !context.env().package_config(package_name).is_dependency;
-            TargetKind::Source { is_root_package }
-        }
-    };
-
     let def = E::ModuleDefinition {
         package_name,
         attributes,
         loc,
         use_funs,
-        target_kind,
+        target_kind: context.defn_context.target_kind,
         friends,
         structs,
         enums,
@@ -1262,7 +1261,10 @@ fn module_warning_filter(
     attributes: &E::Attributes,
 ) -> WarningFilters {
     let mut filters = warning_filter_(context, attributes);
-    let is_dep = context.defn_context.pkg_def_kind != P::PkgDefKind::Source || {
+    let is_dep = !matches!(
+        context.defn_context.target_kind,
+        P::TargetKind::Source { .. }
+    ) || {
         let pkg = context.current_package();
         context.env().package_config(pkg).is_dependency
     };
@@ -1857,7 +1859,10 @@ fn duplicate_module_member(context: &mut Context, old_loc: Loc, alias: Name) {
 }
 
 fn unused_alias(context: &mut Context, _kind: &str, alias: Name) {
-    if context.defn_context.pkg_def_kind != P::PkgDefKind::Source {
+    if !matches!(
+        context.defn_context.target_kind,
+        P::TargetKind::Source { .. }
+    ) {
         return;
     }
     let mut diag = diag!(

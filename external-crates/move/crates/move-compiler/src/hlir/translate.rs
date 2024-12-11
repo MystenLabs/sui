@@ -6,7 +6,7 @@ use crate::{
     debug_display, debug_display_verbose, diag,
     diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
     hlir::{
         ast::{self as H, Block, BlockLabel, MoveOpAnnotation, UnpackType},
         detect_dead_code::program as detect_dead_code_analysis,
@@ -15,7 +15,8 @@ use crate::{
     ice,
     naming::ast as N,
     parser::ast::{
-        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
+        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, TargetKind,
+        VariantName,
     },
     shared::{
         matching::{new_match_var_name, MatchContext, MATCH_TEMP_PREFIX},

@@ -12,17 +12,14 @@ mod token_set;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{
-    parser::{
-        self,
-        ast::{PackageDefinition, PkgDefKind},
-        syntax::parse_file_string,
-    },
+    parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{
         files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex,
         NamedAddressMaps,
     },
 };
 use anyhow::anyhow;
+use ast::TargetKind;
 use comments::*;
 use move_command_line_common::files::FileHash;
 use move_symbol_pool::Symbol;
@@ -99,12 +96,17 @@ pub(crate) fn parse_program(
         files.add(hash, fname, text);
         source_comments.insert(hash, comments);
         let defs = defs.into_iter().map(|def| {
-            let pkg_def_kind = pkg_def_kind(compilation_env, is_dep, PathBuf::from(fname.as_str()));
+            let pkg_def_kind = pkg_target_kind(
+                compilation_env,
+                package,
+                is_dep,
+                PathBuf::from(fname.as_str()),
+            );
             PackageDefinition {
                 package,
                 named_address_map,
                 def,
-                def_kind: pkg_def_kind,
+                target_kind: pkg_def_kind,
             }
         });
         if is_dep {
@@ -122,17 +124,24 @@ pub(crate) fn parse_program(
     Ok((files, pprog, source_comments))
 }
 
-fn pkg_def_kind(compilation_env: &CompilationEnv, is_dep: bool, path: PathBuf) -> PkgDefKind {
+fn pkg_target_kind(
+    compilation_env: &CompilationEnv,
+    package_name: Option<Symbol>,
+    is_dep: bool,
+    path: PathBuf,
+) -> TargetKind {
     if is_dep {
-        PkgDefKind::Library
+        TargetKind::External(ast::ExternalTargetKind::Library)
     } else if let Some(files_to_compile) = compilation_env.files_to_compile() {
         if files_to_compile.contains(&path) {
-            PkgDefKind::Source
+            let is_root_package = !compilation_env.package_config(package_name).is_dependency;
+            TargetKind::Source { is_root_package }
         } else {
-            PkgDefKind::Skipped
+            TargetKind::External(ast::ExternalTargetKind::Library)
         }
     } else {
-        PkgDefKind::Source
+        let is_root_package = !compilation_env.package_config(package_name).is_dependency;
+        TargetKind::Source { is_root_package }
     }
 }
 

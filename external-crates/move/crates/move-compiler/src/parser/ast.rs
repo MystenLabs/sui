@@ -72,14 +72,21 @@ pub struct Program {
     pub lib_definitions: Vec<PackageDefinition>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
-pub enum PkgDefKind {
-    /// source - full compilation
-    Source,
-    /// library - skip function bodies
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalTargetKind {
     Library,
-    /// skipped source - skip function bodies
-    Skipped,
+    SkippedSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Specifies a source target or dependency
+pub enum TargetKind {
+    /// A source module. If is_root_package is false, some warnings might be suppressed.
+    /// Bytecode/CompiledModules will be generated for any Source target
+    Source { is_root_package: bool },
+    /// A dependency only used for linking.
+    /// No bytecode or CompiledModules are generated
+    External(ExternalTargetKind),
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +94,7 @@ pub struct PackageDefinition {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
     pub def: Definition,
-    pub def_kind: PkgDefKind,
+    pub target_kind: TargetKind,
 }
 
 #[derive(Debug, Clone)]
@@ -1358,7 +1365,7 @@ fn ast_debug_package_definition(
         package,
         named_address_map,
         def,
-        def_kind: _,
+        target_kind: _,
     } = pkg;
     match package {
         Some(n) => w.writeln(format!("package: {}", n)),
