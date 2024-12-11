@@ -32,6 +32,8 @@ mod synchronizer;
 mod threshold_clock;
 mod transaction;
 mod universal_committer;
+#[cfg(any(test, msim))]
+mod swarm;
 
 #[cfg(test)]
 #[path = "tests/randomized_tests.rs"]

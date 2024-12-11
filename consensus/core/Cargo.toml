@@ -42,6 +42,7 @@ shared-crypto.workspace = true
 strum_macros.workspace = true
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
+sui-simulator.workspace = true
 sui-tls.workspace = true
 tap.workspace = true
 thiserror.workspace = true

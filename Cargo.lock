@@ -2734,6 +2734,7 @@ dependencies = [
  "sui-http",
  "sui-macros",
  "sui-protocol-config",
+ "sui-simulator",
  "sui-tls",
  "tap",
  "telemetry-subscribers",
