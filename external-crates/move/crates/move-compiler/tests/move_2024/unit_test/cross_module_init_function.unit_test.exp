@@ -1,0 +1,9 @@
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/unit_test/cross_module_init_function.move:10:9
+   │
+ 3 │     fun init() { }
+   │         ---- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+10 │         M::init();
+   │         ^^^^^^^^^ Invalid call to internal function '0x1::M::init'
+
