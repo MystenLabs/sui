@@ -1,14 +1,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, convert::TryFrom};
-
 use crate::{
+    compatibility::{compare_ord_iters, Mark},
     compatibility::{Compatibility, InclusionCheck},
     file_format::*,
     normalized::{self, Type},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
+use proptest::prelude::*;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+};
 
 // A way to permute pools, and index into them still.
 pub struct Permutation {
@@ -535,6 +539,134 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
     normalized::Module::new(&m)
 }
 
+fn mk_module_with_defs(
+    struct_defs: Vec<(Identifier, StructDefinition)>,
+    enum_defs: Vec<(Identifier, EnumDefinition)>,
+    function_defs: Vec<(Identifier, FunctionDefinition)>,
+    friend_defs: Vec<(Identifier, AccountAddress)>,
+) -> normalized::Module {
+    let mut identifiers = vec![
+        Identifier::new("M").unwrap(), // Module name
+    ];
+
+    let mut datatype_handles = vec![];
+
+    let struct_defs: Vec<StructDefinition> = struct_defs
+        .into_iter()
+        .map(|(name, def)| {
+            identifiers.push(name);
+            let i = identifiers.len() - 1;
+            datatype_handles.push(DatatypeHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(i as TableIndex),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+            });
+            def
+        })
+        .collect();
+
+    let enum_defs: Vec<EnumDefinition> = enum_defs
+        .into_iter()
+        .map(|(name, def)| {
+            identifiers.push(name);
+            let i = identifiers.len() - 1;
+            datatype_handles.push(DatatypeHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(i as TableIndex),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+            });
+            def
+        })
+        .collect();
+
+    let function_defs: Vec<FunctionDefinition> = function_defs
+        .into_iter()
+        .map(|(name, def)| {
+            identifiers.push(name);
+            let i = identifiers.len() - 1;
+            datatype_handles.push(DatatypeHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(i as TableIndex),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+            });
+            def
+        })
+        .collect();
+
+    let mut address_identifiers = vec![
+        AccountAddress::ZERO, // self
+    ];
+    let mut friend_decls = vec![];
+
+    for name in &friend_defs {
+        identifiers.push(name.0.clone());
+        address_identifiers.push(name.1);
+        friend_decls.push(ModuleHandle {
+            address: AddressIdentifierIndex(address_identifiers.len() as TableIndex - 1),
+            name: IdentifierIndex(identifiers.len() as TableIndex - 1),
+        });
+    }
+
+    let m = CompiledModule {
+        version: crate::file_format_common::VERSION_MAX,
+        module_handles: vec![
+            // only self module
+            ModuleHandle {
+                address: AddressIdentifierIndex(0),
+                name: IdentifierIndex(0),
+            },
+        ],
+        self_module_handle_idx: ModuleHandleIndex(0),
+        identifiers,
+        address_identifiers,
+        function_handles: vec![
+            // fun fn()
+            FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(1),
+                parameters: SignatureIndex(0),
+                return_: SignatureIndex(0),
+                type_parameters: vec![],
+            },
+        ],
+        function_defs,
+        signatures: vec![
+            Signature(vec![]),                    // void
+            Signature(vec![SignatureToken::U64]), // u64
+        ],
+        struct_defs,
+        datatype_handles,
+        constant_pool: vec![
+            Constant {
+                type_: SignatureToken::U8,
+                data: vec![0],
+            },
+            Constant {
+                type_: SignatureToken::U8,
+                data: vec![1],
+            },
+            Constant {
+                type_: SignatureToken::Bool,
+                data: vec![1],
+            },
+        ],
+        metadata: vec![],
+        field_handles: vec![],
+        friend_decls,
+        struct_def_instantiations: vec![],
+        function_instantiations: vec![],
+        field_instantiations: vec![],
+        enum_defs,
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
+    };
+    normalized::Module::new(&m)
+}
+
 #[test]
 fn deprecated_unchanged_script_visibility() {
     let script_module = mk_module(Visibility::DEPRECATED_SCRIPT);
@@ -884,5 +1016,444 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
             assert!(InclusionCheck::Subset.check(m0, m1).is_ok());
             assert!(InclusionCheck::Subset.check(m1, m0).is_ok());
         }
+    }
+}
+
+#[test]
+fn check_new_changed_missing_declarations() {
+    let empty = mk_module_with_defs(vec![], vec![], vec![], vec![]);
+    // struct
+    let m1 = mk_module_with_defs(
+        vec![(
+            Identifier::new("S1").unwrap(),
+            StructDefinition {
+                struct_handle: DatatypeHandleIndex(0),
+                field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                    name: IdentifierIndex(1),
+                    signature: TypeSignature(SignatureToken::U64),
+                }]),
+            },
+        )],
+        vec![],
+        vec![],
+        vec![],
+    );
+
+    // change struct S1 to S2
+    let m2 = mk_module_with_defs(
+        vec![(
+            Identifier::new("S2").unwrap(),
+            StructDefinition {
+                struct_handle: DatatypeHandleIndex(0),
+                field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                    name: IdentifierIndex(1),
+                    signature: TypeSignature(SignatureToken::U64),
+                }]),
+            },
+        )],
+        vec![],
+        vec![],
+        vec![],
+    );
+
+    // same name different type
+    let m3 = mk_module_with_defs(
+        vec![(
+            Identifier::new("S1").unwrap(),
+            StructDefinition {
+                struct_handle: DatatypeHandleIndex(0),
+                field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+                    name: IdentifierIndex(1),
+                    // changed to U32
+                    signature: TypeSignature(SignatureToken::U32),
+                }]),
+            },
+        )],
+        vec![],
+        vec![],
+        vec![],
+    );
+
+    assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
+    assert!(InclusionCheck::Subset.check(&m1, &empty).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_err());
+
+    assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+
+    //enums
+    let m1 = mk_module_with_defs(
+        vec![],
+        vec![(
+            Identifier::new("E1").unwrap(),
+            EnumDefinition {
+                enum_handle: DatatypeHandleIndex(0),
+                variants: vec![VariantDefinition {
+                    variant_name: IdentifierIndex(1),
+                    fields: vec![FieldDefinition {
+                        name: IdentifierIndex(1),
+                        signature: TypeSignature(SignatureToken::U64),
+                    }],
+                }],
+            },
+        )],
+        vec![],
+        vec![],
+    );
+
+    // change enum E1 to E2
+    let m2 = mk_module_with_defs(
+        vec![],
+        vec![(
+            Identifier::new("E2").unwrap(),
+            EnumDefinition {
+                enum_handle: DatatypeHandleIndex(0),
+                variants: vec![VariantDefinition {
+                    variant_name: IdentifierIndex(1),
+                    fields: vec![FieldDefinition {
+                        name: IdentifierIndex(1),
+                        signature: TypeSignature(SignatureToken::U64),
+                    }],
+                }],
+            },
+        )],
+        vec![],
+        vec![],
+    );
+
+    // same name different type
+    let m3 = mk_module_with_defs(
+        vec![],
+        vec![(
+            Identifier::new("E1").unwrap(),
+            EnumDefinition {
+                enum_handle: DatatypeHandleIndex(0),
+                variants: vec![VariantDefinition {
+                    variant_name: IdentifierIndex(1),
+                    fields: vec![FieldDefinition {
+                        name: IdentifierIndex(1),
+                        // changed to U32
+                        signature: TypeSignature(SignatureToken::U32),
+                    }],
+                }],
+            },
+        )],
+        vec![],
+        vec![],
+    );
+
+    assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&m1, &m1).is_ok());
+
+    assert!(InclusionCheck::Subset.check(&m1, &empty).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_err());
+
+    assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+
+    //functions
+    let m1 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![(
+            Identifier::new("fn1").unwrap(),
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        )],
+        vec![],
+    );
+
+    // change function fn1 to fn2
+    let m2 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![(
+            Identifier::new("fn2").unwrap(),
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        )],
+        vec![],
+    );
+
+    // change fn1 bytecode to abort from return
+    let m3 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![(
+            Identifier::new("fn1").unwrap(),
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![Bytecode::Abort],
+                    jump_tables: vec![],
+                }),
+            },
+        )],
+        vec![],
+    );
+
+    assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&m1, &m1).is_ok());
+
+    assert!(InclusionCheck::Subset.check(&m1, &empty).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_err());
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_err());
+
+    assert!(InclusionCheck::Subset.check(&empty, &m1).is_ok());
+    assert!(InclusionCheck::Equal.check(&empty, &m1).is_err());
+}
+
+#[test]
+fn test_friend_linking() {
+    let friend_modules = [
+        (Identifier::new("M1").unwrap(), AccountAddress::random()),
+        (Identifier::new("M2").unwrap(), AccountAddress::random()),
+        (Identifier::new("M3").unwrap(), AccountAddress::random()),
+        (Identifier::new("M4").unwrap(), AccountAddress::random()),
+    ];
+
+    // zero friends
+    let m0 = mk_module_with_defs(vec![], vec![], vec![], vec![]);
+
+    // two friends
+    let m1 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![friend_modules[0].clone(), friend_modules[1].clone()],
+    );
+
+    // 3 friends
+    let m2 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![
+            friend_modules[0].clone(),
+            friend_modules[1].clone(),
+            friend_modules[2].clone(),
+        ],
+    );
+
+    // 2 friends from m1, but different order
+    let m3 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![friend_modules[1].clone(), friend_modules[0].clone()],
+    );
+
+    // 2 friends, different from m1
+    let m4 = mk_module_with_defs(
+        vec![],
+        vec![],
+        vec![],
+        vec![friend_modules[2].clone(), friend_modules[3].clone()],
+    );
+
+    // Subset, all changes are allowed
+    // same module, no friends
+    assert!(InclusionCheck::Subset.check(&m0, &m0).is_ok());
+    // start with empty and add friend
+    assert!(InclusionCheck::Subset.check(&m0, &m1).is_ok());
+    // start with two, keep the two and add one more
+    assert!(InclusionCheck::Subset.check(&m1, &m2).is_ok());
+    // start with two, remove them
+    assert!(InclusionCheck::Subset.check(&m3, &m0).is_ok());
+    // start with three remove one
+    assert!(InclusionCheck::Subset.check(&m2, &m1).is_ok());
+    // change order
+    assert!(InclusionCheck::Subset.check(&m1, &m3).is_ok());
+    // 2 friends, changed to 2 different friends
+    assert!(InclusionCheck::Subset.check(&m1, &m4).is_ok());
+
+    // Equal, can only keep the same number of friends
+    // same module, no friends
+    assert!(InclusionCheck::Equal.check(&m0, &m0).is_ok());
+    // start with empty and add friends
+    assert!(InclusionCheck::Equal.check(&m0, &m1).is_err());
+    // start with two, keep the two and add one more
+    assert!(InclusionCheck::Equal.check(&m1, &m2).is_err());
+    // start with two, remove them
+    assert!(InclusionCheck::Equal.check(&m3, &m0).is_err());
+    // start with three remove one
+    assert!(InclusionCheck::Equal.check(&m2, &m1).is_err());
+    // change order
+    assert!(InclusionCheck::Equal.check(&m1, &m3).is_ok());
+    // 2 friends, changed to 2 different friends
+    assert!(InclusionCheck::Equal.check(&m1, &m4).is_ok());
+}
+
+#[test]
+fn test_compare_ord_iters() {
+    let a = Identifier::new("a").unwrap();
+    let b = Identifier::new("b").unwrap();
+    let c = Identifier::new("c").unwrap();
+    let d = Identifier::new("d").unwrap();
+    let e = Identifier::new("e").unwrap();
+    let f = Identifier::new("f").unwrap();
+
+    // (old, new, expected, name)
+    let tests = vec![
+        ("empty", vec![], vec![], vec![]),
+        (
+            "existing",
+            vec![&a],
+            vec![&a],
+            vec![Mark::Existing(&a, &(), &())],
+        ),
+        ("missing", vec![&a], vec![], vec![Mark::Missing(&a, &())]),
+        ("new", vec![], vec![&a], vec![Mark::New(&a, &())]),
+        (
+            "missing new",
+            vec![&a],
+            vec![&b],
+            vec![Mark::Missing(&a, &()), Mark::New(&b, &())],
+        ),
+        (
+            "existing new",
+            vec![&a],
+            vec![&a, &b],
+            vec![Mark::Existing(&a, &(), &()), Mark::New(&b, &())],
+        ),
+        (
+            "existing missing",
+            vec![&a, &b],
+            vec![&a],
+            vec![Mark::Existing(&a, &(), &()), Mark::Missing(&b, &())],
+        ),
+        (
+            "missing existing",
+            vec![&a, &b],
+            vec![&b],
+            vec![Mark::Missing(&a, &()), Mark::Existing(&b, &(), &())],
+        ),
+        (
+            "existing new missing",
+            vec![&a, &e],
+            vec![&a, &b],
+            vec![
+                Mark::Existing(&a, &(), &()),
+                Mark::New(&b, &()),
+                Mark::Missing(&e, &()),
+            ],
+        ),
+        (
+            "new existing missing",
+            vec![&b, &f],
+            vec![&a, &b],
+            vec![
+                Mark::New(&a, &()),
+                Mark::Existing(&b, &(), &()),
+                Mark::Missing(&f, &()),
+            ],
+        ),
+        (
+            "new missing existing",
+            vec![&d, &e],
+            vec![&a, &e],
+            vec![
+                Mark::New(&a, &()),
+                Mark::Missing(&d, &()),
+                Mark::Existing(&e, &(), &()),
+            ],
+        ),
+        (
+            "missing existing new",
+            vec![&a, &b],
+            vec![&b, &c],
+            vec![
+                Mark::Missing(&a, &()),
+                Mark::Existing(&b, &(), &()),
+                Mark::New(&c, &()),
+            ],
+        ),
+    ];
+
+    for (name, old, new, expected) in tests {
+        let old = old.into_iter().map(|x| (x, &())).collect::<Vec<_>>();
+        let new = new.into_iter().map(|x| (x, &())).collect::<Vec<_>>();
+
+        let iter = compare_ord_iters(old.into_iter(), new.into_iter());
+        let result: Vec<_> = iter.collect();
+        assert_eq!(
+            result, expected,
+            "failed: {}. Result: {:?}, Expected: {:?}",
+            name, result, expected
+        );
+    }
+}
+
+fn arbitrary_map() -> impl Strategy<Value = BTreeMap<i32, i32>> {
+    prop::collection::btree_map(0..1000, 0..1000, 0..20)
+}
+
+proptest! {
+    #[test]
+    fn proptest_compare_ord_iters(old in arbitrary_map(), new in arbitrary_map()) {
+        let result: Vec<_> = compare_ord_iters(old.iter(), new.iter()).collect();
+
+        // For each 'mark' make sure the key exists in the expected maps of old, new or both
+        for mark in &result {
+            match mark {
+                Mark::New(key, _) => {
+                    // New keys must only be in `new`
+                    prop_assert!(new.contains_key(key));
+                    prop_assert!(!old.contains_key(key));
+                },
+                Mark::Missing(key, _) => {
+                    // Missing keys must only be in `old`
+                    prop_assert!(old.contains_key(key));
+                    prop_assert!(!new.contains_key(key));
+                },
+                Mark::Existing(key, old_value, new_value) => {
+                    let old_expected = old.get(key).expect("key exists in old");
+                    let new_expected = new.get(key).expect("key exists in new");
+                    // Existing keys must be in both
+                    prop_assert!(old.contains_key(key));
+                    prop_assert!(new.contains_key(key));
+                    // Values must match the input maps
+                    prop_assert_eq!(Some(*old_value), Some(old_expected));
+                    prop_assert_eq!(Some(*new_value), Some(new_expected));
+                },
+            }
+        }
+
+        // check that the combined keys of old and new are the same as the keys in result
+        // btreeset is used to dedup 'existing' keys
+        let combined: BTreeSet<_> = old.keys().chain(new.keys()).collect();
+
+        let result_keys: BTreeSet<_> = result
+            .iter()
+            .map(|mark| match mark {
+                Mark::New(key, _) | Mark::Missing(key, _) | Mark::Existing(key, _, _) => *key,
+            })
+            .collect();
+
+        prop_assert_eq!(result_keys, combined);
     }
 }
