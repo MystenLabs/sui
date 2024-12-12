@@ -19,6 +19,7 @@ diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
+hex.workspace = true
 itertools.workspace = true
 serde.workspace = true
 telemetry-subscribers.workspace = true
