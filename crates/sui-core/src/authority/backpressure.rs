@@ -20,17 +20,19 @@ impl Watermarks {
     // we can only permit backpressure if the certified checkpoint is ahead of the executed
     // checkpoint. Otherwise, backpressure might prevent construction of the next checkpoint,
     // because it could stop consensus commits from being processed.
-    fn is_backpressure_suppressed(&self) -> bool {
+    fn should_suppress_backpressure(&self) -> bool {
         self.certified <= self.executed
     }
 }
 
 pub struct BackpressureManager {
-    // holds the executed and certified checkpoint watermarks.
-    // builder can run ahead of executor, or vice versa, so these watermarks
-    // do not have a strict ordering.
+    // Holds the executed and certified checkpoint watermarks.
+    // Because we never execute an uncertified checkpoint, the executed watermark is always
+    // less than or equal to the certified watermark.
     //
-    // We want to engage backpressure whenever builder is running ahead of the executor.
+    // If the watermarks are equal, we must not apply backpressure to consensus handler,
+    // because we could be waiting on the next consensus commit in order to build and eventually
+    // certify the next checkpoint.
     watermarks_sender: watch::Sender<Watermarks>,
 
     // used by the WritebackCache to notify us when it has too many pending transactions in memory.
@@ -123,11 +125,13 @@ impl BackpressureSubscriber {
         *self.mgr.backpressure_sender.borrow()
     }
 
-    pub async fn await_backpressure(&self) {
+    /// If there is no backpressure returns immediately.
+    /// Otherwise, wait until backpressure is lifted or suppressed.
+    pub async fn await_no_backpressure(&self) {
         let mut watermarks_rx = self.mgr.watermarks_sender.subscribe();
         if watermarks_rx
             .borrow_and_update()
-            .is_backpressure_suppressed()
+            .should_suppress_backpressure()
         {
             return;
         }
@@ -153,7 +157,7 @@ impl BackpressureSubscriber {
                 _ = watermarks_rx.changed() => {
                     let watermarks = watermarks_rx.borrow_and_update();
                     debug!(?watermarks, "watermarks updated");
-                    if watermarks.is_backpressure_suppressed() {
+                    if watermarks.should_suppress_backpressure() {
                         info!("backpressure suppressed");
                         return;
                     }
@@ -174,27 +178,25 @@ mod tests {
     async fn test_no_backpressure() {
         let manager = Arc::new(BackpressureManager::new_for_tests());
 
-        manager.update_highest_certified_checkpoint(11);
-        manager.update_highest_executed_checkpoint(10);
+        manager.update_highest_certified_checkpoint(1);
         manager.set_backpressure(false);
 
         let subscriber = manager.subscribe();
 
-        subscriber.await_backpressure().now_or_never().unwrap();
+        subscriber.await_no_backpressure().now_or_never().unwrap();
     }
 
     #[tokio::test]
     async fn test_backpressure_suppressed() {
         let manager = Arc::new(BackpressureManager::new_for_tests());
 
-        manager.update_highest_certified_checkpoint(10);
-        manager.update_highest_executed_checkpoint(10);
+        // watermarks start at 0, 0
         manager.set_backpressure(true);
 
         let subscriber = manager.subscribe();
 
         // backpressure should be suppressed because of watermarks.
-        subscriber.await_backpressure().now_or_never().unwrap();
+        subscriber.await_no_backpressure().now_or_never().unwrap();
     }
 
     async fn await_with_timeout<R>(f: impl std::future::Future<Output = R>) {
@@ -245,8 +247,7 @@ mod tests {
         let manager = BackpressureManager::new_for_tests();
 
         // backpressure is in effect, and not suppressed by watermarks.
-        manager.update_highest_certified_checkpoint(11);
-        manager.update_highest_executed_checkpoint(10);
+        manager.update_highest_certified_checkpoint(1);
         manager.set_backpressure(true);
 
         let log = Log::new(manager.clone());
@@ -256,7 +257,7 @@ mod tests {
             let log = log.clone();
             log.push("await");
             async move {
-                subscriber.await_backpressure().await;
+                subscriber.await_no_backpressure().await;
                 log.push("await_finished");
             }
         });
@@ -281,8 +282,7 @@ mod tests {
         let manager = BackpressureManager::new_for_tests();
 
         // backpressure is in effect, and not suppressed by watermarks.
-        manager.update_highest_certified_checkpoint(11);
-        manager.update_highest_executed_checkpoint(10);
+        manager.update_highest_certified_checkpoint(1);
         manager.set_backpressure(true);
 
         let log = Log::new(manager.clone());
@@ -292,14 +292,14 @@ mod tests {
             let log = log.clone();
             log.push("await");
             async move {
-                subscriber.await_backpressure().await;
+                subscriber.await_no_backpressure().await;
                 log.push("await_finished");
             }
         });
 
         // once executed checkpoint catches up to certified checkpoint,
         // backpressure should be suppressed.
-        log.update_executed(11);
+        log.update_executed(1);
 
         await_with_timeout(waiter).await;
 
@@ -307,7 +307,7 @@ mod tests {
             log.get(),
             vec![
                 "await".to_string(),
-                "update executed 11".to_string(),
+                "update executed 1".to_string(),
                 "await_finished".to_string(),
             ]
         );

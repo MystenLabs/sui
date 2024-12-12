@@ -899,7 +899,7 @@ impl WritebackCache {
             .total_transaction_inserts
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let pending_count = prev.saturating_sub(
+        let pending_count = (prev + 1).saturating_sub(
             self.dirty
                 .total_transaction_commits
                 .load(std::sync::atomic::Ordering::Relaxed),

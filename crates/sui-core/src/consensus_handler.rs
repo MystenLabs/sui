@@ -209,7 +209,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.
         // - The highest executed checkpoint catches up to the highest certified checkpoint.
-        self.backpressure_subscriber.await_backpressure().await;
+        self.backpressure_subscriber.await_no_backpressure().await;
 
         let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
 
@@ -909,7 +909,7 @@ impl ConsensusTransactionHandler {
         &self,
         blocks_and_rejected_transactions: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
     ) {
-        self.backpressure_subscriber.await_backpressure().await;
+        self.backpressure_subscriber.await_no_backpressure().await;
 
         let _scope = monitored_scope("ConsensusTransactionHandler::handle_consensus_transactions");
 
