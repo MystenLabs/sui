@@ -2731,6 +2731,7 @@ dependencies = [
  "serde",
  "shared-crypto",
  "strum_macros 0.24.3",
+ "sui-config",
  "sui-http",
  "sui-macros",
  "sui-protocol-config",

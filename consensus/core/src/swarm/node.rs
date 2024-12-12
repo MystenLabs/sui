@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-use anyhow::Result;
-use parking_lot::Mutex;
-use tracing::info;
 use super::container::AuthorityNodeContainer;
-use tempfile::TempDir;
+use anyhow::Result;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, ProtocolKeyPair};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use tempfile::TempDir;
+use tracing::info;
 
 #[derive(Clone)]
-pub (crate) struct NodeConfig {
+#[allow(unused)]
+pub(crate) struct NodeConfig {
     pub authority_index: AuthorityIndex,
     pub db_dir: Arc<TempDir>,
     pub committee: Committee,
@@ -21,22 +22,19 @@ pub (crate) struct NodeConfig {
     pub protocol_config: ProtocolConfig,
 }
 
-pub (crate) struct Node {
+#[allow(unused)]
+pub(crate) struct Node {
     container: Mutex<Option<AuthorityNodeContainer>>,
-    config: NodeConfig
+    config: NodeConfig,
 }
 
+#[allow(unused)]
 impl Node {
     /// Create a new Node from the provided `NodeConfig`.
-    ///
-    /// The Node is returned without being started. See [`Node::spawn`] or [`Node::start`] for how to
-    /// start the node.
-    ///
-    /// [`NodeConfig`]: sui_config::NodeConfig
     pub fn new(config: NodeConfig) -> Self {
         Self {
             container: Default::default(),
-            config
+            config,
         }
     }
 

@@ -10,14 +10,15 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tracing::{info, trace};
 
+use super::node::NodeConfig;
+use crate::network::tonic_network::to_socket_addr;
 use crate::transaction::NoopTransactionVerifier;
 use crate::{CommitConsumer, CommittedSubDag, ConsensusAuthority};
-use super::node::NodeConfig;
 
 pub(crate) struct AuthorityNodeContainer {
     handle: Option<ContainerHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
-    node_watch: watch::Receiver<Option<ConsensusAuthority>>,
+    node_watch: watch::Receiver<Option<(ConsensusAuthority, UnboundedReceiver<CommittedSubDag>)>>,
 }
 
 #[derive(Debug)]
@@ -37,9 +38,7 @@ impl Drop for AuthorityNodeContainer {
 
 impl AuthorityNodeContainer {
     /// Spawn a new Node.
-    pub async fn spawn(
-        config: NodeConfig,
-    ) -> Self {
+    pub async fn spawn(config: NodeConfig) -> Self {
         let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(None);
         let (cancel_sender, cancel_receiver) = tokio::sync::watch::channel(false);
 
@@ -47,7 +46,7 @@ impl AuthorityNodeContainer {
         let builder = handle.create_node();
 
         let authority = config.committee.authority(config.authority_index);
-        let socket_addr = authority.address.to_socket_addr().unwrap();
+        let socket_addr = to_socket_addr(&authority.address).unwrap();
         let ip = match socket_addr {
             SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
             _ => panic!("unsupported protocol"),
@@ -58,13 +57,16 @@ impl AuthorityNodeContainer {
             .name(format!("{}", config.authority_index))
             .init(move || {
                 info!("Node restarted");
+                let config = config.clone();
                 let mut cancel_receiver = cancel_receiver.clone();
                 let startup_sender = startup_sender.clone();
                 async move {
-                    let (consensus_authority, commit_receiver) = AuthorityNodeContainer::make_authority(config)
-                    .await;
-        
-                    startup_sender.send(Some(consensus_authority)).ok();
+                    let (consensus_authority, commit_receiver) =
+                        AuthorityNodeContainer::make_authority(config).await;
+
+                    startup_sender
+                        .send(Some((consensus_authority, commit_receiver)))
+                        .ok();
 
                     // run until canceled
                     loop {
@@ -86,17 +88,31 @@ impl AuthorityNodeContainer {
         }
     }
 
-    // TODO: create a fixture
-    async fn make_authority(config: NodeConfig) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
+    /// Check to see that the Node is still alive by checking if the receiving side of the
+    /// `cancel_sender` has been dropped.
+    pub fn is_alive(&self) -> bool {
+        if let Some(cancel_sender) = &self.cancel_sender {
+            // unless the node is deleted, it keeps a reference to its start up function, which
+            // keeps 1 receiver alive. If the node is actually running, the cloned receiver will
+            // also be alive, and receiver count will be 2.
+            cancel_sender.receiver_count() > 1
+        } else {
+            false
+        }
+    }
+
+    async fn make_authority(
+        config: NodeConfig,
+    ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
         let NodeConfig {
             authority_index,
-        db_dir,
-        committee,
-        keypairs,
-        network_type,
-        boot_counter,
-        protocol_config
-    } = config;
+            db_dir,
+            committee,
+            keypairs,
+            network_type,
+            boot_counter,
+            protocol_config,
+        } = config;
 
         let registry = Registry::new();
 
@@ -132,19 +148,5 @@ impl AuthorityNodeContainer {
         .await;
 
         (authority, commit_receiver)
-    }
-
-    /// Check to see that the Node is still alive by checking if the receiving side of the
-    /// `cancel_sender` has been dropped.
-    ///
-    pub fn is_alive(&self) -> bool {
-        if let Some(cancel_sender) = &self.cancel_sender {
-            // unless the node is deleted, it keeps a reference to its start up function, which
-            // keeps 1 receiver alive. If the node is actually running, the cloned receiver will
-            // also be alive, and receiver count will be 2.
-            cancel_sender.receiver_count() > 1
-        } else {
-            false
-        }
     }
 }
