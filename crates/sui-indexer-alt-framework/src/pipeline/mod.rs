@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+pub use crate::handlers::cp_mapping::PrunableRange;
 use crate::watermarks::CommitterWatermark;
 
 pub use processor::Processor;

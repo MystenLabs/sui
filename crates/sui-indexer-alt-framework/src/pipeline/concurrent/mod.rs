@@ -10,7 +10,9 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use crate::{metrics::IndexerMetrics, watermarks::CommitterWatermark};
+use crate::{
+    handlers::cp_mapping::PrunableRange, metrics::IndexerMetrics, watermarks::CommitterWatermark,
+};
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
@@ -62,9 +64,10 @@ pub trait Handler: Processor<Value: FieldCount> {
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
         -> anyhow::Result<usize>;
 
-    /// Clean up data between checkpoints `_from` and `_to` (inclusive) in the database, returning
-    /// the number of rows affected. This function is optional, and defaults to not pruning at all.
-    async fn prune(_from: u64, _to: u64, _conn: &mut db::Connection<'_>) -> anyhow::Result<usize> {
+    /// Clean up data between two epochs, checkpoints, or txs as determined by the handler,
+    /// returning the number of rows affected. This function is optional, and defaults to not
+    /// pruning at all.
+    async fn prune(_range: PrunableRange, _conn: &mut db::Connection<'_>) -> anyhow::Result<usize> {
         Ok(0)
     }
 }
