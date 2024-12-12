@@ -5,9 +5,11 @@ use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as Big
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
 use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
+use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::{
-    mutation, MutateRowsRequest, MutateRowsResponse, Mutation, ReadRowsRequest, RowRange, RowSet,
+    mutation, MutateRowsRequest, MutateRowsResponse, Mutation, ReadRowsRequest, RowFilter,
+    RowRange, RowSet,
 };
 use crate::{Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData};
 use anyhow::{anyhow, Result};
@@ -141,10 +143,9 @@ impl KeyValueStoreWriter for BigTableClient {
     ) -> Result<()> {
         let key = name.as_bytes().to_vec();
         let value = watermark.to_be_bytes().to_vec();
-        self.multi_set_with_timestamp(
+        self.multi_set(
             WATERMARK_TABLE,
             [(key, vec![(DEFAULT_COLUMN_QUALIFIER, value)])],
-            watermark as i64,
         )
         .await
     }
@@ -269,7 +270,9 @@ impl KeyValueStoreReader for BigTableClient {
 
     async fn get_watermark(&mut self, watermark_name: &str) -> Result<CheckpointSequenceNumber> {
         let key = watermark_name.as_bytes().to_vec();
-        let mut response = self.multi_get(WATERMARK_TABLE, vec![key]).await?;
+        let mut response = self
+            .multi_get_with_versions_limit(WATERMARK_TABLE, vec![key])
+            .await?;
         if let Some(row) = response.pop() {
             if let Some((_, value)) = row.into_iter().next() {
                 return Ok(u64::from_be_bytes(value.as_slice().try_into()?));
@@ -449,6 +452,30 @@ impl BigTableClient {
             rows: Some(RowSet {
                 row_keys: keys,
                 row_ranges: vec![],
+            }),
+            ..ReadRowsRequest::default()
+        };
+        let mut result = vec![];
+        for (_, cells) in self.read_rows(request).await? {
+            result.push(cells);
+        }
+        Ok(result)
+    }
+
+    pub async fn multi_get_with_versions_limit(
+        &mut self,
+        table_name: &str,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
+        let request = ReadRowsRequest {
+            table_name: format!("{}{}", self.table_prefix, table_name),
+            rows_limit: keys.len() as i64,
+            rows: Some(RowSet {
+                row_keys: keys,
+                row_ranges: vec![],
+            }),
+            filter: Some(RowFilter {
+                filter: Some(Filter::CellsPerColumnLimitFilter(2)),
             }),
             ..ReadRowsRequest::default()
         };

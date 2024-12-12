@@ -122,6 +122,10 @@ async fn main() -> Result<()> {
     let mut bigtable_client = None;
     for task in &config.tasks {
         if let Task::BigTableKV(kv_config) = &task.task {
+            std::env::set_var(
+                "GOOGLE_APPLICATION_CREDENTIALS",
+                kv_config.credentials.clone(),
+            );
             bigtable_client = Some(
                 BigTableClient::new_remote(
                     kv_config.instance_id.clone(),
@@ -175,7 +179,6 @@ async fn main() -> Result<()> {
                 executor.register(worker_pool).await?;
             }
             Task::BigTableKV(kv_config) => {
-                std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", kv_config.credentials);
                 let client = BigTableClient::new_remote(
                     kv_config.instance_id,
                     false,
