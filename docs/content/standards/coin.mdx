@@ -40,7 +40,7 @@ The [regulated-coin-sample repository](https://github.com/MystenLabs/regulated-c
 
 ### DenyList object
 
-The list of addresses that aren't able to use a particular regulated coin is held within a system-created `DenyList` shared object. If you have access to the `DenyCap`, then you can use the `coin::deny_list_v2_add` and `coin::deny_list_v2_remove` functions to add and remove addresses. You can also use the `coin::deny_list_v2_contains_current_epoch` and `coin::deny_list_v2_contains_next_epoch` functions to check if an address is already on the list.
+The list of addresses that aren't able to use a particular regulated coin is held within a system-created `DenyList` shared object. If you have access to the `DenyCap`, then you can use the `coin::deny_list_v2_add` and `coin::deny_list_v2_remove` functions to add and remove addresses.
 
 ### Global pause switch
 
@@ -216,24 +216,6 @@ Use the following functions to get the values for the respective fields on the m
 ### Supply
 
 Use the `coin::supply` function to get the current supply of a given coin.
-
-### Check for address on deny list
-
-Use the `coin::deny_list_v2_contains_current_epoch` and `coin::deny_list_v2_contains_next_epoch` functions to check if an address exists on the deny list for your coin in the current or next epoch, respectively.
-
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_contains_current_epoch noComments}
-
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_contains_next_epoch noComments}
-
-The functions return `true` if the address is found on the coin's list, otherwise they return `false`.
-
-### Check if global pause is active
-
-Use the `coin::deny_list_v2_is_global_pause_enabled_current_epoch` and `coin::deny_list_v2_is_global_pause_enabled_next_epoch` functions to check if a global pause is currently active or becomes active in the next epoch. 
-
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_is_global_pause_enabled_current_epoch noComments}
-
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_is_global_pause_enabled_next_epoch noComments}
 
 ## Update coin metadata
 
