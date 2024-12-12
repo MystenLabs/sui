@@ -15,7 +15,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = cp_mapping)]
 pub(crate) struct StoredCpMapping {
-    pub cp: i64,
+    pub cp_sequence_number: i64,
     pub tx_lo: i64,
     pub tx_hi: i64,
     pub epoch: i64,
@@ -40,8 +40,8 @@ impl PrunableRange {
     ) -> QueryResult<PrunableRange> {
         let results = cp_mapping::table
             .select(StoredCpMapping::as_select())
-            .filter(cp_mapping::cp.eq_any([from_cp as i64, to_cp as i64]))
-            .order(cp_mapping::cp.asc())
+            .filter(cp_mapping::cp_sequence_number.eq_any([from_cp as i64, to_cp as i64]))
+            .order(cp_mapping::cp_sequence_number.asc())
             .load::<StoredCpMapping>(conn)
             .await?;
 
@@ -56,7 +56,10 @@ impl PrunableRange {
 
     /// Inclusive start and exclusive end range of prunable checkpoints.
     pub fn checkpoint_interval(&self) -> (u64, u64) {
-        (self.from.cp as u64, self.to.cp as u64)
+        (
+            self.from.cp_sequence_number as u64,
+            self.to.cp_sequence_number as u64,
+        )
     }
 
     /// Inclusive start and exclusive end range of prunable txs.
@@ -79,13 +82,14 @@ impl Processor for CpMapping {
     type Value = StoredCpMapping;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let cp = checkpoint.checkpoint_summary.sequence_number as i64;
-        let tx_lo = checkpoint.checkpoint_summary.network_total_transactions as i64
-            - checkpoint.transactions.len() as i64;
-        let tx_hi = checkpoint.checkpoint_summary.network_total_transactions as i64;
+        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
+        let network_total_transactions =
+            checkpoint.checkpoint_summary.network_total_transactions as i64;
+        let tx_lo = network_total_transactions - checkpoint.transactions.len() as i64;
+        let tx_hi = network_total_transactions;
         let epoch = checkpoint.checkpoint_summary.epoch as i64;
         Ok(vec![StoredCpMapping {
-            cp,
+            cp_sequence_number,
             tx_lo,
             tx_hi,
             epoch,
