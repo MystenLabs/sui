@@ -1375,6 +1375,20 @@ fn ast_debug_package_definition(
     def.ast_debug(w);
 }
 
+impl AstDebug for TargetKind {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.writeln(match self {
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module".to_string(),
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module".to_string(),
+            TargetKind::External(k) => format!("external module {:?}", k),
+        });
+    }
+}
+
 impl AstDebug for NamedAddressMap {
     fn ast_debug(&self, w: &mut AstWriter) {
         for (sym, addr) in self {

@@ -1119,15 +1119,7 @@ impl AstDebug for ModuleDefinition {
             w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(match target_kind {
-            P::TargetKind::Source {
-                is_root_package: true,
-            } => "root module".to_string(),
-            P::TargetKind::Source {
-                is_root_package: false,
-            } => "dependency module".to_string(),
-            P::TargetKind::External(k) => format!("external module {:?}", k),
-        });
+        target_kind.ast_debug(w);
         use_funs.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));
