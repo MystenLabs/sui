@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod response_ext;
+
+use base64::Engine;
 pub use response_ext::ResponseExt;
 
 pub mod sdk;
@@ -9,7 +11,7 @@ use sdk::BoxError;
 
 pub use reqwest;
 use tap::Pipe;
-use tonic::metadata::MetadataMap;
+use tonic::metadata::{Ascii, MetadataMap, MetadataValue};
 
 use crate::proto::node::node_client::NodeClient;
 use crate::proto::node::{
@@ -25,16 +27,20 @@ use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSeque
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 
-pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
+pub type Result<T, E = Status> = std::result::Result<T, E>;
 
+use tonic::codegen::InterceptedService;
+use tonic::service::Interceptor;
 use tonic::transport::channel::ClientTlsConfig;
-use tonic::Status;
+use tonic::transport::Channel;
+use tonic::{Request, Status};
 
 #[derive(Clone)]
 pub struct Client {
     #[allow(unused)]
     uri: http::Uri,
-    channel: tonic::transport::Channel,
+    channel: Channel,
+    basic_auth_value: Option<MetadataValue<Ascii>>,
 }
 
 impl Client {
@@ -56,11 +62,31 @@ impl Client {
         }
         let channel = endpoint.connect_lazy();
 
-        Ok(Self { uri, channel })
+        Ok(Self {
+            uri,
+            channel,
+            basic_auth_value: None,
+        })
     }
 
-    pub fn raw_client(&self) -> NodeClient<tonic::transport::Channel> {
-        NodeClient::new(self.channel.clone())
+    pub fn with_basic_auth(mut self, (username, password): (String, String)) -> Result<Self> {
+        let auth =
+            base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", username, password));
+        let value: MetadataValue<Ascii> = format!("Basic {}", auth)
+            .parse()
+            .map_err(Into::into)
+            .map_err(Status::from_error)?;
+        self.basic_auth_value = Some(value);
+        Ok(self)
+    }
+
+    pub fn raw_client(&self) -> NodeClient<InterceptedService<Channel, BasicAuthInterceptor>> {
+        NodeClient::with_interceptor(
+            self.channel.clone(),
+            BasicAuthInterceptor {
+                basic_auth: self.basic_auth_value.clone(),
+            },
+        )
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
@@ -193,7 +219,7 @@ impl Client {
         let request = crate::proto::node::ExecuteTransactionRequest {
             transaction: None,
             transaction_bcs: Some(
-                crate::proto::types::Bcs::serialize(&transaction.inner().intent_message.value)
+                Bcs::serialize(&transaction.inner().intent_message.value)
                     .map_err(|e| Status::from_error(e.into()))?,
             ),
             signatures: None,
@@ -204,7 +230,7 @@ impl Client {
                 effects_bcs: Some(true),
                 events: Some(false),
                 events_bcs: Some(true),
-                ..(parameters.to_owned().into())
+                ..parameters.to_owned().into()
             }),
         };
 
@@ -392,4 +418,17 @@ fn status_from_error_with_metadata<T: Into<BoxError>>(err: T, metadata: Metadata
     let mut status = Status::from_error(err.into());
     *status.metadata_mut() = metadata;
     status
+}
+
+pub struct BasicAuthInterceptor {
+    basic_auth: Option<MetadataValue<Ascii>>,
+}
+
+impl Interceptor for BasicAuthInterceptor {
+    fn call(&mut self, mut request: Request<()>) -> std::result::Result<Request<()>, Status> {
+        if let Some(auth) = self.basic_auth.as_ref() {
+            request.metadata_mut().insert("authorization", auth.clone());
+        }
+        Ok(request)
+    }
 }

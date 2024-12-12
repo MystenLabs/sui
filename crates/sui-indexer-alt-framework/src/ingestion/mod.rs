@@ -26,6 +26,7 @@ pub mod error;
 mod local_client;
 mod regulator;
 mod remote_client;
+mod rpc_client;
 #[cfg(test)]
 mod test_utils;
 
@@ -39,6 +40,14 @@ pub struct ClientArgs {
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
     #[clap(long, required = true, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
+
+    /// Path to the local ingestion directory.
+    /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
+    #[clap(long, required = true, group = "source")]
+    pub rpc_api_url: Option<Url>,
+
+    #[clap(long)]
+    pub basic_auth: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,8 +91,15 @@ impl IngestionService {
             IngestionClient::new_remote(url.clone(), metrics.clone())?
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
             IngestionClient::new_local(path.clone(), metrics.clone())
+        } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
+            let basic_auth = args.basic_auth.map(|s| {
+                let split = s.split(":").collect::<Vec<_>>();
+                assert_eq!(2, split.len());
+                (split[0].to_string(), split[1].to_string())
+            });
+            IngestionClient::new_rpc(rpc_api_url.clone(), basic_auth, metrics.clone())?
         } else {
-            panic!("Either remote_store_url or local_ingestion_path must be provided");
+            panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
         };
 
         let subscribers = Vec::new();
@@ -204,6 +220,8 @@ mod tests {
             ClientArgs {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
                 local_ingestion_path: None,
+                rpc_api_url: None,
+                basic_auth: None,
             },
             IngestionConfig {
                 checkpoint_buffer_size,

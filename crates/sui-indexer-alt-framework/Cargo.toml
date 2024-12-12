@@ -33,6 +33,8 @@ sui-field-count.workspace = true
 sui-pg-db.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+sui-rpc-api.workspace = true
+bytes = "1.8.0"
 
 [dev-dependencies]
 rand.workspace = true

@@ -185,6 +185,8 @@ impl Indexer {
             ClientArgs {
                 remote_store_url: None,
                 local_ingestion_path: Some(tempdir().unwrap().into_path()),
+                rpc_api_url: None,
+                basic_auth: None,
             },
             IngestionConfig::default(),
             &MIGRATIONS,
