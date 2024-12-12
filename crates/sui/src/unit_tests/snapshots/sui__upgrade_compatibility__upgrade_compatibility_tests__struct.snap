@@ -48,46 +48,167 @@ error[Compatibility E01003]: ability mismatch
    = Restore the original abilities of struct 'AddMultipleAbilities': none.
 
 error[Compatibility E01002]: type mismatch
-   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:17:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:18:19
    │
-17 │     public struct AddField {
+18 │     public struct AddFieldToEmpty {
+   │                   ^^^^^^^^^^^^^^^ Incorrect number of fields: expected 0, found 1
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'AddFieldToEmpty' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:23:19
+   │
+23 │     public struct AddField {
    │                   ^^^^^^^^ Incorrect number of fields: expected 1, found 2
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's field for struct 'AddField' including the ordering.
 
 error[Compatibility E01002]: type mismatch
-   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:22:19
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:29:19
    │
-22 │     public struct RemoveField {
+29 │     public struct RemoveOnlyField {
+   │                   ^^^^^^^^^^^^^^^ Incorrect number of fields: expected 1, found 0
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's field for struct 'RemoveOnlyField' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:34:19
+   │
+34 │     public struct RemoveField {
    │                   ^^^^^^^^^^^ Incorrect number of fields: expected 2, found 1
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'RemoveField' including the ordering.
 
 error[Compatibility E01004]: field mismatch
-   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:30:9
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:42:9
    │
-28 │     public struct ChangeFieldName {
+40 │     public struct ChangeFieldName {
    │                   --------------- Struct definition
-29 │         a: u64,
-30 │         c: u64, // changed from b to c
+41 │         a: u64,
+42 │         c: u64, // changed from b to c
    │         ^ Mismatched field name 'c', expected 'b'.
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'ChangeFieldName' including the ordering.
 
 error[Compatibility E01002]: type mismatch
-   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:36:9
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:48:9
    │
-34 │     public struct ChangeFieldType {
+46 │     public struct ChangeFieldType {
    │                   --------------- Struct definition
-35 │         a: u64,
-36 │         b: u32, // changed to u32
+47 │         a: u64,
+48 │         b: u32, // changed to u32
    │         ^ Mismatched field type 'u32', expected 'u64'.
    │
    = Structs are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original struct's fields for struct 'ChangeFieldType' including the ordering.
+
+error[Compatibility E01004]: field mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:54:9
+   │
+52 │     public struct ChangeFieldNameAndType {
+   │                   ---------------------- Struct definition
+53 │         a: u64,
+54 │         c: u32, // changed from b to c and u64 to u32
+   │         ^ Mismatched field 'c: u32', expected 'b: u64'.
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'ChangeFieldNameAndType' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:58:19
+   │
+58 │     public struct EmptyPositionalAdd(u64) // removed the u64
+   │                   ^^^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 0, found 1
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'EmptyPositionalAdd' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:61:19
+   │
+61 │     public struct PositionalAdd(u64, u64, u64) // added a u64
+   │                   ^^^^^^^^^^^^^ Incorrect number of fields: expected 2, found 3
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'PositionalAdd' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:64:19
+   │
+64 │     public struct PositionalRemove(u64, u64) // removed a u64
+   │                   ^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 3, found 2
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'PositionalRemove' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:67:41
+   │
+67 │     public struct PositionalChange(u32, u64) // changed second u32 to u64
+   │                   ----------------      ^^^ Mismatched field type 'u64', expected 'u32'.
+   │                   │                      
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'PositionalChange' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:70:19
+   │
+70 │     public struct PositionalAddNamed{ a: u64 } // changed to named from empty positional
+   │                   ^^^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 0, found 1
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's fields for struct 'PositionalAddNamed' including the ordering.
+
+error[Compatibility E01004]: field mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:73:38
+   │
+73 │     public struct PositionalToNamed{ a: u64 } // changed to named from positional
+   │                   -----------------  ^ Mismatched field name 'a', expected at position 0.
+   │                   │                   
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's field for struct 'PositionalToNamed' including the ordering.
+
+error[Compatibility E01004]: field mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:76:51
+   │
+76 │     public struct PositionalToNamedAndChangeType{ a: u64 } // changed to named from positional and changed type to u64
+   │                   ------------------------------  ^ Mismatched field 'a: u64', expected 'u32' at position 0.
+   │                   │                                
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's field for struct 'PositionalToNamedAndChangeType' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:87:43
+   │
+87 │     public struct ChangePositionalStruct (ChangeFieldB) // changed to ChangeFieldB
+   │                   ----------------------  ^^^^^^^^^^^^ Mismatched field type '0x0::upgrades::ChangeFieldB', expected '0x0::upgrades::ChangeFieldA'.
+   │                   │                        
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's field for struct 'ChangePositionalStruct' including the ordering.
+
+error[Compatibility E01002]: type mismatch
+   ┌─ /fixtures/upgrade_errors/struct_errors_v2/sources/UpgradeErrors.move:91:9
+   │
+90 │     public struct ChangeNameNestedStruct {
+   │                   ---------------------- Struct definition
+91 │         a: ChangeFieldB, // changed to ChangeFieldB
+   │         ^ Mismatched field type '0x0::upgrades::ChangeFieldB', expected '0x0::upgrades::ChangeFieldA'.
+   │
+   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original struct's field for struct 'ChangeNameNestedStruct' including the ordering.
 
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
