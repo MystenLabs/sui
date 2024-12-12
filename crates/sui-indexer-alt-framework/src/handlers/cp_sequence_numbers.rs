@@ -3,22 +3,13 @@
 
 use std::sync::Arc;
 
+use crate::models::cp_sequence_numbers::StoredCpSequenceNumbers;
 use crate::pipeline::{concurrent::Handler, Processor};
 use crate::schema::cp_sequence_numbers;
 use anyhow::Result;
-use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use sui_field_count::FieldCount;
 use sui_pg_db::{self as db};
 use sui_types::full_checkpoint_content::CheckpointData;
-
-#[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
-#[diesel(table_name = cp_sequence_numbers)]
-pub struct StoredCpSequenceNumbers {
-    pub cp_sequence_number: i64,
-    pub tx_lo: i64,
-    pub epoch: i64,
-}
 
 pub struct CpSequenceNumbers;
 
