@@ -84,6 +84,8 @@ impl OffchainCluster {
         let client_args = ClientArgs {
             local_ingestion_path: Some(config.data_ingestion_path.clone()),
             remote_store_url: None,
+            rpc_api_url: None,
+            basic_auth: None,
         };
 
         // The example config includes every pipeline, and we configure its consistent range using
