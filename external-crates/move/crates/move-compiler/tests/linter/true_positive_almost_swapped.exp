@@ -1,0 +1,24 @@
+warning[Lint W04013]: swap sequence can be simplified
+   ┌─ tests/linter/true_positive_almost_swapped.move:11:9
+   │
+11 │         a = temp;
+   │         ^^^^^^^^ Unnecessary swap sequence detected - consider using a tuple assignment
+   │
+   = This warning can be suppressed with '#[allow(lint(almost_swapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: swap sequence can be simplified
+   ┌─ tests/linter/true_positive_almost_swapped.move:22:9
+   │
+22 │         y = temp;
+   │         ^^^^^^^^ Unnecessary swap sequence detected - consider using a tuple assignment
+   │
+   = This warning can be suppressed with '#[allow(lint(almost_swapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: swap sequence can be simplified
+   ┌─ tests/linter/true_positive_almost_swapped.move:34:9
+   │
+34 │         b = temp;
+   │         ^^^^^^^^ Unnecessary swap sequence detected - consider using a tuple assignment
+   │
+   = This warning can be suppressed with '#[allow(lint(almost_swapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

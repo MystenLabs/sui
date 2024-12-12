@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub mod abort_constant;
+pub mod almost_swapped;
 pub mod combinable_comparisons;
 pub mod constant_naming;
 pub mod equal_operands;
@@ -175,6 +176,12 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
+    ),
+    (
+        AlmostSwapped,
+        LinterDiagnosticCategory::Style,
+        "almost_swapped",
+        "swap sequence can be simplified"
     )
 );
 
@@ -215,6 +222,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                almost_swapped::AlmostSwapped.visitor(),
             ]
         }
     }
