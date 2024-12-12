@@ -9,6 +9,7 @@ use diesel::{
     pg::Pg,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use handlers::cp_mapping;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use pipeline::{
@@ -23,6 +24,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use watermarks::CommitterWatermark;
 
+mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod pipeline;
