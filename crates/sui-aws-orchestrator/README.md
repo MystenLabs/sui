@@ -34,29 +34,29 @@ Create a file called `settings.json` that contains all the configuration paramet
 
 ```json
 {
-  "testbed_id": "alberto-0",
-  "cloud_provider": "aws",
-  "token_file": "/Users/alberto/.aws/credentials",
-  "ssh_private_key_file": "/Users/alberto/.ssh/aws",
-  "regions": [
-    "us-east-1",
-    "us-west-2",
-    "ca-central-1",
-    "eu-central-1",
-    "ap-northeast-1",
-    "eu-west-1",
-    "eu-west-2",
-    "ap-south-1",
-    "ap-southeast-1",
-    "ap-southeast-2"
-  ],
-  "specs": "m5d.8xlarge",
-  "repository": {
-    "url": "https://github.com/MystenLabs/sui.git",
-    "commit": "main"
-  },
-  "results_directory": "./results",
-  "logs_directory": "./logs"
+	"testbed_id": "alberto-0",
+	"cloud_provider": "aws",
+	"token_file": "/Users/alberto/.aws/credentials",
+	"ssh_private_key_file": "/Users/alberto/.ssh/aws",
+	"regions": [
+		"us-east-1",
+		"us-west-2",
+		"ca-central-1",
+		"eu-central-1",
+		"ap-northeast-1",
+		"eu-west-1",
+		"eu-west-2",
+		"ap-south-1",
+		"ap-southeast-1",
+		"ap-southeast-2"
+	],
+	"specs": "m5d.8xlarge",
+	"repository": {
+		"url": "https://github.com/MystenLabs/sui.git",
+		"commit": "main"
+	},
+	"results_directory": "./results",
+	"logs_directory": "./logs"
 }
 ```
 
@@ -120,6 +120,7 @@ In a network of 10 validators, each with a corresponding load generator, each lo
 The orchestrator provides facilities to monitor metrics on clients and nodes. The orchestrator deploys a [Prometheus](https://prometheus.io) instance and a [Grafana](https://grafana.com) instance on a dedicated remote machine. Grafana is then available on the address printed on stdout (e.g., `http://3.83.97.12:3000`) with the default username and password both set to `admin`. You can either create a [new dashboard](https://grafana.com/docs/grafana/latest/getting-started/build-first-dashboard/) or [import](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/#import-a-dashboard) the example dashboards located in the `./assets` folder.
 
 ## Destroy a testbed
+
 After you have found yourself that you don't need the deployed testbed anymore you can simply run
 
 ```
@@ -132,26 +133,31 @@ to use a different `testbed_id` in the `settings.json` to avoid any later confli
 ## FAQ
 
 ### I am getting an error "Failed to read settings file '"crates/sui-aws-orchestrator/assets/settings.json"': No such file or directory"
+
 To run the tool a `settings.json` file with the deployment configuration should be under the directory `crates/sui-aws-orchestrator/assets`. Also, please make sure
 that you run the orchestrator from the top level repo folder, ex `/sui $ cargo run --bin sui-aws-orchestrator`
 
 ### I am getting an error "IncorrectInstanceState" with message "The instance 'i-xxxxxxx' is not in a state from which it can be started."" when I try to run a benchmark
+
 When a testbed is deployed the EC2 instances are tagged with the `testbed_id` as dictated in the `settings.json` file. When trying to run a benchmark the tool will try to list
 all the EC2 instances on the dictated by the configuration regions. To successfully run the benchmark all the listed instances should be in status
 `Running`. If there is any instance in different state , ex `Terminated` , then the above error will arise. Please pay attention that if you `destroy` a deployment
 and then immediately `deploy` a new one under the same `testbed_id`, then it is possible to have a mix of instances with status `Running` and `Terminated`, as AWS does not immediately
-delete the `Terminated` instances. That can eventually cause the above false positive error as well. It is advised in this case to use a different `testbed_id`  to ensure that 
+delete the `Terminated` instances. That can eventually cause the above false positive error as well. It is advised in this case to use a different `testbed_id` to ensure that
 there is no overlap between instances.
 
 ### I am getting an error "Not enough instances: missing X instances" when running a benchmark
-In the common case to successfully run a benchmark we need to have enough instances available to run 
-* the required validators  
-* the grafana dashboard
-* the benchmarking clients
+
+In the common case to successfully run a benchmark we need to have enough instances available to run
+
+- the required validators
+- the grafana dashboard
+- the benchmarking clients
 
 for example when running the command `cargo run --bin sui-aws-orchestrator -- benchmark --committee 4 fixed-load --loads 500 --duration 500`, we'll need the following amount of instances available:
-* `4 instances` to run the validators (since we set `--committee 4`)
-* `1 instance` to run the grafana dashboard (by default only 1 is needed)
-* no additional instances to run the benchmarking clients, as those will be co-deployed on the validator nodes
+
+- `4 instances` to run the validators (since we set `--committee 4`)
+- `1 instance` to run the grafana dashboard (by default only 1 is needed)
+- no additional instances to run the benchmarking clients, as those will be co-deployed on the validator nodes
 
 so in total we must have deployed a testbed of at least `5 instances`. If we attempt to run with fewer, then the above error will be thrown.
