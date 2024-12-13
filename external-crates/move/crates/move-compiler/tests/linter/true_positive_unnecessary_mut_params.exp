@@ -1,0 +1,40 @@
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/true_positive_unnecessary_mut_params.move:17:34
+   │
+17 │     public fun unused_mut_person(person: &mut Person) {
+   │                                  ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/true_positive_unnecessary_mut_params.move:22:37
+   │
+22 │     public fun multiple_unused_muts(person: &mut Person, counter: &mut Counter) {
+   │                                     ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/true_positive_unnecessary_mut_params.move:22:58
+   │
+22 │     public fun multiple_unused_muts(person: &mut Person, counter: &mut Counter) {
+   │                                                          ^^^^^^^ Parameter 'counter' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/true_positive_unnecessary_mut_params.move:27:36
+   │
+27 │     public fun partial_unused_muts(person: &mut Person, counter: &mut Counter) {
+   │                                    ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/true_positive_unnecessary_mut_params.move:33:35
+   │
+33 │     public fun complex_unused_mut(person: &mut Person, immut_value: u64) {
+   │                                   ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
