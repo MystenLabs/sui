@@ -66,7 +66,7 @@ pub trait Handler: Processor<Value: FieldCount> {
 
     /// Clean up data between two epochs, checkpoints, or txs as determined by the handler,
     /// returning the number of rows affected. This function is optional, and defaults to not
-    /// pruning at all.
+    /// pruning at all. The `cp_mapping` pipeline must be started to enable pruning.
     async fn prune(_range: PrunableRange, _conn: &mut db::Connection<'_>) -> anyhow::Result<usize> {
         Ok(0)
     }

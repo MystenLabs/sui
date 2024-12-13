@@ -9,7 +9,7 @@ use anyhow::Result;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
-use sui_pg_db::{self as db};
+use sui_pg_db::{self as db, Connection};
 use sui_types::full_checkpoint_content::CheckpointData;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
@@ -63,7 +63,7 @@ impl PrunableRange {
 
     /// Inclusive start and exclusive end range of prunable txs.
     pub fn tx_interval(&self) -> (u64, u64) {
-        (self.from.tx_lo as u64, self.to.tx_hi as u64)
+        (self.from.tx_lo as u64, self.to.tx_lo as u64)
     }
 
     /// Returns the epochs that contain the checkpoints in this range.

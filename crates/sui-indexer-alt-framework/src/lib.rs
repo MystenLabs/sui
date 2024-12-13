@@ -302,6 +302,11 @@ impl Indexer {
             );
         }
 
+        let cp_mapping_enabled = self.added_pipelines.contains("cp_mapping");
+        if !cp_mapping_enabled {
+            warn!("cp_mapping pipeline is not enabled on this indexer instance. Tables configured for pruning may not actually be pruned if cp_mapping is not written to.");
+        }
+
         let metrics_handle = self
             .metrics_service
             .run()
