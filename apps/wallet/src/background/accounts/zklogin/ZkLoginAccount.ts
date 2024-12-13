@@ -133,6 +133,7 @@ export class ZkLoginAccount
 				iss: decodedJWT.iss,
 				aud,
 				userSalt: BigInt(salt),
+				legacyAddress: true,
 			}),
 			claims: await obfuscate(claims),
 			salt: await obfuscate(salt),
