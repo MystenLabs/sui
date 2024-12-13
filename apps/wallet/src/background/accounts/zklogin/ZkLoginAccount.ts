@@ -4,8 +4,11 @@
 import networkEnv from '_src/background/NetworkEnv';
 import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
+import { getActiveNetworkSuiClient } from '_src/shared/sui-client';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
+import { fetchTransactionsByAddress } from '_src/ui/app/hooks/useQueryTransactionsByAddress';
 import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
@@ -91,6 +94,15 @@ export function isZkLoginAccountSerializedUI(
 	return account.type === 'zkLogin';
 }
 
+async function hasTransactionHistory(address: string): Promise<boolean> {
+	// TODO XXX FIXME: this needs to be turned on for mainnet only
+	const rpc = await getActiveNetworkSuiClient();
+	const txns = await fetchTransactionsByAddress(rpc, address);
+	return !!txns.length;
+}
+
+type CreateNewZkLoginAccountResponseItem = Omit<ZkLoginAccountSerialized, 'id'>;
+
 export class ZkLoginAccount
 	extends Account<ZkLoginAccountSerialized, SessionStorageData>
 	implements SigningAccount
@@ -102,7 +114,7 @@ export class ZkLoginAccount
 		provider,
 	}: {
 		provider: ZkLoginProvider;
-	}): Promise<Omit<ZkLoginAccountSerialized, 'id'>> {
+	}): Promise<CreateNewZkLoginAccountResponseItem[]> {
 		const jwt = await zkLoginAuthenticate({ provider, prompt: true });
 		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
@@ -125,16 +137,29 @@ export class ZkLoginAccount
 		};
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
-		return {
+
+		const legacyAddress = computeZkLoginAddress({
+			claimName,
+			claimValue,
+			iss: decodedJWT.iss,
+			aud,
+			userSalt: BigInt(salt),
+			legacyAddress: true,
+		});
+
+		const nonLegacyAddress = computeZkLoginAddress({
+			claimName,
+			claimValue,
+			iss: decodedJWT.iss,
+			aud,
+			userSalt: BigInt(salt),
+			legacyAddress: false,
+		});
+
+		const response: CreateNewZkLoginAccountResponseItem[] = [];
+
+		const accountData: Omit<CreateNewZkLoginAccountResponseItem, 'address'> = {
 			type: 'zkLogin',
-			address: computeZkLoginAddress({
-				claimName,
-				claimValue,
-				iss: decodedJWT.iss,
-				aud,
-				userSalt: BigInt(salt),
-				legacyAddress: true,
-			}),
 			claims: await obfuscate(claims),
 			salt: await obfuscate(salt),
 			addressSeed: await obfuscate(
@@ -148,6 +173,25 @@ export class ZkLoginAccount
 			createdAt: Date.now(),
 			claimName,
 		};
+
+		response.push({
+			...accountData,
+			address: legacyAddress,
+		});
+
+		// By default, always import the legacy address. If the legacy and
+		// non-legacy addresses differ, only import the non-legacy address if it
+		// has already been used.
+		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(nonLegacyAddress)) {
+			if (await hasTransactionHistory(nonLegacyAddress)) {
+				response.push({
+					...accountData,
+					address: nonLegacyAddress,
+				});
+			}
+		}
+
+		return response;
 	}
 
 	static isOfType(serialized: SerializedAccount): serialized is ZkLoginAccountSerialized {

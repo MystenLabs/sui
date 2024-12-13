@@ -4,8 +4,47 @@
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
+import type { SuiClient, SuiTransactionBlockResponse } from '@mysten/sui/client';
 import { useQuery } from '@tanstack/react-query';
+
+export async function fetchTransactionsByAddress(rpc: SuiClient, address: string) {
+	// combine from and to transactions
+	const [txnIds, fromTxnIds] = await Promise.all([
+		rpc.queryTransactionBlocks({
+			filter: {
+				ToAddress: address!,
+			},
+			options: {
+				showInput: true,
+				showEffects: true,
+				showEvents: true,
+			},
+		}),
+		rpc.queryTransactionBlocks({
+			filter: {
+				FromAddress: address!,
+			},
+			options: {
+				showInput: true,
+				showEffects: true,
+				showEvents: true,
+			},
+		}),
+	]);
+
+	const inserted = new Map();
+	const uniqueList: SuiTransactionBlockResponse[] = [];
+
+	[...txnIds.data, ...fromTxnIds.data]
+		.sort((a, b) => Number(b.timestampMs ?? 0) - Number(a.timestampMs ?? 0))
+		.forEach((txb) => {
+			if (inserted.get(txb.digest)) return;
+			uniqueList.push(txb);
+			inserted.set(txb.digest, true);
+		});
+
+	return uniqueList;
+}
 
 export function useQueryTransactionsByAddress(address: string | null) {
 	const rpc = useSuiClient();
@@ -14,42 +53,10 @@ export function useQueryTransactionsByAddress(address: string | null) {
 	return useQuery({
 		queryKey: ['transactions-by-address', address],
 		queryFn: async () => {
-			// combine from and to transactions
-			const [txnIds, fromTxnIds] = await Promise.all([
-				rpc.queryTransactionBlocks({
-					filter: {
-						ToAddress: address!,
-					},
-					options: {
-						showInput: true,
-						showEffects: true,
-						showEvents: true,
-					},
-				}),
-				rpc.queryTransactionBlocks({
-					filter: {
-						FromAddress: address!,
-					},
-					options: {
-						showInput: true,
-						showEffects: true,
-						showEvents: true,
-					},
-				}),
-			]);
-
-			const inserted = new Map();
-			const uniqueList: SuiTransactionBlockResponse[] = [];
-
-			[...txnIds.data, ...fromTxnIds.data]
-				.sort((a, b) => Number(b.timestampMs ?? 0) - Number(a.timestampMs ?? 0))
-				.forEach((txb) => {
-					if (inserted.get(txb.digest)) return;
-					uniqueList.push(txb);
-					inserted.set(txb.digest, true);
-				});
-
-			return uniqueList;
+			if (address) {
+				return await fetchTransactionsByAddress(rpc, address);
+			}
+			return [];
 		},
 		enabled: !!address,
 		staleTime: 10 * 1000,
