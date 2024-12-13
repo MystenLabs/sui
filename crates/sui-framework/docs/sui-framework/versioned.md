@@ -16,8 +16,7 @@ title: Module `0x2::versioned`
 -  [Function `destroy`](#0x2_versioned_destroy)
 
 
-<pre><code><b>use</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
+<pre><code><b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
