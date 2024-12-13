@@ -1881,6 +1881,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "better-panic"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fa9e1d11a268684cbd90ed36370d7577afb6c62d912ddff5c15fc34343e5036"
+dependencies = [
+ "backtrace",
+ "console",
+]
+
+[[package]]
 name = "better_any"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2577,6 +2587,21 @@ name = "clap_lex"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
+
+[[package]]
+name = "cli-sandbox"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "532ceb0e75de92461de4ff3fd1e7a6b08b0823842b24fd99d82b618260bd479f"
+dependencies = [
+ "anyhow",
+ "better-panic",
+ "cargo_metadata 0.15.4",
+ "fastrand 1.9.0",
+ "pretty_assertions",
+ "regex",
+ "tempfile",
+]
 
 [[package]]
 name = "clipboard-win"
@@ -4919,9 +4944,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a407cfaa3385c4ae6b23e84623d48c2798d06e3e6a1878f7f59f17b3f86499"
+checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
 dependencies = [
  "instant",
 ]
@@ -5220,7 +5245,7 @@ version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7694489acd39452c77daa48516b894c153f192c3578d5a839b62c58099fcbf48"
 dependencies = [
- "fastrand 1.8.0",
+ "fastrand 1.9.0",
  "futures-core",
  "futures-io",
  "memchr",
@@ -6451,9 +6476,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.26.0"
+version = "1.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6f0f08b46e4379744de2ab67aa8f7de3ffd1da3e275adc41fcc82053ede46ff"
+checksum = "7e9ffc4d4892617c50a928c52b2961cb5174b6fc6ebf252b2fac9d21955c48b8"
 dependencies = [
  "console",
  "lazy_static",
@@ -6462,7 +6487,17 @@ dependencies = [
  "pest_derive",
  "serde",
  "similar",
- "yaml-rust",
+]
+
+[[package]]
+name = "insta-cmd"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffeeefa927925cced49ccb01bf3e57c9d4cd132df21e576eb9415baeab2d3de6"
+dependencies = [
+ "insta",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -14674,8 +14709,11 @@ dependencies = [
  "better_any",
  "bin-version",
  "clap",
+ "cli-sandbox",
  "colored",
  "futures",
+ "insta",
+ "insta-cmd",
  "jemalloc-ctl",
  "jsonrpsee",
  "move-binary-format",

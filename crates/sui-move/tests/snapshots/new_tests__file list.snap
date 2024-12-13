@@ -1,0 +1,11 @@
+---
+source: crates/sui-move/tests/new_tests.rs
+expression: recursive_paths(&proj)
+---
+- ""
+- example
+- example/Move.toml
+- example/sources
+- example/sources/example.move
+- example/tests
+- example/tests/example_tests.move
