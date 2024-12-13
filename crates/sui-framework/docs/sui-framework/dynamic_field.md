@@ -92,16 +92,6 @@ Failed to serialize the field's name
 
 
 
-<a name="0x2_dynamic_field_ESharedObjectOperationNotSupported"></a>
-
-The object added as a dynamic field was previously a shared object
-
-
-<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
-</code></pre>
-
-
-
 <a name="0x2_dynamic_field_EFieldAlreadyExists"></a>
 
 The object already has a dynamic field with this name (with the value and type specified)
@@ -129,6 +119,16 @@ The object has a field with that name, but the value type does not match
 
 
 <pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
+</code></pre>
+
+
+
+<a name="0x2_dynamic_field_ESharedObjectOperationNotSupported"></a>
+
+The object added as a dynamic field was previously a shared object
+
+
+<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 

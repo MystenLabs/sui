@@ -5,12 +5,12 @@ use std::{collections::BTreeMap, fmt::Display, sync::Arc};
 
 use self::known_attributes::AttributePosition;
 use crate::{
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent, TargetKind, Visibility},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
         StructDefinition, SyntaxMethods, Type,
     },
-    parser::ast::{ConstantName, DatatypeName, Field, FunctionName, VariantName},
+    parser::ast::{ConstantName, DatatypeName, Field, FunctionName, TargetKind, VariantName},
     shared::unique_map::UniqueMap,
     shared::*,
     sui_mode::info::SuiInfo,

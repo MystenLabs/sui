@@ -202,7 +202,7 @@ title: Module `0xb::committee`
  The public key bytes of the bridge key
 </dd>
 <dt>
-<code><a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  Voting power, values are voting power in the scale of 10000.
@@ -417,7 +417,7 @@ title: Module `0xb::committee`
         // get <a href="committee.md#0xb_committee">committee</a> signature weight and check pubkey is part of the <a href="committee.md#0xb_committee">committee</a>
         <b>let</b> member = &self.members[&pubkey];
         <b>if</b> (!member.blocklisted) {
-            threshold = threshold + member.<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
+            threshold = threshold + member.voting_power;
         };
         seen_pub_key.insert(pubkey);
         i = i + 1;
@@ -554,15 +554,15 @@ title: Module `0xb::committee`
         // Find <a href="../sui-system/validator.md#0x3_validator">validator</a> stake amount from system state
 
         // Process registration <b>if</b> it's active <a href="../sui-system/validator.md#0x3_validator">validator</a>
-        <b>let</b> <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = active_validator_voting_power.try_get(&registration.sui_address);
-        <b>if</b> (<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>.is_some()) {
-            <b>let</b> <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>.destroy_some();
-            stake_participation_percentage = stake_participation_percentage + <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
+        <b>let</b> voting_power = active_validator_voting_power.try_get(&registration.sui_address);
+        <b>if</b> (voting_power.is_some()) {
+            <b>let</b> voting_power = voting_power.destroy_some();
+            stake_participation_percentage = stake_participation_percentage + voting_power;
 
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
                 bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
-                <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>: (<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>),
+                voting_power: (voting_power <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>),
                 http_rest_url: registration.http_rest_url,
                 blocklisted: <b>false</b>,
             };
