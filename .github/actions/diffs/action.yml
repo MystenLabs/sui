@@ -42,7 +42,6 @@ runs:
           - 'consensus/**'
           - 'crates/**'
           - 'external-crates/**'
-          - 'narwhal/**'
           - 'sui-execution/**'
           - '.github/workflows/cargo-llvm-cov.yml'
           - '.github/workflows/rust.yml'
@@ -77,7 +76,6 @@ runs:
           - 'docker/**'
           - 'external-crates/**'
           - 'kiosk/**'
-          - 'narwhal/**'
           - 'nre/**'
           - 'sui-execution/**'
         isMoveAutoFormatter:

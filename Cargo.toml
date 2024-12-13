@@ -185,16 +185,6 @@ members = [
     "crates/typed-store-error",
     "crates/typed-store-workspace-hack",
     "crates/x",
-    "narwhal/config",
-    "narwhal/crypto",
-    "narwhal/executor",
-    "narwhal/network",
-    "narwhal/node",
-    "narwhal/primary",
-    "narwhal/storage",
-    "narwhal/test-utils",
-    "narwhal/types",
-    "narwhal/worker",
     "sui-execution",
     "sui-execution/cut",
     "sui-execution/latest/sui-adapter",
@@ -711,17 +701,6 @@ x = { path = "crates/x" }
 
 consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }
-
-narwhal-config = { path = "narwhal/config" }
-narwhal-crypto = { path = "narwhal/crypto" }
-narwhal-executor = { path = "narwhal/executor" }
-narwhal-network = { path = "narwhal/network" }
-narwhal-node = { path = "narwhal/node" }
-narwhal-primary = { path = "narwhal/primary" }
-narwhal-storage = { path = "narwhal/storage" }
-narwhal-test-utils = { path = "narwhal/test-utils" }
-narwhal-types = { path = "narwhal/types" }
-narwhal-worker = { path = "narwhal/worker" }
 
 sui-execution = { path = "sui-execution" }
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
