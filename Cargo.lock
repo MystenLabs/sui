@@ -13939,6 +13939,7 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "futures",
+ "hex",
  "itertools 0.13.0",
  "rand 0.8.5",
  "serde",
