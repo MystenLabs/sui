@@ -2434,7 +2434,7 @@ pub fn compute_symbols(
         // we have at least compiled program available, either already cached
         // or created for the purpose of this analysis
         if let Some(deps_symbols_data) = cacheable_symbols_data_opt {
-            // dependencies migh have changed or not, but we still need to update the cache
+            // dependencies may have changed or not, but we still need to update the cache
             // with new file hashes and user program info
             eprintln!("caching pre-compiled program and pre-computed symbols");
             pkg_deps.insert(
@@ -3086,7 +3086,7 @@ pub fn add_member_use_def(
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
     let Some(name_file_start) = files.start_position_opt(use_loc) else {
-        //        debug_assert!(false);
+        debug_assert!(false);
         return None;
     };
     let name_start = Position {
