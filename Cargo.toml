@@ -503,6 +503,7 @@ toml_edit = { version = "0.19.10" }
 tonic = { version = "0.12", features = ["transport", "tls-webpki-roots"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
+tonic-reflection = "0.12"
 tonic-rustls = "0.1.0"
 tower = { version = "0.4.12", features = [
     "full",

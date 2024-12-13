@@ -44,6 +44,8 @@ prost.workspace = true
 prost-types = "0.13.3"
 bytes.workspace = true
 
+tonic-reflection.workspace = true
+
 [dev-dependencies]
 diffy = "0.3"
 prost-build = "0.13.3"

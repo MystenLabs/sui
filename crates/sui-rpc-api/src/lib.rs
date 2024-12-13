@@ -82,7 +82,19 @@ impl RpcService {
         let rest_router = build_rest_router(self.clone());
 
         let grpc_router = {
+            let reflection_v1 = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(crate::proto::node::FILE_DESCRIPTOR_SET)
+                .build_v1()
+                .unwrap();
+
+            let reflection_v1alpha = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(crate::proto::node::FILE_DESCRIPTOR_SET)
+                .build_v1alpha()
+                .unwrap();
+
             grpc::Services::new()
+                .add_service(reflection_v1)
+                .add_service(reflection_v1alpha)
                 .add_service(crate::proto::node::node_server::NodeServer::new(
                     self.clone(),
                 ))
