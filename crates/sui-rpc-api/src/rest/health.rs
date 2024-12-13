@@ -3,7 +3,7 @@
 
 use crate::{
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    Result, RpcService,
+    RpcService,
 };
 use axum::extract::{Query, State};
 use documented::Documented;
@@ -58,9 +58,12 @@ pub struct Threshold {
     pub threshold_seconds: Option<u32>,
 }
 
-async fn health(
+pub async fn health(
     Query(Threshold { threshold_seconds }): Query<Threshold>,
     State(state): State<RpcService>,
-) -> Result<()> {
-    state.health_check(threshold_seconds)
+) -> impl axum::response::IntoResponse {
+    match state.health_check(threshold_seconds) {
+        Ok(()) => (axum::http::StatusCode::OK, "up"),
+        Err(_) => (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down"),
+    }
 }
