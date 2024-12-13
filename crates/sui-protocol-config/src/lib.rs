@@ -431,6 +431,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     accept_zklogin_in_multisig: bool,
 
+    // If true, multisig containing passkey sig is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_passkey_in_multisig: bool,
+
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
@@ -1537,6 +1541,10 @@ impl ProtocolConfig {
 
     pub fn accept_zklogin_in_multisig(&self) -> bool {
         self.feature_flags.accept_zklogin_in_multisig
+    }
+
+    pub fn accept_passkey_in_multisig(&self) -> bool {
+        self.feature_flags.accept_passkey_in_multisig
     }
 
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {

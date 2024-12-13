@@ -4,6 +4,7 @@
 use crate::{
     crypto::{CompressedSignature, DefaultHash, SignatureScheme},
     digests::ZKLoginInputsDigest,
+    passkey_authenticator::PasskeyAuthenticator,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
     zk_login_authenticator::ZkLoginAuthenticator,
@@ -183,6 +184,22 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid zklogin authenticator bytes".to_string(),
                         }
                     })?;
+                    authenticator
+                        .verify_claims(
+                            value,
+                            SuiAddress::from(subsig_pubkey),
+                            verify_params,
+                            zklogin_inputs_cache.clone(),
+                        )
+                        .map_err(|e| FastCryptoError::GeneralError(e.to_string()))
+                }
+                CompressedSignature::Passkey(bytes) => {
+                    let authenticator =
+                        PasskeyAuthenticator::from_bytes(&bytes.0).map_err(|_| {
+                            SuiError::InvalidSignature {
+                                error: "Invalid passkey authenticator bytes".to_string(),
+                            }
+                        })?;
                     authenticator
                         .verify_claims(
                             value,
