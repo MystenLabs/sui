@@ -348,7 +348,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .get_dynamic_fields_result_size_total
                 .inc_by(data.len() as u64);
             Ok(DynamicFieldPage {
-                data: data.into_iter().map(|(_, w)| w).collect(),
+                data: data.into_iter().map(|(_, w)| w.into()).collect(),
                 next_cursor,
                 has_next_page,
             })

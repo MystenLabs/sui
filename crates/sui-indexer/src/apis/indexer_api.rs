@@ -228,7 +228,7 @@ impl IndexerApiServer for IndexerApi {
         results.truncate(limit);
         let next_cursor = results.last().map(|o| o.object_id);
         Ok(Page {
-            data: results,
+            data: results.into_iter().map(Into::into).collect(),
             next_cursor,
             has_next_page,
         })
