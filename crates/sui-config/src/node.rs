@@ -63,8 +63,6 @@ pub struct NodeConfig {
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
-    #[serde(default)]
-    pub enable_experimental_rest_api: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc: Option<sui_rpc_api::Config>,
 
