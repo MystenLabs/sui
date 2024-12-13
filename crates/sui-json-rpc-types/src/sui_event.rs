@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Base64;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::identifier::Identifier;
@@ -51,15 +52,90 @@ pub struct SuiEvent {
     pub type_: StructTag,
     /// Parsed json value of the event
     pub parsed_json: Value,
-    #[serde_as(as = "sui_types::sui_serde::Base64orBase58")]
-    #[schemars(with = "Base64")]
     /// Base64 encoded bcs bytes of the move event
-    pub bcs: Vec<u8>,
+    #[serde(flatten)]
+    pub bcs: BcsEvent,
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<BigInt<u64>>")]
     #[serde_as(as = "Option<BigInt<u64>>")]
     pub timestamp_ms: Option<u64>,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", tag = "bcsEncoding")]
+#[serde(from = "MaybeTaggedBcsEvent")]
+pub enum BcsEvent {
+    Base64 {
+        #[serde_as(as = "Base64")]
+        #[schemars(with = "Base64")]
+        bcs: Vec<u8>,
+    },
+    Base58 {
+        #[serde_as(as = "Base58")]
+        #[schemars(with = "Base58")]
+        bcs: Vec<u8>,
+    },
+}
+
+impl BcsEvent {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self::Base64 { bcs: bytes }
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        match self {
+            BcsEvent::Base64 { bcs } => bcs.as_ref(),
+            BcsEvent::Base58 { bcs } => bcs.as_ref(),
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            BcsEvent::Base64 { bcs } => bcs,
+            BcsEvent::Base58 { bcs } => bcs,
+        }
+    }
+}
+
+#[allow(unused)]
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+enum MaybeTaggedBcsEvent {
+    Tagged(TaggedBcsEvent),
+    Base58 {
+        #[serde_as(as = "Base58")]
+        bcs: Vec<u8>,
+    },
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "bcsEncoding")]
+enum TaggedBcsEvent {
+    Base64 {
+        #[serde_as(as = "Base64")]
+        bcs: Vec<u8>,
+    },
+    Base58 {
+        #[serde_as(as = "Base58")]
+        bcs: Vec<u8>,
+    },
+}
+
+impl From<MaybeTaggedBcsEvent> for BcsEvent {
+    fn from(event: MaybeTaggedBcsEvent) -> BcsEvent {
+        let bcs = match event {
+            MaybeTaggedBcsEvent::Tagged(TaggedBcsEvent::Base58 { bcs })
+            | MaybeTaggedBcsEvent::Base58 { bcs } => bcs,
+            MaybeTaggedBcsEvent::Tagged(TaggedBcsEvent::Base64 { bcs }) => bcs,
+        };
+
+        // Bytes are already decoded, force into Base64 variant to avoid serializing to base58
+        Self::Base64 { bcs }
+    }
 }
 
 impl From<EventEnvelope> for SuiEvent {
@@ -74,7 +150,9 @@ impl From<EventEnvelope> for SuiEvent {
             sender: ev.event.sender,
             type_: ev.event.type_,
             parsed_json: ev.parsed_json,
-            bcs: ev.event.contents,
+            bcs: BcsEvent::Base64 {
+                bcs: ev.event.contents,
+            },
             timestamp_ms: Some(ev.timestamp),
         }
     }
@@ -87,7 +165,7 @@ impl From<SuiEvent> for Event {
             transaction_module: val.transaction_module,
             sender: val.sender,
             type_: val.type_,
-            contents: val.bcs,
+            contents: val.bcs.into_bytes(),
         }
     }
 }
@@ -108,7 +186,9 @@ impl SuiEvent {
             contents,
         } = event;
 
-        let bcs = contents.to_vec();
+        let bcs = BcsEvent::Base64 {
+            bcs: contents.to_vec(),
+        };
 
         let move_value = Event::move_event_to_move_value(&contents, layout)?;
         let (type_, fields) = type_and_fields_from_move_event_data(move_value)?;
@@ -165,7 +245,7 @@ impl SuiEvent {
             sender: SuiAddress::random_for_testing_only(),
             type_: StructTag::from_str("0x6666::random_for_testing::RandomForTesting").unwrap(),
             parsed_json: json!({}),
-            bcs: vec![],
+            bcs: BcsEvent::new(vec![]),
             timestamp_ms: None,
         }
     }
@@ -292,4 +372,36 @@ impl Filter<SuiEvent> for EventFilter {
 
 pub trait Filter<T> {
     fn matches(&self, item: &T) -> bool;
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn bcs_event_test() {
+        let bytes = vec![0, 1, 2, 3, 4];
+        let untagged_base58 = r#"{"bcs":"12VfUX"}"#;
+        let tagged_base58 = r#"{"bcsEncoding":"base58","bcs":"12VfUX"}"#;
+        let tagged_base64 = r#"{"bcsEncoding":"base64","bcs":"AAECAwQ="}"#;
+
+        assert_eq!(
+            bytes,
+            serde_json::from_str::<BcsEvent>(untagged_base58)
+                .unwrap()
+                .into_bytes()
+        );
+        assert_eq!(
+            bytes,
+            serde_json::from_str::<BcsEvent>(tagged_base58)
+                .unwrap()
+                .into_bytes()
+        );
+        assert_eq!(
+            bytes,
+            serde_json::from_str::<BcsEvent>(tagged_base64)
+                .unwrap()
+                .into_bytes()
+        );
+    }
 }
