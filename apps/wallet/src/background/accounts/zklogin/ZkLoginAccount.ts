@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import networkEnv from '_src/background/NetworkEnv';
-import { type NetworkEnvType } from '_src/shared/api-env';
+import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
-import { getActiveNetworkSuiClient } from '_src/shared/sui-client';
+import { getSuiClient } from '_src/shared/sui-client';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 import { fetchTransactionsByAddress } from '_src/ui/app/hooks/useQueryTransactionsByAddress';
 import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
@@ -95,8 +95,12 @@ export function isZkLoginAccountSerializedUI(
 }
 
 async function hasTransactionHistory(address: string): Promise<boolean> {
-	// TODO XXX FIXME: this needs to be turned on for mainnet only
-	const rpc = await getActiveNetworkSuiClient();
+	const activeNetwork = await networkEnv.getActiveNetwork();
+	if (activeNetwork.env !== API_ENV.mainnet) {
+		return false;
+	}
+
+	const rpc = getSuiClient(activeNetwork);
 	const txns = await fetchTransactionsByAddress(rpc, address);
 	return !!txns.length;
 }
