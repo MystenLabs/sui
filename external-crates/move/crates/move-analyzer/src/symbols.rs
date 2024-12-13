@@ -1441,9 +1441,9 @@ impl SymbolicatorRunner {
                             let root_dir = root_dir_opt.unwrap();
                             if let Some(mut modified_files) = pkgs_to_analyze.remove(&root_dir) {
                                 // we already seen this package
-                                if modified_files.len() != 1 || modified_files.first() != None {
+                                if modified_files.len() != 1 || modified_files.first().is_some() {
                                     // keep adding modfied Move files if any
-                                    if is_move_file(&starting_path) {
+                                    if is_move_file(starting_path) {
                                         // add move file to existing set
                                         modified_files.insert(Some(starting_path.clone()));
                                         pkgs_to_analyze.insert(root_dir, modified_files);
@@ -1454,7 +1454,7 @@ impl SymbolicatorRunner {
                                 } // else we already seen this package with a non-Move-file path so nothing to do
                             } else {
                                 // first time we see this package
-                                let modified_file = if is_move_file(&starting_path) {
+                                let modified_file = if is_move_file(starting_path) {
                                     Some(starting_path.clone())
                                 } else {
                                     None
@@ -1468,10 +1468,10 @@ impl SymbolicatorRunner {
                                 packages_info.clone(),
                                 ide_files_root.clone(),
                                 pkg_path.as_path(),
-                                if modified_files.len() == 1 && modified_files.first() == None {
+                                if modified_files.len() == 1 && modified_files.first().is_none() {
                                     None
                                 } else {
-                                    Some(modified_files.into_iter().filter_map(|p| p).collect())
+                                    Some(modified_files.into_iter().flatten().collect())
                                 },
                                 lint,
                                 None,
@@ -1933,7 +1933,7 @@ pub fn get_compiled_pkg(
         mapped_files
             .file_name_mapping()
             .iter()
-            .map(|(fhash, fpath)| (fpath.clone(), fhash.clone()))
+            .map(|(fhash, fpath)| (fpath.clone(), *fhash))
             .collect(),
     );
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
@@ -2152,7 +2152,7 @@ pub fn compute_symbols_pre_process(
 
     let mut cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
     pre_process_typed_modules(
-        &typed_program_modules,
+        typed_program_modules,
         &fields_order_info,
         &compiled_pkg_info.mapped_files,
         &mut computation_data.mod_outer_defs,
@@ -2410,8 +2410,8 @@ pub fn compute_symbols(
     let file_hashes = compiled_pkg_info
         .mapped_files
         .file_name_mapping()
-        .into_iter()
-        .map(|(fhash, fpath)| (fpath.clone(), fhash.clone()))
+        .iter()
+        .map(|(fhash, fpath)| (fpath.clone(), *fhash))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
     let mut symbols_computation_data_deps = SymbolsComputationData::new();
@@ -2655,11 +2655,7 @@ fn compute_mapped_files(
             let _ = vfs_file_path.parent().create_dir_all();
             let mut vfs_file = vfs_file_path.create_file().unwrap();
             let _ = vfs_file.write_all(contents.as_bytes());
-            mapped_files.add(
-                fhash.clone(),
-                fname.into(),
-                Arc::from(contents.into_boxed_str()),
-            );
+            mapped_files.add(fhash, fname.into(), Arc::from(contents.into_boxed_str()));
         }
     }
     (mapped_files, format!("{:X}", hasher.finalize()))
