@@ -57,12 +57,7 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
 pub fn build_rest_router(service: RpcService) -> axum::Router {
     let mut api = openapi::Api::new(info(service.software_version()));
 
-    api.register_endpoints(
-        ENDPOINTS
-            .iter()
-            .copied()
-            .filter(|endpoint| endpoint.stable() || service.config.enable_unstable_apis()),
-    );
+    api.register_endpoints(ENDPOINTS.iter().copied());
 
     Router::new()
         .nest("/v2/", api.to_router().with_state(service))
