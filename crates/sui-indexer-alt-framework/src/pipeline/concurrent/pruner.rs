@@ -12,7 +12,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    handlers::cp_mapping::PrunableRange,
     metrics::IndexerMetrics,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
     watermarks::PrunerWatermark,
