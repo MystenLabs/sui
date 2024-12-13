@@ -39,7 +39,7 @@ Amount: <COIN-AMOUNT>
 
 ## DenyList
 
-The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCap` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
+The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
 :::info
 
@@ -49,9 +49,9 @@ The `DenyList` object is a system object that has the address `0x403`. You canno
 
 ## Create regulated coin
 
-If you need the ability to deny specific addresses from having access to your coin, you can use the `create_regulated_currency` function (instead of `create_currency`) to create it.
+If you need the ability to deny specific addresses from having access to your coin, you can use the `create_regulated_currency_v2` function (instead of `create_currency`) to create it.
 
-Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCap` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
+Behind the scenes, `create_regulated_currency_v2` uses the `create_currency` function to create the coin, but also produces a `DenyCapV2` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency_v2` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
 
 ## Create tokens
 
