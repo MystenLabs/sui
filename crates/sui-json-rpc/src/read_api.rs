@@ -1139,7 +1139,7 @@ async fn get_display_object_by_type(
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
     if let Some(event) = events.pop() {
-        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])?;
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs.into_bytes())?;
         Ok(Some(display))
     } else {
         Ok(None)
