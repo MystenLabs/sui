@@ -138,25 +138,23 @@ export class ZkLoginAccount
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
 
-		const legacyAddress = computeZkLoginAddress({
+		const baseAddressComputationParams = {
 			claimName,
 			claimValue,
 			iss: decodedJWT.iss,
 			aud,
 			userSalt: BigInt(salt),
+		};
+		const legacyAddress = computeZkLoginAddress({
+			...baseAddressComputationParams,
 			legacyAddress: true,
 		});
-
 		const nonLegacyAddress = computeZkLoginAddress({
-			claimName,
-			claimValue,
-			iss: decodedJWT.iss,
-			aud,
-			userSalt: BigInt(salt),
+			...baseAddressComputationParams,
 			legacyAddress: false,
 		});
 
-		const response: CreateNewZkLoginAccountResponseItem[] = [];
+		const ret: CreateNewZkLoginAccountResponseItem[] = [];
 
 		const accountData: Omit<CreateNewZkLoginAccountResponseItem, 'address'> = {
 			type: 'zkLogin',
@@ -174,24 +172,24 @@ export class ZkLoginAccount
 			claimName,
 		};
 
-		response.push({
-			...accountData,
-			address: legacyAddress,
-		});
-
 		// By default, always import the legacy address. If the legacy and
 		// non-legacy addresses differ, only import the non-legacy address if it
 		// has already been used.
+		ret.push({
+			...accountData,
+			address: legacyAddress,
+		});
 		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(nonLegacyAddress)) {
 			if (await hasTransactionHistory(nonLegacyAddress)) {
-				response.push({
+				ret.push({
 					...accountData,
 					address: nonLegacyAddress,
+					nickname: null,
 				});
 			}
 		}
 
-		return response;
+		return ret;
 	}
 
 	static isOfType(serialized: SerializedAccount): serialized is ZkLoginAccountSerialized {
