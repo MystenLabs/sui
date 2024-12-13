@@ -22,6 +22,7 @@ pub(crate) struct NodeConfig {
     pub protocol_config: ProtocolConfig,
 }
 
+/// A wrapper struct to allow us manage the underlying AuthorityNode.
 #[allow(unused)]
 pub(crate) struct Node {
     container: Mutex<Option<AuthorityNodeContainer>>,
@@ -54,6 +55,21 @@ impl Node {
     /// Start this Node, waiting until its completely started up.
     pub async fn start(&self) -> Result<()> {
         self.spawn().await
+    }
+
+    pub fn spawn_committed_subdag_consumer(&self) -> Result<()> {
+        let authority_index = self.config.authority_index;
+        let container = self.container.lock();
+        if let Some(container) = container.as_ref() {
+            let (mut commit_receiver, commit_consumer_monitor) = container.take_commit_receiver();
+            let _handle = tokio::spawn(async move {
+                while let Some(subdag) = commit_receiver.recv().await {
+                    info!(index =% authority_index, "received committed subdag");
+                    commit_consumer_monitor.set_highest_handled_commit(subdag.commit_ref.index);
+                }
+            });
+        }
+        Ok(())
     }
 
     /// Stop this Node

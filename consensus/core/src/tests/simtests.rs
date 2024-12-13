@@ -7,17 +7,21 @@ mod test {
 
     use crate::swarm::{self, node::NodeConfig};
     use consensus_config::{
-        Authority, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake,
+        Authority, AuthorityIndex, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair,
+        ProtocolKeyPair, Stake,
     };
     use prometheus::Registry;
     use rand::{rngs::StdRng, SeedableRng as _};
     use sui_config::local_ip_utils;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
+    use sui_simulator::{
+        configs::{bimodal_latency_ms, env_config, uniform_latency_ms},
+        SimConfig,
+    };
     use tempfile::TempDir;
     use tokio::time::sleep;
     use typed_store::DBMetrics;
-    use sui_simulator::{configs::{env_config, uniform_latency_ms, bimodal_latency_ms}, SimConfig};
 
     fn test_config() -> SimConfig {
         env_config(
@@ -25,7 +29,7 @@ mod test {
             [
                 (
                     "regional_high_variance",
-                    bimodal_latency_ms(30..40, 300..800, 0.005),
+                    bimodal_latency_ms(30..40, 300..800, 0.01),
                 ),
                 (
                     "global_high_variance",
@@ -41,10 +45,10 @@ mod test {
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
-        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_OF_AUTHORITIES: usize = 10;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.set_consensus_gc_depth_for_testing(10);
+        protocol_config.set_consensus_gc_depth_for_testing(3);
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
@@ -60,14 +64,28 @@ mod test {
                 protocol_config: protocol_config.clone(),
             };
             let node = swarm::node::Node::new(config);
-            node.start().await.unwrap();
+
+            if index != AuthorityIndex::new_for_test(NUM_OF_AUTHORITIES as u32 - 1) {
+                node.start().await.unwrap();
+            }
+
+            node.spawn_committed_subdag_consumer().unwrap();
 
             boot_counters[index] += 1;
             authorities.push(node);
         }
 
         // wait for authorities
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(60)).await;
+
+        // Now start the fourth authority and let it start
+        authorities[NUM_OF_AUTHORITIES - 1].start().await.unwrap();
+        authorities[NUM_OF_AUTHORITIES - 1]
+            .spawn_committed_subdag_consumer()
+            .unwrap();
+
+        // Wait for it to catch up
+        sleep(Duration::from_secs(230)).await;
     }
 
     /// Creates a committee for local testing, and the corresponding key pairs for the authorities.

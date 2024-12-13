@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::ArcSwapOption;
 use consensus_config::Parameters;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use prometheus::Registry;
@@ -13,12 +14,18 @@ use tracing::{info, trace};
 use super::node::NodeConfig;
 use crate::network::tonic_network::to_socket_addr;
 use crate::transaction::NoopTransactionVerifier;
-use crate::{CommitConsumer, CommittedSubDag, ConsensusAuthority};
+use crate::{CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority};
 
 pub(crate) struct AuthorityNodeContainer {
     handle: Option<ContainerHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
-    node_watch: watch::Receiver<Option<(ConsensusAuthority, UnboundedReceiver<CommittedSubDag>)>>,
+    node_watch: watch::Receiver<Option<ConsensusAuthority>>,
+    commit_receiver: Arc<
+        ArcSwapOption<(
+            UnboundedReceiver<CommittedSubDag>,
+            Arc<CommitConsumerMonitor>,
+        )>,
+    >,
 }
 
 #[derive(Debug)]
@@ -51,6 +58,8 @@ impl AuthorityNodeContainer {
             SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
             _ => panic!("unsupported protocol"),
         };
+        let commit_receiver_swap = Arc::new(ArcSwapOption::empty());
+        let commit_receiver_swap_clone = commit_receiver_swap.clone();
 
         let node = builder
             .ip(ip)
@@ -60,13 +69,15 @@ impl AuthorityNodeContainer {
                 let config = config.clone();
                 let mut cancel_receiver = cancel_receiver.clone();
                 let startup_sender = startup_sender.clone();
+                let commit_receiver_swap_clone = commit_receiver_swap_clone.clone();
+
                 async move {
-                    let (consensus_authority, commit_receiver) =
+                    let (consensus_authority, commit_receiver, commit_consumer_monitor) =
                         AuthorityNodeContainer::make_authority(config).await;
 
-                    startup_sender
-                        .send(Some((consensus_authority, commit_receiver)))
-                        .ok();
+                    startup_sender.send(Some(consensus_authority)).ok();
+                    commit_receiver_swap_clone
+                        .store(Some(Arc::new((commit_receiver, commit_consumer_monitor))));
 
                     // run until canceled
                     loop {
@@ -85,6 +96,7 @@ impl AuthorityNodeContainer {
             handle: Some(ContainerHandle { node_id: node.id() }),
             cancel_sender: Some(cancel_sender),
             node_watch: startup_receiver,
+            commit_receiver: commit_receiver_swap,
         }
     }
 
@@ -101,9 +113,30 @@ impl AuthorityNodeContainer {
         }
     }
 
+    pub fn take_commit_receiver(
+        &self,
+    ) -> (
+        UnboundedReceiver<CommittedSubDag>,
+        Arc<CommitConsumerMonitor>,
+    ) {
+        if let Some(tuple) = self.commit_receiver.swap(None) {
+            let Ok((commit_receiver, commit_consumer_monitor)) = Arc::try_unwrap(tuple) else {
+                panic!("commit receiver still in use");
+            };
+
+            (commit_receiver, commit_consumer_monitor)
+        } else {
+            panic!("commit receiver already taken");
+        }
+    }
+
     async fn make_authority(
         config: NodeConfig,
-    ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
+    ) -> (
+        ConsensusAuthority,
+        UnboundedReceiver<CommittedSubDag>,
+        Arc<CommitConsumerMonitor>,
+    ) {
         let NodeConfig {
             authority_index,
             db_dir,
@@ -131,6 +164,7 @@ impl AuthorityNodeContainer {
         let network_keypair = keypairs[authority_index].0.clone();
 
         let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
+        let commit_consumer_monitor = commit_consumer.monitor();
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -147,6 +181,6 @@ impl AuthorityNodeContainer {
         )
         .await;
 
-        (authority, commit_receiver)
+        (authority, commit_receiver, commit_consumer_monitor)
     }
 }
