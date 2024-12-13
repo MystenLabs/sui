@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.20
+
+### Patch Changes
+
+- 50d0edb: DRF token
+
 ## 0.12.19
 
 ### Patch Changes
