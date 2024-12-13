@@ -119,7 +119,12 @@ impl RpcService {
             router = router.merge(build_rest_router(self.clone()));
         }
 
+        let health_endpoint = axum::Router::new()
+            .route("/health", axum::routing::get(rest::health::health))
+            .with_state(self.clone());
+
         router
+            .merge(health_endpoint)
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
