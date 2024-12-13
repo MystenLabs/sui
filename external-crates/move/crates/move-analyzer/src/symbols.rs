@@ -1357,6 +1357,10 @@ fn variant_to_ide_string(variants: &[VariantInfo]) -> String {
     vstrings.join(",\n")
 }
 
+fn is_move_file(path: &Path) -> bool {
+    path.is_file() && path.extension().map_or(false, |ext| ext == "move")
+}
+
 impl SymbolicatorRunner {
     /// Create a new idle runner (one that does not actually symbolicate)
     pub fn idle() -> Self {
@@ -1433,16 +1437,13 @@ impl SymbolicatorRunner {
                             // we want to collect either all modified Move files (as BTreeSet<Some(PathBuf)> or,
                             // if one of the paths for a package is not a Move file, have aonly one BTreeSet
                             // None entry. This will be later passed to symbolicator as Some(Vec<PathBuf>) or
-                            // None, to indicated if incremental symbolication is possible or not.
+                            // None, to indicate if incremental symbolication is possible or not.
                             let root_dir = root_dir_opt.unwrap();
                             if let Some(mut modified_files) = pkgs_to_analyze.remove(&root_dir) {
+                                // we already seen this package
                                 if modified_files.len() != 1 || modified_files.first() != None {
                                     // keep adding modfied Move files if any
-                                    let is_move_file = starting_path.is_file() &&
-                                            starting_path
-                                                .extension()
-                                                .map_or(false, |ext| ext == "move");
-                                    if is_move_file {
+                                    if is_move_file(&starting_path) {
                                         // add move file to existing set
                                         modified_files.insert(Some(starting_path.clone()));
                                         pkgs_to_analyze.insert(root_dir, modified_files);
@@ -1452,7 +1453,13 @@ impl SymbolicatorRunner {
                                     }
                                 } // else we already seen this package with a non-Move-file path so nothing to do
                             } else {
-                                pkgs_to_analyze.insert(root_dir,  BTreeSet::from_iter(vec![Some(starting_path.clone())]));
+                                // first time we see this package
+                                let modified_file = if is_move_file(&starting_path) {
+                                    Some(starting_path.clone())
+                                } else {
+                                    None
+                                };
+                                pkgs_to_analyze.insert(root_dir,  BTreeSet::from_iter(vec![modified_file]));
                             }
                         }
                         for (pkg_path, modified_files) in pkgs_to_analyze.into_iter() {
