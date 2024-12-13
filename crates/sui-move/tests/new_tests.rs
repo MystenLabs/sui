@@ -97,7 +97,7 @@ fn test_new_basic() {
     "###);
 
     // check list of files
-    assert_yaml_snapshot!("file list", recursive_paths(&proj));
+    assert_yaml_snapshot!(recursive_paths(&proj));
 
     // check .gitignore contents
     assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").unwrap(), @r###"
