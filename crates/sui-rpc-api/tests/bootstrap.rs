@@ -34,12 +34,14 @@ fn bootstrap() {
     };
 
     let out_dir = root_dir.join("src").join("proto").join("generated");
+    let file_descriptor_set_path = out_dir.join("sui.node.v2.fds.bin");
 
     if let Err(error) = tonic_build::configure()
         .build_client(true)
         .build_server(true)
         .bytes(["."])
         .out_dir(&out_dir)
+        .file_descriptor_set_path(file_descriptor_set_path)
         .compile_protos(&proto_files[..], &[proto_dir])
     {
         panic!("failed to compile `sui` protos: {}", error);
