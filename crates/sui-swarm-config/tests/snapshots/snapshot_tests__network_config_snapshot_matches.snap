@@ -156,6 +156,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -317,6 +319,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -478,6 +482,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -639,6 +645,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -800,6 +808,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -961,6 +971,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1122,6 +1134,8 @@ validator_configs:
         effect_cache_size: ~
         events_cache_size: ~
         transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
