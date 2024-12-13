@@ -5,7 +5,6 @@ use anyhow;
 use cli_sandbox::Project;
 use insta::{assert_snapshot, assert_yaml_snapshot};
 use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
-use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::Path;
 use std::{fs, fs::File, path::PathBuf, process::Command};
