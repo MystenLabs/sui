@@ -595,10 +595,7 @@ impl SuiNode {
             None
         };
 
-        let rpc_index = if is_full_node
-            && config.enable_experimental_rest_api
-            && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
-        {
+        let rpc_index = if is_full_node && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
             Some(Arc::new(RpcIndexStore::new(
                 &config.db_path(),
                 &store,
@@ -2109,24 +2106,27 @@ pub async fn build_http_server(
 
     router = router.merge(json_rpc_router);
 
-    if config.enable_experimental_rest_api {
-        let mut rest_service = sui_rpc_api::RpcService::new(
+    let rpc_router = {
+        let mut rpc_service = sui_rpc_api::RpcService::new(
             Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );
 
         if let Some(config) = config.rpc.clone() {
-            rest_service.with_config(config);
+            rpc_service.with_config(config);
         }
 
-        rest_service.with_metrics(RpcMetrics::new(prometheus_registry));
+        rpc_service.with_metrics(RpcMetrics::new(prometheus_registry));
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
-            rest_service.with_executor(transaction_orchestrator.clone())
+            rpc_service.with_executor(transaction_orchestrator.clone())
         }
 
-        router = router.merge(rest_service.into_router().await);
-    }
+        rpc_service.into_router().await
+    };
+
+    router = router.merge(rpc_router);
+
     // TODO: Remove this health check when experimental REST API becomes default
     // This is a copy of the health check in crates/sui-rpc-api/src/health.rs
     router = router
