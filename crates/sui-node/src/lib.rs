@@ -2125,7 +2125,7 @@ pub async fn build_http_server(
             rest_service.with_executor(transaction_orchestrator.clone())
         }
 
-        router = router.merge(rest_service.into_router());
+        router = router.merge(rest_service.into_router().await);
     }
     // TODO: Remove this health check when experimental REST API becomes default
     // This is a copy of the health check in crates/sui-rpc-api/src/health.rs

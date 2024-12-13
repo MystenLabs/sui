@@ -15047,6 +15047,7 @@ dependencies = [
  "tokio",
  "tonic 0.12.3",
  "tonic-build",
+ "tonic-health",
  "tonic-reflection",
  "tower 0.4.13",
  "url",
