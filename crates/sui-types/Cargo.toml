@@ -105,6 +105,10 @@ passkey-authenticator.workspace = true
 name = "accumulator_bench"
 harness = false
 
+[[bench]]
+name = "nitro_attestation_bench"
+harness = false
+
 [features]
 default = []
 tracing = [

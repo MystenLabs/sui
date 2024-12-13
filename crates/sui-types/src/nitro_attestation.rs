@@ -544,7 +544,7 @@ impl AttestationDocument {
     fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroError> {
         // only pcr0, pcr1, pcr2 are checked
         assert!(expected_pcrs.len() == 3);
-        for (i, expected_pcr) in expected_pcrs.into_iter().enumerate().take(3) {
+        for (i, expected_pcr) in expected_pcrs.iter().enumerate().take(3) {
             if self.pcrs[i] != *expected_pcr {
                 return Err(NitroError::InvalidPcrs);
             }
