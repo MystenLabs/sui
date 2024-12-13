@@ -637,6 +637,10 @@ impl NodeConfig {
     pub fn jsonrpc_server_type(&self) -> ServerType {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
     }
+
+    pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
+        self.rpc.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

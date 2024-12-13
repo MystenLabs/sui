@@ -597,7 +597,7 @@ impl SuiNode {
 
         let rpc_index = if is_full_node
             && config.enable_experimental_rest_api
-            && config.rpc.as_ref().is_some_and(|rpc| rpc.enable_indexing())
+            && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
         {
             Some(Arc::new(RpcIndexStore::new(
                 &config.db_path(),
