@@ -16,8 +16,7 @@ use std::{fs, fs::File, path::PathBuf, process::Command};
 
 fn sui_move() -> (Project, Command) {
     let project = Project::new().unwrap();
-    let mut cmd = Command::new(get_cargo_bin("sui"));
-    cmd.arg("move");
+    let mut cmd = Command::new(get_cargo_bin("sui-move"));
     cmd.current_dir(project.path());
     (project, cmd)
 }
@@ -42,7 +41,7 @@ fn slurp_file<P: AsRef<Path>>(proj: &Project, path: P) -> anyhow::Result<String>
 /// return the set of files (and directories) recursively contained in the directory at [root].
 /// Results are normalized relative to [root] and returned in sorted order.
 /// [root] is included (even if it doesn't exist)
-fn recursive_paths(proj: &Project) -> Vec<PathBuf> {
+fn recursive_paths<P: AsRef<Path>>(root: P) -> Vec<PathBuf> {
     // dump [files rooted at [path] into [accum]
     fn add_files(accum: &mut Vec<PathBuf>, path: &Path, root: &Path) {
         for child in path.read_dir().into_iter().flatten() {
@@ -56,7 +55,7 @@ fn recursive_paths(proj: &Project) -> Vec<PathBuf> {
     }
 
     let mut result = vec![];
-    add_files(&mut result, proj.path(), proj.path());
+    add_files(&mut result, root.as_ref(), root.as_ref());
     result.sort();
     result
 }
@@ -76,8 +75,9 @@ fn test_new_file_recursive_paths() {
     new_file(&mut proj, "foo/bar.txt", "foo/bar").unwrap();
     new_file(&mut proj, "foo/baz/baz.txt", "foo/baz/baz").unwrap();
     new_file(&mut proj, "qux.txt", "qux").unwrap();
+    new_file(&mut proj, "quux/.foo", "qux").unwrap();
 
-    assert_yaml_snapshot!(recursive_paths(&proj));
+    assert_yaml_snapshot!(recursive_paths(proj.path()));
 }
 
 /// # Tests for `sui move new` /////////////////////////////////////////////////////////////////////
@@ -86,8 +86,10 @@ fn test_new_file_recursive_paths() {
 fn test_new_basic() {
     let (mut proj, mut cmd) = sui_move();
 
+    cmd.arg("new").arg("example");
+
     // sui move new
-    assert_cmd_snapshot!(cmd.arg("new").arg("example"), @r###"
+    assert_cmd_snapshot!(cmd, @r###"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -96,10 +98,10 @@ fn test_new_basic() {
     "###);
 
     // check list of files
-    assert_yaml_snapshot!(recursive_paths(&proj));
+    assert_yaml_snapshot!(recursive_paths(proj.path().join("example")));
 
     // check .gitignore contents
-    assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").unwrap(), @r###"
+    assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").expect("sui move new creates .gitignore"), @r###"
     build/*
     "###)
 }
@@ -110,6 +112,9 @@ fn test_new_gitignore_exists() {
 
     // create .gitignore file
     new_file(&mut proj, "example/.gitignore", "existing_ignore\n").unwrap();
+    assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").expect("sui move new updates .gitignore"), @r###"
+    existing_ignore
+    "###);
 
     // sui move new
     assert_cmd_snapshot!(cmd.arg("new").arg("example"), @r###"
@@ -120,11 +125,13 @@ fn test_new_gitignore_exists() {
     ----- stderr -----
     "###);
 
+    assert_yaml_snapshot!(recursive_paths(proj.path().join("example")));
+
     // check .gitignore contents
-    assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").unwrap(), @r###"
+    assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").expect("sui move new updates .gitignore"), @r###"
     existing_ignore
     build/*
-    "###)
+    "###);
 }
 
 #[test]
