@@ -86,10 +86,8 @@ fn test_new_file_recursive_paths() {
 fn test_new_basic() {
     let (mut proj, mut cmd) = sui_move();
 
-    cmd.arg("new").arg("example");
-
-    // sui move new
-    assert_cmd_snapshot!(cmd, @r###"
+    // sui move new example
+    assert_cmd_snapshot!(cmd.arg("new").arg("example"), @r###"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -112,11 +110,8 @@ fn test_new_gitignore_exists() {
 
     // create .gitignore file
     new_file(&mut proj, "example/.gitignore", "existing_ignore\n").unwrap();
-    assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").expect("sui move new updates .gitignore"), @r###"
-    existing_ignore
-    "###);
 
-    // sui move new
+    // sui move new example
     assert_cmd_snapshot!(cmd.arg("new").arg("example"), @r###"
     success: true
     exit_code: 0
@@ -125,6 +120,7 @@ fn test_new_gitignore_exists() {
     ----- stderr -----
     "###);
 
+    // check list of files
     assert_yaml_snapshot!(recursive_paths(proj.path().join("example")));
 
     // check .gitignore contents
@@ -146,5 +142,16 @@ fn test_new_tests_exists() {
 
 #[test]
 fn test_new_move_toml_exists() {
-    // TODO
+    let (mut proj, mut cmd) = sui_move();
+
+    // create .gitignore file
+    new_file(&mut proj, "example/Move.toml", "dummy").unwrap();
+
+    // sui move new example
+    assert_cmd_snapshot!(cmd.arg("new").arg("example"), @r###"
+    success: false
+    "###);
+
+    // check list of files
+    assert_yaml_snapshot!(recursive_paths(proj.path().join("example")));
 }
