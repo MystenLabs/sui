@@ -9,6 +9,10 @@
 import path from "path";
 import fs from "fs";
 
+const BRIDGE_PATH = path.join(
+  __dirname,
+  "../../../../../crates/sui-framework/docs/bridge",
+);
 const FRAMEWORK_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/sui-framework",
@@ -29,7 +33,6 @@ const DOCS_PATH = path.join(
   __dirname,
   "../../../../content/references/framework",
 );
-
 
 const frameworkPlugin = (context, options) => {
   return {
@@ -62,11 +65,13 @@ const frameworkPlugin = (context, options) => {
         return files;
       };
 
+      const bridgeFiles = recurseFiles(BRIDGE_PATH);
       const frameworkFiles = recurseFiles(FRAMEWORK_PATH);
       const stdlibFiles = recurseFiles(STDLIB_PATH);
       const deepbookFiles = recurseFiles(DEEPBOOK_PATH);
       const suisysFiles = recurseFiles(SUISYS_PATH);
       const allFiles = [
+        bridgeFiles,
         frameworkFiles,
         stdlibFiles,
         deepbookFiles,
@@ -91,7 +96,10 @@ const frameworkPlugin = (context, options) => {
             .replace(/<pre><code><\/code><\/pre>/g, "");
           const filename = file.replace(/.*\/docs\/(.*)$/, `$1`);
           const parts = filename.split("/");
-          const fileWrite = path.join(DOCS_PATH, filename);
+          const fileWrite = path.join(
+            DOCS_PATH,
+            filename.replace(/\.md$/, "-schema.md"),
+          );
           let newDir = DOCS_PATH;
 
           // Should work for nested docs, but is currently flat tree.
