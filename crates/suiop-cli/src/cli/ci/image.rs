@@ -344,7 +344,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 build_args: _,
                 force: _,
                 image_target,
-                org,
+                org: _,
             } => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
