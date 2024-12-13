@@ -19,9 +19,9 @@ CHANGELOG.md
 /crates/sui-graphql-e2e-tests/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
 
 # Consensus working group
-/consensus/ @akichidis @mwtian @arun-koshy
-/crates/sui-core/src/consensus_handler.rs @akichidis @mwtian @arun-koshy
-/crates/sui-core/src/consensus_adapter.rs @akichidis @mwtian @arun-koshy
+/consensus/ @MystenLabs/consensus
+/crates/sui-core/src/consensus_handler.rs @MystenLabs/consensus
+/crates/sui-core/src/consensus_adapter.rs @MystenLabs/consensus
 
 apps/ @MystenLabs/fe-and-apps
 sdk/ @MystenLabs/sdk-reviewers
