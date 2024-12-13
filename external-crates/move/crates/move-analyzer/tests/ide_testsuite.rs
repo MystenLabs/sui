@@ -381,6 +381,7 @@ fn initial_symbols(
         pkg_deps.clone(),
         ide_files_root.clone(),
         project_path.as_path(),
+        None,
         LintLevel::None,
     )?;
 
