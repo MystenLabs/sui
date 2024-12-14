@@ -115,7 +115,7 @@ async function hasTransactionHistory(address: string): Promise<boolean> {
 		}),
 	]);
 
-	return !!txnIds.data.length && !!fromTxnIds.data.length;
+	return !!txnIds.data.length || !!fromTxnIds.data.length;
 }
 
 type CreateNewZkLoginAccountResponseItem = Omit<ZkLoginAccountSerialized, 'id'>;
