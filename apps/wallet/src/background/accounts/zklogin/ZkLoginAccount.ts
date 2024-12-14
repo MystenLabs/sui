@@ -2,14 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import networkEnv from '_src/background/NetworkEnv';
-import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
+import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
-import { getSuiClient } from '_src/shared/sui-client';
+import { getActiveNetworkSuiClient } from '_src/shared/sui-client';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
-import { fetchTransactionsByAddress } from '_src/ui/app/hooks/useQueryTransactionsByAddress';
 import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
-import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
+import {
+	computeZkLoginAddress,
+	genAddressSeed,
+	getZkLoginSignature,
+	jwtToAddress,
+	type ComputeZkLoginAddressOptions,
+} from '@mysten/sui/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 
@@ -95,14 +100,21 @@ export function isZkLoginAccountSerializedUI(
 }
 
 async function hasTransactionHistory(address: string): Promise<boolean> {
-	const activeNetwork = await networkEnv.getActiveNetwork();
-	if (activeNetwork.env !== API_ENV.mainnet) {
-		return false;
-	}
+	const rpc = await getActiveNetworkSuiClient();
+	const [txnIds, fromTxnIds] = await Promise.all([
+		rpc.queryTransactionBlocks({
+			filter: {
+				ToAddress: address!,
+			},
+		}),
+		rpc.queryTransactionBlocks({
+			filter: {
+				FromAddress: address!,
+			},
+		}),
+	]);
 
-	const rpc = getSuiClient(activeNetwork);
-	const txns = await fetchTransactionsByAddress(rpc, address);
-	return !!txns.length;
+	return !!txnIds.data.length && !!fromTxnIds.data.length;
 }
 
 type CreateNewZkLoginAccountResponseItem = Omit<ZkLoginAccountSerialized, 'id'>;
@@ -142,7 +154,7 @@ export class ZkLoginAccount
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
 
-		const baseAddressComputationParams = {
+		const baseAddressComputationParams: ComputeZkLoginAddressOptions = {
 			claimName,
 			claimValue,
 			iss: decodedJWT.iss,
@@ -188,7 +200,7 @@ export class ZkLoginAccount
 				ret.push({
 					...accountData,
 					address: nonLegacyAddress,
-					nickname: null,
+					nickname: accountData.nickname ? `${accountData.nickname} (address 2)` : null,
 				});
 			}
 		}
@@ -314,6 +326,11 @@ export class ZkLoginAccount
 		const epoch = await getCurrentEpoch();
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
 		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
+
+		// On re-auth, we check if the account for the legacy/non-legacy address
+		// has been imported. If not, and it has txns, we import it.
+		this.#checkAndImportAlternateAccount(jwt);
+
 		const decodedJWT = decodeJwt(jwt);
 		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
 			throw new Error("Logged in account doesn't match with saved account");
@@ -331,7 +348,23 @@ export class ZkLoginAccount
 		ephemeralValue[serializeNetwork(activeNetwork)] = credentialsData;
 		await this.setEphemeralValue(ephemeralValue);
 		await this.onUnlocked();
+
 		return credentialsData;
+	}
+
+	async #checkAndImportAlternateAccount(jwt: string) {
+		const currentAddress = await this.address;
+		const salt = await fetchSalt(jwt);
+		const legacyAddress = jwtToAddress(jwt, salt, true);
+		// const nonLegacyAddress = jwtToAddress(jwt, salt, true);
+
+		// TODO FIXME XXX: implement this
+		// check whichever address does not match the current, if it exists
+		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(currentAddress)) {
+			// await checkAndImportZkLoginAccount(legacyAddress);
+		} else {
+			// await checkAndImportZkLoginAccount(nonLegacyAddress);
+		}
 	}
 
 	async #generateProofs(
