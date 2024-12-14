@@ -2,14 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import networkEnv from '_src/background/NetworkEnv';
-import { type NetworkEnvType } from '_src/shared/api-env';
+import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
+import { getSuiClient } from '_src/shared/sui-client';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
-import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
+import {
+	computeZkLoginAddress,
+	genAddressSeed,
+	getZkLoginSignature,
+	jwtToAddress,
+	type ComputeZkLoginAddressOptions,
+} from '@mysten/sui/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 
+import { addNewAccounts, getAccountsByAddress } from '..';
 import {
 	Account,
 	type SerializedAccount,
@@ -91,6 +100,28 @@ export function isZkLoginAccountSerializedUI(
 	return account.type === 'zkLogin';
 }
 
+async function hasTransactionHistory(address: string): Promise<boolean> {
+	const rpc = getSuiClient({ env: API_ENV.mainnet, customRpcUrl: null });
+	const [txnIds, fromTxnIds] = await Promise.all([
+		rpc.queryTransactionBlocks({
+			filter: {
+				ToAddress: address!,
+			},
+			limit: 1,
+		}),
+		rpc.queryTransactionBlocks({
+			filter: {
+				FromAddress: address!,
+			},
+			limit: 1,
+		}),
+	]);
+
+	return !!txnIds.data.length || !!fromTxnIds.data.length;
+}
+
+type CreateNewZkLoginAccountResponseItem = Omit<ZkLoginAccountSerialized, 'id'>;
+
 export class ZkLoginAccount
 	extends Account<ZkLoginAccountSerialized, SessionStorageData>
 	implements SigningAccount
@@ -102,7 +133,7 @@ export class ZkLoginAccount
 		provider,
 	}: {
 		provider: ZkLoginProvider;
-	}): Promise<Omit<ZkLoginAccountSerialized, 'id'>> {
+	}): Promise<CreateNewZkLoginAccountResponseItem[]> {
 		const jwt = await zkLoginAuthenticate({ provider, prompt: true });
 		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
@@ -125,16 +156,27 @@ export class ZkLoginAccount
 		};
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
-		return {
+
+		const baseAddressComputationParams: ComputeZkLoginAddressOptions = {
+			claimName,
+			claimValue,
+			iss: decodedJWT.iss,
+			aud,
+			userSalt: BigInt(salt),
+		};
+		const legacyAddress = computeZkLoginAddress({
+			...baseAddressComputationParams,
+			legacyAddress: true,
+		});
+		const nonLegacyAddress = computeZkLoginAddress({
+			...baseAddressComputationParams,
+			legacyAddress: false,
+		});
+
+		const ret: CreateNewZkLoginAccountResponseItem[] = [];
+
+		const accountData: Omit<CreateNewZkLoginAccountResponseItem, 'address'> = {
 			type: 'zkLogin',
-			address: computeZkLoginAddress({
-				claimName,
-				claimValue,
-				iss: decodedJWT.iss,
-				aud,
-				userSalt: BigInt(salt),
-				legacyAddress: true,
-			}),
 			claims: await obfuscate(claims),
 			salt: await obfuscate(salt),
 			addressSeed: await obfuscate(
@@ -148,6 +190,25 @@ export class ZkLoginAccount
 			createdAt: Date.now(),
 			claimName,
 		};
+
+		// By default, always import the legacy address. If the legacy and
+		// non-legacy addresses differ, only import the non-legacy address if it
+		// has already been used.
+		ret.push({
+			...accountData,
+			address: legacyAddress,
+		});
+		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(nonLegacyAddress)) {
+			if (await hasTransactionHistory(nonLegacyAddress)) {
+				ret.push({
+					...accountData,
+					address: nonLegacyAddress,
+					nickname: accountData.nickname ? `${accountData.nickname} (address 2)` : null,
+				});
+			}
+		}
+
+		return ret;
 	}
 
 	static isOfType(serialized: SerializedAccount): serialized is ZkLoginAccountSerialized {
@@ -268,11 +329,12 @@ export class ZkLoginAccount
 		const epoch = await getCurrentEpoch();
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
 		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
+
 		const decodedJWT = decodeJwt(jwt);
 		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
 			throw new Error("Logged in account doesn't match with saved account");
 		}
-		const ephemeralValue = (await this.getEphemeralValue()) || {};
+
 		const activeNetwork = await networkEnv.getActiveNetwork();
 		const credentialsData: CredentialData = {
 			ephemeralKeyPair: ephemeralKeyPair.getSecretKey(),
@@ -282,10 +344,57 @@ export class ZkLoginAccount
 			randomness: randomness.toString(),
 			jwt,
 		};
-		ephemeralValue[serializeNetwork(activeNetwork)] = credentialsData;
+
+		const ephemeralValue = (await this.getEphemeralValue()) || {};
+		ephemeralValue[serializeNetwork(credentialsData.network)] = credentialsData;
 		await this.setEphemeralValue(ephemeralValue);
+
 		await this.onUnlocked();
+
+		// On re-auth, we check if the account for the complementary
+		// legacy/non-legacy address needs to be imported. Additionally, if the
+		// complementary account has been imported before and is unlocked, we
+		// update its credentials. This sync does not need to block the login
+		// process.
+		this.#syncAlternateAccount(jwt, credentialsData);
+
 		return credentialsData;
+	}
+
+	async #syncAlternateAccount(jwt: string, credentialsData: CredentialData) {
+		const salt = await fetchSalt(jwt);
+		const legacyAddress = jwtToAddress(jwt, salt, true);
+		const nonLegacyAddress = jwtToAddress(jwt, salt, false);
+		const decodedJWT = decodeJwt(jwt);
+
+		// if they are the same, do nothing
+		if (legacyAddress === nonLegacyAddress) {
+			return;
+		}
+
+		const { id, ...currentAccount } = await this.getStoredData();
+
+		const alternateAddress =
+			currentAccount.address === legacyAddress ? nonLegacyAddress : legacyAddress;
+
+		const [alternateAccount] = await getAccountsByAddress(alternateAddress);
+
+		// if account exists do nothing
+		if (alternateAccount) return;
+
+		const isAlternateAccountLegacy = alternateAddress === legacyAddress;
+		const suffix = isAlternateAccountLegacy ? '' : ' (address 2)';
+
+		await addNewAccounts([
+			{
+				...currentAccount,
+				selected: false,
+				createdAt: Date.now(),
+				address: alternateAddress,
+				nickname: decodedJWT.email ? decodedJWT.email + suffix : currentAccount.nickname + suffix,
+				lastUnlockedOn: null,
+			},
+		]);
 	}
 
 	async #generateProofs(
