@@ -333,7 +333,6 @@ export class ZkLoginAccount
 			throw new Error("Logged in account doesn't match with saved account");
 		}
 
-		const ephemeralValue = (await this.getEphemeralValue()) || {};
 		const activeNetwork = await networkEnv.getActiveNetwork();
 		const credentialsData: CredentialData = {
 			ephemeralKeyPair: ephemeralKeyPair.getSecretKey(),
@@ -343,8 +342,7 @@ export class ZkLoginAccount
 			randomness: randomness.toString(),
 			jwt,
 		};
-		ephemeralValue[serializeNetwork(activeNetwork)] = credentialsData;
-		await this.setEphemeralValue(ephemeralValue);
+		await this.saveCredentialsData(credentialsData);
 		await this.onUnlocked();
 
 		// On re-auth, we check if the account for the complementary
@@ -379,7 +377,9 @@ export class ZkLoginAccount
 			if (await existing.isLocked()) {
 				return;
 			}
-			// TODO XXX FIXME: update credentials here
+			if (existing instanceof ZkLoginAccount) {
+				existing.saveCredentialsData(_credentialsData);
+			}
 		} else {
 			const cached = await this.getCachedData();
 			await addNewAccounts([
@@ -394,6 +394,12 @@ export class ZkLoginAccount
 				},
 			]);
 		}
+	}
+
+	async saveCredentialsData(credentialsData: CredentialData) {
+		const ephemeralValue = (await this.getEphemeralValue()) || {};
+		ephemeralValue[serializeNetwork(credentialsData.network)] = credentialsData;
+		await this.setEphemeralValue(ephemeralValue);
 	}
 
 	async #generateProofs(
