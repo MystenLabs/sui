@@ -53,7 +53,7 @@ sui-core.workspace = true
 sui-macros.workspace = true
 sui-node.workspace = true
 sui-simulator.workspace = true
-insta = { workspace = true, features = ["yaml"] }
+insta = { workspace = true }
 insta-cmd.workspace = true
 cli-sandbox.workspace = true
 
