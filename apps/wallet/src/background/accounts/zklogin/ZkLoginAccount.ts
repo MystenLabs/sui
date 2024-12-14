@@ -327,14 +327,15 @@ export class ZkLoginAccount
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
 		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
 
-		// On re-auth, we check if the account for the legacy/non-legacy address
-		// has been imported. If not, and it has txns, we import it.
-		this.#checkAndImportAlternateAccount(jwt);
-
 		const decodedJWT = decodeJwt(jwt);
 		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
 			throw new Error("Logged in account doesn't match with saved account");
 		}
+
+		// On re-auth, we check if the account for the legacy/non-legacy address
+		// has been imported. If not, and it has txns, we import it.
+		this.#checkAndImportAlternateAccount(jwt);
+
 		const ephemeralValue = (await this.getEphemeralValue()) || {};
 		const activeNetwork = await networkEnv.getActiveNetwork();
 		const credentialsData: CredentialData = {
