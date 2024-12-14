@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import networkEnv from '_src/background/NetworkEnv';
-import { type NetworkEnvType } from '_src/shared/api-env';
+import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
-import { getActiveNetworkSuiClient } from '_src/shared/sui-client';
+import { getSuiClient } from '_src/shared/sui-client';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
@@ -101,17 +101,19 @@ export function isZkLoginAccountSerializedUI(
 }
 
 async function hasTransactionHistory(address: string): Promise<boolean> {
-	const rpc = await getActiveNetworkSuiClient();
+	const rpc = getSuiClient({ env: API_ENV.mainnet, customRpcUrl: null });
 	const [txnIds, fromTxnIds] = await Promise.all([
 		rpc.queryTransactionBlocks({
 			filter: {
 				ToAddress: address!,
 			},
+			limit: 1,
 		}),
 		rpc.queryTransactionBlocks({
 			filter: {
 				FromAddress: address!,
 			},
+			limit: 1,
 		}),
 	]);
 
@@ -356,26 +358,19 @@ export class ZkLoginAccount
 	}
 
 	async #syncAlternateAccount(jwt: string, credentialsData: CredentialData) {
-		const currentAddress = await this.address;
 		const salt = await fetchSalt(jwt);
 		const legacyAddress = jwtToAddress(jwt, salt, true);
 		const nonLegacyAddress = jwtToAddress(jwt, salt, false);
-
-		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(currentAddress)) {
-			await this.#importOrUpdateAlternateAccount(legacyAddress, credentialsData);
-		}
-		if (normalizeSuiAddress(nonLegacyAddress) !== normalizeSuiAddress(currentAddress)) {
-			await this.#importOrUpdateAlternateAccount(nonLegacyAddress, credentialsData);
-		}
+		await this.#importOrUpdateAlternateAccount(legacyAddress, credentialsData);
+		await this.#importOrUpdateAlternateAccount(nonLegacyAddress, credentialsData);
 	}
 
-	// TODO XXX FIXME: update alternate account credentials
-	async #importOrUpdateAlternateAccount(address: string, _credentialsData: CredentialData) {
+	async #importOrUpdateAlternateAccount(address: string, credentialsData: CredentialData) {
 		const imported = await getAccountsByAddress(address);
 		if (imported.length) {
 			const [existing] = imported;
 			if (existing instanceof ZkLoginAccount && !(await existing.isLocked())) {
-				existing.saveCredentialsData(_credentialsData);
+				existing.saveCredentialsData(credentialsData);
 			}
 		} else {
 			const cached = await this.getCachedData();
