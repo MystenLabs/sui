@@ -385,7 +385,7 @@ export class ZkLoginAccount
 			await addNewAccounts([
 				{
 					address,
-					createdAt: cached.createdAt,
+					createdAt: Date.now(),
 					publicKey: cached.publicKey,
 					selected: false,
 					type: 'zkLogin',
