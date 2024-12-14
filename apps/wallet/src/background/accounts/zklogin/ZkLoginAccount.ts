@@ -374,10 +374,7 @@ export class ZkLoginAccount
 		const imported = await getAccountsByAddress(address);
 		if (imported.length) {
 			const [existing] = imported;
-			if (await existing.isLocked()) {
-				return;
-			}
-			if (existing instanceof ZkLoginAccount) {
+			if (existing instanceof ZkLoginAccount && !(await existing.isLocked())) {
 				existing.saveCredentialsData(_credentialsData);
 			}
 		} else {
