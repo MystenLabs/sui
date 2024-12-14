@@ -184,11 +184,11 @@ fn test_new_build() {
 
     // Check that generated examples can build
     let (_, mut build) = sui_move();
-    assert_cmd_snapshot!(build.current_dir(proj.path().join("example")).arg("build"), @"");
+    assert_cmd_snapshot!(build.current_dir(proj.path().join("example")).arg("build"), @"TODO: this test should run!");
 
     // Check that generated example tests can run
     let (_, mut test) = sui_move();
-    assert_cmd_snapshot!(test.current_dir(proj.path().join("example")).arg("test"), @"");
+    assert_cmd_snapshot!(test.current_dir(proj.path().join("example")).arg("test"), @"TODO: this test should run!");
 }
 
 #[test]
