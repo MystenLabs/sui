@@ -18,6 +18,7 @@ import {
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 
+import { addNewAccounts, getAccountsByAddress } from '..';
 import {
 	Account,
 	type SerializedAccount,
@@ -357,14 +358,31 @@ export class ZkLoginAccount
 		const currentAddress = await this.address;
 		const salt = await fetchSalt(jwt);
 		const legacyAddress = jwtToAddress(jwt, salt, true);
-		// const nonLegacyAddress = jwtToAddress(jwt, salt, true);
+		const nonLegacyAddress = jwtToAddress(jwt, salt, false);
 
-		// TODO FIXME XXX: implement this
-		// check whichever address does not match the current, if it exists
 		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(currentAddress)) {
-			// await checkAndImportZkLoginAccount(legacyAddress);
-		} else {
-			// await checkAndImportZkLoginAccount(nonLegacyAddress);
+			this.#checkAndImportAccount(legacyAddress);
+		}
+		if (normalizeSuiAddress(nonLegacyAddress) !== normalizeSuiAddress(currentAddress)) {
+			this.#checkAndImportAccount(nonLegacyAddress);
+		}
+	}
+
+	async #checkAndImportAccount(address: string) {
+		const imported = await getAccountsByAddress(address);
+		if (imported.length) {
+			return;
+		}
+
+		const cached = await this.getCachedData();
+		if (await hasTransactionHistory(address)) {
+			await addNewAccounts([
+				{
+					...cached,
+					address,
+					nickname: cached.nickname ? `${cached.nickname} (address 2)` : null,
+				},
+			]);
 		}
 	}
 
