@@ -376,14 +376,18 @@ export class ZkLoginAccount
 
 		const alternateAddress =
 			currentAccount.address === legacyAddress ? nonLegacyAddress : legacyAddress;
-
+		const alternateAccountIsLegacy = alternateAddress === legacyAddress;
 		const [alternateAccount] = await getAccountsByAddress(alternateAddress);
 
 		// if account exists do nothing
 		if (alternateAccount) return;
 
-		const isAlternateAccountLegacy = alternateAddress === legacyAddress;
-		const suffix = isAlternateAccountLegacy ? '' : ' (address 2)';
+		// If the account is a non-legacy account and has no transaction history, do nothing
+		if (!alternateAccountIsLegacy && !hasTransactionHistory(alternateAddress)) {
+			return;
+		}
+
+		const suffix = alternateAccountIsLegacy ? '' : ' (address 2)';
 
 		await addNewAccounts([
 			{
