@@ -880,27 +880,6 @@ macro_rules! implement_passthrough_traits {
             }
         }
 
-        impl StateSyncAPI for $implementor {
-            fn insert_transaction_and_effects(
-                &self,
-                transaction: &VerifiedTransaction,
-                transaction_effects: &TransactionEffects,
-            ) {
-                self.store
-                    .insert_transaction_and_effects(transaction, transaction_effects)
-                    .expect("db error");
-            }
-
-            fn multi_insert_transaction_and_effects(
-                &self,
-                transactions_and_effects: &[VerifiedExecutionData],
-            ) {
-                self.store
-                    .multi_insert_transaction_and_effects(transactions_and_effects.iter())
-                    .expect("db error");
-            }
-        }
-
         impl TestingAPI for $implementor {
             fn database_for_testing(&self) -> Arc<AuthorityStore> {
                 self.store.clone()

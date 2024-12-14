@@ -159,6 +159,7 @@ pub struct MonotonicCache<K, V> {
     key_generation: Vec<AtomicU64>,
 }
 
+#[derive(Copy, Clone)]
 pub enum Ticket {
     // Read tickets are used when caching the result of a read from the db.
     // They are only valid if the generation number matches the current generation.
