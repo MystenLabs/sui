@@ -344,7 +344,11 @@ export class ZkLoginAccount
 			randomness: randomness.toString(),
 			jwt,
 		};
-		await this.saveCredentialsData(credentialsData);
+
+		const ephemeralValue = (await this.getEphemeralValue()) || {};
+		ephemeralValue[serializeNetwork(credentialsData.network)] = credentialsData;
+		await this.setEphemeralValue(ephemeralValue);
+
 		await this.onUnlocked();
 
 		// On re-auth, we check if the account for the complementary
@@ -361,37 +365,36 @@ export class ZkLoginAccount
 		const salt = await fetchSalt(jwt);
 		const legacyAddress = jwtToAddress(jwt, salt, true);
 		const nonLegacyAddress = jwtToAddress(jwt, salt, false);
-		await this.#importOrUpdateAlternateAccount(legacyAddress, credentialsData);
-		await this.#importOrUpdateAlternateAccount(nonLegacyAddress, credentialsData);
-	}
+		const decodedJWT = decodeJwt(jwt);
 
-	async #importOrUpdateAlternateAccount(address: string, credentialsData: CredentialData) {
-		const imported = await getAccountsByAddress(address);
-		if (imported.length) {
-			const [existing] = imported;
-			if (existing instanceof ZkLoginAccount && !(await existing.isLocked())) {
-				existing.saveCredentialsData(credentialsData);
-			}
-		} else {
-			const cached = await this.getCachedData();
-			await addNewAccounts([
-				{
-					address,
-					createdAt: Date.now(),
-					publicKey: cached.publicKey,
-					selected: false,
-					type: 'zkLogin',
-					nickname: cached.nickname ? `${cached.nickname} (address 2)` : null,
-					lastUnlockedOn: null,
-				},
-			]);
+		// if they are the same, do nothing
+		if (legacyAddress === nonLegacyAddress) {
+			return;
 		}
-	}
 
-	async saveCredentialsData(credentialsData: CredentialData) {
-		const ephemeralValue = (await this.getEphemeralValue()) || {};
-		ephemeralValue[serializeNetwork(credentialsData.network)] = credentialsData;
-		await this.setEphemeralValue(ephemeralValue);
+		const { id, ...currentAccount } = await this.getStoredData();
+
+		const alternateAddress =
+			currentAccount.address === legacyAddress ? nonLegacyAddress : legacyAddress;
+
+		const [alternateAccount] = await getAccountsByAddress(alternateAddress);
+
+		// if account exists do nothing
+		if (alternateAccount) return;
+
+		const isAlternateAccountLegacy = alternateAddress === legacyAddress;
+		const suffix = isAlternateAccountLegacy ? '' : ' (address 2)';
+
+		await addNewAccounts([
+			{
+				...currentAccount,
+				selected: false,
+				createdAt: Date.now(),
+				address: alternateAddress,
+				nickname: decodedJWT.email ? decodedJWT.email + suffix : currentAccount.nickname + suffix,
+				lastUnlockedOn: null,
+			},
+		]);
 	}
 
 	async #generateProofs(
