@@ -176,9 +176,9 @@ fn test_new_gitignore_has_build() {
         &mut proj,
         "example/.gitignore",
         r###"
-        first_ignore
-        build/*
-        another_ignore
+first_ignore
+build/*
+another_ignore
         "###,
     )
     .unwrap();
