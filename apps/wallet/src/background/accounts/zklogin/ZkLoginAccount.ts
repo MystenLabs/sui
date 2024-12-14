@@ -333,10 +333,6 @@ export class ZkLoginAccount
 			throw new Error("Logged in account doesn't match with saved account");
 		}
 
-		// On re-auth, we check if the account for the legacy/non-legacy address
-		// has been imported. If not, and it has txns, we import it.
-		this.#checkAndImportAlternateAccount(jwt);
-
 		const ephemeralValue = (await this.getEphemeralValue()) || {};
 		const activeNetwork = await networkEnv.getActiveNetwork();
 		const credentialsData: CredentialData = {
@@ -351,36 +347,50 @@ export class ZkLoginAccount
 		await this.setEphemeralValue(ephemeralValue);
 		await this.onUnlocked();
 
+		// On re-auth, we check if the account for the complementary
+		// legacy/non-legacy address needs to be imported. Additionally, if the
+		// complementary account has been imported before and is unlocked, we
+		// update its credentials. This sync does not need to block the login
+		// process.
+		this.#syncAlternateAccount(jwt, credentialsData);
+
 		return credentialsData;
 	}
 
-	async #checkAndImportAlternateAccount(jwt: string) {
+	async #syncAlternateAccount(jwt: string, credentialsData: CredentialData) {
 		const currentAddress = await this.address;
 		const salt = await fetchSalt(jwt);
 		const legacyAddress = jwtToAddress(jwt, salt, true);
 		const nonLegacyAddress = jwtToAddress(jwt, salt, false);
 
 		if (normalizeSuiAddress(legacyAddress) !== normalizeSuiAddress(currentAddress)) {
-			this.#checkAndImportAccount(legacyAddress);
+			await this.#importOrUpdateAlternateAccount(legacyAddress, credentialsData);
 		}
 		if (normalizeSuiAddress(nonLegacyAddress) !== normalizeSuiAddress(currentAddress)) {
-			this.#checkAndImportAccount(nonLegacyAddress);
+			await this.#importOrUpdateAlternateAccount(nonLegacyAddress, credentialsData);
 		}
 	}
 
-	async #checkAndImportAccount(address: string) {
+	// TODO XXX FIXME: update alternate account credentials
+	async #importOrUpdateAlternateAccount(address: string, _credentialsData: CredentialData) {
 		const imported = await getAccountsByAddress(address);
 		if (imported.length) {
-			return;
-		}
-
-		const cached = await this.getCachedData();
-		if (await hasTransactionHistory(address)) {
+			const [existing] = imported;
+			if (await existing.isLocked()) {
+				return;
+			}
+			// TODO XXX FIXME: update credentials here
+		} else {
+			const cached = await this.getCachedData();
 			await addNewAccounts([
 				{
-					...cached,
 					address,
+					createdAt: cached.createdAt,
+					publicKey: cached.publicKey,
+					selected: false,
+					type: 'zkLogin',
 					nickname: cached.nickname ? `${cached.nickname} (address 2)` : null,
+					lastUnlockedOn: null,
 				},
 			]);
 		}
