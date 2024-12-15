@@ -3,7 +3,7 @@
 
 /// This example demonstrates a basic use of a shared object.
 /// Rules:
-/// - anyone can create and share a counter
+/// - anyone, and I mean anyone, can create and share a counter
 /// - everyone can increment a counter by 1
 /// - the owner of the counter can reset it to any value
 module basics::counter {
