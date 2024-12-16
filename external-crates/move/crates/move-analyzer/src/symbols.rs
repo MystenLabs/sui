@@ -1486,9 +1486,7 @@ impl SymbolicatorRunner {
             // The mutext value is only set by the `on_text_document_sync_notification` handler
             // and can only contain a valid Move file path, so we simply collect a set of Move
             // file paths here to pass them to the symbolicator.
-            let modfied_files = pkgs_to_analyze
-                .entry(root_dir.clone())
-                .or_insert(BTreeSet::new());
+            let modfied_files = pkgs_to_analyze.entry(root_dir.clone()).or_default();
             modfied_files.insert(starting_path.clone());
         }
         pkgs_to_analyze
