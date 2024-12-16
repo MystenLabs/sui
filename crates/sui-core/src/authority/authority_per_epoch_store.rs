@@ -22,7 +22,9 @@ use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
-use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{
+    AuthorityName, ConsensusObjectSequenceKey, EpochId, ObjectID, SequenceNumber, TransactionDigest,
+};
 use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
 use sui_types::committee::CommitteeTrait;
@@ -388,7 +390,6 @@ pub struct AuthorityPerEpochStore {
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
 #[derive(DBMapUtils)]
-#[allow(clippy::type_complexity)]
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "signed_transactions_table_default_config"]
@@ -435,9 +436,9 @@ pub struct AuthorityEpochTables {
     /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
     assigned_shared_object_versions_v2: DBMap<TransactionKey, Vec<(ObjectID, SequenceNumber)>>,
     assigned_shared_object_versions_v3:
-        DBMap<TransactionKey, Vec<((ObjectID, SequenceNumber), SequenceNumber)>>,
+        DBMap<TransactionKey, Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>,
     next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
-    next_shared_object_versions_v2: DBMap<(ObjectID, SequenceNumber), SequenceNumber>,
+    next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
     /// Deprecated table for pre-random-beacon shared object versions.
     #[allow(dead_code)]
@@ -1414,7 +1415,7 @@ impl AuthorityPerEpochStore {
         objects: &[InputObjectKind],
     ) -> SuiResult<BTreeSet<InputKey>> {
         let shared_locks = once_cell::unsync::OnceCell::<
-            Option<HashMap<(ObjectID, SequenceNumber), SequenceNumber>>,
+            Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
         >::new();
         objects
             .iter()
@@ -1621,7 +1622,7 @@ impl AuthorityPerEpochStore {
     pub fn set_shared_object_versions_for_testing(
         &self,
         tx_digest: &TransactionDigest,
-        assigned_versions: Vec<((ObjectID, SequenceNumber), SequenceNumber)>,
+        assigned_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     ) -> SuiResult {
         if self.protocol_config().consensus_v2_objects() {
             self.tables()?
@@ -1703,10 +1704,10 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    // For each id in objects_to_init, return the next version for that id as recorded in the
+    // For each key in objects_to_init, return the next version for that key as recorded in the
     // next_shared_object_versions table.
     //
-    // If any ids are missing, then we need to initialize the table. We first check if a previous
+    // If any keys are missing, then we need to initialize the table. We first check if a previous
     // version of that object has been written. If so, then the object was written in a previous
     // epoch, and we initialize next_shared_object_versions to that value. If no version of the
     // object has yet been written, we initialize the object to the initial version recorded in the
@@ -1719,9 +1720,9 @@ impl AuthorityPerEpochStore {
     // successfully for each affected object id.
     pub(crate) async fn get_or_init_next_object_versions(
         &self,
-        objects_to_init: &[(ObjectID, SequenceNumber)],
+        objects_to_init: &[ConsensusObjectSequenceKey],
         cache_reader: &dyn ObjectCacheRead,
-    ) -> SuiResult<HashMap<(ObjectID, SequenceNumber), SequenceNumber>> {
+    ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
         let mut ret: HashMap<_, _>;
         // Since this can be called from consensus task, we must retry forever - the only other
         // option is to panic. It is extremely unlikely that more than 2 retries will be needed, as
@@ -1741,7 +1742,7 @@ impl AuthorityPerEpochStore {
                 )?
             };
 
-            let uninitialized_objects: Vec<(ObjectID, SequenceNumber)> = next_versions
+            let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
                 .iter()
                 .zip(objects_to_init)
                 .filter_map(|(next_version, id_and_version)| match next_version {
@@ -3156,7 +3157,7 @@ impl AuthorityPerEpochStore {
             "additional_cancelled_txns_for_tests",
             |additional_cancelled_txns: Vec<(
                 TransactionDigest,
-                Vec<((ObjectID, SequenceNumber), SequenceNumber)>
+                Vec<(ConsensusObjectSequenceKey, SequenceNumber)>
             )>| {
                 version_assignment.extend(additional_cancelled_txns);
             }
@@ -4279,7 +4280,6 @@ impl AuthorityPerEpochStore {
 }
 
 #[derive(Default)]
-#[allow(clippy::type_complexity)]
 pub(crate) struct ConsensusCommitOutput {
     // Consensus and reconfig state
     consensus_round: Round,
@@ -4292,7 +4292,7 @@ pub(crate) struct ConsensusCommitOutput {
     // transaction scheduling state
     shared_object_versions: Option<(
         AssignedTxAndVersions,
-        HashMap<(ObjectID, SequenceNumber), SequenceNumber>,
+        HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     )>,
 
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
@@ -4363,7 +4363,7 @@ impl ConsensusCommitOutput {
     fn set_assigned_shared_object_versions(
         &mut self,
         versions: AssignedTxAndVersions,
-        next_versions: HashMap<(ObjectID, SequenceNumber), SequenceNumber>,
+        next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     ) {
         assert!(self.shared_object_versions.is_none());
         self.shared_object_versions = Some((versions, next_versions));
@@ -4576,7 +4576,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
     fn get_shared_locks(
         &self,
         key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<((ObjectID, SequenceNumber), SequenceNumber)>>> {
+    ) -> SuiResult<Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>> {
         if self.protocol_config().consensus_v2_objects() {
             Ok(self.tables()?.assigned_shared_object_versions_v3.get(key)?)
         } else {

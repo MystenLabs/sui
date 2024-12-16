@@ -9,7 +9,9 @@ use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use sui_storage::package_object_cache::PackageObjectCache;
-use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
+use sui_types::base_types::{
+    ConsensusObjectSequenceKey, EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber,
+};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::{Object, Owner};
@@ -182,7 +184,7 @@ impl GetSharedLocks for InMemoryObjectStore {
     fn get_shared_locks(
         &self,
         _key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<((ObjectID, SequenceNumber), SequenceNumber)>>> {
+    ) -> SuiResult<Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>> {
         unreachable!()
     }
 

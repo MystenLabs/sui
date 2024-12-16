@@ -155,6 +155,10 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
+/// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
+/// based on the object ID and initial shared version.
+pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
+
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of

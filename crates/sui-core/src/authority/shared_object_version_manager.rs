@@ -8,6 +8,7 @@ use crate::execution_cache::ObjectCacheRead;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -18,24 +19,20 @@ use sui_types::storage::{
 use sui_types::transaction::{
     SenderSignedData, SharedInputObject, TransactionDataAPI, TransactionKey,
 };
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    error::SuiResult,
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
-};
+use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::{debug, trace};
 
 pub struct SharedObjVerManager {}
 
 pub type AssignedTxAndVersions = Vec<(
     TransactionKey,
-    Vec<((ObjectID, SequenceNumber), SequenceNumber)>,
+    Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
 )>;
 
 #[must_use]
 #[derive(Default)]
 pub struct ConsensusSharedObjVerAssignment {
-    pub shared_input_next_versions: HashMap<(ObjectID, SequenceNumber), SequenceNumber>,
+    pub shared_input_next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     pub assigned_versions: AssignedTxAndVersions,
 }
 
@@ -152,9 +149,9 @@ impl SharedObjVerManager {
 
     pub fn assign_versions_for_certificate(
         cert: &VerifiedExecutableTransaction,
-        shared_input_next_versions: &mut HashMap<(ObjectID, SequenceNumber), SequenceNumber>,
+        shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> Vec<((ObjectID, SequenceNumber), SequenceNumber)> {
+    ) -> Vec<(ConsensusObjectSequenceKey, SequenceNumber)> {
         let tx_digest = cert.digest();
 
         // Check if the transaction is cancelled due to congestion.
@@ -282,7 +279,7 @@ async fn get_or_init_versions(
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
     generate_randomness: bool,
-) -> SuiResult<HashMap<(ObjectID, SequenceNumber), SequenceNumber>> {
+) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
     let mut shared_input_objects: Vec<_> = transactions
         .flat_map(|tx| {
             tx.transaction_data()

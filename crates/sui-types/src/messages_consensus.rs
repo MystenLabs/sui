@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
@@ -61,14 +61,13 @@ pub struct ConsensusCommitPrologueV2 {
 
 /// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
-#[allow(clippy::type_complexity)]
 pub enum ConsensusDeterminedVersionAssignments {
     // Cancelled transaction version assignment.
     CancelledTransactions(Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>),
     CancelledTransactionsV2(
         Vec<(
             TransactionDigest,
-            Vec<((ObjectID, SequenceNumber), SequenceNumber)>,
+            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
     ),
 }

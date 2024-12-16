@@ -22,7 +22,9 @@ use sui_macros::{fail_point_async, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
-    base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest},
+    base_types::{
+        AuthorityName, ConsensusObjectSequenceKey, EpochId, SequenceNumber, TransactionDigest,
+    },
     digests::ConsensusCommitDigest,
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
@@ -834,14 +836,13 @@ impl ConsensusCommitInfo {
         VerifiedExecutableTransaction::new_system(transaction, epoch)
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn create_consensus_commit_prologue_transaction(
         &self,
         epoch: u64,
         protocol_config: &ProtocolConfig,
         cancelled_txn_version_assignment: Vec<(
             TransactionDigest,
-            Vec<((ObjectID, SequenceNumber), SequenceNumber)>,
+            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
     ) -> VerifiedExecutableTransaction {
         if protocol_config.consensus_v2_objects() {
@@ -989,7 +990,7 @@ mod tests {
     use prometheus::Registry;
     use sui_protocol_config::ConsensusTransactionOrdering;
     use sui_types::{
-        base_types::{random_object_ref, AuthorityName, SuiAddress},
+        base_types::{random_object_ref, AuthorityName, ObjectID, SuiAddress},
         committee::Committee,
         crypto::deterministic_random_account_key,
         messages_consensus::{
