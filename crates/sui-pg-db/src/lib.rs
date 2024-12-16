@@ -7,8 +7,8 @@ use diesel::pg::Pg;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::{
     pooled_connection::{
-        bb8::{Pool, PooledConnection, RunError},
-        AsyncDieselConnectionManager, PoolError,
+        bb8::{Pool, PooledConnection},
+        AsyncDieselConnectionManager,
     },
     AsyncPgConnection, RunQueryDsl,
 };
@@ -50,7 +50,7 @@ impl DbArgs {
 impl Db {
     /// Construct a new DB connection pool. Instances of [Db] can be cloned to share access to the
     /// same pool.
-    pub async fn new(config: DbArgs) -> Result<Self, PoolError> {
+    pub async fn new(config: DbArgs) -> anyhow::Result<Self> {
         let manager = AsyncDieselConnectionManager::new(config.database_url.as_str());
 
         let pool = Pool::builder()
@@ -64,8 +64,8 @@ impl Db {
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
     /// established before the [DbArgs::connection_timeout] has elapsed.
-    pub async fn connect(&self) -> Result<Connection<'_>, RunError> {
-        self.pool.get().await
+    pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
+        Ok(self.pool.get().await?)
     }
 
     /// Statistics about the connection pool
@@ -73,7 +73,7 @@ impl Db {
         self.pool.state()
     }
 
-    async fn clear_database(&self) -> Result<(), anyhow::Error> {
+    async fn clear_database(&self) -> anyhow::Result<()> {
         info!("Clearing the database...");
         let mut conn = self.connect().await?;
         let drop_all_tables = "
@@ -129,7 +129,7 @@ impl Db {
     pub async fn run_migrations<S: MigrationSource<Pg> + Send + Sync + 'static>(
         &self,
         migrations: S,
-    ) -> Result<Vec<MigrationVersion<'static>>, anyhow::Error> {
+    ) -> anyhow::Result<Vec<MigrationVersion<'static>>> {
         use diesel_migrations::MigrationHarness;
 
         info!("Running migrations ...");
@@ -167,7 +167,7 @@ impl Default for DbArgs {
 pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
     db_config: DbArgs,
     migrations: Option<S>,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     let db = Db::new(db_config).await?;
     db.clear_database().await?;
     if let Some(migrations) = migrations {

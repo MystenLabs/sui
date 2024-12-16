@@ -103,11 +103,13 @@ pub(super) fn committer<H: Handler + 'static>(
                                     pipeline = H::NAME,
                                     "Committed failed to get connection for DB"
                                 );
+
                                 metrics
                                     .total_committer_batches_failed
                                     .with_label_values(&[H::NAME])
                                     .inc();
-                                BE::transient(Break::Err(e.into()))
+
+                                BE::transient(Break::Err(e))
                             })?;
 
                             let affected = H::commit(values.as_slice(), &mut conn).await;
