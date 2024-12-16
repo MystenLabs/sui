@@ -1,0 +1,87 @@
+warning[Lint W01012]: comparison operations condition can be simplified
+  ┌─ tests/linter/false_negative_double_comparisons.move:7:13
+  │
+7 │         if (x + 5 == 15 || x + 5 < 15) {};  // Should detect this as equivalent to (x + 5) <= 15
+  │             ^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+  ┌─ tests/linter/false_negative_double_comparisons.move:7:40
+  │
+7 │         if (x + 5 == 15 || x + 5 < 15) {};  // Should detect this as equivalent to (x + 5) <= 15
+  │             -------------------------  ^^ Unnecessary unit '()'
+  │             │                           
+  │             Consider negating the 'if' condition and simplifying
+  │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+  = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/false_negative_double_comparisons.move:10:14
+   │
+10 │         if ((x == 10 || x < 10) || y == 20) {};  // Should still detect the x comparison
+   │              ^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03009]: unbound variable
+   ┌─ tests/linter/false_negative_double_comparisons.move:10:36
+   │
+10 │         if ((x == 10 || x < 10) || y == 20) {};  // Should still detect the x comparison
+   │                                    ^ Unbound variable 'y'
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/false_negative_double_comparisons.move:10:45
+   │
+10 │         if ((x == 10 || x < 10) || y == 20) {};  // Should still detect the x comparison
+   │             ------------------------------  ^^ Unnecessary unit '()'
+   │             │                                
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01001]: invalid character
+   ┌─ tests/linter/false_negative_double_comparisons.move:13:23
+   │
+13 │         if (string == "a" || string < "a") {};  // Same logical pattern but with strings
+   │                       ^ Unexpected character: '"'
+
+error[E01001]: invalid character
+   ┌─ tests/linter/false_negative_double_comparisons.move:13:25
+   │
+13 │         if (string == "a" || string < "a") {};  // Same logical pattern but with strings
+   │                         ^ Unexpected character: '"'
+
+error[E01001]: invalid character
+   ┌─ tests/linter/false_negative_double_comparisons.move:13:39
+   │
+13 │         if (string == "a" || string < "a") {};  // Same logical pattern but with strings
+   │                                       ^ Unexpected character: '"'
+
+error[E01001]: invalid character
+   ┌─ tests/linter/false_negative_double_comparisons.move:13:41
+   │
+13 │         if (string == "a" || string < "a") {};  // Same logical pattern but with strings
+   │                                         ^ Unexpected character: '"'
+
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/false_negative_double_comparisons.move:16:13
+   │
+16 │         if (10 == x || 10 > x) {};  // Should detect despite variable position swap
+   │             ^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/false_negative_double_comparisons.move:16:32
+   │
+16 │         if (10 == x || 10 > x) {};  // Should detect despite variable position swap
+   │             -----------------  ^^ Unnecessary unit '()'
+   │             │                   
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

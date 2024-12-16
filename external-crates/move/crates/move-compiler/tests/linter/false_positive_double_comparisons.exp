@@ -1,0 +1,61 @@
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/false_positive_double_comparisons.move:10:13
+   │
+10 │         if (x == MAX_U64 || x > MAX_U64) {};  // Can't simplify due to overflow concerns
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/false_positive_double_comparisons.move:10:42
+   │
+10 │         if (x == MAX_U64 || x > MAX_U64) {};  // Can't simplify due to overflow concerns
+   │             ---------------------------  ^^ Unnecessary unit '()'
+   │             │                             
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/linter/false_positive_double_comparisons.move:13:13
+   │
+13 │         if (get_value() == 10 || get_value() < 10) {};  // Simplifying would change behavior
+   │             ^^^^^^^^^ Unbound function 'get_value' in current scope
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/linter/false_positive_double_comparisons.move:13:34
+   │
+13 │         if (get_value() == 10 || get_value() < 10) {};  // Simplifying would change behavior
+   │                                  ^^^^^^^^^ Unbound function 'get_value' in current scope
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/false_positive_double_comparisons.move:13:52
+   │
+13 │         if (get_value() == 10 || get_value() < 10) {};  // Simplifying would change behavior
+   │             -------------------------------------  ^^ Unnecessary unit '()'
+   │             │                                       
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/false_positive_double_comparisons.move:16:13
+   │
+16 │         if (x == SPECIAL_VALUE || x < SPECIAL_VALUE) {};  // Explicit check might be more meaningful
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04010]: unit `()` expression can be removed or simplified
+   ┌─ tests/linter/false_positive_double_comparisons.move:16:54
+   │
+16 │         if (x == SPECIAL_VALUE || x < SPECIAL_VALUE) {};  // Explicit check might be more meaningful
+   │             ---------------------------------------  ^^ Unnecessary unit '()'
+   │             │                                         
+   │             Consider negating the 'if' condition and simplifying
+   │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
+   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

@@ -16,6 +16,7 @@ use crate::{
 pub mod abort_constant;
 pub mod combinable_comparisons;
 pub mod constant_naming;
+pub mod double_comparisons;
 pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
@@ -175,6 +176,12 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
+    ),
+    (
+        DoubleComparison,
+        LinterDiagnosticCategory::Style,
+        "double_comparison",
+        "double comparison detected that could be simplified to a single range check."
     )
 );
 
@@ -215,6 +222,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                double_comparisons::DoubleComparisonCheck.visitor(),
             ]
         }
     }

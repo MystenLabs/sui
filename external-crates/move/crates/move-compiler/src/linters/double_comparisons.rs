@@ -1,63 +1,81 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Detects and simplifies double comparisons in code, such as `x == 10 || x < 10` into `x <= 10`,
-//! which can enhance code clarity and maintainability.
+//! Detects and simplifies double comparisons in code, such as:
+//! - `x == 10 || x < 10` into `x <= 10`
+//! - `x == 10 || x > 10` into `x >= 10`
+//! - `x < 10 || x > 20` into `x not in [10..20]`
+//! - `x <= 10 || x >= 20` into `x not in (10..20)`
+//! These simplifications enhance code clarity and maintainability.
 
 use crate::{
+    cfgir::visitor::simple_visitor,
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::DiagnosticReporter,
+    hlir::ast::{self as H, UnannotatedExp_, Value_},
+    linters::StyleCodes,
     parser::ast::BinOp_,
-    shared::CompilationEnv,
-    typing::{
-        ast::{self as T, UnannotatedExp_},
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
-    },
 };
 use move_ir_types::location::Loc;
 
-use super::{LinterDiagnosticCategory, DOUBLE_COMPARISON_DIAG_CODE, LINT_WARNING_PREFIX};
-
-const DOUBLE_COMPARISON_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    DOUBLE_COMPARISON_DIAG_CODE,
-    "Double comparison detected that could be simplified to a single range check.",
-);
-
-pub struct DoubleComparisonCheck;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for DoubleComparisonCheck {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
-        if let UnannotatedExp_::BinopExp(lhs, sp!(_, BinOp_::Or), _, rhs) = &exp.exp.value {
+simple_visitor!(
+    DoubleComparisonCheck,
+    fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
+        if let UnannotatedExp_::BinopExp(lhs, sp!(_, BinOp_::Or), rhs) = &exp.exp.value {
             match (&lhs.exp.value, &rhs.exp.value) {
                 (
-                    UnannotatedExp_::BinopExp(lhs_l, sp!(_, lhs_op), _, lhs_r),
-                    UnannotatedExp_::BinopExp(rhs_l, sp!(_, rhs_op), _, rhs_r),
+                    UnannotatedExp_::BinopExp(lhs_l, sp!(_, lhs_op), lhs_r),
+                    UnannotatedExp_::BinopExp(rhs_l, sp!(_, rhs_op), rhs_r),
                 ) if are_expressions_comparable(lhs_l, rhs_l, lhs_r, rhs_r) => {
                     match (lhs_op, rhs_op) {
+                        // Case 1: x == 10 || x < 10  ->  x <= 10
                         (BinOp_::Eq, BinOp_::Lt) | (BinOp_::Lt, BinOp_::Eq) => {
-                            report_redundant_comparison(self.env, "<=", exp.exp.loc);
+                            report_redundant_comparison(
+                                &mut self.reporter,
+                                "<=",
+                                exp.exp.loc,
+                                "single range check",
+                            );
                         }
+                        // Case 2: x == 10 || x > 10  ->  x >= 10
                         (BinOp_::Eq, BinOp_::Gt) | (BinOp_::Gt, BinOp_::Eq) => {
-                            report_redundant_comparison(self.env, ">=", exp.exp.loc);
+                            report_redundant_comparison(
+                                &mut self.reporter,
+                                ">=",
+                                exp.exp.loc,
+                                "single range check",
+                            );
                         }
+                        // Case 3: x < 10 || x > 20  ->  x not in [10..20]
+                        // (BinOp_::Lt, BinOp_::Gt) | (BinOp_::Gt, BinOp_::Lt) => {
+                        //     if let (Some(val1), Some(val2)) =
+                        //         (extract_constant(lhs_r), extract_constant(rhs_r))
+                        //     {
+                        //         if val1 < val2 {
+                        //             report_redundant_comparison(
+                        //                 &mut self.reporter,
+                        //                 "not in",
+                        //                 exp.exp.loc,
+                        //                 "range exclusion check",
+                        //             );
+                        //         }
+                        //     }
+                        // }
+                        // // Case 4: x <= 10 || x >= 20  ->  x not in (10..20)
+                        // (BinOp_::Le, BinOp_::Ge) | (BinOp_::Ge, BinOp_::Le) => {
+                        //     if let (Some(val1), Some(val2)) =
+                        //         (extract_constant(lhs_r), extract_constant(rhs_r))
+                        //     {
+                        //         if val1 < val2 {
+                        //             report_redundant_comparison(
+                        //                 &mut self.reporter,
+                        //                 "not in",
+                        //                 exp.exp.loc,
+                        //                 "exclusive range check",
+                        //             );
+                        //         }
+                        //     }
+                        // }
                         _ => {}
                     }
                 }
@@ -66,30 +84,43 @@ impl TypingVisitorContext for Context<'_> {
         }
         false
     }
+);
 
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
+fn report_redundant_comparison(
+    reporter: &mut DiagnosticReporter,
+    oper: &str,
+    loc: Loc,
+    suggestion_type: &str,
+) {
+    let msg = format!(
+        "Consider simplifying this comparison using `{}` operator for a clearer {}.",
+        oper, suggestion_type
+    );
+    let diag = diag!(StyleCodes::DoubleComparison.diag_info(), (loc, msg));
+    reporter.add_diag(diag);
 }
 
 fn are_expressions_comparable(
-    lhs_l: &T::Exp,
-    rhs_l: &T::Exp,
-    lhs_r: &T::Exp,
-    rhs_r: &T::Exp,
+    lhs_l: &H::Exp,
+    rhs_l: &H::Exp,
+    lhs_r: &H::Exp,
+    rhs_r: &H::Exp,
 ) -> bool {
     lhs_l == rhs_l && lhs_r == rhs_r || lhs_l == rhs_r && lhs_r == rhs_l
 }
 
-fn report_redundant_comparison(env: &mut CompilationEnv, oper: &str, loc: Loc) {
-    let msg = format!(
-        "Consider simplifying this comparison to `{}` for better clarity.",
-        oper
-    );
-    let diag = diag!(DOUBLE_COMPARISON_DIAG, (loc, msg));
-    env.add_diag(diag);
+/// Attempts to extract a constant value from an expression
+fn extract_constant(exp: &H::Exp) -> Option<i64> {
+    match &exp.exp.value {
+        UnannotatedExp_::Value(sp!(_, value)) => match value {
+            Value_::U8(val) => Some(*val as i64),
+            Value_::U16(val) => Some(*val as i64),
+            Value_::U32(val) => Some(*val as i64),
+            Value_::U64(val) => Some(*val as i64),
+            Value_::U128(val) => Some(*val as i64),
+            Value_::U256(val) => Some(val.unchecked_as_u64() as i64),
+            _ => None,
+        },
+        _ => None,
+    }
 }

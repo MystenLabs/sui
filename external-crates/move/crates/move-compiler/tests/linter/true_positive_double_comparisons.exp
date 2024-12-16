@@ -1,0 +1,32 @@
+warning[Lint W01012]: comparison operations condition can be simplified
+  ┌─ tests/linter/true_positive_double_comparisons.move:8:13
+  │
+8 │         if (x == 10 || x < 10) {};
+  │             ^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/true_positive_double_comparisons.move:11:13
+   │
+11 │         if (x == 20 || x > 20) {};
+   │             ^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/true_positive_double_comparisons.move:20:13
+   │
+20 │         if (x < 10 || x == 10) {};  // Should suggest: x <= 10
+   │             ^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '<='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: comparison operations condition can be simplified
+   ┌─ tests/linter/true_positive_double_comparisons.move:21:13
+   │
+21 │         if (x > 20 || x == 20) {};  // Should suggest: x >= 20
+   │             ^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
