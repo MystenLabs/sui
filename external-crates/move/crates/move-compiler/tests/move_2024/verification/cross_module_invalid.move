@@ -1,19 +1,21 @@
 // check that `use`'s are filtered out correctly
-address 0x1 {
-module A {
-    struct Foo has drop {}
+module 0x1::A {
+    public struct Foo has drop {}
 
-    public fun build_foo(): Foo { Foo {} }
+    public fun build_foo(): Foo {
+        Foo {}
+    }
 }
 
-module B {
-    #[verify_only]
+module 0x1::B {
+    #[spec_only]
     use 0x1::A::{Self, Foo};
 
-    #[verify_only]
-    fun x(_: Foo) { }
+    #[spec_only]
+    fun x(_: Foo) {
+    }
 
-    #[verify_only]
+    #[spec_only]
     fun tester() {
         x(A::build_foo())
     }
@@ -22,5 +24,4 @@ module B {
     public fun bad(): Foo {
         A::build_foo()
     }
-}
 }

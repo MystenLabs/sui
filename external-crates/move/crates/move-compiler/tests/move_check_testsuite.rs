@@ -24,6 +24,7 @@ const KEEP_TMP: &str = "KEEP";
 const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
 const MIGRATION_EXT: &str = "migration";
+const SPEC_EXT: &str = "spec";
 const IDE_EXT: &str = "ide";
 
 const LINTER_DIR: &str = "linter";
@@ -100,6 +101,28 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
             config,
             lint,
         )?;
+    }
+
+    if path.with_extension(SPEC_EXT).exists() {
+        println!("Running spec test: {}", path.display());
+        let spec_exp_path = format!(
+            "{}.{SPEC_EXT}.{EXP_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        let spec_out_path = format!(
+            "{}.{SPEC_EXT}.{OUT_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        run_test_inner(
+            path,
+            Path::new(&spec_exp_path),
+            Path::new(&spec_out_path),
+            Flags::testing().set_verify(true),
+            config,
+            lint,
+            false,
+        )?;
+        return Ok(());
     }
 
     // A test is marked that it should also be compiled in migration mode by having a

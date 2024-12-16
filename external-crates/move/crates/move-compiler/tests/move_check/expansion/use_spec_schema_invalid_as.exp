@@ -1,10 +1,11 @@
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/use_spec_schema_invalid_as.move:3:5
-  │  
-3 │ ╭     spec schema Foo<T> {
-4 │ │         ensures true;
-5 │ │     }
-  │ ╰─────^ Specification blocks are deprecated and are no longer used
+  │
+3 │     spec schema Foo<T> {
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E03003]: unbound module member
   ┌─ tests/move_check/expansion/use_spec_schema_invalid_as.move:9:18
@@ -15,11 +16,12 @@ error[E03003]: unbound module member
 9 │     use 0x2::X::{Foo as foo};
   │                  ^^^ Invalid 'use'. Unbound member 'Foo' in module '0x2::X'
 
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/use_spec_schema_invalid_as.move:12:5
-   │  
-12 │ ╭     spec t {
-13 │ │         apply foo<S> to t;
-14 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+12 │     spec t {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 

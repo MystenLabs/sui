@@ -1,18 +1,33 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:5:10
+  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:5:5
   │
 5 │     spec fun with_aborts_if {
-  │          ^^^
-  │          │
-  │          Unexpected 'fun'
-  │          Expected only 'spec', drop the 'fun' keyword
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
-  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:5:10
-  │  
-5 │       spec fun with_aborts_if {
-  │ ╭──────────^
-6 │ │       aborts_if x == 0;
-7 │ │     }
-  │ ╰─────^ Specification blocks are deprecated and are no longer used
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:5:29
+  │
+5 │     spec fun with_aborts_if {
+  │                             ^
+  │                             │
+  │                             Unexpected '{'
+  │                             Expected '('
+
+error[E03009]: unbound variable
+  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:6:7
+  │
+6 │       aborts_if x == 0;
+  │       ^^^^^^^^^ Unbound variable 'aborts_if'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:6:17
+  │
+6 │       aborts_if x == 0;
+  │                 ^
+  │                 │
+  │                 Unexpected 'x'
+  │                 Expected ';'
 

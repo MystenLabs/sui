@@ -19,6 +19,7 @@ struct Context<'env> {
     env: &'env CompilationEnv,
     reporter: DiagnosticReporter<'env>,
     is_source_def: bool,
+    has_spec_code: bool,
     current_package: Option<Symbol>,
 }
 
@@ -29,6 +30,7 @@ impl<'env> Context<'env> {
             env,
             reporter,
             is_source_def: false,
+            has_spec_code: false,
             current_package: None,
         }
     }
@@ -44,35 +46,65 @@ impl FilterContext for Context<'_> {
     }
 
     // An AST element should be removed if:
-    // * It is annotated #[verify_only] and verify mode is not set
+    // * It is annotated #[spec_only] and verify mode is not set
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
+        if self.env.flags().is_verifying() {
+            return false;
+        }
         use known_attributes::VerificationAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-        let is_verify_only_loc = flattened_attrs
-            .iter()
-            .map(|attr| match attr {
-                (loc, VerificationAttribute::VerifyOnly) => loc,
-            })
-            .next();
-        let should_remove = is_verify_only_loc.is_some();
-        // TODO this is a bit of a hack
-        // but we don't have a better way of suppressing this unless the filtering was done after
-        // expansion
-        // Ideally we would just have a warning filter scope here
-        // (but again, need expansion for that)
-        let silence_warning =
-            !self.is_source_def || self.env.package_config(self.current_package).is_dependency;
-        if !silence_warning {
-            if let Some(loc) = is_verify_only_loc {
-                let msg = format!(
-                    "The '{}' attribute has been deprecated along with specification blocks",
-                    VerificationAttribute::VERIFY_ONLY
-                );
-                self.reporter
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
+        //
+        let is_spec_only = flattened_attrs.iter().find(|(_, attr)| {
+            matches!(attr, VerificationAttribute::SpecOnly)
+                || matches!(attr, VerificationAttribute::Spec)
+        });
+        self.has_spec_code = self.has_spec_code || is_spec_only.is_some();
+        is_spec_only.is_some()
+    }
+
+    fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool {
+        self.has_spec_code
+            && match &item.value {
+                P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
+                P::SequenceItem_::Declare(_, _) => false,
+                P::SequenceItem_::Bind(bind_list, _, exp) => {
+                    let is_call_to_spec = should_remove_exp(exp);
+                    let is_spec_variable = bind_list.value.iter().any(|bind| match bind.value {
+                        P::Bind_::Var(_, var) => {
+                            // var ends in "_spec"
+                            let name = var.0.value.as_str();
+                            name.ends_with("_spec")
+                        }
+                        P::Bind_::Unpack(_, _) => false,
+                    });
+
+                    is_call_to_spec || is_spec_variable
+                }
             }
+    }
+}
+
+const REMOVED_FUNCTIONS: [&str; 3] = ["invariant", "old", "ensures"];
+const REMOVED_METHODS: [&str; 2] = ["to_int", "to_real"];
+
+fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bool {
+    match &exp.value {
+        P::Exp_::Call(name_access_chain, _) => {
+            let name_access_chain_str = format!("{}", name_access_chain);
+            let should_remove = REMOVED_FUNCTIONS
+                .iter()
+                .any(|&keyword| name_access_chain_str.ends_with(keyword));
+            should_remove
         }
-        should_remove
+        P::Exp_::DotCall(_, _, name, _, _, _) => {
+            let name_str = format!("{}", name);
+            let should_remove = REMOVED_METHODS
+                .iter()
+                .any(|&keyword| name_str.ends_with(keyword));
+            should_remove
+        }
+        P::Exp_::Assign(lhs, rhs) => should_remove_exp(lhs) || should_remove_exp(rhs),
+        _ => false,
     }
 }
 

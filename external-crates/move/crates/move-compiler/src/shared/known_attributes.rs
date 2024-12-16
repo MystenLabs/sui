@@ -44,8 +44,12 @@ pub enum TestingAttribute {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerificationAttribute {
-    // deprecated spec only annotation
-    VerifyOnly,
+    // Denotes a function is a spec
+    Spec,
+    // Focus on this function, deactivates verification for all other functions
+    Focus,
+    // Denotes a function is only used by specs, only included in compilation in verify mode
+    SpecOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -98,7 +102,9 @@ impl KnownAttribute {
             TestingAttribute::TEST_ONLY => TestingAttribute::TestOnly.into(),
             TestingAttribute::EXPECTED_FAILURE => TestingAttribute::ExpectedFailure.into(),
             TestingAttribute::RAND_TEST => TestingAttribute::RandTest.into(),
-            VerificationAttribute::VERIFY_ONLY => VerificationAttribute::VerifyOnly.into(),
+            VerificationAttribute::SPEC => VerificationAttribute::Spec.into(),
+            VerificationAttribute::SPEC_ONLY => VerificationAttribute::SpecOnly.into(),
+            VerificationAttribute::FOCUS => VerificationAttribute::Focus.into(),
             NativeAttribute::BYTECODE_INSTRUCTION => NativeAttribute::BytecodeInstruction.into(),
             DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow.into(),
             DiagnosticAttribute::LINT_ALLOW => DiagnosticAttribute::LintAllow.into(),
@@ -198,11 +204,15 @@ impl TestingAttribute {
 }
 
 impl VerificationAttribute {
-    pub const VERIFY_ONLY: &'static str = "verify_only";
+    pub const SPEC: &'static str = "spec";
+    pub const SPEC_ONLY: &'static str = "spec_only";
+    pub const FOCUS: &'static str = "focus";
 
     pub const fn name(&self) -> &str {
         match self {
-            Self::VerifyOnly => Self::VERIFY_ONLY,
+            Self::Spec => Self::SPEC,
+            Self::SpecOnly => Self::SPEC_ONLY,
+            Self::Focus => Self::FOCUS,
         }
     }
 
@@ -219,8 +229,13 @@ impl VerificationAttribute {
                 AttributePosition::Function,
             ])
         });
+        static FUNCTION_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
+            Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
+
         match self {
-            Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
+            Self::Spec => &FUNCTION_POSITIONS,
+            Self::SpecOnly => &VERIFY_ONLY_POSITIONS,
+            Self::Focus => &FUNCTION_POSITIONS,
         }
     }
 }

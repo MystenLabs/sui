@@ -224,7 +224,6 @@ pub struct ModuleDefinition {
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
-    pub is_spec_module: bool,
     pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }
@@ -237,7 +236,6 @@ pub enum ModuleMember {
     Use(UseDecl),
     Friend(FriendDecl),
     Constant(Constant),
-    Spec(Spanned<String>),
 }
 
 //**************************************************************************************************
@@ -664,9 +662,6 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     // (e: t)
     Annotate(Box<Exp>, Type),
-
-    // spec { ... }
-    Spec(Spanned<String>),
 
     // Internal node marking an error was added to the error list
     // This is here so the pass can continue even when an error is hit
@@ -1483,17 +1478,12 @@ impl AstDebug for ModuleDefinition {
             loc: _loc,
             address,
             name,
-            is_spec_module,
             members,
             definition_mode: _,
         } = self;
         attributes.ast_debug(w);
         match address {
-            None => w.write(format!(
-                "module {}{}",
-                if *is_spec_module { "spec " } else { "" },
-                name
-            )),
+            None => w.write(format!("module {}", name)),
             Some(addr) => w.write(format!("module {}::{}", addr, name)),
         };
         w.block(|w| {
@@ -1513,7 +1503,6 @@ impl AstDebug for ModuleMember {
             ModuleMember::Use(u) => u.ast_debug(w),
             ModuleMember::Friend(f) => f.ast_debug(w),
             ModuleMember::Constant(c) => c.ast_debug(w),
-            ModuleMember::Spec(s) => w.write(&s.value),
         }
     }
 }
@@ -2201,9 +2190,6 @@ impl AstDebug for Exp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::Spec(s) => {
-                w.write(&s.value);
-            }
             E::UnresolvedError => w.write("_|_"),
             E::DotUnresolved(_, e) => {
                 e.ast_debug(w);
@@ -2437,5 +2423,166 @@ impl AstDebug for FieldBindings {
                 w.write(")");
             }
         }
+    }
+}
+
+//**************************************************************************************************
+// Exp map
+//**************************************************************************************************
+
+// Define the ExpMap trait
+pub trait ExpMap {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_;
+}
+
+// Implement the ExpMap trait for Exp
+impl ExpMap for Exp_ {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        let res: Exp_ = match self {
+            Exp_::Value(_) => self,
+            Exp_::Move(loc, exp) => Exp_::Move(loc, exp.map_exp(f)),
+            Exp_::Copy(loc, exp) => Exp_::Copy(loc, exp.map_exp(f)),
+            Exp_::Name(_) => self,
+            Exp_::Call(name, args) => Exp_::Call(name, args.map_exp(f)),
+            Exp_::Pack(name, fields) => Exp_::Pack(
+                name,
+                fields
+                    .into_iter()
+                    .map(|(field, exp)| (field, exp.map_exp(f)))
+                    .collect(),
+            ),
+            Exp_::Vector(loc, tys, elems) => Exp_::Vector(loc, tys, elems.map_exp(f)),
+            Exp_::IfElse(cond, then_exp, else_exp) => {
+                Exp_::IfElse(cond.map_exp(f), then_exp.map_exp(f), else_exp.map_exp(f))
+            }
+            Exp_::Match(exp, arms) => Exp_::Match(exp.map_exp(f), arms.map_exp(f)),
+            Exp_::While(cond, body) => Exp_::While(cond.map_exp(f), body.map_exp(f)),
+            Exp_::Loop(body) => Exp_::Loop(body.map_exp(f)),
+            Exp_::Labeled(label, exp) => Exp_::Labeled(label, exp.map_exp(f)),
+            Exp_::Block((uses, items, loc, exp)) => {
+                Exp_::Block((uses, items.map_exp(f), loc, exp.map_exp(f)))
+            }
+            Exp_::Lambda(bindings, ty, body) => Exp_::Lambda(bindings, ty, body.map_exp(f)),
+            Exp_::Quant(kind, ranges, triggers, cond, body) => Exp_::Quant(
+                kind,
+                ranges,
+                triggers.map_exp(f),
+                cond.map_exp(f),
+                body.map_exp(f),
+            ),
+            Exp_::ExpList(exps) => Exp_::ExpList(exps.map_exp(f)),
+            Exp_::Unit => self,
+            Exp_::Parens(exp) => Exp_::Parens(exp.map_exp(f)),
+            Exp_::Assign(lhs, rhs) => Exp_::Assign(lhs.map_exp(f), rhs.map_exp(f)),
+            Exp_::Abort(exp) => Exp_::Abort(exp.map_exp(f)),
+            Exp_::Return(label, exp) => Exp_::Return(label, exp.map_exp(f)),
+            Exp_::Break(label, exp) => Exp_::Break(label, exp.map_exp(f)),
+            Exp_::Continue(_) => self,
+            Exp_::Dereference(exp) => Exp_::Dereference(exp.map_exp(f)),
+            Exp_::UnaryExp(op, exp) => Exp_::UnaryExp(op, exp.map_exp(f)),
+            Exp_::BinopExp(lhs, op, rhs) => Exp_::BinopExp(lhs.map_exp(f), op, rhs.map_exp(f)),
+            Exp_::Borrow(mut_, exp) => Exp_::Borrow(mut_, exp.map_exp(f)),
+            Exp_::Dot(exp, loc, name) => Exp_::Dot(exp.map_exp(f), loc, name),
+            Exp_::DotCall(exp, loc, name, is_macro, tyargs, args) => {
+                Exp_::DotCall(exp.map_exp(f), loc, name, is_macro, tyargs, args.map_exp(f))
+            }
+            Exp_::Index(exp, indices) => Exp_::Index(exp.map_exp(f), indices.map_exp(f)),
+            Exp_::Cast(exp, ty) => Exp_::Cast(exp.map_exp(f), ty),
+            Exp_::Annotate(exp, ty) => Exp_::Annotate(exp.map_exp(f), ty),
+            Exp_::UnresolvedError => self,
+            Exp_::DotUnresolved(loc, exp) => Exp_::DotUnresolved(loc, exp.map_exp(f)),
+        };
+        f(res)
+    }
+}
+
+// Implement the ExpMap trait for MatchArm_
+impl ExpMap for MatchArm_ {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        let MatchArm_ {
+            pattern,
+            guard,
+            rhs,
+        } = self;
+        MatchArm_ {
+            pattern,
+            guard: guard.map(|e| e.map_exp(f)),
+            rhs: rhs.map_exp(f),
+        }
+    }
+}
+
+impl ExpMap for FunctionBody_ {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        match self {
+            FunctionBody_::Defined((uses, items, loc, exp)) => {
+                FunctionBody_::Defined((uses, items.map_exp(f), loc, exp.map_exp(f)))
+            }
+            FunctionBody_::Native => FunctionBody_::Native,
+        }
+    }
+}
+
+impl ExpMap for SequenceItem_ {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        match self {
+            SequenceItem_::Seq(e) => SequenceItem_::Seq(e.map_exp(f)),
+            SequenceItem_::Declare(bs, ty_opt) => SequenceItem_::Declare(bs, ty_opt),
+            SequenceItem_::Bind(bs, ty_opt, e) => SequenceItem_::Bind(bs, ty_opt, e.map_exp(f)),
+        }
+    }
+}
+
+// implement ExpMap for Spanned
+impl<T: ExpMap> ExpMap for Spanned<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        self.map(|x| x.map_exp(f))
+    }
+}
+
+// implement ExpMap for Option
+impl<T: ExpMap> ExpMap for Option<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        self.map(|x| x.map_exp(f))
+    }
+}
+
+// implement ExpMap for Vec
+impl<T: ExpMap> ExpMap for Vec<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        self.into_iter().map(|x| x.map_exp(f)).collect()
+    }
+}
+
+// implement ExpMap for Box
+impl<T: ExpMap> ExpMap for Box<T> {
+    fn map_exp<F>(self, f: &mut F) -> Self
+    where
+        F: Fn(Exp_) -> Exp_,
+    {
+        Box::new((*self).map_exp(f))
     }
 }

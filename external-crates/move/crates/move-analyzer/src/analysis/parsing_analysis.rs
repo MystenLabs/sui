@@ -270,7 +270,6 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
-                MM::Spec(_) => (),
             }
         }
         self.current_mod_ident_str = None;
@@ -476,12 +475,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 self.type_symbols(t);
             }
             E::DotUnresolved(_, e) => self.exp_symbols(e),
-            E::Value(_)
-            | E::Quant(..)
-            | E::Unit
-            | E::Continue(_)
-            | E::Spec(_)
-            | E::UnresolvedError => (),
+            E::Value(_) | E::Quant(..) | E::Unit | E::Continue(_) | E::UnresolvedError => (),
         }
     }
 
