@@ -74,6 +74,10 @@ message GetTransactionOptions {
   //
   // Defaults to true if not included
   optional bool signatures = 3;
+  // Include the set of UserSignature's encoded as bytes in the response.
+  //
+  // Defaults to false if not included
+  optional bool signatures_bytes = 8;
   // Include the sui.types.TransactionEffects message in the response.
   //
   // Defaults to true if not included
@@ -98,6 +102,7 @@ message GetTransactionResponse {
   optional sui.types.Transaction transaction = 2;
   optional sui.types.Bcs transaction_bcs = 3;
   optional UserSignatures signatures = 4;
+  optional UserSignaturesBytes signatures_bytes = 11;
   optional sui.types.TransactionEffects effects = 5;
   optional sui.types.Bcs effects_bcs = 6;
   optional sui.types.TransactionEvents events = 7;
@@ -108,6 +113,10 @@ message GetTransactionResponse {
 
 message UserSignatures {
   repeated sui.types.UserSignature signatures = 1;
+}
+
+message UserSignaturesBytes {
+  repeated bytes signatures = 1;
 }
 
 message GetObjectRequest {
@@ -322,9 +331,10 @@ message ExecuteTransactionResponse {
 message ExecuteTransactionRequest {
   optional sui.types.Transaction transaction = 1;
   optional sui.types.Bcs transaction_bcs = 2;
-  repeated sui.types.UserSignature signatures = 3;
+  optional UserSignatures signatures = 3;
+  optional UserSignaturesBytes signatures_bytes = 4;
 
-  optional ExecuteTransactionOptions options = 4;
+  optional ExecuteTransactionOptions options = 5;
 }
 
 message ExecuteTransactionOptions {

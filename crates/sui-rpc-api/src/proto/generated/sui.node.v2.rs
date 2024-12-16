@@ -59,6 +59,11 @@ pub struct GetTransactionOptions {
     /// Defaults to true if not included
     #[prost(bool, optional, tag = "3")]
     pub signatures: ::core::option::Option<bool>,
+    /// Include the set of UserSignature's encoded as bytes in the response.
+    ///
+    /// Defaults to false if not included
+    #[prost(bool, optional, tag = "8")]
+    pub signatures_bytes: ::core::option::Option<bool>,
     /// Include the sui.types.TransactionEffects message in the response.
     ///
     /// Defaults to true if not included
@@ -91,6 +96,8 @@ pub struct GetTransactionResponse {
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
     #[prost(message, optional, tag = "4")]
     pub signatures: ::core::option::Option<UserSignatures>,
+    #[prost(message, optional, tag = "11")]
+    pub signatures_bytes: ::core::option::Option<UserSignaturesBytes>,
     #[prost(message, optional, tag = "5")]
     pub effects: ::core::option::Option<super::super::types::TransactionEffects>,
     #[prost(message, optional, tag = "6")]
@@ -108,6 +115,11 @@ pub struct GetTransactionResponse {
 pub struct UserSignatures {
     #[prost(message, repeated, tag = "1")]
     pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserSignaturesBytes {
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub signatures: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetObjectRequest {
@@ -400,9 +412,11 @@ pub struct ExecuteTransactionRequest {
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
     #[prost(message, optional, tag = "2")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    #[prost(message, repeated, tag = "3")]
-    pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
+    #[prost(message, optional, tag = "3")]
+    pub signatures: ::core::option::Option<UserSignatures>,
     #[prost(message, optional, tag = "4")]
+    pub signatures_bytes: ::core::option::Option<UserSignaturesBytes>,
+    #[prost(message, optional, tag = "5")]
     pub options: ::core::option::Option<ExecuteTransactionOptions>,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]

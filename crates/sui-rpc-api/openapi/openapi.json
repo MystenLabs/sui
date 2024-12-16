@@ -608,6 +608,16 @@
           },
           {
             "in": "query",
+            "name": "signatures_bytes",
+            "description": "Request `Vec<UserSignature>` encoded as bytes be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `Vec<UserSignature>` encoded as bytes be included in the response\n\nDefaults to `false` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
             "name": "transaction",
             "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
             "schema": {
@@ -724,6 +734,16 @@
             "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
             "schema": {
               "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "signatures_bytes",
+            "description": "Request `Vec<UserSignature>` encoded as bytes be included in the response\n\nDefaults to `false` if not provided.",
+            "schema": {
+              "description": "Request `Vec<UserSignature>` encoded as bytes be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -5513,6 +5533,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/UserSignature"
+            }
+          },
+          "signatures_bytes": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "timestamp_ms": {

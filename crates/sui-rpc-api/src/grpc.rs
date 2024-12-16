@@ -226,17 +226,40 @@ impl crate::proto::node::node_server::Node for crate::RpcService {
                 ))
             }
         };
-        let signatures = request
-            .signatures
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()
-            .map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    format!("invalid signature: {e}"),
-                )
-            })?;
+        let mut signatures: Vec<sui_sdk_types::types::UserSignature> = Vec::new();
+
+        if let Some(proto_signatures) = request.signatures {
+            let from_proto_signatures = proto_signatures
+                .signatures
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::InvalidArgument,
+                        format!("invalid signature: {e}"),
+                    )
+                })?;
+
+            signatures.extend(from_proto_signatures);
+        }
+
+        if let Some(signatures_bytes) = request.signatures_bytes {
+            let from_bytes_signatures = signatures_bytes
+                .signatures
+                .iter()
+                .map(|bytes| sui_sdk_types::types::UserSignature::from_bytes(bytes))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::InvalidArgument,
+                        format!("invalid signature: {e}"),
+                    )
+                })?;
+
+            signatures.extend(from_bytes_signatures);
+        }
+
         let signed_transaction = sui_sdk_types::types::SignedTransaction {
             transaction,
             signatures,
