@@ -280,6 +280,7 @@ impl From<crate::types::GetTransactionOptions> for GetTransactionOptions {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
@@ -290,6 +291,7 @@ impl From<crate::types::GetTransactionOptions> for GetTransactionOptions {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
@@ -304,6 +306,7 @@ impl From<GetTransactionOptions> for crate::types::GetTransactionOptions {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
@@ -314,6 +317,7 @@ impl From<GetTransactionOptions> for crate::types::GetTransactionOptions {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
@@ -461,6 +465,7 @@ impl From<crate::types::TransactionResponse> for GetTransactionResponse {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
@@ -473,11 +478,16 @@ impl From<crate::types::TransactionResponse> for GetTransactionResponse {
             signatures: signatures.into_iter().map(Into::into).collect(),
         });
 
+        let signatures_bytes = signatures_bytes.map(|signatures| UserSignaturesBytes {
+            signatures: signatures.into_iter().map(Into::into).collect(),
+        });
+
         Self {
             digest: Some(digest.into()),
             transaction: transaction.map(Into::into),
             transaction_bcs: transaction_bcs.map(Into::into),
             signatures,
+            signatures_bytes,
             effects: effects.map(Into::into),
             effects_bcs: effects_bcs.map(Into::into),
             events: events.map(Into::into),
@@ -497,6 +507,7 @@ impl TryFrom<&GetTransactionResponse> for crate::types::TransactionResponse {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
@@ -524,6 +535,14 @@ impl TryFrom<&GetTransactionResponse> for crate::types::TransactionResponse {
             })
             .transpose()?;
 
+        let signatures_bytes = signatures_bytes.as_ref().map(|signatures| {
+            signatures
+                .signatures
+                .iter()
+                .map(|bytes| bytes.to_vec())
+                .collect()
+        });
+
         let effects = effects.as_ref().map(TryInto::try_into).transpose()?;
         let effects_bcs = effects_bcs.as_ref().map(Into::into);
 
@@ -537,6 +556,7 @@ impl TryFrom<&GetTransactionResponse> for crate::types::TransactionResponse {
             transaction,
             transaction_bcs,
             signatures,
+            signatures_bytes,
             effects,
             effects_bcs,
             events,
