@@ -187,7 +187,7 @@ impl TryInto<StoredCoinBalanceBucket> for &ProcessedCoinBalanceBucket {
 
 /// Get the owner kind and address of a coin, if it is owned by a single address,
 /// either through fast-path ownership or ConsensusV2 ownership.
-fn get_coin_owner(object: &Object) -> Option<(StoredCoinOwnerKind, SuiAddress)> {
+pub(crate) fn get_coin_owner(object: &Object) -> Option<(StoredCoinOwnerKind, SuiAddress)> {
     match object.owner() {
         Owner::AddressOwner(owner_id) => Some((StoredCoinOwnerKind::Fastpath, *owner_id)),
         Owner::ConsensusV2 { authenticator, .. } => Some((
@@ -198,8 +198,9 @@ fn get_coin_owner(object: &Object) -> Option<(StoredCoinOwnerKind, SuiAddress)> 
     }
 }
 
-fn get_coin_balance_bucket(coin: &Object) -> anyhow::Result<i16> {
+pub(crate) fn get_coin_balance_bucket(coin: &Object) -> anyhow::Result<i16> {
     let Some(coin) = coin.as_coin_maybe() else {
+        // TODO: We should make this an invariant violation.
         bail!("Failed to deserialize Coin for {}", coin.id());
     };
     let balance = coin.balance.value();
