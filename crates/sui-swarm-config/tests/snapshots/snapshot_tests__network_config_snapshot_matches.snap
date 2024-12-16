@@ -87,6 +87,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -100,6 +101,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -250,6 +252,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -263,6 +266,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -413,6 +417,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -426,6 +431,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -576,6 +582,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -589,6 +596,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -739,6 +747,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -752,6 +761,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -902,6 +912,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -915,6 +926,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -1065,6 +1077,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -1078,6 +1091,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
