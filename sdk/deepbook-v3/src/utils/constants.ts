@@ -188,4 +188,9 @@ export const mainnetPools: PoolMap = {
 		baseCoin: 'AUSD',
 		quoteCoin: 'USDC',
 	},
+	DRF_SUI: {
+		address: `0x126865a0197d6ab44bfd15fd052da6db92fd2eb831ff9663451bbfa1219e2af2`,
+		baseCoin: 'DRF',
+		quoteCoin: 'SUI',
+	},
 };
