@@ -1357,10 +1357,6 @@ fn variant_to_ide_string(variants: &[VariantInfo]) -> String {
     vstrings.join(",\n")
 }
 
-fn is_move_file(path: &Path) -> bool {
-    path.is_file() && path.extension().map_or(false, |ext| ext == "move")
-}
-
 impl SymbolicatorRunner {
     /// Create a new idle runner (one that does not actually symbolicate)
     pub fn idle() -> Self {
@@ -1388,91 +1384,44 @@ impl SymbolicatorRunner {
                 // infinite loop to wait for symbolication requests
                 eprintln!("starting symbolicator runner loop");
                 loop {
-                    let all_starting_paths_opt = {
+                    let starting_paths_opt = {
                         // hold the lock only as long as it takes to get the data, rather than through
                         // the whole symbolication process (hence a separate scope here)
                         let mut symbolicate = mtx.lock().unwrap();
                         match symbolicate.clone() {
                             RunnerState::Quit => break,
-                            RunnerState::Run(root_dir) => {
+                            RunnerState::Run(starting_paths) => {
                                 *symbolicate = RunnerState::Wait;
-                                Some(root_dir)
+                                Some(starting_paths)
                             }
                             RunnerState::Wait => {
                                 // wait for next request
                                 symbolicate = cvar.wait(symbolicate).unwrap();
                                 match symbolicate.clone() {
                                     RunnerState::Quit => break,
-                                    RunnerState::Run(root_dir) => {
+                                    RunnerState::Run(starting_paths) => {
                                         *symbolicate = RunnerState::Wait;
-                                        Some(root_dir)
+                                        Some(starting_paths)
                                     }
                                     RunnerState::Wait => None,
                                 }
                             }
                         }
                     };
-                    if let Some(all_starting_paths) = all_starting_paths_opt {
-                        let mut pkgs_to_analyze: BTreeMap<PathBuf, BTreeSet<Option<PathBuf>>> = BTreeMap::new();
-                        for starting_path in &all_starting_paths {
-                            let root_dir_opt = Self::root_dir(starting_path);
-                            if root_dir_opt.is_none() {
-                                if !missing_manifests.contains(starting_path) {
-                                    eprintln!("reporting missing manifest");
-
-                                    // report missing manifest file only once to avoid cluttering IDE's UI in
-                                    // cases when developer indeed intended to open a standalone file that was
-                                    // not meant to compile
-                                    missing_manifests.insert(starting_path.clone());
-                                    if let Err(err) = sender.send(Err(anyhow!(
-                                        "Unable to find package manifest. Make sure that
-                                        the source files are located in a sub-directory of a package containing
-                                        a Move.toml file. "
-                                    ))) {
-                                        eprintln!("could not pass missing manifest error: {:?}", err);
-                                    }
-                                }
-                                continue;
-                            }
-                            // we want to collect either all modified Move files (as BTreeSet<Some(PathBuf)> or,
-                            // if one of the paths for a package is not a Move file, have aonly one BTreeSet
-                            // None entry. This will be later passed to symbolicator as Some(Vec<PathBuf>) or
-                            // None, to indicate if incremental symbolication is possible or not.
-                            let root_dir = root_dir_opt.unwrap();
-                            if let Some(mut modified_files) = pkgs_to_analyze.remove(&root_dir) {
-                                // we already seen this package
-                                if modified_files.len() != 1 || modified_files.first().is_some() {
-                                    // keep adding modfied Move files if any
-                                    if is_move_file(starting_path) {
-                                        // add move file to existing set
-                                        modified_files.insert(Some(starting_path.clone()));
-                                        pkgs_to_analyze.insert(root_dir, modified_files);
-                                    } else {
-                                        // reset to a single None entry
-                                        pkgs_to_analyze.insert(root_dir,  BTreeSet::from_iter(vec![None]));
-                                    }
-                                } // else we already seen this package with a non-Move-file path so nothing to do
-                            } else {
-                                // first time we see this package
-                                let modified_file = if is_move_file(starting_path) {
-                                    Some(starting_path.clone())
-                                } else {
-                                    None
-                                };
-                                pkgs_to_analyze.insert(root_dir,  BTreeSet::from_iter(vec![modified_file]));
-                            }
-                        }
+                    if let Some(starting_paths) = starting_paths_opt {
+                        // aggregate all starting paths by package
+                        let pkgs_to_analyze = Self::pkgs_to_analyze(
+                            starting_paths,
+                            &mut missing_manifests,
+                            sender.clone(),
+                        );
                         for (pkg_path, modified_files) in pkgs_to_analyze.into_iter() {
                             eprintln!("symbolication started");
                             match get_symbols(
                                 packages_info.clone(),
                                 ide_files_root.clone(),
                                 pkg_path.as_path(),
-                                if modified_files.len() == 1 && modified_files.first().is_none() {
-                                    None
-                                } else {
-                                    Some(modified_files.into_iter().flatten().collect())
-                                },
+                                Some(modified_files.into_iter().collect()),
                                 lint,
                                 None,
                             ) {
@@ -1507,6 +1456,42 @@ impl SymbolicatorRunner {
             .unwrap();
 
         runner
+    }
+
+    /// Aggregates all starting paths by package
+    fn pkgs_to_analyze(
+        starting_paths: BTreeSet<PathBuf>,
+        missing_manifests: &mut BTreeSet<PathBuf>,
+        sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+    ) -> BTreeMap<PathBuf, BTreeSet<PathBuf>> {
+        let mut pkgs_to_analyze: BTreeMap<PathBuf, BTreeSet<PathBuf>> = BTreeMap::new();
+        for starting_path in &starting_paths {
+            let Some(root_dir) = Self::root_dir(starting_path) else {
+                if !missing_manifests.contains(starting_path) {
+                    eprintln!("reporting missing manifest");
+                    // report missing manifest file only once to avoid cluttering IDE's UI in
+                    // cases when developer indeed intended to open a standalone file that was
+                    // not meant to compile
+                    missing_manifests.insert(starting_path.clone());
+                    if let Err(err) = sender.send(Err(anyhow!(
+                        "Unable to find package manifest. Make sure that
+                    the source files are located in a sub-directory of a package containing
+                    a Move.toml file. "
+                    ))) {
+                        eprintln!("could not pass missing manifest error: {:?}", err);
+                    }
+                }
+                continue;
+            };
+            // The mutext value is only set by the `on_text_document_sync_notification` handler
+            // and can only contain a valid Move file path, so we simply collect a set of Move
+            // file paths here to pass them to the symbolicator.
+            let modfied_files = pkgs_to_analyze
+                .entry(root_dir.clone())
+                .or_insert(BTreeSet::new());
+            modfied_files.insert(starting_path.clone());
+        }
+        pkgs_to_analyze
     }
 
     pub fn run(&self, starting_path: PathBuf) {
@@ -1810,12 +1795,13 @@ fn is_parsed_pkg_modified(
     file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
 ) -> bool {
     files_to_compile.iter().any(|fpath| {
-        if let Some(fhash) = file_hashes.get(fpath) {
-            if let P::Definition::Module(mdef) = &pkg_def.def {
-                return mdef.loc.file_hash() == *fhash;
-            }
-        }
-        false
+        file_hashes
+            .get(fpath)
+            .and_then(|fhash| match &pkg_def.def {
+                P::Definition::Module(mdef) => Some((mdef, fhash)),
+                _ => None,
+            })
+            .map_or(false, |(mdef, fhash)| mdef.loc.file_hash() == *fhash)
     })
 }
 
@@ -1825,10 +1811,9 @@ fn is_typed_mod_modified(
     file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
 ) -> bool {
     files_to_compile.iter().any(|fpath| {
-        if let Some(fhash) = file_hashes.get(fpath) {
-            return mdef.loc.file_hash() == *fhash;
-        }
-        false
+        file_hashes
+            .get(fpath)
+            .map_or(false, |fhash| mdef.loc.file_hash() == *fhash)
     })
 }
 
