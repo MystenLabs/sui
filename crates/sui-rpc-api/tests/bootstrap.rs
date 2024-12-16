@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use protox::prost::Message as _;
 use std::fs;
 use std::path::PathBuf;
 
@@ -36,16 +37,36 @@ fn bootstrap() {
     let out_dir = root_dir.join("src").join("proto").join("generated");
     let file_descriptor_set_path = out_dir.join("sui.node.v2.fds.bin");
 
+    let fds = protox::Compiler::new(&[proto_dir.clone()])
+        .unwrap()
+        .include_source_info(true)
+        .include_imports(true)
+        .open_files(&proto_files)
+        .unwrap()
+        .file_descriptor_set();
+
     if let Err(error) = tonic_build::configure()
         .build_client(true)
         .build_server(true)
         .bytes(["."])
         .out_dir(&out_dir)
-        .file_descriptor_set_path(file_descriptor_set_path)
-        .compile_protos(&proto_files[..], &[proto_dir])
+        .compile_fds(fds)
     {
         panic!("failed to compile `sui` protos: {}", error);
     }
+
+    // Generate fds to expose via reflection
+    let mut fds = protox::Compiler::new(&[proto_dir])
+        .unwrap()
+        .include_source_info(false)
+        .include_imports(true)
+        .open_files(&proto_files)
+        .unwrap()
+        .file_descriptor_set();
+
+    // Sort them by their file name in order to have a stable serialized format
+    fds.file.sort_by(|a, b| a.name.cmp(&b.name));
+    std::fs::write(file_descriptor_set_path, fds.encode_to_vec()).unwrap();
 
     let status = std::process::Command::new("git")
         .arg("diff")
