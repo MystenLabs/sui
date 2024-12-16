@@ -8,7 +8,7 @@ use tap::Pipe;
 impl From<sui_sdk_types::types::Identifier> for super::Identifier {
     fn from(value: sui_sdk_types::types::Identifier) -> Self {
         Self {
-            identifier: Some(value.into_inner().into_boxed_bytes().into()),
+            identifier: Some(value.into_inner().into()),
         }
     }
 }
@@ -21,8 +21,6 @@ impl TryFrom<&super::Identifier> for sui_sdk_types::types::Identifier {
             .identifier
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("identifier"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .pipe(Self::new)
             .map_err(TryFromProtoError::from_error)
     }

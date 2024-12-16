@@ -610,12 +610,12 @@ impl TryFrom<&super::AuthenticatorStateUpdate> for sui_sdk_types::types::Authent
 //
 
 impl From<sui_sdk_types::types::Jwk> for super::Jwk {
-    fn from(value: sui_sdk_types::types::Jwk) -> Self {
+    fn from(sui_sdk_types::types::Jwk { kty, e, n, alg }: sui_sdk_types::types::Jwk) -> Self {
         Self {
-            kty: Some(value.kty.into_bytes().into()),
-            e: Some(value.e.into_bytes().into()),
-            n: Some(value.n.into_bytes().into()),
-            alg: Some(value.alg.into_bytes().into()),
+            kty: Some(kty),
+            e: Some(e),
+            n: Some(n),
+            alg: Some(alg),
         }
     }
 }
@@ -627,26 +627,18 @@ impl TryFrom<&super::Jwk> for sui_sdk_types::types::Jwk {
         let kty = kty
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("kty"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let e = e
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let n = n
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("n"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let alg = alg
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("alg"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         Ok(Self { kty, e, n, alg })
     }
@@ -657,10 +649,10 @@ impl TryFrom<&super::Jwk> for sui_sdk_types::types::Jwk {
 //
 
 impl From<sui_sdk_types::types::JwkId> for super::JwkId {
-    fn from(value: sui_sdk_types::types::JwkId) -> Self {
+    fn from(sui_sdk_types::types::JwkId { iss, kid }: sui_sdk_types::types::JwkId) -> Self {
         Self {
-            iss: Some(value.iss.into_bytes().into()),
-            kid: Some(value.kid.into_bytes().into()),
+            iss: Some(iss),
+            kid: Some(kid),
         }
     }
 }
@@ -672,14 +664,10 @@ impl TryFrom<&super::JwkId> for sui_sdk_types::types::JwkId {
         let iss = iss
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("iss"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let kid = kid
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("kid"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         Ok(Self { iss, kid })
     }
