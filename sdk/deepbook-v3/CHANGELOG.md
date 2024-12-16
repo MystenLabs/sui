@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.12.21
+
+### Patch Changes
+
+- 7237686: DRF pool
+
 ## 0.12.20
 
 ### Patch Changes
