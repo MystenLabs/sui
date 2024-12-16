@@ -11,6 +11,7 @@ use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_pg_db::{self as db, Connection};
 use sui_types::full_checkpoint_content::CheckpointData;
+use tracing::warn;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = cp_sequence_numbers)]
@@ -20,18 +21,25 @@ pub struct StoredCpSequenceNumbers {
     pub epoch: i64,
 }
 
-<<<<<<< HEAD:crates/sui-indexer-alt-framework/src/handlers/cp_sequence_numbers.rs
 pub struct CpSequenceNumbers;
 
-=======
 /// A struct that can be instantiated by the pruner task to map a `from` and `to` checkpoint to its
 /// corresponding `tx_lo` and containing epoch. The `from` checkpoint is expected to be inclusive,
 /// and the `to` checkpoint is exclusive. This requires the existence of the `checkpoint_metadata`
 /// table.
->>>>>>> 0ad4e6f393 (address first set of comments. trait fn prune still accepts from and to checkpoints, up to handler prune to decide what it needs. doc comments for PrunableRange regarding what it expects on instantiation):crates/sui-indexer-alt-framework/src/handlers/cp_mapping.rs
 pub struct PrunableRange {
-    from: StoredCpMapping,
-    to: StoredCpMapping,
+    from: StoredCpSequenceNumbers,
+    to: StoredCpSequenceNumbers,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RangeError {
+    #[error("Invalid checkpoint range: `from` {0} is greater than `to` {1}")]
+    InvalidCheckpointRange(u64, u64),
+    #[error("No checkpoint mapping found for checkpoints {0} and {1}")]
+    NoCheckpointMapping(u64, u64),
+    #[error("Database error: {0}")]
+    DbError(diesel::result::Error),
 }
 
 impl PrunableRange {
@@ -43,21 +51,28 @@ impl PrunableRange {
         conn: &mut Connection<'_>,
         from_cp: u64,
         to_cp: u64,
-    ) -> QueryResult<Self> {
-        let results = cp_mapping::table
-            .select(StoredCpMapping::as_select())
-            .filter(cp_mapping::cp_sequence_number.eq_any([from_cp as i64, to_cp as i64]))
-            .order(cp_mapping::cp_sequence_number.asc())
-            .load::<StoredCpMapping>(conn)
-            .await?;
-
-        match results.as_slice() {
-            [first, .., last] => Ok(PrunableRange {
-                from: first.clone(),
-                to: last.clone(),
-            }),
-            _ => Err(diesel::result::Error::NotFound),
+    ) -> Result<Self, RangeError> {
+        if from_cp > to_cp {
+            return Err(RangeError::InvalidCheckpointRange(from_cp, to_cp));
         }
+
+        let results = cp_sequence_numbers::table
+            .select(StoredCpSequenceNumbers::as_select())
+            .filter(cp_sequence_numbers::cp_sequence_number.eq_any([from_cp as i64, to_cp as i64]))
+            .order(cp_sequence_numbers::cp_sequence_number.asc())
+            .load::<StoredCpSequenceNumbers>(conn)
+            .await
+            .map_err(RangeError::DbError)?;
+
+        let [first, last] = results.as_slice() else {
+            warn!("No checkpoint mapping found for checkpoint {from_cp} and {to_cp}. Found {} mapping(s) instead of 2", results.len());
+            return Err(RangeError::NoCheckpointMapping(from_cp, to_cp));
+        };
+
+        Ok(PrunableRange {
+            from: first.clone(),
+            to: last.clone(),
+        })
     }
 
     /// Inclusive start and exclusive end range of prunable checkpoints.
