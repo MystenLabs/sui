@@ -5,7 +5,7 @@ description: Everything on the Sui blockchain is an object, with metadata, type 
 
 import ProtocolConfig from "@site/src/components/ProtocolConfig";
 
-The basic unit of storage in Sui is the object. In contrast to many other blockchains where storage is centered around accounts containing key-value stores, Sui's storage is centered around objects addressable on-chain by unique IDs. A smart contract is an object (called a Sui Move package), and these smart contracts manipulate objects on the Sui network:
+{@include: ../snippets/object-model-ovr.mdx} A smart contract is an object (called a Sui Move package), and these smart contracts manipulate objects on the Sui network:
 
 - Sui Move Package: a set of Sui Move bytecode modules. Each module has a name that's unique within the containing package. The combination of the package's on-chain ID and the name of a module uniquely identify the module. When you publish smart contracts to Sui, a package is the unit of publishing. After you publish a package object, it is immutable and can never be changed or removed. A package object can depend on other package objects that were previously published to Sui.
 - Sui Move Object: typed data governed by a particular Sui Move module from a Sui Move package. Each object value is a struct with fields that can contain primitive types (such as integers and addresses), other objects, and non-object structs. 
