@@ -71,6 +71,7 @@ pub(crate) struct IndexerMetrics {
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
 
+    // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
     pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
     pub ingested_checkpoint_timestamp_lag: Histogram,
@@ -101,6 +102,26 @@ pub(crate) struct IndexerMetrics {
     pub total_pruner_chunks_attempted: IntCounterVec,
     pub total_pruner_chunks_deleted: IntCounterVec,
     pub total_pruner_rows_deleted: IntCounterVec,
+
+    // Checkpoint lag metrics for the collector.
+    pub latest_collected_checkpoint: IntGaugeVec,
+    pub latest_collected_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub collected_checkpoint_timestamp_lag: HistogramVec,
+
+    // Checkpoint lag metrics for the committer.
+    // We can only report partially committed checkpoints, since the concurrent committer isn't aware of
+    // when a checkpoint is fully committed. So we report whenever we see a checkpoint. Since data from
+    // the same checkpoint is batched continuously, this is a good proxy for the last committed checkpoint.
+    pub latest_partially_committed_checkpoint: IntGaugeVec,
+    pub latest_partially_committed_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub partially_committed_checkpoint_timestamp_lag: HistogramVec,
+
+    // Checkpoint lag metrics for the watermarker.
+    // The latest watermarked checkpoint metric is already covered by watermark_checkpoint_in_db.
+    // While we already have watermark_timestamp_in_db_ms metric, reporting the lag explicitly
+    // for consistency.
+    pub latest_watermarked_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub watermarked_checkpoint_timestamp_lag: HistogramVec,
 
     pub collector_gather_latency: HistogramVec,
     pub collector_batch_size: HistogramVec,
@@ -406,6 +427,71 @@ impl IndexerMetrics {
                 "indexer_pruner_rows_deleted",
                 "Number of rows this pruner successfully deleted",
                 &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_collected_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_latest_collected_checkpoint",
+                "Latest checkpoint sequence number collected by this collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_collected_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_collected_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was collected and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collected_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_collected_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was collected and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latest_partially_committed_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_latest_partially_committed_checkpoint",
+                "Latest checkpoint sequence number partially committed by this collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_partially_committed_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_partially_committed_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was partially committed and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            partially_committed_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_partially_committed_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was partially committed and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latest_watermarked_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
+                "indexer_latest_watermarked_checkpoint_timestamp_lag_ms",
+                "Difference between the system timestamp when the latest checkpoint was watermarked and the \
+                 timestamp in the checkpoint, in milliseconds",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermarked_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
+                "indexer_watermarked_checkpoint_timestamp_lag",
+                "Difference between the system timestamp when a checkpoint was watermarked and the \
+                 timestamp in each checkpoint, in seconds",
+                &["pipeline"],
+                LAG_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
