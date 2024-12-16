@@ -63,6 +63,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use transfer::TransferReceiveObjectInternalCostParams;
 
+mod account;
 mod address;
 mod config;
 mod crypto;
@@ -814,6 +815,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "dynamic_field",
             "has_child_object_with_ty",
             make_native!(dynamic_field::has_child_object_with_ty),
+        ),
+        (
+            "account",
+            "emit_account_event",
+            make_native!(account::emit_account_event),
         ),
         (
             "ecdsa_k1",

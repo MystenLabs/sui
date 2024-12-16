@@ -29,6 +29,7 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `join`](#0x2_coin_join)
 -  [Function `split`](#0x2_coin_split)
 -  [Function `divide_into_n`](#0x2_coin_divide_into_n)
+-  [Function `send_to_account`](#0x2_coin_send_to_account)
 -  [Function `zero`](#0x2_coin_zero)
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
@@ -763,6 +764,30 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
         i = i + 1;
     };
     vec
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_send_to_account"></a>
+
+## Function `send_to_account`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_send_to_account">send_to_account</a>&lt;T&gt;(self: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, recipient: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_send_to_account">send_to_account</a>&lt;T&gt;(self: <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, recipient: <b>address</b>) {
+    self.<a href="../sui-framework/coin.md#0x2_coin_into_balance">into_balance</a>().<a href="../sui-framework/coin.md#0x2_coin_send_to_account">send_to_account</a>(recipient);
 }
 </code></pre>
 

@@ -9,7 +9,9 @@ custom coins with <code><a href="../sui-framework/balance.md#0x2_balance_Supply"
 
 -  [Struct `Supply`](#0x2_balance_Supply)
 -  [Struct `Balance`](#0x2_balance_Balance)
+-  [Struct `MergableBalance`](#0x2_balance_MergableBalance)
 -  [Constants](#@Constants_0)
+-  [Function `mergable_from_balance`](#0x2_balance_mergable_from_balance)
 -  [Function `value`](#0x2_balance_value)
 -  [Function `supply_value`](#0x2_balance_supply_value)
 -  [Function `create_supply`](#0x2_balance_create_supply)
@@ -20,12 +22,16 @@ custom coins with <code><a href="../sui-framework/balance.md#0x2_balance_Supply"
 -  [Function `split`](#0x2_balance_split)
 -  [Function `withdraw_all`](#0x2_balance_withdraw_all)
 -  [Function `destroy_zero`](#0x2_balance_destroy_zero)
+-  [Function `send_to_account`](#0x2_balance_send_to_account)
+-  [Function `withdraw_from_account`](#0x2_balance_withdraw_from_account)
 -  [Function `create_staking_rewards`](#0x2_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#0x2_balance_destroy_storage_rebates)
 -  [Function `destroy_supply`](#0x2_balance_destroy_supply)
 
 
-<pre><code><b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<pre><code><b>use</b> <a href="../sui-framework/account.md#0x2_account">0x2::account</a>;
+<b>use</b> <a href="../sui-framework/mergable.md#0x2_mergable">0x2::mergable</a>;
+<b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
@@ -79,6 +85,33 @@ Can be used to store coins which don't need the key ability.
 <dl>
 <dt>
 <code>value: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_balance_MergableBalance"></a>
+
+## Struct `MergableBalance`
+
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/balance.md#0x2_balance_MergableBalance">MergableBalance</a>&lt;T&gt; <b>has</b> store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>value: <a href="../sui-framework/mergable.md#0x2_mergable_Sum">mergable::Sum</a></code>
 </dt>
 <dd>
 
@@ -151,6 +184,31 @@ For when an overflow is happening on Supply operations.
 </code></pre>
 
 
+
+<a name="0x2_balance_mergable_from_balance"></a>
+
+## Function `mergable_from_balance`
+
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_mergable_from_balance">mergable_from_balance</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): <a href="../sui-framework/balance.md#0x2_balance_MergableBalance">balance::MergableBalance</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_mergable_from_balance">mergable_from_balance</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): <a href="../sui-framework/balance.md#0x2_balance_MergableBalance">MergableBalance</a>&lt;T&gt; {
+    <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value } = <a href="../sui-framework/balance.md#0x2_balance">balance</a>;
+    <a href="../sui-framework/balance.md#0x2_balance_MergableBalance">MergableBalance</a> { value: make_sum(value) }
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="0x2_balance_value"></a>
 
@@ -406,6 +464,61 @@ Destroy a zero <code><a href="../sui-framework/balance.md#0x2_balance_Balance">B
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;) {
     <b>assert</b>!(<a href="../sui-framework/balance.md#0x2_balance">balance</a>.value == 0, <a href="../sui-framework/balance.md#0x2_balance_ENonZero">ENonZero</a>);
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value: _ } = <a href="../sui-framework/balance.md#0x2_balance">balance</a>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_send_to_account"></a>
+
+## Function `send_to_account`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_send_to_account">send_to_account</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_send_to_account">send_to_account</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
+    <b>let</b> <a href="../sui-framework/balance.md#0x2_balance">balance</a> = <a href="../sui-framework/balance.md#0x2_balance_mergable_from_balance">mergable_from_balance</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>);
+    <a href="../sui-framework/account.md#0x2_account_transfer_to_account">account::transfer_to_account</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>, recipient);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_withdraw_from_account"></a>
+
+## Function `withdraw_from_account`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_withdraw_from_account">withdraw_from_account</a>&lt;T&gt;(reservation: &<b>mut</b> <a href="../sui-framework/account.md#0x2_account_Reservation">account::Reservation</a>&lt;<a href="../sui-framework/balance.md#0x2_balance_MergableBalance">balance::MergableBalance</a>&lt;T&gt;&gt;, amount: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_withdraw_from_account">withdraw_from_account</a>&lt;T&gt;(reservation: &<b>mut</b> <a href="../sui-framework/account.md#0x2_account_Reservation">account::Reservation</a>&lt;<a href="../sui-framework/balance.md#0x2_balance_MergableBalance">MergableBalance</a>&lt;T&gt;&gt;, amount: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+    // Conservation: we create a debit which will be subtracted from the <a href="../sui-framework/account.md#0x2_account">account</a> (<b>if</b> and only iff
+    // reservation is sufficient) and a corresponding credit which will be returned.
+    // Since reservation cannot underflow, and the two balances are equal, nothing is created or destroyed.
+    <b>let</b> debit = <a href="../sui-framework/balance.md#0x2_balance_MergableBalance">MergableBalance</a>&lt;T&gt; { value: make_sum(amount) };
+    <b>let</b> credit = <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value: amount };
+    <a href="../sui-framework/account.md#0x2_account_withdraw_from_account">account::withdraw_from_account</a>(reservation, debit, amount);
+    credit
 }
 </code></pre>
 
