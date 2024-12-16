@@ -2430,14 +2430,12 @@ impl AstDebug for FieldBindings {
 // Exp map
 //**************************************************************************************************
 
-// Define the ExpMap trait
 pub trait ExpMap {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
         F: Fn(Exp_) -> Exp_;
 }
 
-// Implement the ExpMap trait for Exp
 impl ExpMap for Exp_ {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
@@ -2501,7 +2499,6 @@ impl ExpMap for Exp_ {
     }
 }
 
-// Implement the ExpMap trait for MatchArm_
 impl ExpMap for MatchArm_ {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
@@ -2547,7 +2544,6 @@ impl ExpMap for SequenceItem_ {
     }
 }
 
-// implement ExpMap for Spanned
 impl<T: ExpMap> ExpMap for Spanned<T> {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
@@ -2557,7 +2553,6 @@ impl<T: ExpMap> ExpMap for Spanned<T> {
     }
 }
 
-// implement ExpMap for Option
 impl<T: ExpMap> ExpMap for Option<T> {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
@@ -2567,7 +2562,6 @@ impl<T: ExpMap> ExpMap for Option<T> {
     }
 }
 
-// implement ExpMap for Vec
 impl<T: ExpMap> ExpMap for Vec<T> {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
@@ -2577,7 +2571,6 @@ impl<T: ExpMap> ExpMap for Vec<T> {
     }
 }
 
-// implement ExpMap for Box
 impl<T: ExpMap> ExpMap for Box<T> {
     fn map_exp<F>(self, f: &mut F) -> Self
     where
