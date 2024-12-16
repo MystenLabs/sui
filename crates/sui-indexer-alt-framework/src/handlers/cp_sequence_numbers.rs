@@ -20,8 +20,15 @@ pub struct StoredCpSequenceNumbers {
     pub epoch: i64,
 }
 
+<<<<<<< HEAD:crates/sui-indexer-alt-framework/src/handlers/cp_sequence_numbers.rs
 pub struct CpSequenceNumbers;
 
+=======
+/// A struct that can be instantiated by the pruner task to map a `from` and `to` checkpoint to its
+/// corresponding `tx_lo` and containing epoch. The `from` checkpoint is expected to be inclusive,
+/// and the `to` checkpoint is exclusive. This requires the existence of the `checkpoint_metadata`
+/// table.
+>>>>>>> 0ad4e6f393 (address first set of comments. trait fn prune still accepts from and to checkpoints, up to handler prune to decide what it needs. doc comments for PrunableRange regarding what it expects on instantiation):crates/sui-indexer-alt-framework/src/handlers/cp_mapping.rs
 pub struct PrunableRange {
     from: StoredCpMapping,
     to: StoredCpMapping,
@@ -36,7 +43,7 @@ impl PrunableRange {
         conn: &mut Connection<'_>,
         from_cp: u64,
         to_cp: u64,
-    ) -> QueryResult<PrunableRange> {
+    ) -> QueryResult<Self> {
         let results = cp_mapping::table
             .select(StoredCpMapping::as_select())
             .filter(cp_mapping::cp_sequence_number.eq_any([from_cp as i64, to_cp as i64]))
@@ -66,11 +73,11 @@ impl PrunableRange {
         (self.from.tx_lo as u64, self.to.tx_lo as u64)
     }
 
-    /// Returns the epochs that contain the checkpoints in this range.
+    /// Inclusive start and exclusive end range of epochs.
     ///
-    /// While the checkpoint and tx ranges use exclusive end bounds, the epoch is different in that
-    /// it represents which epoch the `from` and `to` checkpoints come from.
-    pub fn containing_epochs(&self) -> (u64, u64) {
+    /// The two values in the tuple represent which epoch the `from` and `to` checkpoints come from,
+    /// respectively.
+    pub fn epoch_interval(&self) -> (u64, u64) {
         (self.from.epoch as u64, self.to.epoch as u64)
     }
 }
