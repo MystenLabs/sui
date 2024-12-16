@@ -44,7 +44,7 @@ use crate::{
             ExecutionIndicesWithStats,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
-        epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
+        epoch_start_configuration::EpochStartConfigTrait,
         AuthorityMetrics, AuthorityState,
     },
     checkpoints::{CheckpointService, CheckpointServiceNotify},
@@ -860,14 +860,13 @@ impl ConsensusCommitInfo {
     pub fn create_consensus_commit_prologue_transaction(
         &self,
         epoch: u64,
-        epoch_start_config: &EpochStartConfiguration,
         protocol_config: &ProtocolConfig,
         cancelled_txn_version_assignment: Vec<(
             TransactionDigest,
             Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
     ) -> VerifiedExecutableTransaction {
-        if epoch_start_config.use_version_assignment_tables_v3() {
+        if protocol_config.record_consensus_determined_version_assignments_in_prologue_v2() {
             self.consensus_commit_prologue_v3_transaction(
                 epoch,
                 ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
