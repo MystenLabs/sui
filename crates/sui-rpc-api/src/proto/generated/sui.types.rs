@@ -262,8 +262,8 @@ pub struct GasCostSummary {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Identifier {
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub identifier: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "1")]
+    pub identifier: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StructTag {
@@ -725,25 +725,25 @@ pub struct ActiveJwk {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct JwkId {
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub iss: ::core::option::Option<::prost::bytes::Bytes>,
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub kid: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "1")]
+    pub iss: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "2")]
+    pub kid: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Jwk {
     /// Key type parameter, <<https://datatracker.ietf.org/doc/html/rfc7517#section-4.1>>
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub kty: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "1")]
+    pub kty: ::core::option::Option<::prost::alloc::string::String>,
     /// RSA public exponent, <<https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>>
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub e: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "2")]
+    pub e: ::core::option::Option<::prost::alloc::string::String>,
     /// RSA modulus, <<https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>>
-    #[prost(bytes = "bytes", optional, tag = "3")]
-    pub n: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "3")]
+    pub n: ::core::option::Option<::prost::alloc::string::String>,
     /// Algorithm parameter, <<https://datatracker.ietf.org/doc/html/rfc7517#section-4.4>>
-    #[prost(bytes = "bytes", optional, tag = "4")]
-    pub alg: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "4")]
+    pub alg: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EndOfEpochTransaction {
@@ -1336,8 +1336,8 @@ pub struct SimpleSignature {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginPublicIdentifier {
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub iss: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "1")]
+    pub iss: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
     pub address_seed: ::core::option::Option<Bn254FieldElement>,
 }
@@ -1419,8 +1419,8 @@ pub struct ZkLoginInputs {
     pub proof_points: ::core::option::Option<ZkLoginProof>,
     #[prost(message, optional, tag = "2")]
     pub iss_base64_details: ::core::option::Option<ZkLoginClaim>,
-    #[prost(bytes = "bytes", optional, tag = "3")]
-    pub header_base64: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "3")]
+    pub header_base64: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "4")]
     pub address_seed: ::core::option::Option<Bn254FieldElement>,
 }
@@ -1435,8 +1435,8 @@ pub struct ZkLoginProof {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZkLoginClaim {
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub value: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "1")]
+    pub value: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(uint32, optional, tag = "2")]
     pub index_mod_4: ::core::option::Option<u32>,
 }
@@ -1473,8 +1473,8 @@ pub struct Bn254FieldElement {
 pub struct PasskeyAuthenticator {
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub authenticator_data: ::core::option::Option<::prost::bytes::Bytes>,
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub client_data_json: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "2")]
+    pub client_data_json: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
     pub signature: ::core::option::Option<SimpleSignature>,
 }
