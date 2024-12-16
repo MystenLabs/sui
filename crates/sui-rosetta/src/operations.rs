@@ -567,71 +567,80 @@ impl Operations {
         balance_change.chain(gas)
     }
 
-    fn process_single_gascoin_transfer(
-        coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
-        tx: SuiTransactionBlockKind,
-        sender: SuiAddress,
-        gas_used: i128,
-    ) -> Vec<Operation> {
-        let mut is_single_gascoin_transfer = false;
+    fn is_single_gascoin_transfer(tx: SuiTransactionBlockKind) -> bool {
         match tx {
             SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
                 let SuiProgrammableTransactionBlock {
                     inputs: _,
                     commands,
                 } = &pt;
-                for command in commands {
-                    match command {
+                return commands
+                    .into_iter()
+                    .find(|command| match command {
                         SuiCommand::TransferObjects(objs, _) => {
-                            if objs.len() == 1 {
-                                match objs[0] {
-                                    SuiArgument::GasCoin => {
-                                        is_single_gascoin_transfer = true;
-                                    }
-                                    _ => {}
-                                }
-                            }
+                            objs.len() > 0 && objs[0] == SuiArgument::GasCoin
                         }
-                        _ => {}
-                    }
-                }
+                        _ => false,
+                    })
+                    .is_some();
             }
             _ => {}
         }
-        if !is_single_gascoin_transfer {
-            return vec![];
-        };
+        false
+    }
+
+    fn process_single_gascoin_transfer(
+        coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
+        tx: SuiTransactionBlockKind,
+        prev_gas_owner: SuiAddress,
+        new_gas_owner: SuiAddress,
+        gas_used: i128,
+    ) -> Vec<Operation> {
         let mut operations = vec![];
-        coin_change_operations.into_iter().for_each(|operation| {
-            match operation.type_ {
-                OperationType::Gas => {
-                    // change gas account back to sender as the sender is the one
-                    // who paid for the txn (this is the format Rosetta wants to process)
-                    operations.push(Operation::gas(sender, gas_used))
+        if Self::is_single_gascoin_transfer(tx) {
+            coin_change_operations.into_iter().for_each(|operation| {
+                match operation.type_ {
+                    OperationType::Gas => {
+                        // change gas account back to the previous owner as it is the one
+                        // who paid for the txn (this is the format Rosetta wants to process)
+                        operations.push(Operation::gas(prev_gas_owner, gas_used))
+                    }
+                    OperationType::SuiBalanceChange => {
+                        operation.account.map(|account| {
+                            let mut amount = match operation.amount {
+                                Some(amount) => amount,
+                                None => return,
+                            };
+                            let mut is_convert_to_pay_sui = false;
+                            if account.address == prev_gas_owner {
+                                // previous owner's balance needs to be adjusted for gas
+                                amount.value -= gas_used;
+                                is_convert_to_pay_sui = true;
+                            } else if account.address == new_gas_owner {
+                                // new owner's balance needs to be adjusted for gas
+                                amount.value += gas_used;
+                                is_convert_to_pay_sui = true;
+                            }
+                            if is_convert_to_pay_sui {
+                                operations.push(Operation::pay_sui(
+                                    operation.status,
+                                    account.address,
+                                    amount.value,
+                                ));
+                            } else {
+                                operations.push(Operation::balance_change(
+                                    operation.status,
+                                    account.address,
+                                    amount.value,
+                                    amount.currency,
+                                ));
+                            }
+                        });
+                    }
+                    _ => {}
                 }
-                OperationType::SuiBalanceChange => {
-                    operation.account.map(|account| {
-                        let mut amount = match operation.amount {
-                            Some(amount) => amount.value,
-                            None => 0,
-                        };
-                        if account.address == sender {
-                            // sender's balance needs to be adjusted for gas
-                            amount -= gas_used;
-                        } else {
-                            // recipient's balance needs to be adjusted for gas
-                            amount += gas_used;
-                        }
-                        operations.push(Operation::pay_sui(
-                            operation.status,
-                            account.address,
-                            amount,
-                        ));
-                    });
-                }
-                _ => {}
-            }
-        });
+            });
+        }
         operations
     }
 }
@@ -746,15 +755,13 @@ impl Operations {
             accounted_balances.clone(),
         );
 
-        let mut single_gascoin_transfer = vec![];
-        if gas_owner != sender && accounted_balances.is_empty() {
-            single_gascoin_transfer = Self::process_single_gascoin_transfer(
-                &mut coin_change_operations,
-                tx.data.transaction().clone(),
-                sender,
-                gas_used,
-            );
-        }
+        let single_gascoin_transfer = Self::process_single_gascoin_transfer(
+            &mut coin_change_operations,
+            tx.data.transaction().clone(),
+            tx.data.gas_data().owner,
+            gas_owner,
+            gas_used,
+        );
 
         let ops: Operations = ops
             .into_iter()
