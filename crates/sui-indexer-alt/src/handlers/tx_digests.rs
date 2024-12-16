@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor, PrunableRange};
 use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
 use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -48,5 +49,13 @@ impl Handler for TxDigests {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(range: PrunableRange, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let (from, to) = range.tx_interval();
+        let filter = tx_digests::table
+            .filter(tx_digests::tx_sequence_number.between(from as i64, to as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }

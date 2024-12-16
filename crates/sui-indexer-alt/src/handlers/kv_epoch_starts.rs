@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor, PrunableRange};
 use sui_indexer_alt_schema::{epochs::StoredEpochStart, schema::kv_epoch_starts};
 use sui_pg_db as db;
 use sui_types::{
@@ -71,5 +72,13 @@ impl Handler for KvEpochStarts {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(range: PrunableRange, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let (from, to) = range.containing_epochs();
+        let filter = kv_epoch_starts::table
+            .filter(kv_epoch_starts::epoch.between(from as i64, to as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }
