@@ -1073,6 +1073,7 @@ impl SequenceNumber {
     pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
         SequenceNumber(SequenceNumber::MAX.value() + 3);
     // Used to represent a sequence number whose value is unknown.
+    // For internal use only. This should never appear on chain.
     pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 4);
 
     pub const fn new() -> Self {
