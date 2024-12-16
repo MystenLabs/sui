@@ -1440,7 +1440,7 @@ impl AuthorityPerEpochStore {
                             })?;
 
                         let initial_shared_version =
-                            if self.protocol_config().consensus_v2_objects() {
+                            if self.epoch_start_config().use_version_assignment_tables_v3() {
                                 *initial_shared_version
                             } else {
                                 // (before ConsensusV2 objects, we didn't track initial shared
@@ -1576,7 +1576,7 @@ impl AuthorityPerEpochStore {
         // Note that this does not delete keys for random transactions. The worst case result
         // of this is that we restart at the end of the epoch and load about 160k keys into
         // memory.
-        if self.protocol_config().consensus_v2_objects() {
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
             batch.delete_batch(
                 &tables.assigned_shared_object_versions_v3,
                 digests.iter().map(|d| TransactionKey::Digest(*d)),
@@ -1604,7 +1604,7 @@ impl AuthorityPerEpochStore {
         obj: &ObjectID,
         start_version: SequenceNumber,
     ) -> Option<SequenceNumber> {
-        if self.protocol_config().consensus_v2_objects() {
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
             self.tables()
                 .expect("test should not cross epoch boundary")
                 .next_shared_object_versions_v2
@@ -1624,7 +1624,7 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
         assigned_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     ) -> SuiResult {
-        if self.protocol_config().consensus_v2_objects() {
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
             self.tables()?
                 .assigned_shared_object_versions_v3
                 .insert(&TransactionKey::Digest(*tx_digest), &assigned_versions)?;
@@ -1733,7 +1733,7 @@ impl AuthorityPerEpochStore {
             let tables = self.tables()?;
             let mut db_transaction = tables.next_shared_object_versions.transaction()?;
 
-            let next_versions = if self.protocol_config().consensus_v2_objects() {
+            let next_versions = if self.epoch_start_config().use_version_assignment_tables_v3() {
                 db_transaction.multi_get(&tables.next_shared_object_versions_v2, objects_to_init)?
             } else {
                 db_transaction.multi_get(
@@ -1779,7 +1779,9 @@ impl AuthorityPerEpochStore {
                                 let obj_start_version = obj_start_version.unwrap();
                                 assert!(*initial_version >= obj_start_version,
                                     "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
-                                if self.protocol_config().consensus_v2_objects() && obj_start_version == *initial_version {
+                                if self.epoch_start_config().use_version_assignment_tables_v3()
+                                    && obj_start_version == *initial_version
+                                {
                                     ((*id, *initial_version), obj.version())
                                 } else {
                                     // If existing object's start version does not match the version
@@ -1804,7 +1806,7 @@ impl AuthorityPerEpochStore {
                 ?versions_to_write,
                 "initializing next_shared_object_versions"
             );
-            if self.protocol_config().consensus_v2_objects() {
+            if self.epoch_start_config().use_version_assignment_tables_v3() {
                 db_transaction
                     .insert_batch(&tables.next_shared_object_versions_v2, versions_to_write)?;
             } else {
@@ -1825,7 +1827,7 @@ impl AuthorityPerEpochStore {
         db_batch: &mut DBBatch,
     ) -> SuiResult {
         debug!("set_assigned_shared_object_versions: {:?}", versions);
-        if self.protocol_config().consensus_v2_objects() {
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
             db_batch.insert_batch(&self.tables()?.assigned_shared_object_versions_v3, versions)?;
         } else {
             db_batch.insert_batch(
@@ -3165,6 +3167,7 @@ impl AuthorityPerEpochStore {
 
         let transaction = consensus_commit_info.create_consensus_commit_prologue_transaction(
             self.epoch(),
+            self.epoch_start_config(),
             self.protocol_config(),
             version_assignment,
         );
@@ -4471,7 +4474,10 @@ impl ConsensusCommitOutput {
         )?;
 
         if let Some((assigned_versions, next_versions)) = self.shared_object_versions {
-            if epoch_store.protocol_config().consensus_v2_objects() {
+            if epoch_store
+                .epoch_start_config()
+                .use_version_assignment_tables_v3()
+            {
                 batch.insert_batch(
                     &tables.assigned_shared_object_versions_v3,
                     assigned_versions,
@@ -4577,7 +4583,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
     ) -> SuiResult<Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>> {
-        if self.protocol_config().consensus_v2_objects() {
+        if self.epoch_start_config().use_version_assignment_tables_v3() {
             Ok(self.tables()?.assigned_shared_object_versions_v3.get(key)?)
         } else {
             Ok(self
@@ -4594,7 +4600,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
     }
 
     fn is_initial_shared_version_unknown(&self) -> bool {
-        !self.protocol_config().consensus_v2_objects()
+        !self.epoch_start_config().use_version_assignment_tables_v3()
     }
 }
 
