@@ -5,15 +5,12 @@ use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use sui_field_count::FieldCount;
+use sui_pg_db::{self as db, Db};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    db::{self, Db},
-    metrics::IndexerMetrics,
-    watermarks::CommitterWatermark,
-};
+use crate::{metrics::IndexerMetrics, watermarks::CommitterWatermark};
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
@@ -80,6 +77,12 @@ pub struct ConcurrentConfig {
 
     /// Configuration for the pruner, that deletes old data.
     pub pruner: Option<PrunerConfig>,
+
+    /// How many checkpoints lagged behind latest seen checkpoint to hold back writes for.
+    /// This is useful if pruning is implemented as a concurrent pipeline, and it must be behind
+    /// the pipeline it tries to prune from by a certain number of checkpoints, to ensure
+    /// consistency reads remain valid for a certain amount of time.
+    pub checkpoint_lag: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -100,7 +103,10 @@ pub struct PrunerConfig {
 
 /// Values ready to be written to the database. This is an internal type used to communicate
 /// between the collector and the committer parts of the pipeline.
-struct Batched<H: Handler> {
+///
+/// Values inside each batch may or may not be from the same checkpoint. Values in the same
+/// checkpoint can also be split across multiple batches.
+struct BatchedRows<H: Handler> {
     /// The rows to write
     values: Vec<H::Value>,
     /// Proportions of all the watermarks that are represented in this chunk
@@ -117,7 +123,7 @@ impl PrunerConfig {
     }
 }
 
-impl<H: Handler> Batched<H> {
+impl<H: Handler> BatchedRows<H> {
     fn new() -> Self {
         Self {
             values: vec![],
@@ -181,6 +187,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let ConcurrentConfig {
         committer: committer_config,
         pruner: pruner_config,
+        checkpoint_lag,
     } = config;
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
@@ -205,6 +212,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let collector = collector::<H>(
         committer_config.clone(),
+        checkpoint_lag,
         collector_rx,
         collector_tx,
         metrics.clone(),
@@ -249,5 +257,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 }
 
 const fn max_chunk_rows<H: Handler>() -> usize {
+    // Handle division by zero
+    if H::Value::FIELD_COUNT == 0 {
+        return 0;
+    }
     i16::MAX as usize / H::Value::FIELD_COUNT
 }

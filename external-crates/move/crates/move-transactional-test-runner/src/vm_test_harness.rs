@@ -65,10 +65,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         self.default_syntax
     }
 
-    async fn cleanup_resources(&mut self) -> Result<()> {
-        Ok(())
-    }
-
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,

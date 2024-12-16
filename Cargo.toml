@@ -118,6 +118,7 @@ members = [
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
     "crates/sui-indexer-alt-framework",
+    "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -142,14 +143,14 @@ members = [
     "crates/sui-package-dump",
     "crates/sui-package-management",
     "crates/sui-package-resolver",
-    "crates/sui-pg-temp-db",
+    "crates/sui-pg-db",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-replay",
-    "crates/sui-rest-api",
     "crates/sui-rosetta",
+    "crates/sui-rpc-api",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-security-watchdog",
@@ -184,16 +185,6 @@ members = [
     "crates/typed-store-error",
     "crates/typed-store-workspace-hack",
     "crates/x",
-    "narwhal/config",
-    "narwhal/crypto",
-    "narwhal/executor",
-    "narwhal/network",
-    "narwhal/node",
-    "narwhal/primary",
-    "narwhal/storage",
-    "narwhal/test-utils",
-    "narwhal/types",
-    "narwhal/worker",
     "sui-execution",
     "sui-execution/cut",
     "sui-execution/latest/sui-adapter",
@@ -212,7 +203,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.39.0"
+version = "1.40.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -366,6 +357,7 @@ hyper = "1"
 hyper-util = "0.1.6"
 hyper-rustls = { version = "0.27", default-features = false, features = [
     "webpki-roots",
+    "http1",
     "http2",
     "ring",
     "tls12",
@@ -508,7 +500,7 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.12", features = ["transport"] }
+tonic = { version = "0.12", features = ["transport", "tls-webpki-roots"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
 tonic-rustls = "0.1.0"
@@ -605,7 +597,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f769
 
 # core-types with json format for REST api
 # sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "31bd9da32a8057edc45da8f5e6a8f25b83919b93", features = ["hash", "serde", "schemars"] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "24c34933c421319e9aa1c48b3b7108c756e1422f", features = ["hash", "serde", "schemars"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -648,6 +640,7 @@ sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
+sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
@@ -669,7 +662,7 @@ sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
-sui-pg-temp-db = { path = "crates/sui-pg-temp-db" }
+sui-pg-db = { path = "crates/sui-pg-db" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
@@ -691,7 +684,7 @@ sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
-sui-rest-api = { path = "crates/sui-rest-api" }
+sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
@@ -708,17 +701,6 @@ x = { path = "crates/x" }
 
 consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }
-
-narwhal-config = { path = "narwhal/config" }
-narwhal-crypto = { path = "narwhal/crypto" }
-narwhal-executor = { path = "narwhal/executor" }
-narwhal-network = { path = "narwhal/network" }
-narwhal-node = { path = "narwhal/node" }
-narwhal-primary = { path = "narwhal/primary" }
-narwhal-storage = { path = "narwhal/storage" }
-narwhal-test-utils = { path = "narwhal/test-utils" }
-narwhal-types = { path = "narwhal/types" }
-narwhal-worker = { path = "narwhal/worker" }
 
 sui-execution = { path = "sui-execution" }
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }

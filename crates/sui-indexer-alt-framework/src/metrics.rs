@@ -13,11 +13,12 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry, TextEncoder,
 };
+use sui_pg_db::Db;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::{db::Db, ingestion::error::Error};
+use crate::ingestion::error::Error;
 
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -85,10 +86,12 @@ pub(crate) struct IndexerMetrics {
     pub handler_checkpoint_latency: HistogramVec,
 
     // Statistics related to individual ingestion pipelines.
+    pub total_collector_checkpoints_received: IntCounterVec,
     pub total_collector_rows_received: IntCounterVec,
     pub total_collector_batches_created: IntCounterVec,
     pub total_committer_batches_attempted: IntCounterVec,
     pub total_committer_batches_succeeded: IntCounterVec,
+    pub total_committer_batches_failed: IntCounterVec,
     pub total_committer_rows_committed: IntCounterVec,
     pub total_committer_rows_affected: IntCounterVec,
     pub total_watermarks_out_of_order: IntCounterVec,
@@ -305,6 +308,13 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            total_collector_checkpoints_received: register_int_counter_vec_with_registry!(
+                "indexer_total_collector_checkpoints_received",
+                "Total number of checkpoints received by this collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
             total_collector_rows_received: register_int_counter_vec_with_registry!(
                 "indexer_total_collector_rows_received",
                 "Total number of rows received by this collector",
@@ -329,6 +339,13 @@ impl IndexerMetrics {
             total_committer_batches_succeeded: register_int_counter_vec_with_registry!(
                 "indexer_total_committer_batches_succeeded",
                 "Total number of successful batches writes by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_batches_failed: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_batches_failed",
+                "Total number of failed batches writes by this committer",
                 &["pipeline"],
                 registry,
             )

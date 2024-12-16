@@ -45,28 +45,28 @@ impl RequestMetrics {
             total_requests_received: register_int_counter_vec_with_registry!(
                 "total_requests_received",
                 "Total number of requests received in Faucet",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             total_requests_succeeded: register_int_counter_vec_with_registry!(
                 "total_requests_succeeded",
                 "Total number of requests processed successfully in Faucet",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             total_requests_shed: register_int_counter_vec_with_registry!(
                 "total_requests_shed",
                 "Total number of requests that were dropped because the service was saturated",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             total_requests_failed: register_int_counter_vec_with_registry!(
                 "total_requests_failed",
                 "Total number of requests that started but failed with an uncaught error",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
@@ -74,21 +74,21 @@ impl RequestMetrics {
                 "total_requests_disconnected",
                 "Total number of requests where the client disconnected before the service \
                  returned a response",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             current_requests_in_flight: register_int_gauge_vec_with_registry!(
                 "current_requests_in_flight",
                 "Current number of requests being processed in Faucet",
-                &["path"],
+                &["path", "user_agent"],
                 registry,
             )
             .unwrap(),
             process_latency: register_histogram_vec_with_registry!(
                 "process_latency",
                 "Latency of processing a Faucet request",
-                &["path"],
+                &["path", "user_agent"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

@@ -10,11 +10,11 @@ use crate::{
     diag,
     diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::Flavor,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, TargetKind, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, DatatypeName, FunctionName},
+    parser::ast::{Ability_, DatatypeName, FunctionName, TargetKind},
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::*,
     typing::{

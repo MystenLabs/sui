@@ -102,6 +102,11 @@ export const mainnetCoins: CoinMap = {
 		type: `0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD`,
 		scalar: 1000000,
 	},
+	DRF: {
+		address: `0x294de7579d55c110a00a7c4946e09a1b5cbeca2592fbb83fd7bfacba3cfeaf0e`,
+		type: `0x294de7579d55c110a00a7c4946e09a1b5cbeca2592fbb83fd7bfacba3cfeaf0e::drf::DRF`,
+		scalar: 1000000,
+	},
 };
 
 export const testnetPools: PoolMap = {
@@ -182,5 +187,10 @@ export const mainnetPools: PoolMap = {
 		address: `0x5661fc7f88fbeb8cb881150a810758cf13700bb4e1f31274a244581b37c303c3`,
 		baseCoin: 'AUSD',
 		quoteCoin: 'USDC',
+	},
+	DRF_SUI: {
+		address: `0x126865a0197d6ab44bfd15fd052da6db92fd2eb831ff9663451bbfa1219e2af2`,
+		baseCoin: 'DRF',
+		quoteCoin: 'SUI',
 	},
 };

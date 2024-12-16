@@ -10,7 +10,6 @@ use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
 use mysten_common::fatal;
-use narwhal_config::Parameters as NarwhalParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -67,7 +66,7 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_experimental_rest_api: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rest: Option<sui_rest_api::Config>,
+    pub rpc: Option<sui_rpc_api::Config>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
@@ -231,6 +230,13 @@ pub enum ExecutionCacheConfig {
         events_cache_size: Option<u64>, // defaults to transaction_cache_size
 
         transaction_objects_cache_size: Option<u64>, // defaults to 1000
+
+        /// Number of uncommitted transactions at which to pause consensus handler.
+        backpressure_threshold: Option<u64>,
+
+        /// Number of uncommitted transactions at which to refuse new transaction
+        /// submissions. Defaults to backpressure_threshold if unset.
+        backpressure_threshold_for_rpc: Option<u64>,
     },
 }
 
@@ -238,6 +244,8 @@ impl Default for ExecutionCacheConfig {
     fn default() -> Self {
         ExecutionCacheConfig::WritebackCache {
             max_cache_size: None,
+            backpressure_threshold: None,
+            backpressure_threshold_for_rpc: None,
             package_cache_size: None,
             object_cache_size: None,
             marker_cache_size: None,
@@ -375,6 +383,32 @@ impl ExecutionCacheConfig {
                 } => transaction_objects_cache_size.unwrap_or(1000),
             })
     }
+
+    pub fn backpressure_threshold(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold,
+                    ..
+                } => backpressure_threshold.unwrap_or(10000),
+            })
+    }
+
+    pub fn backpressure_threshold_for_rpc(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD_FOR_RPC")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold_for_rpc,
+                    ..
+                } => backpressure_threshold_for_rpc.unwrap_or(self.backpressure_threshold()),
+            })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -455,6 +489,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Threedos".to_string(),
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "Arden".to_string(),
+        "FanTV".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -640,18 +675,10 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
-    // Deprecated: Narwhal specific configs.
-    pub address: Multiaddr,
-    pub narwhal_config: NarwhalParameters,
-
     pub parameters: Option<ConsensusParameters>,
 }
 
 impl ConsensusConfig {
-    pub fn address(&self) -> &Multiaddr {
-        &self.address
-    }
-
     pub fn db_path(&self) -> &Path {
         &self.db_path
     }
@@ -663,10 +690,6 @@ impl ConsensusConfig {
     pub fn submit_delay_step_override(&self) -> Option<Duration> {
         self.submit_delay_step_override_millis
             .map(Duration::from_millis)
-    }
-
-    pub fn narwhal_config(&self) -> &NarwhalParameters {
-        &self.narwhal_config
     }
 
     pub fn db_retention_epochs(&self) -> u64 {
@@ -1310,6 +1333,14 @@ mod tests {
         const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
 
         let _template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
+    }
+
+    /// Tests that a legacy validator config (captured on 12/06/2024) can be parsed.
+    #[test]
+    fn legacy_validator_config() {
+        const FILE: &str = include_str!("../data/sui-node-legacy.yaml");
+
+        let _template: NodeConfig = serde_yaml::from_str(FILE).unwrap();
     }
 
     #[test]

@@ -54,10 +54,10 @@ pub(crate) async fn verify_zklogin_signature(
     intent_scope: ZkLoginIntentScope,
     author: SuiAddress,
 ) -> Result<ZkLoginVerifyResult, Error> {
-    let Watermark { checkpoint, .. } = *ctx.data_unchecked();
+    let Watermark { hi_cp, .. } = *ctx.data_unchecked();
 
     // get current epoch from db.
-    let Some(curr_epoch) = Epoch::query(ctx, None, checkpoint).await? else {
+    let Some(curr_epoch) = Epoch::query(ctx, None, hi_cp).await? else {
         return Err(Error::Internal(
             "Cannot get current epoch from db".to_string(),
         ));
@@ -88,7 +88,7 @@ pub(crate) async fn verify_zklogin_signature(
             bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
         },
         DynamicFieldType::DynamicField,
-        checkpoint,
+        hi_cp,
     )
     .await
     .map_err(|e| as_jwks_read_error(e.to_string()))?;

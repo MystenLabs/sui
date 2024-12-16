@@ -43,6 +43,7 @@ const DB_QUERY_COST_BUCKETS: &[f64] = &[
 pub(crate) struct Metrics {
     pub db_metrics: Arc<DBMetrics>,
     pub request_metrics: Arc<RequestMetrics>,
+    pub app_metrics: Arc<AppMetrics>,
 }
 
 #[derive(Clone)]
@@ -81,14 +82,23 @@ pub(crate) struct RequestMetrics {
     pub inflight_requests: Gauge,
 }
 
+#[derive(Clone)]
+pub(crate) struct AppMetrics {
+    /// The time it takes for the non-mainnet graphql service to resolve the mvr object from
+    /// mainnet.
+    pub external_mvr_resolution_latency: Histogram,
+}
+
 impl Metrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         let db_metrics = DBMetrics::new(registry);
         let request_metrics = RequestMetrics::new(registry);
+        let app_metrics = AppMetrics::new(registry);
 
         Self {
             db_metrics: Arc::new(db_metrics),
             request_metrics: Arc::new(request_metrics),
+            app_metrics: Arc::new(app_metrics),
         }
     }
 
@@ -247,6 +257,20 @@ impl RequestMetrics {
                 "inflight_requests",
                 "Number of queries that are being resolved at a moment in time",
                 registry
+            )
+            .unwrap(),
+        }
+    }
+}
+
+impl AppMetrics {
+    pub(crate) fn new(registry: &Registry) -> Self {
+        Self {
+            external_mvr_resolution_latency: register_histogram_with_registry!(
+                "external_mvr_resolution_latency",
+                "The time it takes for the non-mainnet graphql service to resolve the mvr object from mainnet",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
         }

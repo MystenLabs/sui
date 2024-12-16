@@ -37,4 +37,13 @@ describe('BCS: Encodings', () => {
 		);
 		expect(toHex(fromHex(addressLeading0))).toEqual(`0${addressLeading0}`);
 	});
+
+	it('should throw on invalid hex strings', () => {
+		expect(() => fromHex('0xZZ')).toThrow('Invalid hex string 0xZZ');
+		expect(() => fromHex('GG')).toThrow('Invalid hex string GG');
+		expect(() => fromHex('hello')).toThrow('Invalid hex string hello');
+		expect(() => fromHex('12 34')).toThrow('Invalid hex string 12 34');
+		expect(() => fromHex('12\n34')).toThrow('Invalid hex string 12\n34');
+		expect(() => fromHex('12-34')).toThrow('Invalid hex string 12-34');
+	});
 });

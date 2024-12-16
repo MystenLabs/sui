@@ -5,7 +5,20 @@
 		"test": {
 			"dependsOn": ["^build", "build"],
 			"outputs": ["coverage/**"],
-			"env": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_KMS_KEY_ID"]
+			"env": [
+				"AWS_ACCESS_KEY_ID",
+				"AWS_SECRET_ACCESS_KEY",
+				"AWS_REGION",
+				"AWS_KMS_KEY_ID",
+				"GOOGLE_PROJECT_ID",
+				"GOOGLE_LOCATION",
+				"GOOGLE_KEYRING",
+				"GOOGLE_KEY_NAME",
+				"GOOGLE_KEY_NAME_VERSION",
+				"E2E_AWS_KMS_TEST_ENABLE",
+				"E2E_GCP_KMS_TEST_ENABLE",
+				"GOOGLE_APPLICATION_CREDENTIALS"
+			]
 		},
 		"dev": {
 			"dependsOn": ["^build"],

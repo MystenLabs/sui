@@ -30,7 +30,7 @@ The `TreasuryCap` object is transferable, so a third party can take over the man
 
 ## Regulated coins
 
-The Coin standard includes the ability to create regulated coins. To create a regulated coin, you use the `coin::create_regulated_currency` function (which uses the `coin::create_currency` function itself), but which also returns a `DenyCap` capability. The `DenyCap` capability allows the bearer to maintain a list of addresses that aren't allowed to use the token.
+The Coin standard includes the ability to create regulated coins. To create a regulated coin, you use the `coin::create_regulated_currency_v2` function (which uses the `coin::create_currency` function itself), but which also returns a `DenyCap` capability. The `DenyCap` capability allows the bearer to maintain a list of addresses that aren't allowed to use the token.
 
 :::tip
 
@@ -40,7 +40,15 @@ The [regulated-coin-sample repository](https://github.com/MystenLabs/regulated-c
 
 ### DenyList object
 
-The list of addresses that aren't able to use a particular regulated coin is held within a system-created `DenyList` shared object. If you have access to the `DenyCap`, then you can use the `coin::deny_list_add` and `coin::deny_list_remove` functions to add and remove addresses. You can also use the `coin::deny_list_contains` function to check if an address is already on the list.
+The list of addresses that aren't able to use a particular regulated coin is held within a system-created `DenyList` shared object. If you have access to the `DenyCap`, then you can use the `coin::deny_list_v2_add` and `coin::deny_list_v2_remove` functions to add and remove addresses.
+
+### Global pause switch
+
+Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network additionally disallows all addresses from receiving the coin type. 
+
+When the bearer of the `DenyCapV2` object for the coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.  
+
+The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.  
 
 ## Coin metadata
 
@@ -67,7 +75,7 @@ The fields of the metadata objects include the following:
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                   | The ID of the metadata object for the regulated token.                                                                                       |
 | `coin_metadata_object` | The ID of the underlying metadata object (`CoinMetadata`) for the regulated token.                                                           |
-| `deny_cap_object`      | The ID of the token's `DenyCap` object, which is necessary to maintain the deny list entries that controls who can and cannot use the token. |
+| `deny_cap_object`      | The ID of the token's `DenyCapV2` object, which is necessary to maintain the deny list entries that controls who can and cannot use the token. |
 
 ## Minting and burning coins
 
@@ -75,64 +83,39 @@ The `coin` module provides the logic for creating and destroying coins on the Su
 
 ### Mint
 
-Use the `coin::mint` function to create new tokens. The signature for the function is:
+Use the `coin::mint` function to create new tokens.
 
-```move
-public fun mint<T>(
-  cap: &mut coin::TreasuryCap<T>,
-  value: u64,
-  ctx: &mut tx_context::TxContext
-): coin::Coin<T>
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint noComments}
 
 The signature shows that a `Coin<T>` results from calling the function with a `TreasuryCap`, value for the coin created, and the transaction context. The function updates the total supply in `TreasuryCap` automatically. Upon display, the coin `value` respects the `decimals` value in the metadata. So, if you supply 1000000 as the coin `value` that has a `decimal` value of `6`, the coin's value displays as `1.000000`.
 
 ### Burn
 
-Use the `coin::burn` function to destroy current tokens. The signature for the function is:
+Use the `coin::burn` function to destroy current tokens.
 
-```move
-public entry fun burn<T>(
-  cap: &mut coin::TreasuryCap<T>,
-  c: coin::Coin<T>
-): u64
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn noComments}
 
 The signature shows that only the `TreasuryCap` and coin object you want to burn are necessary inputs, returning the amount by which the supply was decreased (value of the coin). The function does not allow you to burn more coins than are available in the supply.
 
 ## Adding and removing addresses to and from the deny list
 
-The deny list is only applicable to regulated coins. As mentioned previously, when you create a regulated coin you receive a `DenyCap` that authorizes the bearer to add and remove addresses from the system-created `DenyList` object. Any address on the list for your coin is unable to use the coin as an input to transactions.
+The deny list is only applicable to regulated coins. As mentioned previously, when you create a regulated coin you receive a `DenyCapV2` that authorizes the bearer to add and remove addresses from the system-created `DenyList` object. Any address on the list for your coin is unable to use the coin as an input to transactions starting immediately upon being added. At the epoch that follows address addition to the deny list, the addresses additionally cannot receive the coin type. In other words, an address that gets added to the deny list for a coin type is immediately unable to send the coin. At the start of the following epoch, the address is still unable to send the coin but is also unable to receive it. From that point, the address cannot interact with the coin until expressly removed from the deny list by the `DenyCapV2` bearer.
 
 ### Add address to deny list
 
-Use the `coin::deny_list_add` function to add the provided address to the deny list for your coin. The signature for the function is:
+Use the `coin::deny_list_v2_add` function to add the provided address to the deny list for your coin. The signature for the function is:
 
-```move
-public fun deny_list_add<T>(
-  deny_list: &mut deny_list::DenyList,
-  _deny_cap: &mut coin::DenyCap<T>,
-  addr: address,
-  _ctx: &mut tx_context::TxContext
-)
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_add noComments}
 
 When using this function, you provide the `DenyList` object (`0x403`), the `DenyCap` you receive on coin creation, the address to add to the list, and the transaction context. After using this function, the address you provide is unable to use your coin by the next epoch.
 
 ### Remove address from deny list
 
-Use the `coin::deny_list_remove` function to remove addresses from the deny list for your coin. The signature for the function is:
+Use the `coin::deny_list_v2_remove` function to remove addresses from the deny list for your coin.
 
-```move
-public fun deny_list_remove<T>(
-  deny_list: &mut deny_list::DenyList,
-  _deny_cap: &mut coin::DenyCap<T>,
-  addr: address,
-  _ctx: &mut tx_context::TxContext
-)
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_remove noComments}
 
-When using this function, you provide the `DenyList` object (`0x403`), the `DenyCap` you receive on coin creation, the address to remove from the list, and the transaction context. If you try to remove an address that isn't on the list, you receive an `ENotFrozen` error and the function aborts. After calling this function, the address you provide is able to use your coin by the next epoch.
+When using this function, you provide the `DenyList` object (`0x403`), the `DenyCapV2` you receive on coin creation, the address to remove from the list, and the transaction context. If you try to remove an address that isn't on the list, you receive an `ENotFrozen` error and the function aborts. After calling this function, the address you provide is able to use your coin by the next epoch.
 
 ### Using an SDK
 
@@ -146,7 +129,7 @@ You can use either the TypeScript or Rust SDK to manipulate the addresses held i
 const tx = new Transaction();
 
 tx.moveCall({
-    target: `0x2::coin::deny_list_add`,
+    target: `0x2::coin::deny_list_v2_add`,
     arguments: [
         tx.object(<SUI-DENY-LIST-OBJECT-ID>),
         tx.object(<DENY-CAP-ID>),
@@ -157,7 +140,7 @@ tx.moveCall({
 ```
 
 - `<SUI-DENY-LIST-OBJECT-ID>` is `"0x403"`
-- `<DENY-CAP-ID>` is the object of type `DenyCap<REGULATED_COIN>` we received from publishing the contract
+- `<DENY-CAP-ID>` is the object of type `DenyCapV2<REGULATED_COIN>` you receive from publishing the contract
 - `options.address` is the address to ban
 - `<COIN-TYPE>` is `${PACKAGE-ID}::${MODULE-NAME}::${COIN-NAME}`, which is `${PACKAGE-ID}::regulated_coin::REGULATED_COIN` based on the example.
 
@@ -178,7 +161,7 @@ let address = ptb.pure(cmd.address())?;
 ptb.command(Command::move_call(
     SUI_FRAMEWORK_PACKAGE_ID,
     Identifier::from(COIN_MODULE_NAME),
-    Identifier::from_str("deny_list_add".to_string())?,
+    Identifier::from_str("deny_list_v2_add".to_string())?,
     vec![<otw-type>],
     vec![deny_list, deny_cap, address],
 ));
@@ -189,13 +172,30 @@ let builder = ptb.finish();
 - `deny_list` is of type `(ObjectID, SequenceNumber)`.
   - `ObjectID` is `0x403`.
   - `SequenceNumber` is the `initial_shared_version` of the `DenyList` singleton.
-- `deny_cap` is the `ObjectRef` (`(ObjectID, SequenceNumber, ObjectDigest)`) of the `DenyCap<REGULATED_COIN>` the publisher has received.
+- `deny_cap` is the `ObjectRef` (`(ObjectID, SequenceNumber, ObjectDigest)`) of the `DenyCapV2<REGULATED_COIN>` the publisher has received.
 - `otw_type` is the `TypeTag` created from `<PACKAGE_ID>::regulated_coin::REGULATED_COIN` type.
 - `cmd.address()` returns the address to ban as a `SuiAddress`.
 
 </TabItem>
 
 </Tabs>
+
+
+## Globally pausing and unpausing regulated coin activity
+
+Globally pausing coin activity is only applicable to regulated coin types.
+
+### Pause coin activity
+
+To pause activity across the network for a regulated coin type with the `allow_global_pause` field set to `true`, use `coin::deny_list_v2_enable_global_pause`. You must provide the `DenyCapV2` object for the coin type to initiate the pause. Transaction activity is paused immediately, and no addresses can receive the coin in the epoch that follows the call to pause.
+
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_enable_global_pause noComments}
+
+### Unpause coin activity
+
+To restart network activity for a paused regulated coin, use the `coin::deny_list_v2_disable_global_pause` function. As with pausing, you must provide the `DenyCapV2` object for the coin type. Transaction activity resumes immediately, and addresses can begin receiving the coin in the epoch that follows the call to remove the pause.
+
+{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_disable_global_pause noComments}
 
 ## Query coin data
 
@@ -217,19 +217,6 @@ Use the following functions to get the values for the respective fields on the m
 
 Use the `coin::supply` function to get the current supply of a given coin.
 
-### Check for address on deny list
-
-Use the `coin::deny_list_contains` function to check if an address exists on the deny list for your coin. The signature of the function is:
-
-```move
-public fun deny_list_contains<T>(
-  freezer: &deny_list::DenyList,
-  addr: address
-): bool
-```
-
-The function returns `true` if the address is found on the coin's list, otherwise it returns `false`.
-
 ## Update coin metadata
 
 If the `CoinMetadata` object was not frozen upon creation, you can use the following functions to update its values.
@@ -237,13 +224,11 @@ If the `CoinMetadata` object was not frozen upon creation, you can use the follo
 Each function signature is similar. Replace `<FUNCTION-NAME>` and `<ATTRIBUTE-TYPE>` with the values defined in the table to get the signature of each function:
 
 ```move
-
 public entry fun <FUNCTION-NAME><T>(
   _treasury: &coin::TreasuryCap<T>,
   metadata: &mut coin::CoinMetadata<T>,
   <ATTRIBUTE-TYPE>
 )
-
 ```
 
 | `<FUNCTION-NAME>`    | `<ATTRIBUTE-TYPE>`            |

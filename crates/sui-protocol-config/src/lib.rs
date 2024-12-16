@@ -198,8 +198,11 @@ const MAX_PROTOCOL_VERSION: u64 = 70;
 // Version 69: Sets number of rounds allowed for fastpath voting in consensus.
 //             Enable smart ancestor selection in devnet.
 //             Enable G1Uncompressed group in testnet.
-// Version 70: Enable probing for accepted rounds in round prober.
+// Version 70: Enable smart ancestor selection in testnet.
+//             Enable probing for accepted rounds in round prober in testnet
 //             Add new gas model version to update charging of native functions.
+//             Add std::uq64_64 module to Move stdlib.
+//             Improve gas/wall time efficiency of some Move stdlib vector functions
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2990,8 +2993,10 @@ impl ProtocolConfig {
                     }
                 }
                 70 => {
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        // Enable probing for accepted rounds in round prober.
+                    if chain != Chain::Mainnet {
+                        // Enable smart ancestor selection for testnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
+                        // Enable probing for accepted rounds in round prober for testnet
                         cfg.feature_flags
                             .consensus_round_prober_probe_accepted_rounds = true;
                     }

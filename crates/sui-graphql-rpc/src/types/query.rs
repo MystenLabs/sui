@@ -74,8 +74,8 @@ impl Query {
     /// Range of checkpoints that the RPC has data available for (for data
     /// that can be tied to a particular checkpoint).
     async fn available_range(&self, ctx: &Context<'_>) -> Result<AvailableRange> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        AvailableRange::query(ctx.data_unchecked(), checkpoint)
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        AvailableRange::query(ctx.data_unchecked(), hi_cp)
             .await
             .extend()
     }
@@ -211,10 +211,10 @@ impl Query {
         address: SuiAddress,
         root_version: Option<UInt53>,
     ) -> Result<Option<Owner>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
         Ok(Some(Owner {
             address,
-            checkpoint_viewed_at: checkpoint,
+            checkpoint_viewed_at: hi_cp,
             root_version: root_version.map(|v| v.into()),
         }))
     }
@@ -227,10 +227,10 @@ impl Query {
         address: SuiAddress,
         version: Option<UInt53>,
     ) -> Result<Option<Object>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
         let key = match version {
-            Some(version) => Object::at_version(version.into(), checkpoint),
-            None => Object::latest_at(checkpoint),
+            Some(version) => Object::at_version(version.into(), hi_cp),
+            None => Object::latest_at(hi_cp),
         };
 
         Object::query(ctx, address, key).await.extend()
@@ -252,10 +252,10 @@ impl Query {
         address: SuiAddress,
         version: Option<UInt53>,
     ) -> Result<Option<MovePackage>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
         let key = match version {
-            Some(version) => MovePackage::by_version(version.into(), checkpoint),
-            None => MovePackage::by_id_at(checkpoint),
+            Some(version) => MovePackage::by_version(version.into(), hi_cp),
+            None => MovePackage::by_id_at(hi_cp),
         };
 
         MovePackage::query(ctx, address, key).await.extend()
@@ -270,19 +270,19 @@ impl Query {
         ctx: &Context<'_>,
         address: SuiAddress,
     ) -> Result<Option<MovePackage>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        MovePackage::query(ctx, address, MovePackage::latest_at(checkpoint))
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        MovePackage::query(ctx, address, MovePackage::latest_at(hi_cp))
             .await
             .extend()
     }
 
     /// Look-up an Account by its SuiAddress.
     async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Address>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         Ok(Some(Address {
             address,
-            checkpoint_viewed_at: checkpoint,
+            checkpoint_viewed_at: hi_cp,
         }))
     }
 
@@ -297,8 +297,8 @@ impl Query {
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<UInt53>) -> Result<Option<Epoch>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        Epoch::query(ctx, id.map(|id| id.into()), checkpoint)
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        Epoch::query(ctx, id.map(|id| id.into()), hi_cp)
             .await
             .extend()
     }
@@ -310,8 +310,8 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        Checkpoint::query(ctx, id.unwrap_or_default(), checkpoint)
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        Checkpoint::query(ctx, id.unwrap_or_default(), hi_cp)
             .await
             .extend()
     }
@@ -322,8 +322,8 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        let lookup = TransactionBlock::by_digest(digest, checkpoint);
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        let lookup = TransactionBlock::by_digest(digest, hi_cp);
         TransactionBlock::query(ctx, lookup).await.extend()
     }
 
@@ -340,7 +340,7 @@ impl Query {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
@@ -349,7 +349,7 @@ impl Query {
             page,
             coin,
             /* owner */ None,
-            checkpoint,
+            hi_cp,
         )
         .await
         .extend()
@@ -364,10 +364,10 @@ impl Query {
         last: Option<u64>,
         before: Option<epoch::Cursor>,
     ) -> Result<Connection<String, Epoch>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Epoch::paginate(ctx.data_unchecked(), page, checkpoint)
+        Epoch::paginate(ctx.data_unchecked(), page, hi_cp)
             .await
             .extend()
     }
@@ -381,17 +381,12 @@ impl Query {
         last: Option<u64>,
         before: Option<checkpoint::Cursor>,
     ) -> Result<Connection<String, Checkpoint>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Checkpoint::paginate(
-            ctx.data_unchecked(),
-            page,
-            /* epoch */ None,
-            checkpoint,
-        )
-        .await
-        .extend()
+        Checkpoint::paginate(ctx.data_unchecked(), page, /* epoch */ None, hi_cp)
+            .await
+            .extend()
     }
 
     /// The transaction blocks that exist in the network.
@@ -424,19 +419,13 @@ impl Query {
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        TransactionBlock::paginate(
-            ctx,
-            page,
-            filter.unwrap_or_default(),
-            checkpoint,
-            scan_limit,
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter.unwrap_or_default(), hi_cp, scan_limit)
+            .await
+            .extend()
     }
 
     /// Query events that are emitted in the network.
@@ -451,14 +440,14 @@ impl Query {
         before: Option<event::Cursor>,
         filter: Option<EventFilter>,
     ) -> Result<Connection<String, Event>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         Event::paginate(
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            checkpoint,
+            hi_cp,
         )
         .await
         .extend()
@@ -474,14 +463,14 @@ impl Query {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         Object::paginate(
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            checkpoint,
+            hi_cp,
         )
         .await
         .extend()
@@ -501,10 +490,10 @@ impl Query {
         before: Option<move_package::Cursor>,
         filter: Option<MovePackageCheckpointFilter>,
     ) -> Result<Connection<String, MovePackage>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        MovePackage::paginate_by_checkpoint(ctx.data_unchecked(), page, filter, checkpoint)
+        MovePackage::paginate_by_checkpoint(ctx.data_unchecked(), page, filter, hi_cp)
             .await
             .extend()
     }
@@ -522,10 +511,10 @@ impl Query {
         address: SuiAddress,
         filter: Option<MovePackageVersionFilter>,
     ) -> Result<Connection<String, MovePackage>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        MovePackage::paginate_by_version(ctx.data_unchecked(), page, address, filter, checkpoint)
+        MovePackage::paginate_by_version(ctx.data_unchecked(), page, address, filter, hi_cp)
             .await
             .extend()
     }
@@ -548,14 +537,14 @@ impl Query {
         ctx: &Context<'_>,
         domain: Domain,
     ) -> Result<Option<Address>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        Ok(NameService::resolve_to_record(ctx, &domain, checkpoint)
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        Ok(NameService::resolve_to_record(ctx, &domain, hi_cp)
             .await
             .extend()?
             .and_then(|r| r.target_address)
             .map(|a| Address {
                 address: a.into(),
-                checkpoint_viewed_at: checkpoint,
+                checkpoint_viewed_at: hi_cp,
             }))
     }
 
@@ -565,17 +554,15 @@ impl Query {
         ctx: &Context<'_>,
         name: String,
     ) -> Result<Option<MovePackage>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
 
-        NamedMovePackage::query(ctx, &name, checkpoint)
-            .await
-            .extend()
+        NamedMovePackage::query(ctx, &name, hi_cp).await.extend()
     }
 
     /// Fetch a type that includes dot move service names in it.
     async fn type_by_name(&self, ctx: &Context<'_>, name: String) -> Result<MoveType> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        let type_tag = NamedType::query(ctx, &name, checkpoint).await?;
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        let type_tag = NamedType::query(ctx, &name, hi_cp).await?;
 
         Ok(type_tag.into())
     }
@@ -587,8 +574,8 @@ impl Query {
         ctx: &Context<'_>,
         coin_type: ExactTypeFilter,
     ) -> Result<Option<CoinMetadata>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        CoinMetadata::query(ctx.data_unchecked(), coin_type.0, checkpoint)
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+        CoinMetadata::query(ctx.data_unchecked(), coin_type.0, hi_cp)
             .await
             .extend()
     }

@@ -126,8 +126,8 @@ impl Epoch {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
             None => {
-                let Watermark { checkpoint, .. } = *ctx.data_unchecked();
-                checkpoint
+                let Watermark { hi_cp, .. } = *ctx.data_unchecked();
+                hi_cp
             }
         };
 

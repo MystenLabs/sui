@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
+use sui_pg_db::Db;
 use tokio::{task::JoinHandle, time::interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
     watermarks::{ReaderWatermark, StoredWatermark},
 };

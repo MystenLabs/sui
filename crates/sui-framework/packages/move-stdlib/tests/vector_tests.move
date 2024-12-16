@@ -38,6 +38,16 @@ fun append_empties_is_empty() {
 }
 
 #[test]
+fun append_singletons() {
+    let mut v1 = vector[0];
+    let v2 = vector[1];
+    v1.append(v2);
+    assert!(v1.length() == 2);
+    assert!(v1[0] == 0);
+    assert!(v1[1] == 1);
+}
+
+#[test]
 fun append_respects_order_empty_lhs() {
     let mut v1 = vector[];
     let mut v2 = vector[];

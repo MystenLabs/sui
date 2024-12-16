@@ -4,12 +4,12 @@
 
 use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
-    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability, TargetKind},
+    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
     hlir::ast::{
         BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,
         StructDefinition, Var, Visibility,
     },
-    parser::ast::{ConstantName, DatatypeName, FunctionName, ENTRY_MODIFIER},
+    parser::ast::{ConstantName, DatatypeName, FunctionName, TargetKind, ENTRY_MODIFIER},
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_core_types::runtime_value::MoveValue;
@@ -227,15 +227,7 @@ impl AstDebug for ModuleDefinition {
             w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(match target_kind {
-            TargetKind::Source {
-                is_root_package: true,
-            } => "root module",
-            TargetKind::Source {
-                is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
-        });
+        target_kind.ast_debug(w);
         w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));

@@ -48,10 +48,13 @@ task 10, line 43:
 //# advance-epoch
 Epoch advanced: 2
 
-task 11, lines 45-55:
+task 11, lines 45-58:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
+    "epoch": {
+      "epochId": 2
+    },
     "checkpoints": {
       "nodes": [
         {
@@ -71,7 +74,7 @@ Response: {
   }
 }
 
-task 12, lines 57-67:
+task 12, lines 60-70:
 //# run-graphql
 Response: {
   "data": {
@@ -86,7 +89,7 @@ Response: {
   }
 }
 
-task 13, lines 69-72:
+task 13, lines 72-75:
 //# run-graphql
 Response: {
   "data": {
@@ -94,7 +97,7 @@ Response: {
   }
 }
 
-task 14, lines 74-103:
+task 14, lines 77-106:
 //# run-graphql
 Response: {
   "data": {

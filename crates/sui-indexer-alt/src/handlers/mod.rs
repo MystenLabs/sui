@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod coin_balance_buckets;
+pub(crate) mod coin_balance_buckets_pruner;
 pub(crate) mod ev_emit_mod;
 pub(crate) mod ev_struct_inst;
 pub(crate) mod kv_checkpoints;
@@ -11,6 +13,7 @@ pub(crate) mod kv_objects;
 pub(crate) mod kv_protocol_configs;
 pub(crate) mod kv_transactions;
 pub(crate) mod obj_info;
+pub(crate) mod obj_info_pruner;
 pub(crate) mod obj_versions;
 pub(crate) mod sum_coin_balances;
 pub(crate) mod sum_displays;

@@ -19,12 +19,10 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 // Move Registry constants
 pub(crate) const MOVE_REGISTRY_MODULE: &IdentStr = ident_str!("name");
 pub(crate) const MOVE_REGISTRY_TYPE: &IdentStr = ident_str!("Name");
-// TODO(manos): Replace with actual package id on mainnet.
 const MOVE_REGISTRY_PACKAGE: &str =
-    "0x1a841abe817c38221596856bc975b3b84f2f68692191e9247e185213d3d02fd8";
-// TODO(manos): Replace with actual registry table id on mainnet.
+    "0x62c1f5b1cb9e3bfc3dd1f73c95066487b662048a6358eabdbf67f6cdeca6db4b";
 const MOVE_REGISTRY_TABLE_ID: &str =
-    "0x250b60446b8e7b8d9d7251600a7228dbfda84ccb4b23a56a700d833e221fae4f";
+    "0xe8417c530cde59eddf6dfb760e8a0e3e2c6f17c69ddaab5a73dd6a6e65fc463b";
 const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// The combination of all configurations for the GraphQL service.

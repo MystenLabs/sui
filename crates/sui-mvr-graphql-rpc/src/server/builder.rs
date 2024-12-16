@@ -469,7 +469,10 @@ impl ServerBuilder {
             .context_data(metrics.clone())
             .context_data(config.clone())
             .context_data(move_registry_config.clone())
-            .context_data(MoveRegistryDataLoader::new(move_registry_config));
+            .context_data(MoveRegistryDataLoader::new(
+                move_registry_config,
+                metrics.clone(),
+            ));
 
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
@@ -580,13 +583,13 @@ struct MetricsCallbackHandler {
 }
 
 impl ResponseHandler for MetricsCallbackHandler {
-    fn on_response(self, response: &http::response::Parts) {
+    fn on_response(&mut self, response: &http::response::Parts) {
         if let Some(errors) = response.extensions.get::<GraphqlErrors>() {
             self.metrics.inc_errors(&errors.0);
         }
     }
 
-    fn on_error<E>(self, _error: &E) {
+    fn on_error<E>(&mut self, _error: &E) {
         // Do nothing if the whole service errored
         //
         // in Axum this isn't possible since all services are required to have an error type of
@@ -692,7 +695,7 @@ pub mod tests {
     use serde_json::json;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_pg_temp_db::get_available_port;
+    use sui_pg_db::temp::get_available_port;
     use sui_sdk::SuiClient;
     use sui_types::digests::get_mainnet_chain_identifier;
     use sui_types::transaction::TransactionData;

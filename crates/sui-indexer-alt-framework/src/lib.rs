@@ -4,8 +4,11 @@
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{ensure, Context, Result};
-use db::{Db, DbArgs};
-use diesel_migrations::EmbeddedMigrations;
+use diesel::{
+    migration::{self, Migration, MigrationSource},
+    pg::Pg,
+};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use pipeline::{
@@ -13,19 +16,21 @@ use pipeline::{
     sequential::{self, SequentialConfig},
     Processor,
 };
+use sui_pg_db::{Db, DbArgs};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use watermarks::CommitterWatermark;
 
-pub mod db;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod pipeline;
 pub(crate) mod schema;
 pub mod task;
 pub(crate) mod watermarks;
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Debug, Clone)]
@@ -135,7 +140,7 @@ impl Indexer {
             .context("Failed to connect to database")?;
 
         // At indexer initialization, we ensure that the DB schema is up-to-date.
-        db.run_migrations(migrations)
+        db.run_migrations(Self::migrations(migrations))
             .await
             .context("Failed to run pending migrations")?;
 
@@ -335,6 +340,25 @@ impl Indexer {
             cancel.cancel();
             metrics_handle.await.unwrap();
         }))
+    }
+
+    /// Combine the provided `migrations` with the migrations necessary to set up the indexer
+    /// framework. The returned migration source can be passed to [Db::run_migrations] to ensure
+    /// the database's schema is up-to-date for both the indexer framework and the specific
+    /// indexer.
+    pub fn migrations(
+        migrations: &'static EmbeddedMigrations,
+    ) -> impl MigrationSource<Pg> + Send + Sync + 'static {
+        struct Migrations(&'static EmbeddedMigrations);
+        impl MigrationSource<Pg> for Migrations {
+            fn migrations(&self) -> migration::Result<Vec<Box<dyn Migration<Pg>>>> {
+                let mut migrations = MIGRATIONS.migrations()?;
+                migrations.extend(self.0.migrations()?);
+                Ok(migrations)
+            }
+        }
+
+        Migrations(migrations)
     }
 
     /// Update the indexer's first checkpoint based on the watermark for the pipeline by adding for

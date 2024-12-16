@@ -1,5 +1,37 @@
 # @mysten/deepbook-v3
 
+## 0.12.21
+
+### Patch Changes
+
+- 7237686: DRF pool
+
+## 0.12.20
+
+### Patch Changes
+
+- 50d0edb: DRF token
+
+## 0.12.19
+
+### Patch Changes
+
+- Updated dependencies [20af12d]
+  - @mysten/sui@1.17.0
+
+## 0.12.18
+
+### Patch Changes
+
+- Updated dependencies [100207f]
+  - @mysten/sui@1.16.2
+
+## 0.12.17
+
+### Patch Changes
+
+- @mysten/sui@1.16.1
+
 ## 0.12.16
 
 ### Patch Changes

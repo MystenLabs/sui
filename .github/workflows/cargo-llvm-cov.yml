@@ -49,13 +49,15 @@ jobs:
         with:
             ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
-      - uses: bmwill/rust-cache@v1
-
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-    
+
       - name: Install nextest
         uses: taiki-e/install-action@nextest
+
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
 
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -63,7 +65,7 @@ jobs:
           swap-size-gb: 256
         
       - name: Run code coverage for nextest
-        run: RUSTFLAGS="-C debuginfo=0" SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv -E '!package(sui-bridge)'
+        run: RUSTFLAGS="-C debuginfo=0" SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
 
       - name: Upload report to Codecov for nextest
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1

@@ -12,13 +12,15 @@ use crate::{
     client::Instance,
     settings::Settings,
 };
-use narwhal_config::PrometheusMetricsParameters;
 use serde::{Deserialize, Serialize};
 
 use super::{ProtocolCommands, ProtocolMetrics};
 
 const NUM_WORKERS: usize = 1;
 const BASE_PORT: usize = 5000;
+
+// Narwhal default metrics port.
+const DEFAULT_PORT: usize = 9184;
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NarwhalBenchmarkType {
@@ -243,7 +245,7 @@ impl ProtocolMetrics for NarwhalProtocol {
                 let path = format!(
                     "{}:{}{}",
                     instance.main_ip,
-                    PrometheusMetricsParameters::DEFAULT_PORT,
+                    DEFAULT_PORT,
                     mysten_metrics::METRICS_ROUTE
                 );
                 (instance, path)

@@ -25,7 +25,8 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::node::AuthorityOverloadConfig;
-    use sui_config::{ExecutionCacheConfig, AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
+    use sui_config::ExecutionCacheConfig;
+    use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
     use sui_core::authority::AuthorityState;
@@ -173,18 +174,22 @@ mod test {
         test_cluster.wait_for_epoch_all_nodes(1).await;
     }
 
-    #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
-        // TODO added to invalidate a failing test seed in CI. Remove me
-        tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000, 1).await;
+        let test_cluster = build_test_cluster(4, 5_000, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
+        test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_small_committee_reconfig() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(1, 5_000, 0).await;
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -571,7 +576,7 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config, None, None)
+        test_simulated_load_with_test_config(test_cluster, 180, simulated_load_config, None, None)
             .await;
     }
 
@@ -878,6 +883,51 @@ mod test {
         test_simulated_load(test_cluster, 60).await
     }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_backpressure() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let mut cache_config: ExecutionCacheConfig = Default::default();
+        // make sure we don't halt even with absurdly low backpressure threshold
+        // To validate this, change backpressure::Watermarks::is_backpressure_suppressed() to
+        // always return false and verify the test fails.
+        match &mut cache_config {
+            ExecutionCacheConfig::WritebackCache {
+                backpressure_threshold,
+                backpressure_threshold_for_rpc,
+                ..
+            } => {
+                *backpressure_threshold = Some(1);
+                // for the tests to pass we still need to be able to submit transactions
+                // during backpressure.
+                *backpressure_threshold_for_rpc = Some(10000);
+            }
+            _ => panic!(),
+        }
+
+        let test_cluster = init_test_cluster_builder(4, 10000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_execution_cache_config(cache_config)
+            .with_submit_delay_step_override_millis(3000)
+            .build()
+            .await
+            .into();
+
+        tokio::time::timeout(
+            Duration::from_secs(120),
+            test_simulated_load(test_cluster, 60),
+        )
+        .await
+        .expect("test_backpressure timed out");
+    }
+
     fn handle_bool_failpoint(
         eligible_nodes: &HashSet<sui_simulator::task::NodeId>, // only given eligible nodes may fail
         probability: f64,
@@ -946,6 +996,7 @@ mod test {
         shared_deletion_weight: u32,
         shared_counter_hotness_factor: u32,
         randomness_weight: u32,
+        randomized_transaction_weight: u32,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -964,6 +1015,7 @@ mod test {
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
                 randomness_weight: 1,
+                randomized_transaction_weight: 1,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -1022,7 +1074,7 @@ mod test {
 
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
-        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 10));
+        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 20));
         let num_workers = num_workers.unwrap_or(get_var("SIM_STRESS_TEST_WORKERS", 10));
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
@@ -1052,6 +1104,7 @@ mod test {
             randomness: config.randomness_weight,
             adversarial: adversarial_weight,
             expected_failure: config.expected_failure_weight,
+            randomized_transaction: config.randomized_transaction_weight,
         };
 
         let workload_config = WorkloadConfig {

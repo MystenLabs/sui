@@ -148,7 +148,7 @@ cursor info:
 - module: Move2024::M2
 - definition: function baz
 - position: exp
-- value: DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), "f3", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))])
+- value: DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), Loc { file_hash: "c26c564206296bc6de3b43456c0cf245c77be098b5cb90d48a37b737c8b0d007", start: 842, end: 843 }, "f3", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))])
 
 -- test 20 @ 34:37 ------------
 expected: equal sign in a binop
@@ -156,5 +156,5 @@ cursor info:
 - module: Move2024::M2
 - definition: function baz
 - position: exp
-- value: BinopExp(DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), "f3", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))]), Eq, DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), "f4", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))]))
+- value: BinopExp(DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), Loc { file_hash: "c26c564206296bc6de3b43456c0cf245c77be098b5cb90d48a37b737c8b0d007", start: 842, end: 843 }, "f3", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))]), Eq, DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), Loc { file_hash: "c26c564206296bc6de3b43456c0cf245c77be098b5cb90d48a37b737c8b0d007", start: 865, end: 866 }, "f4", None, None, [Name(Single(PathEntry { name: "val", tyargs: None, is_macro: None }))]))
 

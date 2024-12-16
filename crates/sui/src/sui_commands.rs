@@ -213,6 +213,11 @@ pub enum SuiCommand {
         /// Start the network without a fullnode
         #[clap(long = "no-full-node")]
         no_full_node: bool,
+        /// Set the number of validators in the network. If a genesis was already generated with a
+        /// specific number of validators, this will not override it; the user should recreate the
+        /// genesis with the desired number of validators.
+        #[clap(long)]
+        committee_size: Option<usize>,
     },
     #[clap(name = "network")]
     Network {
@@ -250,6 +255,9 @@ pub enum SuiCommand {
             help = "Creates an extra faucet configuration for sui persisted runs."
         )]
         with_faucet: bool,
+        /// Set number of validators in the network.
+        #[clap(long)]
+        committee_size: Option<usize>,
     },
     GenesisCeremony(Ceremony),
     /// Sui keystore tool.
@@ -378,6 +386,7 @@ impl SuiCommand {
                 data_ingestion_dir,
                 no_full_node,
                 epoch_duration_ms,
+                committee_size,
             } => {
                 start(
                     config_dir.clone(),
@@ -388,6 +397,7 @@ impl SuiCommand {
                     fullnode_rpc_port,
                     data_ingestion_dir,
                     no_full_node,
+                    committee_size,
                 )
                 .await?;
 
@@ -401,6 +411,7 @@ impl SuiCommand {
                 epoch_duration_ms,
                 benchmark_ips,
                 with_faucet,
+                committee_size,
             } => {
                 genesis(
                     from_config,
@@ -410,6 +421,7 @@ impl SuiCommand {
                     epoch_duration_ms,
                     benchmark_ips,
                     with_faucet,
+                    committee_size,
                 )
                 .await
             }
@@ -612,6 +624,7 @@ async fn start(
     fullnode_rpc_port: u16,
     mut data_ingestion_dir: Option<PathBuf>,
     no_full_node: bool,
+    committee_size: Option<usize>,
 ) -> Result<(), anyhow::Error> {
     if force_regenesis {
         ensure!(
@@ -656,8 +669,12 @@ async fn start(
     // If this is set, then no data will be persisted between runs, and a new genesis will be
     // generated each run.
     let config_dir = if force_regenesis {
-        swarm_builder =
-            swarm_builder.committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap());
+        let committee_size = match committee_size {
+            Some(x) => NonZeroUsize::new(x),
+            None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+        }
+        .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+        swarm_builder = swarm_builder.committee_size(committee_size);
         let genesis_config = GenesisConfig::custom_genesis(1, 100);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
@@ -674,30 +691,76 @@ async fn start(
                         .extension()
                         .is_some_and(|e| e == "yml" || e == "yaml") =>
             {
+                if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
+                            configuration already exists. To change the committee-size, you'll \
+                            have to adjust the network configuration file or regenerate a genesis \
+                            with the desired committee size. See `sui genesis --help` for more \
+                            information."
+                            .yellow()
+                            .bold()
+                    );
+                }
                 (config, sui_config_dir()?)
             }
 
-            Some(config) => (config.join(SUI_NETWORK_CONFIG), config),
+            Some(config) => {
+                if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
+                            configuration already exists. To change the committee-size, you'll \
+                            have to adjust the network configuration file or regenerate a genesis \
+                            with the desired committee size. See `sui genesis --help` for more \
+                            information."
+                            .yellow()
+                            .bold()
+                    );
+                }
+                (config.join(SUI_NETWORK_CONFIG), config)
+            }
 
             None => {
                 let sui_config = sui_config_dir()?;
                 let network_config = sui_config.join(SUI_NETWORK_CONFIG);
 
                 if !network_config.exists() {
-                    genesis(None, None, None, false, epoch_duration_ms, None, false)
-                        .await
-                        .map_err(|_| {
-                            anyhow!(
-                                "Cannot run genesis with non-empty Sui config directory: {}.\n\n\
+                    genesis(
+                        None,
+                        None,
+                        None,
+                        false,
+                        epoch_duration_ms,
+                        None,
+                        false,
+                        committee_size,
+                    )
+                    .await
+                    .map_err(|_| {
+                        anyhow!(
+                            "Cannot run genesis with non-empty Sui config directory: {}.\n\n\
                                 If you are trying to run a local network without persisting the \
                                 data (so a new genesis that is randomly generated and will not be \
                                 saved once the network is shut down), use --force-regenesis flag.\n\
                                 If you are trying to persist the network data and start from a new \
                                 genesis, use sui genesis --help to see how to generate a new \
                                 genesis.",
-                                sui_config.display(),
-                            )
-                        })?;
+                            sui_config.display(),
+                        )
+                    })?;
+                } else if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
+                            configuration already exists. To change the committee-size, you'll \
+                            have to adjust the network configuration file or regenerate a genesis \
+                            with the desired committee size. See `sui genesis --help` for more \
+                            information."
+                            .yellow()
+                            .bold()
+                    );
                 }
 
                 (network_config, sui_config)
@@ -888,6 +951,7 @@ async fn genesis(
     epoch_duration_ms: Option<u64>,
     benchmark_ips: Option<Vec<String>>,
     with_faucet: bool,
+    committee_size: Option<usize>,
 ) -> Result<(), anyhow::Error> {
     let sui_config_dir = &match working_dir {
         // if a directory is specified, it must exist (it
@@ -994,6 +1058,12 @@ async fn genesis(
     if let Some(epoch_duration_ms) = epoch_duration_ms {
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
+    let committee_size = match committee_size {
+        Some(x) => NonZeroUsize::new(x),
+        None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+    }
+    .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+
     let mut network_config = if let Some(validators) = validator_info {
         builder
             .with_genesis_config(genesis_conf)
@@ -1001,7 +1071,7 @@ async fn genesis(
             .build()
     } else {
         builder
-            .committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap())
+            .committee_size(committee_size)
             .with_genesis_config(genesis_conf)
             .build()
     };

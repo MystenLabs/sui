@@ -8,7 +8,7 @@ use crate::{
         DiagnosticReporter,
     },
     expansion::ast::{
-        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
     },
     ice,
     naming::ast::{
@@ -16,7 +16,7 @@ use crate::{
         Type, Type_, UseFuns, Var,
     },
     parser::ast::{
-        BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
+        BinOp, ConstantName, DatatypeName, Field, FunctionName, TargetKind, UnaryOp, VariantName,
         ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
@@ -473,15 +473,7 @@ impl AstDebug for ModuleDefinition {
             w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(match target_kind {
-            TargetKind::Source {
-                is_root_package: true,
-            } => "root module",
-            TargetKind::Source {
-                is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
-        });
+        target_kind.ast_debug(w);
         w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
             w.write(format!("{mident} is"));

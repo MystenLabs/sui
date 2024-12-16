@@ -66,6 +66,8 @@ feature_flags:
   relocate_event_module: true
   uncompressed_g1_group_elements: true
   disallow_new_modules_in_deps_only_packages: true
+  consensus_smart_ancestor_selection: true
+  consensus_round_prober_probe_accepted_rounds: true
   native_charging_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048

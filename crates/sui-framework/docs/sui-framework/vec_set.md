@@ -21,7 +21,6 @@ title: Module `0x2::vec_set`
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
-<b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 </code></pre>
 
 
@@ -68,7 +67,7 @@ than insertion order iteration should be handwritten.
 This key already exists in the map
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+<pre><code><b>const</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>: u64 = 0;
 </code></pre>
 
 
@@ -78,7 +77,7 @@ This key already exists in the map
 This key does not exist in the map
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+<pre><code><b>const</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
 </code></pre>
 
 
@@ -218,7 +217,7 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 Return the number of entries in <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): u64
 </code></pre>
 
 
@@ -227,7 +226,7 @@ Return the number of entries in <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): u64 {
     self.contents.length()
 }
 </code></pre>
@@ -353,7 +352,7 @@ Find the index of <code>key</code> in <code>self</code>. Return <code>None</code
 Note that keys are stored in insertion order, *not* sorted.
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
 </code></pre>
 
 
@@ -362,7 +361,7 @@ Note that keys are stored in insertion order, *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): Option&lt;u64&gt; {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>(self);
     <b>while</b> (i &lt; n) {
@@ -387,7 +386,7 @@ Find the index of <code>key</code> in <code>self</code>. Aborts if <code>key</co
 Note that map entries are stored in insertion order, *not* sorted.
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): u64
 </code></pre>
 
 
@@ -396,7 +395,7 @@ Note that map entries are stored in insertion order, *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): u64 {
     <b>let</b> idx_opt = <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>(self, key);
     <b>assert</b>!(idx_opt.is_some(), <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>);
     idx_opt.destroy_some()

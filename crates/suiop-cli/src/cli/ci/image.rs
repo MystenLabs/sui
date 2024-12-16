@@ -131,6 +131,9 @@ pub enum ImageAction {
         /// Optional flag to target the image, used for multi-stage builds
         #[arg(short = 't', long)]
         image_target: Option<String>,
+        /// Optional arg to speciy the org to build the image for, default to "mystenlabs"
+        #[arg(short = 'o', long)]
+        org: Option<String>,
     },
     #[command(name = "query")]
     Query {
@@ -178,6 +181,7 @@ struct RequestBuildRequest {
     build_args: Vec<String>,
     force: bool,
     image_target: Option<String>,
+    org: String,
 }
 
 #[derive(serde::Serialize)]
@@ -340,6 +344,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 build_args: _,
                 force: _,
                 image_target,
+                org: _,
             } => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
@@ -525,6 +530,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             build_args,
             force,
             image_target,
+            org,
         } => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
@@ -573,6 +579,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 build_args: build_args.clone(),
                 force: *force,
                 image_target: image_target.clone(),
+                org: org.clone().unwrap_or("mystenlabs".to_string()),
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))

@@ -24,6 +24,8 @@ function printAbortExpression(path: AstPath<Node>, options: MoveOptions, print: 
 	const expression = path.node.nonFormattingChildren[0];
 	const printed = path.call(print, 'nonFormattingChildren', 0);
 
+	if (!expression) return 'abort';
+
 	return group([
 		'abort',
 		expression?.isList || expression?.isControlFlow
