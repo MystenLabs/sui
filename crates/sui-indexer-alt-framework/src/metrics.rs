@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{atomic::AtomicU64, Arc},
+};
 
 use anyhow::Result;
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
@@ -18,7 +21,7 @@ use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::ingestion::error::Error;
+use crate::{ingestion::error::Error, pipeline::Processor};
 
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -128,6 +131,20 @@ pub(crate) struct IndexerMetrics {
 struct DbConnectionStatsCollector {
     db: Db,
     desc: Vec<(MetricType, Desc)>,
+}
+
+/// A helper struct to report metrics regarding the checkpoint lag at various points in the indexer.
+pub(crate) struct CheckpointLagMetricReporter {
+    /// Metric to report the lag distribution of each checkpoint.
+    checkpoint_time_lag_histogram: Histogram,
+    /// Metric to report the lag of the checkpoint with the highest sequence number observed so far.
+    /// This is needed since concurrent pipelines observe checkpoints out of order.
+    latest_checkpoint_time_lag_gauge: IntGauge,
+    /// Metric to report the sequence number of the checkpoint with the highest sequence number observed so far.
+    latest_checkpoint_sequence_number_gauge: IntGauge,
+
+    // Internal state to keep track of the highest checkpoint sequence number reported so far.
+    latest_reported_checkpoint: AtomicU64,
 }
 
 impl MetricsService {
@@ -660,6 +677,48 @@ impl Collector for DbConnectionStatsCollector {
                 ],
             ),
         ]
+    }
+}
+
+impl CheckpointLagMetricReporter {
+    pub fn new(
+        checkpoint_time_lag_histogram: Histogram,
+        latest_checkpoint_time_lag_gauge: IntGauge,
+        latest_checkpoint_sequence_number_gauge: IntGauge,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            checkpoint_time_lag_histogram,
+            latest_checkpoint_time_lag_gauge,
+            latest_checkpoint_sequence_number_gauge,
+            latest_reported_checkpoint: AtomicU64::new(0),
+        })
+    }
+
+    pub fn new_for_pipeline<P: Processor>(
+        checkpoint_time_lag_histogram: &HistogramVec,
+        latest_checkpoint_time_lag_gauge: &IntGaugeVec,
+        latest_checkpoint_sequence_number_gauge: &IntGaugeVec,
+    ) -> Arc<Self> {
+        Self::new(
+            checkpoint_time_lag_histogram.with_label_values(&[P::NAME]),
+            latest_checkpoint_time_lag_gauge.with_label_values(&[P::NAME]),
+            latest_checkpoint_sequence_number_gauge.with_label_values(&[P::NAME]),
+        )
+    }
+
+    pub fn report_lag(&self, cp_sequence_number: u64, checkpoint_timestamp_ms: u64) {
+        let lag = chrono::Utc::now().timestamp_millis() - checkpoint_timestamp_ms as i64;
+        self.checkpoint_time_lag_histogram
+            .observe((lag as f64) / 1000.0);
+
+        let prev = self
+            .latest_reported_checkpoint
+            .fetch_max(cp_sequence_number, std::sync::atomic::Ordering::Relaxed);
+        if cp_sequence_number > prev {
+            self.latest_checkpoint_sequence_number_gauge
+                .set(cp_sequence_number as i64);
+            self.latest_checkpoint_time_lag_gauge.set(lag);
+        }
     }
 }
 
