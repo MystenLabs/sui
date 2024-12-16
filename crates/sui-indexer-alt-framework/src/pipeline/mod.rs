@@ -115,6 +115,10 @@ impl WatermarkPart {
         self.watermark.checkpoint_hi_inclusive as u64
     }
 
+    fn timestamp_ms(&self) -> u64 {
+        self.watermark.timestamp_ms_hi_inclusive as u64
+    }
+
     /// Check if all the rows from this watermark are represented in this part.
     fn is_complete(&self) -> bool {
         self.batch_rows == self.total_rows

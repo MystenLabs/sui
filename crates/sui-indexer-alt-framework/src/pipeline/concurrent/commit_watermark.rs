@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
     watermarks::CommitterWatermark,
 };
@@ -78,6 +78,12 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
         // The watermark task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
         let mut logger = WatermarkLogger::new("concurrent_committer", &watermark);
+
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.watermarked_checkpoint_timestamp_lag,
+            &metrics.latest_watermarked_checkpoint_timestamp_lag_ms,
+            &metrics.watermark_checkpoint_in_db,
+        );
 
         info!(pipeline = H::NAME, ?watermark, "Starting commit watermark");
 
@@ -202,15 +208,15 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                                 logger.log::<H>(&watermark, elapsed);
 
+                                checkpoint_lag_reporter.report_lag(
+                                    watermark.checkpoint_hi_inclusive as u64,
+                                    watermark.timestamp_ms_hi_inclusive as u64,
+                                );
+
                                 metrics
                                     .watermark_epoch_in_db
                                     .with_label_values(&[H::NAME])
                                     .set(watermark.epoch_hi_inclusive);
-
-                                metrics
-                                    .watermark_checkpoint_in_db
-                                    .with_label_values(&[H::NAME])
-                                    .set(watermark.checkpoint_hi_inclusive);
 
                                 metrics
                                     .watermark_transaction_in_db

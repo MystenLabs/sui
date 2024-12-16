@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{Break, CommitterConfig, WatermarkPart},
     task::TrySpawnStreamExt,
 };
@@ -45,6 +45,11 @@ pub(super) fn committer<H: Handler + 'static>(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!(pipeline = H::NAME, "Starting committer");
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.partially_committed_checkpoint_timestamp_lag,
+            &metrics.latest_partially_committed_checkpoint_timestamp_lag_ms,
+            &metrics.latest_partially_committed_checkpoint,
+        );
 
         match ReceiverStream::new(rx)
             .try_for_each_spawned(
@@ -55,6 +60,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     let db = db.clone();
                     let metrics = metrics.clone();
                     let cancel = cancel.clone();
+                    let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
 
                     // Repeatedly try to get a connection to the DB and write the batch. Use an
                     // exponential backoff in case the failure is due to contention over the DB
@@ -67,11 +73,16 @@ pub(super) fn committer<H: Handler + 'static>(
                         ..Default::default()
                     };
 
+                    let highest_checkpoint = watermark.iter().map(|w| w.checkpoint()).max();
+                    let highest_checkpoint_timestamp =
+                        watermark.iter().map(|w| w.timestamp_ms()).max();
+
                     use backoff::Error as BE;
                     let commit = move || {
                         let values = values.clone();
                         let db = db.clone();
                         let metrics = metrics.clone();
+                        let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                         async move {
                             if values.is_empty() {
                                 return Ok(());
@@ -110,6 +121,12 @@ pub(super) fn committer<H: Handler + 'static>(
                                         affected,
                                         committed = values.len(),
                                         "Wrote batch",
+                                    );
+
+                                    checkpoint_lag_reporter.report_lag(
+                                        // unwrap is safe because we would have returned if values is empty.
+                                        highest_checkpoint.unwrap(),
+                                        highest_checkpoint_timestamp.unwrap(),
                                     );
 
                                     metrics

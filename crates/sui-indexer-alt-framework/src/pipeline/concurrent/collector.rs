@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 use crate::{
-    metrics::IndexerMetrics,
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
 };
 
@@ -99,6 +99,12 @@ pub(super) fn collector<H: Handler + 'static>(
         let mut received: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let checkpoint_lag = checkpoint_lag.unwrap_or_default();
 
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.collected_checkpoint_timestamp_lag,
+            &metrics.latest_collected_checkpoint_timestamp_lag_ms,
+            &metrics.latest_collected_checkpoint,
+        );
+
         // Data for checkpoints that are ready to be sent but haven't been written yet.
         let mut pending: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
@@ -128,6 +134,10 @@ pub(super) fn collector<H: Handler + 'static>(
                         let indexed = entry.get_mut();
                         indexed.batch_into(&mut batch);
                         if indexed.is_empty() {
+                            checkpoint_lag_reporter.report_lag(
+                                indexed.watermark.checkpoint(),
+                                indexed.watermark.timestamp_ms(),
+                            );
                             entry.remove();
                         }
                     }
