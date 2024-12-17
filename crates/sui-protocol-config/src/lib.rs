@@ -1293,8 +1293,7 @@ pub struct ProtocolConfig {
 
     /// If >0, congestion control will allow transactions in total cost equaling the
     /// configured amount to exceed the configured maximum accumulated cost per object.
-    /// If a single transaction exceeds the burst limit, it will be allowed up to
-    /// `max_txn_cost_overage_per_object_in_commit` above.
+    /// As above, up to one transaction per object exceeding the burst limit will be allowed.
     allowed_txn_cost_overage_burst_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
