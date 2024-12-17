@@ -259,7 +259,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 const fn max_chunk_rows<H: Handler>() -> usize {
     // Handle division by zero
     if H::Value::FIELD_COUNT == 0 {
-        return 0;
+        return i16::MAX as usize;
     }
     i16::MAX as usize / H::Value::FIELD_COUNT
 }
