@@ -104,11 +104,13 @@ pub enum BcsName {
     Base64 {
         #[serde_as(as = "Base64")]
         #[schemars(with = "Base64")]
+        #[serde(rename = "bcsName")]
         bcs_name: Vec<u8>,
     },
     Base58 {
         #[serde_as(as = "Base58")]
         #[schemars(with = "Base58")]
+        #[serde(rename = "bcsName")]
         bcs_name: Vec<u8>,
     },
 }
@@ -212,5 +214,17 @@ mod test {
                 .unwrap()
                 .into_bytes()
         );
+
+        // Roundtrip base64
+        let name = serde_json::from_str::<BcsName>(tagged_base64).unwrap();
+        let json = serde_json::to_string(&name).unwrap();
+        let from_json = serde_json::from_str::<BcsName>(&json).unwrap();
+        assert_eq!(name, from_json);
+
+        // Roundtrip base58
+        let name = serde_json::from_str::<BcsName>(tagged_base58).unwrap();
+        let json = serde_json::to_string(&name).unwrap();
+        let from_json = serde_json::from_str::<BcsName>(&json).unwrap();
+        assert_eq!(name, from_json);
     }
 }
