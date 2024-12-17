@@ -32,7 +32,7 @@ impl Processor for CoinBalanceBucketsPruner {
             .into_iter()
             .map(|o| (o.id(), o))
             .collect();
-        let mut values = Vec::with_capacity(checkpoint_input_objects.len());
+        let mut values = Vec::new();
         for (object_id, input_object) in checkpoint_input_objects {
             // This loop processes all coins that were owned by a single address prior to the checkpoint,
             // but is now deleted/wrapped, or changed owner or coin balance bucket the checkpoint.
@@ -103,5 +103,7 @@ impl Handler for CoinBalanceBucketsPruner {
 }
 
 impl FieldCount for CoinBalanceBucketToBePruned {
+    // This does not really matter since we are not limited by postgres' bound variable limit, because
+    // we don't bind parameters in the deletion statement.
     const FIELD_COUNT: usize = 1;
 }

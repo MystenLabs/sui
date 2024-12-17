@@ -96,6 +96,7 @@ impl Handler for ObjInfoPruner {
 }
 
 impl FieldCount for ObjInfoToBePruned {
-    // This does not really matter since we are deleting, and we are not limited by the insertion limit.
+    // This does not really matter since we are not limited by postgres' bound variable limit, because
+    // we don't bind parameters in the deletion statement.
     const FIELD_COUNT: usize = 1;
 }
