@@ -167,21 +167,14 @@ impl SharedObjectCongestionTracker {
             return None;
         }
 
-        // Allow over-budget tx if it's not above the overage limit.
-        let absolute_limit = self
-            .max_accumulated_txn_cost_per_object_in_commit
-            .saturating_add(self.max_txn_cost_overage_per_object_in_commit);
-        if start_cost <= self.max_accumulated_txn_cost_per_object_in_commit
-            && end_cost <= absolute_limit
-        {
-            return None;
-        }
-
-        // Allow bursting over-budget tx if it's not above the burst limit.
+        // Allow over-budget tx if it's not above the overage limits.
         let burst_limit = self
             .max_accumulated_txn_cost_per_object_in_commit
             .saturating_add(self.allowed_txn_cost_overage_burst_per_object_in_commit);
-        if end_cost <= burst_limit {
+        let absolute_limit = self
+            .max_accumulated_txn_cost_per_object_in_commit
+            .saturating_add(self.max_txn_cost_overage_per_object_in_commit);
+        if start_cost <= burst_limit && end_cost <= absolute_limit {
             return None;
         }
 
@@ -819,9 +812,9 @@ mod object_cost_tests {
         // before overage occurs.
         let max_accumulated_txn_cost_per_object_in_commit = match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
-            PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
+            PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget,
             PerObjectCongestionControlMode::TotalTxCount => 2,
-            PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget - 1,
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget,
         };
 
         // Set burst limit to allow 1 extra transaction to go through.
@@ -836,14 +829,14 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => {
                 // Construct object execution cost as following
-                //                190   202
+                //                199   301
                 // object 0:            |
                 // object 1:      |
                 //
-                // burst limit is 101 + 200 = 301
+                // burst limit is 100 + 200 = 300
                 // tx cost is 100 (gas budget)
                 SharedObjectCongestionTracker::new(
-                    [(shared_obj_0, 202), (shared_obj_1, 190)],
+                    [(shared_obj_0, 301), (shared_obj_1, 199)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -854,14 +847,14 @@ mod object_cost_tests {
             }
             PerObjectCongestionControlMode::TotalTxCount => {
                 // Construct object execution cost as following
-                //                3     4
+                //                4     5
                 // object 0:            |
                 // object 1:      |
                 //
                 // burst limit is 2 + 2 = 4
                 // tx cost is 1 (tx count)
                 SharedObjectCongestionTracker::new(
-                    [(shared_obj_0, 4), (shared_obj_1, 3)],
+                    [(shared_obj_0, 5), (shared_obj_1, 4)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -872,14 +865,14 @@ mod object_cost_tests {
             }
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
                 // Construct object execution cost as following
-                //                200   210
+                //                250   301
                 // object 0:            |
                 // object 1:      |
                 //
-                // burst limit is 99 + 200 = 299
+                // burst limit is 100 + 200 = 300
                 // tx cost is 90 (gas budget capped at 45*(1 move call + 1 input))
                 SharedObjectCongestionTracker::new(
-                    [(shared_obj_0, 210), (shared_obj_1, 200)],
+                    [(shared_obj_0, 301), (shared_obj_1, 250)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
@@ -1113,7 +1106,8 @@ mod object_cost_tests {
                     None,
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
-                    0,
+                    // Set a burst limit to verify that it does not affect debt calculation.
+                    max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
@@ -1125,7 +1119,8 @@ mod object_cost_tests {
                     Some(45),
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
-                    0,
+                    // Set a burst limit to verify that it does not affect debt calculation.
+                    max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
             PerObjectCongestionControlMode::TotalTxCount => {
@@ -1137,7 +1132,8 @@ mod object_cost_tests {
                     None,
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
-                    0,
+                    // Set a burst limit to verify that it does not affect debt calculation.
+                    max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
         };
