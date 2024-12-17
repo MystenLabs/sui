@@ -293,7 +293,7 @@ error[Compatibility E01004]: field mismatch
 104 │ ╭         A {
 105 │ │             x: ChangeFieldA,
 106 │ │             y: ChangeFieldA,
-107 │ │             z: ChangeFieldB,
+107 │ │             z: ChangeFieldB, // changed to ChangeFieldB
 108 │ │         },
     │ ╰─────────^ Mismatched field 'z: 0x0::upgrades::ChangeFieldA', expected '0x0::upgrades::ChangeFieldB'.
     │  
