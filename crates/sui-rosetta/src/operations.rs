@@ -567,7 +567,7 @@ impl Operations {
         balance_change.chain(gas)
     }
 
-    fn is_single_gascoin_transfer(tx: SuiTransactionBlockKind) -> bool {
+    fn is_gascoin_transfer(tx: SuiTransactionBlockKind) -> bool {
         match tx {
             SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
                 let SuiProgrammableTransactionBlock {
@@ -578,7 +578,7 @@ impl Operations {
                     .into_iter()
                     .find(|command| match command {
                         SuiCommand::TransferObjects(objs, _) => {
-                            objs.len() > 0 && objs[0] == SuiArgument::GasCoin
+                            objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
                         }
                         _ => false,
                     })
@@ -589,7 +589,7 @@ impl Operations {
         false
     }
 
-    fn process_single_gascoin_transfer(
+    fn process_gascoin_transfer(
         coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
         tx: SuiTransactionBlockKind,
         prev_gas_owner: SuiAddress,
@@ -597,7 +597,7 @@ impl Operations {
         gas_used: i128,
     ) -> Vec<Operation> {
         let mut operations = vec![];
-        if Self::is_single_gascoin_transfer(tx) {
+        if Self::is_gascoin_transfer(tx) {
             coin_change_operations.into_iter().for_each(|operation| {
                 match operation.type_ {
                     OperationType::Gas => {
@@ -755,7 +755,7 @@ impl Operations {
             accounted_balances.clone(),
         );
 
-        let single_gascoin_transfer = Self::process_single_gascoin_transfer(
+        let gascoin_transfer_operations = Self::process_gascoin_transfer(
             &mut coin_change_operations,
             tx.data.transaction().clone(),
             tx.data.gas_data().owner,
@@ -766,7 +766,7 @@ impl Operations {
         let ops: Operations = ops
             .into_iter()
             .chain(coin_change_operations)
-            .chain(single_gascoin_transfer)
+            .chain(gascoin_transfer_operations)
             .chain(staking_balance)
             .collect();
 
