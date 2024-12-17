@@ -3,7 +3,6 @@
 
 use narwhal_types::Round;
 use serde::{Deserialize, Serialize};
-use mysten_common::debug_fatal;
 use sui_types::base_types::ObjectID;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
