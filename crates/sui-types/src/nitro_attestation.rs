@@ -66,20 +66,15 @@ impl From<NitroError> for SuiError {
 pub fn attestation_verify_inner(
     attestation_bytes: &[u8],
     enclave_vk: &[u8],
-    pcr0: &[u8],
-    pcr1: &[u8],
-    pcr2: &[u8],
+    pcrs: &[&[u8]],
     timestamp: u64,
 ) -> SuiResult<()> {
     // Parse attestation into a valid cose sign1 object with valid header.
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
 
     // Parse attestation document payload and verify cert against AWS root of trust.
-    let doc = AttestationDocument::parse_and_validate_payload(
-        &cose_sign1.payload,
-        timestamp,
-        &[pcr0, pcr1, pcr2],
-    )?;
+    let doc =
+        AttestationDocument::parse_and_validate_payload(&cose_sign1.payload, timestamp, pcrs)?;
 
     // Extract public key from cert and signature as P384.
     let signature = Signature::from_slice(&cose_sign1.signature).expect("Invalid signature");
@@ -95,7 +90,7 @@ pub fn attestation_verify_inner(
 
     // Verify the signature against the public key and the canonical message.
     verifying_key
-        .verify(&cose_sign1.to_canonical(), &signature)
+        .verify(&cose_sign1.to_signed_message(), &signature)
         .map_err(|_| NitroError::InvalidSignature)?;
 
     // Verify the user data equals to the enclave public key.
@@ -105,7 +100,7 @@ pub fn attestation_verify_inner(
     }
 
     // Verify the pcrs.
-    doc.validate_pcrs(&[pcr0, pcr1, pcr2])
+    doc.validate_pcrs(pcrs)
         .map_err(|_| NitroError::InvalidPcrs)?;
     Ok(())
 }
@@ -285,14 +280,10 @@ impl CoseSign1 {
 
     /// Validate protected header, payload and signature length.
     pub fn validate_header(&self) -> Result<(), NitroError> {
-        let is_valid = {
-            let mut is_valid = true;
-            is_valid &= Self::is_valid_protected_header(self.protected.as_slice());
-            is_valid &= (1..16384).contains(&self.payload.len());
-            is_valid &= self.signature.len() == 96;
-            is_valid
-        };
-        if !is_valid {
+        if !(Self::is_valid_protected_header(self.protected.as_slice())
+            && (1..16384).contains(&self.payload.len())
+            && self.signature.len() == 96)
+        {
             return Err(NitroError::InvalidCoseSign1(
                 "invalid cbor header".to_string(),
             ));
@@ -322,7 +313,8 @@ impl CoseSign1 {
         }
     }
 
-    fn to_canonical(&self) -> Vec<u8> {
+    /// This is the content that the signature is committed over.
+    fn to_signed_message(&self) -> Vec<u8> {
         let value = Value::Array(vec![
             Value::Text("Signature1".to_string()),
             Value::Bytes(self.protected.as_slice().to_vec()),
@@ -540,11 +532,9 @@ impl AttestationDocument {
         Ok(())
     }
 
-    /// Validate the PCRs against the expected PCRs. todo: add docs
+    /// Validate the PCRs against the expected PCRs.
     fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroError> {
-        // only pcr0, pcr1, pcr2 are checked
-        assert!(expected_pcrs.len() == 3);
-        for (i, expected_pcr) in expected_pcrs.iter().enumerate().take(3) {
+        for (i, expected_pcr) in expected_pcrs.iter().enumerate() {
             if self.pcrs[i] != *expected_pcr {
                 return Err(NitroError::InvalidPcrs);
             }

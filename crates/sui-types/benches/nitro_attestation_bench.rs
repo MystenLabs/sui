@@ -23,9 +23,7 @@ fn nitro_attestation_benchmark(c: &mut Criterion) {
             attestation_verify_inner(
                 &attestation_data,
                 &public_key,
-                &pcr0,
-                &pcr1,
-                &pcr2,
+                &[&pcr0, &pcr1, &pcr2],
                 timestamp,
             )
         })
