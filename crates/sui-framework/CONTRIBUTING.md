@@ -16,4 +16,4 @@ Please use your best judgment to decide if the changes between old and new versi
 
 ### Updating auto-generated documentation
 
-To avoid CI failure, follow these steps. First, make your desired changes. Then, navigate to the `crates/sui-framework` directory and execute the command `UPDATE=1 cargo nextest run build_system_packages`. This action will automatically update the md file on your behalf and ensure that the portion of the CI responsible for checking those auto-generated pages passes successfully. 
+To avoid CI failure, follow these steps. First, make your desired code changes. Then, navigate to the `crates/sui-framework` directory and execute the command `UPDATE=1 cargo nextest run build_system_packages`. This action will automatically update the md files associated with your code changes on your behalf and ensure that the portion of the CI responsible for checking those auto-generated pages passes successfully. 
