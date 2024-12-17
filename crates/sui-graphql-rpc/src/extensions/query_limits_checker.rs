@@ -123,11 +123,6 @@ impl<'a> LimitsTraversal<'a> {
             self.check_input_limits(op)?;
         }
 
-        // Next, check the size of the multiget queries inputs and outputs.
-        for (_name, op) in doc.operations.iter() {
-            self.check_multiget_queries(op)?;
-        }
-
         // Then gather inputs to transaction execution and dry-run nodes, and make sure these are
         // within budget, cumulatively.
         for (_name, op) in doc.operations.iter() {
@@ -150,51 +145,6 @@ impl<'a> LimitsTraversal<'a> {
             self.check_output_limits(op)?;
         }
 
-        Ok(())
-    }
-
-    fn check_multiget_queries(
-        &mut self,
-        op: &'a Positioned<OperationDefinition>,
-    ) -> ServerResult<()> {
-        for item in &op.node.selection_set.node.items {
-            self.traverse_multiget_queries(item)?;
-        }
-        Ok(())
-    }
-
-    fn traverse_multiget_queries(&mut self, item: &'a Positioned<Selection>) -> ServerResult<()> {
-        match &item.node {
-            Selection::Field(f) => {
-                let name = &f.node.name.node;
-                if name.starts_with(MULTI_GET_QUERY) {
-                    for (_, value) in &f.node.arguments {
-                        let m = self.check_multiget_args(value);
-                        for selection in &f.node.selection_set.node.items {
-                            self.traverse_selection_for_output(selection, m as u32, None)?;
-                        }
-                    }
-                }
-            }
-
-            Selection::InlineFragment(f) => {
-                for selection in &f.node.selection_set.node.items {
-                    self.traverse_multiget_queries(selection)?;
-                }
-            }
-
-            Selection::FragmentSpread(fs) => {
-                let name = &fs.node.fragment_name.node;
-                let def = self
-                    .fragments
-                    .get(name)
-                    .ok_or_else(|| self.reporter.fragment_not_found_error(name, fs.pos))?;
-
-                for selection in &def.node.selection_set.node.items {
-                    self.traverse_multiget_queries(selection)?;
-                }
-            }
-        }
         Ok(())
     }
 
@@ -308,8 +258,7 @@ impl<'a> LimitsTraversal<'a> {
     }
 
     /// multiGet queries can only pass a number of keys that does not exceed the max
-    /// page size. This checks for the number of keys and deducts the raw size of the keys from
-    /// the payload size.
+    /// page size.
     fn check_multiget_args(&mut self, value: &'a Positioned<Value>) -> usize {
         use GqlValue as V;
 
@@ -450,7 +399,7 @@ impl<'a> LimitsTraversal<'a> {
     ///
     /// This check must be done after the input limit check, because it relies on the query depth
     /// being bounded to protect it from recursing too deeply.
-    fn check_output_limits(&mut self, op: &Positioned<OperationDefinition>) -> ServerResult<()> {
+    fn check_output_limits(&mut self, op: &'a Positioned<OperationDefinition>) -> ServerResult<()> {
         for selection in &op.node.selection_set.node.items {
             self.traverse_selection_for_output(selection, 1, None)?;
         }
@@ -466,7 +415,7 @@ impl<'a> LimitsTraversal<'a> {
     /// size of the connection's page.
     fn traverse_selection_for_output(
         &mut self,
-        selection: &Positioned<Selection>,
+        selection: &'a Positioned<Selection>,
         multiplicity: u32,
         page_size: Option<u32>,
     ) -> ServerResult<()> {
@@ -478,11 +427,26 @@ impl<'a> LimitsTraversal<'a> {
                     self.output_budget -= multiplicity;
                 }
 
-                // If the field being traversed is a connection field, increase multiplicity by a
-                // factor of page size. This operation can fail due to overflow, which will be
-                // treated as a limits check failure, even if the resulting value does not get used
-                // for anything.
                 let name = &f.node.name.node;
+                
+                // Check for multi-get queries
+                if name.starts_with(MULTI_GET_QUERY) {
+                    // Get multiplicity from the arguments
+                    for (_, value) in &f.node.arguments {
+                        let multi_get_size = self.check_multiget_args(value);
+                        let new_multiplicity = multiplicity
+                            .checked_mul(multi_get_size as u32)
+                            .ok_or_else(|| self.output_node_error())?;
+                            
+                        // Process the selections with the updated multiplicity
+                        for selection in &f.node.selection_set.node.items {
+                            self.traverse_selection_for_output(selection, new_multiplicity, None)?;
+                        }
+                        return Ok(());
+                    }
+                }
+
+                // Handle regular connection fields
                 let multiplicity = 'm: {
                     if !CONNECTION_FIELDS.contains(&name.as_str()) {
                         break 'm multiplicity;
