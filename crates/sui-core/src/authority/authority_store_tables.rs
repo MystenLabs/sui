@@ -10,7 +10,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::storage::MarkerValue;
-use tidehunter::key_shape::KeySpaceConfig;
+use tidehunter::key_shape::{KeyShape, KeyShapeBuilder, KeySpaceConfig};
 use tidehunter::minibytes::Bytes;
 use tidehunter::wal::WalPosition;
 use typed_store::metrics::SamplingInterval;
@@ -26,7 +26,7 @@ use crate::authority::authority_store_types::{
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use typed_store::tidehunter::th_db_map::{key_shape_builder, open_thdb, ThDbBatch, ThDbMap};
+use typed_store::tidehunter::th_db_map::{default_cells_per_mutex, open_thdb, ThDbBatch, ThDbMap};
 use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
@@ -158,6 +158,7 @@ impl AuthorityPerpetualTables {
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
         registry: &Registry,
     ) -> Self {
+        const MUTEXES: usize = 128;
         let db_options_override = db_options_override.unwrap_or_default();
         let db_options =
             db_options_override.apply_to(default_db_options().optimize_db_for_write_throughput(4));
@@ -189,44 +190,39 @@ impl AuthorityPerpetualTables {
         ]));
         let path = Self::path(parent_path);
 
-        // todo - update those values when adding new space
-        let const_spaces = 6;
-        let frac_spaces = 8;
-        let mut builder = key_shape_builder(const_spaces, frac_spaces);
-        // 6 const key spaces
-        let root_state_hash_by_epoch = builder.const_key_space("root_state_hash_by_epoch", 8, 1);
-        let epoch_start_configuration = builder.const_key_space("epoch_start_configuration", 0, 1);
-        let pruned_checkpoint = builder.const_key_space("pruned_checkpoint", 0, 1);
-        let expected_network_sui_amount = builder.const_key_space("expected_network_sui_amount", 0, 1);
+        let mut builder = KeyShapeBuilder::new();
+        // *** Key spaces with a single value
+        let root_state_hash_by_epoch = builder.add_key_space("root_state_hash_by_epoch", 8, 1,1);
+        let epoch_start_configuration = builder.add_key_space("epoch_start_configuration", 0, 1, 1);
+        let pruned_checkpoint = builder.add_key_space("pruned_checkpoint", 0, 1, 1);
+        let expected_network_sui_amount = builder.add_key_space("expected_network_sui_amount", 0, 1, 1);
         let expected_storage_fund_imbalance =
-            builder.const_key_space("expected_storage_fund_imbalance", 0, 1);
+            builder.add_key_space("expected_storage_fund_imbalance", 0, 1, 1);
         // todo chop off too?
         // decide what to do with it - make it frac_key_space or get rid of?
-        let indirect_move_objects = builder.const_key_space("indirect_move_objects", 32, 1);
-        // todo - this is very confusing - need to fix
-        let const_spaces_round_up = builder.pad_const_space();
+        let indirect_move_objects = builder.add_key_space("indirect_move_objects", 32, 1, 1);
 
-        // 8 frac key spaces
+        // *** Key spaces with MUTEXES * default_cells_per_mutex() cells
         let objects_config = KeySpaceConfig::new().with_compactor(Box::new(objects_compactor));
-        let objects = builder.frac_key_space_config("objects", 32 + 8, 1, objects_config);
-        let live_owned_object_markers = builder.frac_key_space("live_owned_object_markers", 32 + 8 + 32 + 8, 1);
-        let transactions = builder.frac_key_space("transactions", 32, 1);
-        let effects = builder.frac_key_space("effects", 32, 1);
-        let executed_effects = builder.frac_key_space("executed_effects",32, 1);
-        let events = builder.frac_key_space("events", 32 + 8, 1);
+        let objects = builder.add_key_space_config("objects", 32 + 8, MUTEXES, default_cells_per_mutex(), objects_config);
+        let live_owned_object_markers = builder.add_key_space("live_owned_object_markers", 32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex());
+        let transactions = builder.add_key_space("transactions", 32, MUTEXES, default_cells_per_mutex());
+        let effects = builder.add_key_space("effects", 32, MUTEXES, default_cells_per_mutex());
+        let executed_effects = builder.add_key_space("executed_effects",32, MUTEXES, default_cells_per_mutex());
+        let events = builder.add_key_space("events", 32 + 8, MUTEXES, default_cells_per_mutex());
         let executed_transactions_to_checkpoint =
-            builder.frac_key_space("executed_transactions_to_checkpoint", 32, 1);
+            builder.add_key_space("executed_transactions_to_checkpoint", 32, MUTEXES, default_cells_per_mutex());
 
         // key_offset is set to 8 to hash by object id rather then epoch
-        let object_per_epoch_marker_table = builder.frac_key_space_config(
+        let object_per_epoch_marker_table = builder.add_key_space_config(
             "object_per_epoch_marker_table",
             32 + 8 + 8,
-            1,
+            MUTEXES, default_cells_per_mutex(),
             KeySpaceConfig::new_with_key_offset(8),
         );
 
         let key_shape = builder.build();
-        let thdb = open_thdb(&path, key_shape, const_spaces_round_up, registry);
+        let thdb = open_thdb(&path, key_shape, registry);
         // Effect digest, transaction digest and other keys derived from Digest are prefixed with
         // [0, 0, ..., 32], which we can remove to reduce the size of thdb index.
         // Smaller index means less write amplification, and

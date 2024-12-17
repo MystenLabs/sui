@@ -323,12 +323,11 @@ fn deserialize_key<K: DeserializeOwned>(v: &[u8]) -> K {
 pub fn open_thdb(
     path: &Path,
     key_shape: KeyShape,
-    const_spaces: usize,
     registry: &Registry,
 ) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
     let metrics = Metrics::new_in(registry);
-    let config = thdb_config(const_spaces);
+    let config = thdb_config();
     let config = Arc::new(config);
     let db = Db::open(path, key_shape, config, metrics).unwrap();
     let db = Arc::new(db);
@@ -336,16 +335,10 @@ pub fn open_thdb(
     db
 }
 
-pub fn key_shape_builder(const_spaces: usize, frac_base: usize) -> KeyShapeBuilder {
-    KeyShapeBuilder::from_config(&thdb_config(const_spaces), frac_base)
-}
-
-fn thdb_config(const_spaces: usize) -> Config {
+fn thdb_config() -> Config {
     let mut config = Config::default();
-    modify_large_table_size(&mut config);
     modify_frag_size(&mut config);
-    config.max_loaded_entries = config.large_table_size / 1024;
-    config.large_table_size += const_spaces;
+    config.max_loaded_entries = 256;
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     config.max_dirty_keys = 1024;
@@ -353,13 +346,13 @@ fn thdb_config(const_spaces: usize) -> Config {
 }
 
 #[cfg(not(debug_assertions))]
-fn modify_large_table_size(config: &mut Config) {
-    config.large_table_size = 256 * 1024;
+pub fn default_cells_per_mutex() -> usize {
+    256
 }
 
 #[cfg(debug_assertions)]
-fn modify_large_table_size(config: &mut Config) {
-    config.large_table_size = 2 * 1024;
+pub fn default_cells_per_mutex() -> usize {
+    1
 }
 
 #[cfg(not(debug_assertions))]
