@@ -47,7 +47,7 @@ impl TryFrom<u32> for ExpectedFailureType {
         match value {
             0 => {
                 let mut rng = rand::thread_rng();
-                let n = rng.gen_range(0..ExpectedFailureType::COUNT - 1);
+                let n = rng.gen_range(1..ExpectedFailureType::COUNT - 1);
                 Ok(ExpectedFailureType::iter().nth(n).unwrap())
             }
             _ => ExpectedFailureType::iter()
