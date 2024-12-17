@@ -19,7 +19,7 @@ datatest-stable.workspace = true
 prometheus.workspace = true
 
 sui-framework.workspace = true
-sui-move = { workspace = true, features = ["unit_test"] }
+sui-move.workspace = true
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
