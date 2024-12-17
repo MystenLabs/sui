@@ -909,6 +909,9 @@ mod test {
                 // having queued certs which are missing dependencies.
                 check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
+                max_txn_age_in_queue: Duration::from_secs(10000),
+                max_transaction_manager_queue_length: 10000,
+                max_transaction_manager_per_object_queue_length: 10000,
                 ..Default::default()
             })
             .with_execution_cache_config(cache_config)
