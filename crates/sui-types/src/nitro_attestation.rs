@@ -61,7 +61,7 @@ impl From<NitroError> for SuiError {
 }
 
 /// Given an attestation document bytes, deserialize and verify its validity according to
-/// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
+/// <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html>
 /// and check the user_data is consistent with the enclave public key.
 pub fn attestation_verify_inner(
     attestation_bytes: &[u8],
@@ -109,7 +109,7 @@ pub fn attestation_verify_inner(
 ///  protected_header: See Section 3 (Note: AWS Nitro does not have unprotected header.)
 ///  payload: See Section 4.2.
 ///  signature: See Section 4.2.
-///  Class and trait impl adapted from https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs
+///  Class and trait impl adapted from <https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs>
 #[derive(Debug, Clone)]
 pub struct CoseSign1 {
     /// protected: empty_or_serialized_map,
@@ -243,7 +243,7 @@ impl<'de> Deserialize<'de> for CoseSign1 {
 }
 
 impl CoseSign1 {
-    /// Parse CBOR bytes into struct. Adapted from https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs
+    /// Parse CBOR bytes into struct. Adapted from <https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs>
     pub fn parse_and_validate(bytes: &[u8]) -> Result<Self, NitroError> {
         let tagged_value: ciborium::value::Value = ciborium::de::from_reader(bytes)
             .map_err(|e| NitroError::InvalidCoseSign1(e.to_string()))?;
