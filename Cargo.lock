@@ -7320,7 +7320,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=152d65b631fbe751c50b8ab3c79793b9196cbe86#152d65b631fbe751c50b8ab3c79793b9196cbe86"
+source = "git+https://github.com/andll/tidehunter.git?rev=9cad3342cbaa64219fb313c7cf209e4879d5afe6#9cad3342cbaa64219fb313c7cf209e4879d5afe6"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -16516,7 +16516,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=152d65b631fbe751c50b8ab3c79793b9196cbe86#152d65b631fbe751c50b8ab3c79793b9196cbe86"
+source = "git+https://github.com/andll/tidehunter.git?rev=9cad3342cbaa64219fb313c7cf209e4879d5afe6#9cad3342cbaa64219fb313c7cf209e4879d5afe6"
 dependencies = [
  "bincode",
  "bytes",
