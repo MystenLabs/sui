@@ -46,7 +46,7 @@ pub struct IndexerConfig {
     pub extra: toml::Table,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct ConsistencyConfig {
     /// Number of checkpoints to delay indexing summary tables for.
     pub consistent_range: u64,
@@ -438,14 +438,6 @@ impl<T: Merge> Merge for Option<T> {
             (Some(a), Some(b)) => Some(a.merge(b)),
             (Some(a), _) | (_, Some(a)) => Some(a),
             (None, None) => None,
-        }
-    }
-}
-
-impl Default for ConsistencyConfig {
-    fn default() -> Self {
-        Self {
-            consistent_range: 0,
         }
     }
 }
