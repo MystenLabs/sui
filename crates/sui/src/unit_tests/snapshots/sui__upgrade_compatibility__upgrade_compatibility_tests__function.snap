@@ -6,7 +6,7 @@ error[Compatibility E03001]: function signature mismatch
   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
   │
 9 │     public fun func_with_wrong_param(a: u32): u64 {
-  │                                      ^ Unexpected parameter u32, expected u64
+  │                                      ^ Unexpected parameter 'u32', expected 'u64'
   │
   = Functions are part of a module's public interface and cannot be changed during an upgrade.
   = Restore the original function's parameter for function 'func_with_wrong_param'.
@@ -15,7 +15,7 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:14:42
    │
 14 │     public fun func_with_wrong_return(): u32 {
-   │                                          ^^^ Unexpected return type u32, expected u64
+   │                                          ^^^ Unexpected return type 'u64', expected 'u32'
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's return type for function 'func_with_wrong_return'.
@@ -24,7 +24,7 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:49
    │
 19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
-   │                                                 ^ Unexpected parameter u32, expected u64
+   │                                                 ^ Unexpected parameter 'u32', expected 'u64'
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's parameter for function 'func_with_wrong_param_and_return'.
@@ -33,7 +33,7 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:58
    │
 19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
-   │                                                          ^^^ Unexpected return type u32, expected u64
+   │                                                          ^^^ Unexpected return type 'u64', expected 'u32'
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's return type for function 'func_with_wrong_param_and_return'.
@@ -55,6 +55,15 @@ error[Compatibility E03001]: function signature mismatch
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's return types for function 'func_with_wrong_return_length'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:42:45
+   │
+42 │     public fun func_with_wrong_struct_param(a: B): u64 {
+   │                                             ^ Unexpected parameter '0x0::upgrades::B', expected '0x0::upgrades::A'
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's parameter for function 'func_with_wrong_struct_param'.
 
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

@@ -15,6 +15,7 @@ use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
     StructDefinitionIndex, TableIndex,
 };
+use move_binary_format::normalized::Type;
 use move_binary_format::{
     compatibility::Compatibility,
     compatibility_mode::CompatibilityMode,
@@ -961,13 +962,54 @@ fn function_signature_mismatch_diag(
                     .context("Unable to get parameter location")?
                     .1;
 
+                let mut secondary = Vec::new();
+
+                let new_param_message = if let Type::TypeParameter(t) = new_param {
+                    let new_param = func_sourcemap
+                        .type_parameters
+                        .get(*t as usize)
+                        .context("Unable to get type param location")?;
+
+                    secondary.push((
+                        new_param.1.clone(),
+                        format!("Expected type parameter '{}' is defined here", &new_param.0),
+                    ));
+                    format!("type parameter '{}'", new_param.0)
+                } else {
+                    format!("'{}'", new_param)
+                };
+
+                let old_param_message = if let Type::TypeParameter(t) = old_param {
+                    let old_param = &func_sourcemap
+                        .type_parameters
+                        .get(*t as usize)
+                        .context("Unable to get type param location")?;
+
+                    format!("type parameter '{}'", old_param.0)
+                } else {
+                    format!("'{}'", old_param)
+                };
+
+                let label = format!(
+                    "Unexpected parameter {new_param_message}, expected {old_param_message}"
+                );
+
+                let mut secondary = Vec::new();
+                if let Type::TypeParameter(t) = new_param {
+                    let type_param = &func_sourcemap
+                        .type_parameters
+                        .get(*t as usize)
+                        .context("Unable to get type param location")?;
+                    secondary.push((
+                        type_param.1.clone(),
+                        format!("Type parameter '{}' is defined here", &type_param.0),
+                    ));
+                }
+
                 diags.add(Diagnostic::new(
                     Functions_::SignatureMismatch,
-                    (
-                        param_loc,
-                        format!("Unexpected parameter {new_param}, expected {old_param}"),
-                    ),
-                    Vec::<(Loc, String)>::new(),
+                    (param_loc, label),
+                    secondary,
                     vec![
                         "Functions are part of a module's public interface \
                         and cannot be changed during an upgrade."
@@ -1117,23 +1159,49 @@ fn function_signature_mismatch_diag(
                 .context("Unable to get return location")?;
 
             if old_return != new_return {
+                let mut secondary = Vec::new();
+                let new_return_message = if let Type::TypeParameter(t) = new_return {
+                    let type_param = func_sourcemap
+                        .type_parameters
+                        .get(*t as usize)
+                        .context("Unable to get type param location")?;
+
+                    secondary.push((
+                        type_param.1.clone(),
+                        format!(
+                            "Expected type parameter '{}' is defined here",
+                            &type_param.0
+                        ),
+                    ));
+                    format!("type parameter {}", type_param.0)
+                } else {
+                    format!("'{}'", new_return)
+                };
+
+                let old_return_message = if let Type::TypeParameter(t) = old_return {
+                    let type_param = func_sourcemap
+                        .type_parameters
+                        .get(*t as usize)
+                        .context("Unable to get type param location")?;
+                    format!("type parameter {}", type_param.0)
+                } else {
+                    format!("'{}'", old_return)
+                };
+
+                let label = if new_function.return_.len() == 1 {
+                    format!(
+                        "Unexpected return type {old_return_message}, expected {new_return_message}"
+                    )
+                } else {
+                    format!(
+                        "Unexpected return type {new_return_message} at position {i}, expected {old_return_message}"
+                    )
+                };
+
                 diags.add(Diagnostic::new(
                     Functions_::SignatureMismatch,
-                    (
-                        *return_,
-                        if new_function.return_.len() == 1 {
-                            format!(
-                                "Unexpected return type {new_return}, \
-                                expected {old_return}"
-                            )
-                        } else {
-                            format!(
-                                "Unexpected return type {new_return} at \
-                                position {i}, expected {old_return}"
-                            )
-                        },
-                    ),
-                    Vec::<(Loc, String)>::new(),
+                    (*return_, label),
+                    secondary,
                     vec![
                         "Functions are part of a module's public interface \
                         and cannot be changed during an upgrade."

@@ -29,5 +29,22 @@ module upgrades::upgrades {
     public fun func_with_wrong_return_length(): u64 {
         0
     }
+
+    public struct A has drop {
+        x: u64
+    }
+
+    public struct B has drop {
+        x: u32
+    }
+
+    // changed argument from A to B
+    public fun func_with_wrong_struct_param(a: B): u64 {
+        0
+    }
+    
+    public fun func_with_wrong_struct_param2(b: A): u64 {
+        0
+    }
 }
 
