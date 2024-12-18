@@ -14060,7 +14060,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
- "url",
 ]
 
 [[package]]
