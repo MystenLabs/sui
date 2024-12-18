@@ -30,3 +30,4 @@ packages:
   - '!sdk/signers/gcp'
   - '!sdk/typescript/zklogin'
   - '!sdk/typescript/keypairs/passkey'
+  - '!sdk/typescript/graphql/schemas/latest'

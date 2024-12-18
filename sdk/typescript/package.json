@@ -93,6 +93,10 @@
 		"./graphql/schemas/2024.4": {
 			"import": "./dist/esm/graphql/schemas/2024.4/index.js",
 			"require": "./dist/cjs/graphql/schemas/2024.4/index.js"
+		},
+		"./graphql/schemas/latest": {
+			"import": "./dist/esm/graphql/schemas/latest/index.js",
+			"require": "./dist/cjs/graphql/schemas/latest/index.js"
 		}
 	},
 	"scripts": {
