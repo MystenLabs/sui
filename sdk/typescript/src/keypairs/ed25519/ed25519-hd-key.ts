@@ -5,9 +5,9 @@
 // with @noble/hashes to be browser compatible.
 
 import { fromHex } from '@mysten/bcs';
+import { ed25519 } from '@noble/curves/ed25519';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
-import nacl from 'tweetnacl';
 
 type Hex = string;
 type Path = string;
@@ -55,12 +55,11 @@ const CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
 };
 
 export const getPublicKey = (privateKey: Uint8Array, withZeroByte = true): Uint8Array => {
-	const keyPair = nacl.sign.keyPair.fromSeed(privateKey);
-	const signPk = keyPair.secretKey.subarray(32);
-	const newArr = new Uint8Array(signPk.length + 1);
+	const publicKey = ed25519.getPublicKey(privateKey).subarray(32);
+	const newArr = new Uint8Array(publicKey.length + 1);
 	newArr.set([0]);
-	newArr.set(signPk, 1);
-	return withZeroByte ? newArr : signPk;
+	newArr.set(publicKey, 1);
+	return withZeroByte ? newArr : publicKey;
 };
 
 export const isValidPath = (path: string): boolean => {
