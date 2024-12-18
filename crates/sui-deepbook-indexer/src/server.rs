@@ -1182,7 +1182,6 @@ async fn deep_supply() -> Result<Json<u64>, DeepBookError> {
         "No results from dev_inspect_transaction_block".to_string(),
     ))?;
 
-    // Extract the total supply (assuming it's the first value returned)
     let total_supply = &binding
         .first_mut()
         .ok_or(DeepBookError::InternalError(
@@ -1195,12 +1194,10 @@ async fn deep_supply() -> Result<Json<u64>, DeepBookError> {
         ))?
         .0;
 
-    // Assuming `total_supply` is returned as a byte array that can be converted to a number
     let total_supply_value: u64 = bcs::from_bytes(total_supply).map_err(|_| {
         DeepBookError::InternalError("Failed to deserialize total supply".to_string())
     })?;
 
-    // Return the total supply as a single JSON number
     Ok(Json(total_supply_value))
 }
 
