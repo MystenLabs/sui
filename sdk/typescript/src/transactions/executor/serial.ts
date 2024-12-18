@@ -3,7 +3,7 @@
 
 import { toBase64 } from '@mysten/bcs';
 
-import { bcs } from '../../bcs/index.js';
+import type { bcs } from '../../bcs/index.js';
 import type { SuiClient, SuiTransactionBlockResponseOptions } from '../../client/index.js';
 import type { Signer } from '../../cryptography/keypair.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
@@ -32,11 +32,12 @@ export class SerialTransactionExecutor {
 		this.#cache = new CachingTransactionExecutor({
 			client: options.client,
 			cache: options.cache,
+			onEffects: (effects) => this.#cacheGasCoin(effects),
 		});
 	}
 
 	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
-		return Promise.all([this.#cacheGasCoin(effects), this.#cache.cache.applyEffects(effects)]);
+		return this.#cache.applyEffects(effects);
 	}
 
 	#cacheGasCoin = async (effects: typeof bcs.TransactionEffects.$inferType) => {
@@ -104,9 +105,6 @@ export class SerialTransactionExecutor {
 				});
 
 			const effectsBytes = Uint8Array.from(results.rawEffects!);
-			const effects = bcs.TransactionEffects.parse(effectsBytes);
-			await this.applyEffects(effects);
-
 			return {
 				digest: results.digest,
 				effects: toBase64(effectsBytes),
