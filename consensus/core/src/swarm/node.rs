@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::TransactionClient;
+
 use super::container::AuthorityNodeContainer;
 use anyhow::Result;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, ProtocolKeyPair};
@@ -45,16 +47,11 @@ impl Node {
     }
 
     /// Start this Node
-    pub async fn spawn(&self) -> Result<()> {
+    pub async fn start(&self) -> Result<()> {
         info!(index =% self.config.authority_index, "starting in-memory node");
         let config = self.config.clone();
         *self.container.lock() = Some(AuthorityNodeContainer::spawn(config).await);
         Ok(())
-    }
-
-    /// Start this Node, waiting until its completely started up.
-    pub async fn start(&self) -> Result<()> {
-        self.spawn().await
     }
 
     pub fn spawn_committed_subdag_consumer(&self) -> Result<()> {
@@ -70,6 +67,15 @@ impl Node {
             });
         }
         Ok(())
+    }
+
+    pub fn transaction_client(&self) -> Arc<TransactionClient> {
+        let container = self.container.lock();
+        if let Some(container) = container.as_ref() {
+            container.transaction_client()
+        } else {
+            panic!("Container not initialised");
+        }
     }
 
     /// Stop this Node

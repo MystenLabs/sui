@@ -5,10 +5,11 @@ use arc_swap::ArcSwapOption;
 use consensus_config::Parameters;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use prometheus::Registry;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::watch;
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
 use tracing::{info, trace};
 
 use super::node::NodeConfig;
@@ -19,13 +20,9 @@ use crate::{CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAut
 pub(crate) struct AuthorityNodeContainer {
     handle: Option<ContainerHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
-    node_watch: watch::Receiver<Option<ConsensusAuthority>>,
-    commit_receiver: Arc<
-        ArcSwapOption<(
-            UnboundedReceiver<CommittedSubDag>,
-            Arc<CommitConsumerMonitor>,
-        )>,
-    >,
+    consensus_authority: ConsensusAuthority,
+    commit_receiver: ArcSwapOption<UnboundedReceiver<CommittedSubDag>>,
+    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
 }
 
 #[derive(Debug)]
@@ -46,7 +43,7 @@ impl Drop for AuthorityNodeContainer {
 impl AuthorityNodeContainer {
     /// Spawn a new Node.
     pub async fn spawn(config: NodeConfig) -> Self {
-        let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(None);
+        let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
         let (cancel_sender, cancel_receiver) = tokio::sync::watch::channel(false);
 
         let handle = sui_simulator::runtime::Handle::current();
@@ -58,8 +55,8 @@ impl AuthorityNodeContainer {
             SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
             _ => panic!("unsupported protocol"),
         };
-        let commit_receiver_swap = Arc::new(ArcSwapOption::empty());
-        let commit_receiver_swap_clone = commit_receiver_swap.clone();
+        let init_receiver_swap = Arc::new(ArcSwapOption::empty());
+        let int_receiver_swap_clone = init_receiver_swap.clone();
 
         let node = builder
             .ip(ip)
@@ -68,16 +65,19 @@ impl AuthorityNodeContainer {
                 info!("Node restarted");
                 let config = config.clone();
                 let mut cancel_receiver = cancel_receiver.clone();
-                let startup_sender = startup_sender.clone();
-                let commit_receiver_swap_clone = commit_receiver_swap_clone.clone();
+                let init_receiver_swap_clone = int_receiver_swap_clone.clone();
+                let startup_sender_clone = startup_sender.clone();
 
                 async move {
                     let (consensus_authority, commit_receiver, commit_consumer_monitor) =
                         AuthorityNodeContainer::make_authority(config).await;
 
-                    startup_sender.send(Some(consensus_authority)).ok();
-                    commit_receiver_swap_clone
-                        .store(Some(Arc::new((commit_receiver, commit_consumer_monitor))));
+                    startup_sender_clone.send(true).ok();
+                    init_receiver_swap_clone.store(Some(Arc::new((
+                        consensus_authority,
+                        commit_receiver,
+                        commit_consumer_monitor,
+                    ))));
 
                     // run until canceled
                     loop {
@@ -92,11 +92,22 @@ impl AuthorityNodeContainer {
 
         startup_receiver.changed().await.unwrap();
 
+        let Some(init_tuple) = init_receiver_swap.swap(None) else {
+            panic!("Components should be initialised by now");
+        };
+
+        let Ok((consensus_authority, commit_receiver, commit_consumer_monitor)) =
+            Arc::try_unwrap(init_tuple)
+        else {
+            panic!("commit receiver still in use");
+        };
+
         Self {
             handle: Some(ContainerHandle { node_id: node.id() }),
             cancel_sender: Some(cancel_sender),
-            node_watch: startup_receiver,
-            commit_receiver: commit_receiver_swap,
+            consensus_authority,
+            commit_receiver: ArcSwapOption::new(Some(Arc::new(commit_receiver))),
+            commit_consumer_monitor,
         }
     }
 
@@ -119,15 +130,19 @@ impl AuthorityNodeContainer {
         UnboundedReceiver<CommittedSubDag>,
         Arc<CommitConsumerMonitor>,
     ) {
-        if let Some(tuple) = self.commit_receiver.swap(None) {
-            let Ok((commit_receiver, commit_consumer_monitor)) = Arc::try_unwrap(tuple) else {
+        if let Some(commit_receiver) = self.commit_receiver.swap(None) {
+            let Ok(commit_receiver) = Arc::try_unwrap(commit_receiver) else {
                 panic!("commit receiver still in use");
             };
 
-            (commit_receiver, commit_consumer_monitor)
+            (commit_receiver, self.commit_consumer_monitor.clone())
         } else {
             panic!("commit receiver already taken");
         }
+    }
+
+    pub fn transaction_client(&self) -> Arc<crate::TransactionClient> {
+        self.consensus_authority.transaction_client()
     }
 
     async fn make_authority(

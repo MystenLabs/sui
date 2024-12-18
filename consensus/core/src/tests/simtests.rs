@@ -51,6 +51,7 @@ mod test {
         protocol_config.set_consensus_gc_depth_for_testing(3);
 
         let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::with_capacity(committee.size());
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
@@ -67,13 +68,28 @@ mod test {
 
             if index != AuthorityIndex::new_for_test(NUM_OF_AUTHORITIES as u32 - 1) {
                 node.start().await.unwrap();
-            }
+                node.spawn_committed_subdag_consumer().unwrap();
 
-            node.spawn_committed_subdag_consumer().unwrap();
+                let client = node.transaction_client();
+                transaction_clients.push(client);
+            }
 
             boot_counters[index] += 1;
             authorities.push(node);
         }
+
+        let transaction_clients_clone = transaction_clients.clone();
+        let _handle = tokio::spawn(async move {
+            const NUM_TRANSACTIONS: u16 = 1000;
+
+            for i in 0..NUM_TRANSACTIONS {
+                let txn = vec![i as u8; 16];
+                transaction_clients_clone[i as usize % transaction_clients_clone.len()]
+                    .submit(vec![txn])
+                    .await
+                    .unwrap();
+            }
+        });
 
         // wait for authorities
         sleep(Duration::from_secs(60)).await;
