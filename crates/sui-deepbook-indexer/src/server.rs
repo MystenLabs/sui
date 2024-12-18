@@ -54,7 +54,8 @@ pub const DEEPBOOK_PACKAGE_ID: &str =
     "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809";
 pub const DEEP_TOKEN_PACKAGE_ID: &str =
     "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270";
-pub const DEEP_TREASURY_ID: &str = "0x032abf8948dda67a271bcc18e776dbbcfb0d58c8d288a700ff0d5521e57a1ffe";
+pub const DEEP_TREASURY_ID: &str =
+    "0x032abf8948dda67a271bcc18e776dbbcfb0d58c8d288a700ff0d5521e57a1ffe";
 pub const DEEP_SUPPLY_MODULE: &str = "deep";
 pub const DEEP_SUPPLY_FUNCTION: &str = "total_supply";
 pub const DEEP_SUPPLY_PATH: &str = "/deep_supply";
@@ -1125,18 +1126,18 @@ async fn orderbook(
     Ok(Json(result))
 }
 
-
 /// DEEP total supply
 async fn deep_supply() -> Result<Json<u64>, DeepBookError> {
     let sui_client = SuiClientBuilder::default().build(SUI_MAINNET_URL).await?;
     let mut ptb = ProgrammableTransactionBuilder::new();
 
-    let deep_treasury_object_id = ObjectID::from_hex_literal(
-        DEEP_TREASURY_ID
-    )?;
+    let deep_treasury_object_id = ObjectID::from_hex_literal(DEEP_TREASURY_ID)?;
     let deep_treasury_object: SuiObjectResponse = sui_client
         .read_api()
-        .get_object_with_options(deep_treasury_object_id, SuiObjectDataOptions::full_content())
+        .get_object_with_options(
+            deep_treasury_object_id,
+            SuiObjectDataOptions::full_content(),
+        )
         .await?;
     let deep_treasury_data: &SuiObjectData =
         deep_treasury_object
@@ -1146,14 +1147,18 @@ async fn deep_supply() -> Result<Json<u64>, DeepBookError> {
                 "Incorrect Treasury ID".to_string(),
             ))?;
 
-    let deep_treasury_ref: ObjectRef =
-        (deep_treasury_data.object_id, deep_treasury_data.version, deep_treasury_data.digest);
+    let deep_treasury_ref: ObjectRef = (
+        deep_treasury_data.object_id,
+        deep_treasury_data.version,
+        deep_treasury_data.digest,
+    );
 
     let deep_treasury_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(deep_treasury_ref));
     ptb.input(deep_treasury_input)?;
 
-    let package = ObjectID::from_hex_literal(DEEP_TOKEN_PACKAGE_ID)
-        .map_err(|e| DeepBookError::InternalError(format!("Invalid deep token package ID: {}", e)))?;
+    let package = ObjectID::from_hex_literal(DEEP_TOKEN_PACKAGE_ID).map_err(|e| {
+        DeepBookError::InternalError(format!("Invalid deep token package ID: {}", e))
+    })?;
     let module = DEEP_SUPPLY_MODULE.to_string();
     let function = DEEP_SUPPLY_FUNCTION.to_string();
 
@@ -1176,7 +1181,6 @@ async fn deep_supply() -> Result<Json<u64>, DeepBookError> {
     let mut binding = result.results.ok_or(DeepBookError::InternalError(
         "No results from dev_inspect_transaction_block".to_string(),
     ))?;
-
 
     // Extract the total supply (assuming it's the first value returned)
     let total_supply = &binding
