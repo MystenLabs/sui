@@ -25,7 +25,7 @@ tracing = "0.1.36"
 serde = { version = "1.0.144", features = ["derive"] }
 url = "2.3.1"
 
-sui-move.workspace = true 
+sui-move.workspace = true
 sui-move-build.workspace = true
 sui-sdk.workspace = true
 sui-source-validation.workspace = true
@@ -48,6 +48,6 @@ fs_extra = "1.3.0"
 reqwest.workspace = true
 
 sui.workspace = true
-sui-move = { workspace = true, features = ["all"] }
+sui-move.workspace = true
 sui-json-rpc-types.workspace = true
 test-cluster.workspace = true
