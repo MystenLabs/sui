@@ -896,6 +896,36 @@ fn function_lost_public(
     Ok(diags)
 }
 
+fn format_param(
+    param: &Type,
+    type_params: Vec<SourceName>,
+    secondary: &mut Vec<(Loc, String)>,
+) -> Result<String, Error> {
+    Ok(match param {
+        Type::TypeParameter(t) => {
+            let type_param = type_params
+                .get(*t as usize)
+                .context("Unable to get type param location")?;
+
+            secondary.push((
+                type_param.1,
+                format!("Type parameter '{}' is defined here", &type_param.0),
+            ));
+            type_param.0.to_string()
+        }
+        Type::Vector(t) => {
+            format!("vector<{}>", format_param(t, type_params, secondary)?)
+        }
+        Type::MutableReference(t) => {
+            format!("&mut {}", format_param(t, type_params, secondary)?)
+        }
+        Type::Reference(t) => {
+            format!("&{}", format_param(t, type_params, secondary)?)
+        }
+        _ => format!("{}", param),
+    })
+}
+
 /// Return a diagnostic for a function signature mismatch.
 /// start by checking the lengths of the parameters and returns and return a diagnostic if they are different
 /// if the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch
@@ -964,47 +994,18 @@ fn function_signature_mismatch_diag(
 
                 let mut secondary = Vec::new();
 
-                let new_param_message = if let Type::TypeParameter(t) = new_param {
-                    let new_param = func_sourcemap
-                        .type_parameters
-                        .get(*t as usize)
-                        .context("Unable to get type param location")?;
+                let old_param = format_param(
+                    old_param,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut secondary,
+                )?;
+                let new_param = format_param(
+                    new_param,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut Vec::new(),
+                )?;
 
-                    secondary.push((
-                        new_param.1.clone(),
-                        format!("Expected type parameter '{}' is defined here", &new_param.0),
-                    ));
-                    format!("type parameter '{}'", new_param.0)
-                } else {
-                    format!("'{}'", new_param)
-                };
-
-                let old_param_message = if let Type::TypeParameter(t) = old_param {
-                    let old_param = &func_sourcemap
-                        .type_parameters
-                        .get(*t as usize)
-                        .context("Unable to get type param location")?;
-
-                    format!("type parameter '{}'", old_param.0)
-                } else {
-                    format!("'{}'", old_param)
-                };
-
-                let label = format!(
-                    "Unexpected parameter {new_param_message}, expected {old_param_message}"
-                );
-
-                let mut secondary = Vec::new();
-                if let Type::TypeParameter(t) = new_param {
-                    let type_param = &func_sourcemap
-                        .type_parameters
-                        .get(*t as usize)
-                        .context("Unable to get type param location")?;
-                    secondary.push((
-                        type_param.1.clone(),
-                        format!("Type parameter '{}' is defined here", &type_param.0),
-                    ));
-                }
+                let label = format!("Unexpected parameter '{new_param}', expected '{old_param}'");
 
                 diags.add(Diagnostic::new(
                     Functions_::SignatureMismatch,
@@ -1160,41 +1161,23 @@ fn function_signature_mismatch_diag(
 
             if old_return != new_return {
                 let mut secondary = Vec::new();
-                let new_return_message = if let Type::TypeParameter(t) = new_return {
-                    let type_param = func_sourcemap
-                        .type_parameters
-                        .get(*t as usize)
-                        .context("Unable to get type param location")?;
 
-                    secondary.push((
-                        type_param.1.clone(),
-                        format!(
-                            "Expected type parameter '{}' is defined here",
-                            &type_param.0
-                        ),
-                    ));
-                    format!("type parameter {}", type_param.0)
-                } else {
-                    format!("'{}'", new_return)
-                };
-
-                let old_return_message = if let Type::TypeParameter(t) = old_return {
-                    let type_param = func_sourcemap
-                        .type_parameters
-                        .get(*t as usize)
-                        .context("Unable to get type param location")?;
-                    format!("type parameter {}", type_param.0)
-                } else {
-                    format!("'{}'", old_return)
-                };
+                let old_return = format_param(
+                    old_return,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut secondary,
+                )?;
+                let new_return = format_param(
+                    new_return,
+                    func_sourcemap.type_parameters.clone(),
+                    &mut Vec::new(),
+                )?;
 
                 let label = if new_function.return_.len() == 1 {
-                    format!(
-                        "Unexpected return type {old_return_message}, expected {new_return_message}"
-                    )
+                    format!("Unexpected return type '{new_return}', expected '{old_return}'")
                 } else {
                     format!(
-                        "Unexpected return type {new_return_message} at position {i}, expected {old_return_message}"
+                        "Unexpected return type '{new_return}' at position {i}, expected '{old_return}'"
                     )
                 };
 

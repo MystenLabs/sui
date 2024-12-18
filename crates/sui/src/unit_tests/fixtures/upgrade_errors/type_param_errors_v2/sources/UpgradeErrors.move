@@ -56,8 +56,14 @@ module upgrades::upgrades {
 
     // type params swapped
     public fun swap_type_params<T: drop, U: drop + copy>(a: U, b: T): T { return b }
-    
+
     // return type params swapped U and T
     public fun swap_type_params_return<T: drop, U: drop + copy>(a: T, b: U): U { return b }
+
+    // change type on vector
+    public fun vec_changed(_: vector<u32>) {}
+
+    // change type param on vector
+    public fun vec_changed_type_param<T: drop, U: drop + copy>(_: vector<U>) {}
 }
 
