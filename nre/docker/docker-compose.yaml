@@ -7,7 +7,7 @@ services:
     image: mysten/sui-node:${SUI_SHA} # UPDATE HERE
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,consensus=debug,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
     labels:
       org.label-schema.name: "validator"
     ports:

@@ -73,7 +73,8 @@ module sui::object {
 }
 
 module sui::transfer {
+    const ZERO: u64 = 0;
     public fun public_freeze_object<T: key>(_: T) {
-        abort 0
+        abort ZERO
     }
 }

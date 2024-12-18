@@ -3,33 +3,32 @@
 
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use diesel::query_dsl::methods::FilterDsl;
-use diesel::{ExpressionMethods, OptionalExtension};
-use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models::objects::{StoredHistoryObject, StoredObject};
-use sui_indexer::schema::objects;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use move_core_types::language_storage::TypeTag;
+use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
+use sui_types::dynamic_field::visitor::{Field, FieldVisitor};
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 use super::available_range::AvailableRange;
 use super::cursor::{Page, Target};
-use super::move_object::MoveObjectDowncastError;
-use super::object::{self, deserialize_move_struct, Object, ObjectKind, ObjectLookup};
+use super::object::{self, Object, ObjectKind};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
 use crate::consistency::{build_objects_query, View};
 use crate::data::package_resolver::PackageResolver;
-use crate::data::{Db, DbConnection, QueryExecutor};
+use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::filter;
 use crate::raw_query::RawQuery;
 
 pub(crate) struct DynamicField {
     pub super_: MoveObject,
-    pub df_object_id: SuiAddress,
-    pub df_kind: DynamicFieldType,
+    /// The root version that this dynamic field was queried at. This can be a later version than
+    /// the version of the dynamic field's object (`super_`).
+    pub root_version: Option<u64>,
 }
 
 #[derive(Union)]
@@ -62,40 +61,28 @@ impl DynamicField {
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
     /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
-        let resolver: &PackageResolver = ctx
-            .data()
-            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-            .extend()?;
+        let resolver: &PackageResolver = ctx.data_unchecked();
 
-        let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
-            .await
-            .extend()?;
+        let type_ = TypeTag::from(self.super_.native.type_().clone());
+        let layout = resolver.type_layout(type_.clone()).await.map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                type_.to_canonical_display(/* with_prefix */ true)
+            ))
+        })?;
 
-        // Get TypeTag of the DynamicField name from StructTag of the MoveStruct
-        let type_tag = DynamicFieldInfo::try_extract_field_name(&struct_tag, &self.df_kind)
+        let Field {
+            name_layout,
+            name_bytes,
+            ..
+        } = FieldVisitor::deserialize(self.super_.native.contents(), &layout)
             .map_err(|e| Error::Internal(e.to_string()))
             .extend()?;
 
-        let name_move_value = extract_field_from_move_struct(move_struct, "name").extend()?;
-
-        let undecorated = if self.df_kind == DynamicFieldType::DynamicObject {
-            let inner_name_move_value = match name_move_value {
-                A::MoveValue::Struct(inner_struct) => {
-                    extract_field_from_move_struct(inner_struct, "name")
-                }
-                _ => Err(Error::Internal("Expected a wrapper struct".to_string())),
-            }
-            .extend()?;
-            inner_name_move_value.undecorate()
-        } else {
-            name_move_value.undecorate()
-        };
-
-        let bcs = bcs::to_bytes(&undecorated)
-            .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))
-            .extend()?;
-
-        Ok(Some(MoveValue::new(type_tag, Base64::from(bcs))))
+        Ok(Some(MoveValue::new(
+            name_layout.into(),
+            Base64::from(name_bytes.to_owned()),
+        )))
     }
 
     /// The returned dynamic field is an object if its return type is `MoveObject`,
@@ -103,45 +90,47 @@ impl DynamicField {
     /// will be from the latest version that is at most equal to its parent object's
     /// version
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
-        if self.df_kind == DynamicFieldType::DynamicObject {
-            // If `df_kind` is a DynamicObject, the object we are currently on is the field object,
-            // and we must resolve one more level down to the value object. Becuase we only have
-            // checkpoint-level granularity, we may end up reading a later version of the value
-            // object. Thus, we use the version of the field object to bound the value object at the
-            // correct version.
+        let resolver: &PackageResolver = ctx.data_unchecked();
+
+        let type_ = TypeTag::from(self.super_.native.type_().clone());
+        let layout = resolver.type_layout(type_.clone()).await.map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                type_.to_canonical_display(/* with_prefix */ true)
+            ))
+        })?;
+
+        let Field {
+            kind,
+            value_layout,
+            value_bytes,
+            ..
+        } = FieldVisitor::deserialize(self.super_.native.contents(), &layout)
+            .map_err(|e| Error::Internal(e.to_string()))
+            .extend()?;
+
+        if kind == DynamicFieldType::DynamicObject {
+            let df_object_id: SuiAddress = bcs::from_bytes(value_bytes)
+                .map_err(|e| Error::Internal(format!("Failed to deserialize object ID: {e}")))
+                .extend()?;
+
             let obj = MoveObject::query(
                 ctx,
-                self.df_object_id,
-                Object::under_parent(self.root_version(), self.super_.super_.checkpoint_viewed_at),
+                df_object_id,
+                if let Some(root_version) = self.root_version {
+                    Object::under_parent(root_version, self.super_.super_.checkpoint_viewed_at)
+                } else {
+                    Object::latest_at(self.super_.super_.checkpoint_viewed_at)
+                },
             )
             .await
             .extend()?;
+
             Ok(obj.map(DynamicFieldValue::MoveObject))
         } else {
-            let resolver: &PackageResolver = ctx
-                .data()
-                .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-                .extend()?;
-
-            let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
-                .await
-                .extend()?;
-
-            // Get TypeTag of the DynamicField value from StructTag of the MoveStruct
-            let type_tag = DynamicFieldInfo::try_extract_field_value(&struct_tag)
-                .map_err(|e| Error::Internal(e.to_string()))
-                .extend()?;
-
-            let value_move_value = extract_field_from_move_struct(move_struct, "value").extend()?;
-
-            let undecorated = value_move_value.undecorate();
-            let bcs = bcs::to_bytes(&undecorated)
-                .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))
-                .extend()?;
-
             Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
-                type_tag,
-                Base64::from(bcs),
+                value_layout.into(),
+                Base64::from(value_bytes.to_owned()),
             ))))
         }
     }
@@ -174,67 +163,17 @@ impl DynamicField {
         let super_ = MoveObject::query(
             ctx,
             SuiAddress::from(field_id),
-            ObjectLookup::LatestAt {
-                parent_version,
-                checkpoint_viewed_at,
+            if let Some(parent_version) = parent_version {
+                Object::under_parent(parent_version, checkpoint_viewed_at)
+            } else {
+                Object::latest_at(checkpoint_viewed_at)
             },
         )
         .await?;
 
-        super_.map(Self::try_from).transpose()
-    }
-
-    /// Due to recent performance degradations, the existing `DynamicField::query` method is now
-    /// consistently timing out. This impacts features like `verify_zklogin_signature`, which
-    /// depends on resolving a dynamic field of 0x7 authenticator state. This method is a temporary
-    /// fix by fetching the data from the live `objects` table, and should only be used by
-    /// `verify_zklogin_signature`. Once we have fixed `objects_snapshot` table lag and backfilled
-    /// the `objects_version` table, this will no longer be needed.
-    pub(crate) async fn query_latest_dynamic_field(
-        db: &Db,
-        parent: SuiAddress,
-        name: DynamicFieldName,
-        kind: DynamicFieldType,
-        checkpoint_viewed_at: u64,
-    ) -> Result<Option<DynamicField>, Error> {
-        let type_ = match kind {
-            DynamicFieldType::DynamicField => name.type_.0,
-            DynamicFieldType::DynamicObject => {
-                DynamicFieldInfo::dynamic_object_field_wrapper(name.type_.0).into()
-            }
-        };
-
-        let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
-            .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
-
-        let object_id = SuiAddress::from(field_id);
-
-        let Some(stored_obj): Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    objects::dsl::objects.filter(objects::dsl::object_id.eq(object_id.into_vec()))
-                })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch dynamic field: {e}")))?
-        else {
-            return Ok(None);
-        };
-
-        let history_object = StoredHistoryObject::from(stored_obj);
-        let gql_object =
-            Object::try_from_stored_history_object(history_object, checkpoint_viewed_at, None)?;
-
-        let super_ = match MoveObject::try_from(&gql_object) {
-            Ok(object) => Some(object),
-            Err(MoveObjectDowncastError::WrappedOrDeleted) => None,
-            Err(MoveObjectDowncastError::NotAMoveObject) => {
-                return Err(Error::Internal(format!("{object_id} is not a Move object")));
-            }
-        };
-
-        super_.map(Self::try_from).transpose()
+        super_
+            .map(|super_| Self::try_from(super_, parent_version))
+            .transpose()
     }
 
     /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`. The
@@ -257,15 +196,22 @@ impl DynamicField {
 
         let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    checkpoint_viewed_at,
-                    dynamic_fields_query(parent, parent_version, range, &page),
-                )?))
+                    Ok(Some(
+                        page.paginate_raw_query::<StoredHistoryObject>(
+                            conn,
+                            checkpoint_viewed_at,
+                            dynamic_fields_query(parent, parent_version, range, &page),
+                        )
+                        .await?,
+                    ))
+                }
+                .scope_boxed()
             })
             .await?
         else {
@@ -294,76 +240,39 @@ impl DynamicField {
                 ))
             })?;
 
-            let dynamic_field = DynamicField::try_from(move_)?;
+            let dynamic_field = DynamicField::try_from(move_, parent_version)?;
             conn.edges.push(Edge::new(cursor, dynamic_field));
         }
 
         Ok(conn)
     }
 
-    pub(crate) fn root_version(&self) -> u64 {
-        self.super_.root_version()
-    }
-}
-
-impl TryFrom<MoveObject> for DynamicField {
-    type Error = Error;
-
-    fn try_from(stored: MoveObject) -> Result<Self, Error> {
+    fn try_from(stored: MoveObject, root_version: Option<u64>) -> Result<Self, Error> {
         let super_ = &stored.super_;
 
-        let (df_object_id, df_kind) = match &super_.kind {
-            ObjectKind::Indexed(_, stored) => stored
-                .df_object_id
-                .as_ref()
-                .map(|id| (id, stored.df_kind))
-                .ok_or_else(|| Error::Internal("Object is not a dynamic field.".to_string()))?,
-            _ => {
-                return Err(Error::Internal(
-                    "A WrappedOrDeleted object cannot be converted into a DynamicField."
-                        .to_string(),
-                ))
-            }
+        let native = match &super_.kind {
+            ObjectKind::NotIndexed(native) | ObjectKind::Indexed(native, _) => native.clone(),
+            ObjectKind::Serialized(bytes) => bcs::from_bytes(bytes)
+                .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?,
         };
 
-        let df_object_id = SuiAddress::from_bytes(df_object_id).map_err(|e| {
-            Error::Internal(format!("Failed to deserialize dynamic field ID: {e}."))
-        })?;
-
-        let df_kind = match df_kind {
-            Some(0) => DynamicFieldType::DynamicField,
-            Some(1) => DynamicFieldType::DynamicObject,
-            Some(k) => {
-                return Err(Error::Internal(format!(
-                    "Unrecognized dynamic field kind: {k}."
-                )))
-            }
-            None => return Err(Error::Internal("No dynamic field kind.".to_string())),
+        let Some(object) = native.data.try_as_move() else {
+            return Err(Error::Internal("DynamicField is not an object".to_string()));
         };
+
+        let Some(tag) = object.type_().other() else {
+            return Err(Error::Internal("DynamicField is not a struct".to_string()));
+        };
+
+        if !DynamicFieldInfo::is_dynamic_field(tag) {
+            return Err(Error::Internal("Wrong type for DynamicField".to_string()));
+        }
 
         Ok(DynamicField {
             super_: stored,
-            df_object_id,
-            df_kind,
+            root_version,
         })
     }
-}
-
-pub fn extract_field_from_move_struct(
-    move_struct: MoveStruct,
-    field_name: &str,
-) -> Result<A::MoveValue, Error> {
-    move_struct
-        .fields
-        .into_iter()
-        .find_map(|(id, value)| {
-            if id.to_string() == field_name {
-                Some(value)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| Error::Internal(format!("Field '{}' not found", field_name)))
 }
 
 /// Builds the `RawQuery` for fetching dynamic fields attached to a parent object. If

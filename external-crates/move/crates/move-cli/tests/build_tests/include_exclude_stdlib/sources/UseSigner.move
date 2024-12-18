@@ -1,4 +1,4 @@
-module 0x1::Example {
+module 0x6::Example {
     use std::address;
 
     public fun f(): u64 {

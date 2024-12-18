@@ -141,25 +141,25 @@ Emitted when a new pool is created
 
 </dd>
 <dt>
-<code>taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>taker_fee_rate: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>maker_rebate_rate: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>tick_size: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>lot_size: u64</code>
 </dt>
 <dd>
 
@@ -193,13 +193,13 @@ Emitted when a maker order is injected into the order book.
  object ID of the pool the order was placed on
 </dd>
 <dt>
-<code>order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>order_id: u64</code>
 </dt>
 <dd>
  ID of the order within the pool
 </dd>
 <dt>
-<code>client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>client_order_id: u64</code>
 </dt>
 <dd>
  ID of the order defined by client
@@ -217,25 +217,25 @@ Emitted when a maker order is injected into the order book.
  owner ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
-<code>original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>original_quantity: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>base_asset_quantity_placed: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>base_asset_quantity_placed: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>expire_timestamp: u64</code>
 </dt>
 <dd>
 
@@ -269,13 +269,13 @@ Emitted when a maker order is canceled.
  object ID of the pool the order was placed on
 </dd>
 <dt>
-<code>order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>order_id: u64</code>
 </dt>
 <dd>
  ID of the order within the pool
 </dd>
 <dt>
-<code>client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>client_order_id: u64</code>
 </dt>
 <dd>
  ID of the order defined by client
@@ -293,19 +293,19 @@ Emitted when a maker order is canceled.
  owner ID of the <code>AccountCap</code> that canceled the order
 </dd>
 <dt>
-<code>original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>original_quantity: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>base_asset_quantity_canceled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>base_asset_quantity_canceled: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
 
@@ -333,13 +333,13 @@ A struct to make all orders canceled a more effifient struct
 
 <dl>
 <dt>
-<code>order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>order_id: u64</code>
 </dt>
 <dd>
  ID of the order within the pool
 </dd>
 <dt>
-<code>client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>client_order_id: u64</code>
 </dt>
 <dd>
  ID of the order defined by client
@@ -357,19 +357,19 @@ A struct to make all orders canceled a more effifient struct
  owner ID of the <code>AccountCap</code> that canceled the order
 </dd>
 <dt>
-<code>original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>original_quantity: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>base_asset_quantity_canceled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>base_asset_quantity_canceled: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
 
@@ -437,19 +437,19 @@ Emitted only when a maker order is filled.
  object ID of the pool the order was placed on
 </dd>
 <dt>
-<code>order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>order_id: u64</code>
 </dt>
 <dd>
  ID of the order within the pool
 </dd>
 <dt>
-<code>taker_client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>taker_client_order_id: u64</code>
 </dt>
 <dd>
  ID of the order defined by taker client
 </dd>
 <dt>
-<code>maker_client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>maker_client_order_id: u64</code>
 </dt>
 <dd>
  ID of the order defined by maker client
@@ -473,37 +473,37 @@ Emitted only when a maker order is filled.
  owner ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
-<code>original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>original_quantity: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>base_asset_quantity_filled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>base_asset_quantity_filled: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>base_asset_quantity_remaining: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>base_asset_quantity_remaining: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>taker_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>taker_commission: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>maker_rebates: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>maker_rebates: u64</code>
 </dt>
 <dd>
 
@@ -537,7 +537,7 @@ Emitted when user deposit asset to custodian
  object id of the pool that asset deposit to
 </dd>
 <dt>
-<code>quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>quantity: u64</code>
 </dt>
 <dd>
  quantity of the asset deposited
@@ -577,7 +577,7 @@ Emitted when user withdraw asset from custodian
  object id of the pool that asset withdraw from
 </dd>
 <dt>
-<code>quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>quantity: u64</code>
 </dt>
 <dd>
  quantity of the asset user withdrew
@@ -617,7 +617,7 @@ Returned as metadata only when a maker order is filled from place order function
  object ID of the pool the order was placed on
 </dd>
 <dt>
-<code>order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>order_id: u64</code>
 </dt>
 <dd>
  ID of the order within the pool
@@ -641,25 +641,25 @@ Returned as metadata only when a maker order is filled from place order function
  owner ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
-<code>base_asset_quantity_filled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>base_asset_quantity_filled: u64</code>
 </dt>
 <dd>
  qty of base asset filled.
 </dd>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
  price at which basset asset filled.
 </dd>
 <dt>
-<code>taker_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>taker_commission: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>maker_rebates: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>maker_rebates: u64</code>
 </dt>
 <dd>
 
@@ -686,31 +686,31 @@ Returned as metadata only when a maker order is filled from place order function
 
 <dl>
 <dt>
-<code>order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>order_id: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>client_order_id: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>original_quantity: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>quantity: u64</code>
 </dt>
 <dd>
 
@@ -728,7 +728,7 @@ Returned as metadata only when a maker order is filled from place order function
  Order can only be canceled by the <code>AccountCap</code> with this owner ID
 </dd>
 <dt>
-<code>expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>expire_timestamp: u64</code>
 </dt>
 <dd>
 
@@ -761,13 +761,13 @@ Returned as metadata only when a maker order is filled from place order function
 
 <dl>
 <dt>
-<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>price: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>open_orders: <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;</code>
+<code>open_orders: <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;</code>
 </dt>
 <dd>
 
@@ -812,43 +812,43 @@ Returned as metadata only when a maker order is filled from place order function
 
 </dd>
 <dt>
-<code>next_bid_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>next_bid_order_id: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>next_ask_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>next_ask_order_id: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>usr_open_orders: <a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;&gt;</code>
+<code>usr_open_orders: <a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, u64&gt;&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>taker_fee_rate: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>maker_rebate_rate: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>tick_size: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+<code>lot_size: u64</code>
 </dt>
 <dd>
 
@@ -946,7 +946,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_FLOAT_SCALING">FLOAT_SCALING</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1000000000;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_FLOAT_SCALING">FLOAT_SCALING</a>: u64 = 1000000000;
 </code></pre>
 
 
@@ -955,7 +955,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 7;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>: u64 = 7;
 </code></pre>
 
 
@@ -964,7 +964,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 8;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>: u64 = 8;
 </code></pre>
 
 
@@ -973,7 +973,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 19;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: u64 = 19;
 </code></pre>
 
 
@@ -982,7 +982,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidOrderId">EInvalidOrderId</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidOrderId">EInvalidOrderId</a>: u64 = 3;
 </code></pre>
 
 
@@ -991,7 +991,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>: u64 = 5;
 </code></pre>
 
 
@@ -1000,7 +1000,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 6;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>: u64 = 6;
 </code></pre>
 
 
@@ -1009,7 +1009,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidRestriction">EInvalidRestriction</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 14;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidRestriction">EInvalidRestriction</a>: u64 = 14;
 </code></pre>
 
 
@@ -1018,7 +1018,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidTickPrice">EInvalidTickPrice</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 11;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidTickPrice">EInvalidTickPrice</a>: u64 = 11;
 </code></pre>
 
 
@@ -1027,7 +1027,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidUser">EInvalidUser</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 12;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidUser">EInvalidUser</a>: u64 = 12;
 </code></pre>
 
 
@@ -1036,7 +1036,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EOrderCannotBeFullyFilled">EOrderCannotBeFullyFilled</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 9;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EOrderCannotBeFullyFilled">EOrderCannotBeFullyFilled</a>: u64 = 9;
 </code></pre>
 
 
@@ -1045,7 +1045,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EOrderCannotBeFullyPassive">EOrderCannotBeFullyPassive</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EOrderCannotBeFullyPassive">EOrderCannotBeFullyPassive</a>: u64 = 10;
 </code></pre>
 
 
@@ -1054,7 +1054,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EUnauthorizedCancel">EUnauthorizedCancel</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EUnauthorizedCancel">EUnauthorizedCancel</a>: u64 = 4;
 </code></pre>
 
 
@@ -1081,7 +1081,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MAX_PRICE">MAX_PRICE</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 9223372036854775808;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MAX_PRICE">MAX_PRICE</a>: u64 = 9223372036854775808;
 </code></pre>
 
 
@@ -1090,7 +1090,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 9223372036854775808;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>: u64 = 9223372036854775808;
 </code></pre>
 
 
@@ -1099,7 +1099,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MIN_PRICE">MIN_PRICE</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MIN_PRICE">MIN_PRICE</a>: u64 = 0;
 </code></pre>
 
 
@@ -1135,7 +1135,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EIncorrectPoolOwner">EIncorrectPoolOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EIncorrectPoolOwner">EIncorrectPoolOwner</a>: u64 = 1;
 </code></pre>
 
 
@@ -1144,7 +1144,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFee">EInvalidFee</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 18;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFee">EInvalidFee</a>: u64 = 18;
 </code></pre>
 
 
@@ -1153,7 +1153,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>: u64 = 2;
 </code></pre>
 
 
@@ -1162,7 +1162,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPair">EInvalidPair</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 16;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPair">EInvalidPair</a>: u64 = 16;
 </code></pre>
 
 
@@ -1171,7 +1171,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg">EInvalidSelfMatchingPreventionArg</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 21;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg">EInvalidSelfMatchingPreventionArg</a>: u64 = 21;
 </code></pre>
 
 
@@ -1180,7 +1180,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 20;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>: u64 = 20;
 </code></pre>
 
 
@@ -1189,7 +1189,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_ENotEqual">ENotEqual</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 13;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_ENotEqual">ENotEqual</a>: u64 = 13;
 </code></pre>
 
 
@@ -1198,7 +1198,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 100000000000;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>: u64 = 100000000000;
 </code></pre>
 
 
@@ -1207,7 +1207,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>: u64 = 1;
 </code></pre>
 
 
@@ -1216,7 +1216,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1500000;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>: u64 = 1500000;
 </code></pre>
 
 
@@ -1225,7 +1225,7 @@ do not have this capability:
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2500000;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>: u64 = 2500000;
 </code></pre>
 
 
@@ -1264,7 +1264,7 @@ Accessor functions
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_usr_open_orders_for_address">usr_open_orders_for_address</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, owner: <b>address</b>): &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_usr_open_orders_for_address">usr_open_orders_for_address</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, owner: <b>address</b>): &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, u64&gt;
 </code></pre>
 
 
@@ -1276,7 +1276,7 @@ Accessor functions
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_usr_open_orders_for_address">usr_open_orders_for_address</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     owner: <b>address</b>
-): &LinkedTable&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
+): &LinkedTable&lt;u64, u64&gt; {
     <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&pool.usr_open_orders, owner)
 }
 </code></pre>
@@ -1291,7 +1291,7 @@ Accessor functions
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_usr_open_orders">usr_open_orders</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): &<a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_usr_open_orders">usr_open_orders</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): &<a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, u64&gt;&gt;
 </code></pre>
 
 
@@ -1302,7 +1302,7 @@ Accessor functions
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_usr_open_orders">usr_open_orders</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-): &Table&lt;<b>address</b>, LinkedTable&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;&gt; {
+): &Table&lt;<b>address</b>, LinkedTable&lt;u64, u64&gt;&gt; {
     &pool.usr_open_orders
 }
 </code></pre>
@@ -1428,7 +1428,7 @@ Destroy the given <code>pool_owner_cap</code> object
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(taker_fee_rate: u64, maker_rebate_rate: u64, tick_size: u64, lot_size: u64, creation_fee: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1438,10 +1438,10 @@ Destroy the given <code>pool_owner_cap</code> object
 
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(
-    taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    taker_fee_rate: u64,
+    maker_rebate_rate: u64,
+    tick_size: u64,
+    lot_size: u64,
     creation_fee: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -1469,7 +1469,7 @@ Destroy the given <code>pool_owner_cap</code> object
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1479,8 +1479,8 @@ Destroy the given <code>pool_owner_cap</code> object
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    tick_size: u64,
+    lot_size: u64,
     creation_fee: Coin&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -1508,7 +1508,7 @@ The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and
 Taker_fee_rate of 0.25% should be 2_500_000 for example
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, taker_fee_rate: u64, maker_rebate_rate: u64, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1518,10 +1518,10 @@ Taker_fee_rate of 0.25% should be 2_500_000 for example
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    tick_size: u64,
+    lot_size: u64,
+    taker_fee_rate: u64,
+    maker_rebate_rate: u64,
     creation_fee: Coin&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -1547,7 +1547,7 @@ Taker_fee_rate of 0.25% should be 2_500_000 for example
 Helper function that all the create pools now call to create pools.
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_with_return_">create_pool_with_return_</a>&lt;BaseAsset, QuoteAsset&gt;(taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">clob_v2::PoolOwnerCap</a>)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_with_return_">create_pool_with_return_</a>&lt;BaseAsset, QuoteAsset&gt;(taker_fee_rate: u64, maker_rebate_rate: u64, tick_size: u64, lot_size: u64, creation_fee: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">clob_v2::PoolOwnerCap</a>)
 </code></pre>
 
 
@@ -1557,10 +1557,10 @@ Helper function that all the create pools now call to create pools.
 
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_with_return_">create_pool_with_return_</a>&lt;BaseAsset, QuoteAsset&gt;(
-    taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    taker_fee_rate: u64,
+    maker_rebate_rate: u64,
+    tick_size: u64,
+    lot_size: u64,
     creation_fee: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">PoolOwnerCap</a>) {
@@ -1621,7 +1621,7 @@ Helper function that all the create pools now call to create pools.
 Function for creating an external pool. This API can be used to wrap deepbook pools into other objects.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_with_return">create_pool_with_return</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_with_return">create_pool_with_return</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;
 </code></pre>
 
 
@@ -1631,8 +1631,8 @@ Function for creating an external pool. This API can be used to wrap deepbook po
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_pool_with_return">create_pool_with_return</a>&lt;BaseAsset, QuoteAsset&gt;(
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    tick_size: u64,
+    lot_size: u64,
     creation_fee: Coin&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ): <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt; {
@@ -1660,7 +1660,7 @@ The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and
 Taker_fee_rate of 0.25% should be 2_500_000 for example
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool_with_return">create_customized_pool_with_return</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool_with_return">create_customized_pool_with_return</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, taker_fee_rate: u64, maker_rebate_rate: u64, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;
 </code></pre>
 
 
@@ -1670,10 +1670,10 @@ Taker_fee_rate of 0.25% should be 2_500_000 for example
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool_with_return">create_customized_pool_with_return</a>&lt;BaseAsset, QuoteAsset&gt;(
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    tick_size: u64,
+    lot_size: u64,
+    taker_fee_rate: u64,
+    maker_rebate_rate: u64,
     creation_fee: Coin&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) : <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt; {
@@ -1703,7 +1703,7 @@ If a user wants to create a pool and then destroy/lock the pool_owner_cap one ca
 so with this function.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool_v2">create_customized_pool_v2</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">clob_v2::PoolOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool_v2">create_customized_pool_v2</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, taker_fee_rate: u64, maker_rebate_rate: u64, creation_fee: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">clob_v2::PoolOwnerCap</a>)
 </code></pre>
 
 
@@ -1713,10 +1713,10 @@ so with this function.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool_v2">create_customized_pool_v2</a>&lt;BaseAsset, QuoteAsset&gt;(
-    tick_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    lot_size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    taker_fee_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebate_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    tick_size: u64,
+    lot_size: u64,
+    taker_fee_rate: u64,
+    maker_rebate_rate: u64,
     creation_fee: Coin&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) : (<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">PoolOwnerCap</a>) {
@@ -1819,7 +1819,7 @@ so with this function.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_base">withdraw_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_base">withdraw_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;
 </code></pre>
 
 
@@ -1830,7 +1830,7 @@ so with this function.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_base">withdraw_base</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    quantity: u64,
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;BaseAsset&gt; {
@@ -1854,7 +1854,7 @@ so with this function.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_quote">withdraw_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_quote">withdraw_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;
 </code></pre>
 
 
@@ -1865,7 +1865,7 @@ so with this function.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_quote">withdraw_quote</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    quantity: u64,
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;QuoteAsset&gt; {
@@ -1889,7 +1889,7 @@ so with this function.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, u64)
 </code></pre>
 
 
@@ -1900,14 +1900,14 @@ so with this function.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
     account_cap: &AccountCap,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    quantity: u64,
     base_coin: Coin&lt;BaseAsset&gt;,
     quote_coin: Coin&lt;QuoteAsset&gt;,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     ctx: &<b>mut</b> TxContext,
-): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
+): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_value">coin::value</a>(&base_coin) &gt;= quantity, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
     <b>let</b> original_val = <a href="../sui-framework/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
@@ -1937,7 +1937,7 @@ so with this function.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote_with_metadata">swap_exact_base_for_quote_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote_with_metadata">swap_exact_base_for_quote_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, u64, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
 </code></pre>
 
 
@@ -1948,14 +1948,14 @@ so with this function.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote_with_metadata">swap_exact_base_for_quote_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
     account_cap: &AccountCap,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    quantity: u64,
     base_coin: Coin&lt;BaseAsset&gt;,
     quote_coin: Coin&lt;QuoteAsset&gt;,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     ctx: &<b>mut</b> TxContext,
-): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;) {
+): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;) {
     <b>let</b> original_val = <a href="../sui-framework/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
     <b>let</b> (ret_base_coin, ret_quote_coin, <b>mut</b> matched_order_metadata) = <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_int">place_market_order_int</a>(
         pool,
@@ -1984,7 +1984,7 @@ so with this function.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, u64)
 </code></pre>
 
 
@@ -1995,13 +1995,13 @@ so with this function.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
     account_cap: &AccountCap,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    quantity: u64,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     quote_coin: Coin&lt;QuoteAsset&gt;,
     ctx: &<b>mut</b> TxContext,
-): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
+): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_value">coin::value</a>(&quote_coin) &gt;= quantity, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
     <b>let</b> (base_asset_balance, quote_asset_balance, _matched_order_metadata) = <a href="clob_v2.md#0xdee9_clob_v2_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>(
@@ -2029,7 +2029,7 @@ so with this function.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base_with_metadata">swap_exact_quote_for_base_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base_with_metadata">swap_exact_quote_for_base_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, u64, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
 </code></pre>
 
 
@@ -2040,13 +2040,13 @@ so with this function.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base_with_metadata">swap_exact_quote_for_base_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
     account_cap: &AccountCap,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    quantity: u64,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     quote_coin: Coin&lt;QuoteAsset&gt;,
     ctx: &<b>mut</b> TxContext,
-): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;) {
+): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;) {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_value">coin::value</a>(&quote_coin) &gt;= quantity, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
     <b>let</b> (base_asset_balance, quote_asset_balance, <b>mut</b> matched_order_metadata) = <a href="clob_v2.md#0xdee9_clob_v2_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>(
@@ -2074,7 +2074,7 @@ so with this function.
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, current_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quote_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, compute_metadata: bool): (<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: u64, quantity: u64, price_limit: u64, current_timestamp: u64, quote_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, compute_metadata: bool): (<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
 </code></pre>
 
 
@@ -2086,10 +2086,10 @@ so with this function.
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    current_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    quantity: u64,
+    price_limit: u64,
+    current_timestamp: u64,
     quote_balance: Balance&lt;QuoteAsset&gt;,
     compute_metadata: bool,
 ): (Balance&lt;BaseAsset&gt;, Balance&lt;QuoteAsset&gt;, Option&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;) {
@@ -2147,12 +2147,12 @@ so with this function.
                 <b>let</b> maker_quote_quantity = maker_quote_quantity_without_commission + taker_commission;
 
                 // Total base quantity filled.
-                <b>let</b> <b>mut</b> filled_base_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
+                <b>let</b> <b>mut</b> filled_base_quantity: u64;
                 // Total quote quantity filled, excluding commission and rebate.
-                <b>let</b> <b>mut</b> filled_quote_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
+                <b>let</b> <b>mut</b> filled_quote_quantity: u64;
                 // Total quote quantity paid by taker.
                 // filled_quote_quantity_without_commission * (<a href="clob_v2.md#0xdee9_clob_v2_FLOAT_SCALING">FLOAT_SCALING</a> + taker_fee_rate) = filled_quote_quantity
-                <b>let</b> <b>mut</b> filled_quote_quantity_without_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
+                <b>let</b> <b>mut</b> filled_quote_quantity_without_commission: u64;
                 <b>if</b> (taker_quote_quantity_remaining &gt; maker_quote_quantity) {
                     filled_quote_quantity = maker_quote_quantity;
                     filled_quote_quantity_without_commission = maker_quote_quantity_without_commission;
@@ -2299,7 +2299,7 @@ so with this function.
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_bid">match_bid</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, current_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quote_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, compute_metadata: bool): (<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_bid">match_bid</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: u64, quantity: u64, price_limit: u64, current_timestamp: u64, quote_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, compute_metadata: bool): (<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
 </code></pre>
 
 
@@ -2311,10 +2311,10 @@ so with this function.
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_bid">match_bid</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    current_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    quantity: u64,
+    price_limit: u64,
+    current_timestamp: u64,
     quote_balance: Balance&lt;QuoteAsset&gt;,
     compute_metadata: bool,
 ): (Balance&lt;BaseAsset&gt;, Balance&lt;QuoteAsset&gt;, Option&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;) {
@@ -2480,7 +2480,7 @@ so with this function.
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_ask">match_ask</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, current_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, base_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, compute_metadata: bool): (<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_ask">match_ask</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: u64, price_limit: u64, current_timestamp: u64, base_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, compute_metadata: bool): (<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;BaseAsset&gt;, <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
 </code></pre>
 
 
@@ -2492,9 +2492,9 @@ so with this function.
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_match_ask">match_ask</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    current_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    price_limit: u64,
+    current_timestamp: u64,
     base_balance: Balance&lt;BaseAsset&gt;,
     compute_metadata: bool,
 ): (Balance&lt;BaseAsset&gt;, Balance&lt;QuoteAsset&gt;, Option&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;) {
@@ -2663,7 +2663,7 @@ so with this function.
 Place a market order to the order book.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order">place_market_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, is_bid: bool, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order">place_market_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: u64, quantity: u64, is_bid: bool, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;)
 </code></pre>
 
 
@@ -2675,8 +2675,8 @@ Place a market order to the order book.
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order">place_market_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    quantity: u64,
     is_bid: bool,
     base_coin: Coin&lt;BaseAsset&gt;,
     quote_coin: Coin&lt;QuoteAsset&gt;,
@@ -2709,7 +2709,7 @@ Place a market order to the order book.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_with_metadata">place_market_order_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, is_bid: bool, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_with_metadata">place_market_order_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: u64, quantity: u64, is_bid: bool, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
 </code></pre>
 
 
@@ -2721,8 +2721,8 @@ Place a market order to the order book.
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_with_metadata">place_market_order_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    quantity: u64,
     is_bid: bool,
     base_coin: Coin&lt;BaseAsset&gt;,
     quote_coin: Coin&lt;QuoteAsset&gt;,
@@ -2756,7 +2756,7 @@ Place a market order to the order book.
 Place a market order to the order book.
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_int">place_market_order_int</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, is_bid: bool, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, compute_metadata: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_int">place_market_order_int</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, client_order_id: u64, quantity: u64, is_bid: bool, base_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, compute_metadata: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
 </code></pre>
 
 
@@ -2768,8 +2768,8 @@ Place a market order to the order book.
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_market_order_int">place_market_order_int</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    quantity: u64,
     is_bid: bool,
     <b>mut</b> base_coin: Coin&lt;BaseAsset&gt;,
     <b>mut</b> quote_coin: Coin&lt;QuoteAsset&gt;,
@@ -2850,7 +2850,7 @@ Injects a maker order to the order book.
 Returns the order id.
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_inject_limit_order">inject_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, is_bid: bool, self_matching_prevention: u8, expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_inject_limit_order">inject_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, price: u64, original_quantity: u64, quantity: u64, is_bid: bool, self_matching_prevention: u8, expire_timestamp: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -2861,18 +2861,18 @@ Returns the order id.
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_inject_limit_order">inject_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    original_quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    price: u64,
+    original_quantity: u64,
+    quantity: u64,
     is_bid: bool,
     self_matching_prevention: u8,
-    expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    expire_timestamp: u64,
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
-): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+): u64 {
     <b>let</b> owner = account_owner(account_cap);
-    <b>let</b> order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
+    <b>let</b> order_id: u64;
     <b>let</b> open_orders: &<b>mut</b> CritbitTree&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>&gt;;
     <b>if</b> (is_bid) {
         <b>let</b> quote_quantity = clob_math::mul(quantity, price);
@@ -2945,7 +2945,7 @@ When the limit order is successfully placed, we return true to indicate that and
 So please check that boolean value first before using the order id.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, self_matching_prevention: u8, is_bid: bool, expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, restriction: u8, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, price: u64, quantity: u64, self_matching_prevention: u8, is_bid: bool, expire_timestamp: u64, restriction: u8, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (u64, u64, bool, u64)
 </code></pre>
 
 
@@ -2956,17 +2956,17 @@ So please check that boolean value first before using the order id.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order">place_limit_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    price: u64,
+    quantity: u64,
     self_matching_prevention: u8,
     is_bid: bool,
-    expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, // Expiration timestamp in ms in absolute value inclusive.
+    expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
     restriction: u8,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
-): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
+): (u64, u64, bool, u64) {
     <b>let</b> (base_quantity_filled, quote_quantity_filled, is_success, order_id, _meta_data) = <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_int">place_limit_order_int</a>(
         pool,
         client_order_id,
@@ -3000,7 +3000,7 @@ When the limit order is successfully placed, we return true to indicate that and
 So please check that boolean value first before using the order id.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_with_metadata">place_limit_order_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, self_matching_prevention: u8, is_bid: bool, expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, restriction: u8, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_with_metadata">place_limit_order_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, price: u64, quantity: u64, self_matching_prevention: u8, is_bid: bool, expire_timestamp: u64, restriction: u8, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (u64, u64, bool, u64, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;)
 </code></pre>
 
 
@@ -3011,17 +3011,17 @@ So please check that boolean value first before using the order id.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_with_metadata">place_limit_order_with_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    price: u64,
+    quantity: u64,
     self_matching_prevention: u8,
     is_bid: bool,
-    expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, // Expiration timestamp in ms in absolute value inclusive.
+    expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
     restriction: u8,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     account_cap: &AccountCap,
     ctx: &<b>mut</b> TxContext
-): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;) {
+): (u64, u64, bool, u64, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;) {
     <b>let</b> (base_quantity_filled, quote_quantity_filled, is_success, order_id, <b>mut</b> meta_data) = <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_int">place_limit_order_int</a>(
         pool,
         client_order_id,
@@ -3050,7 +3050,7 @@ So please check that boolean value first before using the order id.
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_int">place_limit_order_int</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, self_matching_prevention: u8, is_bid: bool, expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, restriction: u8, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, compute_metadata: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_int">place_limit_order_int</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, price: u64, quantity: u64, self_matching_prevention: u8, is_bid: bool, expire_timestamp: u64, restriction: u8, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, compute_metadata: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (u64, u64, bool, u64, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;)
 </code></pre>
 
 
@@ -3061,18 +3061,18 @@ So please check that boolean value first before using the order id.
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_place_limit_order_int">place_limit_order_int</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    client_order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    client_order_id: u64,
+    price: u64,
+    quantity: u64,
     self_matching_prevention: u8,
     is_bid: bool,
-    expire_timestamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, // Expiration timestamp in ms in absolute value inclusive.
+    expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
     restriction: u8,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     account_cap: &AccountCap,
     compute_metadata: bool,
     ctx: &<b>mut</b> TxContext
-): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, Option&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;) {
+): (u64, u64, bool, u64, Option&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;&gt;&gt;) {
     // If limit bid order, check whether the price is lower than the lowest ask order by checking the min_leaf of asks Critbit Tree.
     // If so, assign the sequence id of the order <b>to</b> be next_bid_order_id and increment next_bid_order_id by 1.
     // Inject the new order <b>to</b> the bids Critbit Tree according <b>to</b> the price and order id.
@@ -3212,7 +3212,7 @@ So please check that boolean value first before using the order id.
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id: u64): bool
 </code></pre>
 
 
@@ -3221,7 +3221,7 @@ So please check that boolean value first before using the order id.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool {
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id: u64): bool {
     <b>return</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a> &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>
 }
 </code></pre>
@@ -3272,7 +3272,7 @@ So please check that boolean value first before using the order id.
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, taker_client_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, taker_address: <b>address</b>, order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>, base_asset_quantity_filled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, taker_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebates: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, taker_client_id: u64, taker_address: <b>address</b>, order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>, base_asset_quantity_filled: u64, taker_commission: u64, maker_rebates: u64)
 </code></pre>
 
 
@@ -3283,12 +3283,12 @@ So please check that boolean value first before using the order id.
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool_id: ID,
-    taker_client_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    taker_client_id: u64,
     taker_address: <b>address</b>,
     order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>,
-    base_asset_quantity_filled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    taker_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebates: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+    base_asset_quantity_filled: u64,
+    taker_commission: u64,
+    maker_rebates: u64
 ) {
     <a href="../sui-framework/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
         pool_id,
@@ -3322,7 +3322,7 @@ Cancel and opening order.
 Abort if order_id is invalid or if the order is not submitted by the transaction sender.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_cancel_order">cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_cancel_order">cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>)
 </code></pre>
 
 
@@ -3333,7 +3333,7 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_cancel_order">cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    order_id: u64,
     account_cap: &AccountCap
 ) {
     // First check the highest bit of the order id <b>to</b> see whether it's bid or ask.
@@ -3377,7 +3377,7 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_remove_order">remove_order</a>(open_orders: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, usr_open_orders: &<b>mut</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, tick_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, owner: <b>address</b>): <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_remove_order">remove_order</a>(open_orders: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, usr_open_orders: &<b>mut</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, u64&gt;, tick_index: u64, order_id: u64, owner: <b>address</b>): <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>
 </code></pre>
 
 
@@ -3388,9 +3388,9 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_remove_order">remove_order</a>(
     open_orders: &<b>mut</b> CritbitTree&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>&gt;,
-    usr_open_orders: &<b>mut</b> LinkedTable&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
-    tick_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    usr_open_orders: &<b>mut</b> LinkedTable&lt;u64, u64&gt;,
+    tick_index: u64,
+    order_id: u64,
     owner: <b>address</b>,
 ): <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> {
     <a href="../sui-framework/linked_table.md#0x2_linked_table_remove">linked_table::remove</a>(usr_open_orders, order_id);
@@ -3494,7 +3494,7 @@ For example, if we have the following order_id to price mapping, {0: 100., 1: 20
 Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_batch_cancel_order">batch_cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_batch_cancel_order">batch_cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>)
 </code></pre>
 
 
@@ -3505,7 +3505,7 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_batch_cancel_order">batch_cancel_order</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
     account_cap: &AccountCap
 ) {
     <b>let</b> pool_id = *<a href="../sui-framework/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
@@ -3516,8 +3516,8 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
     // retrieve and remove the order from open orders of the PriceLevel.
     <b>let</b> owner = account_owner(account_cap);
     <b>assert</b>!(contains(&pool.usr_open_orders, owner), 0);
-    <b>let</b> <b>mut</b> tick_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
-    <b>let</b> <b>mut</b> tick_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+    <b>let</b> <b>mut</b> tick_index: u64 = 0;
+    <b>let</b> <b>mut</b> tick_price: u64 = 0;
     <b>let</b> n_order = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&order_ids);
     <b>let</b> <b>mut</b> i_order = 0;
     <b>let</b> usr_open_orders = borrow_mut(&<b>mut</b> pool.usr_open_orders, owner);
@@ -3590,7 +3590,7 @@ Order owners should be the owner addresses from the account capacities which pla
 and they should correspond to the order IDs one by one.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clean_up_expired_orders">clean_up_expired_orders</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, order_owners: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clean_up_expired_orders">clean_up_expired_orders</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, order_owners: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -3602,7 +3602,7 @@ and they should correspond to the order IDs one by one.
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clean_up_expired_orders">clean_up_expired_orders</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
-    order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    order_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
     order_owners: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;
 ) {
     <b>let</b> pool_id = *<a href="../sui-framework/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
@@ -3610,8 +3610,8 @@ and they should correspond to the order IDs one by one.
     <b>let</b> n_order = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&order_ids);
     <b>assert</b>!(n_order == <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&order_owners), <a href="clob_v2.md#0xdee9_clob_v2_ENotEqual">ENotEqual</a>);
     <b>let</b> <b>mut</b> i_order = 0;
-    <b>let</b> <b>mut</b> tick_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
-    <b>let</b> <b>mut</b> tick_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
+    <b>let</b> <b>mut</b> tick_index: u64 = 0;
+    <b>let</b> <b>mut</b> tick_price: u64 = 0;
     <b>let</b> <b>mut</b> canceled_order_events = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>while</b> (i_order &lt; n_order) {
         <b>let</b> order_id = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&order_ids, i_order);
@@ -3726,7 +3726,7 @@ and they should correspond to the order IDs one by one.
 query user balance inside custodian
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_account_balance">account_balance</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_account_balance">account_balance</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>): (u64, u64, u64, u64)
 </code></pre>
 
 
@@ -3738,7 +3738,7 @@ query user balance inside custodian
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_account_balance">account_balance</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     account_cap: &AccountCap
-): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
+): (u64, u64, u64, u64) {
     <b>let</b> owner = account_owner(account_cap);
     <b>let</b> (base_avail, base_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.base_custodian, owner);
     <b>let</b> (quote_avail, quote_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.quote_custodian, owner);
@@ -3759,7 +3759,7 @@ returns (best_bid_price, best_ask_price) if there exists
 bid/ask order in the order book, otherwise returns None
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_market_price">get_market_price</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): (<a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_market_price">get_market_price</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): (<a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;)
 </code></pre>
 
 
@@ -3770,18 +3770,18 @@ bid/ask order in the order book, otherwise returns None
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_market_price">get_market_price</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;
-): (Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;){
+): (Option&lt;u64&gt;, Option&lt;u64&gt;){
     <b>let</b> bid_price = <b>if</b> (!<a href="critbit.md#0xdee9_critbit_is_empty">critbit::is_empty</a>(&pool.bids)) {
         <b>let</b> (result, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.bids);
-        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(result)
+        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>&lt;u64&gt;(result)
     } <b>else</b> {
-        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;()
+        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>&lt;u64&gt;()
     };
     <b>let</b> ask_price = <b>if</b> (!<a href="critbit.md#0xdee9_critbit_is_empty">critbit::is_empty</a>(&pool.asks)) {
         <b>let</b> (result, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.asks);
-        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(result)
+        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>&lt;u64&gt;(result)
     } <b>else</b> {
-        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;()
+        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>&lt;u64&gt;()
     };
     <b>return</b> (bid_price, ask_price)
 }
@@ -3801,7 +3801,7 @@ The previous is a list of all valid prices
 The latter is the corresponding depth list
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status_bid_side">get_level2_book_status_bid_side</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price_high: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status_bid_side">get_level2_book_status_bid_side</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: u64, price_high: u64, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;)
 </code></pre>
 
 
@@ -3812,12 +3812,12 @@ The latter is the corresponding depth list
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status_bid_side">get_level2_book_status_bid_side</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    <b>mut</b> price_low: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    <b>mut</b> price_high: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    <b>mut</b> price_low: u64,
+    <b>mut</b> price_high: u64,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock
-): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;) {
-    <b>let</b> <b>mut</b> price_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;();
-    <b>let</b> <b>mut</b> depth_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;();
+): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
+    <b>let</b> <b>mut</b> price_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u64&gt;();
+    <b>let</b> <b>mut</b> depth_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u64&gt;();
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_is_empty">critbit::is_empty</a>(&pool.bids)) { <b>return</b> (price_vec, depth_vec) };
     <b>let</b> (price_low_, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.bids);
     <b>let</b> (price_high_, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.bids);
@@ -3863,7 +3863,7 @@ The previous is a list of all valid prices
 The latter is the corresponding depth list
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status_ask_side">get_level2_book_status_ask_side</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, price_high: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status_ask_side">get_level2_book_status_ask_side</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, price_low: u64, price_high: u64, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;)
 </code></pre>
 
 
@@ -3874,12 +3874,12 @@ The latter is the corresponding depth list
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status_ask_side">get_level2_book_status_ask_side</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    <b>mut</b> price_low: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    <b>mut</b> price_high: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    <b>mut</b> price_low: u64,
+    <b>mut</b> price_high: u64,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock
-): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;) {
-    <b>let</b> <b>mut</b> price_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;();
-    <b>let</b> <b>mut</b> depth_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;();
+): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
+    <b>let</b> <b>mut</b> price_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u64&gt;();
+    <b>let</b> <b>mut</b> depth_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u64&gt;();
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_is_empty">critbit::is_empty</a>(&pool.asks)) { <b>return</b> (price_vec, depth_vec) };
     <b>let</b> (price_low_, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.asks);
 
@@ -3922,7 +3922,7 @@ The latter is the corresponding depth list
 internal func to retrive single depth of a tick price
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status">get_level2_book_status</a>(open_orders: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, time_stamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status">get_level2_book_status</a>(open_orders: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, price: u64, time_stamp: u64): u64
 </code></pre>
 
 
@@ -3933,9 +3933,9 @@ internal func to retrive single depth of a tick price
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status">get_level2_book_status</a>(
     open_orders: &CritbitTree&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>&gt;,
-    price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    time_stamp: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
-): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    price: u64,
+    time_stamp: u64
+): u64 {
     <b>let</b> tick_level = <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">critbit::borrow_leaf_by_key</a>(open_orders, price);
     <b>let</b> tick_open_orders = &tick_level.open_orders;
     <b>let</b> <b>mut</b> depth = 0;
@@ -3960,7 +3960,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_order_status">get_order_status</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>): &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_order_status">get_order_status</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>): &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>
 </code></pre>
 
 
@@ -3971,7 +3971,7 @@ internal func to retrive single depth of a tick price
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_get_order_status">get_order_status</a>&lt;BaseAsset, QuoteAsset&gt;(
     pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
-    order_id: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    order_id: u64,
     account_cap: &AccountCap
 ): &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> {
     <b>let</b> owner = account_owner(account_cap);
@@ -3999,7 +3999,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_matched_order_metadata">matched_order_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, taker_address: <b>address</b>, order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>, base_asset_quantity_filled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, taker_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, maker_rebates: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;
+<pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_matched_order_metadata">matched_order_metadata</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, taker_address: <b>address</b>, order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>, base_asset_quantity_filled: u64, taker_commission: u64, maker_rebates: u64): <a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;
 </code></pre>
 
 
@@ -4012,9 +4012,9 @@ internal func to retrive single depth of a tick price
     pool_id: ID,
     taker_address: <b>address</b>,
     order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>,
-    base_asset_quantity_filled: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    taker_commission: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    maker_rebates: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+    base_asset_quantity_filled: u64,
+    taker_commission: u64,
+    maker_rebates: u64
 ): <a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;{
     <a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt; {
         pool_id,
@@ -4040,7 +4040,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_matched_order_metadata_info">matched_order_metadata_info</a>&lt;BaseAsset, QuoteAsset&gt;(matched_order_metadata: &<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;): (<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <b>address</b>, <b>address</b>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_matched_order_metadata_info">matched_order_metadata_info</a>&lt;BaseAsset, QuoteAsset&gt;(matched_order_metadata: &<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">clob_v2::MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;): (<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, u64, bool, <b>address</b>, <b>address</b>, u64, u64, u64, u64)
 </code></pre>
 
 
@@ -4051,7 +4051,7 @@ internal func to retrive single depth of a tick price
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_matched_order_metadata_info">matched_order_metadata_info</a>&lt;BaseAsset, QuoteAsset&gt;(
     matched_order_metadata: &<a href="clob_v2.md#0xdee9_clob_v2_MatchedOrderMetadata">MatchedOrderMetadata</a>&lt;BaseAsset, QuoteAsset&gt;
-) : ( ID, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, bool, <b>address</b>, <b>address</b>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
+) : ( ID, u64, bool, <b>address</b>, <b>address</b>, u64, u64, u64, u64) {
     (
         matched_order_metadata.pool_id,
         matched_order_metadata.order_id,
@@ -4124,7 +4124,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_size">tick_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_size">tick_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64
 </code></pre>
 
 
@@ -4133,7 +4133,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_size">tick_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_size">tick_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64 {
     pool.tick_size
 }
 </code></pre>
@@ -4148,7 +4148,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_maker_rebate_rate">maker_rebate_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_maker_rebate_rate">maker_rebate_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64
 </code></pre>
 
 
@@ -4157,7 +4157,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_maker_rebate_rate">maker_rebate_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_maker_rebate_rate">maker_rebate_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64 {
     pool.maker_rebate_rate
 }
 </code></pre>
@@ -4172,7 +4172,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_taker_fee_rate">taker_fee_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_taker_fee_rate">taker_fee_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64
 </code></pre>
 
 
@@ -4181,7 +4181,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_taker_fee_rate">taker_fee_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_taker_fee_rate">taker_fee_rate</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64 {
     pool.taker_fee_rate
 }
 </code></pre>
@@ -4196,7 +4196,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_pool_size">pool_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_pool_size">pool_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64
 </code></pre>
 
 
@@ -4205,7 +4205,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_pool_size">pool_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_pool_size">pool_size</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64 {
     <a href="critbit.md#0xdee9_critbit_size">critbit::size</a>(&pool.asks) + <a href="critbit.md#0xdee9_critbit_size">critbit::size</a>(&pool.bids)
 }
 </code></pre>
@@ -4220,7 +4220,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_open_orders">open_orders</a>(tick_level: &<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>): &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_open_orders">open_orders</a>(tick_level: &<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>): &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
 </code></pre>
 
 
@@ -4229,7 +4229,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_open_orders">open_orders</a>(tick_level: &<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>): &LinkedTable&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_open_orders">open_orders</a>(tick_level: &<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>): &LinkedTable&lt;u64, <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>&gt; {
     &tick_level.open_orders
 }
 </code></pre>
@@ -4244,7 +4244,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
 </code></pre>
 
 
@@ -4253,7 +4253,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.order_id
 }
 </code></pre>
@@ -4268,7 +4268,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
 </code></pre>
 
 
@@ -4277,7 +4277,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.price
 }
 </code></pre>
@@ -4292,7 +4292,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_original_quantity">original_quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_original_quantity">original_quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
 </code></pre>
 
 
@@ -4301,7 +4301,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_original_quantity">original_quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_original_quantity">original_quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.original_quantity
 }
 </code></pre>
@@ -4316,7 +4316,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
 </code></pre>
 
 
@@ -4325,7 +4325,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.quantity
 }
 </code></pre>
@@ -4388,7 +4388,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
 </code></pre>
 
 
@@ -4397,7 +4397,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.expire_timestamp
 }
 </code></pre>
@@ -4412,7 +4412,7 @@ internal func to retrive single depth of a tick price
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quote_asset_trading_fees_value">quote_asset_trading_fees_value</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quote_asset_trading_fees_value">quote_asset_trading_fees_value</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64
 </code></pre>
 
 
@@ -4421,7 +4421,7 @@ internal func to retrive single depth of a tick price
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quote_asset_trading_fees_value">quote_asset_trading_fees_value</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quote_asset_trading_fees_value">quote_asset_trading_fees_value</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): u64 {
     <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&pool.quote_asset_trading_fees)
 }
 </code></pre>

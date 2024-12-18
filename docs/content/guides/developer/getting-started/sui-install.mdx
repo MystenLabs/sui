@@ -13,15 +13,18 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey or later
 - Microsoft Windows - Windows 10 and 11
 
+::::info[Fastest method]
+
 ## Quick install using Homebrew or Chocolatey {#install-homebrew}
 
 {@include: ../../../snippets/quick-install.mdx}
 
-:::info
+:::note
 
 If you use this method to install Sui, you are all set. The quick install is suitable for most use cases. The remaining installation methods are for those wanting more control over the installation process.
 
 :::
+::::
 
 ## Download binaries from GitHub {#install-binaries}
 
@@ -109,8 +112,10 @@ To confirm that Sui installed correctly, type `sui --version` in your console or
 Run the following command to install Sui binaries from the `testnet` branch:
 
 ```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
+
+Enabling the `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Without it these two features will not be able to be used.
 
 The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
 
@@ -127,8 +132,10 @@ The command installs Sui components in the `~/.cargo/bin` folder.
 If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch):
 
 ```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
+
+The `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Unless it is enabled you will not be able to use these two features.
 
 ## Build from source
 
@@ -182,7 +189,7 @@ The prerequisites needed for the Linux operating system include:
 - GCC
 - libssl-dev
 - libclang-dev
-- libpq-dev
+- libpq-dev (optional)
 - build-essential
 
 :::info
@@ -271,7 +278,9 @@ sudo apt-get install libclang-dev
 
 If the version of Linux you use doesn't support `libclang-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
 
-#### libpq-dev {#libpq-dev}
+#### libpq-dev (optional) {#libpq-dev}
+
+{@include: ../../../snippets/libpq-req.mdx}
 
 Use the following command to install `libpq-dev`:
 
@@ -299,7 +308,7 @@ The prerequisites needed for the macOS operating system include:
 - Homebrew
 - cURL
 - CMake
-- libpq
+- libpq (optional)
 - Git CLI
 
 macOS includes a version of cURL you can use to install Homebrew. Use Homebrew to install other tools, including a newer version of cURL.
@@ -343,7 +352,10 @@ brew install cmake
 
 To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
 
-#### libpq {#libpq-1}
+#### libpq (optional) {#libpq-1}
+
+{@include: ../../../snippets/libpq-req.mdx}
+
 Use the following command to install libpq:
 ```bash
 brew install libpq
@@ -405,6 +417,14 @@ Sui requires the following additional tools on computers running Windows.
 ## Using Sui from command line
 
 With Sui installed, you can interact with Sui networks using the Sui CLI. For more details, see the [Sui CLI](/references/cli.mdx) reference.
+
+## Installing Sui developer tools
+
+If you use VSCode, you can install the [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get language server support for Move, as well as support for building, testing, and debugging Move code within the IDE. 
+You can install the extension either by searhing the fully-qualified extension name, `Mysten.move`, in the extension view, or by pressing `Ctrl-P` or `Cmd-P` and typing `ext install mysten.move`.
+Installing the Move extension also installs the appropriate `move-analyzer` binary for your operating system, as well as the [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension, and [Move Syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax) extension.
+
+There are also community Move packages for [Emacs](https://github.com/amnn/move-mode) and [Vim](https://github.com/yanganto/move.vim). 
 
 ## Next steps {#next-steps}
 

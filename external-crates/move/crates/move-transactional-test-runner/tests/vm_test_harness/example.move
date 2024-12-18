@@ -2,7 +2,7 @@
 
 //# run
 
-module 0x1::m {
+module 0x5::m {
     fun main() {}
 }
 
@@ -30,7 +30,7 @@ module A::N {
 
 //# run --args 0
 
-module 0x2::m {
+module 0x6::m {
     entry fun main(v: u64) {
         helper(v)
     }
@@ -41,7 +41,7 @@ module 0x2::m {
 
 //# run --args 42 --syntax=mvir
 
-module 0x3.m {
+module 0x7.m {
 import 0x42.N;
 entry foo(v: u64) {
 label b0:

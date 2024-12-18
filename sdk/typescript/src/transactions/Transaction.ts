@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SerializedBcs } from '@mysten/bcs';
-import { fromB64, isSerializedBcs } from '@mysten/bcs';
+import { fromBase64, isSerializedBcs } from '@mysten/bcs';
 import type { InferInput } from 'valibot';
 import { is, parse } from 'valibot';
 
@@ -22,6 +22,7 @@ import type {
 	TransactionPlugin,
 } from './json-rpc-resolver.js';
 import { resolveTransactionData } from './json-rpc-resolver.js';
+import { createObjectMethods } from './object.js';
 import { createPure } from './pure.js';
 import { TransactionDataBuilder } from './TransactionData.js';
 import { getIdFromCallArg } from './utils.js';
@@ -98,12 +99,41 @@ export function isTransaction(obj: unknown): obj is Transaction {
 
 export type TransactionObjectInput = string | CallArg | TransactionObjectArgument;
 
+interface TransactionPluginRegistry {
+	// eslint-disable-next-line @typescript-eslint/ban-types
+	buildPlugins: Map<string | Function, TransactionPlugin>;
+	// eslint-disable-next-line @typescript-eslint/ban-types
+	serializationPlugins: Map<string | Function, TransactionPlugin>;
+}
+
+const modulePluginRegistry: TransactionPluginRegistry = {
+	buildPlugins: new Map(),
+	serializationPlugins: new Map(),
+};
+
+const TRANSACTION_REGISTRY_KEY = Symbol.for('@mysten/transaction/registry');
+function getGlobalPluginRegistry() {
+	try {
+		const target = globalThis as {
+			[TRANSACTION_REGISTRY_KEY]?: TransactionPluginRegistry;
+		};
+
+		if (!target[TRANSACTION_REGISTRY_KEY]) {
+			target[TRANSACTION_REGISTRY_KEY] = modulePluginRegistry;
+		}
+
+		return target[TRANSACTION_REGISTRY_KEY];
+	} catch (e) {
+		return modulePluginRegistry;
+	}
+}
+
 /**
  * Transaction Builder
  */
 export class Transaction {
-	#serializationPlugins: TransactionPlugin[] = [];
-	#buildPlugins: TransactionPlugin[] = [];
+	#serializationPlugins: TransactionPlugin[];
+	#buildPlugins: TransactionPlugin[];
 	#intentResolvers = new Map<string, TransactionPlugin>();
 
 	/**
@@ -114,7 +144,7 @@ export class Transaction {
 		const tx = new Transaction();
 
 		tx.#data = TransactionDataBuilder.fromKindBytes(
-			typeof serialized === 'string' ? fromB64(serialized) : serialized,
+			typeof serialized === 'string' ? fromBase64(serialized) : serialized,
 		);
 
 		return tx;
@@ -133,13 +163,47 @@ export class Transaction {
 			newTransaction.#data = new TransactionDataBuilder(transaction.getData());
 		} else if (typeof transaction !== 'string' || !transaction.startsWith('{')) {
 			newTransaction.#data = TransactionDataBuilder.fromBytes(
-				typeof transaction === 'string' ? fromB64(transaction) : transaction,
+				typeof transaction === 'string' ? fromBase64(transaction) : transaction,
 			);
 		} else {
 			newTransaction.#data = TransactionDataBuilder.restore(JSON.parse(transaction));
 		}
 
 		return newTransaction;
+	}
+
+	/** @deprecated global plugins should be registered with a name */
+	static registerGlobalSerializationPlugin(step: TransactionPlugin): void;
+	static registerGlobalSerializationPlugin(name: string, step: TransactionPlugin): void;
+	static registerGlobalSerializationPlugin(
+		stepOrStep: TransactionPlugin | string,
+		step?: TransactionPlugin,
+	) {
+		getGlobalPluginRegistry().serializationPlugins.set(
+			stepOrStep,
+			step ?? (stepOrStep as TransactionPlugin),
+		);
+	}
+
+	static unregisterGlobalSerializationPlugin(name: string) {
+		getGlobalPluginRegistry().serializationPlugins.delete(name);
+	}
+
+	/** @deprecated global plugins should be registered with a name */
+	static registerGlobalBuildPlugin(step: TransactionPlugin): void;
+	static registerGlobalBuildPlugin(name: string, step: TransactionPlugin): void;
+	static registerGlobalBuildPlugin(
+		stepOrStep: TransactionPlugin | string,
+		step?: TransactionPlugin,
+	) {
+		getGlobalPluginRegistry().buildPlugins.set(
+			stepOrStep,
+			step ?? (stepOrStep as TransactionPlugin),
+		);
+	}
+
+	static unregisterGlobalBuildPlugin(name: string) {
+		getGlobalPluginRegistry().buildPlugins.delete(name);
 	}
 
 	addSerializationPlugin(step: TransactionPlugin) {
@@ -241,7 +305,10 @@ export class Transaction {
 	}
 
 	constructor() {
+		const globalPlugins = getGlobalPluginRegistry();
 		this.#data = new TransactionDataBuilder();
+		this.#buildPlugins = [...globalPlugins.buildPlugins.values()];
+		this.#serializationPlugins = [...globalPlugins.serializationPlugins.values()];
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
@@ -252,37 +319,43 @@ export class Transaction {
 	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: TransactionObjectInput): { $kind: 'Input'; Input: number; type?: 'object' } {
-		if (typeof value === 'function') {
-			return this.object(value(this));
-		}
+	object = createObjectMethods(
+		(value: TransactionObjectInput): { $kind: 'Input'; Input: number; type?: 'object' } => {
+			if (typeof value === 'function') {
+				return this.object(value(this));
+			}
 
-		if (typeof value === 'object' && is(Argument, value)) {
-			return value as { $kind: 'Input'; Input: number; type?: 'object' };
-		}
+			if (typeof value === 'object' && is(Argument, value)) {
+				return value as { $kind: 'Input'; Input: number; type?: 'object' };
+			}
 
-		const id = getIdFromCallArg(value);
+			const id = getIdFromCallArg(value);
 
-		const inserted = this.#data.inputs.find((i) => id === getIdFromCallArg(i));
+			const inserted = this.#data.inputs.find((i) => id === getIdFromCallArg(i));
 
-		// Upgrade shared object inputs to mutable if needed:
-		if (inserted?.Object?.SharedObject && typeof value === 'object' && value.Object?.SharedObject) {
-			inserted.Object.SharedObject.mutable =
-				inserted.Object.SharedObject.mutable || value.Object.SharedObject.mutable;
-		}
+			// Upgrade shared object inputs to mutable if needed:
+			if (
+				inserted?.Object?.SharedObject &&
+				typeof value === 'object' &&
+				value.Object?.SharedObject
+			) {
+				inserted.Object.SharedObject.mutable =
+					inserted.Object.SharedObject.mutable || value.Object.SharedObject.mutable;
+			}
 
-		return inserted
-			? { $kind: 'Input', Input: this.#data.inputs.indexOf(inserted), type: 'object' }
-			: this.#data.addInput(
-					'object',
-					typeof value === 'string'
-						? {
-								$kind: 'UnresolvedObject',
-								UnresolvedObject: { objectId: normalizeSuiAddress(value) },
-							}
-						: value,
-				);
-	}
+			return inserted
+				? { $kind: 'Input', Input: this.#data.inputs.indexOf(inserted), type: 'object' }
+				: this.#data.addInput(
+						'object',
+						typeof value === 'string'
+							? {
+									$kind: 'UnresolvedObject',
+									UnresolvedObject: { objectId: normalizeSuiAddress(value) },
+								}
+							: value,
+					);
+		},
+	);
 
 	/**
 	 * Add a new object input to the transaction using the fully-resolved object reference.

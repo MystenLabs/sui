@@ -3,10 +3,7 @@ processed 4 tasks
 task 0, lines 1-24:
 //# print-bytecode
 // Move bytecode v6
-module 1.m {
-
-
-
+module 6.m {
 
 entry foo() {
 L0:	loc0: u64
@@ -27,17 +24,15 @@ B3:
 	10: Branch(11)
 B4:
 	11: Ret
+}
 
 }
-}
+
 
 task 1, lines 26-45:
 //# print-bytecode
 // Move bytecode v6
-module 2.m {
-
-
-
+module 7.m {
 
 entry foo() {
 L0:	loc0: u64
@@ -55,17 +50,15 @@ B2:
 	8: StLoc[0](loc0: u64)
 B3:
 	9: Ret
+}
 
 }
-}
+
 
 task 2, lines 47-65:
 //# print-bytecode
 // Move bytecode v6
-module 3.m {
-
-
-
+module 8.m {
 
 entry foo() {
 L0:	loc0: u64
@@ -92,17 +85,15 @@ B4:
 	15: StLoc[0](loc0: u64)
 B5:
 	16: Ret
+}
 
 }
-}
+
 
 task 3, lines 67-82:
 //# print-bytecode
 // Move bytecode v6
-module 4.m {
-
-
-
+module 9.m {
 
 entry foo() {
 L0:	loc0: u64
@@ -121,6 +112,7 @@ B2:
 	9: Ret
 B3:
 	10: Ret
+}
 
 }
-}
+

@@ -7,5 +7,5 @@ sandbox publish --bundle --override-ordering B --override-ordering A -v
 # expect success: this is the correct order of publishing A and B
 # with friend relationship
 sandbox publish --bundle --override-ordering A --override-ordering B -v
-sandbox view storage/0x0000000000000000000000000000000000000000000000000000000000000002/modules/A.mv
-sandbox view storage/0x0000000000000000000000000000000000000000000000000000000000000002/modules/B.mv
+sandbox view storage/0x0000000000000000000000000000000000000000000000000000000000000007/modules/A.mv
+sandbox view storage/0x0000000000000000000000000000000000000000000000000000000000000007/modules/B.mv

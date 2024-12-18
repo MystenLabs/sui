@@ -74,6 +74,13 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
 
         let checkpoint_timestamp = summary.timestamp_ms;
         let checkpoint_seq = summary.sequence_number;
+        self.metrics.checkpoint_creation_latency.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_secs_f64(),
+        );
         self.metrics.checkpoint_creation_latency_ms.observe(
             summary
                 .timestamp()

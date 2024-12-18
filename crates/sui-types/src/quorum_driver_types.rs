@@ -31,20 +31,19 @@ pub const NON_RECOVERABLE_ERROR_MSG: &str =
 /// Every invariant needs detailed documents to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
 pub enum QuorumDriverError {
-    #[error("QuorumDriver internal error: {0:?}.")]
+    #[error("QuorumDriver internal error: {0}.")]
     QuorumDriverInternalError(SuiError),
-    #[error("Invalid user signature: {0:?}.")]
+    #[error("Invalid user signature: {0}.")]
     InvalidUserSignature(SuiError),
     #[error(
         "Failed to sign transaction by a quorum of validators because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
         conflicting_txes,
-        retried_tx,
-        retried_tx_success
+        .retried_tx_status.map(|(tx, success)| tx),
+        .retried_tx_status.map(|(tx, success)| success),
     )]
     ObjectsDoubleUsed {
         conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-        retried_tx: Option<TransactionDigest>,
-        retried_tx_success: Option<bool>,
+        retried_tx_status: Option<(TransactionDigest, bool)>,
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
@@ -81,10 +80,17 @@ pub enum TransactionType {
     SharedObject, // Txes that use at least one shared object
 }
 
+/// Proof of finality of transaction effects.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum EffectsFinalityInfo {
+    /// Effects are certified by a quorum of validators.
     Certified(AuthorityStrongQuorumSignInfo),
+
+    /// Effects are included in a checkpoint.
     Checkpointed(EpochId, CheckpointSequenceNumber),
+
+    /// A quorum of validators have acknowledged effects.
+    QuorumExecuted(EpochId),
 }
 
 /// When requested to execute a transaction with WaitForLocalExecution,
@@ -122,22 +128,6 @@ pub struct QuorumDriverResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExecuteTransactionRequest {
-    pub transaction: Transaction,
-    pub request_type: ExecuteTransactionRequestType,
-}
-
-impl ExecuteTransactionRequest {
-    pub fn transaction_type(&self) -> TransactionType {
-        if self.transaction.contains_shared_object() {
-            TransactionType::SharedObject
-        } else {
-            TransactionType::SingleWriter
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExecuteTransactionRequestV3 {
     pub transaction: Transaction,
 
@@ -145,17 +135,6 @@ pub struct ExecuteTransactionRequestV3 {
     pub include_input_objects: bool,
     pub include_output_objects: bool,
     pub include_auxiliary_data: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct VerifiedExecuteTransactionResponseV3 {
-    pub effects: VerifiedCertifiedTransactionEffects,
-    pub events: Option<TransactionEvents>,
-    // Input objects will only be populated in the happy path
-    pub input_objects: Option<Vec<Object>>,
-    // Output objects will only be populated in the happy path
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 impl ExecuteTransactionRequestV3 {
@@ -201,6 +180,11 @@ impl FinalizedEffects {
         match &self.finality_info {
             EffectsFinalityInfo::Certified(cert) => cert.epoch,
             EffectsFinalityInfo::Checkpointed(epoch, _) => *epoch,
+            EffectsFinalityInfo::QuorumExecuted(epoch) => *epoch,
         }
+    }
+
+    pub fn data(&self) -> &TransactionEffects {
+        &self.effects
     }
 }

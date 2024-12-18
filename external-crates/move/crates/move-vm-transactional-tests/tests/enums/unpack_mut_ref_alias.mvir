@@ -1,5 +1,5 @@
 //# publish
-module 0x1.o {
+module 0x6.o {
     enum X has drop { 
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
@@ -60,6 +60,6 @@ module 0x1.o {
 
 }
 
-//# run 0x1::o::test1
+//# run 0x6::o::test1
 
-//# run 0x1::o::test2
+//# run 0x6::o::test2

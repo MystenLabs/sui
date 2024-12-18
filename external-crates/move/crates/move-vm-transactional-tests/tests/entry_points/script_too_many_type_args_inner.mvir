@@ -1,9 +1,9 @@
 //# publish
-module 0x1.M {
+module 0x5.M {
     struct Ex<T> { flag: bool }
 }
 
-//# run --type-args 0x1::M::Ex<bool,u64>
+//# run --type-args 0x5::M::Ex<bool,u64>
 module 0x42.m {
 
 entry foo<T>() { // too many type args

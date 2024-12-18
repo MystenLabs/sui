@@ -11,7 +11,7 @@ use typed_store::traits::Map;
 use crate::get_db_entries;
 use move_core_types::language_storage::ModuleId;
 use std::fmt::Debug;
-use sui_storage::IndexStoreTables;
+use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TxSequenceNumber},
     Identifier, TypeTag,
@@ -124,14 +124,6 @@ pub fn search_index(
             get_db_entries!(
                 db_read_only_handle.dynamic_field_index,
                 from_oid_oid,
-                start,
-                termination
-            )
-        }
-        "loaded_child_object_versions" => {
-            get_db_entries!(
-                db_read_only_handle.loaded_child_object_versions,
-                TransactionDigest::from_str,
                 start,
                 termination
             )

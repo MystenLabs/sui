@@ -31,12 +31,6 @@ error[E03013]: positional call mismatch
    │
    = Remove '()' arguments from this pattern
 
-error[E04017]: too many arguments
-   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:18:13
-   │
-18 │             Y::D(x, ..) => 0,
-   │             ^^^^^^^^^^^ Invalid usage for empty variant '0x42::m::Y::D'. Empty variants do not take any arguments.
-
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:18:18
    │
@@ -55,12 +49,6 @@ error[E03013]: positional call mismatch
    │             ^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
    │
    = Remove '{ }' arguments from this pattern
-
-error[E04017]: too many arguments
-   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:19:13
-   │
-19 │             Y::D{x, ..} => 0,
-   │             ^^^^^^^^^^^ Invalid usage for empty variant '0x42::m::Y::D'. Empty variants do not take any arguments.
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:19:18

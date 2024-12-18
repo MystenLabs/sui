@@ -118,6 +118,25 @@ if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 }
 ```
 
+## Verifying zkLogin signatures
+
+ZkLogin signatures can't be verified purely on the client. When verifying a zkLogin signature, the
+SDK uses the GraphQL API to verify the signature. This will work for mainnet signatures without any
+additional configuration.
+
+For testnet signatures, you will need to provide a testnet GraphQL Client:
+
+```typescript
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+
+const publicKey = await verifyPersonalMessageSignature(message, zkSignature, {
+	client: new SuiGraphQLClient({
+		url: 'https://sui-testnet.mystenlabs.com/graphql',
+	}),
+});
+```
+
 ## Deriving a key pair from a mnemonic
 
 The Sui TypeScript SDK supports deriving a key pair from a mnemonic phrase. This can be useful when
@@ -152,6 +171,21 @@ const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 
 See [SIP-15](https://github.com/sui-foundation/sips/blob/main/sips/sip-15.md) for additional context
 and motivation.
+
+If you know your keypair schema, you can use the `fromSecretKey` method of the appropriate keypair
+to directly derive the keypair from the secret key.
+
+```typescript
+const secretKey = 'suiprivkey1qzse89atw7d3zum8ujep76d2cxmgduyuast0y9fu23xcl0mpafgkktllhyc';
+
+const keypair = Ed25519Keypair.fromSecretKey(secretKey);
+```
+
+You can also export a keypair to a Bech32 encoded secret key using the `getSecretKey` method.
+
+```typescript
+const secretKey = keypair.getSecretKey();
+```
 
 ## Deriving a `Keypair` from a hex encoded secret key
 

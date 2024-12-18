@@ -7,6 +7,7 @@ use jsonrpsee::rpc_params;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
 use rand::rngs::OsRng;
+use std::path::PathBuf;
 use std::sync::Arc;
 use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
@@ -68,8 +69,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
-        .await
-        .unwrap();
+        .await;
 
     // A small delay is needed for post processing operations following the transaction to finish.
     sleep(Duration::from_secs(1)).await;
@@ -114,8 +114,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
-        .await
-        .unwrap();
+        .await;
 
     Ok(())
 }
@@ -507,8 +506,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
-        .await
-        .unwrap();
+        .await;
 
     let info = fullnode
         .state()
@@ -628,8 +626,7 @@ async fn do_test_full_node_sync_flood() {
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
-        .await
-        .unwrap();
+        .await;
 }
 
 // Test fullnode has event read jsonrpc endpoints working
@@ -818,8 +815,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
-        .await
-        .unwrap();
+        .await;
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
@@ -1116,8 +1112,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     node.state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
-        .await
-        .unwrap();
+        .await;
 
     loop {
         // Ensure this full node is able to transition to the next epoch
@@ -1136,8 +1131,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     node.state()
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest_after_restore])
-        .await
-        .unwrap();
+        .await;
     Ok(())
 }
 
@@ -1250,14 +1244,13 @@ async fn test_access_old_object_pruned() {
                     .database_for_testing()
                     .prune_objects_and_compact_for_testing(
                         state.get_checkpoint_store(),
-                        state.rest_index.as_deref(),
+                        state.rpc_index.as_deref(),
                     )
                     .await;
                 // Make sure the old version of the object is already pruned.
                 assert!(state
                     .database_for_testing()
                     .get_object_by_key(&gas_object.0, gas_object.1)
-                    .unwrap()
                     .is_none());
                 let epoch_store = state.epoch_store_for_testing();
                 assert_eq!(
@@ -1406,4 +1399,30 @@ async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
         .is_none());
 
     Ok(())
+}
+
+// This test checks that the fullnode is able to resolve events emitted from a transaction
+// that references the structs defined in the package published by the transaction itself,
+// without local execution.
+#[sim_test]
+async fn publish_init_events_without_local_execution() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/move_test_code");
+    let tx_data = test_cluster
+        .test_transaction_builder()
+        .await
+        .publish(path)
+        .build();
+    let tx = test_cluster.sign_transaction(&tx_data);
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let response = client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            tx,
+            SuiTransactionBlockResponseOptions::new().with_events(),
+            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.events.unwrap().data.len(), 1);
 }

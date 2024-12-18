@@ -512,6 +512,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(elem_id))
     }
 
+    #[allow(deprecated)]
     pub fn call(
         &mut self,
         offset: CodeOffset,

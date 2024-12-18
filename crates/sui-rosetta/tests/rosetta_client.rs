@@ -20,8 +20,8 @@ use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, ConstructionCombineRequest,
     ConstructionCombineResponse, ConstructionMetadataRequest, ConstructionMetadataResponse,
     ConstructionPayloadsRequest, ConstructionPayloadsResponse, ConstructionPreprocessRequest,
-    ConstructionPreprocessResponse, ConstructionSubmitRequest, NetworkIdentifier, Signature,
-    SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
+    ConstructionPreprocessResponse, ConstructionSubmitRequest, Currencies, NetworkIdentifier,
+    Signature, SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
 use sui_sdk::SuiClient;
@@ -70,6 +70,13 @@ impl RosettaClient {
             offline_port: offline,
         }
     }
+
+    // Used to print port, when keeping test running by waiting for online server handle.
+    #[allow(dead_code)]
+    pub fn online_port(&self) -> u16 {
+        self.online_port
+    }
+
     pub async fn call<R: Serialize, T: DeserializeOwned>(
         &self,
         endpoint: RosettaEndpoint,
@@ -192,7 +199,7 @@ impl RosettaClient {
                 sub_account,
             },
             block_identifier: Default::default(),
-            currencies: vec![],
+            currencies: Currencies(vec![]),
         };
         self.call(RosettaEndpoint::Balance, &request).await
     }

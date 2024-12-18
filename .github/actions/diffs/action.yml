@@ -22,13 +22,19 @@ outputs:
   isMoveAutoFormatter:
     description: True when changes happened in MoveAutoFormatter code
     value: "${{ steps.diff.outputs.isMoveAutoFormatter }}"
+  isMoveAnalyzerTraceAdapter:
+    description: True when changes happened in Trace Adapter
+    value: "${{ steps.diff.outputs.isMoveAnalyzerTraceAdapter }}"
+  isExamples:
+    description: True when changes happened in examples/ directory
+    value: "${{ steps.diff.outputs.isExamples }}"
 
 runs:
   using: composite
   steps:
   - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
   - name: Detect Changes
-    uses: dorny/paths-filter@v2.10.2
+    uses: dorny/paths-filter@v3
     id: diff
     with:
       filters: |
@@ -36,9 +42,8 @@ runs:
           - 'consensus/**'
           - 'crates/**'
           - 'external-crates/**'
-          - 'narwhal/**'
           - 'sui-execution/**'
-          - '.github/workflows/codecov.yml'
+          - '.github/workflows/cargo-llvm-cov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
           - 'Cargo.lock'
@@ -71,8 +76,11 @@ runs:
           - 'docker/**'
           - 'external-crates/**'
           - 'kiosk/**'
-          - 'narwhal/**'
           - 'nre/**'
           - 'sui-execution/**'
         isMoveAutoFormatter:
           - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'
+        isMoveAnalyzerTraceAdapter:
+          - 'external-crates/move/crates/move-analyzer/trace-adapter/**'
+        isExamples:
+          - 'examples/**'

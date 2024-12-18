@@ -107,12 +107,14 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
                  package,
                  named_address_map,
                  def,
+                 target_kind: pkg_def_kind,
              }| {
                 context.set_current_package(package);
                 Some(P::PackageDefinition {
                     package,
                     named_address_map,
                     def: filter_definition(context, def)?,
+                    target_kind: pkg_def_kind,
                 })
             },
         )
@@ -126,12 +128,14 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
                  package,
                  named_address_map,
                  def,
+                 target_kind: pkg_def_kind,
              }| {
                 context.set_current_package(package);
                 Some(P::PackageDefinition {
                     package,
                     named_address_map,
                     def: filter_definition(context, def)?,
+                    target_kind: pkg_def_kind,
                 })
             },
         )

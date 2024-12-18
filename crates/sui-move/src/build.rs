@@ -22,6 +22,11 @@ pub struct Build {
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
+    /// Don't specialize the package to the active chain when dumping bytecode as Base64. This
+    /// allows building to proceed without a network connection or active environment, but it
+    /// will not be able to automatically determine the addresses of its dependencies.
+    #[clap(long, global = true, requires = "dump_bytecode_as_base64")]
+    pub ignore_chain: bool,
     /// If true, generate struct layout schemas for
     /// all struct types passed into `entry` functions declared by modules in this package
     /// These layout schemas can be consumed by clients (e.g.,
@@ -75,12 +80,11 @@ impl Build {
                 check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
             }
 
-            let package_dependencies = pkg.get_package_dependencies_hex();
             println!(
                 "{}",
                 json!({
                     "modules": pkg.get_package_base64(with_unpublished_deps),
-                    "dependencies": json!(package_dependencies),
+                    "dependencies": pkg.get_dependency_storage_package_ids(),
                     "digest": pkg.get_package_digest(with_unpublished_deps),
                 })
             )
@@ -89,11 +93,12 @@ impl Build {
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
             // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-            let layout_filename = rerooted_path
+            let dir_name = rerooted_path
                 .join("build")
                 .join(pkg.package.compiled_package_info.package_name.as_str())
-                .join(LAYOUTS_DIR)
-                .join(STRUCT_LAYOUTS_FILENAME);
+                .join(LAYOUTS_DIR);
+            let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
+            fs::create_dir_all(dir_name)?;
             fs::write(layout_filename, layout_str)?
         }
 

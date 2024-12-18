@@ -3,6 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
+use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
@@ -15,15 +16,14 @@ use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_command_line_common::{
-    address::ParsedAddress, files::verify_and_create_named_address_mapping,
-};
+use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
     Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
+use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
@@ -40,8 +40,6 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{
@@ -52,9 +50,7 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_graphql_rpc::config::ConnectionConfig;
-use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
+use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -71,10 +67,11 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
+use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
@@ -128,6 +125,19 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
+/// Extra args related to configuring the indexer and reader.
+// TODO: the configs are still tied to the indexer crate, eventually we'd like a new command that is
+// more agnostic
+pub struct OffChainConfig {
+    pub snapshot_config: SnapshotLagConfig,
+    pub retention_config: Option<RetentionConfig>,
+    /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer if it
+    /// uses file-based ingestion.
+    pub data_ingestion_path: PathBuf,
+    /// URL for the Sui REST API. To be passed to the offchain indexer if it uses the REST API.
+    pub rest_api_url: Option<String>,
+}
+
 pub struct SuiTestAdapter {
     pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
@@ -140,8 +150,30 @@ pub struct SuiTestAdapter {
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
     is_simulator: bool,
-    pub(crate) cluster: Option<ExecutorCluster>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
+    /// If `is_simulator` is true, the executor will be a `Simulacrum`, and this will be a
+    /// `RpcStateReader` that can be used to spawn the equivalent of a fullnode rest api. This can
+    /// then be used to serve an indexer that reads from said rest api service.
+    pub read_replica: Option<Arc<dyn RpcStateReader + Send + Sync>>,
+    /// Configuration for offchain state reader read from the file itself, and can be passed to the
+    /// specific indexing and reader flavor.
+    pub offchain_config: Option<OffChainConfig>,
+    /// A trait encapsulating methods to interact with offchain state.
+    pub offchain_reader: Option<Box<dyn OffchainStateReader>>,
+}
+
+struct AdapterInitConfig {
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+    account_names: BTreeSet<String>,
+    protocol_config: ProtocolConfig,
+    is_simulator: bool,
+    custom_validator_account: bool,
+    reference_gas_price: Option<u64>,
+    default_gas_price: Option<u64>,
+    flavor: Option<Flavor>,
+    /// Configuration for offchain state reader read from the file itself, and can be passed to the
+    /// specific indexing and reader flavor.
+    offchain_config: Option<OffChainConfig>,
 }
 
 pub(crate) struct StagedPackage {
@@ -169,6 +201,79 @@ struct TxnSummary {
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
+}
+
+impl AdapterInitConfig {
+    fn from_args(init_cmd: InitCommand, sui_args: SuiInitArgs) -> Self {
+        let InitCommand { named_addresses } = init_cmd;
+        let SuiInitArgs {
+            accounts,
+            protocol_version,
+            max_gas,
+            shared_object_deletion,
+            simulator,
+            custom_validator_account,
+            reference_gas_price,
+            default_gas_price,
+            snapshot_config,
+            flavor,
+            epochs_to_keep,
+            data_ingestion_path,
+            rest_api_url,
+        } = sui_args;
+
+        let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
+        let accounts = accounts
+            .map(|v| v.into_iter().collect::<BTreeSet<_>>())
+            .unwrap_or_default();
+
+        let mut protocol_config = if let Some(protocol_version) = protocol_version {
+            ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+        } else {
+            ProtocolConfig::get_for_max_version_UNSAFE()
+        };
+        if let Some(enable) = shared_object_deletion {
+            protocol_config.set_shared_object_deletion_for_testing(enable);
+        }
+        if let Some(mx_tx_gas_override) = max_gas {
+            if simulator {
+                panic!("Cannot set max gas in simulator mode");
+            }
+            protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+        }
+        if custom_validator_account && !simulator {
+            panic!("Can only set custom validator account in simulator mode");
+        }
+        if reference_gas_price.is_some() && !simulator {
+            panic!("Can only set reference gas price in simulator mode");
+        }
+
+        let offchain_config = if simulator {
+            let retention_config =
+                epochs_to_keep.map(RetentionConfig::new_with_default_retention_only_for_testing);
+
+            Some(OffChainConfig {
+                snapshot_config,
+                retention_config,
+                data_ingestion_path: data_ingestion_path.unwrap_or(tempdir().unwrap().into_path()),
+                rest_api_url,
+            })
+        } else {
+            None
+        };
+
+        Self {
+            additional_mapping: map,
+            account_names: accounts,
+            protocol_config,
+            is_simulator: simulator,
+            custom_validator_account,
+            reference_gas_price,
+            default_gas_price,
+            flavor,
+            offchain_config,
+        }
+    }
 }
 
 #[async_trait]
@@ -214,12 +319,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     fn default_syntax(&self) -> SyntaxChoice {
         self.default_syntax
     }
-    async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
-        if let Some(cluster) = self.cluster.take() {
-            cluster.cleanup_resources().await;
-        }
-        Ok(())
-    }
+
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
@@ -229,7 +329,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 Self::ExtraInitArgs,
             )>,
         >,
-        path: &Path,
+        _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -238,7 +338,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
         );
 
         // Unpack the init arguments
-        let (
+        let AdapterInitConfig {
             additional_mapping,
             account_names,
             protocol_config,
@@ -246,80 +346,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
             flavor,
-        ) = match task_opt.map(|t| t.command) {
-            Some((
-                InitCommand { named_addresses },
-                SuiInitArgs {
-                    accounts,
-                    protocol_version,
-                    max_gas,
-                    shared_object_deletion,
-                    simulator,
-                    custom_validator_account,
-                    reference_gas_price,
-                    default_gas_price,
-                    object_snapshot_min_checkpoint_lag,
-                    object_snapshot_max_checkpoint_lag,
-                    flavor,
-                },
-            )) => {
-                let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                let accounts = accounts
-                    .map(|v| v.into_iter().collect::<BTreeSet<_>>())
-                    .unwrap_or_default();
-
-                let mut protocol_config = if let Some(protocol_version) = protocol_version {
-                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
-                } else {
-                    ProtocolConfig::get_for_max_version_UNSAFE()
-                };
-                if let Some(enable) = shared_object_deletion {
-                    protocol_config.set_shared_object_deletion_for_testing(enable);
-                }
-                if let Some(mx_tx_gas_override) = max_gas {
-                    if simulator {
-                        panic!("Cannot set max gas in simulator mode");
-                    }
-                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
-                }
-                if custom_validator_account && !simulator {
-                    panic!("Can only set custom validator account in simulator mode");
-                }
-                if reference_gas_price.is_some() && !simulator {
-                    panic!("Can only set reference gas price in simulator mode");
-                }
-
-                (
-                    map,
-                    accounts,
-                    protocol_config,
-                    simulator,
-                    custom_validator_account,
-                    reference_gas_price,
-                    default_gas_price,
-                    object_snapshot_min_checkpoint_lag,
-                    object_snapshot_max_checkpoint_lag,
-                    flavor,
-                )
-            }
-            None => {
-                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-                (
-                    BTreeMap::new(),
-                    BTreeSet::new(),
-                    protocol_config,
-                    false,
-                    false,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            }
+            offchain_config,
+        } = match task_opt.map(|t| t.command) {
+            Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
+            None => AdapterInitConfig::default(),
         };
 
         let (
@@ -331,7 +362,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 objects,
                 account_objects,
             },
-            cluster,
+            read_replica,
         ) = if is_simulator {
             init_sim_executor(
                 rng,
@@ -340,9 +371,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
-                object_snapshot_min_checkpoint_lag,
-                object_snapshot_max_checkpoint_lag,
-                path.to_path_buf(),
+                offchain_config
+                    .as_ref()
+                    .unwrap()
+                    .data_ingestion_path
+                    .clone(),
             )
             .await
         } else {
@@ -354,8 +387,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
 
         let mut test_adapter = Self {
             is_simulator,
-            cluster,
+            // This is opt-in and instantiated later
+            offchain_reader: None,
             executor,
+            offchain_config,
+            read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -567,63 +603,49 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }};
         }
         match command {
-            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
-                start_cp,
-                end_cp,
-            }) => {
-                let cluster = self.cluster.as_ref().unwrap();
-                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-
-                if end_cp > highest_checkpoint {
-                    bail!(
-                        "end_cp {} is greater than highest checkpoint {}",
-                        end_cp,
-                        highest_checkpoint,
-                    );
-                }
-
-                cluster
-                    .force_objects_snapshot_catchup(start_cp, end_cp)
-                    .await;
-
-                Ok(Some(format!(
-                    "Objects snapshot updated to [{} to {})",
-                    start_cp, end_cp
-                )))
-            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
                 show_service_version,
+                wait_for_checkpoint_pruned,
                 cursors,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
-                let cluster = self.cluster.as_ref().unwrap();
+                let offchain_reader = self
+                    .offchain_reader
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Offchain reader not set"))?;
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-                cluster
+                offchain_reader
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
                     .await;
 
-                cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
-                    .await;
+                // wait_for_objects_snapshot_catchup(graphql_client, Duration::from_secs(180)).await;
+
+                if let Some(checkpoint_to_prune) = wait_for_checkpoint_pruned {
+                    offchain_reader
+                        .wait_for_pruned_checkpoint(checkpoint_to_prune, Duration::from_secs(60))
+                        .await;
+                }
 
                 let interpolated =
                     self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
-                let resp = cluster
-                    .graphql_client
-                    .execute_to_graphql(interpolated.trim().to_owned(), show_usage, vec![], vec![])
+                let resp = offchain_reader
+                    .execute_graphql(interpolated.trim().to_owned(), show_usage)
                     .await?;
 
                 let mut output = vec![];
                 if show_headers {
-                    output.push(format!("Headers: {:#?}", resp.http_headers_without_date()));
+                    output.push(format!("Headers: {:#?}", resp.http_headers.unwrap()));
                 }
                 if show_service_version {
-                    output.push(format!("Service version: {}", resp.graphql_version()?));
+                    output.push(format!(
+                        "Service version: {}",
+                        resp.service_version.unwrap()
+                    ));
                 }
-                output.push(format!("Response: {}", resp.response_body_json_pretty()));
+                output.push(format!("Response: {}", resp.response_body));
 
                 Ok(Some(output.join("\n")))
             }
@@ -631,7 +653,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor
-                    .get_checkpoint_by_sequence_number(latest_chk)?
+                    .get_checkpoint_by_sequence_number(latest_chk)
                     .unwrap();
                 Ok(Some(format!("{}", chk.data())))
             }
@@ -754,8 +776,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }
             SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
                 sender,
+                sponsor,
                 gas_budget,
                 gas_price,
+                gas_payment,
                 dev_inspect,
                 inputs,
             }) => {
@@ -801,15 +825,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 let summary = if !dev_inspect {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let transaction = self.sign_txn(sender, |sender, gas| {
-                        TransactionData::new_programmable(
-                            sender,
-                            vec![gas],
-                            ProgrammableTransaction { inputs, commands },
-                            gas_budget,
-                            gas_price,
-                        )
-                    });
+                    let transaction = self.sign_sponsor_txn(
+                        sender,
+                        sponsor,
+                        gas_payment,
+                        |sender, sponsor, gas| {
+                            TransactionData::new_programmable_allow_sponsor(
+                                sender,
+                                vec![gas],
+                                ProgrammableTransaction { inputs, commands },
+                                gas_budget,
+                                gas_price,
+                                sponsor,
+                            )
+                        },
+                    );
                     self.execute_txn(transaction).await?
                 } else {
                     assert!(
@@ -1169,6 +1199,10 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl<'a> SuiTestAdapter {
+    pub fn with_offchain_reader(&mut self, offchain_reader: Box<dyn OffchainStateReader>) {
+        self.offchain_reader = Some(offchain_reader);
+    }
+
     pub fn is_simulator(&self) -> bool {
         self.is_simulator
     }
@@ -1379,13 +1413,46 @@ impl<'a> SuiTestAdapter {
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
-        let test_account = self.get_sender(sender);
-        let gas_payment = self
-            .get_object(&test_account.gas, None)
+        self.sign_sponsor_txn(sender, None, None, move |sender, _, gas| {
+            txn_data(sender, gas)
+        })
+    }
+
+    fn sign_sponsor_txn(
+        &self,
+        sender: Option<String>,
+        sponsor: Option<String>,
+        payment: Option<FakeID>,
+        txn_data: impl FnOnce(
+            /* sender */ SuiAddress,
+            /* sponsor */ SuiAddress,
+            /* gas */ ObjectRef,
+        ) -> TransactionData,
+    ) -> Transaction {
+        let sender = self.get_sender(sender);
+        let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
+
+        let payment = if let Some(payment) = payment {
+            self.fake_to_real_object_id(payment)
+                .expect("Could not find specified payment object")
+        } else {
+            sponsor.gas
+        };
+
+        let payment_ref = self
+            .get_object(&payment, None)
             .unwrap()
             .compute_object_reference();
-        let data = txn_data(test_account.address, gas_payment);
-        to_sender_signed_transaction(data, &test_account.key_pair)
+
+        let data = txn_data(sender.address, sponsor.address, payment_ref);
+        if sender.address == sponsor.address {
+            to_sender_signed_transaction(data, &sender.key_pair)
+        } else {
+            to_sender_signed_transaction_with_multi_signers(
+                data,
+                vec![&sender.key_pair, &sponsor.key_pair],
+            )
+        }
     }
 
     fn get_sender(&self, sender: Option<String>) -> &TestAccount {
@@ -1611,8 +1678,8 @@ impl<'a> SuiTestAdapter {
             ObjectStore::get_object(&*self.executor, id)
         };
         match obj_res {
-            Ok(Some(obj)) => Ok(obj),
-            Ok(None) | Err(_) => Err(anyhow!("INVALID TEST! Unable to find object {id}")),
+            Some(obj) => Ok(obj),
+            None => Err(anyhow!("INVALID TEST! Unable to find object {id}")),
         }
     }
 
@@ -1747,14 +1814,16 @@ impl<'a> SuiTestAdapter {
             return format!("{}", objs.len());
         }
         objs.iter()
-            .map(|id| match self.real_to_fake_object_id(id) {
-                None => "object(_)".to_string(),
-                Some(FakeID::Known(id)) => {
-                    let id: AccountAddress = id.into();
-                    format!("0x{id:x}")
-                }
-                Some(fake) => format!("object({})", fake),
-            })
+            .map(
+                |id| /*id.to_string(), */match self.real_to_fake_object_id(id) {
+                                         None => "object(_)".to_string(),
+                                         Some(FakeID::Known(id)) => {
+                                             let id: AccountAddress = id.into();
+                                             format!("0x{id:x}")
+                                         }
+                                         Some(fake) => format!("object({})", fake),
+                                     },
+            )
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -1876,6 +1945,22 @@ impl fmt::Display for FakeID {
                 write!(f, "0x{:x}", addr)
             }
             FakeID::Enumerated(task, i) => write!(f, "{},{}", task, i),
+        }
+    }
+}
+
+impl Default for AdapterInitConfig {
+    fn default() -> Self {
+        Self {
+            additional_mapping: BTreeMap::new(),
+            account_names: BTreeSet::new(),
+            protocol_config: ProtocolConfig::get_for_max_version_UNSAFE(),
+            is_simulator: false,
+            custom_validator_account: false,
+            reference_gas_price: None,
+            default_gas_price: None,
+            flavor: None,
+            offchain_config: None,
         }
     }
 }
@@ -2026,7 +2111,7 @@ async fn init_val_fullnode_executor(
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
-    Option<ExecutorCluster>,
+    Option<Arc<dyn RpcStateReader + Send + Sync>>,
 ) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -2092,13 +2177,11 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
-    object_snapshot_min_checkpoint_lag: Option<usize>,
-    object_snapshot_max_checkpoint_lag: Option<usize>,
-    test_file_path: PathBuf,
+    data_ingestion_path: PathBuf,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
-    Option<ExecutorCluster>,
+    Option<Arc<dyn RpcStateReader + Send + Sync>>,
 ) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -2160,37 +2243,8 @@ async fn init_sim_executor(
             reference_gas_price,
             None,
         );
-    let data_ingestion_path = tempdir().unwrap().into_path();
+
     sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-    // Hash the file path to create custom unique DB name
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    test_file_path.hash(&mut hasher);
-    let hash = hasher.finish();
-    let db_name = format!("sui_graphql_test_{}", hash);
-
-    // Use the hash as a seed to generate a random port number
-    let base_port = hash as u16 % 8192;
-
-    let graphql_port = 20000 + base_port;
-    let graphql_prom_port = graphql_port + 1;
-    let internal_data_port = graphql_prom_port + 1;
-    let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg_with_db_name(
-            db_name,
-            graphql_port,
-            graphql_prom_port,
-        ),
-        internal_data_port,
-        Arc::new(read_replica),
-        Some(SnapshotLagConfig::new(
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
-            Some(1),
-        )),
-        data_ingestion_path,
-    )
-    .await;
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
@@ -2249,7 +2303,7 @@ async fn init_sim_executor(
             account_objects,
             accounts,
         },
-        Some(cluster),
+        Some(Arc::new(read_replica)),
     )
 }
 
@@ -2295,18 +2349,11 @@ async fn update_named_address_mapping(
 }
 
 impl ObjectStore for SuiTestAdapter {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         ObjectStore::get_object(&*self.executor, object_id)
     }
 
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> sui_types::storage::error::Result<Option<Object>> {
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         ObjectStore::get_object_by_key(&*self.executor, object_id, version)
     }
 }
@@ -2319,7 +2366,7 @@ impl ReadStore for SuiTestAdapter {
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,
-    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
+    ) -> Option<Arc<sui_types::committee::Committee>> {
         self.executor.get_committee(epoch)
     }
 
@@ -2348,14 +2395,14 @@ impl ReadStore for SuiTestAdapter {
     fn get_checkpoint_by_digest(
         &self,
         digest: &sui_types::messages_checkpoint::CheckpointDigest,
-    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+    ) -> Option<VerifiedCheckpoint> {
         self.executor.get_checkpoint_by_digest(digest)
     }
 
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+    ) -> Option<VerifiedCheckpoint> {
         self.executor
             .get_checkpoint_by_sequence_number(sequence_number)
     }
@@ -2363,45 +2410,34 @@ impl ReadStore for SuiTestAdapter {
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+    ) -> Option<CheckpointContents> {
         self.executor.get_checkpoint_contents_by_digest(digest)
     }
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+    ) -> Option<CheckpointContents> {
         self.executor
             .get_checkpoint_contents_by_sequence_number(sequence_number)
     }
 
-    fn get_transaction(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<Arc<VerifiedTransaction>>> {
+    fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
         self.executor.get_transaction(tx_digest)
     }
 
-    fn get_transaction_effects(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+    fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
         self.executor.get_transaction_effects(tx_digest)
     }
 
-    fn get_events(
-        &self,
-        event_digest: &TransactionEventsDigest,
-    ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
+    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
         self.executor.get_events(event_digest)
     }
 
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> sui_types::storage::error::Result<
-        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
-    > {
+    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         self.executor
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
@@ -2409,9 +2445,7 @@ impl ReadStore for SuiTestAdapter {
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> sui_types::storage::error::Result<
-        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
-    > {
+    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         self.executor.get_full_checkpoint_contents(digest)
     }
 }

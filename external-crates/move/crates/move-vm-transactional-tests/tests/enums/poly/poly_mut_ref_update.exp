@@ -3,8 +3,7 @@ processed 3 tasks
 task 0, lines 3-50:
 //# print-bytecode
 // Move bytecode v7
-module 1.PolymorphicEnums {
-
+module 6.PolymorphicEnums {
 
 enum EnumWithTwoVariants<Ty0: drop> has drop {
 	One { x: Ty0 },
@@ -19,8 +18,8 @@ B0:
 	3: MoveLoc[1](loc0: u64)
 	4: PackVariantGeneric(VariantInstantiationHandleIndex(0))
 	5: Ret
-
 }
+
 public mutate<Ty0: drop>(Arg0: &mut EnumWithTwoVariants<Ty0>, Arg1: Ty0) {
 B0:
 	0: CopyLoc[0](Arg0: &mut EnumWithTwoVariants<Ty0>)
@@ -49,6 +48,7 @@ Jump tables:
 		Variant1 => jump 10
 	}
 }
+
 public get<Ty0: drop>(Arg0: &EnumWithTwoVariants<Ty0>): &Ty0 {
 L0:	loc1: &u64
 B0:
@@ -73,4 +73,6 @@ Jump tables:
 		Variant1 => jump 7
 	}
 }
+
 }
+

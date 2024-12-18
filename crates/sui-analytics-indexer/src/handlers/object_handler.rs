@@ -10,7 +10,8 @@ use tokio::sync::Mutex;
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_package_resolver::Resolver;
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
+use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::object::Object;
 
@@ -25,6 +26,7 @@ use crate::FileType;
 
 pub struct ObjectHandler {
     state: Mutex<State>,
+    package_filter: Option<ObjectID>,
 }
 
 struct State {
@@ -35,7 +37,9 @@ struct State {
 
 #[async_trait::async_trait]
 impl Worker for ObjectHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    type Result = ();
+
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
@@ -50,7 +54,7 @@ impl Worker for ObjectHandler {
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                &checkpoint_transaction,
+                checkpoint_transaction,
                 &checkpoint_transaction.effects,
                 &mut state,
             )
@@ -85,7 +89,7 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
 }
 
 impl ObjectHandler {
-    pub fn new(store_path: &Path, rest_uri: &str) -> Self {
+    pub fn new(store_path: &Path, rest_uri: &str, package_filter: &Option<String>) -> Self {
         let package_store = LocalDBPackageStore::new(&store_path.join("object"), rest_uri);
         let state = State {
             objects: vec![],
@@ -94,6 +98,9 @@ impl ObjectHandler {
         };
         Self {
             state: Mutex::new(state),
+            package_filter: package_filter
+                .clone()
+                .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
         }
     }
     async fn process_transaction(
@@ -177,13 +184,30 @@ impl ObjectHandler {
         } else {
             (None, None)
         };
-        let object_type = move_obj_opt.map(|o| o.type_().to_string());
+
+        let object_type = move_obj_opt.map(|o| o.type_());
+
+        let is_match = if let Some(package_id) = self.package_filter {
+            if let Some(move_object_type) = object_type {
+                let object_package_id: ObjectID = move_object_type.address().into();
+                object_package_id == package_id
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+
+        if !is_match {
+            return Ok(());
+        }
+
         let object_id = object.id();
         let entry = ObjectEntry {
             object_id: object_id.to_string(),
             digest: object.digest().to_string(),
             version: object.version().value(),
-            type_: object_type,
+            type_: object_type.map(|t| t.to_string()),
             checkpoint,
             epoch,
             timestamp_ms,

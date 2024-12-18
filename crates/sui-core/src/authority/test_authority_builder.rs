@@ -10,9 +10,10 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
+use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::rest_index::RestIndexStore;
+use crate::rpc_index::RpcIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -30,7 +31,6 @@ use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_network::randomness;
 use sui_protocol_config::ProtocolConfig;
-use sui_storage::IndexStore;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
@@ -42,6 +42,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::VerifiedTransaction;
 
+use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
 
 #[derive(Default, Clone)]
@@ -227,13 +228,19 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_flags,
         )
         .unwrap();
-        let expensive_safety_checks = match self.expensive_safety_checks {
-            None => ExpensiveSafetyCheckConfig::default(),
-            Some(config) => config,
-        };
+        let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let cache_traits =
-            build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
+        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+        let backpressure_manager =
+            BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
+
+        let cache_traits = build_execution_cache(
+            &Default::default(),
+            &epoch_start_configuration,
+            &registry,
+            &authority_store,
+            backpressure_manager.clone(),
+        );
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,
@@ -255,7 +262,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
         ));
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
         if self.insert_genesis_checkpoint {
             checkpoint_store.insert_genesis_checkpoint(
                 genesis.checkpoint(),
@@ -273,13 +279,14 @@ impl<'a> TestAuthorityBuilder<'a> {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 false,
+                &authority_store,
             )))
         };
-        let rest_index = if self.disable_indexer {
+        let rpc_index = if self.disable_indexer {
             None
         } else {
-            Some(Arc::new(RestIndexStore::new(
-                path.join("rest_index"),
+            Some(Arc::new(RpcIndexStore::new(
+                &path,
                 &authority_store,
                 &checkpoint_store,
                 &epoch_store,
@@ -313,7 +320,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_store.clone(),
             committee_store,
             index_store,
-            rest_index,
+            rpc_index,
             checkpoint_store,
             &registry,
             genesis.objects(),
@@ -364,6 +371,11 @@ impl<'a> TestAuthorityBuilder<'a> {
             )
             .await
             .unwrap();
+
+        state
+            .get_cache_commit()
+            .commit_transaction_outputs(epoch_store.epoch(), &[*genesis.transaction().digest()])
+            .await;
 
         // We want to insert these objects directly instead of relying on genesis because
         // genesis process would set the previous transaction field for these objects, which would

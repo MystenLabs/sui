@@ -249,7 +249,7 @@ impl ChildObjectResolver for InMemoryStore {
             return Err(SuiError::InvalidChildObjectAccess {
                 object: *child,
                 given_parent: parent,
-                actual_owner: child_object.owner,
+                actual_owner: child_object.owner.clone(),
             });
         }
 
@@ -306,19 +306,16 @@ impl ModuleResolver for InMemoryStore {
 }
 
 impl ObjectStore for InMemoryStore {
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        Ok(self.get_object(object_id).cloned())
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.get_object(object_id).cloned()
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        Ok(self.get_object_at_version(object_id, version).cloned())
+    ) -> Option<Object> {
+        self.get_object_at_version(object_id, version).cloned()
     }
 }
 
@@ -326,7 +323,7 @@ impl ParentSync for InMemoryStore {
     fn get_latest_parent_entry_ref_deprecated(
         &self,
         _object_id: ObjectID,
-    ) -> sui_types::error::SuiResult<Option<sui_types::base_types::ObjectRef>> {
+    ) -> Option<sui_types::base_types::ObjectRef> {
         panic!("Never called in newer protocol versions")
     }
 }

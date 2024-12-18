@@ -122,6 +122,8 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
 
         // update the blocklist
         _updateBlocklist(_blocklist, isBlocklisted);
+
+        emit BlocklistUpdatedV2(message.nonce, _blocklist, isBlocklisted);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -134,8 +136,6 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
         for (uint16 i; i < _blocklist.length; i++) {
             blocklist[_blocklist[i]] = isBlocklisted;
         }
-
-        emit BlocklistUpdated(_blocklist, isBlocklisted);
     }
 
     /// @notice Splits the provided signature into its r, s, and v components.

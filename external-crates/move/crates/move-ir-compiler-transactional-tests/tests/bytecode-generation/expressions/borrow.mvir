@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x1.m {
+module 0x6.m {
 // Borrowing a local produces a reference type.
 entry foo() {
     let x: u64;
@@ -13,7 +13,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x2.m {
+module 0x7.m {
 // Borrowing a local reference produces a reference type.
 entry foo() {
     let x: u64;
@@ -112,7 +112,7 @@ module 0x3d4.N {
 }
 
 //# print-bytecode
-module 0x1.m {
+module 0x8.m {
 import 0x3d4.M;
 entry foo(account: signer) {
     let t: M.T;
@@ -142,7 +142,7 @@ module 0x3d4.O {
 }
 
 //# print-bytecode
-module 0x1.m {
+module 0x9.m {
 entry foo(account: signer) {
     let t: M.T;
     let r: &bool;

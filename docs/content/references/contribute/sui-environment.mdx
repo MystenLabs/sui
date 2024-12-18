@@ -39,6 +39,7 @@ The Sui repo is a monorepo, containing all the source code that is used to build
 The root folder of the Sui monorepo has the following top-level folders:
 
 - [apps](https://github.com/MystenLabs/sui/tree/main/apps): Contains the source code for the main web applications that Mysten Labs runs, `Sui Wallet`.
+- [consensus](https://github.com/MystenLabs/sui/tree/main/consensus): Contains the source code of consensus.
 - [crates](https://github.com/MystenLabs/sui/tree/main/crates): Contains all the Rust crates that are part of the Sui system.
 - [dapps](https://github.com/MystenLabs/sui/tree/main/dapps): Contains some examples of decentralized applications built on top of Sui, such as Kiosk or Sponsored Transactions.
 - [dashboards](https://github.com/MystenLabs/sui/tree/main/dashboards): Currently empty.
@@ -48,7 +49,6 @@ The root folder of the Sui monorepo has the following top-level folders:
 - [examples](https://github.com/MystenLabs/sui/tree/main/examples): Contains examples of apps written for Sui and smart contracts written in Move.
 - [external-crates](https://github.com/MystenLabs/sui/tree/main/external-crates): Contains the source code for the Move programming language.
 - [kiosk](https://github.com/MystenLabs/sui/tree/main/kiosk): Contains the source code of the Mysten Labs Kiosk extensions and rules, as well as examples.
-- [narwhal](https://github.com/MystenLabs/sui/tree/main/narwhal): Contains the source code of Narwhal and partially synchronous Bullshark, a DAG-based mempool, and efficient BFT consensus.
 - [nre](https://github.com/MystenLabs/sui/tree/main/nre): Contains information about node and network reliability engineering.
 - [scripts](https://github.com/MystenLabs/sui/tree/main/scripts): Contains a number of scripts that are used internally.
 - [sdk](https://github.com/MystenLabs/sui/tree/main/sdk): Contains the source code for different tools and SDKs, such as the Sui TypeScript SDK, Kiosk SDK, BCS, zkLogin, dApp kit, and others.
@@ -57,7 +57,7 @@ The root folder of the Sui monorepo has the following top-level folders:
 The following primary directories offer a good starting point for exploring the Sui codebase:
 
 - [move](https://github.com/MystenLabs/sui/tree/main/external-crates/move) - Move VM, compiler, and tools.
-- [narwhal](https://github.com/MystenLabs/sui/tree/main/narwhal) - Mempool and consensus.
+- [consensus](https://github.com/MystenLabs/sui/tree/main/consensus) - Consensus engine.
 - [typescript-sdk](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/) - the Sui TypeScript SDK.
 - [wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet) - Chrome extension wallet for Sui.
 - [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui command line tool.

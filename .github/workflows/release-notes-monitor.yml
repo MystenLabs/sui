@@ -33,7 +33,7 @@ jobs:
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -rV | head -1)
         export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
         
-        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
+        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- consensus crates dashboards doc docker external-crates kiosk nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
 
         echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
         echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
@@ -100,22 +100,11 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       with:
         channel-id: '#ext-mysten-release-notes'
-        payload: |
-          {
-            "text": "PR *${{ matrix.pr }}* Release Notes",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ env.release_notes }}"
-                }
-              },
-              {
-                "type": "divider"
-              }
-            ]
-          }
+        slack-message: |
+          <@U03LRLPR1QX> and <@U04A8V9E203>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
+          *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>
+          *Release Notes:*
+          ${{ env.release_notes }}
 
   tag:
     name: Adding git tag to processed commit

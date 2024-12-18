@@ -16,7 +16,7 @@ title: Sui Bridge Testnet Incentive Program FAQ
 **Q: Am I eligible for rewards if I test the bridge by directly calling the contract/package?**\
 **A:** No, to be eligible, users must directly interact with the [Sui Bridge web interface on Testnet](https://bridge.testnet.sui.io/?ref=blog.sui.io)
 
-**Q: Can I use a bot to bulk test  the [Sui Bridge Testnet](https://bridge.testnet.sui.io/)?**\
+**Q: Can I use a bot to bulk test the [Sui Bridge Testnet](https://bridge.testnet.sui.io/)?**\
 **A:** We expect real valuable signals and feedback to come from human testers. **Using a bot for testing is discouraged and will negatively impact your final rewards.**
 
 **Q: How do I get test tokens?**\
@@ -29,7 +29,7 @@ title: Sui Bridge Testnet Incentive Program FAQ
 **A:** Yes. We track eligible test activities by Sui address.
 
 **Q: Does a roundtrip require the same token and amount?**\
-**A:** No it doesn't. Namely transferring 1 Native Sepolia ETH from Etheruem to Sui and 500 USDC from Sui to Ethereum is considered an eligible test activity.
+**A:** No it doesn't. Namely transferring 1 Native Sepolia ETH from Ethereum to Sui and 500 USDC from Sui to Ethereum is considered an eligible test activity.
 
 **Q: I see my transfer is "delayed". What does it mean?**\
 **A:** Check the "What is the limiter?" on the [FAQ section of the Sui Bridge Website] (https://bridge.testnet.sui.io/#faq). On Mainnet we expect the limiter to be hit rarely. However during the incentivize program we may intentionally trigger this scenario more often to thoroughly test it.

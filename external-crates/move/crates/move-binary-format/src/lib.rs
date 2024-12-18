@@ -9,6 +9,7 @@ use std::fmt;
 pub mod binary_config;
 pub mod check_bounds;
 pub mod compatibility;
+pub mod compatibility_mode;
 #[macro_use]
 pub mod errors;
 pub mod constant;
@@ -21,6 +22,7 @@ pub mod normalized;
 pub mod proptest_types;
 pub mod serializer;
 
+pub mod inclusion_mode;
 #[cfg(test)]
 mod unit_tests;
 
@@ -161,8 +163,10 @@ macro_rules! safe_unwrap {
         match $e {
             Some(x) => x,
             None => {
-                let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("{}:{} (none)", file!(), line!()));
+                let err = move_binary_format::errors::PartialVMError::new(
+                    move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                )
+                .with_message(format!("{}:{} (none)", file!(), line!()));
                 if cfg!(debug_assertions) {
                     panic!("{:?}", err);
                 } else {

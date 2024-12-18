@@ -232,19 +232,21 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
     /// Remove reference `id` from the graph
     /// Fixes any transitive borrows, so if `parent` borrowed by `id` borrowed by `child`
     /// After the release, `parent` borrowed by `child`
-    pub fn release(&mut self, id: RefID) {
+    pub fn release(&mut self, id: RefID) -> usize {
         debug_assert!(self.check_invariant());
         let Ref {
             borrowed_by,
             borrows_from,
             ..
         } = self.0.remove(&id).unwrap();
+        let mut released_edges = 0;
         for parent_ref_id in borrows_from.into_iter() {
             let parent = self.0.get_mut(&parent_ref_id).unwrap();
             let parent_edges = parent.borrowed_by.0.remove(&id).unwrap();
             for parent_edge in parent_edges {
                 for (child_ref_id, child_edges) in &borrowed_by.0 {
                     for child_edge in child_edges {
+                        released_edges += 1;
                         self.splice_out_intermediate(
                             parent_ref_id,
                             &parent_edge,
@@ -260,6 +262,7 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
             child.borrows_from.remove(&id);
         }
         debug_assert!(self.check_invariant());
+        released_edges
     }
 
     fn splice_out_intermediate(

@@ -255,7 +255,7 @@ permissions in the custom <code>add</code> call.
     self: &<b>mut</b> Kiosk,
     cap: &KioskOwnerCap,
     permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>,
-    ctx: &<b>mut</b> TxContext
+    ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     df::add(
@@ -265,7 +265,7 @@ permissions in the custom <code>add</code> call.
             storage: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
             permissions,
             is_enabled: <b>true</b>,
-        }
+        },
     )
 }
 </code></pre>
@@ -292,10 +292,7 @@ The storage is still available to the extension (until it's removed).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_disable">disable</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> Kiosk,
-    cap: &KioskOwnerCap,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_disable">disable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
     <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>false</b>;
@@ -324,10 +321,7 @@ owner can disable them via <code>disable</code> call.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_enable">enable</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> Kiosk,
-    cap: &KioskOwnerCap,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_enable">enable</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
     <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>true</b>;
@@ -355,9 +349,7 @@ the extension storage must be empty for the transaction to succeed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap) {
     <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
 
@@ -392,9 +384,7 @@ the extension as long as the extension is installed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(
-    _ext: Ext, self: &Kiosk
-): &Bag {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &Kiosk): &Bag {
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     &<a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).storage
 }
@@ -431,9 +421,7 @@ aware of the risks.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage_mut">storage_mut</a>&lt;Ext: drop&gt;(
-    _ext: Ext, self: &<b>mut</b> Kiosk
-): &<b>mut</b> Bag {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage_mut">storage_mut</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> Kiosk): &<b>mut</b> Bag {
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     &<b>mut</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).storage
 }
@@ -465,7 +453,10 @@ requires a <code>TransferPolicy</code> for the placed type to exist.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_place">place</a>&lt;Ext: drop, T: key + store&gt;(
-    _ext: Ext, self: &<b>mut</b> Kiosk, item: T, _policy: &TransferPolicy&lt;T&gt;
+    _ext: Ext,
+    self: &<b>mut</b> Kiosk,
+    item: T,
+    _policy: &TransferPolicy&lt;T&gt;,
 ) {
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext&gt;(self) || <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
@@ -496,7 +487,10 @@ authorized extension. The extension must have the <code>lock</code> permission.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_lock">lock</a>&lt;Ext: drop, T: key + store&gt;(
-    _ext: Ext, self: &<b>mut</b> Kiosk, item: T, _policy: &TransferPolicy&lt;T&gt;
+    _ext: Ext,
+    self: &<b>mut</b> Kiosk,
+    item: T,
+    _policy: &TransferPolicy&lt;T&gt;,
 ) {
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);

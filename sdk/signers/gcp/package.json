@@ -1,0 +1,6 @@
+{
+	"private": true,
+	"import": "../dist/esm/gcp/index.js",
+	"main": "../dist/cjs/gcp/index.js",
+	"sideEffects": false
+}

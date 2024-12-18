@@ -16,7 +16,7 @@ use std::{
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
-use sui_config::NodeConfig;
+use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolVersion;
@@ -51,6 +51,7 @@ pub struct SwarmBuilder<R = OsRng> {
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
@@ -58,6 +59,7 @@ pub struct SwarmBuilder<R = OsRng> {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
+    disable_fullnode_pruning: bool,
 }
 
 impl SwarmBuilder {
@@ -79,6 +81,7 @@ impl SwarmBuilder {
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
             authority_overload_config: None,
+            execution_cache_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
@@ -86,6 +89,7 @@ impl SwarmBuilder {
             max_submit_position: None,
             submit_delay_step_override_millis: None,
             state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(true),
+            disable_fullnode_pruning: false,
         }
     }
 }
@@ -109,6 +113,7 @@ impl<R> SwarmBuilder<R> {
             jwk_fetch_interval: self.jwk_fetch_interval,
             num_unpruned_validators: self.num_unpruned_validators,
             authority_overload_config: self.authority_overload_config,
+            execution_cache_config: self.execution_cache_config,
             data_ingestion_dir: self.data_ingestion_dir,
             fullnode_run_with_range: self.fullnode_run_with_range,
             fullnode_policy_config: self.fullnode_policy_config,
@@ -116,6 +121,7 @@ impl<R> SwarmBuilder<R> {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             state_accumulator_v2_enabled_config: self.state_accumulator_v2_enabled_config,
+            disable_fullnode_pruning: self.disable_fullnode_pruning,
         }
     }
 
@@ -254,6 +260,14 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_execution_cache_config(
+        mut self,
+        execution_cache_config: ExecutionCacheConfig,
+    ) -> Self {
+        self.execution_cache_config = Some(execution_cache_config);
+        self
+    }
+
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
         self
@@ -286,6 +300,11 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
         self.max_submit_position = Some(max_submit_position);
+        self
+    }
+
+    pub fn with_disable_fullnode_pruning(mut self) -> Self {
+        self.disable_fullnode_pruning = true;
         self
     }
 
@@ -328,6 +347,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             if let Some(authority_overload_config) = self.authority_overload_config {
                 config_builder =
                     config_builder.with_authority_overload_config(authority_overload_config);
+            }
+
+            if let Some(execution_cache_config) = self.execution_cache_config {
+                config_builder = config_builder.with_execution_cache_config(execution_cache_config);
             }
 
             if let Some(path) = self.data_ingestion_dir {
@@ -375,7 +398,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_run_with_range(self.fullnode_run_with_range)
             .with_policy_config(self.fullnode_policy_config)
             .with_data_ingestion_dir(ingest_data)
-            .with_fw_config(self.fullnode_fw_config);
+            .with_fw_config(self.fullnode_fw_config)
+            .with_disable_pruning(self.disable_fullnode_pruning);
 
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {

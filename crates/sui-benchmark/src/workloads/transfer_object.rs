@@ -13,7 +13,8 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
-    Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
+    ExpectedFailureType, Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    STORAGE_COST_PER_COIN,
 };
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -80,6 +81,9 @@ impl Payload for TransferObjectTestPayload {
                 .reference_gas_price,
         )
     }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
+    }
 }
 
 impl std::fmt::Display for TransferObjectTestPayload {
@@ -104,7 +108,7 @@ impl TransferObjectWorkloadBuilder {
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
+        let target_qps = (workload_weight * target_qps as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
         if max_ops == 0 || num_workers == 0 {

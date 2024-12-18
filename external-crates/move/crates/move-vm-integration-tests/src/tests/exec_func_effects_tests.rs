@@ -4,7 +4,7 @@
 
 use std::convert::TryInto;
 
-use crate::compiler::{as_module, compile_units};
+use crate::compiler::{as_module, compile_units, serialize_module_at_max_version};
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
@@ -127,7 +127,7 @@ fn compile_module(storage: &mut InMemoryStorage, mod_id: &ModuleId, code: &str) 
     let mut units = compile_units(code).unwrap();
     let module = as_module(units.pop().unwrap());
     let mut blob = vec![];
-    module.serialize(&mut blob).unwrap();
+    serialize_module_at_max_version(&module, &mut blob).unwrap();
     storage.publish_or_overwrite_module(mod_id.clone(), blob);
 }
 

@@ -45,6 +45,9 @@ env:
   RUST_BACKTRACE: short
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  # Set log level in CI to error. If you need more information to debug a CI
+  # failure, change this temporarily and rerun your tests
+  RUST_LOG: error
 
 jobs:
   diff:
@@ -52,10 +55,10 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
-      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
-      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
@@ -65,53 +68,9 @@ jobs:
     runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
-          crate: cargo-hakari
-          locked: true
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: cargo xlint
-
-  release-notes-description-check:
-    name: release-notes-check
-    needs: diff
-    if: needs.diff.outputs.isReleaseNotesEligible == 'true'
-    runs-on: [ ubuntu-latest ]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
-        with:
-          python-version: 3.10.10
-      - name: Validate PR's release notes
-        shell: bash
-        run: |
-          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py check
-
-  move-auto-formatter-ci-test:
-    needs: diff
-    if: needs.diff.outputs.isMoveAutoFormatter == 'true'
-    runs-on: [ ubuntu-latest ]
-    strategy:
-      matrix:
-        node-version: [ 20 ]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
-        with:
-          version: 9.1.1
-      - name: Setup Node
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
-        with:
-          node-version: '20.x'
-          cache: 'pnpm'
-      - name: Install dependencies
-        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
-        run: npm install && npm i web-tree-sitter
-      - name: Run npm test
-        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
-        shell: bash
-        run: npm run test
 
   test:
     needs: diff
@@ -130,14 +89,19 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E '!package(sui-bridge)'
+          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -159,11 +123,19 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: cargo test (sui-graphql staging)
+        run: |
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
       - name: benchmark (smoke)
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
@@ -183,6 +155,20 @@ jobs:
       - name: sui-execution
         run: |
           ./scripts/execution_layer.py generate-lib
+      - name: Install diesel CLI, and cache the binary
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+        with:
+          crate: diesel_cli
+          locked: true
+      - name: Indexer schema
+        run: |
+          ./scripts/generate_indexer_schema.sh
+      - name: Indexer Alt schema
+        run: |
+          ./crates/sui-indexer-alt-schema/generate_schema.sh
+      - name: Indexer Alt Framework schema
+        run: |
+          ./crates/sui-indexer-alt-framework/generate_schema.sh
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -199,6 +185,9 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+
       - uses: taiki-e/install-action@nextest
 
       - name: Install postgres (Windows)
@@ -210,12 +199,6 @@ jobs:
           echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
-
-      - name: Install MySql (Windows)
-        shell: bash
-        run: |
-          choco install mysql --force --params '/Password:root'
-          echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Server 8.0\lib" >> $GITHUB_ENV
 
       - name: cargo build
         shell: bash
@@ -231,7 +214,12 @@ jobs:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -253,6 +241,8 @@ jobs:
     runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
@@ -266,6 +256,8 @@ jobs:
   #   runs-on: [ubuntu-ghcloud]
   #   steps:
   #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+  #       with:
+  #         ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
   #     - name: Setup environment
   #       run: .github/scripts/rosetta/setup.sh
@@ -340,6 +332,8 @@ jobs:
     runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
@@ -352,30 +346,40 @@ jobs:
       - name: cargo clippy
         run: cargo xclippy -D warnings
 
-      - name: cargo mysql-clippy
-        run: cargo mysql-clippy -D warnings
-
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - run: rustup component add rustfmt
-      - name: rustfmt
-        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
-          command: fmt
-          args: --check
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - run: rustup component add rustfmt
+      - run: cargo fmt --check
 
   cargo-deny:
-    name: cargo-deny (advisories, licenses, bans, ...)
+    name: cargo-deny (bans, licenses, sources)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - uses: mystenlabs/cargo-deny-action@main
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check bans licenses sources
+
+  cargo-deny-advisories:
+    name: cargo-deny (advisories)
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check advisories
 
   sui-excution-cut:
     name: cutting a new execution layer
@@ -384,83 +388,17 @@ jobs:
     runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: cargo-hakari
           locked: true
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Make cut
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-  #indexer:
-  #  name: indexer
-  #  needs: diff
-  #  if: needs.diff.outputs.isRust == 'true'
-  #  timeout-minutes: 45
-  #  runs-on: [ubuntu-ghcloud]
-  #  services:
-  #    postgres:
-  #      image: postgres
-  #      env:
-  #        POSTGRES_PASSWORD: postgrespw
-  #      options: >-
-  #        --health-cmd pg_isready
-  #        --health-interval 10s
-  #        --health-timeout 5s
-  #        --health-retries 5
-  #      ports:
-  #        - 5432:5432
-  #  steps:
-  #    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-  #    - name: integration-test-with-postgres
-  #      #We only have 1 instance of postgres DB, can only run test in single thread
-  #      run: |
-  #        cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
-  #      env:
-  #        POSTGRES_HOST: localhost
-  #        POSTGRES_PORT: 5432
-
-  graphql-rpc:
-    name: graphql-rpc
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgrespw
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          --name postgres_container
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - uses: taiki-e/install-action@nextest
-      - name: Setup db
-        run: |
-          PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer;' -c 'ALTER SYSTEM SET max_connections = 500;'
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgrespw
-      - run: docker restart --time 0 postgres_container
-      - run: sleep 5
-      - name: tests-requiring-postgres
-        run: |
-          cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-graphql-rpc --lib --features pg_integration -- test_query_cost
-          cargo nextest run --test-threads 4 --package sui-graphql-e2e-tests --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-indexer --test ingestion_tests --features pg_integration
-
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432

@@ -50,16 +50,31 @@ impl Transaction {
     }
 }
 
+/// Index of a transaction in a block.
+pub type TransactionIndex = u16;
+
+/// Votes on transactions in a specific block.
+/// Reject votes are explicit. The rest of transactions in the block receive implicit accept votes.
+// TODO: look into making fields `pub`.
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) struct BlockTransactionVotes {
+    pub(crate) block_ref: BlockRef,
+    pub(crate) rejects: Vec<TransactionIndex>,
+}
+
 /// A block includes references to previous round blocks and transactions that the authority
 /// considers valid.
 /// Well behaved authorities produce at most one block per round, but malicious authorities can
 /// equivocate.
+#[allow(private_interfaces)]
 #[derive(Clone, Deserialize, Serialize)]
 #[enum_dispatch(BlockAPI)]
 pub enum Block {
     V1(BlockV1),
+    V2(BlockV2),
 }
 
+#[allow(private_interfaces)]
 #[enum_dispatch]
 pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
@@ -70,15 +85,15 @@ pub trait BlockAPI {
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
     fn commit_votes(&self) -> &[CommitVote];
+    fn transaction_votes(&self) -> &[BlockTransactionVotes];
     fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
-pub struct BlockV1 {
+pub(crate) struct BlockV1 {
     epoch: Epoch,
     round: Round,
     author: AuthorityIndex,
-    // TODO: during verification ensure that timestamp_ms >= ancestors.timestamp
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
@@ -150,6 +165,106 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
+    }
+
+    fn transaction_votes(&self) -> &[BlockTransactionVotes] {
+        &[]
+    }
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
+    }
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub(crate) struct BlockV2 {
+    epoch: Epoch,
+    round: Round,
+    author: AuthorityIndex,
+    timestamp_ms: BlockTimestampMs,
+    ancestors: Vec<BlockRef>,
+    transactions: Vec<Transaction>,
+    transaction_votes: Vec<BlockTransactionVotes>,
+    commit_votes: Vec<CommitVote>,
+    misbehavior_reports: Vec<MisbehaviorReport>,
+}
+
+#[allow(unused)]
+impl BlockV2 {
+    pub(crate) fn new(
+        epoch: Epoch,
+        round: Round,
+        author: AuthorityIndex,
+        timestamp_ms: BlockTimestampMs,
+        ancestors: Vec<BlockRef>,
+        transactions: Vec<Transaction>,
+        commit_votes: Vec<CommitVote>,
+        transaction_votes: Vec<BlockTransactionVotes>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
+    ) -> BlockV2 {
+        Self {
+            epoch,
+            round,
+            author,
+            timestamp_ms,
+            ancestors,
+            transactions,
+            commit_votes,
+            transaction_votes,
+            misbehavior_reports,
+        }
+    }
+
+    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
+        Self {
+            epoch,
+            round: GENESIS_ROUND,
+            author,
+            timestamp_ms: 0,
+            ancestors: vec![],
+            transactions: vec![],
+            commit_votes: vec![],
+            transaction_votes: vec![],
+            misbehavior_reports: vec![],
+        }
+    }
+}
+
+impl BlockAPI for BlockV2 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
+    fn round(&self) -> Round {
+        self.round
+    }
+
+    fn author(&self) -> AuthorityIndex {
+        self.author
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
+    }
+
+    fn ancestors(&self) -> &[BlockRef] {
+        &self.ancestors
+    }
+
+    fn transactions(&self) -> &[Transaction] {
+        &self.transactions
+    }
+
+    fn transaction_votes(&self) -> &[BlockTransactionVotes] {
+        &self.transaction_votes
     }
 
     fn commit_votes(&self) -> &[CommitVote] {
@@ -443,8 +558,8 @@ impl VerifiedBlock {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_for_test(block: Block) -> Self {
+    /// This method is public for testing in other crates.
+    pub fn new_for_test(block: Block) -> Self {
         // Use empty signature in test.
         let signed_block = SignedBlock {
             inner: block,
@@ -462,7 +577,7 @@ impl VerifiedBlock {
     }
 
     /// Returns reference to the block.
-    pub(crate) fn reference(&self) -> BlockRef {
+    pub fn reference(&self) -> BlockRef {
         BlockRef {
             round: self.round(),
             author: self.author(),
@@ -544,15 +659,14 @@ pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
 }
 
 /// Creates fake blocks for testing.
-#[cfg(test)]
+/// This struct is public for testing in other crates.
 #[derive(Clone)]
-pub(crate) struct TestBlock {
+pub struct TestBlock {
     block: BlockV1,
 }
 
-#[cfg(test)]
 impl TestBlock {
-    pub(crate) fn new(round: Round, author: u32) -> Self {
+    pub fn new(round: Round, author: u32) -> Self {
         Self {
             block: BlockV1 {
                 round,
@@ -562,42 +676,42 @@ impl TestBlock {
         }
     }
 
-    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+    pub fn set_epoch(mut self, epoch: Epoch) -> Self {
         self.block.epoch = epoch;
         self
     }
 
-    pub(crate) fn set_round(mut self, round: Round) -> Self {
+    pub fn set_round(mut self, round: Round) -> Self {
         self.block.round = round;
         self
     }
 
-    pub(crate) fn set_author(mut self, author: AuthorityIndex) -> Self {
+    pub fn set_author(mut self, author: AuthorityIndex) -> Self {
         self.block.author = author;
         self
     }
 
-    pub(crate) fn set_timestamp_ms(mut self, timestamp_ms: BlockTimestampMs) -> Self {
+    pub fn set_timestamp_ms(mut self, timestamp_ms: BlockTimestampMs) -> Self {
         self.block.timestamp_ms = timestamp_ms;
         self
     }
 
-    pub(crate) fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
+    pub fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
         self.block.ancestors = ancestors;
         self
     }
 
-    pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
+    pub fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.block.transactions = transactions;
         self
     }
 
-    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+    pub fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
         self.block.commit_votes = commit_votes;
         self
     }
 
-    pub(crate) fn build(self) -> Block {
+    pub fn build(self) -> Block {
         Block::V1(self.block)
     }
 }

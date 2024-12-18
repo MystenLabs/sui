@@ -12,7 +12,6 @@ cargo run --bin sui-tool -- <args>
 You can use the anemo CLI tools to ping or call an RPC on an Anemo server. Note that (for now) this uses randomly generated keys, so a server or method that restricts access to allowlisted peers will reject connections from this tool.
 
 Anemo networks are identified by a "server name" that the client must match. Server names you may want to use:
-- Narwhal primary and worker: `narwhal`
 - Sui discovery and state sync: `sui`
 
 ### ping

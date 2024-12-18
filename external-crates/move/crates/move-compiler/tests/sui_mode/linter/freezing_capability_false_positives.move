@@ -5,11 +5,11 @@ module a::test_false_positives {
     use sui::object::UID;
     use sui::transfer;
 
-    struct Capture has key {
+    struct NoCap has key {
        id: UID
     }
 
-    struct Handicap has key {
+    struct CapAndHat has key {
        id: UID
     }
 
@@ -21,11 +21,11 @@ module a::test_false_positives {
        id: UID
     }
 
-    public fun freeze_capture(w: Capture) {
+    public fun freeze_capture(w: NoCap) {
         transfer::public_freeze_object(w);
     }
 
-    public fun freeze_handicap(w: Handicap) {
+    public fun freeze_handicap(w: CapAndHat) {
         transfer::public_freeze_object(w);
     }
 
@@ -45,7 +45,8 @@ module sui::object {
 }
 
 module sui::transfer {
+    const ZERO: u64 = 0;
     public fun public_freeze_object<T: key>(_: T) {
-        abort 0
+        abort ZERO
     }
 }

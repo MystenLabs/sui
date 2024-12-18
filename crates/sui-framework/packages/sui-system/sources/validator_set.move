@@ -7,7 +7,7 @@ module sui_system::validator_set {
     use sui::sui::SUI;
     use sui_system::validator::{Validator, staking_pool_id, sui_address};
     use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
-    use sui_system::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
+    use sui_system::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id, FungibleStakedSui, fungible_staked_sui_pool_id};
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::VecSet;
@@ -309,6 +309,45 @@ module sui_system::validator_set {
         validator.request_withdraw_stake(staked_sui, ctx)
     }
 
+    public(package) fun convert_to_fungible_staked_sui(
+        self: &mut ValidatorSet,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) : FungibleStakedSui {
+        let staking_pool_id = pool_id(&staked_sui);
+        let validator =
+            if (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active validator.
+                let validator_address = self.staking_pool_mappings[staking_pool_id];
+                get_candidate_or_active_validator_mut(self, validator_address)
+            } else { // This is an inactive pool.
+                assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
+                let wrapper = &mut self.inactive_validators[staking_pool_id];
+                wrapper.load_validator_maybe_upgrade()
+            };
+
+        validator.convert_to_fungible_staked_sui(staked_sui, ctx)
+    }
+
+    public(package) fun redeem_fungible_staked_sui(
+        self: &mut ValidatorSet,
+        fungible_staked_sui: FungibleStakedSui,
+        ctx: &TxContext,
+    ) : Balance<SUI> {
+        let staking_pool_id = fungible_staked_sui_pool_id(&fungible_staked_sui);
+
+        let validator =
+            if (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active validator.
+                let validator_address = self.staking_pool_mappings[staking_pool_id];
+                get_candidate_or_active_validator_mut(self, validator_address)
+            } else { // This is an inactive pool.
+                assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
+                let wrapper = &mut self.inactive_validators[staking_pool_id];
+                wrapper.load_validator_maybe_upgrade()
+            };
+
+        validator.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
+    }
+
     // ==== validator config setting functions ====
 
     public(package) fun request_set_commission_rate(
@@ -545,6 +584,17 @@ module sui_system::validator_set {
 
     public fun staking_pool_mappings(self: &ValidatorSet): &Table<ID, address> {
         &self.staking_pool_mappings
+    }
+
+    public fun validator_address_by_pool_id(self: &mut ValidatorSet, pool_id: &ID): address {
+        // If the pool id is recorded in the mapping, then it must be either candidate or active.
+        if (self.staking_pool_mappings.contains(*pool_id)) {
+            self.staking_pool_mappings[*pool_id]
+        } else { // otherwise it's inactive
+            let wrapper = &mut self.inactive_validators[*pool_id];
+            let validator = wrapper.load_validator_maybe_upgrade();
+            validator.sui_address()
+        }
     }
 
     public(package) fun pool_exchange_rates(

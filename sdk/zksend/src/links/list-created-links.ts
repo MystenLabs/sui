@@ -5,18 +5,18 @@ import { bcs } from '@mysten/sui/bcs';
 import type { SuiClient } from '@mysten/sui/client';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { graphql } from '@mysten/sui/graphql/schemas/2024.4';
-import { fromB64, normalizeSuiAddress } from '@mysten/sui/utils';
+import { fromBase64, normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS } from './zk-bag.js';
+import { getContractIds } from './zk-bag.js';
 
 const ListCreatedLinksQuery = graphql(`
 	query listCreatedLinks($address: SuiAddress!, $function: String!, $cursor: String) {
 		transactionBlocks(
 			last: 10
 			before: $cursor
-			filter: { signAddress: $address, function: $function, kind: PROGRAMMABLE_TX }
+			filter: { sentAddress: $address, function: $function }
 		) {
 			pageInfo {
 				startCursor
@@ -37,7 +37,7 @@ export async function listCreatedLinks({
 	address,
 	cursor,
 	network,
-	contract = MAINNET_CONTRACT_IDS,
+	contract = getContractIds(network),
 	fetch: fetchFn,
 	...linkOptions
 }: {
@@ -85,10 +85,9 @@ export async function listCreatedLinks({
 					return null;
 				}
 
-				const kind = bcs.SenderSignedData.parse(fromB64(node.bcs))?.[0]?.intentMessage.value.V1
-					.kind;
+				const kind = bcs.TransactionData.parse(fromBase64(node.bcs)).V1.kind;
 
-				if (!kind.ProgrammableTransaction) {
+				if (!kind?.ProgrammableTransaction) {
 					return null;
 				}
 

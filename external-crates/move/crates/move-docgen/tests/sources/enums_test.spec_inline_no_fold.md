@@ -12,8 +12,11 @@ This is a doc comment above an annotation.
 -  [Struct `YG`](#0x42_m_YG)
 -  [Struct `XGG`](#0x42_m_XGG)
 -  [Struct `YGG`](#0x42_m_YGG)
+-  [Struct `VecMap`](#0x42_m_VecMap)
+-  [Struct `Entry`](#0x42_m_Entry)
 -  [Enum `Enum`](#0x42_m_Enum)
 -  [Enum `GenericEnum`](#0x42_m_GenericEnum)
+-  [Function `f`](#0x42_m_f)
 
 
 <pre><code></code></pre>
@@ -26,7 +29,7 @@ This is a doc comment above an annotation.
 
 
 
-<pre><code><b>struct</b> <a href="enums_test.md#0x42_m_X">X</a>
+<pre><code><b>struct</b> <a href="enums_test.md#0x42_m_X">X</a> <b>has</b> drop
 </code></pre>
 
 
@@ -164,6 +167,61 @@ This is a doc comment above an annotation.
 </dl>
 
 
+<a name="0x42_m_VecMap"></a>
+
+## Struct `VecMap`
+
+
+
+<pre><code><b>struct</b> <a href="enums_test.md#0x42_m_VecMap">VecMap</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>contents: vector&lt;<a href="enums_test.md#0x42_m_Entry">m::Entry</a>&lt;K, V&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+<a name="0x42_m_Entry"></a>
+
+## Struct `Entry`
+
+An entry in the map
+
+
+<pre><code><b>struct</b> <a href="enums_test.md#0x42_m_Entry">Entry</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>key: K</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>value: V</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
 <a name="0x42_m_Enum"></a>
 
 ## Enum `Enum`
@@ -171,7 +229,7 @@ This is a doc comment above an annotation.
 This is a doc comment above an enum
 
 
-<pre><code><b>public</b> enum Enum
+<pre><code><b>public</b> enum Enum <b>has</b> drop
 </code></pre>
 
 
@@ -291,3 +349,24 @@ Variant <code>B</code>
 
 </dd>
 </dl>
+
+
+<a name="0x42_m_f"></a>
+
+## Function `f`
+
+Doc comments <code>type_: <a href="enums_test.md#0x42_m_VecMap">VecMap</a>&lt;u64, <a href="enums_test.md#0x42_m_X">X</a>&gt;</code>
+
+
+<pre><code><b>fun</b> <a href="enums_test.md#0x42_m_f">f</a>(x: <a href="enums_test.md#0x42_m_VecMap">m::VecMap</a>&lt;u64, <a href="enums_test.md#0x42_m_X">m::X</a>&gt;): u64
+</code></pre>
+
+
+
+##### Implementation
+
+
+<pre><code><b>fun</b> <a href="enums_test.md#0x42_m_f">f</a>(x: <a href="enums_test.md#0x42_m_VecMap">VecMap</a>&lt;u64, <a href="enums_test.md#0x42_m_X">X</a>&gt;): u64 {
+    0
+}
+</code></pre>

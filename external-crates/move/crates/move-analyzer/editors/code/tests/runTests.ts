@@ -43,6 +43,10 @@ async function runVSCodeTest(vscodeVersion: string): Promise<void> {
         }
 
         // Install vscode and depends extension
+        //
+        // TODO: currently, running `npm test` fails with an ENOENT error when spawning Electron;
+        // make sure that the path is correct and that `npm test` runs correctly to completion
+
         const vscodeExecutablePath = await downloadAndUnzipVSCode(vscodeVersion);
         const [cli, ...args] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
         const newCli = cli ?? 'code';

@@ -19,7 +19,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:5:5
   │
 5 │     }
-  │     ^ Expected a vector argument expression
+  │     ^ Unexpected '}'. Expected a vector argument expression
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:7:1

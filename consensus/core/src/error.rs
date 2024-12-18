@@ -24,6 +24,15 @@ pub(crate) enum ConsensusError {
     #[error("Error serializing: {0}")]
     SerializationFailure(bcs::Error),
 
+    #[error("Block contains a transaction that is too large: {size} > {limit}")]
+    TransactionTooLarge { size: usize, limit: usize },
+
+    #[error("Block contains too many transactions: {count} > {limit}")]
+    TooManyTransactions { count: usize, limit: usize },
+
+    #[error("Block contains too many transaction bytes: {size} > {limit}")]
+    TooManyTransactionBytes { size: usize, limit: usize },
+
     #[error("Unexpected block authority {0} from peer {1}")]
     UnexpectedAuthority(AuthorityIndex, AuthorityIndex),
 
@@ -117,9 +126,6 @@ pub(crate) enum ConsensusError {
         block_timestamp_ms: u64,
     },
 
-    #[error("No available authority to fetch commits")]
-    NoAvailableAuthorityToFetchCommits,
-
     #[error("Received no commit from peer {peer}")]
     NoCommitReceived { peer: AuthorityIndex },
 
@@ -183,6 +189,13 @@ pub(crate) enum ConsensusError {
     Shutdown,
 }
 
+impl ConsensusError {
+    /// Returns the error name - only the enun name without any parameters - as a static string.
+    pub fn name(&self) -> &'static str {
+        self.into()
+    }
+}
+
 pub type ConsensusResult<T> = Result<T, ConsensusError>;
 
 #[macro_export]
@@ -199,4 +212,40 @@ macro_rules! ensure {
             bail!($e);
         }
     };
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// This test ensures that consensus errors when converted to a static string are the same as the enum name without
+    /// any parameterers included to the result string.
+    #[test]
+    fn test_error_name() {
+        {
+            let error = ConsensusError::InvalidAncestorRound {
+                ancestor: 10,
+                block: 11,
+            };
+            let error: &'static str = error.into();
+
+            assert_eq!(error, "InvalidAncestorRound");
+        }
+
+        {
+            let error = ConsensusError::InvalidAuthorityIndex {
+                index: AuthorityIndex::new_for_test(3),
+                max: 10,
+            };
+            assert_eq!(error.name(), "InvalidAuthorityIndex");
+        }
+
+        {
+            let error = ConsensusError::InsufficientParentStakes {
+                parent_stakes: 5,
+                quorum: 20,
+            };
+            assert_eq!(error.name(), "InsufficientParentStakes");
+        }
+    }
 }

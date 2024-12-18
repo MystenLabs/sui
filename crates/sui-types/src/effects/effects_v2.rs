@@ -90,7 +90,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .iter()
             .filter_map(|(id, change)| {
                 if let ObjectIn::Exist(((version, digest), owner)) = &change.input_state {
-                    Some(((*id, *version, *digest), *owner))
+                    Some(((*id, *version, *digest), owner.clone()))
                 } else {
                     None
                 }
@@ -145,7 +145,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         ObjectIn::NotExist,
                         ObjectOut::ObjectWrite((digest, owner)),
                         IDOperation::Created,
-                    ) => Some(((*id, self.lamport_version, *digest), *owner)),
+                    ) => Some(((*id, self.lamport_version, *digest), owner.clone())),
                     (
                         ObjectIn::NotExist,
                         ObjectOut::PackageWrite((version, digest)),
@@ -163,7 +163,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .filter_map(
                 |(id, change)| match (&change.input_state, &change.output_state) {
                     (ObjectIn::Exist(_), ObjectOut::ObjectWrite((digest, owner))) => {
-                        Some(((*id, self.lamport_version, *digest), *owner))
+                        Some(((*id, self.lamport_version, *digest), owner.clone()))
                     }
                     (ObjectIn::Exist(_), ObjectOut::PackageWrite((version, digest))) => {
                         Some(((*id, *version, *digest), Owner::Immutable))
@@ -187,7 +187,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         ObjectIn::NotExist,
                         ObjectOut::ObjectWrite((digest, owner)),
                         IDOperation::None,
-                    ) => Some(((*id, self.lamport_version, *digest), *owner)),
+                    ) => Some(((*id, self.lamport_version, *digest), owner.clone())),
                     _ => None,
                 }
             })
@@ -287,9 +287,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
     fn gas_object(&self) -> (ObjectRef, Owner) {
         if let Some(gas_object_index) = self.gas_object_index {
             let entry = &self.changed_objects[gas_object_index as usize];
-            match entry.1.output_state {
+            match &entry.1.output_state {
                 ObjectOut::ObjectWrite((digest, owner)) => {
-                    ((entry.0, self.lamport_version, digest), owner)
+                    ((entry.0, self.lamport_version, *digest), owner.clone())
                 }
                 _ => panic!("Gas object must be an ObjectWrite in changed_objects"),
             }

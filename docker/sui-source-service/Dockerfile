@@ -1,4 +1,4 @@
-FROM rust:1.75-bullseye  AS chef
+FROM rust:1.81-bullseye  AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -11,7 +11,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
-COPY narwhal narwhal
 COPY external-crates external-crates
 RUN cargo build --release \
     --bin sui-source-validation-service

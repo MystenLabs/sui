@@ -18,6 +18,7 @@ use serde_json::json;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
+use sui_json_rpc_types::BcsEvent;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DelegatedStake,
@@ -67,11 +68,6 @@ use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_PACKAGE_ID};
 struct Examples {
     function_name: String,
     examples: Vec<ExamplePairing>,
-}
-
-#[derive(serde::Serialize)]
-struct Value {
-    value: String,
 }
 
 impl Examples {
@@ -785,7 +781,7 @@ impl RpcExampleProvider {
             sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
             type_: parse_sui_struct_tag("0x9::test::TestEvent").unwrap(),
             parsed_json: json!({"test": "example value"}),
-            bcs: vec![],
+            bcs: BcsEvent::new(vec![]),
             timestamp_ms: None,
         };
 
@@ -1059,6 +1055,7 @@ impl RpcExampleProvider {
             friends: vec![],
             name: "module".to_string(),
             structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
         };
 
         Examples::new(
@@ -1082,6 +1079,7 @@ impl RpcExampleProvider {
             friends: vec![],
             name: "module".to_string(),
             structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
         };
 
         Examples::new(
@@ -1166,6 +1164,7 @@ impl RpcExampleProvider {
                 version: SequenceNumber::from_u64(1),
                 digest: ObjectDigest::new(self.rng.gen()),
             })
+            .map(Into::into)
             .collect::<Vec<_>>();
 
         let next_cursor = ObjectID::new(self.rng.gen());
@@ -1211,7 +1210,7 @@ impl RpcExampleProvider {
                     },
                     MoveStructLayout {
                         type_: struct_tag,
-                        fields: Vec::new(),
+                        fields: Box::new(Vec::new()),
                     },
                 )
                 .unwrap(),
@@ -1319,7 +1318,7 @@ impl RpcExampleProvider {
                 sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
                 type_: StructTag::from_str("0x3::test::Test<0x3::test::Test>").unwrap(),
                 parsed_json: serde_json::Value::String("some_value".to_string()),
-                bcs: vec![],
+                bcs: BcsEvent::new(vec![]),
                 timestamp_ms: None,
             })
             .collect();

@@ -1,0 +1,40 @@
+current frame stack:
+  function: test (m.move:17)
+    scope 0 :
+  function: foo (m.move:0)
+    scope 0 :
+  function: __inlined__ (m_dep.move:6)
+    scope 0 :
+  function: baz (m_dep_dep.move:4)
+    scope 0 :
+      p : 2
+      type: u64
+
+current frame stack:
+  function: test (m.move:17)
+    scope 0 :
+  function: foo (m.move:0)
+    scope 0 :
+      ret : 4
+      type: u64
+
+  function: __inlined__ (m_dep.move:7)
+    scope 0 :
+current frame stack:
+  function: test (m.move:17)
+    scope 0 :
+  function: foo (m.move:12)
+    scope 0 :
+      v : 12
+      type: u64
+
+  function: __inlined__ (m_dep.move:6)
+    scope 0 :
+  function: baz (m_dep_dep.move:4)
+    scope 0 :
+      p : 24
+      type: u64
+
+line breakpoints
+  m_dep_dep.move
+    4

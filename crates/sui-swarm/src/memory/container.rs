@@ -69,7 +69,7 @@ impl Container {
                 RuntimeType::MultiThreaded => {
                     thread_local! {
                         static SPAN: std::cell::RefCell<Option<tracing::span::EnteredSpan>> =
-                            std::cell::RefCell::new(None);
+                            const { std::cell::RefCell::new(None) };
                     }
                     let mut builder = tokio::runtime::Builder::new_multi_thread();
                     let span = span.clone();

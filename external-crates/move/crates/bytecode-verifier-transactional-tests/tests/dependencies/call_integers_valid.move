@@ -10,7 +10,7 @@ public fun plus256(a: u256): u256 { a + 1 }
 
 
 //# publish
-module 0x42::m_test {
+module 0x43::m_test {
 use 0x42::m;
 public fun test8() { m::plus8(1u8); }
 public fun test16() { m::plus16(1u16); }

@@ -7,7 +7,7 @@ module 0x42::X {
 }
 
 //# publish
-module 0x42::Y {
+module 0x43::Y {
     use 0x42::X;
     public fun foo(): X::T {
         X::new()
@@ -16,8 +16,8 @@ module 0x42::Y {
 
 
 //# run
-module 0x42::m {
-use 0x42::Y;
+module 0x44::m {
+use 0x43::Y;
 
 fun main() {
     Y::foo();

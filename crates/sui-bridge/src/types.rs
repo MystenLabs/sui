@@ -14,6 +14,7 @@ use ethers::types::Address as EthAddress;
 use ethers::types::Log;
 use ethers::types::H256;
 pub use ethers::types::H256 as EthTransactionHash;
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Keccak256};
 use num_enum::TryFromPrimitive;
 use rand::seq::SliceRandom;
@@ -22,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use strum_macros::Display;
+use sui_types::base_types::SuiAddress;
 use sui_types::bridge::{
     BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
     APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
@@ -35,6 +38,7 @@ use sui_types::bridge::{
 };
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::ToFromBytes;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::TypeTag;
@@ -49,6 +53,7 @@ pub const BRIDGE_UNPAUSED: bool = false;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
+    pub sui_address: SuiAddress,
     pub pubkey: BridgeAuthorityPublicKey,
     pub voting_power: u64,
     pub base_url: String,
@@ -117,6 +122,30 @@ impl BridgeCommittee {
     pub fn total_blocklisted_stake(&self) -> StakeUnit {
         self.total_blocklisted_stake
     }
+
+    pub fn active_stake(&self, member: &BridgeAuthorityPublicKeyBytes) -> StakeUnit {
+        self.members
+            .get(member)
+            .map(|a| if a.is_blocklisted { 0 } else { a.voting_power })
+            .unwrap_or(0)
+    }
+}
+
+impl core::fmt::Display for BridgeCommittee {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
+        for m in self.members.values() {
+            writeln!(
+                f,
+                "pubkey: {:?}, url: {:?}, stake: {:?}, blocklisted: {}, eth address: {:x}",
+                Hex::encode(m.pubkey_bytes().as_bytes()),
+                m.base_url,
+                m.voting_power,
+                m.is_blocklisted,
+                m.pubkey_bytes().to_eth_address(),
+            )?;
+        }
+        Ok(())
+    }
 }
 
 impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
@@ -173,7 +202,7 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     }
 }
 
-#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash)]
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash, Display)]
 #[repr(u8)]
 pub enum BridgeActionType {
     TokenTransfer = 0,
@@ -354,7 +383,7 @@ impl BridgeAction {
     // Digest of BridgeAction (with Keccak256 hasher)
     pub fn digest(&self) -> BridgeActionDigest {
         let mut hasher = Keccak256::default();
-        hasher.update(&self.to_bytes());
+        hasher.update(self.to_bytes());
         BridgeActionDigest::new(hasher.finalize().into())
     }
 

@@ -2,4 +2,4 @@ When resolving dependencies for package Root-rename, conflicting dependencies fo
 At B -> A
 	ADep-rename = { local = "deps_only/ADep", addr_subst = { "A" = "0000000000000000000000000000000000000000000000000000000000000007" } }
 At C -> A
-	ADep-resolved = { local = "deps_only/ADep", addr_subst = { "A" = "0000000000000000000000000000000000000000000000000000000000000042" } }
+	ADep-rename = { local = "deps_only/ADep", addr_subst = { "A" = "0000000000000000000000000000000000000000000000000000000000000042" } }

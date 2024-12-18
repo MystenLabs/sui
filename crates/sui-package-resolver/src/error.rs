@@ -13,11 +13,8 @@ pub enum Error {
     #[error("{0}")]
     Bcs(#[from] bcs::Error),
 
-    #[error("Store {} error: {}", store, source)]
-    Store {
-        store: &'static str,
-        source: Arc<dyn std::error::Error + Send + Sync + 'static>,
-    },
+    #[error("Store {} error: {}", store, error)]
+    Store { store: &'static str, error: String },
 
     #[error("{0}")]
     Deserialize(VMError),

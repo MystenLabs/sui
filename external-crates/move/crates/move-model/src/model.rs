@@ -47,7 +47,8 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
-use move_command_line_common::{address::NumericalAddress, files::FileHash};
+use move_command_line_common::files::FileHash;
+use move_core_types::parsing::address::NumericalAddress;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -944,12 +945,14 @@ impl GlobalEnv {
         loc: Loc,
         typ: Type,
         value: Value,
+        attributes: Vec<Attribute>,
     ) -> NamedConstantData {
         NamedConstantData {
             name,
             loc,
             typ,
             value,
+            attributes,
         }
     }
 
@@ -1121,7 +1124,7 @@ impl GlobalEnv {
     }
 
     /// Gets a StructEnv in this module by its `StructTag`
-    pub fn find_struct_by_tag(
+    pub fn find_datatype_by_tag(
         &self,
         tag: &language_storage::StructTag,
     ) -> Option<QualifiedId<DatatypeId>> {
@@ -1129,6 +1132,10 @@ impl GlobalEnv {
             .and_then(|menv| {
                 menv.find_struct_by_identifier(tag.name.clone())
                     .map(|sid| menv.get_id().qualified(sid))
+                    .or_else(|| {
+                        menv.find_enum_by_identifier(tag.name.clone())
+                            .map(|sid| menv.get_id().qualified(sid))
+                    })
             })
     }
 
@@ -1242,16 +1249,23 @@ impl GlobalEnv {
         sid: DatatypeId,
         ts: &[Type],
     ) -> Option<language_storage::StructTag> {
-        self.get_struct_type(mid, sid, ts)?.into_struct_tag()
+        self.get_datatype(mid, sid, ts)?.into_struct_tag()
     }
 
     /// Attempt to compute a struct type for (`mid`, `sid`, `ts`).
-    pub fn get_struct_type(&self, mid: ModuleId, sid: DatatypeId, ts: &[Type]) -> Option<MType> {
+    pub fn get_datatype(&self, mid: ModuleId, sid: DatatypeId, ts: &[Type]) -> Option<MType> {
         let menv = self.get_module(mid);
+        let name = menv
+            .find_struct(sid.symbol())
+            .map(|senv| senv.get_identifier())
+            .or_else(|| {
+                menv.find_enum(sid.symbol())
+                    .map(|eenv| eenv.get_identifier())
+            })??;
         Some(MType::Struct {
             address: *menv.self_address(),
             module: menv.get_identifier(),
-            name: menv.get_struct(sid).get_identifier()?,
+            name,
             type_arguments: ts
                 .iter()
                 .map(|t| t.clone().into_normalized_type(self).unwrap())
@@ -2113,6 +2127,7 @@ impl<'env> ModuleEnv<'env> {
                 print_code: true,
                 print_basic_blocks: true,
                 print_locals: true,
+                max_output_size: None,
             },
         );
         disas
@@ -2986,6 +3001,9 @@ pub struct NamedConstantData {
 
     /// The value of this constant
     value: Value,
+
+    /// Attributes attached to this constant
+    attributes: Vec<Attribute>,
 }
 
 #[derive(Debug)]
@@ -3025,6 +3043,11 @@ impl<'env> NamedConstantEnv<'env> {
     /// Returns the value of this constant
     pub fn get_value(&self) -> Value {
         self.data.value.clone()
+    }
+
+    /// Returns the attributes attached to this constant
+    pub fn get_attributes(&self) -> &[Attribute] {
+        &self.data.attributes
     }
 }
 

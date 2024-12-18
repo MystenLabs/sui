@@ -331,13 +331,13 @@ impl TestTransactionBuilder {
                         let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
                         let all_module_bytes =
                             compiled_package.get_package_bytes(with_unpublished_deps);
-                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        let dependencies = compiled_package.get_dependency_storage_package_ids();
                         (all_module_bytes, dependencies)
                     }
                     PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
                     PublishData::CompiledPackage(compiled_package) => {
                         let all_module_bytes = compiled_package.get_package_bytes(false);
-                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        let dependencies = compiled_package.get_dependency_storage_package_ids();
                         (all_module_bytes, dependencies)
                     }
                 };

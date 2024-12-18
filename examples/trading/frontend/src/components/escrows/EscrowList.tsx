@@ -47,13 +47,11 @@ export function EscrowList({
   return (
     <div>
       {enableSearch && (
-        <TextField.Root>
-          <TextField.Input
-            placeholder="Search by escrow id"
-            value={escrowId}
-            onChange={(e) => setEscrowId(e.target.value)}
-          />
-        </TextField.Root>
+        <TextField.Root
+          placeholder="Search by escrow id"
+          value={escrowId}
+          onChange={(e) => setEscrowId(e.target.value)}
+        />
       )}
       <InfiniteScrollArea
         loadMore={() => fetchNextPage()}

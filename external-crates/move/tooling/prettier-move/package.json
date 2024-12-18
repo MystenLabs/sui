@@ -1,0 +1,34 @@
+{
+	"name": "@mysten/prettier-plugin-move",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"description": "Move Plugin for Prettier",
+	"version": "0.2.2",
+	"license": "Apache-2.0",
+	"keywords": [
+		"prettier",
+		"move",
+		"plugin"
+	],
+	"bin": {
+		"prettier-move": "./bin/prettier-move.js"
+	},
+	"main": "./out/index.js",
+	"scripts": {
+		"prepublishOnly": "pnpm build",
+		"build": "tsc -p .",
+		"watch": "tsc -p . -w",
+		"test": "npm run build && vitest run",
+		"prettier": "npm run build && prettier --plugin out/index.js"
+	},
+	"dependencies": {
+		"prettier": "^3.3.2",
+		"web-tree-sitter": "^0.20.8"
+	},
+	"devDependencies": {
+		"@types/diff": "^5.2.1",
+		"@types/node": "^20.14.10",
+		"diff": "^5.2.0",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
+	}
+}

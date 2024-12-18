@@ -287,13 +287,20 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         let move_value =
             Constant::deserialize_constant(&compiled_module.constant_pool()[*const_idx as usize])
                 .unwrap();
+        let attributes = self.translate_attributes(&def.attributes);
         let mut et = ExpTranslator::new(self);
         let loc = et.to_loc(&def.loc);
         let ty = et.translate_type(&def.signature);
         let value = et.translate_from_move_value(&loc, &ty, &move_value);
-        et.parent
-            .parent
-            .define_const(qsym, ConstEntry { loc, ty, value });
+        et.parent.parent.define_const(
+            qsym,
+            ConstEntry {
+                loc,
+                ty,
+                value,
+                attributes,
+            },
+        );
     }
 
     fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
@@ -626,12 +633,21 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             .iter()
             .filter(|(name, _)| name.module_name == self.module_name)
             .map(|(name, const_entry)| {
-                let ConstEntry { loc, value, ty } = const_entry.clone();
+                let ConstEntry {
+                    loc,
+                    value,
+                    ty,
+                    attributes,
+                } = const_entry.clone();
                 (
                     NamedConstantId::new(name.symbol),
-                    self.parent
-                        .env
-                        .create_named_constant_data(name.symbol, loc, ty, value),
+                    self.parent.env.create_named_constant_data(
+                        name.symbol,
+                        loc,
+                        ty,
+                        value,
+                        attributes,
+                    ),
                 )
             })
             .collect();

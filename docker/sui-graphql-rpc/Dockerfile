@@ -2,7 +2,7 @@
 #
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
-FROM rust:1.75-bullseye AS builder
+FROM rust:1.81-bullseye AS builder
 ARG PROFILE=release
 ENV PROFILE=$PROFILE
 ARG GIT_REVISION
@@ -14,7 +14,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
-COPY narwhal narwhal
 COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} --bin sui-graphql-rpc

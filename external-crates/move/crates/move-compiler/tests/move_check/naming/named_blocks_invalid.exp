@@ -2,7 +2,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/named_blocks_invalid.move:3:9
   │
 3 │         'name: {
-  │         ^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │         ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -22,7 +22,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:11:14
    │
 11 │         loop 'name: {
-   │              ^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │              ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -36,7 +36,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:17:14
    │
 17 │         loop 'outer: {
-   │              ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │              ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -44,7 +44,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:18:18
    │
 18 │             loop 'inner: {
-   │                  ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                  ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -64,7 +64,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:26:22
    │
 26 │         while (cond) 'outer: {
-   │                      ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -72,7 +72,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:27:26
    │
 27 │             while (cond) 'inner: {
-   │                          ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                          ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -92,7 +92,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:35:22
    │
 35 │         while (cond) 'outer: {
-   │                      ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -100,7 +100,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:36:22
    │
 36 │             let _x = 'inner: {
-   │                      ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -120,7 +120,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:45:14
    │
 45 │         loop 'l: {
-   │              ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │              ^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -128,7 +128,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:46:18
    │
 46 │             loop 'l: {
-   │                  ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                  ^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -142,7 +142,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:53:9
    │
 53 │         'name: {
-   │         ^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │         ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -156,7 +156,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:60:14
    │
 60 │         loop 'name: {
-   │              ^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │              ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -176,7 +176,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:67:14
    │
 67 │         loop 'outer2: {
-   │              ^^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │              ^^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -184,7 +184,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:68:18
    │
 68 │             loop 'inner2: {
-   │                  ^^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                  ^^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -204,7 +204,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:76:22
    │
 76 │         while (cond) 'outer: {
-   │                      ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -212,7 +212,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:77:26
    │
 77 │             while (cond) 'inner: {
-   │                          ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                          ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -232,7 +232,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:85:14
    │
 85 │         loop 'l: {
-   │              ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │              ^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -240,7 +240,7 @@ error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:86:18
    │
 86 │             loop 'l: {
-   │                  ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │                  ^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 

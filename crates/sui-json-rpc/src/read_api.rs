@@ -3,9 +3,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use backoff::future::retry;
+use backoff::ExponentialBackoff;
 use futures::future::join_all;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
@@ -17,6 +20,7 @@ use move_core_types::language_storage::StructTag;
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
@@ -36,13 +40,11 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::AggregateAuthoritySignature;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiObjectResponseError};
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
-    CheckpointTimestamp,
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::object::{Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
@@ -118,7 +120,7 @@ impl ReadApi {
                     .await?;
                 let content = self
                     .transaction_kv_store
-                    .get_checkpoint_contents_by_digest(verified_summary.content_digest)
+                    .get_checkpoint_contents(verified_summary.sequence_number)
                     .await?;
                 let signature = verified_summary.auth_sig().signature.clone();
                 (verified_summary.into_data(), content, signature).into()
@@ -130,7 +132,7 @@ impl ReadApi {
                     .await?;
                 let content = self
                     .transaction_kv_store
-                    .get_checkpoint_contents_by_digest(verified_summary.content_digest)
+                    .get_checkpoint_contents(verified_summary.sequence_number)
                     .await?;
                 let signature = verified_summary.auth_sig().signature.clone();
                 (verified_summary.into_data(), content, signature).into()
@@ -168,13 +170,8 @@ impl ReadApi {
             })
             .collect();
 
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
-            checkpoint_summaries_and_signatures
-                .iter()
-                .map(|summary| summary.0.content_digest)
-                .collect();
         let checkpoint_contents = transaction_kv_store
-            .multi_get_checkpoints_contents_by_digest(checkpoint_contents_digest.as_slice())
+            .multi_get_checkpoints_contents(&checkpoint_numbers)
             .await?;
         let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
 
@@ -194,6 +191,7 @@ impl ReadApi {
         Ok(checkpoints)
     }
 
+    #[instrument(skip_all)]
     async fn multi_get_transaction_blocks_internal(
         &self,
         digests: Vec<TransactionDigest>,
@@ -209,7 +207,7 @@ impl ReadApi {
         }
         self.metrics
             .get_tx_blocks_limit
-            .report(digests.len() as u64);
+            .observe(digests.len() as f64);
 
         let opts = opts.unwrap_or_default();
 
@@ -315,54 +313,60 @@ impl ReadApi {
 
         if opts.show_events {
             trace!("getting events");
-
-            let event_digests_list = temp_response
-                .values()
-                .filter_map(|cache_entry| match &cache_entry.effects {
-                    Some(eff) => eff.events_digest().cloned(),
-                    None => None,
-                })
-                .collect::<Vec<TransactionEventsDigest>>();
-
-            // fetch events from the DB
-            let events = self
-                .transaction_kv_store
-                .multi_get_events(&event_digests_list)
-                .await
-                .map_err(|e| {
-                    Error::UnexpectedError(format!("Failed to call multi_get_events for transactions {digests:?} with event digests {event_digests_list:?}: {e:?}"))
-                })?
-                .into_iter();
-
-            // construct a hashmap of event digests -> events for fast lookup
-            let event_digest_to_events = event_digests_list
-                .into_iter()
-                .zip(events)
-                .collect::<HashMap<_, _>>();
+            let mut non_empty_digests = vec![];
+            for cache_entry in temp_response.values() {
+                if let Some(effects) = &cache_entry.effects {
+                    if effects.events_digest().is_some() {
+                        non_empty_digests.push(cache_entry.digest);
+                    }
+                }
+            }
+            // fetch events from the DB with retry, retry each 0.5s for 3s
+            let backoff = ExponentialBackoff {
+                max_elapsed_time: Some(Duration::from_secs(3)),
+                multiplier: 1.0,
+                ..ExponentialBackoff::default()
+            };
+            let mut events = retry(backoff, || async {
+                match self
+                    .transaction_kv_store
+                    .multi_get_events_by_tx_digests(&non_empty_digests)
+                    .await
+                {
+                    // Only return Ok when all the queried transaction events are found, otherwise retry
+                    // until timeout, then return Err.
+                    Ok(events) if !events.contains(&None) => Ok(events),
+                    Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
+                        "Events not found, transaction execution may be incomplete.".into(),
+                    ))),
+                    Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
+                        "Failed to call multi_get_events: {e:?}"
+                    )))),
+                }
+            })
+            .await
+            .map_err(|e| {
+                Error::UnexpectedError(format!(
+                "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
+            ))
+            })?
+            .into_iter();
 
             // fill cache with the events
             for (_, cache_entry) in temp_response.iter_mut() {
                 let transaction_digest = cache_entry.digest;
-                let event_digest: Option<Option<TransactionEventsDigest>> = cache_entry
-                    .effects
-                    .as_ref()
-                    .map(|e| e.events_digest().cloned());
-                let event_digest = event_digest.flatten();
-                if event_digest.is_some() {
-                    // safe to unwrap because `is_some` is checked
-                    let event_digest = event_digest.as_ref().unwrap();
-                    let events= event_digest_to_events
-                        .get(event_digest)
-                        .cloned()
-                        .unwrap_or_else(|| panic!("Expect event digest {event_digest:?} to be found in cache for transaction {transaction_digest}"))
-                        .map(|events| to_sui_transaction_events(self, cache_entry.digest, events));
-                    match events {
-                        Some(Ok(e)) => cache_entry.events = Some(e),
-                        Some(Err(e)) => cache_entry.errors.push(e.to_string()),
-                        None => {
-                            error!("Failed to fetch events with event digest {event_digest:?} for txn {transaction_digest}");
+                if let Some(events_digest) =
+                    cache_entry.effects.as_ref().and_then(|e| e.events_digest())
+                {
+                    match events.next() {
+                        Some(Some(ev)) => {
+                            cache_entry.events =
+                                Some(to_sui_transaction_events(self, cache_entry.digest, ev)?)
+                        }
+                        None | Some(None) => {
+                            error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
                             cache_entry.errors.push(format!(
-                                "Failed to fetch events with event digest {event_digest:?}",
+                                "Failed to fetch events with event digest {events_digest:?}",
                             ))
                         }
                     }
@@ -428,6 +432,7 @@ impl ReadApi {
 
                 results.push(get_object_changes(
                     &object_cache,
+                    effects,
                     resp.transaction
                         .as_ref()
                         .ok_or_else(|| {
@@ -465,7 +470,7 @@ impl ReadApi {
 
         self.metrics
             .get_tx_blocks_result_size
-            .report(converted_tx_block_resps.len() as u64);
+            .observe(converted_tx_block_resps.len() as f64);
         self.metrics
             .get_tx_blocks_result_size_total
             .inc_by(converted_tx_block_resps.len() as u64);
@@ -542,7 +547,7 @@ impl ReadApiServer for ReadApi {
             if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
                 self.metrics
                     .get_objects_limit
-                    .report(object_ids.len() as u64);
+                    .observe(object_ids.len() as f64);
                 let mut futures = vec![];
                 for object_id in object_ids {
                     futures.push(self.get_object(object_id, options.clone()));
@@ -566,7 +571,7 @@ impl ReadApiServer for ReadApi {
 
                 self.metrics
                     .get_objects_result_size
-                    .report(objects.len() as u64);
+                    .observe(objects.len() as f64);
                 self.metrics
                     .get_objects_result_size_total
                     .inc_by(objects.len() as u64);
@@ -721,10 +726,12 @@ impl ReadApiServer for ReadApi {
             // Fetch transaction to determine existence
             let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
-                transaction_kv_store.get_tx(digest).await.map_err(|err| {
+                let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
-                })
+                });
+                add_server_timing("tx_kv_lookup");
+                ret
             })
             .await
             .map_err(Error::from)??;
@@ -786,30 +793,26 @@ impl ReadApiServer for ReadApi {
             }
 
             if opts.show_events && temp_response.effects.is_some() {
-                // safe to unwrap because we have checked is_some
-                if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest()
-                {
-                    let transaction_kv_store = self.transaction_kv_store.clone();
-                    let event_digest = *event_digest;
-                    let events = spawn_monitored_task!(async move {
-                        transaction_kv_store
-                            .get_events(event_digest)
-                            .await
-                            .map_err(|e| {
-                                error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
-                                Error::from(e)
-                            })
-                        })
+                let transaction_kv_store = self.transaction_kv_store.clone();
+                let events = spawn_monitored_task!(async move {
+                    transaction_kv_store
+                        .multi_get_events_by_tx_digests(&[digest])
                         .await
-                        .map_err(Error::from)??;
-                    match to_sui_transaction_events(self, digest, events) {
+                        .map_err(|e| {
+                            error!("Failed to call get transaction events for transaction: {digest:?} with error {e:?}");
+                            Error::from(e)
+                        })
+                    })
+                    .await
+                    .map_err(Error::from)??
+                    .pop()
+                    .flatten();
+                match events {
+                    None => temp_response.events = Some(SuiTransactionBlockEvents::default()),
+                    Some(events) => match to_sui_transaction_events(self, digest, events) {
                         Ok(e) => temp_response.events = Some(e),
                         Err(e) => temp_response.errors.push(e.to_string()),
-                    };
-                } else {
-                    // events field will be Some if and only if `show_events` is true and
-                    // there is no error in converting fetching events
-                    temp_response.events = Some(SuiTransactionBlockEvents::default());
+                    },
                 }
             }
 
@@ -843,6 +846,7 @@ impl ReadApiServer for ReadApi {
                     let sender = input.data().intent_message().value.sender();
                     let object_changes = get_object_changes(
                         &object_cache,
+                        effects,
                         sender,
                         effects.modified_at_versions(),
                         effects.all_changed_objects(),
@@ -890,38 +894,29 @@ impl ReadApiServer for ReadApi {
             let transaction_kv_store = self.transaction_kv_store.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = transaction_kv_store
-                .get_fx_by_tx_digest(transaction_digest)
-                .await
-                .map_err(Error::from)?;
-            let events = if let Some(event_digest) = effect.events_digest() {
-            transaction_kv_store
-                .get_events(*event_digest)
+            let events = transaction_kv_store
+                .multi_get_events_by_tx_digests(&[transaction_digest])
                 .await
                 .map_err(
                     |e| {
-                        error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
+                        error!("Failed to get transaction events for transaction {transaction_digest:?} with error: {e:?}");
                         Error::StateReadError(e.into())
                     })?
-                .data
-                .into_iter()
-                .enumerate()
-                .map(|(seq, e)| {
-                    let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
-                    SuiEvent::try_from(
-                        e,
-                        *effect.transaction_digest(),
-                        seq as u64,
-                        None,
-                        layout,
-                    )
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(Error::SuiError)?
-        } else {
-            vec![]
-        };
-        Ok(events)
+                .pop()
+                .flatten();
+            Ok(match events {
+                Some(events) => events
+                    .data
+                    .into_iter()
+                    .enumerate()
+                    .map(|(seq, e)| {
+                        let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
+                        SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(Error::SuiError)?,
+                None => vec![],
+            })
         }).await.map_err(Error::from)?
         })
     }
@@ -961,7 +956,7 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             let kv_store = self.transaction_kv_store.clone();
 
-            self.metrics.get_checkpoints_limit.report(limit as u64);
+            self.metrics.get_checkpoints_limit.observe(limit as f64);
 
             let mut data = spawn_monitored_task!(Self::get_checkpoints_internal(
                 state,
@@ -985,7 +980,7 @@ impl ReadApiServer for ReadApi {
 
             self.metrics
                 .get_checkpoints_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_checkpoints_result_size_total
                 .inc_by(data.len() as u64);
@@ -1058,6 +1053,7 @@ impl SuiRpcModule for ReadApi {
     }
 }
 
+#[instrument(skip_all)]
 fn to_sui_transaction_events(
     fullnode_api: &ReadApi,
     tx_digest: TransactionDigest,
@@ -1097,6 +1093,7 @@ pub enum ObjectDisplayError {
     StateReadError(#[from] StateReadError),
 }
 
+#[instrument(skip(fullnode_api, kv_store))]
 async fn get_display_fields(
     fullnode_api: &ReadApi,
     kv_store: &Arc<TransactionKeyValueStore>,
@@ -1121,6 +1118,7 @@ async fn get_display_fields(
     })
 }
 
+#[instrument(skip(kv_store, fullnode_api))]
 async fn get_display_object_by_type(
     kv_store: &Arc<TransactionKeyValueStore>,
     fullnode_api: &ReadApi,
@@ -1141,7 +1139,7 @@ async fn get_display_object_by_type(
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
     if let Some(event) = events.pop() {
-        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])?;
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs.into_bytes())?;
         Ok(Some(display))
     } else {
         Ok(None)
@@ -1314,6 +1312,7 @@ fn get_value_from_move_struct(
     }
 }
 
+#[instrument(skip_all)]
 fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionBlockResponseOptions,
@@ -1322,28 +1321,36 @@ fn convert_to_response(
     let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
-    if opts.show_raw_input && cache.transaction.is_some() {
-        let sender_signed_data = cache.transaction.as_ref().unwrap().data();
-        let raw_tx = bcs::to_bytes(sender_signed_data)
-            .map_err(|e| anyhow!("Failed to serialize raw transaction with error: {}", e))?; // TODO: is this a client or server error?
-        response.raw_transaction = raw_tx;
-    }
-
-    if opts.show_input && cache.transaction.is_some() {
-        let tx_block =
-            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_data(), module_cache)?;
-        response.transaction = Some(tx_block);
-    }
-
-    if opts.show_effects && cache.effects.is_some() {
-        let effects = cache.effects.unwrap().try_into().map_err(|e| {
-            anyhow!(
+    if let Some(transaction) = cache.transaction {
+        if opts.show_raw_input {
+            response.raw_transaction = bcs::to_bytes(transaction.data()).map_err(|e| {
                 // TODO: is this a client or server error?
-                "Failed to convert transaction block effects with error: {}",
-                e
-            )
-        })?;
-        response.effects = Some(effects);
+                anyhow!("Failed to serialize raw transaction with error: {e}")
+            })?;
+        }
+
+        if opts.show_input {
+            response.transaction = Some(SuiTransactionBlock::try_from(
+                transaction.into_data(),
+                module_cache,
+            )?);
+        }
+    }
+
+    if let Some(effects) = cache.effects {
+        if opts.show_raw_effects {
+            response.raw_effects = bcs::to_bytes(&effects).map_err(|e| {
+                // TODO: is this a client or server error?
+                anyhow!("Failed to serialize transaction block effects with error: {e}")
+            })?;
+        }
+
+        if opts.show_effects {
+            response.effects = Some(effects.try_into().map_err(|e| {
+                // TODO: is this a client or server error?
+                anyhow!("Failed to convert transaction block effects with error: {e}")
+            })?);
+        }
     }
 
     response.checkpoint = cache.checkpoint_seq;
@@ -1360,6 +1367,7 @@ fn convert_to_response(
     if opts.show_object_changes {
         response.object_changes = cache.object_changes;
     }
+
     Ok(response)
 }
 

@@ -40,7 +40,7 @@ async fn run(
     duration: Option<Duration>,
 ) -> Result<ExecutorProgress> {
     let options = ReaderOptions {
-        tick_interal_ms: 10,
+        tick_internal_ms: 10,
         batch_size: 1,
         ..Default::default()
     };
@@ -74,7 +74,8 @@ struct TestWorker;
 
 #[async_trait]
 impl Worker for TestWorker {
-    async fn process_checkpoint(&self, _checkpoint: CheckpointData) -> Result<()> {
+    type Result = ();
+    async fn process_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<()> {
         Ok(())
     }
 }

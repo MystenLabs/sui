@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version = "2024.7.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -19,7 +19,8 @@ bin-version.workspace = true
 chrono.workspace = true
 clap.workspace = true
 const-str.workspace = true
-diesel.workspace = true
+diesel = { workspace = true, features = ["i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
+diesel-async = { workspace = true, features = ["postgres"] }
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
@@ -32,7 +33,6 @@ lru.workspace = true
 move-binary-format.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-markdown-gen.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 move-core-types.workspace = true
@@ -41,13 +41,13 @@ prometheus.workspace = true
 rand.workspace = true # todo: cleanup test only deps
 regex.workspace = true
 reqwest.workspace = true
-serial_test.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
 shared-crypto.workspace = true
 similar.workspace = true
+sui-pg-db.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true
 tap.workspace = true
@@ -64,7 +64,7 @@ uuid.workspace = true
 im.workspace = true
 downcast = "0.11.0"
 
-sui-graphql-config.workspace = true
+sui-default-config.workspace = true
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true
 
@@ -75,8 +75,8 @@ bcs.workspace = true
 simulacrum.workspace = true  # todo: cleanup test only deps
 sui-json-rpc.workspace = true
 sui-json-rpc-types.workspace = true
-sui-indexer = { workspace = true, default-features = true }
-sui-rest-api.workspace = true
+sui-indexer.workspace = true
+sui-rpc-api.workspace = true
 sui-swarm-config.workspace = true
 test-cluster.workspace = true
 sui-protocol-config.workspace = true
@@ -91,10 +91,7 @@ serde_json.workspace = true
 sui-framework.workspace = true
 tower.workspace = true
 sui-test-transaction-builder.workspace = true
-
+sui-move-build.workspace = true
 
 [features]
-default = ["pg_backend", "postgres-feature"]
-postgres-feature = ["diesel/postgres", "diesel/postgres_backend"]
-pg_integration = []
-pg_backend = []
+staging = []

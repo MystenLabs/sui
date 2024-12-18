@@ -46,6 +46,7 @@ pub trait Meter {
     }
 
     /// Adds the number of items with growth factor
+    #[deprecated(note = "this function is extremely slow and should be avoided")]
     fn add_items_with_growth(
         &mut self,
         scope: Scope,

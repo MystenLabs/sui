@@ -556,15 +556,15 @@ title: Module `0xb::message`
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a> {
-    <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
-    <b>let</b> sender_address = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_u8();
-    <b>let</b> target_chain = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
-    <b>let</b> target_address = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_u8();
-    <b>let</b> token_type = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
-    <b>let</b> amount = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>);
+    <b>let</b> <b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> = <a href="../sui-framework/bcs.md#0x2_bcs_new">bcs::new</a>(<a href="message.md#0xb_message">message</a>.payload);
+    <b>let</b> sender_address = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_vec_u8();
+    <b>let</b> target_chain = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8();
+    <b>let</b> target_address = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_vec_u8();
+    <b>let</b> token_type = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8();
+    <b>let</b> amount = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>);
 
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
-    <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
+    <b>assert</b>!(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
     <a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a> {
         sender_address,
@@ -624,9 +624,9 @@ Emergency op payload is just a single byte
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_blocklist_payload">extract_blocklist_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_Blocklist">Blocklist</a> {
     // blocklist payload should consist of one byte blocklist type, and list of 20 bytes evm addresses
     // derived from ECDSA <b>public</b> keys
-    <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
-    <b>let</b> blocklist_type = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
-    <b>let</b> <b>mut</b> address_count = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
+    <b>let</b> <b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> = <a href="../sui-framework/bcs.md#0x2_bcs_new">bcs::new</a>(<a href="message.md#0xb_message">message</a>.payload);
+    <b>let</b> blocklist_type = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8();
+    <b>let</b> <b>mut</b> address_count = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8();
 
     <b>assert</b>!(address_count != 0, <a href="message.md#0xb_message_EEmptyList">EEmptyList</a>);
 
@@ -634,14 +634,14 @@ Emergency op payload is just a single byte
     <b>while</b> (address_count &gt; 0) {
         <b>let</b> (<b>mut</b> <b>address</b>, <b>mut</b> i) = (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], 0);
         <b>while</b> (i &lt; <a href="message.md#0xb_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>) {
-            <b>address</b>.push_back(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8());
+            <b>address</b>.push_back(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8());
             i = i + 1;
         };
         validator_eth_addresses.push_back(<b>address</b>);
         address_count = address_count - 1;
     };
 
-    <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
+    <b>assert</b>!(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
     <a href="message.md#0xb_message_Blocklist">Blocklist</a> {
         blocklist_type,
@@ -670,12 +670,12 @@ Emergency op payload is just a single byte
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_update_bridge_limit">extract_update_bridge_limit</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
-    <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
-    <b>let</b> sending_chain = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
-    <b>let</b> limit = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>);
+    <b>let</b> <b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> = <a href="../sui-framework/bcs.md#0x2_bcs_new">bcs::new</a>(<a href="message.md#0xb_message">message</a>.payload);
+    <b>let</b> sending_chain = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8();
+    <b>let</b> limit = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>);
 
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
-    <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
+    <b>assert</b>!(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
     <a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
         receiving_chain: <a href="message.md#0xb_message">message</a>.source_chain,
@@ -705,11 +705,11 @@ Emergency op payload is just a single byte
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_update_asset_price">extract_update_asset_price</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_UpdateAssetPrice">UpdateAssetPrice</a> {
-    <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
-    <b>let</b> token_id = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
-    <b>let</b> new_price = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>);
+    <b>let</b> <b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> = <a href="../sui-framework/bcs.md#0x2_bcs_new">bcs::new</a>(<a href="message.md#0xb_message">message</a>.payload);
+    <b>let</b> token_id = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_u8();
+    <b>let</b> new_price = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>);
 
-    <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
+    <b>assert</b>!(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
     <a href="message.md#0xb_message_UpdateAssetPrice">UpdateAssetPrice</a> {
         token_id,
@@ -738,11 +738,11 @@ Emergency op payload is just a single byte
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a> {
-    <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
-    <b>let</b> native_token = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_bool();
-    <b>let</b> token_ids = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_u8();
-    <b>let</b> token_type_names_bytes = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_vec_u8();
-    <b>let</b> token_prices = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_u64();
+    <b>let</b> <b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> = <a href="../sui-framework/bcs.md#0x2_bcs_new">bcs::new</a>(<a href="message.md#0xb_message">message</a>.payload);
+    <b>let</b> native_token = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_bool();
+    <b>let</b> token_ids = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_vec_u8();
+    <b>let</b> token_type_names_bytes = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_vec_vec_u8();
+    <b>let</b> token_prices = <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.peel_vec_u64();
 
     <b>let</b> <b>mut</b> n = 0;
     <b>let</b> <b>mut</b> token_type_names = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
@@ -750,7 +750,7 @@ Emergency op payload is just a single byte
         token_type_names.push_back(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(*token_type_names_bytes.borrow(n)));
         n = n + 1;
     };
-    <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
+    <b>assert</b>!(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
     <a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a> {
         native_token,
         token_ids,
@@ -793,8 +793,8 @@ Emergency op payload is just a single byte
         message_version,
     ];
 
-    // <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> serializes <a href="../move-stdlib/u64.md#0x1_u64">u64</a> <b>as</b> 8 bytes
-    <a href="message.md#0xb_message">message</a>.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&seq_num)));
+    // <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> serializes <a href="../move-stdlib/u64.md#0x1_u64">u64</a> <b>as</b> 8 bytes
+    <a href="message.md#0xb_message">message</a>.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&seq_num)));
     <a href="message.md#0xb_message">message</a>.push_back(source_chain);
     <a href="message.md#0xb_message">message</a>.append(payload);
     <a href="message.md#0xb_message">message</a>
@@ -854,8 +854,8 @@ Token Transfer Message Format:
     payload.push_back((<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&target_address) <b>as</b> u8));
     payload.append(target_address);
     payload.push_back(token_type);
-    // <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> serialzies <a href="../move-stdlib/u64.md#0x1_u64">u64</a> <b>as</b> 8 bytes
-    payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&amount)));
+    // <a href="../sui-framework/bcs.md#0x2_bcs">bcs</a> serialzies <a href="../move-stdlib/u64.md#0x1_u64">u64</a> <b>as</b> 8 bytes
+    payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&amount)));
 
     <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&payload) == 64, <a href="message.md#0xb_message_EInvalidPayloadLength">EInvalidPayloadLength</a>);
 
@@ -1005,7 +1005,7 @@ Update bridge limit Message Format:
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
 
     <b>let</b> <b>mut</b> payload = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[sending_chain];
-    payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&new_limit)));
+    payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&new_limit)));
 
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
         message_type: <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(),
@@ -1052,7 +1052,7 @@ Update asset price message
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
 
     <b>let</b> <b>mut</b> payload = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[token_id];
-    payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&new_price)));
+    payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&new_price)));
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
         message_type: <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>(),
         message_version: <a href="message.md#0xb_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
@@ -1100,10 +1100,10 @@ Update Sui token message
     token_prices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
-    <b>let</b> <b>mut</b> payload = <a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&native_token);
-    payload.append(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&token_ids));
-    payload.append(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&type_names));
-    payload.append(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&token_prices));
+    <b>let</b> <b>mut</b> payload = <a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&native_token);
+    payload.append(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&token_ids));
+    payload.append(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&type_names));
+    payload.append(<a href="../sui-framework/bcs.md#0x2_bcs_to_bytes">bcs::to_bytes</a>(&token_prices));
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
         message_type: <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>(),
         message_version: <a href="message.md#0xb_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
@@ -1831,7 +1831,7 @@ Return the required signature threshold for the message, values are voting power
 
 
 
-<pre><code><b>fun</b> <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>fun</b> <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="../sui-framework/bcs.md#0x2_bcs_BCS">bcs::BCS</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1840,11 +1840,11 @@ Return the required signature threshold for the message, values are voting power
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> BCS): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+<pre><code><b>fun</b> <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> BCS): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u64, 64u8);
     <b>while</b> (i &gt; 0) {
         i = i - 8;
-        <b>let</b> byte = (bcs::peel_u8(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
+        <b>let</b> byte = (<a href="../sui-framework/bcs.md#0x2_bcs_peel_u8">bcs::peel_u8</a>(<a href="../sui-framework/bcs.md#0x2_bcs">bcs</a>) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
         value = value + (byte &lt;&lt; i);
     };
     value

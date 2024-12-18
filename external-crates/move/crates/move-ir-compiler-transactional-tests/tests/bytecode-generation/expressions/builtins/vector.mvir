@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x1.m {
+module 0x6.m {
 entry foo() {
     let v: vector<u64>;
     let v_imm: &vector<u64>;

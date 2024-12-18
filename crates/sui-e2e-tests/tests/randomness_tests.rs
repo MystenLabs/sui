@@ -24,7 +24,6 @@ async fn test_create_randomness_state_object() {
                 .state()
                 .get_object_cache_reader()
                 .get_latest_object_ref_or_tombstone(SUI_RANDOMNESS_STATE_OBJECT_ID)
-                .unwrap()
                 .is_none());
         });
     }
@@ -40,7 +39,6 @@ async fn test_create_randomness_state_object() {
             node.state()
                 .get_object_cache_reader()
                 .get_latest_object_ref_or_tombstone(SUI_RANDOMNESS_STATE_OBJECT_ID)
-                .unwrap()
                 .expect("randomness state object should exist");
         });
     }

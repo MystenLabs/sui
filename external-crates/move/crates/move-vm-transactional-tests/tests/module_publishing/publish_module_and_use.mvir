@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Coin {
+module 0x5.Coin {
     struct Coin { value: u64 }
     public value(c: &Self.Coin): u64 {
     label b0:
@@ -18,8 +18,8 @@ module 0x1.Coin {
 }
 
 //# publish
-module 0x42.MoneyHolder {
-    import 0x1.Coin;
+module 0x43.MoneyHolder {
+    import 0x5.Coin;
 
     struct T { money: Coin.Coin }
 
@@ -48,9 +48,9 @@ module 0x42.MoneyHolder {
 }
 
 //# run
-module 0x42.m {
-import 0x42.MoneyHolder;
-import 0x1.Coin;
+module 0x44.m {
+import 0x43.MoneyHolder;
+import 0x5.Coin;
 
 entry foo() {
     let coin: Coin.Coin;

@@ -1,5 +1,5 @@
 //# publish
-module 0x1.A {
+module 0x6.A {
 
     struct S { f: u64 }
 
@@ -47,7 +47,7 @@ module 0x1.A {
 
 //# run
 module 0x42.m {
-import 0x1.A;
+import 0x6.A;
 
 entry foo() {
 label b0:

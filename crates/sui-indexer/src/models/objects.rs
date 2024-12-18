@@ -13,13 +13,12 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::digests::ObjectDigest;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
-use sui_types::object::Object;
-use sui_types::object::ObjectRead;
+use sui_types::dynamic_field::{DynamicFieldType, Field};
+use sui_types::object::{Object, ObjectRead};
 
 use crate::errors::IndexerError;
-use crate::schema::{objects, objects_history, objects_snapshot};
-use crate::types::{IndexedDeletedObject, IndexedObject, ObjectStatus};
+use crate::schema::{full_objects_history, objects, objects_history, objects_snapshot};
+use crate::types::{owner_to_owner_info, IndexedDeletedObject, IndexedObject, ObjectStatus};
 
 #[derive(Queryable)]
 pub struct DynamicFieldColumn {
@@ -48,7 +47,6 @@ pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub object_digest: Vec<u8>,
-    pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
     /// The full type of this object, including package id, module, name and type parameters.
@@ -63,9 +61,61 @@ pub struct StoredObject {
     // TODO deal with overflow
     pub coin_balance: Option<i64>,
     pub df_kind: Option<i16>,
-    pub df_name: Option<Vec<u8>>,
-    pub df_object_type: Option<String>,
-    pub df_object_id: Option<Vec<u8>>,
+}
+
+impl From<IndexedObject> for StoredObject {
+    fn from(o: IndexedObject) -> Self {
+        let IndexedObject {
+            checkpoint_sequence_number: _,
+            object,
+            df_kind,
+        } = o;
+        let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
+        let coin_type = object
+            .coin_type_maybe()
+            .map(|t| t.to_canonical_string(/* with_prefix */ true));
+        let coin_balance = if coin_type.is_some() {
+            Some(object.get_coin_value_unsafe())
+        } else {
+            None
+        };
+        Self {
+            object_id: object.id().to_vec(),
+            object_version: object.version().value() as i64,
+            object_digest: object.digest().into_inner().to_vec(),
+            owner_type: owner_type as i16,
+            owner_id: owner_id.map(|id| id.to_vec()),
+            object_type: object
+                .type_()
+                .map(|t| t.to_canonical_string(/* with_prefix */ true)),
+            object_type_package: object.type_().map(|t| t.address().to_vec()),
+            object_type_module: object.type_().map(|t| t.module().to_string()),
+            object_type_name: object.type_().map(|t| t.name().to_string()),
+            serialized_object: bcs::to_bytes(&object).unwrap(),
+            coin_type,
+            coin_balance: coin_balance.map(|b| b as i64),
+            df_kind: df_kind.map(|k| match k {
+                DynamicFieldType::DynamicField => 0,
+                DynamicFieldType::DynamicObject => 1,
+            }),
+        }
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects, primary_key(object_id))]
+pub struct StoredDeletedObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+}
+
+impl From<IndexedDeletedObject> for StoredDeletedObject {
+    fn from(o: IndexedDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id.to_vec(),
+            object_version: o.object_version as i64,
+        }
+    }
 }
 
 #[derive(Queryable, Insertable, Selectable, Debug, Identifiable, Clone, QueryableByName)]
@@ -86,44 +136,58 @@ pub struct StoredObjectSnapshot {
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
     pub df_kind: Option<i16>,
-    pub df_name: Option<Vec<u8>>,
-    pub df_object_type: Option<String>,
-    pub df_object_id: Option<Vec<u8>>,
 }
 
-impl From<StoredObject> for StoredObjectSnapshot {
-    fn from(o: StoredObject) -> Self {
+impl From<IndexedObject> for StoredObjectSnapshot {
+    fn from(o: IndexedObject) -> Self {
+        let IndexedObject {
+            checkpoint_sequence_number,
+            object,
+            df_kind,
+        } = o;
+        let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
+        let coin_type = object
+            .coin_type_maybe()
+            .map(|t| t.to_canonical_string(/* with_prefix */ true));
+        let coin_balance = if coin_type.is_some() {
+            Some(object.get_coin_value_unsafe())
+        } else {
+            None
+        };
+
         Self {
-            object_id: o.object_id,
-            object_version: o.object_version,
+            object_id: object.id().to_vec(),
+            object_version: object.version().value() as i64,
             object_status: ObjectStatus::Active as i16,
-            object_digest: Some(o.object_digest),
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
-            owner_type: Some(o.owner_type),
-            object_type_package: o.object_type_package,
-            object_type_module: o.object_type_module,
-            object_type_name: o.object_type_name,
-            owner_id: o.owner_id,
-            object_type: o.object_type,
-            serialized_object: Some(o.serialized_object),
-            coin_type: o.coin_type,
-            coin_balance: o.coin_balance,
-            df_kind: o.df_kind,
-            df_name: o.df_name,
-            df_object_type: o.df_object_type,
-            df_object_id: o.df_object_id,
+            object_digest: Some(object.digest().into_inner().to_vec()),
+            checkpoint_sequence_number: checkpoint_sequence_number as i64,
+            owner_type: Some(owner_type as i16),
+            owner_id: owner_id.map(|id| id.to_vec()),
+            object_type: object
+                .type_()
+                .map(|t| t.to_canonical_string(/* with_prefix */ true)),
+            object_type_package: object.type_().map(|t| t.address().to_vec()),
+            object_type_module: object.type_().map(|t| t.module().to_string()),
+            object_type_name: object.type_().map(|t| t.name().to_string()),
+            serialized_object: Some(bcs::to_bytes(&object).unwrap()),
+            coin_type,
+            coin_balance: coin_balance.map(|b| b as i64),
+            df_kind: df_kind.map(|k| match k {
+                DynamicFieldType::DynamicField => 0,
+                DynamicFieldType::DynamicObject => 1,
+            }),
         }
     }
 }
 
-impl From<StoredDeletedObject> for StoredObjectSnapshot {
-    fn from(o: StoredDeletedObject) -> Self {
+impl From<IndexedDeletedObject> for StoredObjectSnapshot {
+    fn from(o: IndexedDeletedObject) -> Self {
         Self {
-            object_id: o.object_id,
-            object_version: o.object_version,
+            object_id: o.object_id.to_vec(),
+            object_version: o.object_version as i64,
             object_status: ObjectStatus::WrappedOrDeleted as i16,
             object_digest: None,
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: None,
             owner_id: None,
             object_type: None,
@@ -134,9 +198,6 @@ impl From<StoredDeletedObject> for StoredObjectSnapshot {
             coin_type: None,
             coin_balance: None,
             df_kind: None,
-            df_name: None,
-            df_object_type: None,
-            df_object_id: None,
         }
     }
 }
@@ -159,100 +220,68 @@ pub struct StoredHistoryObject {
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
     pub df_kind: Option<i16>,
-    pub df_name: Option<Vec<u8>>,
-    pub df_object_type: Option<String>,
-    pub df_object_id: Option<Vec<u8>>,
 }
 
-impl From<StoredObject> for StoredHistoryObject {
-    fn from(o: StoredObject) -> Self {
+impl From<IndexedObject> for StoredHistoryObject {
+    fn from(o: IndexedObject) -> Self {
+        let IndexedObject {
+            checkpoint_sequence_number,
+            object,
+            df_kind,
+        } = o;
+        let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
+        let coin_type = object
+            .coin_type_maybe()
+            .map(|t| t.to_canonical_string(/* with_prefix */ true));
+        let coin_balance = if coin_type.is_some() {
+            Some(object.get_coin_value_unsafe())
+        } else {
+            None
+        };
+
         Self {
-            object_id: o.object_id,
-            object_version: o.object_version,
+            object_id: object.id().to_vec(),
+            object_version: object.version().value() as i64,
             object_status: ObjectStatus::Active as i16,
-            object_digest: Some(o.object_digest),
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
-            owner_type: Some(o.owner_type),
-            object_type_package: o.object_type_package,
-            object_type_module: o.object_type_module,
-            object_type_name: o.object_type_name,
-            owner_id: o.owner_id,
-            object_type: o.object_type,
-            serialized_object: Some(o.serialized_object),
-            coin_type: o.coin_type,
-            coin_balance: o.coin_balance,
-            df_kind: o.df_kind,
-            df_name: o.df_name,
-            df_object_type: o.df_object_type,
-            df_object_id: o.df_object_id,
+            object_digest: Some(object.digest().into_inner().to_vec()),
+            checkpoint_sequence_number: checkpoint_sequence_number as i64,
+            owner_type: Some(owner_type as i16),
+            owner_id: owner_id.map(|id| id.to_vec()),
+            object_type: object
+                .type_()
+                .map(|t| t.to_canonical_string(/* with_prefix */ true)),
+            object_type_package: object.type_().map(|t| t.address().to_vec()),
+            object_type_module: object.type_().map(|t| t.module().to_string()),
+            object_type_name: object.type_().map(|t| t.name().to_string()),
+            serialized_object: Some(bcs::to_bytes(&object).unwrap()),
+            coin_type,
+            coin_balance: coin_balance.map(|b| b as i64),
+            df_kind: df_kind.map(|k| match k {
+                DynamicFieldType::DynamicField => 0,
+                DynamicFieldType::DynamicObject => 1,
+            }),
         }
     }
 }
 
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
-#[diesel(table_name = objects, primary_key(object_id))]
-pub struct StoredDeletedObject {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub checkpoint_sequence_number: i64,
-}
-
-impl From<IndexedDeletedObject> for StoredDeletedObject {
+impl From<IndexedDeletedObject> for StoredHistoryObject {
     fn from(o: IndexedDeletedObject) -> Self {
         Self {
             object_id: o.object_id.to_vec(),
             object_version: o.object_version as i64,
-            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
-        }
-    }
-}
-
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
-#[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
-pub struct StoredDeletedHistoryObject {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub object_status: i16,
-    pub checkpoint_sequence_number: i64,
-}
-
-impl From<StoredDeletedObject> for StoredDeletedHistoryObject {
-    fn from(o: StoredDeletedObject) -> Self {
-        Self {
-            object_id: o.object_id,
-            object_version: o.object_version,
             object_status: ObjectStatus::WrappedOrDeleted as i16,
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
-        }
-    }
-}
-
-impl From<IndexedObject> for StoredObject {
-    fn from(o: IndexedObject) -> Self {
-        Self {
-            object_id: o.object_id.to_vec(),
-            object_version: o.object_version as i64,
-            object_digest: o.object_digest.into_inner().to_vec(),
+            object_digest: None,
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
-            owner_type: o.owner_type as i16,
-            owner_id: o.owner_id.map(|id| id.to_vec()),
-            object_type: o
-                .object
-                .type_()
-                .map(|t| t.to_canonical_string(/* with_prefix */ true)),
-            object_type_package: o.object.type_().map(|t| t.address().to_vec()),
-            object_type_module: o.object.type_().map(|t| t.module().to_string()),
-            object_type_name: o.object.type_().map(|t| t.name().to_string()),
-            serialized_object: bcs::to_bytes(&o.object).unwrap(),
-            coin_type: o.coin_type,
-            coin_balance: o.coin_balance.map(|b| b as i64),
-            df_kind: o.df_info.as_ref().map(|k| match k.type_ {
-                DynamicFieldType::DynamicField => 0,
-                DynamicFieldType::DynamicObject => 1,
-            }),
-            df_name: o.df_info.as_ref().map(|n| bcs::to_bytes(&n.name).unwrap()),
-            df_object_type: o.df_info.as_ref().map(|v| v.object_type.clone()),
-            df_object_id: o.df_info.as_ref().map(|v| v.object_id.to_vec()),
+            owner_type: None,
+            owner_id: None,
+            object_type: None,
+            object_type_package: None,
+            object_type_module: None,
+            object_type_name: None,
+            serialized_object: None,
+            coin_type: None,
+            coin_balance: None,
+            df_kind: None,
         }
     }
 }
@@ -278,10 +307,7 @@ impl StoredObject {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
         let Some(move_object) = object.data.try_as_move().cloned() else {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Object {:?} is not a Move object",
-                oref,
-            )));
+            return Ok(ObjectRead::Exists(oref, object, None));
         };
 
         let move_type_layout = package_resolver
@@ -302,129 +328,7 @@ impl StoredObject {
             )),
         }?;
 
-        Ok(ObjectRead::Exists(oref, object, Some(move_struct_layout)))
-    }
-
-    pub async fn try_into_expectant_dynamic_field_info(
-        self,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
-    ) -> Result<DynamicFieldInfo, IndexerError> {
-        match self
-            .try_into_dynamic_field_info(package_resolver)
-            .await
-            .transpose()
-        {
-            Some(Ok(info)) => Ok(info),
-            Some(Err(e)) => Err(e),
-            None => Err(IndexerError::PersistentStorageDataCorruptionError(
-                "Dynamic field object has incompatible dynamic field type: empty df_kind".into(),
-            )),
-        }
-    }
-
-    pub async fn try_into_dynamic_field_info(
-        self,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
-    ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
-        if self.df_kind.is_none() {
-            return Ok(None);
-        }
-
-        // Past this point, if there is any unexpected field, it's a data corruption error
-        let object_id = ObjectID::from_bytes(&self.object_id).map_err(|_| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Can't convert {:?} to object_id",
-                self.object_id
-            ))
-        })?;
-        let object_digest = ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|e| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible object digest. Error: {e}",
-                object_id
-            ))
-        })?;
-        let df_object_id = if let Some(df_object_id) = self.df_object_id.clone() {
-            ObjectID::from_bytes(df_object_id).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: df_object_id. Error: {e}",
-                    object_id
-                ))
-            })
-        } else {
-            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible dynamic field type: empty df_object_id",
-                object_id
-            )));
-        }?;
-        let type_ = match self.df_kind {
-            Some(0) => DynamicFieldType::DynamicField,
-            Some(1) => DynamicFieldType::DynamicObject,
-            _ => {
-                return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: empty df_kind",
-                    object_id
-                )))
-            }
-        };
-        let name = if let Some(field_name) = self.df_name.clone() {
-            let name: DynamicFieldName = bcs::from_bytes(&field_name).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: df_name. Error: {e}",
-                    object_id
-                ))
-            })?;
-            name
-        } else {
-            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible dynamic field type: empty df_name",
-                object_id
-            )));
-        };
-
-        let oref = self.get_object_ref()?;
-        let object: sui_types::object::Object = self.clone().try_into()?;
-        let Some(move_object) = object.data.try_as_move().cloned() else {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Object {:?} is not a Move object",
-                oref,
-            )));
-        };
-        if !move_object.type_().is_dynamic_field() {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Object {:?} is not a dynamic field",
-                oref,
-            )));
-        }
-
-        let layout = package_resolver
-            .type_layout(name.type_.clone())
-            .await
-            .map_err(|e| {
-                IndexerError::ResolveMoveStructError(format!(
-                    "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
-                    object.id(),
-                    object.version(),
-                    move_object.type_(),
-                ))
-            })?;
-        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
-        let bcs_name = sui_json_value.to_bcs_bytes(&layout)?;
-        let object_type = self.df_object_type.clone().ok_or(
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible dynamic field type: empty df_object_type",
-                object_id
-            )),
-        )?;
-
-        Ok(Some(DynamicFieldInfo {
-            version: oref.1,
-            digest: object_digest,
-            type_,
-            name,
-            bcs_name,
-            object_type,
-            object_id: df_object_id,
-        }))
+        Ok(ObjectRead::Exists(oref, object, Some(*move_struct_layout)))
     }
 
     pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
@@ -486,7 +390,7 @@ impl TryFrom<StoredObject> for SuiCoin {
         let balance = o
             .coin_balance
             .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Object {} is supposed to be a coin but has an empy coin_balance column",
+                "Object {} is supposed to be a coin but has an empty coin_balance column",
                 coin_object_id,
             )))?;
         Ok(SuiCoin {
@@ -527,6 +431,93 @@ impl TryFrom<CoinBalance> for Balance {
             // TODO: deal with overflow
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
+        })
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName, Selectable)]
+#[diesel(table_name = full_objects_history, primary_key(object_id, object_version))]
+pub struct StoredFullHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub serialized_object: Option<Vec<u8>>,
+}
+
+impl From<IndexedObject> for StoredFullHistoryObject {
+    fn from(o: IndexedObject) -> Self {
+        let object = o.object;
+        Self {
+            object_id: object.id().to_vec(),
+            object_version: object.version().value() as i64,
+            serialized_object: Some(bcs::to_bytes(&object).unwrap()),
+        }
+    }
+}
+
+impl From<IndexedDeletedObject> for StoredFullHistoryObject {
+    fn from(o: IndexedDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id.to_vec(),
+            object_version: o.object_version as i64,
+            serialized_object: None,
+        }
+    }
+}
+
+impl TryFrom<StoredHistoryObject> for StoredObject {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredHistoryObject) -> Result<Self, Self::Error> {
+        // Return early if any required fields are None
+        if o.object_digest.is_none() || o.owner_type.is_none() || o.serialized_object.is_none() {
+            return Err(IndexerError::PostgresReadError(
+                "Missing required fields in StoredHistoryObject".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_digest: o.object_digest.unwrap(),
+            owner_type: o.owner_type.unwrap(),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
+            serialized_object: o.serialized_object.unwrap(),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
+        })
+    }
+}
+
+impl TryFrom<StoredObjectSnapshot> for StoredObject {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredObjectSnapshot) -> Result<Self, Self::Error> {
+        // Return early if any required fields are None
+        if o.object_digest.is_none() || o.owner_type.is_none() || o.serialized_object.is_none() {
+            return Err(IndexerError::PostgresReadError(
+                "Missing required fields in StoredObjectSnapshot".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_digest: o.object_digest.unwrap(),
+            owner_type: o.owner_type.unwrap(),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
+            serialized_object: o.serialized_object.unwrap(),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
         })
     }
 }

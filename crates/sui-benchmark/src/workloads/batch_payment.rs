@@ -5,7 +5,7 @@ use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, STORAGE_COST_PER_COIN};
+use crate::workloads::workload::{ExpectedFailureType, Workload, STORAGE_COST_PER_COIN};
 use crate::workloads::workload::{WorkloadBuilder, ESTIMATED_COMPUTATION_COST};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -116,6 +116,10 @@ impl Payload for BatchPaymentTestPayload {
             gas_budget,
         )
     }
+
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -134,7 +138,7 @@ impl BatchPaymentWorkloadBuilder {
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
+        let target_qps = (workload_weight * target_qps as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
         if max_ops == 0 || num_workers == 0 {

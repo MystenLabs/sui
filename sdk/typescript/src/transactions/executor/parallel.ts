@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
+import { toBase64 } from '@mysten/bcs';
 
 import { bcs } from '../../bcs/index.js';
 import type { SuiObjectRef } from '../../bcs/types.js';
-import type { SuiClient } from '../../client/index.js';
+import type {
+	SuiClient,
+	SuiTransactionBlockResponse,
+	SuiTransactionBlockResponseOptions,
+} from '../../client/index.js';
 import type { Signer } from '../../cryptography/index.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { Transaction } from '../Transaction.js';
@@ -104,16 +108,17 @@ export class ParallelTransactionExecutor {
 		await this.#updateCache(() => this.#waitForLastDigest());
 	}
 
-	async executeTransaction(transaction: Transaction) {
+	async executeTransaction(transaction: Transaction, options?: SuiTransactionBlockResponseOptions) {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			digest: string;
 			effects: string;
+			data: SuiTransactionBlockResponse;
 		}>();
 		const usedObjects = await this.#getUsedObjects(transaction);
 
 		const execute = () => {
 			this.#executeQueue.runTask(() => {
-				const promise = this.#execute(transaction, usedObjects);
+				const promise = this.#execute(transaction, usedObjects, options);
 
 				return promise.then(resolve, reject);
 			});
@@ -174,7 +179,11 @@ export class ParallelTransactionExecutor {
 		return usedObjects;
 	}
 
-	async #execute(transaction: Transaction, usedObjects: Set<string>) {
+	async #execute(
+		transaction: Transaction,
+		usedObjects: Set<string>,
+		options?: SuiTransactionBlockResponseOptions,
+	) {
 		let gasCoin!: CoinWithBalance;
 		try {
 			transaction.setSenderIfNotSet(this.#signer.toSuiAddress());
@@ -186,9 +195,7 @@ export class ParallelTransactionExecutor {
 					transaction.setGasPrice(await this.#getGasPrice());
 				}
 
-				if (!data.gasData.budget) {
-					transaction.setGasBudget(this.#defaultGasBudget);
-				}
+				transaction.setGasBudgetIfNotSet(this.#defaultGasBudget);
 
 				await this.#updateCache();
 				gasCoin = await this.#getGasCoin();
@@ -213,6 +220,7 @@ export class ParallelTransactionExecutor {
 				transaction: bytes,
 				signature,
 				options: {
+					...options,
 					showEffects: true,
 				},
 			});
@@ -258,7 +266,8 @@ export class ParallelTransactionExecutor {
 
 			return {
 				digest: results.digest,
-				effects: toB64(effectsBytes),
+				effects: toBase64(effectsBytes),
+				data: results,
 			};
 		} catch (error) {
 			if (gasCoin) {

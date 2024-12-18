@@ -14,13 +14,13 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { TransactionObjectArgument } from '@mysten/sui/transactions';
 import { Transaction } from '@mysten/sui/transactions';
 import {
-	fromB64,
+	fromBase64,
 	normalizeStructTag,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
 	SUI_TYPE_ARG,
-	toB64,
+	toBase64,
 } from '@mysten/sui/utils';
 
 import type { ZkSendLinkBuilderOptions } from './builder.js';
@@ -28,10 +28,10 @@ import { ZkSendLinkBuilder } from './builder.js';
 import type { LinkAssets } from './utils.js';
 import { getAssetsFromTransaction, isOwner, ownedAfterChange } from './utils.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
+import { getContractIds, ZkBag } from './zk-bag.js';
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
-	host: 'https://zksend.com',
+	host: 'https://getstashed.com',
 	path: '/claim',
 	network: 'mainnet' as const,
 };
@@ -66,6 +66,7 @@ export class ZkSendLink {
 	creatorAddress?: string;
 	assets?: LinkAssets;
 	claimed?: boolean;
+	claimedBy?: string;
 	bagObject?: SuiObjectData | null;
 
 	#client: SuiClient;
@@ -89,7 +90,7 @@ export class ZkSendLink {
 		network = DEFAULT_ZK_SEND_LINK_OPTIONS.network,
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		keypair,
-		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : null,
+		contract = getContractIds(network),
 		address,
 		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
 		path = DEFAULT_ZK_SEND_LINK_OPTIONS.path,
@@ -123,25 +124,28 @@ export class ZkSendLink {
 	) {
 		const parsed = new URL(url);
 		const isContractLink = parsed.hash.startsWith('#$');
+		const parsedNetwork = parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet';
+		const network = options.network ?? parsedNetwork;
 
 		let link: ZkSendLink;
 		if (isContractLink) {
-			const keypair = Ed25519Keypair.fromSecretKey(fromB64(parsed.hash.slice(2)));
+			const keypair = Ed25519Keypair.fromSecretKey(fromBase64(parsed.hash.slice(2)));
 			link = new ZkSendLink({
 				...options,
 				keypair,
+				network,
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: true,
 			});
 		} else {
 			const keypair = Ed25519Keypair.fromSecretKey(
-				fromB64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
+				fromBase64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
 			);
-
 			link = new ZkSendLink({
 				...options,
 				keypair,
+				network,
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: false,
@@ -205,6 +209,12 @@ export class ZkSendLink {
 			throw new Error('Assets have already been claimed');
 		}
 
+		if (!this.assets) {
+			throw new Error(
+				'Link assets could not be loaded.  Link has not been indexed or has already been claimed',
+			);
+		}
+
 		if (!this.#contract) {
 			const bytes = await this.createClaimTransaction(address).build({
 				client: this.#client,
@@ -231,14 +241,25 @@ export class ZkSendLink {
 			reclaim ? address : this.keypair!.toSuiAddress(),
 		);
 
-		const bytes = fromB64(sponsored.bytes);
+		const bytes = fromBase64(sponsored.bytes);
 		const signature = sign
 			? await sign(bytes)
 			: (await this.keypair!.signTransaction(bytes)).signature;
 
 		const { digest } = await this.#executeSponsoredTransaction(sponsored, signature);
 
-		return this.#client.waitForTransaction({ digest });
+		const result = await this.#client.waitForTransaction({
+			digest,
+			options: { showEffects: true },
+		});
+
+		if (result.effects?.status.status !== 'success') {
+			throw new Error(
+				`Claim transaction failed: ${result.effects?.status.error ?? 'Unknown error'}`,
+			);
+		}
+
+		return result;
 	}
 
 	createClaimTransaction(
@@ -354,7 +375,10 @@ export class ZkSendLink {
 		});
 
 		this.bagObject = bagField.data;
-		this.claimed = !bagField.data;
+
+		if (this.bagObject) {
+			this.claimed = false;
+		}
 	}
 
 	async #loadBag({
@@ -369,12 +393,6 @@ export class ZkSendLink {
 		if (!this.#contract) {
 			return;
 		}
-
-		this.assets = {
-			balances: [],
-			nfts: [],
-			coins: [],
-		};
 
 		if (!this.bagObject || !this.claimed) {
 			await this.#loadBagObject();
@@ -419,6 +437,12 @@ export class ZkSendLink {
 				showContent: true,
 			},
 		});
+
+		this.assets = {
+			balances: [],
+			nfts: [],
+			coins: [],
+		};
 
 		const balances = new Map<
 			string,
@@ -519,6 +543,8 @@ export class ZkSendLink {
 				? input.value
 				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
+		this.claimed = true;
+		this.claimedBy = receiver;
 		this.assets = getAssetsFromTransaction({
 			transaction: tx,
 			address: receiver,
@@ -533,7 +559,7 @@ export class ZkSendLink {
 				network: this.#network,
 				sender,
 				claimer,
-				transactionBlockKindBytes: toB64(
+				transactionBlockKindBytes: toBase64(
 					await tx.build({
 						onlyTransactionKind: true,
 						client: this.#client,

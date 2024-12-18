@@ -1,1 +1,1 @@
-module 0x1::Foo {}
+module 0x6::Foo {}

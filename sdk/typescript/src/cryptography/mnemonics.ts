@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { toHEX } from '@mysten/bcs';
+import { toHex } from '@mysten/bcs';
 import { mnemonicToSeedSync as bip39MnemonicToSeedSync } from '@scure/bip39';
 
 /**
@@ -45,5 +45,5 @@ export function mnemonicToSeed(mnemonics: string): Uint8Array {
  * @param mnemonics 12 words string split by spaces.
  */
 export function mnemonicToSeedHex(mnemonics: string): string {
-	return toHEX(mnemonicToSeed(mnemonics));
+	return toHex(mnemonicToSeed(mnemonics));
 }

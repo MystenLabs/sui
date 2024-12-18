@@ -53,7 +53,7 @@ async fn test_object_wrapping_unwrapping() {
     )
     .await;
 
-    let gas_version = authority.get_object(&gas).await.unwrap().unwrap().version();
+    let gas_version = authority.get_object(&gas).await.unwrap().version();
     let create_child_version = SequenceNumber::lamport_increment([gas_version]);
 
     // Create a Child object.
@@ -335,9 +335,12 @@ async fn test_object_owning_another_object() {
     // Check that the child is now owned by the parent.
     let field_id = match child_effect.1 {
         Owner::ObjectOwner(field_id) => field_id.into(),
-        Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
+        Owner::Shared { .. }
+        | Owner::Immutable
+        | Owner::AddressOwner(_)
+        | Owner::ConsensusV2 { .. } => panic!(),
     };
-    let field_object = authority.get_object(&field_id).await.unwrap().unwrap();
+    let field_object = authority.get_object(&field_id).await.unwrap();
     assert_eq!(field_object.owner, parent.0);
 
     // Mutate the child directly will now fail because we need the parent to authenticate.
@@ -789,7 +792,8 @@ async fn test_entry_point_vector_empty() {
         TypeTag::from_str(format!("{}::entry_point_vector::Obj", package.0).as_str()).unwrap();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let empty_vec = builder.command(Command::MakeMoveVec(Some(type_tag.clone()), vec![]));
+        let empty_vec =
+            builder.command(Command::MakeMoveVec(Some(type_tag.clone().into()), vec![]));
         builder.programmable_move_call(
             package.0,
             Identifier::new("entry_point_vector").unwrap(),
@@ -818,7 +822,8 @@ async fn test_entry_point_vector_empty() {
     // call a function with an empty vector whose type is generic
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let empty_vec = builder.command(Command::MakeMoveVec(Some(type_tag.clone()), vec![]));
+        let empty_vec =
+            builder.command(Command::MakeMoveVec(Some(type_tag.clone().into()), vec![]));
         builder.programmable_move_call(
             package.0,
             Identifier::new("entry_point_vector").unwrap(),
@@ -2275,7 +2280,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         args: Vec<Argument>,
     ) {
         let n = builder.pure(args.len() as u64).unwrap();
-        let vec = builder.command(Command::MakeMoveVec(Some(t.clone()), args));
+        let vec = builder.command(Command::MakeMoveVec(Some(t.clone().into()), args));
         builder.programmable_move_call(
             package,
             Identifier::new("entry_point_types").unwrap(),
@@ -2394,7 +2399,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         vec![arg],
     );
     let inner_args = vec![arg, id_result, arg];
-    let vec = builder.command(Command::MakeMoveVec(Some(t.clone()), inner_args));
+    let vec = builder.command(Command::MakeMoveVec(Some(t.clone().into()), inner_args));
     let args = vec![vec, vec, vec];
     make_and_drop(
         &mut builder,
@@ -2572,7 +2577,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     // invalid bcs
     let mut builder = ProgrammableTransactionBuilder::new();
     let args = vec![builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false)];
-    builder.command(Command::MakeMoveVec(Some(t.clone()), args));
+    builder.command(Command::MakeMoveVec(Some(t.clone().into()), args));
     let pt = builder.finish();
     let effects = execute_programmable_transaction(
         authority,
@@ -2603,7 +2608,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         builder.pure(value).unwrap(),
         builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false),
     ];
-    builder.command(Command::MakeMoveVec(Some(t.clone()), args));
+    builder.command(Command::MakeMoveVec(Some(t.clone().into()), args));
     let pt = builder.finish();
     let effects = execute_programmable_transaction(
         authority,
@@ -2806,7 +2811,7 @@ pub fn build_package(
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let digest = compiled_package.get_package_digest(with_unpublished_deps);
     let modules = compiled_package.get_package_bytes(with_unpublished_deps);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
     (digest.to_vec(), modules, dependencies)
 }
 
@@ -2826,9 +2831,9 @@ pub async fn build_and_try_publish_test_package(
 
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
-    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object = authority.get_object(gas_object_id).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(
@@ -2928,7 +2933,7 @@ pub async fn collect_packages_and_upgrade_caps(
         if !matches!(owner, Owner::AddressOwner(_)) {
             continue;
         }
-        let cap = authority.get_object(&obj_ref.0).await.unwrap().unwrap();
+        let cap = authority.get_object(&obj_ref.0).await.unwrap();
         let bcs = cap.data.try_as_move().unwrap().contents();
         let obj: UpgradeCap = bcs::from_bytes(bcs).unwrap();
         let pkg = packages.get(&obj.package.bytes).unwrap();
@@ -2946,7 +2951,7 @@ pub async fn run_multi_txns(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // build the transaction data
     let pt = builder.finish();
-    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object = authority.get_object(gas_object_id).await;
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let gas_price = authority.reference_gas_price_for_testing().unwrap();
     let gas_budget = pt.non_system_packages_to_be_published().count() as u64

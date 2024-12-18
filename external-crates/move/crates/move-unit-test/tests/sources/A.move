@@ -1,4 +1,4 @@
-module 0x1::A {
+module 0x6::A {
     #[test]
     fun a() { }
 

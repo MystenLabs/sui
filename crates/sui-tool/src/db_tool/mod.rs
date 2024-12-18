@@ -6,7 +6,6 @@ use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
 use anyhow::{anyhow, bail};
 use clap::Parser;
-use narwhal_storage::NodeStorage;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -15,7 +14,6 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
-use sui_types::storage::ObjectStore;
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -264,15 +262,12 @@ pub fn print_last_consensus_index(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn print_consensus_commit(path: &Path, opt: PrintConsensusCommitOptions) -> anyhow::Result<()> {
-    let consensus_db = NodeStorage::reopen(path, None);
-    let consensus_commit = consensus_db
-        .consensus_store
-        .read_consensus_commit(&opt.seqnum)?;
-    match consensus_commit {
-        Some(commit) => println!("Consensus commit at {} is {:?}", opt.seqnum, commit),
-        None => println!("Consensus commit at {} is not found!", opt.seqnum),
-    }
+// TODO: implement for consensus.
+pub fn print_consensus_commit(
+    _path: &Path,
+    _opt: PrintConsensusCommitOptions,
+) -> anyhow::Result<()> {
+    println!("Printing consensus commit is unimplemented");
     Ok(())
 }
 
@@ -300,9 +295,9 @@ pub fn print_object(path: &Path, opt: PrintObjectOptions) -> anyhow::Result<()> 
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
 
     let obj = if let Some(version) = opt.version {
-        perpetual_db.get_object_by_key(&opt.id, version.into())?
+        perpetual_db.get_object_by_key_fallible(&opt.id, version.into())?
     } else {
-        perpetual_db.get_object(&opt.id)?
+        perpetual_db.get_object_fallible(&opt.id)?
     };
 
     if let Some(obj) = obj {

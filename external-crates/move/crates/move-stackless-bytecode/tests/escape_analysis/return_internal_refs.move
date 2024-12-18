@@ -1,4 +1,4 @@
-module 0x1::LeakInternalRefs {
+module 0x6::LeakInternalRefs {
 
     public struct S { f: u64, g: u64 }
 

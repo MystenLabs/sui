@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
+    diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{FunctionSignature, SingleType, Value, Var},
     parser,
@@ -13,6 +14,7 @@ use std::collections::BTreeSet;
 
 /// returns true if anything changed
 pub fn optimize(
+    _reporter: &DiagnosticReporter,
     signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<parser::ast::ConstantName, Value>,
@@ -125,7 +127,7 @@ mod count {
                 exp(context, el)
             }
             C::Return { exp: e, .. }
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
             | C::VariantSwitch { subject: e, .. } => exp(context, e),
@@ -302,7 +304,7 @@ mod eliminate {
                 exp(context, el)
             }
             C::Return { exp: e, .. }
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
             | C::VariantSwitch { subject: e, .. } => exp(context, e),

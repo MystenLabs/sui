@@ -1,0 +1,55 @@
+name: Validate Release Notes
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'devnet'
+      - 'testnet'
+      - 'mainnet'
+      - 'releases/sui-*-release'
+  pull_request:
+    types: [ opened, synchronize, reopened, edited, ready_for_review ]
+  workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  diff:
+    name: Determine PR eligibility for ${{ github.event.pull_request.number }}
+    if: github.event.pull_request.number != ''
+    runs-on: [ ubuntu-latest ]
+    outputs:
+      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - name: Detect Changes
+        uses: './.github/actions/diffs'
+        id: diff
+
+  release-notes-description-check:
+    name: Validate Release Notes in ${{ github.event.pull_request.number }}
+    needs: diff
+    if: needs.diff.outputs.isReleaseNotesEligible == 'true' && github.event.pull_request.number != ''
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
+        with:
+          python-version: 3.10.10
+      - name: Validate PR's release notes
+        shell: bash
+        run: |
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py check ${{ github.event.pull_request.number }}

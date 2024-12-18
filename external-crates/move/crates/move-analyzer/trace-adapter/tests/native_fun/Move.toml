@@ -1,0 +1,10 @@
+[package]
+name = "native_fun"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+native_fun = "0x0"
+std = "0x1"

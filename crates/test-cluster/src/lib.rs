@@ -1,37 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::Future;
 use futures::{future::join_all, StreamExt};
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use jsonrpsee::ws_client::WsClient;
-use jsonrpsee::ws_client::WsClientBuilder;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_bridge::crypto::{BridgeAuthorityKeyPair, BridgeAuthoritySignInfo};
-use sui_bridge::sui_transaction_builder::build_add_tokens_on_sui_transaction;
-use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
-use sui_bridge::types::BridgeCommitteeValiditySignInfo;
-use sui_bridge::types::CertifiedBridgeAction;
-use sui_bridge::types::VerifiedCertifiedBridgeAction;
-use sui_bridge::utils::publish_and_register_coins_return_add_coins_on_sui_action;
-use sui_bridge::utils::wait_for_server_to_be_up;
 use sui_config::genesis::Genesis;
-use sui_config::local_ip_utils::get_available_port;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
-use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_api::BridgeReadApiClient;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     TransactionFilter,
@@ -56,12 +40,10 @@ use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConf
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
-use sui_types::bridge::{get_bridge, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
-use sui_types::bridge::{get_bridge_obj_initial_shared_version, BridgeSummary, BridgeTrait};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
+use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::crypto::{KeypairTraits, ToFromBytes};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
@@ -73,13 +55,13 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{
-    CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
-    TransactionKind,
+    CertifiedTransaction, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
 };
-use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info};
+
+mod test_indexer_handle;
 
 const NUM_VALIDATOR: usize = 4;
 
@@ -88,7 +70,6 @@ pub struct FullNodeHandle {
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
-    pub ws_url: String,
 }
 
 impl FullNodeHandle {
@@ -96,7 +77,6 @@ impl FullNodeHandle {
         let rpc_url = format!("http://{}", json_rpc_address);
         let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
 
-        let ws_url = format!("ws://{}", json_rpc_address);
         let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
 
         Self {
@@ -104,15 +84,7 @@ impl FullNodeHandle {
             sui_client,
             rpc_client,
             rpc_url,
-            ws_url,
         }
-    }
-
-    pub async fn ws_client(&self) -> WsClient {
-        WsClientBuilder::default()
-            .build(&self.ws_url)
-            .await
-            .unwrap()
     }
 }
 
@@ -120,26 +92,33 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
-
-    pub bridge_authority_keys: Option<Vec<BridgeAuthorityKeyPair>>,
-    pub bridge_server_ports: Option<Vec<u16>>,
+    indexer_handle: Option<test_indexer_handle::IndexerHandle>,
 }
 
 impl TestCluster {
     pub fn rpc_client(&self) -> &HttpClient {
-        &self.fullnode_handle.rpc_client
+        self.indexer_handle
+            .as_ref()
+            .map(|h| &h.rpc_client)
+            .unwrap_or(&self.fullnode_handle.rpc_client)
     }
 
     pub fn sui_client(&self) -> &SuiClient {
-        &self.fullnode_handle.sui_client
+        self.indexer_handle
+            .as_ref()
+            .map(|h| &h.sui_client)
+            .unwrap_or(&self.fullnode_handle.sui_client)
+    }
+
+    pub fn rpc_url(&self) -> &str {
+        self.indexer_handle
+            .as_ref()
+            .map(|h| h.rpc_url.as_str())
+            .unwrap_or(&self.fullnode_handle.rpc_url)
     }
 
     pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
         self.sui_client().quorum_driver_api()
-    }
-
-    pub fn rpc_url(&self) -> &str {
-        &self.fullnode_handle.rpc_url
     }
 
     pub fn wallet(&mut self) -> &WalletContext {
@@ -269,7 +248,7 @@ impl TestCluster {
     pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {
         self.fullnode_handle
             .sui_node
-            .with_async(|node| async { node.state().get_object(object_id).await.unwrap() })
+            .with_async(|node| async { node.state().get_object(object_id).await })
             .await
     }
 
@@ -278,10 +257,6 @@ impl TestCluster {
             .await
             .unwrap()
             .compute_object_reference()
-    }
-
-    pub async fn get_bridge_summary(&self) -> RpcResult<BridgeSummary> {
-        self.sui_client().http().get_latest_bridge().await
     }
 
     pub async fn get_object_or_tombstone_from_fullnode_store(
@@ -293,7 +268,6 @@ impl TestCluster {
             .state()
             .get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
-            .unwrap()
             .unwrap()
     }
 
@@ -528,54 +502,6 @@ impl TestCluster {
         }
     }
 
-    pub async fn trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized(&self) {
-        let mut bridge =
-            get_bridge(self.fullnode_handle.sui_node.state().get_object_store()).unwrap();
-        if !bridge.committee().members.contents.is_empty() {
-            assert_eq!(
-                self.swarm.active_validators().count(),
-                bridge.committee().members.contents.len()
-            );
-            return;
-        }
-        // wait for next epoch
-        self.trigger_reconfiguration().await;
-        bridge = get_bridge(self.fullnode_handle.sui_node.state().get_object_store()).unwrap();
-        // Committee should be initiated
-        assert!(bridge.committee().member_registrations.contents.is_empty());
-        assert_eq!(
-            self.swarm.active_validators().count(),
-            bridge.committee().members.contents.len()
-        );
-    }
-
-    // Wait for bridge node in the cluster to be up and running.
-    pub async fn wait_for_bridge_cluster_to_be_up(&self, timeout_sec: u64) {
-        let bridge_ports = self.bridge_server_ports.as_ref().unwrap();
-        let mut tasks = vec![];
-        for port in bridge_ports.iter() {
-            let server_url = format!("http://127.0.0.1:{}", port);
-            tasks.push(wait_for_server_to_be_up(server_url, timeout_sec));
-        }
-        join_all(tasks)
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<Vec<_>>>()
-            .unwrap();
-    }
-
-    pub async fn get_mut_bridge_arg(&self) -> Option<ObjectArg> {
-        get_bridge_obj_initial_shared_version(
-            self.fullnode_handle.sui_node.state().get_object_store(),
-        )
-        .unwrap()
-        .map(|seq| ObjectArg::SharedObject {
-            id: SUI_BRIDGE_OBJECT_ID,
-            initial_shared_version: seq,
-            mutable: true,
-        })
-    }
-
     pub async fn wait_for_authenticator_state_update(&self) {
         timeout(
             Duration::from_secs(60),
@@ -590,7 +516,6 @@ impl TestCluster {
                     let tx = state
                         .get_transaction_cache_reader()
                         .get_transaction_block(&digest)
-                        .unwrap()
                         .unwrap();
                     match &tx.data().intent_message().value.kind() {
                         TransactionKind::EndOfEpochTransaction(_) => (),
@@ -895,6 +820,7 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
+    disable_fullnode_pruning: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
@@ -905,6 +831,7 @@ pub struct TestClusterBuilder {
     config_dir: Option<PathBuf>,
     default_jwks: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
@@ -913,6 +840,8 @@ pub struct TestClusterBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
+
+    indexer_backed_rpc: bool,
 }
 
 impl TestClusterBuilder {
@@ -924,6 +853,7 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
+            disable_fullnode_pruning: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
@@ -933,6 +863,7 @@ impl TestClusterBuilder {
             config_dir: None,
             default_jwks: false,
             authority_overload_config: None,
+            execution_cache_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
@@ -942,6 +873,7 @@ impl TestClusterBuilder {
             validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(
                 true,
             ),
+            indexer_backed_rpc: false,
         }
     }
 
@@ -991,6 +923,11 @@ impl TestClusterBuilder {
 
     pub fn enable_fullnode_events(mut self) -> Self {
         self.enable_fullnode_events = true;
+        self
+    }
+
+    pub fn disable_fullnode_pruning(mut self) -> Self {
+        self.disable_fullnode_pruning = true;
         self
     }
 
@@ -1117,6 +1054,12 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_execution_cache_config(mut self, config: ExecutionCacheConfig) -> Self {
+        assert!(self.network_config.is_none());
+        self.execution_cache_config = Some(config);
+        self
+    }
+
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
         self
@@ -1132,6 +1075,11 @@ impl TestClusterBuilder {
         submit_delay_step_override_millis: u64,
     ) -> Self {
         self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
+    pub fn with_indexer_backed_rpc(mut self) -> Self {
+        self.indexer_backed_rpc = true;
         self
     }
 
@@ -1165,20 +1113,50 @@ impl TestClusterBuilder {
             }));
         }
 
+        let mut temp_data_ingestion_dir = None;
+        let mut data_ingestion_path = None;
+
+        if self.indexer_backed_rpc {
+            if self.data_ingestion_dir.is_none() {
+                temp_data_ingestion_dir = Some(tempfile::tempdir().unwrap());
+                self.data_ingestion_dir = Some(
+                    temp_data_ingestion_dir
+                        .as_ref()
+                        .unwrap()
+                        .path()
+                        .to_path_buf(),
+                );
+                assert!(self.data_ingestion_dir.is_some());
+            }
+            assert!(self.data_ingestion_dir.is_some());
+            data_ingestion_path = Some(self.data_ingestion_dir.as_ref().unwrap().to_path_buf());
+        }
+
         let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
-
-        let mut wallet_conf: SuiClientConfig =
-            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
+        let (rpc_url, indexer_handle) = if self.indexer_backed_rpc {
+            let handle = test_indexer_handle::IndexerHandle::new(
+                fullnode_handle.rpc_url.clone(),
+                temp_data_ingestion_dir,
+                data_ingestion_path.unwrap(),
+            )
+            .await;
+            (handle.rpc_url.clone(), Some(handle))
+        } else {
+            (fullnode_handle.rpc_url.clone(), None)
+        };
+
+        let mut wallet_conf: SuiClientConfig =
+            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
-            rpc: fullnode_handle.rpc_url.clone(),
+            rpc: rpc_url,
             ws: None,
             basic_auth: None,
         });
@@ -1196,185 +1174,8 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
-            bridge_authority_keys: None,
-            bridge_server_ports: None,
+            indexer_handle,
         }
-    }
-
-    pub async fn build_with_bridge(
-        self,
-        bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
-        deploy_tokens: bool,
-    ) -> TestCluster {
-        let timer = Instant::now();
-        let gas_objects_for_authority_keys = bridge_authority_keys
-            .iter()
-            .map(|k| {
-                let address = SuiAddress::from(k.public());
-                Object::with_id_owner_for_testing(ObjectID::random(), address)
-            })
-            .collect::<Vec<_>>();
-        let mut test_cluster = self
-            .with_objects(gas_objects_for_authority_keys)
-            .build()
-            .await;
-        info!(
-            "TestCluster build took {:?} secs",
-            timer.elapsed().as_secs()
-        );
-        let ref_gas_price = test_cluster.get_reference_gas_price().await;
-        let bridge_arg = test_cluster.get_mut_bridge_arg().await.unwrap();
-        assert_eq!(
-            bridge_authority_keys.len(),
-            test_cluster.swarm.active_validators().count()
-        );
-
-        // Committee registers themselves
-        let mut server_ports = vec![];
-        let mut tasks = vec![];
-        let quorum_driver_api = test_cluster.quorum_driver_api().clone();
-        for (node, kp) in test_cluster
-            .swarm
-            .active_validators()
-            .zip(bridge_authority_keys.iter())
-        {
-            let validator_address = node.config().sui_address();
-            // create committee registration tx
-            let gas = test_cluster
-                .wallet
-                .get_one_gas_object_owned_by_address(validator_address)
-                .await
-                .unwrap()
-                .unwrap();
-
-            let server_port = get_available_port("127.0.0.1");
-            let server_url = format!("http://127.0.0.1:{}", server_port);
-            server_ports.push(server_port);
-            let data = build_committee_register_transaction(
-                validator_address,
-                &gas,
-                bridge_arg,
-                kp.public().as_bytes().to_vec(),
-                &server_url,
-                ref_gas_price,
-                1000000000,
-            )
-            .unwrap();
-
-            let tx = Transaction::from_data_and_signer(
-                data,
-                vec![node.config().account_key_pair.keypair()],
-            );
-            let api_clone = quorum_driver_api.clone();
-            tasks.push(async move {
-                api_clone
-                    .execute_transaction_block(
-                        tx,
-                        SuiTransactionBlockResponseOptions::new().with_effects(),
-                        None,
-                    )
-                    .await
-            });
-        }
-
-        if deploy_tokens {
-            let timer = Instant::now();
-            let token_ids = vec![TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT];
-            let token_prices = vec![500_000_000u64, 30_000_000u64, 1_000u64, 1_000u64];
-            let action = publish_and_register_coins_return_add_coins_on_sui_action(
-                test_cluster.wallet(),
-                bridge_arg,
-                vec![
-                    Path::new("../../bridge/move/tokens/btc").into(),
-                    Path::new("../../bridge/move/tokens/eth").into(),
-                    Path::new("../../bridge/move/tokens/usdc").into(),
-                    Path::new("../../bridge/move/tokens/usdt").into(),
-                ],
-                token_ids,
-                token_prices,
-                0,
-            );
-            let action = action.await;
-            info!("register tokens took {:?} secs", timer.elapsed().as_secs());
-            let sig_map = bridge_authority_keys
-                .iter()
-                .map(|key| {
-                    (
-                        key.public().into(),
-                        BridgeAuthoritySignInfo::new(&action, key).signature,
-                    )
-                })
-                .collect::<BTreeMap<_, _>>();
-            let certified_action = CertifiedBridgeAction::new_from_data_and_sig(
-                action,
-                BridgeCommitteeValiditySignInfo {
-                    signatures: sig_map.clone(),
-                },
-            );
-            let verifired_action_cert =
-                VerifiedCertifiedBridgeAction::new_from_verified(certified_action);
-            let sender_address = test_cluster.get_address_0();
-
-            await_committee_register_tasks(&test_cluster, tasks).await;
-
-            // Wait until committee is set up
-            test_cluster
-                .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
-                .await;
-
-            let tx = build_add_tokens_on_sui_transaction(
-                sender_address,
-                &test_cluster
-                    .wallet
-                    .get_one_gas_object_owned_by_address(sender_address)
-                    .await
-                    .unwrap()
-                    .unwrap(),
-                verifired_action_cert,
-                bridge_arg,
-                ref_gas_price,
-            )
-            .unwrap();
-
-            let response = test_cluster.sign_and_execute_transaction(&tx).await;
-            assert_eq!(
-                response.effects.unwrap().status(),
-                &SuiExecutionStatus::Success
-            );
-            info!("Deploy tokens took {:?} secs", timer.elapsed().as_secs());
-        } else {
-            await_committee_register_tasks(&test_cluster, tasks).await;
-        }
-
-        async fn await_committee_register_tasks(
-            test_cluster: &TestCluster,
-            tasks: Vec<
-                impl Future<Output = Result<SuiTransactionBlockResponse, sui_sdk::error::Error>>,
-            >,
-        ) {
-            // The tx may fail if a member tries to register when the committee is already finalized.
-            // In that case, we just need to check the committee members is not empty since once
-            // the committee is finalized, it should not be empty.
-            let responses = join_all(tasks).await;
-            let mut has_failure = false;
-            for response in responses {
-                if response.unwrap().effects.unwrap().status() != &SuiExecutionStatus::Success {
-                    has_failure = true;
-                }
-            }
-            if has_failure {
-                let bridge_summary = test_cluster.get_bridge_summary().await.unwrap();
-                assert_ne!(bridge_summary.committee.members.len(), 0);
-            }
-        }
-
-        info!(
-            "TestCluster build_with_bridge took {:?} secs",
-            timer.elapsed().as_secs()
-        );
-        test_cluster.bridge_authority_keys = Some(bridge_authority_keys);
-        test_cluster.bridge_server_ports = Some(server_ports);
-        test_cluster
     }
 
     /// Start a Swarm and set up WalletConfig
@@ -1414,6 +1215,10 @@ impl TestClusterBuilder {
             builder = builder.with_authority_overload_config(authority_overload_config);
         }
 
+        if let Some(execution_cache_config) = self.execution_cache_config.take() {
+            builder = builder.with_execution_cache_config(execution_cache_config);
+        }
+
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
             builder = builder.with_fullnode_rpc_port(fullnode_rpc_port);
         }
@@ -1440,6 +1245,10 @@ impl TestClusterBuilder {
         if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
             builder =
                 builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
+        }
+
+        if self.disable_fullnode_pruning {
+            builder = builder.with_disable_fullnode_pruning();
         }
 
         let mut swarm = builder.build();

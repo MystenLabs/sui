@@ -16,7 +16,7 @@ pub use anemo_tower;
 pub use fastcrypto;
 pub use lru;
 pub use move_package;
-pub use narwhal_network;
+pub use mysten_network;
 pub use sui_framework;
 pub use sui_move_build;
 pub use sui_types;
@@ -110,7 +110,7 @@ pub mod configs {
 }
 
 thread_local! {
-    static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+    static NODE_COUNT: AtomicUsize = const { AtomicUsize::new(0) };
 }
 
 pub struct NodeLeakDetector(());

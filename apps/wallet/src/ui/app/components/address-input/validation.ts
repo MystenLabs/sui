@@ -8,9 +8,12 @@ import { isValidSuiAddress, isValidSuiNSName } from '@mysten/sui/utils';
 import { useMemo } from 'react';
 import * as Yup from 'yup';
 
-export function createSuiAddressValidation(client: SuiClient, suiNSEnabled: boolean) {
-	const resolveCache = new Map<string, boolean>();
+const CACHE_EXPIRY_TIME = 60 * 1000; // 1 minute in milliseconds
 
+export function createSuiAddressValidation(client: SuiClient, suiNSEnabled: boolean) {
+	const resolveCache = new Map<string, { valid: boolean; expiry: number }>();
+
+	const currentTime = Date.now();
 	return Yup.string()
 		.ensure()
 		.trim()
@@ -18,14 +21,22 @@ export function createSuiAddressValidation(client: SuiClient, suiNSEnabled: bool
 		.test('is-sui-address', 'Invalid address. Please check again.', async (value) => {
 			if (suiNSEnabled && isValidSuiNSName(value)) {
 				if (resolveCache.has(value)) {
-					return resolveCache.get(value)!;
+					const cachedEntry = resolveCache.get(value)!;
+					if (currentTime < cachedEntry.expiry) {
+						return cachedEntry.valid;
+					} else {
+						resolveCache.delete(value); // Remove expired entry
+					}
 				}
 
 				const address = await client.resolveNameServiceAddress({
 					name: value,
 				});
 
-				resolveCache.set(value, !!address);
+				resolveCache.set(value, {
+					valid: !!address,
+					expiry: currentTime + CACHE_EXPIRY_TIME,
+				});
 
 				return !!address;
 			}

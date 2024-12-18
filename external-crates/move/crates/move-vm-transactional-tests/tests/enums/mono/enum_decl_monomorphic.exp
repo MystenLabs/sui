@@ -3,16 +3,17 @@ processed 3 tasks
 task 0, lines 1-33:
 //# print-bytecode
 // Move bytecode v7
-module 1.MonomorphicEnums {
-
+module 6.MonomorphicEnums {
 
 enum EnumWithOneVariant {
 	One {  }
 }
+
 enum EnumWithTwoVariants {
 	One {  },
 	Two { x: u64 }
 }
+
 enum EnumWithTwoVariantsPlusAbilities has copy, drop, store, key {
 	One {  },
 	Two { x: u64 }
@@ -44,4 +45,6 @@ Jump tables:
 		Variant1 => jump 9
 	}
 }
+
 }
+

@@ -5,8 +5,14 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::{Gas, GasCoinConfig};
 use crate::ValidatorProxy;
+use anyhow::anyhow;
 use async_trait::async_trait;
+use rand::distributions::{Distribution, Standard};
+use rand::Rng;
+use std::str::FromStr;
 use std::sync::Arc;
+use strum::{EnumCount, IntoEnumIterator};
+use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_types::gas_coin::MIST_PER_SUI;
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
@@ -22,6 +28,65 @@ pub const STORAGE_COST_PER_COIN: u64 = 130 * 76 * 100;
 pub const STORAGE_COST_PER_COUNTER: u64 = 341 * 76 * 100;
 /// Used to estimate the budget required for each transaction.
 pub const ESTIMATED_COMPUTATION_COST: u64 = 1_000_000;
+
+#[derive(Debug, EnumCountMacro, EnumIter, Clone, Copy, PartialEq)]
+pub enum ExpectedFailureType {
+    Random = 0,
+    InvalidSignature,
+    // TODO: Add other failure types
+
+    // This is not a failure type, but a placeholder for no failure. Marking no failure asserts that
+    // the transaction must succeed.
+    NoFailure,
+}
+
+impl TryFrom<u32> for ExpectedFailureType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => {
+                let mut rng = rand::thread_rng();
+                let n = rng.gen_range(1..ExpectedFailureType::COUNT - 1);
+                Ok(ExpectedFailureType::iter().nth(n).unwrap())
+            }
+            _ => ExpectedFailureType::iter()
+                .nth(value as usize)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Invalid failure type specifier. Valid options are {} to {}",
+                        0,
+                        ExpectedFailureType::COUNT
+                    )
+                }),
+        }
+    }
+}
+
+impl FromStr for ExpectedFailureType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = u32::from_str(s).map(ExpectedFailureType::try_from);
+
+        if let Ok(Ok(q)) = v {
+            return Ok(q);
+        }
+
+        Err(anyhow!(
+            "Invalid input string. Valid values are 0 to {}",
+            ExpectedFailureType::COUNT
+        ))
+    }
+}
+
+impl Distribution<ExpectedFailureType> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ExpectedFailureType {
+        // Exclude the "Random" variant
+        let n = rng.gen_range(1..ExpectedFailureType::COUNT);
+        ExpectedFailureType::iter().nth(n).unwrap()
+    }
+}
 
 #[async_trait]
 pub trait WorkloadBuilder<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {

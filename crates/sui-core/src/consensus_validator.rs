@@ -3,30 +3,30 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionVerifier, ValidationError};
-use eyre::WrapErr;
-use fastcrypto_tbls::dkg;
+use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
+use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
-use narwhal_types::{validate_batch_version, BatchAPI};
-use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
-use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    error::SuiError,
+    error::{SuiError, SuiResult},
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+    transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    checkpoints::CheckpointServiceNotify, transaction_manager::TransactionManager,
+    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
+    checkpoints::CheckpointServiceNotify,
+    consensus_adapter::ConsensusOverloadChecker,
+    transaction_manager::TransactionManager,
 };
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    authority_state: Arc<AuthorityState>,
+    consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
@@ -34,55 +34,51 @@ pub struct SuiTxValidator {
 
 impl SuiTxValidator {
     pub fn new(
-        epoch_store: Arc<AuthorityPerEpochStore>,
+        authority_state: Arc<AuthorityState>,
+        consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
+        let epoch_store = authority_state.load_epoch_store_one_call_per_task().clone();
         info!(
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
         );
         Self {
-            epoch_store,
+            authority_state,
+            consensus_overload_checker,
             checkpoint_service,
             _transaction_manager: transaction_manager,
             metrics,
         }
     }
 
-    fn validate_transactions(
-        &self,
-        txs: Vec<ConsensusTransactionKind>,
-    ) -> Result<(), eyre::Report> {
+    fn validate_transactions(&self, txs: &[ConsensusTransactionKind]) -> Result<(), SuiError> {
+        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+
         let mut cert_batch = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
-        for tx in txs.into_iter() {
+        for tx in txs.iter() {
             match tx {
-                ConsensusTransactionKind::UserTransaction(certificate) => {
-                    cert_batch.push(*certificate);
-
-                    // if !certificate.contains_shared_object() {
-                    //     // new_unchecked safety: we do not use the certs in this list until all
-                    //     // have had their signatures verified.
-                    //     owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
-                    // }
+                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
+                    cert_batch.push(certificate.as_ref());
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    ckpt_messages.push(signature.clone());
-                    ckpt_batch.push(signature.summary);
+                    ckpt_messages.push(signature.as_ref());
+                    ckpt_batch.push(&signature.summary);
                 }
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                    if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Message too large");
-                        return Err(SuiError::InvalidDkgMessageSize.into());
+                        return Err(SuiError::InvalidDkgMessageSize);
                     }
                 }
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
-                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                    if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Confirmation too large");
-                        return Err(SuiError::InvalidDkgMessageSize.into());
+                        return Err(SuiError::InvalidDkgMessageSize);
                     }
                 }
 
@@ -92,6 +88,16 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
+
+                ConsensusTransactionKind::UserTransaction(_tx) => {
+                    if !epoch_store.protocol_config().mysticeti_fastpath() {
+                        return Err(SuiError::UnexpectedMessage(
+                            "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
+                        ));
+                    }
+                    // TODO(fastpath): move deterministic verifications of user transactions here,
+                    // for example validity_check() and verify_transaction().
+                }
             }
         }
 
@@ -99,16 +105,15 @@ impl SuiTxValidator {
         let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
 
-        self.epoch_store
+        epoch_store
             .signature_verifier
             .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
-            .tap_err(|e| warn!("batch verification error: {}", e))
-            .wrap_err("Malformed batch (failed to verify)")?;
+            .tap_err(|e| warn!("batch verification error: {}", e))?;
 
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
             self.checkpoint_service
-                .notify_checkpoint_signature(&self.epoch_store, &ckpt)?;
+                .notify_checkpoint_signature(&epoch_store, ckpt)?;
         }
 
         self.metrics
@@ -118,71 +123,94 @@ impl SuiTxValidator {
             .checkpoint_signatures_verified
             .inc_by(ckpt_count as u64);
         Ok(())
-
-        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
-        // all certificates had valid signatures, schedule them for execution prior to sequencing
-        // which is unnecessary for owned object transactions.
-        // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via consensus output.
-        // self.transaction_manager
-        //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
-        //     .wrap_err("Failed to schedule certificates for execution")
     }
-}
 
-fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
-    bcs::from_bytes::<ConsensusTransaction>(tx)
-        .wrap_err("Malformed transaction (failed to deserialize)")
-}
+    async fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
+        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+        if !epoch_store.protocol_config().mysticeti_fastpath() {
+            return vec![];
+        }
 
-impl TransactionValidator for SuiTxValidator {
-    type Error = eyre::Report;
+        let mut result = Vec::new();
+        for (i, tx) in txs.into_iter().enumerate() {
+            let ConsensusTransactionKind::UserTransaction(tx) = tx else {
+                continue;
+            };
 
-    fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
-        // We only accept transactions from local sui instance so no need to re-verify it
+            if let Err(e) = self.vote_transaction(&epoch_store, tx).await {
+                debug!("Failed to vote transaction: {:?}", e);
+                result.push(i as TransactionIndex);
+            }
+        }
+
+        result
+    }
+
+    async fn vote_transaction(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx: Box<Transaction>,
+    ) -> SuiResult<()> {
+        // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
+        // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
+        tx.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+
+        self.authority_state.check_system_overload(
+            &*self.consensus_overload_checker,
+            tx.data(),
+            self.authority_state.check_system_overload_at_signing(),
+        )?;
+
+        let tx = epoch_store.verify_transaction(*tx)?;
+
+        self.authority_state
+            .handle_transaction_v2(epoch_store, tx)
+            .await?;
+
         Ok(())
     }
-
-    fn validate_batch(
-        &self,
-        b: &narwhal_types::Batch,
-        protocol_config: &ProtocolConfig,
-    ) -> Result<(), Self::Error> {
-        let _scope = monitored_scope("ValidateBatch");
-
-        // TODO: Remove once we have removed BatchV1 from the codebase.
-        validate_batch_version(b, protocol_config)
-            .map_err(|err| eyre::eyre!(format!("Invalid Batch: {err}")))?;
-
-        let txs = b
-            .transactions()
-            .iter()
-            .map(|tx| tx_from_bytes(tx).map(|tx| tx.kind))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        self.validate_transactions(txs)
-    }
 }
 
+fn tx_kind_from_bytes(tx: &[u8]) -> Result<ConsensusTransactionKind, ValidationError> {
+    bcs::from_bytes::<ConsensusTransaction>(tx)
+        .map_err(|e| {
+            ValidationError::InvalidTransaction(format!(
+                "Failed to parse transaction bytes: {:?}",
+                e
+            ))
+        })
+        .map(|tx| tx.kind)
+}
+
+#[async_trait::async_trait]
 impl TransactionVerifier for SuiTxValidator {
-    fn verify_batch(
-        &self,
-        _protocol_config: &ProtocolConfig,
-        batch: &[&[u8]],
-    ) -> Result<(), ValidationError> {
+    fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError> {
         let _scope = monitored_scope("ValidateBatch");
 
-        let txs = batch
+        let txs: Vec<_> = batch
             .iter()
-            .map(|tx| {
-                tx_from_bytes(tx)
-                    .map(|tx| tx.kind)
-                    .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
-            })
+            .map(|tx| tx_kind_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.validate_transactions(txs)
+        self.validate_transactions(&txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
+    }
+
+    async fn verify_and_vote_batch(
+        &self,
+        batch: &[&[u8]],
+    ) -> Result<Vec<TransactionIndex>, ValidationError> {
+        let _scope = monitored_scope("VerifyAndVoteBatch");
+
+        let txs: Vec<_> = batch
+            .iter()
+            .map(|tx| tx_kind_from_bytes(tx))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.validate_transactions(&txs)
+            .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))?;
+
+        Ok(self.vote_transactions(txs).await)
     }
 }
 
@@ -214,9 +242,7 @@ impl SuiTxValidatorMetrics {
 mod tests {
     use std::sync::Arc;
 
-    use narwhal_test_utils::latest_protocol_version;
-    use narwhal_types::{Batch, BatchV1};
-    use narwhal_worker::TransactionValidator;
+    use consensus_core::TransactionVerifier as _;
     use sui_macros::sim_test;
     use sui_types::{
         crypto::Ed25519SuiSignature, messages_consensus::ConsensusTransaction, object::Object,
@@ -226,7 +252,10 @@ mod tests {
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
+        consensus_adapter::{
+            consensus_tests::{test_certificates, test_gas_objects},
+            NoopConsensusOverloadChecker,
+        },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
 
@@ -237,8 +266,6 @@ mod tests {
         let mut objects = test_gas_objects();
         let shared_object = Object::shared_for_testing();
         objects.push(shared_object.clone());
-
-        let latest_protocol_config = &latest_protocol_version();
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
@@ -260,12 +287,13 @@ mod tests {
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
-            state.epoch_store_for_testing().clone(),
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             metrics,
         );
-        let res = validator.validate(&first_transaction_bytes);
+        let res = validator.verify_batch(&[&first_transaction_bytes]);
         assert!(res.is_ok(), "{res:?}");
 
         let transaction_bytes: Vec<_> = certificates
@@ -276,8 +304,8 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(transaction_bytes, latest_protocol_config);
-        let res_batch = validator.validate_batch(&batch, latest_protocol_config);
+        let batch: Vec<_> = transaction_bytes.iter().map(|t| t.as_slice()).collect();
+        let res_batch = validator.verify_batch(&batch);
         assert!(res_batch.is_ok(), "{res_batch:?}");
 
         let bogus_transaction_bytes: Vec<_> = certificates
@@ -292,21 +320,11 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(bogus_transaction_bytes, latest_protocol_config);
-        let res_batch = validator.validate_batch(&batch, latest_protocol_config);
+        let batch: Vec<_> = bogus_transaction_bytes
+            .iter()
+            .map(|t| t.as_slice())
+            .collect();
+        let res_batch = validator.verify_batch(&batch);
         assert!(res_batch.is_err());
-
-        // TODO: Remove once we have removed BatchV1 from the codebase.
-        let batch_v1 = Batch::V1(BatchV1::new(vec![]));
-
-        // Case #1: Receive BatchV1 but network has upgraded past v11 so we fail because we expect BatchV2
-        let res_batch = validator.validate_batch(&batch_v1, latest_protocol_config);
-        assert!(res_batch.is_err());
-
-        let batch_v2 = Batch::new(vec![], latest_protocol_config);
-
-        // Case #2: Receive BatchV2 and network is upgraded past v11 so we are okay
-        let res_batch = validator.validate_batch(&batch_v2, latest_protocol_config);
-        assert!(res_batch.is_ok());
     }
 }

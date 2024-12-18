@@ -1,12 +1,12 @@
 // This is a test based on the example in the unit testing proposal
-module 0x1::TestonlyModule {
+module 0x6::TestonlyModule {
     #[test_only]
     public fun aborts() {
         abort 42
     }
 }
 
-module 0x1::Module {
+module 0x7::Module {
     fun a(a: u64): bool {
         a == 10
     }
@@ -21,7 +21,7 @@ module 0x1::Module {
 
     // A test-only module import
     #[test_only]
-    use 0x1::TestonlyModule;
+    use 0x6::TestonlyModule;
 
     // A test only struct. This will only be included in test mode.
     #[test_only, allow(unused_field)]
@@ -41,7 +41,7 @@ module 0x1::Module {
     }
 
     #[test]
-    #[expected_failure(abort_code=42, location=0x1::TestonlyModule)]
+    #[expected_failure(abort_code=42, location=0x6::TestonlyModule)]
     fun other_module_aborts() {
        TestonlyModule::aborts()
     }

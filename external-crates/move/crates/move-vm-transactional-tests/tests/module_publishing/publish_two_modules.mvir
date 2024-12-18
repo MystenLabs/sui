@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Coin {
+module 0x5.Coin {
     struct Coin { value: u64 }
     public value(c: &Self.Coin): u64 {
     label b0:
@@ -19,7 +19,7 @@ module 0x1.Coin {
 
 //# publish
 module 0x42.MoneyHolder {
-    import 0x1.Coin;
+    import 0x5.Coin;
 
     struct T { money: Coin.Coin }
 
@@ -48,7 +48,7 @@ module 0x42.MoneyHolder {
 }
 
 //# publish
-module 0x42.Bar {
+module 0x43.Bar {
         struct T has drop {baz: u64}
         public new(m: u64): Self.T {
         label b0:
@@ -63,10 +63,10 @@ module 0x42.Bar {
 }
 
 //# run
-module 0x42.m {
+module 0x44.m {
 import 0x42.MoneyHolder;
-import 0x42.Bar;
-import 0x1.Coin;
+import 0x43.Bar;
+import 0x5.Coin;
 
 entry foo() {
     let coin: Coin.Coin;

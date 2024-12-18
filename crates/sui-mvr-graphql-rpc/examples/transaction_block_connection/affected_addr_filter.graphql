@@ -1,0 +1,18 @@
+# Filter on affected address
+{
+  transactionBlocks(
+    filter: {
+      recvAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

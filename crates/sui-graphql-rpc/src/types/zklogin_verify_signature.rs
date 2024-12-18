@@ -54,10 +54,10 @@ pub(crate) async fn verify_zklogin_signature(
     intent_scope: ZkLoginIntentScope,
     author: SuiAddress,
 ) -> Result<ZkLoginVerifyResult, Error> {
-    let Watermark { checkpoint, .. } = *ctx.data_unchecked();
+    let Watermark { hi_cp, .. } = *ctx.data_unchecked();
 
     // get current epoch from db.
-    let Some(curr_epoch) = Epoch::query(ctx, None, checkpoint).await? else {
+    let Some(curr_epoch) = Epoch::query(ctx, None, hi_cp).await? else {
         return Err(Error::Internal(
             "Cannot get current epoch from db".to_string(),
         ));
@@ -78,20 +78,17 @@ pub(crate) async fn verify_zklogin_signature(
         ));
     };
 
-    // fetch on-chain JWKs from dynamic field of system object. Due to recent performance
-    // degradations, the existing `DynamicField::query` method is now consistently timing out. As a
-    // workaround, we are using the `query_latest_dynamic_field` method, which fetches object data
-    // from the live `objects` table. This can be reverted once the `objects_snapshot` lag issue is
-    // fixed and we've backfilled the `objects_version` table.
-    let df = DynamicField::query_latest_dynamic_field(
-        ctx.data_unchecked(),
+    // fetch on-chain JWKs from dynamic field of system object.
+    let df = DynamicField::query(
+        ctx,
         SUI_AUTHENTICATOR_STATE_ADDRESS.into(),
+        None,
         DynamicFieldName {
             type_: ExactTypeFilter(TypeTag::U64),
             bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
         },
         DynamicFieldType::DynamicField,
-        checkpoint,
+        hi_cp,
     )
     .await
     .map_err(|e| as_jwks_read_error(e.to_string()))?;

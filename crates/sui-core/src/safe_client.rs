@@ -4,9 +4,11 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use prometheus::{
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
+    HistogramVec, IntCounterVec, Registry,
+};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -66,12 +68,15 @@ impl SafeClientMetricsBase {
                 registry,
             )
             .unwrap(),
-            latency: HistogramVec::new_in_registry(
+            // Address label is removed to reduce high cardinality, can be added back if needed
+            latency: register_histogram_vec_with_registry!(
                 "safe_client_latency",
-                "RPC latency observed by safe client aggregator, group by address and method",
-                &["address", "method"],
+                "RPC latency observed by safe client aggregator, group by method",
+                &["method"],
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 }
@@ -109,16 +114,16 @@ impl SafeClientMetrics {
 
         let handle_transaction_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_transaction"]);
+            .with_label_values(&["handle_transaction"]);
         let handle_certificate_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_certificate"]);
+            .with_label_values(&["handle_certificate"]);
         let handle_obj_info_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+            .with_label_values(&["handle_object_info_request"]);
         let handle_tx_info_latency = metrics_base
             .latency
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+            .with_label_values(&["handle_transaction_info_request"]);
 
         Self {
             total_requests_handle_transaction_info_request,

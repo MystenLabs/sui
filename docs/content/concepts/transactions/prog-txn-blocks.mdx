@@ -320,7 +320,7 @@ Results: [
 
 Now the command, `MoveCall("some_package", "some_marketplace", "buy_two", [], [Input(1), NestedResult(0, 0)])`. Call the function `some_package::some_marketplace::buy_two` with the arguments `Input(1)` and `NestedResult(0, 0)`. To determine how they are used, you need to look at the function's signature. For this example, assume the signature is
 
-```rust
+```move
 entry fun buy_two(
     marketplace: &mut Marketplace,
     coin: Coin<Sui>,
@@ -372,7 +372,7 @@ Results: [
 
 Make another Move call, this one to `sui::tx_context::sender` with the signature
 
-```rust
+```move
 public fun sender(ctx: &TxContext): address
 ```
 

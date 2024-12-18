@@ -28,8 +28,9 @@ export class BalanceManagerContract {
 		});
 
 		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::share`,
+			target: '0x2::transfer::public_share_object',
 			arguments: [manager],
+			typeArguments: [`${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::BalanceManager`],
 		});
 	};
 
@@ -45,9 +46,10 @@ export class BalanceManagerContract {
 			tx.setSenderIfNotSet(this.#config.address);
 			const managerId = this.#config.getBalanceManager(managerKey).address;
 			const coin = this.#config.getCoin(coinKey);
+			const depositInput = Math.round(amountToDeposit * coin.scalar);
 			const deposit = coinWithBalance({
 				type: coin.type,
-				balance: amountToDeposit * coin.scalar,
+				balance: depositInput,
 			});
 
 			tx.moveCall({
@@ -70,9 +72,10 @@ export class BalanceManagerContract {
 		(tx: Transaction) => {
 			const managerId = this.#config.getBalanceManager(managerKey).address;
 			const coin = this.#config.getCoin(coinKey);
+			const withdrawInput = Math.round(amountToWithdraw * coin.scalar);
 			const coinObject = tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::withdraw`,
-				arguments: [tx.object(managerId), tx.pure.u64(amountToWithdraw * coin.scalar)],
+				arguments: [tx.object(managerId), tx.pure.u64(withdrawInput)],
 				typeArguments: [coin.type],
 			});
 

@@ -1,5 +1,228 @@
 # @mysten/create-dapp
 
+## 0.3.44
+
+### Patch Changes
+
+- Updated dependencies [20af12d]
+  - @mysten/sui@1.17.0
+  - @mysten/dapp-kit@0.14.43
+
+## 0.3.43
+
+### Patch Changes
+
+- Updated dependencies [100207f]
+  - @mysten/sui@1.16.2
+  - @mysten/dapp-kit@0.14.42
+
+## 0.3.42
+
+### Patch Changes
+
+- @mysten/sui@1.16.1
+- @mysten/dapp-kit@0.14.41
+
+## 0.3.41
+
+### Patch Changes
+
+- Updated dependencies [ec2dc7f]
+- Updated dependencies [ec2dc7f]
+  - @mysten/sui@1.16.0
+  - @mysten/dapp-kit@0.14.40
+
+## 0.3.40
+
+### Patch Changes
+
+- @mysten/sui@1.15.1
+- @mysten/dapp-kit@0.14.39
+
+## 0.3.39
+
+### Patch Changes
+
+- Updated dependencies [6460e45]
+  - @mysten/sui@1.15.0
+  - @mysten/dapp-kit@0.14.38
+
+## 0.3.38
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.37
+
+## 0.3.37
+
+### Patch Changes
+
+- Updated dependencies [67d4620]
+  - @mysten/dapp-kit@0.14.36
+
+## 0.3.36
+
+### Patch Changes
+
+- Updated dependencies [6f44f4b]
+  - @mysten/dapp-kit@0.14.35
+
+## 0.3.35
+
+### Patch Changes
+
+- Updated dependencies [938fb6e]
+- Updated dependencies [ec919a0]
+  - @mysten/sui@1.14.4
+  - @mysten/dapp-kit@0.14.34
+
+## 0.3.34
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.33
+
+## 0.3.33
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.32
+
+## 0.3.32
+
+### Patch Changes
+
+- Updated dependencies [d5a23d7]
+  - @mysten/sui@1.14.3
+  - @mysten/dapp-kit@0.14.31
+
+## 0.3.31
+
+### Patch Changes
+
+- Updated dependencies [e7bc63e]
+  - @mysten/sui@1.14.2
+  - @mysten/dapp-kit@0.14.30
+
+## 0.3.30
+
+### Patch Changes
+
+- 325955b: Fixes issue regarding refetching object data too soon after executing transactions
+
+## 0.3.29
+
+### Patch Changes
+
+- Updated dependencies [69ef100]
+  - @mysten/sui@1.14.1
+  - @mysten/dapp-kit@0.14.29
+
+## 0.3.28
+
+### Patch Changes
+
+- Updated dependencies [c24814b]
+  - @mysten/sui@1.14.0
+  - @mysten/dapp-kit@0.14.28
+
+## 0.3.27
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+  - @mysten/dapp-kit@0.14.27
+
+## 0.3.26
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.26
+
+## 0.3.25
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+  - @mysten/dapp-kit@0.14.25
+
+## 0.3.24
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+  - @mysten/dapp-kit@0.14.24
+
+## 0.3.23
+
+### Patch Changes
+
+- Updated dependencies [640b757]
+  - @mysten/dapp-kit@0.14.23
+
+## 0.3.22
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+  - @mysten/dapp-kit@0.14.22
+
+## 0.3.21
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.21
+
+## 0.3.20
+
+### Patch Changes
+
+- Updated dependencies [2c96b06]
+- Updated dependencies [1fd22cc]
+  - @mysten/sui@1.9.0
+  - @mysten/dapp-kit@0.14.20
+
+## 0.3.19
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.14.19
+
+## 0.3.18
+
+### Patch Changes
+
+- Updated dependencies [569511a]
+- Updated dependencies [012aefe]
+  - @mysten/sui@1.8.0
+  - @mysten/dapp-kit@0.14.18
+
+## 0.3.17
+
+### Patch Changes
+
+- Updated dependencies [143cd9d]
+- Updated dependencies [4357ac6]
+- Updated dependencies [4019dd7]
+- Updated dependencies [4019dd7]
+- Updated dependencies [00a974d]
+  - @mysten/sui@1.7.0
+  - @mysten/dapp-kit@0.14.17
+
+## 0.3.16
+
+### Patch Changes
+
+- Updated dependencies [a3e32fe]
+  - @mysten/sui@1.6.0
+  - @mysten/dapp-kit@0.14.16
+
 ## 0.3.15
 
 ### Patch Changes

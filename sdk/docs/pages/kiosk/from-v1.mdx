@@ -157,7 +157,7 @@ const purchaseItem = async (item, kioskId) => {
   // Initialize transaction.
   const tx = new Transaction();
 
-  // Both are required if you there is a `kiosk_lock_rule`.
+  // Both are required if there is a `kiosk_lock_rule`.
   // Optional otherwise. Function throws an error if there's a kiosk_lock_rule and these are missing.
   const extraParams = {
     ownedKiosk,
@@ -248,7 +248,7 @@ import {
 import { Transaction } from '@mysten/sui/transactions';
 
 // Attaches a royalty rule of 1% or 0.1 SUI (whichever is bigger)
-// as well as a kiosk lock, making the objects trade-able only from/to a kiosk.
+// as well as a kiosk lock, making the objects tradeable only from/to a kiosk.
 const attachStrongRoyalties = async () => {
 	const type = 'SomePackageId::type::MyType'; // the Type for which we're attaching rules.
 	const policyId = 'policyObjectId'; // the transfer Policy ID that was created for that Type.
@@ -258,7 +258,7 @@ const attachStrongRoyalties = async () => {
 	const percentage = 2.55; // 2.55%
 	const minAmount = 100_000_000; // 0.1 SUI.
 
-	// The environment on which we're referecing the rules package.
+	// The environment on which we're referencing the rules package.
 	// Use `mainnetEnvironment` for mainnet.
 	const environment = testnetEnvironment;
 

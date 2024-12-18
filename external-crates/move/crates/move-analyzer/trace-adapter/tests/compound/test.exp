@@ -1,0 +1,55 @@
+current frame stack:
+  function: test (m.move:53)
+    scope 0 :
+  function: foo (m.move:23)
+    scope 0 :
+      some_struct : (0x0::m::SomeStruct) {
+        simple_field : 0
+        enum_field : (0x0::m::SomeEnum::PositionalVariant) {
+          pos0 : 0
+          pos1 : 0
+        }
+        another_enum_field : (0x0::m::SomeEnum::PositionalVariant) {
+          pos0 : 0
+          pos1 : 0
+        }
+        vec_simple_field : [
+          0 : 0
+        ]
+        vec_struct_field : [
+          0 : (0x0::m::SimpleStruct) {
+            field : 0
+          }
+        ]
+      }
+      type: 0x0::m::SomeStruct
+
+      p : 42
+      type: u64
+
+current frame stack:
+  function: test (m.move:53)
+    scope 0 :
+  function: foo (m.move:37)
+    scope 0 :
+      some_struct : (0x0::m::SomeStruct) {
+        simple_field : 42
+        enum_field : (0x0::m::SomeEnum::PositionalVariant) {
+          pos0 : 42
+          pos1 : 42
+        }
+        another_enum_field : (0x0::m::SomeEnum::NamedVariant) {
+          field1 : 42
+          field2 : 42
+        }
+        vec_simple_field : [
+          0 : 42
+        ]
+        vec_struct_field : [
+          0 : (0x0::m::SimpleStruct) {
+            field : 42
+          }
+        ]
+      }
+      type: 0x0::m::SomeStruct
+

@@ -6,10 +6,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{
-    ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
-};
-use sui_graphql_rpc::server::builder::export_schema;
+use sui_graphql_rpc::config::{ServerConfig, ServiceConfig, Version};
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -19,8 +16,8 @@ bin_version::git_revision!();
 
 // VERSION mimics what other sui binaries use for the same const
 static VERSION: Version = Version {
-    year: env!("CARGO_PKG_VERSION_MAJOR"),
-    month: env!("CARGO_PKG_VERSION_MINOR"),
+    major: env!("CARGO_PKG_VERSION_MAJOR"),
+    minor: env!("CARGO_PKG_VERSION_MINOR"),
     patch: env!("CARGO_PKG_VERSION_PATCH"),
     sha: GIT_REVISION,
     full: const_str::concat!(
@@ -38,52 +35,25 @@ static VERSION: Version = Version {
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
-        Command::GenerateDocsExamples => {
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            // we are looking to put examples content in
-            // sui/docs/content/references/sui-graphql/examples.mdx
-            let filename = "docs/content/references/sui-graphql/examples.mdx";
-            buf.pop();
-            buf.pop();
-            buf.push(filename);
-            let content = sui_graphql_rpc::examples::generate_examples_for_docs()
-                .expect("Generating examples markdown file for docs failed");
-            std::fs::write(buf, content).expect("Writing examples markdown failed");
-            println!("Generated the docs example.mdx file and copied it to {filename}.");
-        }
-        Command::GenerateSchema { file } => {
-            let out = export_schema();
-            if let Some(file) = file {
-                println!("Write schema to file: {:?}", file);
-                std::fs::write(file, &out).unwrap();
+        Command::GenerateConfig { output } => {
+            let config = ServiceConfig::default();
+            let toml = toml::to_string_pretty(&config).expect("Failed to serialize configuration");
+
+            if let Some(path) = output {
+                fs::write(&path, toml).unwrap_or_else(|e| {
+                    panic!("Failed to write configuration to {}: {e}", path.display())
+                });
             } else {
-                println!("{}", &out);
+                println!("{}", toml);
             }
         }
-        Command::GenerateExamples { file } => {
-            let new_content: String = sui_graphql_rpc::examples::generate_markdown()
-                .expect("Generating examples markdown failed");
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            buf.push("docs");
-            buf.push("examples.md");
-            let file = file.unwrap_or(buf);
 
-            std::fs::write(file.clone(), new_content).expect("Writing examples markdown failed");
-            println!("Written examples to file: {:?}", file);
-        }
         Command::StartServer {
-            ide_title,
-            db_url,
-            db_pool_size,
-            port,
-            host,
+            ide,
+            connection,
             config,
-            node_rpc_url,
-            prom_host,
-            prom_port,
+            tx_exec_full_node,
         } => {
-            let connection =
-                ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
@@ -95,8 +65,8 @@ async fn main() {
             let server_config = ServerConfig {
                 connection,
                 service: service_config,
-                ide: Ide::new(ide_title),
-                tx_exec_full_node: TxExecFullNodeConfig::new(node_rpc_url),
+                ide,
+                tx_exec_full_node,
                 ..ServerConfig::default()
             };
 

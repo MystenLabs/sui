@@ -53,6 +53,33 @@ After you have the transaction defined, you can directly execute it with a signe
 client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
 ```
 
+## Observing the results of a transaction
+
+When you use `client.signAndExecuteTransaction` or `client.executeTransactionBlock`, the transaction
+will be finalized on the blockchain before the function resolves, but the effects of the transaction
+may not be immediately observable.
+
+There are 2 ways to observe the results of a transaction. Methods like
+`client.signAndExecuteTransaction` accept an `options` object with options like `showObjectChanges`
+and `showBalanceChanges` (see
+[the SuiClient docs for more details](/typescript/sui-client#arguments)). These options will cause
+the request to contain additional details about the effects of the transaction that can be
+immediately displayed to the user, or used for further processing in your application.
+
+The other way effects of transactions can be observed is by querying other RPC methods like
+`client.getBalances` that return objects or balances owned by a specific address. These RPC calls
+depend on the RPC node having indexed the effects of the transaction, which may not have happened
+immediately after a transaction has been executed. To ensure that effects of a transaction are
+represented in future RPC calls, you can use the `waitForTransaction` method on the client:
+
+```typescript
+const result = await client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
+await client.waitForTransaction({ digest: result.digest });
+```
+
+Once `waitForTransaction` resolves, any future RPC calls will be guaranteed to reflect the effects
+of the transaction.
+
 ## Transactions
 
 Programmable Transactions have two key concepts: inputs and transactions.
@@ -113,7 +140,7 @@ tx.transferObjects([coin], tx.pure.address('0xSomeSuiAddress'));
 tx.transferObjects([coin], tx.pure(bcs.Address.serialize('0xSomeSuiAddress')));
 ```
 
-To pass `vector` or `option` types, you you can pass use the corresponding methods on `tx.pure`, use
+To pass `vector` or `option` types, you can pass use the corresponding methods on `tx.pure`, use
 tx.pure as a function with a type argument, or serialize the value before passing it to tx.pure
 using the bcs sdk:
 
@@ -163,7 +190,7 @@ tx.moveCall({
 	arguments: [tx.object('0xSomeObject')],
 });
 
-// tx.object automaically converts the object ID to receiving transaction arguments if the moveCall expects it
+// tx.object automatically converts the object ID to receiving transaction arguments if the moveCall expects it
 tx.moveCall({
 	target: '0xSomeAddress::example::receive_object',
 	// 0xSomeAddress::example::receive_object expects a receiving argument and has a Move definition that looks like this:
@@ -188,6 +215,24 @@ tx.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
 
 // for receiving objects
 tx.object(Inputs.ReceivingRef({ digest, objectId, version }));
+```
+
+##### Object helpers
+
+There are a handful of specific object types that can be referenced through helper methods on
+tx.object:
+
+```ts
+tx.object.system(),
+tx.object.clock(),
+tx.object.random(),
+tx.object.denyList(),
+
+tx.object.option({
+	type: '0x123::example::Thing',
+	// value can be an Object ID, or any other object reference, or null for `none`
+	value: '0x456',
+}),
 ```
 
 #### Transaction results

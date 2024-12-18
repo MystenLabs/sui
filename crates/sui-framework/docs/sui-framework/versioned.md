@@ -16,8 +16,7 @@ title: Module `0x2::versioned`
 -  [Function `destroy`](#0x2_versioned_destroy)
 
 
-<pre><code><b>use</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
+<pre><code><b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
@@ -241,7 +240,7 @@ and must be used when we upgrade.
         <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a> {
             versioned_id: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(self),
             old_version: self.version,
-        }
+        },
     )
 }
 </code></pre>
@@ -267,7 +266,12 @@ by calling remove_value_for_upgrade.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>, new_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, new_value: T, cap: <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(
+    self: &<b>mut</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>,
+    new_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    new_value: T,
+    cap: <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a>,
+) {
     <b>let</b> <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a> { versioned_id, old_version } = cap;
     <b>assert</b>!(versioned_id == <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(self), <a href="../sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
     <b>assert</b>!(old_version &lt; new_version, <a href="../sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);

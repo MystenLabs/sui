@@ -15,17 +15,17 @@ error[E03013]: positional call mismatch
 7 │         let Foo { y: _ } = Foo(0);
   │             ^^^^^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 
-error[E04016]: too few arguments
-  ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
-  │
-7 │         let Foo { y: _ } = Foo(0);
-  │             ^^^^^^^^^^^^ Missing binding for field '0' in '0x42::M::Foo'
-
 error[E03010]: unbound field
   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
   │
 7 │         let Foo { y: _ } = Foo(0);
   │             ^^^^^^^^^^^^ Unbound field 'y' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
+  │
+7 │         let Foo { y: _ } = Foo(0);
+  │             ^^^^^^^^^^^^ Missing binding for field '0' in '0x42::M::Foo'
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:12:13
@@ -44,15 +44,15 @@ error[E03013]: positional call mismatch
 14 │         Foo { y: _ } = Foo(0);
    │         ^^^^^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 
-error[E04016]: too few arguments
-   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
-   │
-14 │         Foo { y: _ } = Foo(0);
-   │         ^^^^^^^^^^^^ Missing assignment for field '0' in '0x42::M::Foo'
-
 error[E03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
    │
 14 │         Foo { y: _ } = Foo(0);
    │         ^^^^^^^^^^^^ Unbound field 'y' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
+   │
+14 │         Foo { y: _ } = Foo(0);
+   │         ^^^^^^^^^^^^ Missing assignment for field '0' in '0x42::M::Foo'
 

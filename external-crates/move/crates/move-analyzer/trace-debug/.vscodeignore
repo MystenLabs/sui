@@ -1,0 +1,12 @@
+# Rather than listing out what files are *not* included in the extension,
+# list out the small subset of files that *are* included.
+# For more information on `.vscodeignore` files, see:
+# https://code.visualstudio.com/api/working-with-extensions/publishing-extension#.vscodeignore
+**/*
+!node_modules/**/*
+!out/**
+!package-lock.json
+!package.json
+!LICENSE
+!README.md
+!images/move.png

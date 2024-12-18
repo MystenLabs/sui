@@ -205,6 +205,7 @@ impl<'a> ImmForwardCFG<'a> {
     /// Returns
     /// - A CFG
     /// - A set of infinite loop heads
+    ///
     /// This _must_ be called after `BlockMutCFG::new`, as the mutable version optimizes the code
     /// This will be done for external usage,
     /// since the Mut CFG is used during the building of the cfgir::ast::Program
@@ -357,7 +358,7 @@ fn maybe_unmark_infinite_loop_starts(
         {
             infinite_loop_starts.remove(&cur_loop_start);
         }
-        C::Return { .. } | C::Abort(_) => {
+        C::Return { .. } | C::Abort(_, _) => {
             infinite_loop_starts.remove(&cur_loop_start);
         }
 
@@ -696,7 +697,7 @@ impl<'a, T: Deref<Target = BasicBlocks>> AstDebug for ReverseCFG<'a, T> {
             loop_heads,
         } = self;
         w.writeln("--ReverseBlockCFG--");
-        w.writeln(&format!("terminal: {}", terminal));
+        w.writeln(format!("terminal: {}", terminal));
         ast_debug_cfg(
             w,
             traversal_order[0],
@@ -721,8 +722,8 @@ fn ast_debug_cfg<'a>(
     w.write("successor_map:");
     w.indent(4, |w| {
         for (lbl, nexts) in successor_map {
-            w.write(&format!("{} => [", lbl));
-            w.comma(nexts, |w, next| w.write(&format!("{}", next)));
+            w.write(format!("{} => [", lbl));
+            w.comma(nexts, |w, next| w.write(format!("{}", next)));
             w.writeln("]")
         }
     });
@@ -730,8 +731,8 @@ fn ast_debug_cfg<'a>(
     w.write("predecessor_map:");
     w.indent(4, |w| {
         for (lbl, nexts) in predecessor_map {
-            w.write(&format!("{} <= [", lbl));
-            w.comma(nexts, |w, next| w.write(&format!("{}", next)));
+            w.write(format!("{} <= [", lbl));
+            w.comma(nexts, |w, next| w.write(format!("{}", next)));
             w.writeln("]")
         }
     });
@@ -739,7 +740,7 @@ fn ast_debug_cfg<'a>(
     w.write("traversal:");
     w.indent(4, |w| {
         for (cur, next) in traversal {
-            w.writeln(&format!("{} => {}", cur, next))
+            w.writeln(format!("{} => {}", cur, next))
         }
     });
 
@@ -747,7 +748,7 @@ fn ast_debug_cfg<'a>(
     w.indent(4, |w| {
         for (loop_head, back_edge_predecessors) in loop_heads {
             for pred in back_edge_predecessors {
-                w.writeln(&format!(
+                w.writeln(format!(
                     "loop head: {}. back edge predecessor: {}",
                     loop_head, pred
                 ))
@@ -755,7 +756,7 @@ fn ast_debug_cfg<'a>(
         }
     });
 
-    w.writeln(&format!("start: {}", start));
+    w.writeln(format!("start: {}", start));
     w.writeln("blocks:");
     w.indent(4, |w| blocks.ast_debug(w));
 }

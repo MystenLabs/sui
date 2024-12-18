@@ -280,4 +280,19 @@ module bridge::treasury {
     public fun treasuries(treasury: &BridgeTreasury): &ObjectBag {
         &treasury.treasuries
     }
+
+    #[test_only]
+    public fun unwrap_update_event(event: UpdateTokenPriceEvent): (u8, u64) {
+        (event.token_id, event.new_price)
+    }
+
+    #[test_only]
+    public fun unwrap_new_token_event(event: NewTokenEvent): (u8, TypeName, bool, u64, u64) {
+        (event.token_id, event.type_name, event.native_token, event.decimal_multiplier, event.notional_value)
+    }
+
+    #[test_only]
+    public fun unwrap_registration_event(event: TokenRegistrationEvent): (TypeName, u8, bool) {
+        (event.type_name, event.decimal, event.native_token)
+    }
 }

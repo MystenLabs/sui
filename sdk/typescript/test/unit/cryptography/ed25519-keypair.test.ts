@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58 } from '@mysten/bcs';
+import { fromBase64, toBase58 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, expect, it } from 'vitest';
 
@@ -40,7 +40,7 @@ describe('ed25519-keypair', () => {
 	});
 
 	it('create keypair from secret key', () => {
-		const secretKey = fromB64(VALID_SECRET_KEY);
+		const secretKey = fromBase64(VALID_SECRET_KEY);
 		const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 		expect(keypair.getPublicKey().toBase64()).toEqual(
 			'Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI=',
@@ -125,7 +125,7 @@ describe('ed25519-keypair', () => {
 			{
 				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 				version: String((Math.random() * 10000).toFixed(0)),
-				digest: toB58(
+				digest: toBase58(
 					new Uint8Array([
 						0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8,
 						9, 1, 2,

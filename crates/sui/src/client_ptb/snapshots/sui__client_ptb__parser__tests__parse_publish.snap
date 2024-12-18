@@ -32,6 +32,7 @@ expression: parsed
             gas_object_id: None,
             json_set: false,
             dry_run_set: false,
+            dev_inspect_set: false,
             gas_budget: Some(
                 Spanned {
                     span: Span {
@@ -72,6 +73,7 @@ expression: parsed
             gas_object_id: None,
             json_set: false,
             dry_run_set: false,
+            dev_inspect_set: false,
             gas_budget: Some(
                 Spanned {
                     span: Span {

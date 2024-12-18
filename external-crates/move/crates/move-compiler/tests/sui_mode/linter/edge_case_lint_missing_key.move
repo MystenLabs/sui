@@ -1,9 +1,12 @@
 module a::edge_cases {
-    use sui::another::UID as AnotherUID;
-
+    struct UID {}
     // Test case with a different UID type
     struct DifferentUID {
-        id: AnotherUID,
+        id: sui::another::UID,
+    }
+
+    struct NotAnObject {
+        id: UID,
     }
 
 }

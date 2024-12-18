@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::e2e_tests::basic::initiate_bridge_eth_to_sui;
-use crate::e2e_tests::basic::initiate_bridge_sui_to_eth;
-use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
+
+use crate::e2e_tests::test_utils::{
+    initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth, BridgeTestClusterBuilder,
+};
 use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{BridgeAction, EmergencyAction};
 use crate::types::{BridgeActionStatus, EmergencyActionType};
@@ -54,7 +55,7 @@ async fn test_sui_bridge_paused() {
     assert!(!bridge_client.get_bridge_summary().await.unwrap().is_frozen);
 
     // try bridge from eth and verify it works on sui
-    initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 10 * 100_000_000, TOKEN_ID_ETH, 0)
+    initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 0)
         .await
         .unwrap();
     // verify Eth was transferred to Sui address
@@ -70,7 +71,7 @@ async fn test_sui_bridge_paused() {
 
     // get pause bridge signatures from committee
     let bridge_committee = Arc::new(bridge_client.get_bridge_committee().await.unwrap());
-    let agg = BridgeAuthorityAggregator::new(bridge_committee);
+    let agg = BridgeAuthorityAggregator::new_for_testing(bridge_committee);
     let certified_action = agg
         .request_committee_signatures(pause_action)
         .await
@@ -107,9 +108,7 @@ async fn test_sui_bridge_paused() {
     assert!(bridge_client.get_bridge_summary().await.unwrap().is_frozen);
 
     // Transfer from eth to sui should fail on Sui
-    let eth_to_sui_bridge_action =
-        initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 10 * 100_000_000, TOKEN_ID_ETH, 1)
-            .await;
+    let eth_to_sui_bridge_action = initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 1).await;
     assert!(eth_to_sui_bridge_action.is_err());
     // message should not be recorded on Sui when the bridge is paused
     let res = bridge_test_cluster

@@ -27,9 +27,10 @@ export class FlashLoanContract {
 		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const inputQuantity = Math.round(borrowAmount * baseCoin.scalar);
 		const [baseCoinResult, flashLoan] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_base`,
-			arguments: [tx.object(pool.address), tx.pure.u64(borrowAmount * baseCoin.scalar)],
+			arguments: [tx.object(pool.address), tx.pure.u64(inputQuantity)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 		return [baseCoinResult, flashLoan] as const;
@@ -57,7 +58,7 @@ export class FlashLoanContract {
 			const borrowScalar = baseCoin.scalar;
 
 			const [baseCoinReturn] = tx.splitCoins(baseCoinInput, [
-				tx.pure.u64(borrowAmount * borrowScalar),
+				tx.pure.u64(Math.round(borrowAmount * borrowScalar)),
 			]);
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
@@ -78,9 +79,10 @@ export class FlashLoanContract {
 		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const inputQuantity = Math.round(borrowAmount * quoteCoin.scalar);
 		const [quoteCoinResult, flashLoan] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_quote`,
-			arguments: [tx.object(pool.address), tx.pure.u64(borrowAmount * quoteCoin.scalar)],
+			arguments: [tx.object(pool.address), tx.pure.u64(inputQuantity)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 		return [quoteCoinResult, flashLoan] as const;
@@ -108,7 +110,7 @@ export class FlashLoanContract {
 			const borrowScalar = quoteCoin.scalar;
 
 			const [quoteCoinReturn] = tx.splitCoins(quoteCoinInput, [
-				tx.pure.u64(borrowAmount * borrowScalar),
+				tx.pure.u64(Math.round(borrowAmount * borrowScalar)),
 			]);
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_quote`,

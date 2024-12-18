@@ -45,7 +45,7 @@ task 5, lines 43-48:
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
-    location: 0x6::m,
+    location: 0xb::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }

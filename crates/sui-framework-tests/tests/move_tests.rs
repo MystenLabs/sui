@@ -53,6 +53,7 @@ pub(crate) fn tests(path: &Path) -> datatest_stable::Result<()> {
     config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
 
     let move_config = config.config.clone();
+    // TODO: Remove this when we support per-test gas limits.
     let mut testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
     testing_config.filter = std::env::var("FILTER").ok().map(|s| s.to_string());
 

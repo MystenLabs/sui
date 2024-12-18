@@ -4,6 +4,7 @@
 mod health;
 pub mod logging;
 pub mod metrics;
+pub mod server_timing;
 mod service;
 
 pub use service::get_mysten_service;

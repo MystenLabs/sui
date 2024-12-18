@@ -37,38 +37,7 @@ jobs:
         uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
           command: build
-          args: --all-targets --all-features --release --profile=release
-
-  # This job seems to be consistently producing false-positives, lets disable for now
-  # cargo-udeps:
-  #   runs-on: [ubuntu-ghcloud]
-  #   steps:
-  #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-  #     # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-  #     # 'librocksdb-sys' src directory which is managed by cargo
-  #     - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-  #       with:
-  #         path: ~/.cargo/registry/src/**/librocksdb-sys-*
-  #     - name: Install cargo-udeps, and cache the binary
-  #       uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
-  #       with:
-  #         crate: cargo-udeps
-  #         locked: true
-  #     - name: Install cargo-hakari, and cache the binary
-  #       uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
-  #       with:
-  #         crate: cargo-hakari
-  #         locked: true
-  #     # Normally running cargo-udeps requires use of a nightly compiler
-  #     # In order to have a more stable and less noisy experience, lets instead
-  #     # opt to use the stable toolchain specified via the 'rust-toolchain' file
-  #     # and instead enable nightly features via 'RUSTC_BOOTSTRAP'
-  #     - name: run cargo-udeps
-  #       run: |
-  #         # First we need to disable the workspace-hack package
-  #         cargo hakari disable
-  #         cargo hakari remove-deps -y
-  #         RUSTC_BOOTSTRAP=1 cargo udeps
+          args: --all-targets --all-features --release
 
   report-status:
     name: Report Status
@@ -79,32 +48,12 @@ jobs:
       - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
       - name: Post to slack
-        uses: slackapi/slack-github-action@v1.24.0
+        uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # pin@v1.27.0
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
         with:
           channel-id: 'build-failures-sui'
-          payload: |
-            {
-              "text": "Workflow *${{ github.workflow }}* failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Workflow *${{ github.workflow }}* failed"
-                  }
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          slack-message: |
+            :sui::error-cross: Workflow *${{ github.workflow }}* has failed.
+            Logs are here: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.run_id }}>

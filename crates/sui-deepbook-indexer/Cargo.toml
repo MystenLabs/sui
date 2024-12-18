@@ -1,0 +1,43 @@
+[package]
+name = "sui-deepbook-indexer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+serde.workspace = true
+tap.workspace = true
+diesel = { workspace = true, features = ["serde_json"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres"] }
+tokio = { workspace = true, features = ["full"] }
+anyhow.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+bin-version.workspace = true
+clap.workspace = true
+mysten-metrics.workspace = true
+prometheus.workspace = true
+serde_yaml.workspace = true
+sui-sdk.workspace = true
+sui-json-rpc-types.workspace = true
+sui-data-ingestion-core.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+tracing.workspace = true
+backoff.workspace = true
+sui-config.workspace = true
+sui-indexer-builder.workspace = true
+tempfile.workspace = true
+axum.workspace = true
+bigdecimal = { version = "0.4.5" }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+
+[dev-dependencies]
+hex-literal = "0.3.4"
+
+[[bin]]
+name = "deepbook-indexer"
+path = "src/main.rs"

@@ -132,7 +132,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     fn type_display_context(&self) -> TypeDisplayContext<'_> {
         TypeDisplayContext::WithoutEnv {
             symbol_pool: self.symbol_pool(),
-            reverse_struct_table: &self.parent.parent.reverse_datatype_table,
+            reverse_datatype_table: &self.parent.parent.reverse_datatype_table,
         }
     }
 

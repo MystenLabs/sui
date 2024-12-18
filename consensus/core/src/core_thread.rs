@@ -1,13 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 use async_trait::async_trait;
 use mysten_metrics::{
     monitored_mpsc::{channel, Receiver, Sender, WeakSender},
     monitored_scope, spawn_logged_monitored_task,
 };
+use parking_lot::RwLock;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
@@ -17,7 +25,10 @@ use crate::{
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
+    dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    round_prober::QuorumRound,
+    BlockAPI as _,
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
@@ -53,9 +64,22 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     /// Informs the core whether consumer of produced blocks exists.
     /// This is only used by core to decide if it should propose new blocks.
     /// It is not a guarantee that produced blocks will be accepted by peers.
-    fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError>;
+    fn set_subscriber_exists(&self, exists: bool) -> Result<(), CoreError>;
+
+    /// Sets the estimated delay to propagate a block to a quorum of peers, in
+    /// number of rounds, and the received & accepted quorum rounds for all
+    /// authorities.
+    fn set_propagation_delay_and_quorum_rounds(
+        &self,
+        delay: Round,
+        received_quorum_rounds: Vec<QuorumRound>,
+        accepted_quorum_rounds: Vec<QuorumRound>,
+    ) -> Result<(), CoreError>;
 
     fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
+
+    /// Returns the highest round received for each authority by Core.
+    fn highest_received_rounds(&self) -> Vec<Round>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -74,7 +98,8 @@ impl CoreThreadHandle {
 struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
-    rx_consumer_availability: watch::Receiver<bool>,
+    rx_subscriber_exists: watch::Receiver<bool>,
+    rx_propagation_delay_and_quorum_rounds: watch::Receiver<PropagationDelayAndQuorumRounds>,
     rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
 }
@@ -93,8 +118,8 @@ impl CoreThread {
                     match command {
                         CoreThreadCommand::AddBlocks(blocks, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::add_blocks");
-                            let missing_blocks = self.core.add_blocks(blocks)?;
-                            sender.send(missing_blocks).ok();
+                            let missing_block_refs = self.core.add_blocks(blocks)?;
+                            sender.send(missing_block_refs).ok();
                         }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
                             let _scope = monitored_scope("CoreThread::loop::new_block");
@@ -113,12 +138,28 @@ impl CoreThread {
                     self.core.set_last_known_proposed_round(round);
                     self.core.new_block(round + 1, true)?;
                 }
-                _ = self.rx_consumer_availability.changed() => {
-                    let _scope = monitored_scope("CoreThread::loop::set_consumer_availability");
-                    let available = *self.rx_consumer_availability.borrow();
-                    self.core.set_consumer_availability(available);
-                    if available {
-                        // If a consumer becomes available, try to produce a new block to ensure liveness,
+                _ = self.rx_subscriber_exists.changed() => {
+                    let _scope = monitored_scope("CoreThread::loop::set_subscriber_exists");
+                    let should_propose_before = self.core.should_propose();
+                    let exists = *self.rx_subscriber_exists.borrow();
+                    self.core.set_subscriber_exists(exists);
+                    if !should_propose_before && self.core.should_propose() {
+                        // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
+                        // because block proposal could have been skipped.
+                        self.core.new_block(Round::MAX, true)?;
+                    }
+                }
+                _ = self.rx_propagation_delay_and_quorum_rounds.changed() => {
+                    let _scope = monitored_scope("CoreThread::loop::set_propagation_delay_and_quorum_rounds");
+                    let should_propose_before = self.core.should_propose();
+                    let state = self.rx_propagation_delay_and_quorum_rounds.borrow().clone();
+                    self.core.set_propagation_delay_and_quorum_rounds(
+                        state.delay,
+                        state.received_quorum_rounds,
+                        state.accepted_quorum_rounds
+                    );
+                    if !should_propose_before && self.core.should_propose() {
+                        // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
                         self.core.new_block(Round::MAX, true)?;
                     }
@@ -134,22 +175,50 @@ impl CoreThread {
 pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
-    tx_consumer_availability: Arc<watch::Sender<bool>>,
+    tx_subscriber_exists: Arc<watch::Sender<bool>>,
+    tx_propagation_delay_and_quorum_rounds: Arc<watch::Sender<PropagationDelayAndQuorumRounds>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
+    highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
 
 impl ChannelCoreThreadDispatcher {
-    pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
+    pub(crate) fn start(
+        context: Arc<Context>,
+        dag_state: &RwLock<DagState>,
+        core: Core,
+    ) -> (Self, CoreThreadHandle) {
+        // Initialize highest received rounds.
+        let highest_received_rounds = {
+            let dag_state = dag_state.read();
+            let highest_received_rounds = context
+                .committee
+                .authorities()
+                .map(|(index, _)| {
+                    AtomicU32::new(dag_state.get_last_block_for_authority(index).round())
+                })
+                .collect();
+
+            highest_received_rounds
+        };
+
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
-        let (tx_consumer_availability, mut rx_consumer_availability) = watch::channel(false);
+        let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
+        let (tx_propagation_delay_and_quorum_rounds, mut rx_propagation_delay_and_quorum_rounds) =
+            watch::channel(PropagationDelayAndQuorumRounds {
+                delay: 0,
+                received_quorum_rounds: vec![(0, 0); context.committee.size()],
+                accepted_quorum_rounds: vec![(0, 0); context.committee.size()],
+            });
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
-        rx_consumer_availability.mark_unchanged();
+        rx_subscriber_exists.mark_unchanged();
+        rx_propagation_delay_and_quorum_rounds.mark_unchanged();
         rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
             core,
             receiver,
-            rx_consumer_availability,
+            rx_subscriber_exists,
+            rx_propagation_delay_and_quorum_rounds,
             rx_last_known_proposed_round,
             context: context.clone(),
         };
@@ -170,8 +239,12 @@ impl ChannelCoreThreadDispatcher {
         let dispatcher = ChannelCoreThreadDispatcher {
             context,
             sender: sender.downgrade(),
-            tx_consumer_availability: Arc::new(tx_consumer_availability),
+            tx_subscriber_exists: Arc::new(tx_subscriber_exists),
+            tx_propagation_delay_and_quorum_rounds: Arc::new(
+                tx_propagation_delay_and_quorum_rounds,
+            ),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
+            highest_received_rounds: Arc::new(highest_received_rounds),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -199,10 +272,15 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         &self,
         blocks: Vec<VerifiedBlock>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        for block in &blocks {
+            self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
+        }
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
+        self.send(CoreThreadCommand::AddBlocks(blocks.clone(), sender))
             .await;
-        receiver.await.map_err(|e| Shutdown(e.to_string()))
+        let missing_block_refs = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
+
+        Ok(missing_block_refs)
     }
 
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
@@ -218,9 +296,24 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         receiver.await.map_err(|e| Shutdown(e.to_string()))
     }
 
-    fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError> {
-        self.tx_consumer_availability
-            .send(available)
+    fn set_subscriber_exists(&self, exists: bool) -> Result<(), CoreError> {
+        self.tx_subscriber_exists
+            .send(exists)
+            .map_err(|e| Shutdown(e.to_string()))
+    }
+
+    fn set_propagation_delay_and_quorum_rounds(
+        &self,
+        delay: Round,
+        received_quorum_rounds: Vec<QuorumRound>,
+        accepted_quorum_rounds: Vec<QuorumRound>,
+    ) -> Result<(), CoreError> {
+        self.tx_propagation_delay_and_quorum_rounds
+            .send(PropagationDelayAndQuorumRounds {
+                delay,
+                received_quorum_rounds,
+                accepted_quorum_rounds,
+            })
             .map_err(|e| Shutdown(e.to_string()))
     }
 
@@ -229,11 +322,101 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             .send(round)
             .map_err(|e| Shutdown(e.to_string()))
     }
+
+    fn highest_received_rounds(&self) -> Vec<Round> {
+        self.highest_received_rounds
+            .iter()
+            .map(|round| round.load(Ordering::Relaxed))
+            .collect()
+    }
+}
+
+#[derive(Clone)]
+struct PropagationDelayAndQuorumRounds {
+    delay: Round,
+    received_quorum_rounds: Vec<QuorumRound>,
+    accepted_quorum_rounds: Vec<QuorumRound>,
+}
+
+// TODO: complete the Mock for thread dispatcher to be used from several tests
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct MockCoreThreadDispatcher {
+    add_blocks: parking_lot::Mutex<Vec<VerifiedBlock>>,
+    missing_blocks: parking_lot::Mutex<BTreeSet<BlockRef>>,
+    last_known_proposed_round: parking_lot::Mutex<Vec<Round>>,
+}
+
+#[cfg(test)]
+impl MockCoreThreadDispatcher {
+    #[cfg(test)]
+    pub(crate) async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
+        let mut add_blocks = self.add_blocks.lock();
+        add_blocks.drain(0..).collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
+        let mut missing_blocks = self.missing_blocks.lock();
+        missing_blocks.extend(block_refs);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn get_last_own_proposed_round(&self) -> Vec<Round> {
+        let last_known_proposed_round = self.last_known_proposed_round.lock();
+        last_known_proposed_round.clone()
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl CoreThreadDispatcher for MockCoreThreadDispatcher {
+    async fn add_blocks(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let mut add_blocks = self.add_blocks.lock();
+        add_blocks.extend(blocks);
+        Ok(BTreeSet::new())
+    }
+
+    async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let mut missing_blocks = self.missing_blocks.lock();
+        let result = missing_blocks.clone();
+        missing_blocks.clear();
+        Ok(result)
+    }
+
+    fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
+        todo!()
+    }
+
+    fn set_propagation_delay_and_quorum_rounds(
+        &self,
+        _delay: Round,
+        _received_quorum_rounds: Vec<QuorumRound>,
+        _accepted_quorum_rounds: Vec<QuorumRound>,
+    ) -> Result<(), CoreError> {
+        todo!()
+    }
+
+    fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
+        let mut last_known_proposed_round = self.last_known_proposed_round.lock();
+        last_known_proposed_round.push(round);
+        Ok(())
+    }
+
+    fn highest_received_rounds(&self) -> Vec<Round> {
+        todo!()
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use parking_lot::RwLock;
 
     use super::*;
@@ -263,17 +446,17 @@ mod test {
             Arc::new(NoopBlockVerifier),
         );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
         ));
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            commit_consumer,
             dag_state.clone(),
             store,
             leader_schedule.clone(),
@@ -291,10 +474,12 @@ mod test {
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
-            dag_state,
+            dag_state.clone(),
+            false,
         );
 
-        let (core_dispatcher, handle) = ChannelCoreThreadDispatcher::start(core, context);
+        let (core_dispatcher, handle) =
+            ChannelCoreThreadDispatcher::start(context, &dag_state, core);
 
         // Now create some clones of the dispatcher
         let dispatcher_1 = core_dispatcher.clone();

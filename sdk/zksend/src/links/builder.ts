@@ -8,10 +8,10 @@ import type { Keypair, Signer } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { TransactionObjectArgument, TransactionObjectInput } from '@mysten/sui/transactions';
 import { Transaction } from '@mysten/sui/transactions';
-import { normalizeStructTag, normalizeSuiAddress, SUI_TYPE_ARG, toB64 } from '@mysten/sui/utils';
+import { normalizeStructTag, normalizeSuiAddress, SUI_TYPE_ARG, toBase64 } from '@mysten/sui/utils';
 
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
+import { getContractIds, ZkBag } from './zk-bag.js';
 
 interface ZkSendLinkRedirect {
 	url: string;
@@ -30,7 +30,7 @@ export interface ZkSendLinkBuilderOptions {
 }
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
-	host: 'https://zksend.com',
+	host: 'https://getstashed.com',
 	path: '/claim',
 	network: 'mainnet' as const,
 };
@@ -54,6 +54,7 @@ export class ZkSendLinkBuilder {
 	}[] = [];
 	balances = new Map<string, bigint>();
 	sender: string;
+	network: 'mainnet' | 'testnet';
 	#host: string;
 	#path: string;
 	keypair: Keypair;
@@ -70,7 +71,7 @@ export class ZkSendLinkBuilder {
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		sender,
 		redirect,
-		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : undefined,
+		contract = getContractIds(network),
 	}: ZkSendLinkBuilderOptions) {
 		this.#host = host;
 		this.#path = path;
@@ -78,6 +79,7 @@ export class ZkSendLinkBuilder {
 		this.keypair = keypair;
 		this.#client = client;
 		this.sender = normalizeSuiAddress(sender);
+		this.network = network;
 
 		if (contract) {
 			this.#contract = new ZkBag(contract.packageId, contract);
@@ -104,9 +106,13 @@ export class ZkSendLinkBuilder {
 	getLink(): string {
 		const link = new URL(this.#host);
 		link.pathname = this.#path;
-		link.hash = `${this.#contract ? '$' : ''}${toB64(
+		link.hash = `${this.#contract ? '$' : ''}${toBase64(
 			decodeSuiPrivateKey(this.keypair.getSecretKey()).secretKey,
 		)}`;
+
+		if (this.network !== 'mainnet') {
+			link.searchParams.set('network', this.network);
+		}
 
 		if (this.#redirect) {
 			link.searchParams.set('redirect_url', this.#redirect.url);
@@ -130,7 +136,14 @@ export class ZkSendLinkBuilder {
 		const result = await this.#client.signAndExecuteTransaction({
 			transaction: await tx.build({ client: this.#client }),
 			signer,
+			options: {
+				showEffects: true,
+			},
 		});
+
+		if (result.effects?.status.status !== 'success') {
+			throw new Error(`Transaction failed: ${result.effects?.status.error ?? 'Unknown error'}`);
+		}
 
 		if (options.waitForTransaction) {
 			await this.#client.waitForTransaction({ digest: result.digest });
@@ -150,6 +163,7 @@ export class ZkSendLinkBuilder {
 
 		return ZkSendLinkBuilder.createLinks({
 			transaction,
+			network: this.network,
 			client: this.#client,
 			contract: this.#contract.ids,
 			links: [this],
@@ -306,7 +320,7 @@ export class ZkSendLinkBuilder {
 		network = 'mainnet',
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		transaction = new Transaction(),
-		contract: contractIds = MAINNET_CONTRACT_IDS,
+		contract: contractIds = getContractIds(network),
 	}: {
 		transaction?: Transaction;
 		client?: SuiClient;

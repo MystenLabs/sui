@@ -74,7 +74,7 @@ pub trait ExpGenerator<'env> {
     fn get_memory_of_node(&self, node_id: NodeId) -> QualifiedInstId<DatatypeId> {
         // We do have a call `f<R<..>>` so extract the type from the function instantiation.
         let rty = &self.global_env().get_node_instantiation(node_id)[0];
-        let (mid, sid, inst) = rty.require_struct();
+        let (mid, sid, inst) = rty.require_datatype();
         mid.qualified_inst(sid, inst.to_owned())
     }
 }

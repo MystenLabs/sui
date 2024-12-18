@@ -24,7 +24,9 @@ use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use fastcrypto::hash::MultisetHash;
+use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
+use prometheus::Histogram;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -41,8 +43,6 @@ pub use crate::digests::CheckpointDigest;
 
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
-
-use mysten_metrics::histogram::Histogram;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
@@ -265,10 +265,13 @@ impl CheckpointSummary {
             .map(|e| e.next_epoch_committee.as_slice())
     }
 
-    pub fn report_checkpoint_age_ms(&self, metrics: &Histogram) {
+    pub fn report_checkpoint_age(&self, metrics: &Histogram, metrics_deprecated: &MystenHistogram) {
         SystemTime::now()
             .duration_since(self.timestamp())
-            .map(|latency| metrics.report(latency.as_millis() as u64))
+            .map(|latency| {
+                metrics.observe(latency.as_secs_f64());
+                metrics_deprecated.report(latency.as_millis() as u64);
+            })
             .tap_err(|err| {
                 warn!(
                     checkpoint_seq = self.sequence_number,
@@ -462,7 +465,6 @@ impl CheckpointContents {
         })
     }
 
-    #[cfg(any(test, feature = "test-utils"))]
     pub fn new_with_digests_only_for_tests<T>(contents: T) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,
@@ -581,28 +583,25 @@ impl FullCheckpointContents {
             user_signatures: contents.into_v1().user_signatures,
         }
     }
-    pub fn from_checkpoint_contents<S>(
-        store: S,
-        contents: CheckpointContents,
-    ) -> Result<Option<Self>, crate::storage::error::Error>
+    pub fn from_checkpoint_contents<S>(store: S, contents: CheckpointContents) -> Option<Self>
     where
         S: ReadStore,
     {
         let mut transactions = Vec::with_capacity(contents.size());
         for tx in contents.iter() {
             if let (Some(t), Some(e)) = (
-                store.get_transaction(&tx.transaction)?,
-                store.get_transaction_effects(&tx.transaction)?,
+                store.get_transaction(&tx.transaction),
+                store.get_transaction_effects(&tx.transaction),
             ) {
                 transactions.push(ExecutionData::new((*t).clone().into_inner(), e))
             } else {
-                return Ok(None);
+                return None;
             }
         }
-        Ok(Some(Self {
+        Some(Self {
             transactions,
             user_signatures: contents.into_v1().user_signatures,
-        }))
+        })
     }
 
     pub fn iter(&self) -> Iter<'_, ExecutionData> {
@@ -773,7 +772,6 @@ pub struct CheckpointVersionSpecificDataV1 {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test-utils")]
 mod tests {
     use crate::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEffectsDigest};
     use crate::transaction::VerifiedTransaction;

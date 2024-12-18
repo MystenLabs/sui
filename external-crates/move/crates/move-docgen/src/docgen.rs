@@ -7,25 +7,11 @@ use log::{debug, info, warn};
 
 use crate::code_writer::{CodeWriter, CodeWriterLabel};
 use itertools::Itertools;
-<<<<<<< HEAD
 use move_binary_format::file_format;
 use move_compiler::{
     diagnostics::ByteSpan,
     expansion::ast::{TargetKind, Visibility},
     parser::keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS},
-=======
-use move_compiler::parser::keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS};
-use move_model::{
-    ast::ModuleName,
-    code_writer::{CodeWriter, CodeWriterLabel},
-    emit, emitln,
-    model::{
-        AbilitySet, EnumEnv, FunId, FunctionEnv, GlobalEnv, Loc, ModuleEnv, ModuleId,
-        NamedConstantEnv, Parameter, QualifiedId, StructEnv, TypeParameter,
-    },
-    symbol::Symbol,
-    ty::TypeDisplayContext,
->>>>>>> main
 };
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::Loc;
@@ -954,13 +940,31 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates declaration for named constant
-    fn named_constant_display(&self, const_env: model::Constant<'_>) -> String {
-        let name = const_env.name();
+    fn named_constant_display(&self, const_env: &NamedConstantEnv<'_>) -> String {
+        let name = self.name_string(const_env.get_name());
+        let is_error_const = const_env.get_attributes().iter().any(|attr|
+            matches!(attr, Attribute::Apply(_, sym, _) if self.name_string(*sym).to_string() == *"error")
+        );
+        let rendered_value = match (is_error_const, const_env.get_value()) {
+            (true, Value::ByteArray(bytes)) => {
+                if let Ok(s) = std::str::from_utf8(&bytes) {
+                    format!("b\"{s}\"")
+                } else {
+                    format!("{bytes:?}")
+                }
+            }
+            (_, value) => value.to_string(),
+        };
+        let error_const_annot = if is_error_const { "#[error]\n" } else { "" };
         format!(
-            "const {}: {} = {};",
+            "{}const {}: {} = {};",
+            error_const_annot,
             name,
-            model_display::type_(&const_env.info().signature),
-            const_env.value()
+            const_env.get_type().display(&TypeDisplayContext::WithEnv {
+                env: self.env,
+                type_param_names: None,
+            }),
+            rendered_value,
         )
     }
 

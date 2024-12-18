@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::{file_format::CompiledModule, file_format_common::VERSION_MAX};
 use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler as MoveCompiler};
 use std::{fs::File, io::Write, path::Path};
 use tempfile::tempdir;
@@ -57,4 +57,11 @@ pub fn compile_modules(s: &str) -> Result<Vec<CompiledModule>> {
 
 pub fn as_module(unit: AnnotatedCompiledUnit) -> CompiledModule {
     unit.named_module.module
+}
+
+pub fn serialize_module_at_max_version(
+    module: &CompiledModule,
+    binary: &mut Vec<u8>,
+) -> Result<()> {
+    module.serialize_with_version(VERSION_MAX, binary)
 }

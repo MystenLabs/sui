@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, HistogramVec, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    Registry,
 };
-
-use mysten_metrics::histogram::Histogram;
 
 const FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85,
@@ -68,11 +67,12 @@ impl QuorumDriverMetrics {
                 registry,
             )
             .unwrap(),
-            attempt_times_ok_response: Histogram::new_in_registry(
+            attempt_times_ok_response: register_histogram_with_registry!(
                 "quorum_driver_attempt_times_ok_response",
                 "Total attempt times of ok response",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            ).unwrap(),
             current_requests_in_flight: register_int_gauge_with_registry!(
                 "current_requests_in_flight",
                 "Current number of requests being processed in QuorumDriver",
@@ -109,11 +109,12 @@ impl QuorumDriverMetrics {
                 registry,
             )
             .unwrap(),
-            transaction_retry_count: Histogram::new_in_registry(
+            transaction_retry_count: register_histogram_with_registry!(
                 "quorum_driver_transaction_retry_count",
                 "Histogram of transaction retry count",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            ).unwrap(),
             current_transactions_in_retry: register_int_gauge_with_registry!(
                 "current_transactions_in_retry",
                 "Current number of transactions in retry loop in QuorumDriver",

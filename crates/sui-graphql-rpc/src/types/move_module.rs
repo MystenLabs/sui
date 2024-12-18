@@ -5,6 +5,7 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
+use sui_types::move_package;
 
 use crate::consistency::{ConsistentIndexCursor, ConsistentNamedCursor};
 use crate::error::Error;
@@ -15,7 +16,6 @@ use super::datatype::MoveDatatype;
 use super::move_enum::MoveEnum;
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
-use super::object::Object;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -40,7 +40,7 @@ impl MoveModule {
         MovePackage::query(
             ctx,
             self.storage_id,
-            Object::latest_at(self.checkpoint_viewed_at),
+            MovePackage::by_id_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()?
@@ -91,7 +91,7 @@ impl MoveModule {
         let Some(package) = MovePackage::query(
             ctx,
             self.storage_id,
-            Object::latest_at(checkpoint_viewed_at),
+            MovePackage::by_id_at(checkpoint_viewed_at),
         )
         .await
         .extend()?
@@ -416,12 +416,16 @@ impl MoveModule {
     /// Textual representation of the module's bytecode.
     async fn disassembly(&self) -> Result<Option<String>> {
         Ok(Some(
-            Disassembler::from_module(self.parsed.bytecode(), Loc::invalid())
-                .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
-                .extend()?
-                .disassemble()
-                .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
-                .extend()?,
+            Disassembler::from_module_with_max_size(
+                self.parsed.bytecode(),
+                Loc::invalid(),
+                *move_package::MAX_DISASSEMBLED_MODULE_SIZE,
+            )
+            .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
+            .extend()?
+            .disassemble()
+            .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
+            .extend()?,
         ))
     }
 }
@@ -482,7 +486,7 @@ impl MoveModule {
         checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         let Some(package) =
-            MovePackage::query(ctx, address, Object::latest_at(checkpoint_viewed_at)).await?
+            MovePackage::query(ctx, address, MovePackage::by_id_at(checkpoint_viewed_at)).await?
         else {
             return Ok(None);
         };

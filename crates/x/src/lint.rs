@@ -62,6 +62,13 @@ pub fn run(args: Args) -> crate::Result<()> {
                     type_: BannedDepType::Always,
                 },
             ),
+            (
+                "pq-sys".to_owned(),
+                BannedDepConfig {
+                    message: "diesel_async asynchronous database connections instead".to_owned(),
+                    type_: BannedDepType::Always,
+                },
+            ),
         ]
         .into_iter()
         .collect(),
@@ -76,6 +83,8 @@ pub fn run(args: Args) -> crate::Result<()> {
             // as the opentelemetry crates.
             "prost".to_owned(),
             "tonic".to_owned(),
+            // jsonrpsee uses an older version of http-body
+            "http-body".to_owned(),
         ],
     };
 
@@ -135,7 +144,8 @@ pub fn handle_lint_results_exclude_external_crate_checks(
         |source: &LintSource, path: &Utf8Path| -> bool {
             (path.starts_with(EXTERNAL_CRATE_DIR)
                 || path.starts_with(CREATE_DAPP_TEMPLATE_DIR)
-                || path.to_string().contains("/generated/"))
+                || path.to_string().contains("/generated/")
+                || path.to_string().contains("/proto/"))
                 && source.name() == "license-header"
         },
         // ignore check to skip buck related code paths, meta (fb) derived starlark, etc.

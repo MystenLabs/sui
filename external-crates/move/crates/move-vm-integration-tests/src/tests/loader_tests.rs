@@ -5,7 +5,7 @@
 // Simplifies logic around re-using ModuleIds.
 #![allow(clippy::redundant_clone)]
 
-use crate::compiler::{compile_modules_in_file, expect_modules};
+use crate::compiler::{compile_modules_in_file, expect_modules, serialize_module_at_max_version};
 use move_binary_format::{
     file_format::{
         empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
@@ -32,15 +32,19 @@ use move_vm_types::{
 
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
 
-const DEFAULT_ACCOUNT: AccountAddress = AccountAddress::TWO;
+const DEFAULT_ACCOUNT: AccountAddress = {
+    let mut address = [0u8; AccountAddress::LENGTH];
+    address[AccountAddress::LENGTH - 1] = 7u8;
+    AccountAddress::new(address)
+};
 const UPGRADE_ACCOUNT: AccountAddress = {
     let mut address = [0u8; AccountAddress::LENGTH];
-    address[AccountAddress::LENGTH - 1] = 3u8;
+    address[AccountAddress::LENGTH - 1] = 8u8;
     AccountAddress::new(address)
 };
 const UPGRADE_ACCOUNT_2: AccountAddress = {
     let mut address = [0u8; AccountAddress::LENGTH];
-    address[AccountAddress::LENGTH - 1] = 4u8;
+    address[AccountAddress::LENGTH - 1] = 9u8;
     AccountAddress::new(address)
 };
 
@@ -129,7 +133,7 @@ impl Adapter {
 
         for module in modules {
             let mut binary = vec![];
-            module.serialize(&mut binary).unwrap_or_else(|e| {
+            serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                 panic!("failure in module serialization: {e:?}\n{:#?}", module)
             });
             session
@@ -147,7 +151,7 @@ impl Adapter {
 
         for module in modules {
             let mut binary = vec![];
-            module.serialize(&mut binary).unwrap_or_else(|e| {
+            serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                 panic!("failure in module serialization: {e:?}\n{:#?}", module)
             });
             session
@@ -162,7 +166,7 @@ impl Adapter {
             .into_iter()
             .map(|module| {
                 let mut binary = vec![];
-                module.serialize(&mut binary).unwrap_or_else(|e| {
+                serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                     panic!("failure in module serialization: {e:?}\n{:#?}", module)
                 });
                 binary
@@ -185,7 +189,7 @@ impl Adapter {
             .into_iter()
             .map(|module| {
                 let mut binary = vec![];
-                module.serialize(&mut binary).unwrap_or_else(|e| {
+                serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                     panic!("failure in module serialization: {e:?}\n{:#?}", module)
                 });
                 binary
@@ -774,7 +778,7 @@ fn relink_type_identity() {
     let b1_modules = get_relinker_tests_modules_with_deps("b_v1", ["c_v1"]).unwrap();
 
     adapter.publish_modules(c0_modules);
-    let c0_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
+    let c0_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
 
     let mut adapter = adapter.relink(
         UPGRADE_ACCOUNT,
@@ -791,8 +795,8 @@ fn relink_type_identity() {
     adapter.publish_modules(c1_modules);
     adapter.publish_modules(b1_modules);
 
-    let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let b1_s = adapter.load_type(&TypeTag::from_str("0x2::b::S").unwrap());
+    let c1_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let b1_s = adapter.load_type(&TypeTag::from_str("0x7::b::S").unwrap());
 
     assert_eq!(c0_s, c1_s);
     assert_ne!(c1_s, b1_s);
@@ -813,7 +817,7 @@ fn relink_defining_module_successive() {
     let c2_modules = get_relinker_tests_modules_with_deps("c_v2", []).unwrap();
 
     adapter.publish_modules(c0_modules);
-    let c0_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
+    let c0_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
 
     let mut adapter = adapter.relink(
         UPGRADE_ACCOUNT,
@@ -826,8 +830,8 @@ fn relink_defining_module_successive() {
     );
 
     adapter.publish_modules(c1_modules);
-    let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let c1_r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
+    let c1_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let c1_r = adapter.load_type(&TypeTag::from_str("0x7::c::R").unwrap());
 
     let mut adapter = adapter.relink(
         UPGRADE_ACCOUNT_2,
@@ -841,9 +845,9 @@ fn relink_defining_module_successive() {
     );
 
     adapter.publish_modules(c2_modules);
-    let c2_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let c2_r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
-    let c2_q = adapter.load_type(&TypeTag::from_str("0x2::c::Q").unwrap());
+    let c2_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let c2_r = adapter.load_type(&TypeTag::from_str("0x7::c::R").unwrap());
+    let c2_q = adapter.load_type(&TypeTag::from_str("0x7::c::Q").unwrap());
 
     for s in &[c0_s, c1_s, c2_s] {
         let TypeTag::Struct(st) = adapter.get_type_tag(s) else {
@@ -895,9 +899,9 @@ fn relink_defining_module_oneshot() {
     );
 
     adapter.publish_modules(c2_modules);
-    let s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    let r = adapter.load_type(&TypeTag::from_str("0x2::c::R").unwrap());
-    let q = adapter.load_type(&TypeTag::from_str("0x2::c::Q").unwrap());
+    let s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let r = adapter.load_type(&TypeTag::from_str("0x7::c::R").unwrap());
+    let q = adapter.load_type(&TypeTag::from_str("0x7::c::Q").unwrap());
 
     let TypeTag::Struct(s) = adapter.get_type_tag(&s) else {
         panic!("Not a struct: {s:?}")

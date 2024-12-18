@@ -340,12 +340,12 @@ but multiple per package (!).
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="package.md#0x2_package_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="types.md#0x2_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="package.md#0x2_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
-    <b>let</b> tyname = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
+    <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
 
     <a href="package.md#0x2_package_Publisher">Publisher</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="package.md#0x2_package">package</a>: tyname.get_address(),
-        module_name: tyname.get_module(),
+        <a href="package.md#0x2_package">package</a>: <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_address(),
+        module_name: <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_module(),
     }
 }
 </code></pre>
@@ -450,9 +450,9 @@ Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> tyname = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+    <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
 
-    (tyname.get_address() == self.<a href="package.md#0x2_package">package</a>) && (tyname.get_module() == self.module_name)
+    (<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_address() == self.<a href="package.md#0x2_package">package</a>) && (<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.get_module() == self.module_name)
 }
 </code></pre>
 
@@ -899,11 +899,7 @@ for the upgrade to succeed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(
-    cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>,
-    policy: u8,
-    digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
-): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>, policy: u8, digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = @0x0.to_id();
     <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a> != id_zero, <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
     <b>assert</b>!(policy &gt;= cap.policy, <a href="package.md#0x2_package_ETooPermissive">ETooPermissive</a>);
@@ -941,10 +937,7 @@ the upgrade.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_commit_upgrade">commit_upgrade</a>(
-    cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>,
-    receipt: <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>, receipt: <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>) {
     <b>let</b> <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, <a href="package.md#0x2_package">package</a> } = receipt;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(cap) == cap_id, <a href="package.md#0x2_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);

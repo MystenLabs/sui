@@ -57,6 +57,7 @@ trait StatePredicate {
         runner: &StressTestRunner,
         effects: &TransactionEffects,
     );
+    #[allow(unused)]
     async fn post_epoch_post_condition(
         &mut self,
         runner: &StressTestRunner,
@@ -164,8 +165,7 @@ impl StressTestRunner {
         for (obj_ref, _) in effects.created() {
             let object_opt = state
                 .get_object_store()
-                .get_object_by_key(&obj_ref.0, obj_ref.1)
-                .unwrap();
+                .get_object_by_key(&obj_ref.0, obj_ref.1);
             let Some(object) = object_opt else { continue };
             let struct_tag = object.struct_tag().unwrap();
             let total_sui =
@@ -178,7 +178,6 @@ impl StressTestRunner {
             let object = state
                 .get_object_store()
                 .get_object_by_key(&obj_ref.0, obj_ref.1)
-                .unwrap()
                 .unwrap();
             let struct_tag = object.struct_tag().unwrap();
             let total_sui =
@@ -192,7 +191,6 @@ impl StressTestRunner {
             let object = state
                 .get_object_store()
                 .get_object_by_key(&obj_id, version)
-                .unwrap()
                 .unwrap();
             let struct_tag = object.struct_tag().unwrap();
             let total_sui =
@@ -247,10 +245,7 @@ impl StressTestRunner {
         let found: Vec<_> = effects
             .iter()
             .filter_map(|(obj_ref, _)| {
-                let object = db
-                    .get_object_by_key(&obj_ref.0, obj_ref.1)
-                    .unwrap()
-                    .unwrap();
+                let object = db.get_object_by_key(&obj_ref.0, obj_ref.1).unwrap();
                 let struct_tag = object.struct_tag().unwrap();
                 if struct_tag.name.to_string() == name {
                     Some(object)
@@ -351,7 +346,7 @@ async fn fuzz_dynamic_committee() {
     let num_operations = 10;
 
     // Add more actions here as we create them
-    let actions = vec![Box::new(add_stake::RequestAddStakeGen)];
+    let actions = [Box::new(add_stake::RequestAddStakeGen)];
 
     let mut runner = StressTestRunner::new().await;
 

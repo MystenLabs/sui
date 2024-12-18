@@ -3,10 +3,7 @@ processed 3 tasks
 task 0, lines 1-12:
 //# print-bytecode
 // Move bytecode v6
-module 1.m {
-
-
-
+module 6.m {
 
 entry foo() {
 L0:	loc0: u64
@@ -20,19 +17,19 @@ B0:
 	5: MoveLoc[1](loc1: &mut u64)
 	6: WriteRef
 	7: Ret
+}
 
 }
-}
+
 
 task 1, lines 14-25:
 //# print-bytecode
 // Move bytecode v6
 module 3d.Foobar {
+
 struct FooCoin {
 	value: u64
 }
-
-
 
 public borrow_mut_field(Arg0: &mut FooCoin) {
 B0:
@@ -42,19 +39,19 @@ B0:
 	3: MoveLoc[1](loc0: &mut u64)
 	4: Pop
 	5: Ret
+}
 
 }
-}
+
 
 task 2, lines 27-38:
 //# print-bytecode
 // Move bytecode v6
 module 4d.Foobar {
+
 struct FooCoin<Ty0> {
 	value: u64
 }
-
-
 
 public borrow_mut_field(Arg0: &mut FooCoin<address>) {
 B0:
@@ -64,6 +61,7 @@ B0:
 	3: MoveLoc[1](loc0: &mut u64)
 	4: Pop
 	5: Ret
+}
 
 }
-}
+

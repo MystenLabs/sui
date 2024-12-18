@@ -6,9 +6,12 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 move-package.workspace = true
-
+mysten-network.workspace = true
 sui-framework.workspace = true
 sui-move-build.workspace = true
 sui-types.workspace = true
@@ -16,7 +19,6 @@ tempfile.workspace = true
 tracing.workspace = true
 anemo.workspace = true
 anemo-tower.workspace = true
-narwhal-network.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 telemetry-subscribers.workspace = true
 tower.workspace = true

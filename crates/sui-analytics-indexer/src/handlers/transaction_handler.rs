@@ -9,7 +9,7 @@ use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 use tracing::error;
 
-use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
@@ -28,7 +28,9 @@ pub(crate) struct State {
 
 #[async_trait::async_trait]
 impl Worker for TransactionHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    type Result = ();
+
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
@@ -40,7 +42,7 @@ impl Worker for TransactionHandler {
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                &checkpoint_transaction,
+                checkpoint_transaction,
                 &checkpoint_transaction.effects,
                 &mut state,
             )?;
@@ -212,11 +214,11 @@ mod tests {
         let checkpoint = sim.create_checkpoint();
         let checkpoint_data = sim.get_checkpoint_data(
             checkpoint.clone(),
-            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)?
+            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(checkpoint_data).await?;
+        txn_handler.process_checkpoint(&checkpoint_data).await?;
         let transaction_entries = txn_handler.state.lock().await.transactions.clone();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();

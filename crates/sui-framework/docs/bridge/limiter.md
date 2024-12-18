@@ -217,7 +217,7 @@ title: Module `0xb::limiter`
 
 
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
-    // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> <a href="../sui-system/genesis.md#0x3_genesis">genesis</a>
+    // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> genesis
     <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
         transfer_limits: <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
         transfer_records: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>()

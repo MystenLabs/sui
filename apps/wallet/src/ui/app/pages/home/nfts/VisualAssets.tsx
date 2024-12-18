@@ -65,7 +65,7 @@ export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 						</div>
 						<ErrorBoundary>
 							<NFTDisplayCard
-								hideLabel={bnl.some((item) => item?.objectType === object.type)}
+								hideLabel
 								objectId={object.objectId}
 								size="lg"
 								animateHover

@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 arc-swap.workspace = true
+backoff.workspace = true
 chrono.workspace = true
 fastcrypto.workspace = true
 jsonrpsee.workspace = true
@@ -52,6 +53,7 @@ sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-transaction-builder.workspace = true
 mysten-metrics.workspace = true
+mysten-service.workspace = true
 shared-crypto.workspace = true
 typed-store-error.workspace = true
 cached.workspace = true
@@ -59,5 +61,4 @@ cached.workspace = true
 [dev-dependencies]
 mockall.workspace = true
 expect-test.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
 telemetry-subscribers.workspace = true

@@ -11,10 +11,10 @@ futures.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
 jsonrpsee.workspace = true
 tracing.workspace = true
 clap.workspace = true
-diesel.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -22,12 +22,13 @@ uuid.workspace = true
 prometheus.workspace = true
 fastcrypto.workspace = true
 shared-crypto.workspace = true
-derivative.workspace = true
+derive_more = { workspace = true, features = ["debug"] }
 regex.workspace = true
 
 sui-indexer.workspace = true
 sui-faucet.workspace = true
 sui-graphql-rpc.workspace = true
+sui-pg-db.workspace = true
 sui-swarm.workspace = true
 sui-swarm-config.workspace = true
 sui-json-rpc-types.workspace = true
@@ -42,8 +43,3 @@ telemetry-subscribers.workspace = true
 
 test-cluster.workspace = true
 move-core-types.workspace = true
-
-[features]
-default = ["postgres-feature"]
-postgres-feature = ["diesel/postgres", "diesel/postgres_backend"]
-pg_integration = []

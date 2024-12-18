@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x1.m {
+module 0x6.m {
 // This is roughly equivalent to the following Move program:
 // ```
 // if (42 > 0) { x = 1; } else { x = 2; }
@@ -24,7 +24,7 @@ label b3:
 }
 
 //# print-bytecode
-module 0x2.m {
+module 0x7.m {
 // This is roughly equivalent to the following Move program:
 // ```
 // if (42 > 0) { x = 1; } else { x = 2; }
@@ -45,7 +45,7 @@ label b2:
 }
 
 //# print-bytecode
-module 0x3.m {
+module 0x8.m {
 // `jump_if` statements can be sequenced, akin to "nested" `if` statements in Move.
 entry foo() {
     let x: u64;
@@ -65,7 +65,7 @@ label end:
 }
 
 //# print-bytecode
-module 0x4.m {
+module 0x9.m {
 // `return` statements can appear anywhere, including within a jump destination's block.
 entry foo() {
     let x: u64;

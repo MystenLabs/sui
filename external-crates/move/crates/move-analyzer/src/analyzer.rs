@@ -19,7 +19,7 @@ use std::{
 };
 
 use crate::{
-    completion::on_completion_request, context::Context, inlay_hints, symbols,
+    completions::on_completion_request, context::Context, inlay_hints, symbols,
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -46,7 +46,7 @@ pub fn run() {
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
     let pkg_deps = Arc::new(Mutex::new(
-        BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
+        BTreeMap::<PathBuf, symbols::PrecomputedPkgInfo>::new(),
     ));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
@@ -147,11 +147,13 @@ pub fn run() {
     // main reason for this is to enable unit tests that rely on the symbolication information
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
-        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
+        let build_path = uri.to_file_path().unwrap();
+        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&build_path) {
             if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
                 Arc::new(Mutex::new(BTreeMap::new())),
                 ide_files_root.clone(),
                 p.as_path(),
+                None,
                 lint,
                 None,
             ) {
@@ -277,7 +279,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecompiledPkgDeps>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgInfo>>>,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {

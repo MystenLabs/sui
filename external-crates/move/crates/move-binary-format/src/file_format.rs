@@ -12,15 +12,15 @@
 //!
 //! Overall the binary format is structured in a number of sections:
 //! - **Header**: this must start at offset 0 in the binary. It contains a blob that starts every
-//! Diem binary, followed by the version of the VM used to compile the code, and last is the
-//! number of tables present in this binary.
+//!     Diem binary, followed by the version of the VM used to compile the code, and last is the
+//!     number of tables present in this binary.
 //! - **Table Specification**: it's a number of tuple of the form
-//! `(table type, starting_offset, byte_count)`. The number of entries is specified in the
-//! header (last entry in header). There can only be a single entry per table type. The
-//! `starting offset` is from the beginning of the binary. Tables must cover the entire size of
-//! the binary blob and cannot overlap.
+//!     `(table type, starting_offset, byte_count)`. The number of entries is specified in the
+//!     header (last entry in header). There can only be a single entry per table type. The
+//!     `starting offset` is from the beginning of the binary. Tables must cover the entire size of
+//!     the binary blob and cannot overlap.
 //! - **Table Content**: the serialized form of the specific entries in the table. Those roughly
-//! map to the structs defined in this module. Entries in each table must be unique.
+//!     map to the structs defined in this module. Entries in each table must be unique.
 //!
 //! We have two formats: one for modules here represented by `CompiledModule`, another
 //! for transaction scripts which is `CompiledScript`. Building those tables and passing them
@@ -44,6 +44,7 @@ use move_core_types::{
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::ops::BitOr;
 use variant_count::VariantCount;
 
@@ -791,6 +792,17 @@ impl Ability {
     }
 }
 
+impl Display for Ability {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Ability::Copy => write!(f, "copy"),
+            Ability::Drop => write!(f, "drop"),
+            Ability::Store => write!(f, "store"),
+            Ability::Key => write!(f, "key"),
+        }
+    }
+}
+
 /// A set of `Ability`s
 #[derive(Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
@@ -845,7 +857,7 @@ impl AbilitySet {
     }
 
     pub fn remove(self, ability: Ability) -> Self {
-        Self(self.0 & (!(ability as u8)))
+        self.difference(Self::singleton(ability))
     }
 
     pub fn intersect(self, other: Self) -> Self {
@@ -854,6 +866,10 @@ impl AbilitySet {
 
     pub fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
+    }
+
+    pub fn difference(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
     }
 
     #[inline]

@@ -6,7 +6,7 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{
-    Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    ExpectedFailureType, Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
 };
 use crate::workloads::GasCoinConfig;
 use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
@@ -58,6 +58,9 @@ impl Payload for RandomnessTestPayload {
             .call_emit_random(self.package_id, self.randomness_initial_shared_version)
             .build_and_sign(self.gas.2.as_ref())
     }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -76,7 +79,7 @@ impl RandomnessWorkloadBuilder {
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
+        let target_qps = (workload_weight * target_qps as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
         if max_ops == 0 || num_workers == 0 {

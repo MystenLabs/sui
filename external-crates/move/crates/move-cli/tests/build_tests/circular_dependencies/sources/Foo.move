@@ -1,5 +1,5 @@
-module 0x1::Foo {
-    use 0x1::Bar;
+module 0x6::Foo {
+    use 0x6::Bar;
 
     public foo() {
         Bar::bar();

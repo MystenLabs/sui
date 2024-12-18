@@ -10,7 +10,6 @@ use crate::{
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
-use derive_more::Display;
 use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
@@ -25,6 +24,7 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -42,6 +42,21 @@ pub const PACKAGE_MODULE_NAME: &IdentStr = ident_str!("package");
 pub const UPGRADECAP_STRUCT_NAME: &IdentStr = ident_str!("UpgradeCap");
 pub const UPGRADETICKET_STRUCT_NAME: &IdentStr = ident_str!("UpgradeTicket");
 pub const UPGRADERECEIPT_STRUCT_NAME: &IdentStr = ident_str!("UpgradeReceipt");
+
+// Default max bound for disassembled code size is 1MB
+const DEFAULT_MAX_DISASSEMBLED_MODULE_SIZE: Option<usize> = Some(1024 * 1024);
+
+const MAX_DISASSEMBLED_MODULE_SIZE_ENV: &str = "MAX_DISASSEMBLED_MODULE_SIZE";
+pub static MAX_DISASSEMBLED_MODULE_SIZE: Lazy<Option<usize>> = Lazy::new(|| {
+    let max_bound_opt: Option<usize> = std::env::var(MAX_DISASSEMBLED_MODULE_SIZE_ENV)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    match max_bound_opt {
+        Some(0) => None,
+        Some(max_bound) => Some(max_bound),
+        None => DEFAULT_MAX_DISASSEMBLED_MODULE_SIZE,
+    }
+});
 
 #[derive(Clone, Debug)]
 /// Additional information about a function
@@ -114,13 +129,13 @@ pub struct MovePackage {
 // associated constants before storing in any serialization setting.
 /// Rust representation of upgrade policy constants in `sui::package`.
 #[repr(u8)]
-#[derive(Display, Debug, Clone, Copy)]
+#[derive(derive_more::Display, Debug, Clone, Copy)]
 pub enum UpgradePolicy {
-    #[display(fmt = "COMPATIBLE")]
+    #[display("COMPATIBLE")]
     Compatible = 0,
-    #[display(fmt = "ADDITIVE")]
+    #[display("ADDITIVE")]
     Additive = 128,
-    #[display(fmt = "DEP_ONLY")]
+    #[display("DEP_ONLY")]
     DepOnly = 192,
 }
 
@@ -483,6 +498,10 @@ impl MovePackage {
     /// The ObjectID that this package's modules believe they are from, at runtime (can differ from
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
+        if self.version == OBJECT_START_VERSION {
+            // for a non-upgraded package, original ID is just the package ID
+            return self.id;
+        }
         let bytes = self.module_map.values().next().expect("Empty module map");
         let module = CompiledModule::deserialize_with_defaults(bytes)
             .expect("A Move package contains a module that cannot be deserialized");
@@ -598,12 +617,14 @@ where
                 error: error.to_string(),
             }
         })?;
-        let d =
-            Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
-                SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                }
-            })?;
+        let d = Disassembler::from_module_with_max_size(
+            &module,
+            Spanned::unsafe_no_loc(()).loc,
+            *MAX_DISASSEMBLED_MODULE_SIZE,
+        )
+        .map_err(|e| SuiError::ObjectSerializationError {
+            error: e.to_string(),
+        })?;
         let bytecode_str = d
             .disassemble()
             .map_err(|e| SuiError::ObjectSerializationError {

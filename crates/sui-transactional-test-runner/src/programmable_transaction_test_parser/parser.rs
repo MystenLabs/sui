@@ -3,7 +3,7 @@
 
 use std::{borrow::BorrowMut, marker::PhantomData, str::FromStr};
 
-use move_command_line_common::{
+use move_core_types::parsing::{
     parser::{Parser, Token},
     types::{ParsedType, TypeToken},
 };
@@ -11,6 +11,7 @@ use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_types::{
     base_types::ObjectID,
     transaction::{Argument, Command, ProgrammableMoveCall},
+    type_input::TypeInput,
 };
 
 use crate::programmable_transaction_test_parser::token::{
@@ -335,7 +336,7 @@ impl ParsedCommand {
             }
             ParsedCommand::SplitCoins(coin, amts) => Command::SplitCoins(coin, amts),
             ParsedCommand::MergeCoins(target, coins) => Command::MergeCoins(target, coins),
-            ParsedCommand::MakeMoveVec(ty_opt, args) => Command::MakeMoveVec(
+            ParsedCommand::MakeMoveVec(ty_opt, args) => Command::make_move_vec(
                 ty_opt
                     .map(|t| t.into_type_tag(address_mapping))
                     .transpose()?,
@@ -392,12 +393,12 @@ impl ParsedMoveCall {
         };
         let type_arguments = type_arguments
             .into_iter()
-            .map(|t| t.into_type_tag(address_mapping))
+            .map(|t| t.into_type_tag(address_mapping).map(TypeInput::from))
             .collect::<Result<_>>()?;
         Ok(ProgrammableMoveCall {
             package: package.into(),
-            module,
-            function,
+            module: module.to_string(),
+            function: function.to_string(),
             type_arguments,
             arguments,
         })

@@ -8,6 +8,7 @@ use std::fmt;
 
 pub mod abi;
 pub mod account_address;
+pub mod annotated_extractor;
 pub mod annotated_value;
 pub mod annotated_visitor;
 pub mod effects;
@@ -16,7 +17,7 @@ pub mod identifier;
 pub mod language_storage;
 pub mod metadata;
 pub mod move_resource;
-pub mod parser;
+pub mod parsing;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod proptest_types;
 pub mod resolver;

@@ -29,6 +29,7 @@ describe('Test ID as args to entry functions', () => {
 				showEffects: true,
 			},
 		});
+		await toolbox.client.waitForTransaction({ digest: result.digest });
 		expect(result.effects?.status.status).toEqual('success');
 	});
 
@@ -45,6 +46,7 @@ describe('Test ID as args to entry functions', () => {
 				showEffects: true,
 			},
 		});
+		await toolbox.client.waitForTransaction({ digest: result.digest });
 		expect(result.effects?.status.status).toEqual('success');
 	});
 });
