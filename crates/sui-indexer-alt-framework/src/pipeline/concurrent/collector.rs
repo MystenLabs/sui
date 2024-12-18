@@ -31,9 +31,7 @@ impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
     fn is_empty(&self) -> bool {
         let empty = self.values.is_empty();
-        if empty {
-            debug_assert!(self.watermark.batch_rows == 0);
-        }
+        debug_assert!(!empty || self.watermark.batch_rows == 0);
         empty
     }
 
