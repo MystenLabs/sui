@@ -26,3 +26,22 @@ async fn transfer_coin(
     let resp = context.execute_transaction_must_succeed(txn).await;
     resp.digest.into()
 }
+
+async fn stake_with_validator(
+    cluster: &test_cluster::TestCluster,
+) -> sui_sdk_types::types::TransactionDigest {
+    let context = &cluster.wallet;
+    let gas_price = context.get_reference_gas_price().await.unwrap();
+    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let sender = accounts_and_objs[0].0;
+    let gas_object = accounts_and_objs[0].1[0];
+    let coin_to_stake = accounts_and_objs[0].1[1];
+    let validator_address = cluster.swarm.config().validator_configs()[0].sui_address();
+    let txn = context.sign_transaction(
+        &sui_test_transaction_builder::TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .call_staking(coin_to_stake, validator_address)
+            .build(),
+    );
+    let resp = context.execute_transaction_must_succeed(txn).await;
+    resp.digest.into()
+}
