@@ -35,11 +35,9 @@ const OBJECTS_TABLE: &str = "objects";
 const TRANSACTIONS_TABLE: &str = "transactions";
 const CHECKPOINTS_TABLE: &str = "checkpoints";
 const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
-const WATERMARK_TABLE: &str = "watermark";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
 const DEFAULT_COLUMN_QUALIFIER: &str = "";
-const AGGREGATED_WATERMARK_NAME: &str = "bigtable";
 const CHECKPOINT_SUMMARY_COLUMN_QUALIFIER: &str = "s";
 const CHECKPOINT_SIGNATURES_COLUMN_QUALIFIER: &str = "sg";
 const CHECKPOINT_CONTENTS_COLUMN_QUALIFIER: &str = "c";
@@ -130,21 +128,6 @@ impl KeyValueStoreWriter for BigTableClient {
                 checkpoint.checkpoint_summary.digest().inner().to_vec(),
                 vec![(DEFAULT_COLUMN_QUALIFIER, key)],
             )],
-        )
-        .await
-    }
-
-    async fn save_watermark(
-        &mut self,
-        name: &str,
-        watermark: CheckpointSequenceNumber,
-    ) -> Result<()> {
-        let key = name.as_bytes().to_vec();
-        let value = watermark.to_be_bytes().to_vec();
-        self.multi_set_with_timestamp(
-            WATERMARK_TABLE,
-            [(key, vec![(DEFAULT_COLUMN_QUALIFIER, value)])],
-            watermark as i64,
         )
         .await
     }
@@ -254,7 +237,15 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
-        self.get_watermark(AGGREGATED_WATERMARK_NAME).await
+        let upper_limit = u64::MAX.to_be_bytes().to_vec();
+        match self
+            .reversed_scan(CHECKPOINTS_TABLE, upper_limit)
+            .await?
+            .pop()
+        {
+            Some((key_bytes, _)) => Ok(u64::from_be_bytes(key_bytes.as_slice().try_into()?)),
+            None => Ok(0),
+        }
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
@@ -265,17 +256,6 @@ impl KeyValueStoreReader for BigTableClient {
             }
         }
         Ok(None)
-    }
-
-    async fn get_watermark(&mut self, watermark_name: &str) -> Result<CheckpointSequenceNumber> {
-        let key = watermark_name.as_bytes().to_vec();
-        let mut response = self.multi_get(WATERMARK_TABLE, vec![key]).await?;
-        if let Some(row) = response.pop() {
-            if let Some((_, value)) = row.into_iter().next() {
-                return Ok(u64::from_be_bytes(value.as_slice().try_into()?));
-            }
-        }
-        Ok(0)
     }
 }
 
@@ -403,15 +383,6 @@ impl BigTableClient {
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
     ) -> Result<()> {
-        self.multi_set_with_timestamp(table_name, values, -1).await
-    }
-
-    async fn multi_set_with_timestamp(
-        &mut self,
-        table_name: &str,
-        values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
-        timestamp: i64,
-    ) -> Result<()> {
         let mut entries = vec![];
         for (row_key, cells) in values {
             let mutations = cells
@@ -422,7 +393,7 @@ impl BigTableClient {
                         column_qualifier: column_name.to_owned().into_bytes(),
                         // The timestamp of the cell into which new data should be written.
                         // Use -1 for current Bigtable server time.
-                        timestamp_micros: timestamp,
+                        timestamp_micros: -1,
                         value,
                     })),
                 })

@@ -216,6 +216,11 @@ pub struct TransactionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signatures: Option<Vec<sui_sdk_types::types::UserSignature>>,
 
+    #[serde_as(as = "Option<Vec<fastcrypto::encoding::Base64>>")]
+    #[schemars(with = "Option<Vec<String>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signatures_bytes: Option<Vec<Vec<u8>>>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<sui_sdk_types::types::TransactionEffects>,
 
@@ -267,6 +272,12 @@ pub struct GetTransactionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signatures: Option<bool>,
 
+    /// Request `Vec<UserSignature>` encoded as bytes be included in the response
+    ///
+    /// Defaults to `false` if not provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signatures_bytes: Option<bool>,
+
     /// Request `TransactionEffects` be included in the response
     ///
     /// Defaults to `true` if not provided.
@@ -303,6 +314,10 @@ impl GetTransactionOptions {
 
     pub fn include_signatures(&self) -> bool {
         self.signatures.unwrap_or(true)
+    }
+
+    pub fn include_signatures_bytes(&self) -> bool {
+        self.signatures.unwrap_or(false)
     }
 
     pub fn include_effects(&self) -> bool {

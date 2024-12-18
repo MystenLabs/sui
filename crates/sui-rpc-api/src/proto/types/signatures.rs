@@ -278,10 +278,12 @@ impl TryFrom<&super::CircomG2> for sui_sdk_types::types::CircomG2 {
 //
 
 impl From<sui_sdk_types::types::Claim> for super::ZkLoginClaim {
-    fn from(value: sui_sdk_types::types::Claim) -> Self {
+    fn from(
+        sui_sdk_types::types::Claim { value, index_mod_4 }: sui_sdk_types::types::Claim,
+    ) -> Self {
         Self {
-            value: Some(value.value.into_bytes().into()),
-            index_mod_4: Some(value.index_mod_4.into()),
+            value: Some(value),
+            index_mod_4: Some(index_mod_4.into()),
         }
     }
 }
@@ -295,8 +297,6 @@ impl TryFrom<&super::ZkLoginClaim> for sui_sdk_types::types::Claim {
         let value = value
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("value"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let index_mod_4 = index_mod_4
             .ok_or_else(|| TryFromProtoError::missing("index_mod_4"))?
@@ -349,12 +349,19 @@ impl TryFrom<&super::ZkLoginProof> for sui_sdk_types::types::ZkLoginProof {
 //
 
 impl From<sui_sdk_types::types::ZkLoginInputs> for super::ZkLoginInputs {
-    fn from(value: sui_sdk_types::types::ZkLoginInputs) -> Self {
+    fn from(
+        sui_sdk_types::types::ZkLoginInputs {
+            proof_points,
+            iss_base64_details,
+            header_base64,
+            address_seed,
+        }: sui_sdk_types::types::ZkLoginInputs,
+    ) -> Self {
         Self {
-            proof_points: Some(value.proof_points.into()),
-            iss_base64_details: Some(value.iss_base64_details.into()),
-            header_base64: Some(value.header_base64.into_bytes().into()),
-            address_seed: Some(value.address_seed.into()),
+            proof_points: Some(proof_points.into()),
+            iss_base64_details: Some(iss_base64_details.into()),
+            header_base64: Some(header_base64),
+            address_seed: Some(address_seed.into()),
         }
     }
 }
@@ -377,8 +384,6 @@ impl TryFrom<&super::ZkLoginInputs> for sui_sdk_types::types::ZkLoginInputs {
             .header_base64
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("header_base64"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let address_seed = value
             .address_seed
@@ -442,7 +447,7 @@ impl TryFrom<&super::ZkLoginAuthenticator> for sui_sdk_types::types::ZkLoginAuth
 impl From<&sui_sdk_types::types::ZkLoginPublicIdentifier> for super::ZkLoginPublicIdentifier {
     fn from(value: &sui_sdk_types::types::ZkLoginPublicIdentifier) -> Self {
         Self {
-            iss: Some(value.iss().to_owned().into_bytes().into()),
+            iss: Some(value.iss().to_owned()),
             address_seed: Some(value.address_seed().to_owned().into()),
         }
     }
@@ -456,8 +461,6 @@ impl TryFrom<&super::ZkLoginPublicIdentifier> for sui_sdk_types::types::ZkLoginP
             .iss
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("iss"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
         let address_seed = value
             .address_seed
@@ -595,7 +598,7 @@ impl From<sui_sdk_types::types::PasskeyAuthenticator> for super::PasskeyAuthenti
     fn from(value: sui_sdk_types::types::PasskeyAuthenticator) -> Self {
         Self {
             authenticator_data: Some(value.authenticator_data().to_vec().into()),
-            client_data_json: Some(value.client_data_json().as_bytes().to_vec().into()),
+            client_data_json: Some(value.client_data_json().to_owned()),
             signature: Some(value.signature().into()),
         }
     }
@@ -614,8 +617,6 @@ impl TryFrom<&super::PasskeyAuthenticator> for sui_sdk_types::types::PasskeyAuth
             .client_data_json
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("client_data_json"))?
-            .as_ref()
-            .pipe(std::str::from_utf8)?
             .into();
 
         let signature = value

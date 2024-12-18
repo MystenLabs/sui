@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_data_ingestion::{
     ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker,
-    IngestionWorkflowsProgressStore, KVStoreTaskConfig, KVStoreWorker,
+    DynamoDBProgressStore, KVStoreTaskConfig, KVStoreWorker,
 };
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
@@ -119,27 +119,12 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let metrics = DataIngestionMetrics::new(&registry);
 
-    let mut bigtable_client = None;
-    for task in &config.tasks {
-        if let Task::BigTableKV(kv_config) = &task.task {
-            bigtable_client = Some(
-                BigTableClient::new_remote(
-                    kv_config.instance_id.clone(),
-                    false,
-                    Some(Duration::from_secs(kv_config.timeout_secs as u64)),
-                )
-                .await?,
-            );
-        }
-    }
-
-    let progress_store = IngestionWorkflowsProgressStore::new(
+    let progress_store = DynamoDBProgressStore::new(
         &config.progress_store.aws_access_key_id,
         &config.progress_store.aws_secret_access_key,
         config.progress_store.aws_region,
         config.progress_store.table_name,
         config.is_backfill,
-        bigtable_client,
     )
     .await;
     let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);

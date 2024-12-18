@@ -3558,7 +3558,7 @@
                     "value": "some_value"
                   },
                   "bcsEncoding": "base64",
-                  "bcs_name": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x82b2fd67344691abd0efc771941b948ad35360b08e449fbbc28b0641175bf60b",
@@ -3571,7 +3571,7 @@
                     "value": "some_value"
                   },
                   "bcsEncoding": "base64",
-                  "bcs_name": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x21564fc5a68ace997461b098c1d1f3ccbde241d8fdf562db36bc1423ee10cecb",
@@ -3584,7 +3584,7 @@
                     "value": "some_value"
                   },
                   "bcsEncoding": "base64",
-                  "bcs_name": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
+                  "bcsName": "FDB4OTo6dGVzdDo6VGVzdEZpZWxk",
                   "type": "DynamicField",
                   "objectType": "test",
                   "objectId": "0x7e00acf5386662fa062483ba507b1e9e3039750f0a270f2e12441ad7f611a5f7",
@@ -6013,7 +6013,7 @@
             "type": "object",
             "required": [
               "bcsEncoding",
-              "bcs_name"
+              "bcsName"
             ],
             "properties": {
               "bcsEncoding": {
@@ -6022,7 +6022,7 @@
                   "base64"
                 ]
               },
-              "bcs_name": {
+              "bcsName": {
                 "$ref": "#/components/schemas/Base64"
               }
             }
@@ -6031,7 +6031,7 @@
             "type": "object",
             "required": [
               "bcsEncoding",
-              "bcs_name"
+              "bcsName"
             ],
             "properties": {
               "bcsEncoding": {
@@ -6040,7 +6040,7 @@
                   "base58"
                 ]
               },
-              "bcs_name": {
+              "bcsName": {
                 "$ref": "#/components/schemas/Base58"
               }
             }

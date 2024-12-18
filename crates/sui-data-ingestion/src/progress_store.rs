@@ -11,24 +11,21 @@ use aws_sdk_s3::config::{Credentials, Region};
 use std::str::FromStr;
 use std::time::Duration;
 use sui_data_ingestion_core::ProgressStore;
-use sui_kvstore::{BigTableClient, KeyValueStoreWriter};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-pub struct IngestionWorkflowsProgressStore {
+pub struct DynamoDBProgressStore {
     client: Client,
     table_name: String,
     is_backfill: bool,
-    bigtable_client: Option<BigTableClient>,
 }
 
-impl IngestionWorkflowsProgressStore {
+impl DynamoDBProgressStore {
     pub async fn new(
         aws_access_key_id: &str,
         aws_secret_access_key: &str,
         aws_region: String,
         table_name: String,
         is_backfill: bool,
-        bigtable_client: Option<BigTableClient>,
     ) -> Self {
         let credentials = Credentials::new(
             aws_access_key_id,
@@ -53,13 +50,12 @@ impl IngestionWorkflowsProgressStore {
             client,
             table_name,
             is_backfill,
-            bigtable_client,
         }
     }
 }
 
 #[async_trait]
-impl ProgressStore for IngestionWorkflowsProgressStore {
+impl ProgressStore for DynamoDBProgressStore {
     async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber> {
         let item = self
             .client
@@ -82,11 +78,6 @@ impl ProgressStore for IngestionWorkflowsProgressStore {
     ) -> Result<()> {
         if self.is_backfill && checkpoint_number % 1000 != 0 {
             return Ok(());
-        }
-        if let Some(ref mut bigtable_client) = self.bigtable_client {
-            bigtable_client
-                .save_watermark(&task_name, checkpoint_number)
-                .await?;
         }
         let backoff = backoff::ExponentialBackoff::default();
         backoff::future::retry(backoff, || async {

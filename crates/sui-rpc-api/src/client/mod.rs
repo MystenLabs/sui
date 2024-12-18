@@ -185,11 +185,9 @@ impl Client {
         let signatures = transaction
             .inner()
             .tx_signatures
-            .clone()
-            .into_iter()
-            .map(sui_sdk_types::types::UserSignature::try_from)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| Status::from_error(e.into()))?;
+            .iter()
+            .map(|signature| signature.as_ref().to_vec().into())
+            .collect();
 
         let request = crate::proto::node::ExecuteTransactionRequest {
             transaction: None,
@@ -197,7 +195,8 @@ impl Client {
                 crate::proto::types::Bcs::serialize(&transaction.inner().intent_message.value)
                     .map_err(|e| Status::from_error(e.into()))?,
             ),
-            signatures: signatures.into_iter().map(Into::into).collect(),
+            signatures: None,
+            signatures_bytes: Some(crate::proto::node::UserSignaturesBytes { signatures }),
 
             options: Some(crate::proto::node::ExecuteTransactionOptions {
                 effects: Some(false),

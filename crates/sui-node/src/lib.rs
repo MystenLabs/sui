@@ -597,7 +597,7 @@ impl SuiNode {
 
         let rpc_index = if is_full_node
             && config.enable_experimental_rest_api
-            && config.rpc.as_ref().is_some_and(|rpc| rpc.enable_indexing())
+            && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
         {
             Some(Arc::new(RpcIndexStore::new(
                 &config.db_path(),
@@ -2125,7 +2125,7 @@ pub async fn build_http_server(
             rest_service.with_executor(transaction_orchestrator.clone())
         }
 
-        router = router.merge(rest_service.into_router());
+        router = router.merge(rest_service.into_router().await);
     }
     // TODO: Remove this health check when experimental REST API becomes default
     // This is a copy of the health check in crates/sui-rpc-api/src/health.rs
