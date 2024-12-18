@@ -50,7 +50,7 @@ impl FunctionTargetProcessor for MoveLoopInvariantsProcessor {
             if let Some(label_bc) = invariant_labels.get(&offset) {
                 builder.emit(label_bc.clone());
             }
-            if invariants.contains_right(&(offset - 1)) {
+            if offset > 0 && invariants.contains_right(&(offset - 1)) {
                 continue;
             }
             builder.emit(bc);
