@@ -163,10 +163,7 @@ impl From<Error> for ErrorObjectOwned {
                     | QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { .. } => {
                             ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
                     }
-                    QuorumDriverError::ObjectsDoubleUsed {
-                        conflicting_txes,
-                        retried_tx_status,
-                    } => {
+                    QuorumDriverError::ObjectsDoubleUsed { conflicting_txes } => {
                         let weights: Vec<u64> =
                             conflicting_txes.values().map(|(_, stake)| *stake).collect();
                         let remaining: u64 = TOTAL_VOTING_POWER - weights.iter().sum::<u64>();
@@ -178,20 +175,8 @@ impl From<Error> for ErrorObjectOwned {
                             "reserved for another transaction"
                         };
 
-                        let retried_info = match retried_tx_status {
-                            Some((digest, success)) => {
-                                format!(
-                                    "Retried transaction {} ({}) because it was able to gather the necessary votes.",
-                                    digest, if success { "succeeded" } else { "failed" }
-                                )
-                            }
-                            None => "".to_string(),
-                        };
-
                         let error_message = format!(
-                            "Failed to sign transaction by a quorum of validators because one or more of its objects is {}. {} Other transactions locking these objects:\n{}",
-                            reason,
-                            retried_info,
+                            "Failed to sign transaction by a quorum of validators because one or more of its objects is {reason}. Other transactions locking these objects:\n{}",
                             conflicting_txes
                                 .iter()
                                 .sorted_by(|(_, (_, a)), (_, (_, b))| b.cmp(a))
@@ -430,10 +415,7 @@ mod tests {
             let authority_name = AuthorityPublicKeyBytes([1; AuthorityPublicKey::LENGTH]);
             conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
 
-            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed {
-                conflicting_txes,
-                retried_tx_status: Some((TransactionDigest::from([1; 32]), true)),
-            };
+            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed { conflicting_txes };
 
             let error_object: ErrorObjectOwned =
                 Error::QuorumDriverError(quorum_driver_error).into();
@@ -469,11 +451,7 @@ mod tests {
             let authority_name = AuthorityPublicKeyBytes([1; AuthorityPublicKey::LENGTH]);
             conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
 
-            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed {
-                conflicting_txes,
-                // below threshold
-                retried_tx_status: None,
-            };
+            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed { conflicting_txes };
 
             let error_object: ErrorObjectOwned =
                 Error::QuorumDriverError(quorum_driver_error).into();
