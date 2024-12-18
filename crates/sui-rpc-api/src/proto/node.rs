@@ -290,6 +290,78 @@ impl TryFrom<&GetObjectResponse> for crate::types::ObjectResponse {
 // GetCheckpointOptions
 //
 
+impl GetCheckpointOptions {
+    pub fn all() -> Self {
+        Self {
+            summary: Some(true),
+            summary_bcs: Some(true),
+            signature: Some(true),
+            contents: Some(true),
+            contents_bcs: Some(true),
+        }
+    }
+
+    pub fn none() -> Self {
+        Self {
+            summary: Some(false),
+            summary_bcs: Some(false),
+            signature: Some(false),
+            contents: Some(false),
+            contents_bcs: Some(false),
+        }
+    }
+
+    pub fn with_summary(mut self) -> Self {
+        self.summary = Some(true);
+        self
+    }
+
+    pub fn without_summary(mut self) -> Self {
+        self.summary = Some(false);
+        self
+    }
+
+    pub fn with_summary_bcs(mut self) -> Self {
+        self.summary_bcs = Some(true);
+        self
+    }
+
+    pub fn without_summary_bcs(mut self) -> Self {
+        self.summary_bcs = Some(false);
+        self
+    }
+
+    pub fn with_signature(mut self) -> Self {
+        self.signature = Some(true);
+        self
+    }
+
+    pub fn without_signature(mut self) -> Self {
+        self.signature = Some(false);
+        self
+    }
+
+    pub fn with_contents(mut self) -> Self {
+        self.contents = Some(true);
+        self
+    }
+
+    pub fn without_contents(mut self) -> Self {
+        self.contents = Some(false);
+        self
+    }
+
+    pub fn with_contents_bcs(mut self) -> Self {
+        self.contents_bcs = Some(true);
+        self
+    }
+
+    pub fn without_contents_bcs(mut self) -> Self {
+        self.contents_bcs = Some(false);
+        self
+    }
+}
+
 impl From<crate::types::GetCheckpointOptions> for GetCheckpointOptions {
     fn from(
         crate::types::GetCheckpointOptions {
@@ -327,6 +399,41 @@ impl From<GetCheckpointOptions> for crate::types::GetCheckpointOptions {
             contents,
             contents_bcs,
         }
+    }
+}
+
+//
+// GetCheckpointRequest
+//
+
+impl GetCheckpointRequest {
+    pub fn latest() -> Self {
+        Self {
+            sequence_number: None,
+            digest: None,
+            options: None,
+        }
+    }
+
+    pub fn by_digest<T: Into<super::types::Digest>>(digest: T) -> Self {
+        Self {
+            sequence_number: None,
+            digest: Some(digest.into()),
+            options: None,
+        }
+    }
+
+    pub fn by_sequence_number(sequence_number: u64) -> Self {
+        Self {
+            sequence_number: Some(sequence_number),
+            digest: None,
+            options: None,
+        }
+    }
+
+    pub fn with_options(mut self, options: GetCheckpointOptions) -> Self {
+        self.options = Some(options);
+        self
     }
 }
 
