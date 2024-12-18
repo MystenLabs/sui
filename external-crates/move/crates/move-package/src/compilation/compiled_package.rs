@@ -85,6 +85,7 @@ pub struct CompiledPackage {
     //
     /// filename -> doctext
     pub compiled_docs: Option<Vec<(String, String)>>,
+    /// The mapping of file hashes to file names and contents
     pub file_map: MappedFiles,
 }
 
@@ -621,10 +622,10 @@ impl CompiledPackage {
                 source_digest: Some(resolved_package.source_digest),
                 build_flags: resolution_graph.build_options.clone(),
             },
-            file_map,
             root_compiled_units,
             deps_compiled_units,
             compiled_docs,
+            file_map,
         };
 
         compiled_package.save_to_disk(project_root.join(CompiledPackageLayout::Root.path()))?;
