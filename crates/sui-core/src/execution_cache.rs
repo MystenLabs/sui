@@ -3,7 +3,6 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
-use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigTrait};
 use crate::authority::AuthorityStore;
@@ -126,28 +125,15 @@ pub fn build_execution_cache(
     epoch_start_config: &EpochStartConfiguration,
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
-    backpressure_manager: Arc<BackpressureManager>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
     match epoch_start_config.execution_cache_type() {
         ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
-            WritebackCache::new(
-                cache_config,
-                store.clone(),
-                execution_cache_metrics,
-                backpressure_manager,
-            )
-            .into(),
+            WritebackCache::new(cache_config, store.clone(), execution_cache_metrics).into(),
         ),
         ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
-            ProxyCache::new(
-                epoch_start_config,
-                store.clone(),
-                execution_cache_metrics,
-                backpressure_manager,
-            )
-            .into(),
+            ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
         ),
     }
 }
@@ -166,13 +152,7 @@ pub fn build_execution_cache_from_env(
         )
     } else {
         ExecutionCacheTraitPointers::new(
-            WritebackCache::new(
-                &Default::default(),
-                store.clone(),
-                execution_cache_metrics,
-                BackpressureManager::new_for_tests(),
-            )
-            .into(),
+            WritebackCache::new(&Default::default(), store.clone(), execution_cache_metrics).into(),
         )
     }
 }
@@ -198,9 +178,6 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// we have done that, crash recovery will be done by re-processing consensus commits
     /// and pending_consensus_transactions, and this method can be removed.
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()>;
-
-    // Number of pending uncommitted transactions
-    fn approximate_pending_transaction_count(&self) -> u64;
 }
 
 pub trait ObjectCacheRead: Send + Sync {

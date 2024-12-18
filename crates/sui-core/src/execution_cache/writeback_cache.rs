@@ -42,7 +42,6 @@ use crate::authority::authority_store::{
     ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
 };
 use crate::authority::authority_store_tables::LiveObject;
-use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
@@ -57,7 +56,6 @@ use parking_lot::Mutex;
 use prometheus::Registry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point_async;
@@ -228,9 +226,6 @@ struct UncommittedData {
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
-
-    total_transaction_inserts: AtomicU64,
-    total_transaction_commits: AtomicU64,
 }
 
 impl UncommittedData {
@@ -242,8 +237,6 @@ impl UncommittedData {
             executed_effects_digests: DashMap::new(),
             pending_transaction_writes: DashMap::new(),
             transaction_events: DashMap::new(),
-            total_transaction_inserts: AtomicU64::new(0),
-            total_transaction_commits: AtomicU64::new(0),
         }
     }
 
@@ -254,10 +247,6 @@ impl UncommittedData {
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
         self.transaction_events.clear();
-        self.total_transaction_inserts
-            .store(0, std::sync::atomic::Ordering::Relaxed);
-        self.total_transaction_commits
-            .store(0, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn is_empty(&self) -> bool {
@@ -269,12 +258,6 @@ impl UncommittedData {
                     && self.transaction_effects.is_empty()
                     && self.executed_effects_digests.is_empty()
                     && self.transaction_events.is_empty()
-                    && self
-                        .total_transaction_inserts
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                        == self
-                            .total_transaction_commits
-                            .load(std::sync::atomic::Ordering::Relaxed),
             );
         }
         empty
@@ -414,8 +397,6 @@ pub struct WritebackCache {
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
-    backpressure_threshold: u64,
-    backpressure_manager: Arc<BackpressureManager>,
     metrics: Arc<ExecutionCacheMetrics>,
 }
 
@@ -461,7 +442,6 @@ impl WritebackCache {
         config: &ExecutionCacheConfig,
         store: Arc<AuthorityStore>,
         metrics: Arc<ExecutionCacheMetrics>,
-        backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
         let packages = MokaCache::builder()
             .max_capacity(config.package_cache_size())
@@ -473,8 +453,6 @@ impl WritebackCache {
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             store,
-            backpressure_manager,
-            backpressure_threshold: config.backpressure_threshold(),
             metrics,
         }
     }
@@ -484,7 +462,6 @@ impl WritebackCache {
             &Default::default(),
             store,
             ExecutionCacheMetrics::new(registry).into(),
-            BackpressureManager::new_for_tests(),
         )
     }
 
@@ -494,7 +471,6 @@ impl WritebackCache {
             &Default::default(),
             self.store.clone(),
             self.metrics.clone(),
-            self.backpressure_manager.clone(),
         );
         std::mem::swap(self, &mut new);
     }
@@ -911,19 +887,6 @@ impl WritebackCache {
         self.metrics
             .pending_notify_read
             .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-
-        let prev = self
-            .dirty
-            .total_transaction_inserts
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-        let pending_count = (prev + 1).saturating_sub(
-            self.dirty
-                .total_transaction_commits
-                .load(std::sync::atomic::Ordering::Relaxed),
-        );
-
-        self.set_backpressure(pending_count);
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
@@ -968,44 +931,6 @@ impl WritebackCache {
                 .is_some());
             self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
         }
-
-        let num_outputs = all_outputs.len() as u64;
-        let num_commits = self
-            .dirty
-            .total_transaction_commits
-            .fetch_add(num_outputs, std::sync::atomic::Ordering::Relaxed)
-            + num_outputs;
-
-        let pending_count = self
-            .dirty
-            .total_transaction_inserts
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .saturating_sub(num_commits);
-
-        self.set_backpressure(pending_count);
-    }
-
-    fn approximate_pending_transaction_count(&self) -> u64 {
-        let num_commits = self
-            .dirty
-            .total_transaction_commits
-            .load(std::sync::atomic::Ordering::Relaxed);
-
-        self.dirty
-            .total_transaction_inserts
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .saturating_sub(num_commits)
-    }
-
-    fn set_backpressure(&self, pending_count: u64) {
-        let backpressure = pending_count > self.backpressure_threshold;
-        let backpressure_changed = self.backpressure_manager.set_backpressure(backpressure);
-        if backpressure_changed {
-            self.metrics.backpressure_toggles.inc();
-        }
-        self.metrics
-            .backpressure_status
-            .set(if backpressure { 1 } else { 0 });
     }
 
     fn flush_transactions_from_dirty_to_cached(
@@ -1303,10 +1228,6 @@ impl ExecutionCacheCommit for WritebackCache {
 
     fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
         WritebackCache::persist_transactions(self, digests).boxed()
-    }
-
-    fn approximate_pending_transaction_count(&self) -> u64 {
-        WritebackCache::approximate_pending_transaction_count(self)
     }
 }
 

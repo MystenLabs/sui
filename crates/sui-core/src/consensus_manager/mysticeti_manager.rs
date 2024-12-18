@@ -200,7 +200,6 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consensus_transaction_handler = ConsensusTransactionHandler::new(
             epoch_store.clone(),
             consensus_handler.transaction_manager_sender().clone(),
-            consensus_handler_initializer.backpressure_subscriber(),
             consensus_handler_initializer.metrics().clone(),
         );
         let handler = MysticetiConsensusHandler::new(

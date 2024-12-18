@@ -364,10 +364,6 @@ impl ExecutionCacheCommit for PassthroughCache {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
         ready(()).boxed()
     }
-
-    fn approximate_pending_transaction_count(&self) -> u64 {
-        0
-    }
 }
 
 impl StateSyncAPI for PassthroughCache {
