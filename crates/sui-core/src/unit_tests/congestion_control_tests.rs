@@ -129,7 +129,7 @@ impl TestSetup {
         create_shared_object_effects.created()[0].0
     }
 
-    // Creates a owned object in `setup_authority_state` and returns the object reference.
+    // Creates an owned object in `setup_authority_state` and returns the object reference.
     async fn create_owned_object(&self) -> ObjectRef {
         let mut builder = ProgrammableTransactionBuilder::new();
         move_call! {
@@ -307,7 +307,7 @@ async fn test_congestion_control_execution_cancellation() {
         ))
     });
 
-    // Runs a transaction that touches shared_object_1, shared_object_2 and a owned object.
+    // Runs a transaction that touches shared_object_1, shared_object_2 and an owned object.
     let (congested_tx, effects) = update_objects(
         &authority_state,
         &test_setup.package,
