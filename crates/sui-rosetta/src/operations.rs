@@ -615,11 +615,11 @@ impl Operations {
                                 None => return,
                             };
                             let mut is_convert_to_pay_sui = false;
-                            if account.address == prev_gas_owner {
+                            if account.address == prev_gas_owner && amount.currency == *SUI {
                                 // previous owner's balance needs to be adjusted for gas
                                 amount.value -= gas_used;
                                 is_convert_to_pay_sui = true;
-                            } else if account.address == new_gas_owner {
+                            } else if account.address == new_gas_owner && amount.currency == *SUI {
                                 // new owner's balance needs to be adjusted for gas
                                 amount.value += gas_used;
                                 is_convert_to_pay_sui = true;
