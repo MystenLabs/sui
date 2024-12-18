@@ -56,7 +56,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction_executor::SimulateTransactionResult;
-use tap::{TapFallible, TapOptional};
+use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
@@ -70,7 +70,6 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use crate::jsonrpc_index::IndexStore;
 use crate::jsonrpc_index::{CoinInfo, ObjectIndexChanges};
 use mysten_common::debug_fatal;
-use once_cell::sync::OnceCell;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::genesis::Genesis;
@@ -215,8 +214,6 @@ pub mod transaction_deferral;
 
 pub(crate) mod authority_store;
 pub mod backpressure;
-
-pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -820,6 +817,9 @@ pub struct AuthorityState {
     pub overload_info: AuthorityOverloadInfo,
 
     pub validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+
+    /// The chain identifier is derived from the digest of the genesis checkpoint.
+    chain_identifier: ChainIdentifier,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -2854,6 +2854,7 @@ impl AuthorityState {
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+        chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -2910,6 +2911,7 @@ impl AuthorityState {
             config,
             overload_info: AuthorityOverloadInfo::default(),
             validator_tx_finalizer,
+            chain_identifier,
         });
 
         // Start a task to execute ready certificates.
@@ -3470,19 +3472,8 @@ impl AuthorityState {
     }
 
     /// Chain Identifier is the digest of the genesis checkpoint.
-    pub fn get_chain_identifier(&self) -> Option<ChainIdentifier> {
-        if let Some(digest) = CHAIN_IDENTIFIER.get() {
-            return Some(*digest);
-        }
-
-        let checkpoint = self
-            .get_checkpoint_by_sequence_number(0)
-            .tap_err(|e| error!("Failed to get genesis checkpoint: {:?}", e))
-            .ok()?
-            .tap_none(|| error!("Genesis checkpoint is missing from DB"))?;
-        // It's ok if the value is already set due to data races.
-        let _ = CHAIN_IDENTIFIER.set(ChainIdentifier::from(*checkpoint.digest()));
-        Some(ChainIdentifier::from(*checkpoint.digest()))
+    pub fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
     }
 
     #[instrument(level = "trace", skip_all)]
