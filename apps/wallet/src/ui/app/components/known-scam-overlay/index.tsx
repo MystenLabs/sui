@@ -9,8 +9,6 @@ import { Portal } from '../../shared/Portal';
 import type { DappPreflightResponse } from './types';
 import WarningSvg from './warning.svg';
 
-// const scamOverlayStyles = cva
-
 export type ScamOverlayProps = {
 	preflight: DappPreflightResponse;
 	onClickBack(): void;
