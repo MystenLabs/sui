@@ -31,19 +31,20 @@ mod rpc_client;
 mod test_utils;
 
 #[derive(clap::Args, Clone, Debug)]
+#[group(required = true)]
 pub struct ClientArgs {
     /// Remote Store to fetch checkpoints from.
-    #[clap(long, required = true, group = "source")]
+    #[clap(long, group = "source")]
     pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
-    #[clap(long, required = true, group = "source")]
+    #[clap(long, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
 
     /// Path to the local ingestion directory.
     /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
-    #[clap(long, required = true, group = "source")]
+    #[clap(long, group = "source")]
     pub rpc_api_url: Option<Url>,
 
     #[clap(long)]
