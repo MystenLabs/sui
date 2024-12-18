@@ -573,6 +573,9 @@ mod test {
             // Use shared_counter_max_tip to make transactions to have different gas prices.
             simulated_load_config.use_shared_counter_max_tip = rng.gen_bool(0.25);
             simulated_load_config.shared_counter_max_tip = rng.gen_range(1..=1000);
+
+            // Always enable the randomized tx workload in this test.
+            simulated_load_config.randomized_transaction_weight = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
