@@ -30,4 +30,4 @@ error[Compatibility E03001]: function signature mismatch
   = Restore the original function 'new_function' including the ordering.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'dep_only'.

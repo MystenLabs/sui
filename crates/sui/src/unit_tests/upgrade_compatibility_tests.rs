@@ -27,20 +27,6 @@ fn test_declarations_missing() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_snapshot!(normalize_path(err.to_string()));
-
-    // let (pkg_v1, pkg_v2) = get_packages("declaration_errors");
-    // let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Additive);
-    //
-    // assert!(result.is_err());
-    // let err = result.unwrap_err();
-    // assert_snapshot!(normalize_path(err.to_string()));
-    //
-    // let (pkg_v1, pkg_v2) = get_packages("declaration_errors");
-    // let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::DepOnly);
-    //
-    // assert!(result.is_err());
-    // let err = result.unwrap_err();
-    // assert_snapshot!(normalize_path(err.to_string()));
 }
 
 #[test]
@@ -101,6 +87,18 @@ fn test_deponly() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_snapshot!(normalize_path(err.to_string()));
+}
+#[test]
+fn test_version_mismatch() {
+    // use deponly errors package, but change the version of the package and the module
+    // to trigger _only_ a version mismatch error (not a deponly error)
+    let (mut pkg_v1, mut pkg_v2) = get_packages("deponly_errors");
+    pkg_v1[0].version = 1; // previous version was 1
+    pkg_v2.package.root_compiled_units[0].unit.module.version = 0; // downgraded to version 0
+
+    let result = compare_packages(pkg_v1, pkg_v2, UpgradePolicy::Additive);
+    assert!(result.is_err());
+    assert_snapshot!(normalize_path(result.unwrap_err().to_string()));
 }
 
 #[test]
