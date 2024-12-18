@@ -121,6 +121,7 @@ members = [
     "crates/sui-indexer-alt-jsonrpc",
     "crates/sui-indexer-alt-schema",
     "crates/sui-indexer-builder",
+    "crates/sui-indexer-alt-restorer",
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-api",
@@ -644,6 +645,8 @@ sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
+sui-indexer-alt = { path = "crates/sui-indexer-alt" }
+sui-indexer-alt-restorer = { path = "crates/sui-indexer-restorer" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
