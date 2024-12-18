@@ -169,15 +169,27 @@ export interface DryRunTransactionBlockResponse {
 	input: TransactionBlockData;
 	objectChanges: SuiObjectChange[];
 }
-export interface DynamicFieldInfo {
-	bcsName: string;
-	digest: string;
-	name: DynamicFieldName;
-	objectId: string;
-	objectType: string;
-	type: DynamicFieldType;
-	version: string;
-}
+export type DynamicFieldInfo =
+	| {
+			digest: string;
+			name: DynamicFieldName;
+			objectId: string;
+			objectType: string;
+			type: DynamicFieldType;
+			version: string;
+			bcsEncoding: 'base64';
+			bcsName: string;
+	  }
+	| {
+			digest: string;
+			name: DynamicFieldName;
+			objectId: string;
+			objectType: string;
+			type: DynamicFieldType;
+			version: string;
+			bcsEncoding: 'base58';
+			bcsName: string;
+	  };
 export interface DynamicFieldName {
 	type: string;
 	value: unknown;
@@ -205,28 +217,51 @@ export interface EndOfEpochData {
 	 */
 	nextEpochProtocolVersion: string;
 }
-export interface SuiEvent {
-	/** Base 58 encoded bcs bytes of the move event */
-	bcs: string;
-	/**
-	 * Sequential event ID, ie (transaction seq number, event seq number). 1) Serves as a unique event ID
-	 * for each fullnode 2) Also serves to sequence events for the purposes of pagination and querying. A
-	 * higher id is an event seen later by that fullnode. This ID is the "cursor" for event querying.
-	 */
-	id: EventId;
-	/** Move package where this event was emitted. */
-	packageId: string;
-	/** Parsed json value of the event */
-	parsedJson: unknown;
-	/** Sender's Sui address. */
-	sender: string;
-	/** UTC timestamp in milliseconds since epoch (1/1/1970) */
-	timestampMs?: string | null;
-	/** Move module where this event was emitted. */
-	transactionModule: string;
-	/** Move event type. */
-	type: string;
-}
+export type SuiEvent =
+	| {
+			/**
+			 * Sequential event ID, ie (transaction seq number, event seq number). 1) Serves as a unique event ID
+			 * for each fullnode 2) Also serves to sequence events for the purposes of pagination and querying. A
+			 * higher id is an event seen later by that fullnode. This ID is the "cursor" for event querying.
+			 */
+			id: EventId;
+			/** Move package where this event was emitted. */
+			packageId: string;
+			/** Parsed json value of the event */
+			parsedJson: unknown;
+			/** Sender's Sui address. */
+			sender: string;
+			/** UTC timestamp in milliseconds since epoch (1/1/1970) */
+			timestampMs?: string | null;
+			/** Move module where this event was emitted. */
+			transactionModule: string;
+			/** Move event type. */
+			type: string;
+			bcs: string;
+			bcsEncoding: 'base64';
+	  }
+	| {
+			/**
+			 * Sequential event ID, ie (transaction seq number, event seq number). 1) Serves as a unique event ID
+			 * for each fullnode 2) Also serves to sequence events for the purposes of pagination and querying. A
+			 * higher id is an event seen later by that fullnode. This ID is the "cursor" for event querying.
+			 */
+			id: EventId;
+			/** Move package where this event was emitted. */
+			packageId: string;
+			/** Parsed json value of the event */
+			parsedJson: unknown;
+			/** Sender's Sui address. */
+			sender: string;
+			/** UTC timestamp in milliseconds since epoch (1/1/1970) */
+			timestampMs?: string | null;
+			/** Move module where this event was emitted. */
+			transactionModule: string;
+			/** Move event type. */
+			type: string;
+			bcs: string;
+			bcsEncoding: 'base58';
+	  };
 export type SuiEventFilter =
 	/** Return all events. */
 	| {
