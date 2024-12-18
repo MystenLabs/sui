@@ -62,7 +62,7 @@ impl SnapshotRestorer {
             args.start_epoch,
             &remote_store_config,
             &local_store_config,
-            usize::MAX,
+            usize::MAX, // indirect_objects_threshold
             NonZeroUsize::new(args.concurrency).unwrap(),
             m,
             true, // skip_reset_local_store
@@ -80,8 +80,8 @@ impl SnapshotRestorer {
 
     pub async fn restore(&mut self) -> Result<(), Error> {
         info!(
-            "Starting snapshot restore from epoch {}",
-            self.restore_args.start_epoch
+            epoch = self.restore_args.start_epoch,
+            "Starting snapshot restore"
         );
         let (sha3_digests, num_part_files) = self.snapshot_reader.compute_checksum().await?;
         let (_abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -99,12 +99,11 @@ impl SnapshotRestorer {
             remote_object_store,
             sha3_digests,
             num_part_files,
-            self.restore_args.concurrency,
         )
         .await?;
         info!(
-            "Finished snapshot restore from epoch {}",
-            self.restore_args.start_epoch
+            epoch = self.restore_args.start_epoch,
+            "Finished snapshot restore"
         );
         Ok(())
     }
@@ -117,7 +116,6 @@ impl SnapshotRestorer {
         remote_object_store: Arc<dyn ObjectStoreGetExt>,
         sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
         num_part_files: usize,
-        concurrency: usize,
     ) -> std::result::Result<(), anyhow::Error> {
         let move_object_progress_bar = Arc::new(self.snapshot_reader.get_multi_progress().add(
             ProgressBar::new(num_part_files as u64).with_style(
@@ -128,6 +126,7 @@ impl SnapshotRestorer {
             ),
         ));
 
+        let concurrency = self.restore_args.concurrency;
         Abortable::new(
             async move {
                 let sema_limit = Arc::new(Semaphore::new(concurrency));
@@ -157,8 +156,8 @@ impl SnapshotRestorer {
                         )
                         .await;
                         info!(
-                            "Finished downloading move object file {:?}",
-                            object_file_path
+                            path = ?object_file_path,
+                            "Finished downloading move object file"
                         );
                         let mut object_infos = vec![];
                         let _result: Result<(), anyhow::Error> =
@@ -188,7 +187,7 @@ impl SnapshotRestorer {
                                 .await?;
                         }
                         bar_clone.inc(1);
-                        info!("Restored {} move objects", object_info_count);
+                        info!(count = object_info_count, "Restored move objects");
                         Ok::<(), anyhow::Error>(())
                     });
                     restore_tasks.push(restore_task);
