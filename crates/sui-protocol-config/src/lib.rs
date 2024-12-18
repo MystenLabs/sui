@@ -2875,7 +2875,7 @@ impl ProtocolConfig {
                     cfg.consensus_max_transactions_in_block_bytes = Some(35 * 1024);
                     // Assume 20_000 TPS * 5% max stake per validator / (minimum) 4 blocks per round = 250 transactions per block maximum
                     // Using a higher limit that is 512, to account for bursty traffic and system transactions.
-                    cfg.consensus_max_num_transactions_in_block = Some(256);
+                    cfg.consensus_max_num_transactions_in_block = Some(50);
 
                     cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
                 }
