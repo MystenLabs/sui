@@ -1276,7 +1276,7 @@ impl ExecutionCacheCommit for WritebackCache {
     }
 
     fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {
-        self.store.persist_transaction(tx)
+        self.store.persist_transaction(tx).expect("db error");
     }
 
     fn approximate_pending_transaction_count(&self) -> u64 {

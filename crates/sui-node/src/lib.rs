@@ -516,9 +516,6 @@ impl SuiNode {
             )))
         };
 
-        info!("creating checkpoint store");
-        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
-
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),

@@ -242,8 +242,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             backpressure_manager.clone(),
         );
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
