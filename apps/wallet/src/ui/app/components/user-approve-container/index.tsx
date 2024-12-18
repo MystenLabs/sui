@@ -15,7 +15,7 @@ import { txRequestsSelectors } from '../../redux/slices/transaction-requests';
 import { Button } from '../../shared/ButtonUI';
 import { UnlockAccountButton } from '../accounts/UnlockAccountButton';
 import { DAppInfoCard } from '../DAppInfoCard';
-import { ScamOverlay } from '../known-scam-overlay';
+import { ScamOverlay, WarningOverlay } from '../known-scam-overlay';
 import { RequestType } from '../known-scam-overlay/types';
 import { useShowScamWarning } from '../known-scam-overlay/useShowScamWarning';
 
@@ -83,7 +83,8 @@ export function UserApproveContainer({
 
 	const {
 		data,
-		isOpen,
+		showScam,
+		showWarning,
 		isPending: isDomainCheckLoading,
 		isError,
 	} = useShowScamWarning({
@@ -100,9 +101,15 @@ export function UserApproveContainer({
 	return (
 		<>
 			<ScamOverlay
-				open={isOpen}
+				open={showScam}
 				title={data?.block.title}
 				subtitle={data?.block.subtitle}
+				onDismiss={() => handleOnResponse(false)}
+			/>
+			<WarningOverlay
+				open={showWarning}
+				title={data?.warnings.title}
+				subtitles={data?.warnings.subtitles}
 				onDismiss={() => handleOnResponse(false)}
 			/>
 			<div className="flex flex-1 flex-col flex-nowrap h-full">

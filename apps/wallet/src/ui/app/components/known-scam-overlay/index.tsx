@@ -13,6 +13,13 @@ export type ScamOverlayProps = {
 	subtitle?: string;
 };
 
+export type WarningOverlayProps = {
+	onDismiss(): void;
+	open: boolean;
+	title?: string;
+	subtitles?: string[];
+};
+
 export function ScamOverlay({ open, onDismiss, title, subtitle }: ScamOverlayProps) {
 	if (!open) return null;
 	return (
@@ -29,6 +36,37 @@ export function ScamOverlay({ open, onDismiss, title, subtitle }: ScamOverlayPro
 								'This website has been flagged for malicious behavior. To protect your wallet from potential threats, please return to safety.'}
 						</div>
 					</div>
+				</div>
+
+				<div className="gap-2 mt-auto w-full items-stretch">
+					<Button variant="primary" text="I understand" onClick={onDismiss} />
+				</div>
+			</div>
+		</Portal>
+	);
+}
+
+export function WarningOverlay({ open, onDismiss, title, subtitles }: WarningOverlayProps) {
+	if (!open) return null;
+
+	return (
+		<Portal containerId="overlay-portal-container">
+			<div className="h-full w-full bg-issue-light flex flex-col p-4 justify-center items-center gap-4 absolute top-0 left-0 bottom-0 z-50">
+				<WarningSvg />
+				<div className="flex flex-col gap-2 text-center pb-4">
+					<Heading variant="heading2" weight="semibold" color="gray-90">
+						{title || 'Restricted coin(s) detected'}
+					</Heading>
+
+					{(
+						subtitles || [
+							'A coin in this transaction may have implemented restrictions on what you can do with it once in your wallet. Acquiring this coin may result in your inability to sell it or other adverse effects.',
+						]
+					).map((subtitle) => (
+						<div className="flex text-center font-medium text-pBody text-gray-90">
+							<div className="font-medium text-pBody text-gray-90">{subtitle}</div>
+						</div>
+					))}
 				</div>
 
 				<div className="gap-2 mt-auto w-full items-stretch">
