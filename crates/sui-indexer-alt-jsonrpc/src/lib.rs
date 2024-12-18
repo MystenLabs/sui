@@ -85,7 +85,7 @@ pub async fn start_rpc(args: Args) -> anyhow::Result<()> {
         .await
         .context("Failed to start RPC service")?;
 
-    let db = Db::new(db_args)
+    let db = Db::for_read(db_args)
         .await
         .context("Failed to connect to database")?;
 
