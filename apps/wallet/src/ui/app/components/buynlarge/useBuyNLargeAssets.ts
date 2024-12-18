@@ -17,7 +17,7 @@ export function useBuyNLargeAssets() {
 			options: { showDisplay: true, showType: true },
 		},
 		{
-			enabled: !!address && config.some(({ enabled }) => enabled),
+			enabled: !!address?.length && config.some(({ enabled }) => enabled),
 		},
 	);
 
