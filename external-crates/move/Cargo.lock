@@ -471,10 +471,8 @@ checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-targets 0.52.6",
 ]
 
@@ -1784,8 +1782,8 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
+ "move-model-2",
  "move-package",
- "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-unit-test",
@@ -1938,10 +1936,14 @@ dependencies = [
  "datatest-stable",
  "itertools",
  "log",
+ "move-binary-format",
  "move-compiler",
+ "move-core-types",
+ "move-ir-types",
  "move-model",
- "move-prover",
+ "move-model-2",
  "move-prover-test-utils",
+ "move-symbol-pool",
  "num",
  "once_cell",
  "regex",
@@ -2041,6 +2043,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-model-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "codespan",
+ "codespan-reporting",
+ "datatest-stable",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-symbol-pool",
+ "num",
+ "serde",
+ "vfs",
+]
+
+[[package]]
 name = "move-package"
 version = "0.1.0"
 dependencies = [
@@ -2057,7 +2081,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-docgen",
- "move-model",
+ "move-model-2",
  "move-symbol-pool",
  "named-lock",
  "once_cell",
@@ -2082,31 +2106,6 @@ dependencies = [
  "enum-compat-util",
  "quote 1.0.37",
  "syn 2.0.77",
-]
-
-[[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 4.5.17",
- "codespan-reporting",
- "datatest-stable",
- "itertools",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-model",
- "move-prover-test-utils",
- "move-stackless-bytecode",
- "once_cell",
- "serde",
- "shell-words",
- "simplelog",
- "tempfile",
- "toml",
- "walkdir",
 ]
 
 [[package]]
@@ -2158,7 +2157,6 @@ dependencies = [
  "move-core-types",
  "move-docgen",
  "move-package",
- "move-prover",
  "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
@@ -3451,12 +3449,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shell-words"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
-
-[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3503,17 +3495,6 @@ name = "similar"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1de1d4f81173b03af4c0cbed3c898f6bff5b870e4a7f5d6f4057d62a7a4b686e"
-
-[[package]]
-name = "simplelog"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
-dependencies = [
- "chrono",
- "log",
- "termcolor",
-]
 
 [[package]]
 name = "siphasher"

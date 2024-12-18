@@ -11,10 +11,10 @@ use move_binary_format::file_format::{self, SignatureToken};
 use move_compiler::{
     self,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{FilesSourceText, MappedFiles},
     expansion::ast::{self as E, ModuleIdent_},
     naming::ast as N,
     shared::{
+        files::{FilesSourceText, MappedFiles},
         program_info::{ConstantInfo, FunctionInfo, ModuleInfo, TypingProgramInfo},
         NumericalAddress,
     },
@@ -365,8 +365,7 @@ impl<'a> Module<'a> {
     pub fn source_path(&self) -> Symbol {
         self.model()
             .files
-            .name(&self.info().defined_loc.file_hash())
-            .unwrap()
+            .filename(&self.info().defined_loc.file_hash())
     }
 
     pub fn doc(&self) -> &str {
@@ -415,12 +414,12 @@ impl<'a> Struct<'a> {
         self.data.compiled_idx
     }
 
-    pub fn struct_handle(&self) -> &'a file_format::StructHandle {
+    pub fn datatype_handle(&self) -> &'a file_format::DatatypeHandle {
         self.module
             .compiled()
             .named_module
             .module
-            .struct_handle_at(self.compiled().struct_handle)
+            .datatype_handle_at(self.compiled().struct_handle)
     }
 
     pub fn doc(&self) -> &str {
@@ -453,9 +452,21 @@ impl<'a> Enum<'a> {
         self.module.info().enums.get_(&self.name).unwrap()
     }
 
-    // pub fn compiled(&self) -> &file_format::EnumDefinition {
-    //     self.compiled
-    // }
+    pub fn compiled(&self) -> &file_format::EnumDefinition {
+        self.module
+            .compiled()
+            .named_module
+            .module
+            .enum_def_at(self.data.compiled_idx)
+    }
+
+    pub fn datatype_handle(&self) -> &'a file_format::DatatypeHandle {
+        self.module
+            .compiled()
+            .named_module
+            .module
+            .datatype_handle_at(self.compiled().enum_handle)
+    }
 
     pub fn doc(&self) -> &str {
         todo!()
@@ -615,8 +626,8 @@ impl<'a> Constant<'a> {
             ST::Signer => L::Signer,
             ST::Vector(inner) => L::Vector(Box::new(Self::annotated_constant_layout(inner))),
 
-            ST::Struct(_)
-            | ST::StructInstantiation(_)
+            ST::Datatype(_)
+            | ST::DatatypeInstantiation(_)
             | ST::Reference(_)
             | ST::MutableReference(_)
             | ST::TypeParameter(_) => unreachable!("{ty:?} is not supported in constants"),
@@ -701,7 +712,9 @@ pub struct StructData {
     compiled_idx: file_format::StructDefinitionIndex,
 }
 
-struct EnumData {}
+struct EnumData {
+    compiled_idx: file_format::EnumDefinitionIndex,
+}
 
 struct FunctionData {
     compiled_idx: file_format::FunctionDefinitionIndex,
@@ -890,6 +903,20 @@ impl ModuleData {
                 (name, struct_)
             })
             .collect();
+        let enums = info
+            .enums
+            .iter()
+            .map(|(_loc, name, _einfo)| {
+                let name = *name;
+                let (idx, _enum_def) = unit
+                    .named_module
+                    .module
+                    .find_enum_def_by_name(name.as_str())
+                    .unwrap();
+                let enum_ = EnumData::new(idx);
+                (name, enum_)
+            })
+            .collect();
         let functions = info
             .functions
             .iter()
@@ -924,7 +951,7 @@ impl ModuleData {
         Self {
             ident,
             structs,
-            enums: BTreeMap::new(),
+            enums,
             functions,
             constants,
             deps: BTreeMap::new(),
@@ -935,6 +962,12 @@ impl ModuleData {
 
 impl StructData {
     fn new(compiled_idx: file_format::StructDefinitionIndex) -> Self {
+        Self { compiled_idx }
+    }
+}
+
+impl EnumData {
+    fn new(compiled_idx: file_format::EnumDefinitionIndex) -> Self {
         Self { compiled_idx }
     }
 }

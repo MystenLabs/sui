@@ -4,10 +4,11 @@
 use crate::source_model::QualifiedMemberId;
 use move_binary_format::file_format::{
     self, AbilitySet, CodeOffset, CodeUnit, CompiledModule, ConstantPoolIndex, DatatypeHandleIndex,
-    DatatypeTyParameter, FieldHandleIndex, FunctionDefinition, FunctionDefinitionIndex,
-    FunctionHandleIndex, IdentifierIndex, LocalIndex, MemberCount, SignatureIndex, SignatureToken,
-    StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
-    Visibility,
+    DatatypeTyParameter, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinition,
+    FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex, LocalIndex, MemberCount,
+    SignatureIndex, SignatureToken, StructDefInstantiationIndex, StructDefinition,
+    StructDefinitionIndex, StructFieldInformation, TypeParameterIndex, VariantHandleIndex,
+    VariantInstantiationHandleIndex, VariantJumpTable, Visibility,
 };
 use move_core_types::{account_address::AccountAddress, u256::U256};
 use move_symbol_pool::Symbol;
@@ -15,55 +16,64 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct BinaryModel {
-    // TODO: when we introduce packages
-    // packages: BTreeMap<AccountAddress, Package>,
-    modules: BTreeMap<AccountAddress, BTreeMap<Symbol, Module>>,
+    pub packages: BTreeMap<AccountAddress, Package>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Package {
-    package_id: AccountAddress,
-    modules: BTreeMap<Symbol, Module>,
+    pub package_id: AccountAddress,
+    pub modules: BTreeMap<Symbol, Module>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Module {
-    name: Symbol,
-    package: AccountAddress,
-
-    structs: BTreeMap<Symbol, Struct>,
-    functions: BTreeMap<Symbol, Function>,
-    constants: BTreeMap<Symbol, Constant>,
-
-    module: CompiledModule,
+    pub name: Symbol,
+    pub package: AccountAddress,
+    pub structs: BTreeMap<Symbol, Struct>,
+    pub functions: BTreeMap<Symbol, Function>,
+    pub constants: BTreeMap<Symbol, Constant>,
+    pub module: CompiledModule,
 }
 
 #[derive(Debug, Clone)]
 pub struct Struct {
-    name: Symbol,
-    abilities: AbilitySet,
-    type_parameters: Vec<StructTypeParameter>,
-    fields: Vec<Field>,
+    pub name: Symbol,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    pub fields: Vec<Field>,
+    pub def_idx: StructDefinitionIndex,
+}
 
-    def_idx: StructDefinitionIndex,
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: Symbol,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    pub variants: Vec<Variant>,
+    pub def_idx: EnumDefinitionIndex,
+}
+
+#[derive(Debug, Clone)]
+pub struct Variant {
+    pub name: Symbol,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Field {
-    name: Symbol,
-    type_: Type,
+    pub name: Symbol,
+    pub type_: Type,
 }
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    name: Symbol,
-    type_parameters: Vec<AbilitySet>,
-    parameters: Vec<Type>,
-    returns: Vec<Type>,
-    visibility: u8,
-    code: Option<Code>,
-
-    def_idx: FunctionDefinitionIndex,
+    pub name: Symbol,
+    pub type_parameters: Vec<AbilitySet>,
+    pub parameters: Vec<Type>,
+    pub returns: Vec<Type>,
+    pub visibility: u8,
+    pub code: Option<Code>,
+    pub def_idx: FunctionDefinitionIndex,
 }
 
 #[repr(u8)]
@@ -99,8 +109,8 @@ pub enum Type {
     U256,
     Address,
     Vector(Box<Type>),
-    Struct(Box<QualifiedMemberId>),
-    StructInstantiation(Box<(QualifiedMemberId, Vec<Type>)>),
+    Datatype(Box<QualifiedMemberId>),
+    DatatypeInstantiation(Box<(QualifiedMemberId, Vec<Type>)>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     TypeParameter(TypeParameterIndex),
@@ -175,12 +185,21 @@ pub enum Bytecode {
     VecPopBack(Box<Type>),
     VecUnpack(Box<(Type, u64)>),
     VecSwap(Box<Type>),
+    PackVariant(Box<(QualifiedMemberId, Symbol)>),
+    PackVariantGeneric(Box<(QualifiedMemberId, Symbol, Vec<Type>)>),
+    UnpackVariant(Box<(QualifiedMemberId, Symbol)>),
+    UnpackVariantImmRef(Box<(QualifiedMemberId, Symbol)>),
+    UnpackVariantMutRef(Box<(QualifiedMemberId, Symbol)>),
+    UnpackVariantGeneric(Box<(QualifiedMemberId, Symbol, Vec<Type>)>),
+    UnpackVariantGenericImmRef(Box<(QualifiedMemberId, Symbol, Vec<Type>)>),
+    UnpackVariantGenericMutRef(Box<(QualifiedMemberId, Symbol, Vec<Type>)>),
+    VariantSwitch(Box<(QualifiedMemberId, Vec<(Symbol, CodeOffset)>)>),
 }
 
 #[derive(Debug, Clone)]
 pub struct FieldRef {
-    struct_: QualifiedMemberId,
-    field: MemberCount,
+    pub struct_: QualifiedMemberId,
+    pub field: MemberCount,
 }
 
 //**************************************************************************************************
@@ -189,15 +208,30 @@ pub struct FieldRef {
 
 impl BinaryModel {
     pub fn new(compiled_modules: &[CompiledModule]) -> Self {
-        let mut modules = BTreeMap::new();
+        let mut packages = BTreeMap::new();
 
         for compiled_module in compiled_modules {
             let module = Module::new(compiled_module);
-            let module_map = modules.entry(module.package).or_insert(BTreeMap::new());
-            module_map.insert(module.name, module);
+            let package = packages
+                .entry(module.package)
+                .or_insert_with(|| Package::new(module.package));
+            package.insert(module);
         }
 
-        Self { modules }
+        Self { packages }
+    }
+}
+
+impl Package {
+    fn new(package_id: AccountAddress) -> Self {
+        Self {
+            package_id,
+            modules: BTreeMap::new(),
+        }
+    }
+
+    fn insert(&mut self, module: Module) {
+        self.modules.insert(module.name, module);
     }
 }
 
@@ -243,7 +277,7 @@ fn make_struct(
     def: &StructDefinition,
     def_idx: StructDefinitionIndex,
 ) -> Struct {
-    let handle = module.struct_handle_at(def.struct_handle);
+    let handle = module.datatype_handle_at(def.struct_handle);
     let name = identifier_at(module, handle.name);
     let abilities = handle.abilities;
     let type_parameters = handle.type_parameters.clone();
@@ -318,18 +352,18 @@ fn make_type(module: &CompiledModule, token: &SignatureToken) -> Type {
         Address => Type::Address,
         Signer => panic!("Signer type is not supported"),
         Vector(token) => Type::Vector(Box::new(make_type(module, &*token))),
-        Struct(handle_idx) => {
-            let member_id = qualified_member_from_struct_handle(module, *handle_idx);
-            Type::Struct(Box::new(member_id))
+        Datatype(handle_idx) => {
+            let member_id = qualified_member_from_datatype_handle(module, *handle_idx);
+            Type::Datatype(Box::new(member_id))
         }
-        StructInstantiation(struct_inst) => {
-            let (handle_idx, tokens) = &**struct_inst;
-            let member_id = qualified_member_from_struct_handle(module, *handle_idx);
+        DatatypeInstantiation(datatype_inst) => {
+            let (handle_idx, tokens) = &**datatype_inst;
+            let member_id = qualified_member_from_datatype_handle(module, *handle_idx);
             let types = tokens
                 .iter()
                 .map(|token| make_type(module, token))
                 .collect();
-            Type::StructInstantiation(Box::new((member_id, types)))
+            Type::DatatypeInstantiation(Box::new((member_id, types)))
         }
         Reference(token) => Type::Reference(Box::new(make_type(module, &*token))),
         MutableReference(token) => Type::MutableReference(Box::new(make_type(module, &*token))),
@@ -341,22 +375,30 @@ fn make_type(module: &CompiledModule, token: &SignatureToken) -> Type {
 }
 
 fn make_code(module: &CompiledModule, code: &CodeUnit) -> Code {
+    let CodeUnit {
+        locals,
+        code,
+        jump_tables,
+    } = code;
     let locals = module
-        .signature_at(code.locals)
+        .signature_at(*locals)
         .0
         .iter()
         .map(|token| make_type(module, token))
         .collect();
     let code = code
-        .code
         .iter()
-        .map(|bytecode| make_bytecode(module, bytecode))
+        .map(|bytecode| make_bytecode(module, jump_tables, bytecode))
         .collect();
 
     Code { locals, code }
 }
 
-fn make_bytecode(module: &CompiledModule, bytecode: &file_format::Bytecode) -> Bytecode {
+fn make_bytecode(
+    module: &CompiledModule,
+    jump_tables: &[VariantJumpTable],
+    bytecode: &file_format::Bytecode,
+) -> Bytecode {
     use file_format::Bytecode::*;
     match bytecode {
         Pop => Bytecode::Pop,
@@ -386,29 +428,11 @@ fn make_bytecode(module: &CompiledModule, bytecode: &file_format::Bytecode) -> B
             let types = signature_to_types(module, func_inst.type_parameters);
             Bytecode::CallGeneric(Box::new((member_id, types)))
         }
-        Pack(idx) => {
-            let struct_def = module.struct_def_at(*idx);
-            let member_id = qualified_member_from_struct_handle(module, struct_def.struct_handle);
-            Bytecode::Pack(Box::new(member_id))
-        }
-        PackGeneric(idx) => {
-            let struct_inst = module.struct_instantiation_at(*idx);
-            let struct_def = module.struct_def_at(struct_inst.def);
-            let member_id = qualified_member_from_struct_handle(module, struct_def.struct_handle);
-            let types = signature_to_types(module, struct_inst.type_parameters);
-            Bytecode::PackGeneric(Box::new((member_id, types)))
-        }
-        Unpack(idx) => {
-            let struct_def = module.struct_def_at(*idx);
-            let member_id = qualified_member_from_struct_handle(module, struct_def.struct_handle);
-            Bytecode::Unpack(Box::new(member_id))
-        }
+        Pack(idx) => Bytecode::Pack(Box::new(resolve_struct(module, *idx))),
+        PackGeneric(idx) => Bytecode::PackGeneric(Box::new(resolve_struct_generic(module, *idx))),
+        Unpack(idx) => Bytecode::Unpack(Box::new(resolve_struct(module, *idx))),
         UnpackGeneric(idx) => {
-            let struct_inst = module.struct_instantiation_at(*idx);
-            let struct_def = module.struct_def_at(struct_inst.def);
-            let member_id = qualified_member_from_struct_handle(module, struct_def.struct_handle);
-            let types = signature_to_types(module, struct_inst.type_parameters);
-            Bytecode::UnpackGeneric(Box::new((member_id, types)))
+            Bytecode::UnpackGeneric(Box::new(resolve_struct_generic(module, *idx)))
         }
         ReadRef => Bytecode::ReadRef,
         WriteRef => Bytecode::WriteRef,
@@ -495,6 +519,44 @@ fn make_bytecode(module: &CompiledModule, bytecode: &file_format::Bytecode) -> B
         CastU32 => Bytecode::CastU32,
         CastU256 => Bytecode::CastU256,
 
+        PackVariant(idx) => Bytecode::PackVariant(Box::new(resolve_variant(module, *idx))),
+        PackVariantGeneric(idx) => {
+            Bytecode::PackVariantGeneric(Box::new(resolve_variant_generic(module, *idx)))
+        }
+        UnpackVariant(idx) => Bytecode::UnpackVariant(Box::new(resolve_variant(module, *idx))),
+        UnpackVariantImmRef(idx) => {
+            Bytecode::UnpackVariantImmRef(Box::new(resolve_variant(module, *idx)))
+        }
+        UnpackVariantMutRef(idx) => {
+            Bytecode::UnpackVariantMutRef(Box::new(resolve_variant(module, *idx)))
+        }
+        UnpackVariantGeneric(idx) => {
+            Bytecode::UnpackVariantGeneric(Box::new(resolve_variant_generic(module, *idx)))
+        }
+        UnpackVariantGenericImmRef(idx) => {
+            Bytecode::UnpackVariantGenericImmRef(Box::new(resolve_variant_generic(module, *idx)))
+        }
+        UnpackVariantGenericMutRef(idx) => {
+            Bytecode::UnpackVariantGenericMutRef(Box::new(resolve_variant_generic(module, *idx)))
+        }
+        VariantSwitch(idx) => {
+            let VariantJumpTable {
+                head_enum,
+                jump_table,
+            } = &jump_tables[idx.0 as usize];
+            let enum_def = module.enum_def_at(*head_enum);
+            let offsets = match jump_table {
+                file_format::JumpTableInner::Full(offsets) => enum_def
+                    .variants
+                    .iter()
+                    .zip(offsets)
+                    .map(|(variant, offset)| (identifier_at(module, variant.variant_name), *offset))
+                    .collect(),
+            };
+            let member_id = qualified_member_from_datatype_handle(module, enum_def.enum_handle);
+            Bytecode::VariantSwitch(Box::new((member_id, offsets)))
+        }
+
         // deprecated
         ExistsDeprecated(_)
         | ExistsGenericDeprecated(_)
@@ -517,11 +579,53 @@ fn identifier_at(module: &CompiledModule, idx: IdentifierIndex) -> Symbol {
     module.identifier_at(idx).as_str().into()
 }
 
-fn qualified_member_from_struct_handle(
+fn resolve_struct(module: &CompiledModule, idx: StructDefinitionIndex) -> QualifiedMemberId {
+    let struct_def = module.struct_def_at(idx);
+    qualified_member_from_datatype_handle(module, struct_def.struct_handle)
+}
+
+fn resolve_struct_generic(
     module: &CompiledModule,
-    handle_idx: StructHandleIndex,
+    idx: StructDefInstantiationIndex,
+) -> (QualifiedMemberId, Vec<Type>) {
+    let struct_inst = module.struct_instantiation_at(idx);
+    let struct_def = module.struct_def_at(struct_inst.def);
+    let member_id = qualified_member_from_datatype_handle(module, struct_def.struct_handle);
+    let types = signature_to_types(module, struct_inst.type_parameters);
+    (member_id, types)
+}
+
+fn resolve_variant(
+    module: &CompiledModule,
+    idx: VariantHandleIndex,
+) -> (QualifiedMemberId, Symbol) {
+    let variant_handle = module.variant_handle_at(idx);
+    let enum_def = module.enum_def_at(variant_handle.enum_def);
+    let variant_def = module.variant_def_at(variant_handle.enum_def, variant_handle.variant);
+    let member_id = qualified_member_from_datatype_handle(module, enum_def.enum_handle);
+    let variant_name = identifier_at(module, variant_def.variant_name);
+    (member_id, variant_name)
+}
+
+fn resolve_variant_generic(
+    module: &CompiledModule,
+    idx: VariantInstantiationHandleIndex,
+) -> (QualifiedMemberId, Symbol, Vec<Type>) {
+    let variant_inst = module.variant_instantiation_handle_at(idx);
+    let enum_inst = module.enum_instantiation_at(variant_inst.enum_def);
+    let enum_def = module.enum_def_at(enum_inst.def);
+    let variant_def = module.variant_def_at(enum_inst.def, variant_inst.variant);
+    let member_id = qualified_member_from_datatype_handle(module, enum_def.enum_handle);
+    let variant_name = identifier_at(module, variant_def.variant_name);
+    let types = signature_to_types(module, enum_inst.type_parameters);
+    (member_id, variant_name, types)
+}
+
+fn qualified_member_from_datatype_handle(
+    module: &CompiledModule,
+    handle_idx: DatatypeHandleIndex,
 ) -> QualifiedMemberId {
-    let handle = module.struct_handle_at(handle_idx);
+    let handle = module.datatype_handle_at(handle_idx);
     let module_handle = module.module_handle_at(handle.module);
     let address = *module.address_identifier_at(module_handle.address);
     let module_name = identifier_at(module, module_handle.name);
@@ -546,7 +650,7 @@ fn qualified_member_from_func_handle(
 fn field_ref_from_handle(module: &CompiledModule, handle: FieldHandleIndex) -> FieldRef {
     let field_handle = module.field_handle_at(handle);
     let struct_def = module.struct_def_at(field_handle.owner);
-    let struct_ = qualified_member_from_struct_handle(module, struct_def.struct_handle);
+    let struct_ = qualified_member_from_datatype_handle(module, struct_def.struct_handle);
     let field = field_handle.field;
     FieldRef { struct_, field }
 }
