@@ -13,24 +13,31 @@ use crate::snapshot::SnapshotRestorer;
 #[derive(Parser, Debug, Clone)]
 #[clap(name = "sui-indexer-restorer")]
 pub struct Args {
+    /// Restore from end of this epoch.
     #[clap(long, env = "START_EPOCH", required = true)]
     pub start_epoch: u64,
 
+    /// Endpoint to fetch snapshot and archive files from.
     #[clap(long, env = "ENDPOINT", required = true)]
     pub endpoint: String,
 
+    /// Bucket to fetch snapshot files from.
     #[clap(long, env = "SNAPSHOT_BUCKET", required = true)]
     pub snapshot_bucket: String,
 
+    /// Bucket to fetch archive files from.
     #[clap(long, env = "ARCHIVE_BUCKET", required = true)]
     pub archive_bucket: String,
 
+    /// Local directory to temporarily store snapshot files.
     #[clap(long, env = "SNAPSHOT_LOCAL_DIR", required = true)]
     pub snapshot_local_dir: String,
 
+    /// Number of concurrent restore tasks to run.
     #[clap(long, env = "CONCURRENCY", default_value_t = 50)]
     pub concurrency: usize,
 
+    /// Database connection arguments from `sui-pg-db`.
     #[clap(flatten)]
     pub db_args: DbArgs,
 }
