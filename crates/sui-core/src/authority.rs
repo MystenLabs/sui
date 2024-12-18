@@ -3207,12 +3207,11 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             &self.config.expensive_safety_check_config,
-            *self
-                .checkpoint_store
+            self.checkpoint_store
                 .get_epoch_last_checkpoint(epoch_store.epoch())
                 .unwrap()
-                .unwrap()
-                .sequence_number(),
+                .map(|c| *c.sequence_number())
+                .unwrap_or_default(),
         );
         let new_epoch = new_epoch_store.epoch();
         self.transaction_manager.reconfigure(new_epoch);
