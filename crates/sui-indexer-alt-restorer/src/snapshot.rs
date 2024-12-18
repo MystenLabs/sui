@@ -8,16 +8,15 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use diesel_async::RunQueryDsl;
-use futures::future::{AbortHandle, AbortRegistration, Abortable};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use object_store::path::Path;
-use tokio::sync::{Mutex, Semaphore};
-use tokio::task;
+use tokio::sync::Mutex;
 use tracing::info;
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::LiveObject;
 use sui_field_count::FieldCount;
+use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use sui_indexer_alt_schema::objects::StoredObjInfo;
 use sui_indexer_alt_schema::schema::obj_info;
 use sui_pg_db::Db;
@@ -84,7 +83,6 @@ impl SnapshotRestorer {
             "Starting snapshot restore"
         );
         let (sha3_digests, num_part_files) = self.snapshot_reader.compute_checksum().await?;
-        let (_abort_handle, abort_registration) = AbortHandle::new_pair();
         let (input_files, epoch_dir, remote_object_store, _concurrency) =
             self.snapshot_reader.export_metadata().await?;
         let owned_input_files: Vec<(u32, (u32, FileMetadata))> = input_files
@@ -93,7 +91,6 @@ impl SnapshotRestorer {
             .collect();
 
         self.restore_object_infos(
-            abort_registration,
             owned_input_files,
             epoch_dir,
             remote_object_store,
@@ -110,13 +107,12 @@ impl SnapshotRestorer {
 
     async fn restore_object_infos(
         &self,
-        abort_registration: AbortRegistration,
         input_files: Vec<(u32, (u32, FileMetadata))>,
         epoch_dir: Path,
         remote_object_store: Arc<dyn ObjectStoreGetExt>,
         sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
         num_part_files: usize,
-    ) -> std::result::Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         let move_object_progress_bar = Arc::new(self.snapshot_reader.get_multi_progress().add(
             ProgressBar::new(num_part_files as u64).with_style(
                 ProgressStyle::with_template(
@@ -126,33 +122,28 @@ impl SnapshotRestorer {
             ),
         ));
 
-        let concurrency = self.restore_args.concurrency;
-        Abortable::new(
-            async move {
-                let sema_limit = Arc::new(Semaphore::new(concurrency));
-                let mut restore_tasks = vec![];
-
-                for (bucket, (part_num, file_metadata)) in input_files.into_iter() {
-                    let sema_limit_clone = sema_limit.clone();
-                    let epoch_dir_clone = epoch_dir.clone();
-                    let remote_object_store_clone = remote_object_store.clone();
-                    let sha3_digests_clone = sha3_digests.clone();
-                    let bar_clone = move_object_progress_bar.clone();
+        futures::stream::iter(input_files)
+            .try_for_each_spawned(
+                self.restore_args.concurrency,
+                |(bucket, (part_num, file_metadata))| {
+                    let epoch_dir = epoch_dir.clone();
+                    let remote_object_store = remote_object_store.clone();
+                    let sha3_digests = sha3_digests.clone();
+                    let bar = move_object_progress_bar.clone();
                     let db = self.db.clone();
                     let next_cp = self.next_checkpoint_after_epoch;
 
-                    let restore_task = task::spawn(async move {
+                    async move {
                         let mut conn = db.connect().await?;
-                        let _permit = sema_limit_clone.acquire().await.unwrap();
-                        let object_file_path = file_metadata.file_path(&epoch_dir_clone);
+                        let object_file_path = file_metadata.file_path(&epoch_dir);
                         let (bytes, _) = download_bytes(
-                            remote_object_store_clone,
+                            remote_object_store,
                             &file_metadata,
-                            epoch_dir_clone,
-                            sha3_digests_clone,
+                            epoch_dir,
+                            sha3_digests,
                             &&bucket,
                             &part_num,
-                            Some(512),
+                            Some(512), // max_timeout_secs
                         )
                         .await;
                         info!(
@@ -160,19 +151,18 @@ impl SnapshotRestorer {
                             "Finished downloading move object file"
                         );
                         let mut object_infos = vec![];
-                        let _result: Result<(), anyhow::Error> =
-                            LiveObjectIter::new(&file_metadata, bytes.clone()).map(|obj_iter| {
-                                for object in obj_iter {
-                                    match object {
-                                        LiveObject::Normal(obj) => {
-                                            let object_info =
-                                                StoredObjInfo::from_object(&obj, next_cp as i64);
-                                            object_infos.push(object_info);
-                                        }
-                                        LiveObject::Wrapped(_) => {}
+                        LiveObjectIter::new(&file_metadata, bytes.clone()).map(|obj_iter| {
+                            for object in obj_iter {
+                                match object {
+                                    LiveObject::Normal(obj) => {
+                                        let object_info =
+                                            StoredObjInfo::from_object(&obj, next_cp as i64);
+                                        object_infos.push(object_info);
                                     }
+                                    LiveObject::Wrapped(_) => {}
                                 }
-                            });
+                            }
+                        })?;
                         let object_infos =
                             object_infos.into_iter().collect::<Result<Vec<_>, _>>()?;
 
@@ -186,21 +176,13 @@ impl SnapshotRestorer {
                                 .execute(&mut conn)
                                 .await?;
                         }
-                        bar_clone.inc(1);
+                        bar.inc(1);
                         info!(count = object_info_count, "Restored move objects");
                         Ok::<(), anyhow::Error>(())
-                    });
-                    restore_tasks.push(restore_task);
-                }
-
-                let restore_task_results = futures::future::join_all(restore_tasks).await;
-                for restore_task_result in restore_task_results {
-                    restore_task_result??;
-                }
-                Ok(())
-            },
-            abort_registration,
-        )
-        .await?
+                    }
+                },
+            )
+            .await?;
+        Ok(())
     }
 }

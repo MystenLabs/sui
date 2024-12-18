@@ -14052,6 +14052,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-field-count",
+ "sui-indexer-alt-framework",
  "sui-indexer-alt-schema",
  "sui-pg-db",
  "sui-snapshot",
