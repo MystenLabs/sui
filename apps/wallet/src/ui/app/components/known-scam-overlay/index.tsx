@@ -42,7 +42,7 @@ export function ScamOverlay({ preflight, onClickBack, onClickContinue }: ScamOve
 		<Portal containerId="overlay-portal-container">
 			<div
 				className={cx(
-					'h-full w-full bg-warning-light flex flex-col p-4 justify-center items-center gap-4 absolute top-0 left-0 bottom-0 z-50',
+					'h-full w-full flex flex-col p-4 justify-center items-center gap-4 absolute top-0 left-0 bottom-0 z-50',
 					block.enabled ? 'bg-issue-light' : 'bg-warning-light',
 				)}
 			>
@@ -50,8 +50,9 @@ export function ScamOverlay({ preflight, onClickBack, onClickContinue }: ScamOve
 
 				{!!block.enabled && <Warning {...preflight.block} />}
 
-				{warnings?.map(({ title, subtitle }) => {
-					return <Warning title={title} subtitle={subtitle} />;
+				{warnings?.map(({ title, subtitle }, i) => {
+					// warnings list won't ever change, index key is fine
+					return <Warning key={i} title={title} subtitle={subtitle} />;
 				})}
 
 				<div className="flex flex-col gap-2 mt-auto w-full items-stretch">
