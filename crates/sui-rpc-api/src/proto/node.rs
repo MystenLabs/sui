@@ -152,6 +152,42 @@ impl TryFrom<&GetNodeInfoResponse> for crate::types::NodeInfo {
 // GetObjectOptions
 //
 
+impl GetObjectOptions {
+    pub fn all() -> Self {
+        Self {
+            object: Some(true),
+            object_bcs: Some(true),
+        }
+    }
+
+    pub fn none() -> Self {
+        Self {
+            object: Some(false),
+            object_bcs: Some(false),
+        }
+    }
+
+    pub fn with_object(mut self) -> Self {
+        self.object = Some(true);
+        self
+    }
+
+    pub fn without_object(mut self) -> Self {
+        self.object = Some(false);
+        self
+    }
+
+    pub fn with_object_bcs(mut self) -> Self {
+        self.object_bcs = Some(true);
+        self
+    }
+
+    pub fn without_object_bcs(mut self) -> Self {
+        self.object = Some(false);
+        self
+    }
+}
+
 impl From<crate::types::GetObjectOptions> for GetObjectOptions {
     fn from(
         crate::types::GetObjectOptions { object, object_bcs }: crate::types::GetObjectOptions,
@@ -163,6 +199,30 @@ impl From<crate::types::GetObjectOptions> for GetObjectOptions {
 impl From<GetObjectOptions> for crate::types::GetObjectOptions {
     fn from(GetObjectOptions { object, object_bcs }: GetObjectOptions) -> Self {
         Self { object, object_bcs }
+    }
+}
+
+//
+// GetObjectRequest
+//
+
+impl GetObjectRequest {
+    pub fn new<T: Into<super::types::ObjectId>>(object_id: T) -> Self {
+        Self {
+            object_id: Some(object_id.into()),
+            version: None,
+            options: None,
+        }
+    }
+
+    pub fn with_version(mut self, version: u64) -> Self {
+        self.version = Some(version);
+        self
+    }
+
+    pub fn with_options(mut self, options: GetObjectOptions) -> Self {
+        self.options = Some(options);
+        self
     }
 }
 
