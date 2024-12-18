@@ -25,8 +25,8 @@ pub struct DbArgs {
     database_url: Url,
 
     /// Number of connections to keep in the pool.
-    #[arg(long, default_value_t = Self::default().connection_pool_size)]
-    connection_pool_size: u32,
+    #[arg(long, default_value_t = Self::default().db_connection_pool_size)]
+    db_connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available, in milliseconds.
     #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
@@ -169,7 +169,7 @@ impl Default for DbArgs {
                 "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt",
             )
             .unwrap(),
-            connection_pool_size: 100,
+            db_connection_pool_size: 100,
             connection_timeout_ms: 60_000,
         }
     }
@@ -193,7 +193,7 @@ async fn pool(args: DbArgs) -> anyhow::Result<Pool<AsyncPgConnection>> {
     let manager = AsyncDieselConnectionManager::new(args.database_url.as_str());
 
     Ok(Pool::builder()
-        .max_size(args.connection_pool_size)
+        .max_size(args.db_connection_pool_size)
         .connection_timeout(args.connection_timeout())
         .build(manager)
         .await?)
