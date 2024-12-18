@@ -41,8 +41,9 @@ pub(crate) async fn read_archival_checkpoint_info(
     let manifest = archive_reader.get_manifest().await?;
     let next_checkpoint_after_epoch = manifest.next_checkpoint_after_epoch(args.start_epoch);
     info!(
-        "Read from archives: next checkpoint sequence after epoch {} is: {}",
-        args.start_epoch, next_checkpoint_after_epoch
+        epoch = args.start_epoch,
+        checkpoint = next_checkpoint_after_epoch,
+        "Next checkpoint after epoch",
     );
     let cp_summaries = archive_reader
         .get_summaries_for_list_no_verify(vec![0])

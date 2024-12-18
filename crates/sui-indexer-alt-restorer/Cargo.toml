@@ -22,7 +22,6 @@ sui-archival.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-field-count.workspace = true
-sui-indexer-alt.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-pg-db.workspace = true
 sui-snapshot.workspace = true
