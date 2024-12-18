@@ -29,7 +29,6 @@ sui-snapshot.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 tokio = { workspace = true, features = ["full"] }
-url.workspace = true
 
 [[bin]]
 name = "sui-indexer-alt-restorer"

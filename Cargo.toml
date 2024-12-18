@@ -645,7 +645,6 @@ sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
-sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-restorer" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-json = { path = "crates/sui-json" }
