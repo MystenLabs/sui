@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::{cmp::Ordering, hash::DefaultHasher};
 
 use moka::sync::Cache as MokaCache;
+use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 
@@ -177,7 +178,7 @@ const KEY_GENERATION_SIZE: usize = 1024 * 16;
 
 impl<K, V> MonotonicCache<K, V>
 where
-    K: Hash + Eq + Send + Sync + Copy + 'static,
+    K: Hash + Eq + Send + Sync + Copy + std::fmt::Debug + 'static,
     V: IsNewer + Clone + Send + Sync + 'static,
 {
     pub fn new(cache_size: u64) -> Self {
@@ -291,10 +292,13 @@ where
             let mut entry = entry.value().lock();
             check_ticket()?;
 
-            // Ticket expiry makes this assert impossible.
-            // TODO: relax to debug_assert?
-            assert!(!entry.is_newer_than(&value), "entry is newer than value");
-            *entry = value;
+            if entry.is_newer_than(&value) {
+                // TODO: Ticket expiry should this assert impossible. While trying to root cause
+                // the bug we can simply ignore the insert.
+                debug_fatal!("entry is newer than value for key {:?}", key);
+            } else {
+                *entry = value;
+            }
         }
 
         Ok(())
