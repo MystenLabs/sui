@@ -18,8 +18,12 @@ pub mod args;
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
     /// Address to listen to for incoming JSON-RPC connections.
-    #[clap(long)]
+    #[clap(long, default_value_t = Self::default().listen_address)]
     listen_address: SocketAddr,
+
+    /// The maximum number of concurrent connections to accept.
+    #[clap(long, default_value_t = Self::default().max_rpc_connections)]
+    max_rpc_connections: u32,
 }
 
 pub struct RpcService {
@@ -35,10 +39,14 @@ impl RpcService {
     /// bind to its socket upon construction (and will fail if this is not possible), but will not
     /// accept connections until [Self::run] is called.
     pub async fn new(rpc_args: RpcArgs) -> anyhow::Result<Self> {
-        let RpcArgs { listen_address } = rpc_args;
+        let RpcArgs {
+            listen_address,
+            max_rpc_connections,
+        } = rpc_args;
 
         let server = ServerBuilder::new()
             .http_only()
+            .max_connections(max_rpc_connections)
             .build(listen_address)
             .await
             .context("Failed to bind server")?;
@@ -78,6 +86,15 @@ impl RpcService {
     }
 }
 
+impl Default for RpcArgs {
+    fn default() -> Self {
+        Self {
+            listen_address: "0.0.0.0:6000".parse().unwrap(),
+            max_rpc_connections: 100,
+        }
+    }
+}
+
 pub async fn start_rpc(args: Args) -> anyhow::Result<()> {
     let Args { db_args, rpc_args } = args;
 
@@ -114,10 +131,12 @@ mod tests {
     }
 
     async fn test_service() -> RpcService {
-        let listen_address = test_listen_address();
-        RpcService::new(RpcArgs { listen_address })
-            .await
-            .expect("Failed to create test JSON-RPC service")
+        RpcService::new(RpcArgs {
+            listen_address: test_listen_address(),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create test JSON-RPC service")
     }
 
     #[tokio::test]
