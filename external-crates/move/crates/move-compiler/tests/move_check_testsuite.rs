@@ -104,7 +104,6 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     }
 
     if path.with_extension(SPEC_EXT).exists() {
-        println!("Running spec test: {}", path.display());
         let spec_exp_path = format!(
             "{}.{SPEC_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),

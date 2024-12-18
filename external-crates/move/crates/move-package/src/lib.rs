@@ -56,8 +56,9 @@ pub struct BuildConfig {
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 
-    /// Compile in 'verify' mode.
-    #[clap(name = "test-mode", long = "test", global = true)]
+    /// Compile in 'verify' mode. Commented out to not make the flag available for now.
+    /// But we do want the field to be present for downstream configuration.
+    // #[clap(name = "verify-mode", long = "verify", global = true)]
     pub verify_mode: bool,
 
     /// Generate documentation for packages

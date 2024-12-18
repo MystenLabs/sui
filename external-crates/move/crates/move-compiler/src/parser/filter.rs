@@ -251,7 +251,6 @@ fn filter_through_function_body<T: FilterContext>(
         body,
     } = function_def;
 
-    // let new_body = filter_function_body(context, body);
     let new_body = body.map(|b| match b {
         P::FunctionBody_::Native => b,
         P::FunctionBody_::Defined((uses, items, loc, exp)) => P::FunctionBody_::Defined((
