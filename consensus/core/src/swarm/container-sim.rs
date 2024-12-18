@@ -2,20 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::ArcSwapOption;
-use consensus_config::Parameters;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
-use prometheus::Registry;
 use std::{
     net::{IpAddr, SocketAddr},
     sync::Arc,
-    time::Duration,
 };
 use tracing::{info, trace};
 
 use super::node::NodeConfig;
 use crate::network::tonic_network::to_socket_addr;
 use crate::transaction::NoopTransactionVerifier;
-use crate::{CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority};
+use crate::{CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority};
 
 pub(crate) struct AuthorityNodeContainer {
     handle: Option<ContainerHandle>,
@@ -42,7 +39,7 @@ impl Drop for AuthorityNodeContainer {
 
 impl AuthorityNodeContainer {
     /// Spawn a new Node.
-    pub async fn spawn(config: NodeConfig) -> Self {
+    pub async fn spawn(config: super::node::NodeConfig) -> Self {
         let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
         let (cancel_sender, cancel_receiver) = tokio::sync::watch::channel(false);
 
@@ -70,7 +67,7 @@ impl AuthorityNodeContainer {
 
                 async move {
                     let (consensus_authority, commit_receiver, commit_consumer_monitor) =
-                        AuthorityNodeContainer::make_authority(config).await;
+                        super::node::make_authority(config).await;
 
                     startup_sender_clone.send(true).ok();
                     init_receiver_swap_clone.store(Some(Arc::new((
@@ -124,78 +121,23 @@ impl AuthorityNodeContainer {
         }
     }
 
-    pub fn take_commit_receiver(
-        &self,
-    ) -> (
-        UnboundedReceiver<CommittedSubDag>,
-        Arc<CommitConsumerMonitor>,
-    ) {
+    pub fn take_commit_receiver(&self) -> UnboundedReceiver<CommittedSubDag> {
         if let Some(commit_receiver) = self.commit_receiver.swap(None) {
             let Ok(commit_receiver) = Arc::try_unwrap(commit_receiver) else {
                 panic!("commit receiver still in use");
             };
 
-            (commit_receiver, self.commit_consumer_monitor.clone())
+            commit_receiver
         } else {
             panic!("commit receiver already taken");
         }
     }
 
-    pub fn transaction_client(&self) -> Arc<crate::TransactionClient> {
-        self.consensus_authority.transaction_client()
+    pub fn commit_consumer_monitor(&self) -> Arc<CommitConsumerMonitor> {
+        self.commit_consumer_monitor.clone()
     }
 
-    async fn make_authority(
-        config: NodeConfig,
-    ) -> (
-        ConsensusAuthority,
-        UnboundedReceiver<CommittedSubDag>,
-        Arc<CommitConsumerMonitor>,
-    ) {
-        let NodeConfig {
-            authority_index,
-            db_dir,
-            committee,
-            keypairs,
-            network_type,
-            boot_counter,
-            protocol_config,
-        } = config;
-
-        let registry = Registry::new();
-
-        // Cache less blocks to exercise commit sync.
-        let parameters = Parameters {
-            db_path: db_dir.path().to_path_buf(),
-            dag_state_cached_rounds: 5,
-            commit_sync_parallel_fetches: 2,
-            commit_sync_batch_size: 3,
-            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
-            ..Default::default()
-        };
-        let txn_verifier = NoopTransactionVerifier {};
-
-        let protocol_keypair = keypairs[authority_index].1.clone();
-        let network_keypair = keypairs[authority_index].0.clone();
-
-        let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
-        let commit_consumer_monitor = commit_consumer.monitor();
-
-        let authority = ConsensusAuthority::start(
-            network_type,
-            authority_index,
-            committee,
-            parameters,
-            protocol_config,
-            protocol_keypair,
-            network_keypair,
-            Arc::new(txn_verifier),
-            commit_consumer,
-            registry,
-            boot_counter,
-        )
-        .await;
-
-        (authority, commit_receiver, commit_consumer_monitor)
+    pub fn transaction_client(&self) -> Arc<crate::TransactionClient> {
+        self.consensus_authority.transaction_client()
     }
 }

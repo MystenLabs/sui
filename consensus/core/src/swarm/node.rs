@@ -1,16 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use crate::TransactionClient;
-
 use super::container::AuthorityNodeContainer;
 use anyhow::Result;
-use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, ProtocolKeyPair};
+use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use prometheus::Registry;
+use std::{sync::Arc, time::Duration};
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tempfile::TempDir;
 use tracing::info;
+
+use crate::transaction::NoopTransactionVerifier;
+use crate::{
+    CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority, TransactionClient,
+};
 
 #[derive(Clone)]
 #[allow(unused)]
@@ -58,7 +62,8 @@ impl Node {
         let authority_index = self.config.authority_index;
         let container = self.container.lock();
         if let Some(container) = container.as_ref() {
-            let (mut commit_receiver, commit_consumer_monitor) = container.take_commit_receiver();
+            let mut commit_receiver = container.take_commit_receiver();
+            let commit_consumer_monitor = container.commit_consumer_monitor();
             let _handle = tokio::spawn(async move {
                 while let Some(subdag) = commit_receiver.recv().await {
                     info!(index =% authority_index, "received committed subdag");
@@ -67,6 +72,15 @@ impl Node {
             });
         }
         Ok(())
+    }
+
+    pub fn commit_consumer_monitor(&self) -> Arc<CommitConsumerMonitor> {
+        let container = self.container.lock();
+        if let Some(container) = container.as_ref() {
+            container.commit_consumer_monitor()
+        } else {
+            panic!("Container not initialised");
+        }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
@@ -92,4 +106,58 @@ impl Node {
             .as_ref()
             .map_or(false, |c| c.is_alive())
     }
+}
+
+pub(crate) async fn make_authority(
+    config: NodeConfig,
+) -> (
+    ConsensusAuthority,
+    UnboundedReceiver<CommittedSubDag>,
+    Arc<CommitConsumerMonitor>,
+) {
+    let NodeConfig {
+        authority_index,
+        db_dir,
+        committee,
+        keypairs,
+        network_type,
+        boot_counter,
+        protocol_config,
+    } = config;
+
+    let registry = Registry::new();
+
+    // Cache less blocks to exercise commit sync.
+    let parameters = Parameters {
+        db_path: db_dir.path().to_path_buf(),
+        dag_state_cached_rounds: 5,
+        commit_sync_parallel_fetches: 2,
+        commit_sync_batch_size: 3,
+        sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+        ..Default::default()
+    };
+    let txn_verifier = NoopTransactionVerifier {};
+
+    let protocol_keypair = keypairs[authority_index].1.clone();
+    let network_keypair = keypairs[authority_index].0.clone();
+
+    let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
+    let commit_consumer_monitor = commit_consumer.monitor();
+
+    let authority = ConsensusAuthority::start(
+        network_type,
+        authority_index,
+        committee,
+        parameters,
+        protocol_config,
+        protocol_keypair,
+        network_keypair,
+        Arc::new(txn_verifier),
+        commit_consumer,
+        registry,
+        boot_counter,
+    )
+    .await;
+
+    (authority, commit_receiver, commit_consumer_monitor)
 }

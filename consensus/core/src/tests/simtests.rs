@@ -40,7 +40,7 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
-    async fn test_committee_start() {
+    async fn test_committee_start_simple() {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
@@ -102,6 +102,12 @@ mod test {
 
         // Wait for it to catch up
         sleep(Duration::from_secs(230)).await;
+        let commit_consumer_monitor = authorities[NUM_OF_AUTHORITIES - 1].commit_consumer_monitor();
+        let highest_committed_index = commit_consumer_monitor.highest_handled_commit();
+        assert!(
+            highest_committed_index >= 80,
+            "Highest handled commit {highest_committed_index} < 80"
+        );
     }
 
     /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
