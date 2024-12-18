@@ -48,13 +48,11 @@ export function ScamOverlay({ preflight, onClickBack, onClickContinue }: ScamOve
 			>
 				<WarningSvg />
 
-				{block.enabled ? (
-					<Warning {...preflight.block} />
-				) : (
-					warnings?.map(({ title, subtitle }) => {
-						return <Warning title={title} subtitle={subtitle} />;
-					})
-				)}
+				{!!block.enabled && <Warning {...preflight.block} />}
+
+				{warnings?.map(({ title, subtitle }) => {
+					return <Warning title={title} subtitle={subtitle} />;
+				})}
 
 				<div className="flex flex-col gap-2 mt-auto w-full items-stretch">
 					<Button variant="primary" text="Return to safety" onClick={onClickBack} />
