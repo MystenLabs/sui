@@ -137,34 +137,11 @@ diesel::table! {
 }
 
 diesel::table! {
-    sum_coin_balances (object_id) {
-        object_id -> Bytea,
-        object_version -> Int8,
-        owner_id -> Bytea,
-        coin_type -> Bytea,
-        coin_balance -> Int8,
-    }
-}
-
-diesel::table! {
     sum_displays (object_type) {
         object_type -> Bytea,
         display_id -> Bytea,
         display_version -> Int2,
         display -> Bytea,
-    }
-}
-
-diesel::table! {
-    sum_obj_types (object_id) {
-        object_id -> Bytea,
-        object_version -> Int8,
-        owner_kind -> Int2,
-        owner_id -> Nullable<Bytea>,
-        package -> Nullable<Bytea>,
-        module -> Nullable<Text>,
-        name -> Nullable<Text>,
-        instantiation -> Nullable<Bytea>,
     }
 }
 
@@ -225,31 +202,6 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    wal_coin_balances (object_id, object_version) {
-        object_id -> Bytea,
-        object_version -> Int8,
-        owner_id -> Nullable<Bytea>,
-        coin_type -> Nullable<Bytea>,
-        coin_balance -> Nullable<Int8>,
-        cp_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
-    wal_obj_types (object_id, object_version) {
-        object_id -> Bytea,
-        object_version -> Int8,
-        owner_kind -> Nullable<Int2>,
-        owner_id -> Nullable<Bytea>,
-        package -> Nullable<Bytea>,
-        module -> Nullable<Text>,
-        name -> Nullable<Text>,
-        instantiation -> Nullable<Bytea>,
-        cp_sequence_number -> Int8,
-    }
-}
-
 diesel::allow_tables_to_appear_in_same_query!(
     coin_balance_buckets,
     ev_emit_mod,
@@ -264,9 +216,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_transactions,
     obj_info,
     obj_versions,
-    sum_coin_balances,
     sum_displays,
-    sum_obj_types,
     sum_packages,
     tx_affected_addresses,
     tx_affected_objects,
@@ -274,6 +224,4 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_calls,
     tx_digests,
     tx_kinds,
-    wal_coin_balances,
-    wal_obj_types,
 );

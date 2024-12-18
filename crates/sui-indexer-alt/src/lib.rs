@@ -11,11 +11,10 @@ use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
-    obj_info::ObjInfo, obj_versions::ObjVersions, sum_coin_balances::SumCoinBalances,
-    sum_displays::SumDisplays, sum_obj_types::SumObjTypes, sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
-    tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
-    tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
+    obj_info::ObjInfo, obj_versions::ObjVersions, sum_displays::SumDisplays,
+    sum_packages::SumPackages, tx_affected_addresses::TxAffectedAddresses,
+    tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+    tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
@@ -57,10 +56,6 @@ pub async fn start_indexer(
     } = indexer_config.finish();
 
     let PipelineLayer {
-        sum_coin_balances,
-        wal_coin_balances,
-        sum_obj_types,
-        wal_obj_types,
         sum_displays,
         sum_packages,
         obj_info,
@@ -87,28 +82,9 @@ pub async fn start_indexer(
     } = pipeline.finish();
 
     let ingestion = ingestion.finish(IngestionConfig::default());
-
-    let ConsistencyConfig {
-        consistent_pruning_interval_ms,
-        pruner_delay_ms,
-        consistent_range,
-    } = consistency.finish(ConsistencyConfig::default());
-
+    let consistency = consistency.finish(ConsistencyConfig::default());
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
-
-    // Pipelines that are split up into a summary table, and a write-ahead log prune their
-    // write-ahead log so it contains just enough information to overlap with the summary table.
-    let consistent_range = consistent_range.unwrap_or_default();
-    let pruner_config = (consistent_range != 0).then(|| PrunerConfig {
-        interval_ms: consistent_pruning_interval_ms,
-        delay_ms: pruner_delay_ms,
-        // Retain at least twice as much data as the lag, to guarantee overlap between the
-        // summary table and the write-ahead log.
-        retention: consistent_range * 2,
-        // Prune roughly five minutes of data in one go.
-        max_chunk_size: 5 * 300,
-    });
 
     let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();
@@ -171,40 +147,10 @@ pub async fn start_indexer(
         };
     }
 
+    // A consistent pipeline consists of two concurrent pipelines. The first (main) one writes
+    // new data, and the second one lags behind deleting data that has fallen out of the consistent
+    // range.
     macro_rules! add_consistent {
-        ($sum_handler:expr, $sum_config:expr; $wal_handler:expr, $wal_config:expr) => {
-            if let Some(sum_layer) = $sum_config {
-                indexer
-                    .sequential_pipeline(
-                        $sum_handler,
-                        SequentialConfig {
-                            committer: sum_layer.finish(committer.clone()),
-                            checkpoint_lag: consistent_range,
-                        },
-                    )
-                    .await?;
-
-                if let Some(pruner_config) = pruner_config.clone() {
-                    indexer
-                        .concurrent_pipeline(
-                            $wal_handler,
-                            ConcurrentConfig {
-                                committer: $wal_config
-                                    .unwrap_or_default()
-                                    .finish(committer.clone()),
-                                pruner: Some(pruner_config),
-                                checkpoint_lag: None,
-                            },
-                        )
-                        .await?;
-                }
-            }
-        };
-    }
-
-    // Add two concurrent pipelines, one as the main pipeline, and one as a lagged pruner.
-    // The lagged pruner will prune the main pipeline's data based on the consistency range.
-    macro_rules! add_concurrent_with_lagged_pruner {
         ($main_handler:expr, $main_config:expr; $lagged_handler:expr, $lagged_config:expr) => {
             if let Some(main_layer) = $main_config {
                 indexer
@@ -224,7 +170,7 @@ pub async fn start_indexer(
                         $lagged_config.unwrap_or_default().finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: None,
-                            checkpoint_lag: Some(consistent_range),
+                            checkpoint_lag: Some(consistency.consistent_range),
                         }),
                     )
                     .await?;
@@ -240,26 +186,16 @@ pub async fn start_indexer(
         add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
     }
 
-    add_consistent!(
-        SumCoinBalances, sum_coin_balances;
-        WalCoinBalances, wal_coin_balances
-    );
-
-    add_consistent!(
-        SumObjTypes, sum_obj_types;
-        WalObjTypes, wal_obj_types
-    );
-
     // Other summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
     add_sequential!(SumPackages, sum_packages);
 
-    add_concurrent_with_lagged_pruner!(
+    add_consistent!(
         ObjInfo, obj_info;
         ObjInfoPruner, obj_info_pruner
     );
 
-    add_concurrent_with_lagged_pruner!(
+    add_consistent!(
         CoinBalanceBuckets, coin_balance_buckets;
         CoinBalanceBucketsPruner, coin_balance_buckets_pruner
     );
