@@ -4,6 +4,7 @@
 mod checkpoints;
 mod committee;
 mod execute;
+mod node_info;
 mod objects;
 mod resolve;
 mod transactions;
