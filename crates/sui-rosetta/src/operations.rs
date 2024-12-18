@@ -567,6 +567,7 @@ impl Operations {
         balance_change.chain(gas)
     }
 
+    /// Checks to see if transferObjects is used on GasCoin
     fn is_gascoin_transfer(tx: SuiTransactionBlockKind) -> bool {
         match tx {
             SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
@@ -574,36 +575,38 @@ impl Operations {
                     inputs: _,
                     commands,
                 } = &pt;
-                return commands
-                    .into_iter()
-                    .find(|command| match command {
-                        SuiCommand::TransferObjects(objs, _) => {
-                            objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
-                        }
-                        _ => false,
-                    })
-                    .is_some();
+                return commands.iter().any(|command| match command {
+                    SuiCommand::TransferObjects(objs, _) => {
+                        objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
+                    }
+                    _ => false,
+                });
             }
             _ => {}
         }
         false
     }
 
+    /// If GasCoin is transferred as a part of transferObjects, operations need to be
+    /// updated such that:
+    /// 1) gas owner needs to be assigned back to the previous owner
+    /// 2) SuiBalanceChange type needs to be converted to PaySui for
+    ///    previous and new gas owners and their balances need to be adjusted for the gas
     fn process_gascoin_transfer(
         coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
         tx: SuiTransactionBlockKind,
         prev_gas_owner: SuiAddress,
         new_gas_owner: SuiAddress,
         gas_used: i128,
-    ) -> Vec<Operation> {
-        let mut operations = vec![];
+    ) -> Result<Vec<Operation>, anyhow::Error> {
+        let mut gascoin_transfer_operations = vec![];
         if Self::is_gascoin_transfer(tx) {
             coin_change_operations.into_iter().for_each(|operation| {
                 match operation.type_ {
                     OperationType::Gas => {
                         // change gas account back to the previous owner as it is the one
                         // who paid for the txn (this is the format Rosetta wants to process)
-                        operations.push(Operation::gas(prev_gas_owner, gas_used))
+                        gascoin_transfer_operations.push(Operation::gas(prev_gas_owner, gas_used))
                     }
                     OperationType::SuiBalanceChange => {
                         operation.account.map(|account| {
@@ -622,13 +625,13 @@ impl Operations {
                                 is_convert_to_pay_sui = true;
                             }
                             if is_convert_to_pay_sui {
-                                operations.push(Operation::pay_sui(
+                                gascoin_transfer_operations.push(Operation::pay_sui(
                                     operation.status,
                                     account.address,
                                     amount.value,
                                 ));
                             } else {
-                                operations.push(Operation::balance_change(
+                                gascoin_transfer_operations.push(Operation::balance_change(
                                     operation.status,
                                     account.address,
                                     amount.value,
@@ -640,8 +643,15 @@ impl Operations {
                     _ => {}
                 }
             });
+            // sanity check to make sure all the operations have been processed
+            if coin_change_operations.count() != 0 {
+                return Err(anyhow!(
+                    "Unable to process all balance-change operations. Remaining count({})",
+                    coin_change_operations.count()
+                ));
+            }
         }
-        operations
+        Ok(gascoin_transfer_operations)
     }
 }
 
@@ -755,13 +765,15 @@ impl Operations {
             accounted_balances.clone(),
         );
 
+        // Take {gas, previous gas owner, new gas owner} out of coin_change_operations
+        // and convert BalanceChange to PaySui when GasCoin is transferred
         let gascoin_transfer_operations = Self::process_gascoin_transfer(
             &mut coin_change_operations,
             tx.data.transaction().clone(),
             tx.data.gas_data().owner,
             gas_owner,
             gas_used,
-        );
+        )?;
 
         let ops: Operations = ops
             .into_iter()
