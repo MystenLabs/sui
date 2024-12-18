@@ -537,7 +537,7 @@ impl<'env> Docgen<'env> {
         // many modules.
         self.begin_code();
         let used_modules = module_env
-            .get_used_modules(false)
+            .get_used_modules()
             .iter()
             .filter(|id| **id != module_env.get_id())
             .map(|id| {
@@ -704,9 +704,9 @@ impl<'env> Docgen<'env> {
             let mod_env = self.env.get_module(id);
             let mod_name = mod_env.get_name().display(mod_env.symbol_pool());
             let dep_list = if is_forward {
-                mod_env.get_used_modules(false)
+                mod_env.get_used_modules()
             } else {
-                mod_env.get_using_modules(false)
+                mod_env.get_using_modules()
             };
             dot_src_lines.push(format!("\t{}", mod_name));
             for dep_id in dep_list.iter().filter(|dep_id| **dep_id != id) {

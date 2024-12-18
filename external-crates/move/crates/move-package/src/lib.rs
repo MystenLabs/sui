@@ -56,6 +56,10 @@ pub struct BuildConfig {
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 
+    /// Compile in 'verify' mode.
+    #[clap(name = "test-mode", long = "test", global = true)]
+    pub verify_mode: bool,
+
     /// Generate documentation for packages
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
