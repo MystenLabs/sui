@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION","X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION"],"struct":["GasInfo","GetCurrentProtocolConfig","GetGasInfo","GetProtocolConfig","GetSystemStateSummary","ProtocolConfigResponse","ProtocolNotFoundError","SystemStateSummary","ValidatorSummary"]};

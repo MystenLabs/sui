@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Measurement","MeasurementsCollection"],"type":["BucketId","ScraperId"]};

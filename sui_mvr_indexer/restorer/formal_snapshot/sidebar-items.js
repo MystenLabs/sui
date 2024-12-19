@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["IndexerFormalSnapshotRestorer"],"type":["DigestByBucketAndPartition","Sha3DigestType","SnapshotChecksums"]};

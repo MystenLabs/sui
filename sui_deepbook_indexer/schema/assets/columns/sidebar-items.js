@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["asset_type","decimals","name","package_address_url","package_id","star","symbol","ucid"]};
