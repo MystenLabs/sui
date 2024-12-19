@@ -18,6 +18,9 @@ import WordWrapButton from "@theme/CodeBlock/WordWrapButton";
 import Container from "@theme/CodeBlock/Container";
 import styles from "./styles.module.css";
 
+const GITHUB = "https://github.com";
+const GITHUB_BLOB = "blob/main";
+
 // Prism languages are always lowercase
 // We want to fail-safe and allow both "php" and "PHP"
 // See https://github.com/facebook/docusaurus/issues/9012
@@ -54,11 +57,25 @@ export default function CodeBlockString({
 
   // Sui added code.
   // Change component to render title as anchor.
-  const sourceLink =
-    title && !title.match(/^http/)
-      ? `https://github.com/MystenLabs/sui/tree/main/${title}`
-      : title;
+  let sourceLink;
+  if (title) {
+    if (!title.match(/^http/)){
+      if (title.match(/^\github:/)) {
+        const parts = title.split("/");
+        const githubOrgName = parts[0].split(":")[1];
+        const githubRepoName = parts[1];
+        sourceLink = `${GITHUB}/${githubOrgName}/${githubRepoName}/${GITHUB_BLOB}/${parts.slice(2).join("/")}`;
+      } else {
+        sourceLink = `https://github.com/MystenLabs/sui/tree/main/${title}`;
+      }
+    } else {
+      sourceLink = title;
+    }
+  }
+
   const tailwind = "relative ";
+
+  const displayTitle = title.replace("github:", "");
 
   return (
     <Container
@@ -74,7 +91,7 @@ export default function CodeBlockString({
       {title && (
         <div className={styles.codeBlockTitle}>
           <a href={sourceLink} target="_blank" rel="noreferrer">
-            {title}
+            {displayTitle}
           </a>
         </div>
       )}

@@ -42,6 +42,7 @@ const injectCode = (context, opts) => {
       const loaderOptions = {
         replacements: opts.replacements,
         embeds: opts.embeds,
+        sharedFolders: opts.sharedFolders,
       };
 
       return {

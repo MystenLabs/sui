@@ -13,6 +13,7 @@ const addCodeInject = async function (source) {
   let fileString = source;
   const callback = this.async();
   const options = this.getOptions();
+
   const markdownFilename = path.basename(this.resourcePath);
 
   // Do not load and render markdown files without docusaurus header.
@@ -30,8 +31,7 @@ const addCodeInject = async function (source) {
             console.error(
               `Failed to fetch GitHub data: ${response.statusCode}`,
             );
-            response.resume();
-            return;
+            res("Error loading content");
           }
 
           response.on("data", (chunk) => {
@@ -48,11 +48,28 @@ const addCodeInject = async function (source) {
     });
   };
 
-  function addMarkdownIncludes(fileContent) {
+  const pathBuild = (srcPath) => {
+    const parts = srcPath.split("/");
+    if (parts[0].includes("github")) {
+      const githubOrgName = parts[0].split(":")[1];
+      const githubRepoName = parts[1];
+      return path.join(
+        GITHUB,
+        githubOrgName,
+        githubRepoName,
+        GITHUB_RAW,
+        parts.slice(2).join("/"),
+      );
+    } else {
+      return path.join(__dirname, "../../../../..", srcPath);
+    }
+  };
+
+  async function addMarkdownIncludes(fileContent) {
     let res = fileContent;
     const matches = fileContent.match(/(?<!`)\{@\w+: .+\}/g);
     if (matches) {
-      matches.forEach(async (match) => {
+      for (const match of matches) {
         const replacer = new RegExp(match, "g");
         const key = "{@inject: ";
 
@@ -60,26 +77,12 @@ const addCodeInject = async function (source) {
           const parts = match.split(" ");
           const [, , ...options] = parts.length > 2 ? parts : [];
           let injectFileFull = parts[1].replace(/\}$/, "");
-          const injectFile = injectFileFull.split("#")[0];
-          const isSuiRepo = !injectFile.match(/^github:/i);
-          const githubOrg = isSuiRepo
-            ? ""
-            : injectFile.split("/")[0].split(":")[1];
-          const githubRepo = isSuiRepo ? "" : injectFile.split("/")[1];
-          const repoPath = isSuiRepo
-            ? path.join(__dirname, "../../../../..")
-            : path.join(
-                GITHUB,
-                githubOrg,
-                githubRepo,
-                GITHUB_RAW,
-                injectFile.split(githubRepo)[1],
-              );
+          let injectFile = injectFileFull.split("#")[0];
           let fileExt = injectFile.substring(injectFile.lastIndexOf(".") + 1);
           let language = "";
-          const fullPath = isSuiRepo
-            ? path.join(repoPath, injectFile)
-            : repoPath;
+          //const repoPath = path.join(__dirname, "../../../../..");
+          //const fullPath = path.join(repoPath, injectFile);
+          const fullPath = pathBuild(injectFile);
 
           switch (fileExt) {
             case "lock":
@@ -107,19 +110,16 @@ const addCodeInject = async function (source) {
           const isMove = language === "move";
           const isTs = language === "ts" || language === "js";
 
-          if (fs.existsSync(fullPath) || !isSuiRepo) {
-            let injectFileContent = "";
-            if (isSuiRepo) {
+          if (fs.existsSync(fullPath) || fullPath.match(/^https/)) {
+            let injectFileContent;
+            if (fullPath.match(/^https/)) {
+              injectFileContent = await fetchFile(fullPath);
+            } else {
               injectFileContent = fs
                 .readFileSync(fullPath, "utf8")
                 .replaceAll(`\t`, "  ");
-            } else {
-              try {
-                injectFileContent = await fetchFile(fullPath);
-              } catch {
-                injectFileContent = "Problem loading GitHub file.";
-              }
             }
+
             const marker =
               injectFileFull.indexOf("#") > 0
                 ? injectFileFull.substring(injectFileFull.indexOf("#"))
@@ -559,7 +559,7 @@ const addCodeInject = async function (source) {
                 options,
               );
               res = res.replace(replacer, injectFileContent);
-              res = addMarkdownIncludes(res);
+              res = await addMarkdownIncludes(res);
             } else {
               // Handle import of all the code
               const processed = utils.processOptions(
@@ -598,7 +598,7 @@ const addCodeInject = async function (source) {
             }
           }
         }
-      });
+      }
     }
     return res;
   }
@@ -622,7 +622,12 @@ const addCodeInject = async function (source) {
     return res;
   }
 
-  fileString = replacePlaceHolders(await addMarkdownIncludes(fileString));
+  if (source.match(/(?<!`)\{@inject: .+\}/g)) {
+    fileString = replacePlaceHolders(await addMarkdownIncludes(fileString));
+  } else {
+    console.log(this.resourcePath);
+    fileString = source;
+  }
 
   return callback && callback(null, fileString);
 };
