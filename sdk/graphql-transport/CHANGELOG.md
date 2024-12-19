@@ -1,5 +1,14 @@
 # @mysten/graphql-transport
 
+## 0.2.36
+
+### Patch Changes
+
+- a872b97: Use `latest` as schema for graphql types
+- Updated dependencies [b2928a9]
+- Updated dependencies [a872b97]
+  - @mysten/sui@1.18.0
+
 ## 0.2.35
 
 ### Patch Changes
