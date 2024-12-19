@@ -25,7 +25,10 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     editions::Flavor,
     linters,
-    shared::{files::MappedFiles, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
+    shared::{
+        files::MappedFiles, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths,
+        SaveFlag, SaveHook,
+    },
     sui_mode::{self},
     Compiler,
 };
@@ -37,7 +40,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::Write,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use vfs::VfsPath;
 
@@ -136,9 +138,7 @@ pub struct DependencyInfo<'a> {
 
 pub(crate) struct BuildResult<T> {
     root_package_name: Symbol,
-    sources_package_paths: PackagePaths,
     immediate_dependencies: Vec<Symbol>,
-    deps_package_paths: Vec<(PackagePaths, ModuleFormat)>,
     result: T,
 }
 
@@ -506,9 +506,7 @@ impl CompiledPackage {
             .add_visitors(linters::linter_visitors(lint_level));
         Ok(BuildResult {
             root_package_name,
-            sources_package_paths,
             immediate_dependencies,
-            deps_package_paths,
             result: compiler_driver(compiler)?,
         })
     }
@@ -539,14 +537,12 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        compiler_driver: impl FnMut(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
+        mut compiler_driver: impl FnMut(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let BuildResult {
             root_package_name,
-            sources_package_paths: _,
             immediate_dependencies,
-            deps_package_paths: _,
             result,
         } = Self::build_for_driver(
             w,
@@ -563,7 +559,7 @@ impl CompiledPackage {
         let (file_map, all_compiled_units) = result;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
-        for annot_unit in all_compiled_units {
+        for annot_unit in &all_compiled_units {
             let source_path = PathBuf::from(
                 file_map
                     .get(&annot_unit.loc().file_hash())
@@ -573,7 +569,7 @@ impl CompiledPackage {
             );
             let package_name = annot_unit.named_module.package_name.unwrap();
             let unit = CompiledUnitWithSource {
-                unit: annot_unit.into_compiled_unit(),
+                unit: annot_unit.named_module.clone(),
                 source_path,
             };
             if package_name == root_package_name {

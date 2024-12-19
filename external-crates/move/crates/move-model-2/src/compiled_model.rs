@@ -351,7 +351,7 @@ fn make_type(module: &CompiledModule, token: &SignatureToken) -> Type {
         U128 => Type::U128,
         Address => Type::Address,
         Signer => panic!("Signer type is not supported"),
-        Vector(token) => Type::Vector(Box::new(make_type(module, &*token))),
+        Vector(token) => Type::Vector(Box::new(make_type(module, token))),
         Datatype(handle_idx) => {
             let member_id = qualified_member_from_datatype_handle(module, *handle_idx);
             Type::Datatype(Box::new(member_id))

@@ -14,7 +14,7 @@ use move_compiler::{
     expansion::ast::{self as E, ModuleIdent_},
     naming::ast as N,
     shared::{
-        files::{FilesSourceText, MappedFiles},
+        files::MappedFiles,
         program_info::{ConstantInfo, FunctionInfo, ModuleInfo, TypingProgramInfo},
         NumericalAddress,
     },
@@ -123,7 +123,7 @@ pub struct Constant<'a> {
 
 impl Model {
     pub fn new(
-        files: FilesSourceText,
+        files: MappedFiles,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
         info: Arc<TypingProgramInfo>,
         compiled_units_vec: Vec<AnnotatedCompiledUnit>,
@@ -146,12 +146,12 @@ impl Model {
                         .as_ref()
                         .map(|s| s.as_str())
                         .unwrap_or("UNKNOWN"),
-                    files[&prev.loc().file_hash()].0,
+                    files.filename(&prev.loc().file_hash()),
                     package_name
                         .as_ref()
                         .map(|s| s.as_str())
                         .unwrap_or("UNKNOWN"),
-                    files[&loc.file_hash()].0,
+                    files.filename(&loc.file_hash()),
                 );
             }
         }
@@ -173,7 +173,7 @@ impl Model {
             })
             .collect();
         let mut model = Self {
-            files: MappedFiles::new(files),
+            files,
             root_named_address_map,
             info,
             compiled_units,

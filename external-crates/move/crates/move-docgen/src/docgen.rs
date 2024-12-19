@@ -30,7 +30,6 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    env,
     fmt::Write as FmtWrite,
     fs::{self, File},
     io::{Read, Write},
@@ -579,7 +578,7 @@ impl<'env> Docgen<'env> {
             self.gen_struct(s);
         }
 
-        if !module_env.enums().next().is_some() {
+        if module_env.enums().next().is_some() {
             for e in module_env.enums().sorted_by_key(|e| e.compiled_idx()) {
                 self.gen_enum(e);
             }
@@ -1129,6 +1128,7 @@ impl<'env> Docgen<'env> {
     // ============================================================================================
     // Helpers
 
+    /// Collect tokens in an ability set
     fn ability_tokens(&self, key: bool, store: bool, drop: bool, copy: bool) -> Vec<&'static str> {
         let mut ability_tokens = vec![];
         if key {
@@ -1146,7 +1146,7 @@ impl<'env> Docgen<'env> {
         ability_tokens
     }
 
-    /// Collect tokens in an ability set
+    #[allow(unused)]
     fn file_format_ability_tokens(&self, abilities: file_format::AbilitySet) -> Vec<&'static str> {
         self.ability_tokens(
             abilities.has_key(),
@@ -1579,6 +1579,7 @@ impl<'env> Docgen<'env> {
         }
     }
 
+    #[allow(unused)]
     fn function_type_parameter_list_display(&self, tps: &[N::TParam]) -> String {
         if tps.is_empty() {
             "".to_owned()
@@ -1628,7 +1629,7 @@ impl<'env> Docgen<'env> {
         let source: &str = source.as_ref();
         // Compute the indentation of this source fragment by looking at some
         // characters preceding it.
-        let ByteSpan { start, end } = files.byte_span(loc).byte_span;
+        let ByteSpan { start, end } = files.byte_span(&loc).byte_span;
         let source = &source[start..end];
         let peek_start = start.saturating_sub(60);
         let source_before = &source[peek_start..start];
