@@ -36,7 +36,7 @@
 //! the Sui devnet, and the Sui testnet is shown below.
 //! To successfully run this program, make sure to spin up a local
 //! network with a local validator, a fullnode, and a faucet server
-//! (see [here](https://github.com/stefan-mysten/sui/tree/rust_sdk_api_examples/crates/sui-sdk/examples#preqrequisites) for more information).
+//! (see [https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) for more information).
 //!
 //! ```rust,no_run
 //! use sui_sdk::SuiClientBuilder;
@@ -60,6 +60,11 @@
 //!     // Sui testnet running at `https://testnet.devnet.io:443`
 //!     let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
 //!     println!("Sui testnet version: {:?}", sui_testnet.api_version());
+//!
+//!     // Sui mainnet -- https://fullnode.mainnet.sui.io:443
+//!     let sui_mainnet = SuiClientBuilder::default().build_mainnet().await?;
+//!     println!("Sui mainnet version: {}", sui_mainnet.api_version());
+//!
 //!     Ok(())
 //!
 //! }
