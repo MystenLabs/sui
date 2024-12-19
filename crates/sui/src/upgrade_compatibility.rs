@@ -509,7 +509,7 @@ pub(crate) async fn check_compatibility(
 
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
-    new_package: CompiledPackage,
+    mut new_package: CompiledPackage,
     package_path: PathBuf,
     policy: UpgradePolicy,
 ) -> Result<(), Error> {
@@ -578,15 +578,23 @@ fn compare_packages(
         return Ok(());
     }
 
-    let mut files: FilesSourceText = HashMap::new();
-    let mut file_set = HashSet::new();
-
     let mut diags = Diagnostics::new();
 
+    // add move toml
+    let move_toml_path = package_path.join("Move.toml");
+    let move_toml_contents = Arc::from(
+        fs::read_to_string(&move_toml_path)
+            .context("Unable to read Move.toml")?
+            .to_string(),
+    );
+    let move_toml_hash = FileHash::new(&move_toml_contents);
     for (name, err) in errors {
         if let UpgradeCompatibilityModeError::ModuleMissing { name, .. } = &err {
-            diags.extend(missing_module_diag(name, &package_path)?);
-            insert_into_files(&mut file_set, &mut files, &package_path.join("Move.toml"))?;
+            diags.extend(missing_module_diag(
+                name,
+                &move_toml_hash,
+                &move_toml_contents,
+            )?);
             continue;
         }
 
@@ -595,12 +603,6 @@ fn compare_packages(
             .get_module_by_name_from_root(name.as_str())
             .context("Unable to get module")?;
 
-        insert_into_files(
-            &mut file_set,
-            &mut files,
-            &compiled_unit_with_source.source_path,
-        )?;
-
         diags.extend(diag_from_error(
             &err,
             compiled_unit_with_source,
@@ -608,13 +610,19 @@ fn compare_packages(
         )?);
     }
 
+    new_package.package.file_map.add(
+        FileHash::new(&move_toml_contents),
+        FileName::from(move_toml_path.to_string_lossy()),
+        move_toml_contents,
+    );
+
     // use colors but inline
     Err(anyhow!(
         "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
         Its upgrade policy is set to '{}'.",
         if !diags.is_empty() {
             String::from_utf8(report_diagnostics_to_buffer(
-                &files.into(),
+                &new_package.package.file_map,
                 diags,
                 use_colors()
             ))
@@ -628,30 +636,6 @@ fn compare_packages(
             UpgradePolicy::DepOnly => "dependency only",
         }
     ))
-}
-
-/// insert into diagnostics files set if the path does not already exist
-fn insert_into_files(
-    file_set: &mut HashSet<PathBuf>,
-    files: &mut FilesSourceText,
-    path: &PathBuf,
-) -> Result<(), Error> {
-    if file_set.contains(path) {
-        return Ok(());
-    }
-
-    let file_contents: Arc<str> = fs::read_to_string(path)
-        .with_context(|| format!("Unable to read source file {:?}", path))?
-        .into();
-    let file_hash = FileHash::new(&file_contents);
-
-    files.insert(
-        file_hash,
-        (FileName::from(path.to_string_lossy()), file_contents),
-    );
-
-    file_set.insert(path.clone());
-    Ok(())
 }
 
 fn errors_or_empty_vec(
@@ -825,27 +809,23 @@ fn module_compatibility_error_diag(
 
 fn missing_module_diag(
     module_name: &Identifier,
-    package_path: &PathBuf,
+    move_toml_hash: &FileHash,
+    move_toml_contents: &Arc<str>,
 ) -> Result<Diagnostics, Error> {
     const PACKAGE_TABLE: &str = "[package]";
     let mut diags = Diagnostics::new();
 
-    // read Move.toml to get the hash and first line start and end
-    let toml_path = package_path.join("Move.toml");
-    let toml_str = fs::read_to_string(&toml_path).context("Unable to read Move.toml")?;
-    let hash = FileHash::new(&toml_str);
-
-    let start: usize = toml_str.find(PACKAGE_TABLE).unwrap_or_default();
+    let start: usize = move_toml_contents.find(PACKAGE_TABLE).unwrap_or_default();
     // default to the end of the package table definition
     // get the third newline after the start of the package table declaration if it exists
-    let end = toml_str[start..]
+    let end = move_toml_contents[start..]
         .match_indices('\n')
         .take(3)
         .last()
         .map(|(idx, _)| start + idx)
         .unwrap_or(start + PACKAGE_TABLE.len());
 
-    let loc = Loc::new(hash, start as ByteIndex, end as ByteIndex);
+    let loc = Loc::new(move_toml_hash.clone(), start as ByteIndex, end as ByteIndex);
 
     diags.add(Diagnostic::new(
         Declarations::ModuleMissing,
