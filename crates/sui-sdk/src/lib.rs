@@ -5,7 +5,7 @@
 //!
 //! It aims at providing a similar SDK functionality like the one existing for
 //! [TypeScript](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/).
-//! Sui Rust SDK builds on top of the [JSON RPC API](https://docs.sui.io/sui-api-ref)
+//! Sui Rust SDK builds on top of the [JSON RPC API](https://docs.sui.io/references/sui-api)
 //! and therefore many of the return types are the ones specified in [sui_types].
 //!
 //! The API is split in several parts corresponding to different functionalities
