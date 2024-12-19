@@ -61,7 +61,7 @@
 //!     let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
 //!     println!("Sui testnet version: {:?}", sui_testnet.api_version());
 //!
-//!     // Sui mainnet -- https://fullnode.mainnet.sui.io:443
+//!     // Sui mainnet running at `https://fullnode.mainnet.sui.io:443`
 //!     let sui_mainnet = SuiClientBuilder::default().build_mainnet().await?;
 //!     println!("Sui mainnet version: {}", sui_mainnet.api_version());
 //!
