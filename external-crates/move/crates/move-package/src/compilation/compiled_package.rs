@@ -18,8 +18,8 @@ use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::{serialize_to_json, source_map_from_file};
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{
-    extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-    SOURCE_MAP_EXTENSION,
+    extension_equals, find_filenames, try_exists, FileHash, MOVE_COMPILED_EXTENSION,
+    MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
@@ -33,6 +33,7 @@ use move_docgen::{Docgen, DocgenOptions};
 use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Write,
@@ -84,6 +85,8 @@ pub struct CompiledPackage {
     //
     /// filename -> doctext
     pub compiled_docs: Option<Vec<(String, String)>>,
+    /// The mapping of file hashes to file names and contents
+    pub file_map: MappedFiles,
 }
 
 /// Represents a compiled package that has been saved to disk. This holds only the minimal metadata
@@ -159,6 +162,8 @@ impl OnDiskCompiledPackage {
 
     pub fn into_compiled_package(&self) -> Result<CompiledPackage> {
         let root_name = self.package.compiled_package_info.package_name;
+        let mut file_map = MappedFiles::empty();
+
         assert!(self.root_path.ends_with(root_name.as_str()));
         let root_compiled_units = self.get_compiled_units_paths(root_name)?;
         let root_compiled_units = root_compiled_units
@@ -171,6 +176,18 @@ impl OnDiskCompiledPackage {
             for bytecode_path in compiled_units {
                 deps_compiled_units.push((dep_name, self.decode_unit(dep_name, &bytecode_path)?))
             }
+        }
+
+        for unit in root_compiled_units
+            .iter()
+            .chain(deps_compiled_units.iter().map(|(_, unit)| unit))
+        {
+            let contents = Arc::from(std::fs::read_to_string(&unit.source_path)?);
+            file_map.add(
+                FileHash::new(&contents),
+                FileName::from(unit.source_path.to_string_lossy().to_string()),
+                contents,
+            );
         }
 
         let docs_path = self
@@ -198,6 +215,7 @@ impl OnDiskCompiledPackage {
             root_compiled_units,
             deps_compiled_units,
             compiled_docs,
+            file_map,
         })
     }
 
@@ -607,6 +625,7 @@ impl CompiledPackage {
             root_compiled_units,
             deps_compiled_units,
             compiled_docs,
+            file_map,
         };
 
         compiled_package.save_to_disk(project_root.join(CompiledPackageLayout::Root.path()))?;
