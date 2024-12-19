@@ -80,8 +80,6 @@ const addCodeInject = async function (source) {
           let injectFile = injectFileFull.split("#")[0];
           let fileExt = injectFile.substring(injectFile.lastIndexOf(".") + 1);
           let language = "";
-          //const repoPath = path.join(__dirname, "../../../../..");
-          //const fullPath = path.join(repoPath, injectFile);
           const fullPath = pathBuild(injectFile);
 
           switch (fileExt) {
