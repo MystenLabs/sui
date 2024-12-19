@@ -528,19 +528,19 @@ pub struct GetFullCheckpointOptions {
 
     /// Request that input objects be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_objects: Option<bool>,
 
     /// Request that output objects be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_objects: Option<bool>,
 
     /// Request that `Object` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object: Option<bool>,
 
@@ -597,15 +597,15 @@ impl GetFullCheckpointOptions {
     }
 
     pub fn include_input_objects(&self) -> bool {
-        self.input_objects.unwrap_or(true)
+        self.input_objects.unwrap_or(false)
     }
 
     pub fn include_output_objects(&self) -> bool {
-        self.output_objects.unwrap_or(true)
+        self.output_objects.unwrap_or(false)
     }
 
     pub fn include_object(&self) -> bool {
-        self.object.unwrap_or(true)
+        self.object.unwrap_or(false)
     }
 
     pub fn include_object_bcs(&self) -> bool {
