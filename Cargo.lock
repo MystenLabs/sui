@@ -9310,6 +9310,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "p384"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70786f51bcc69f6a4c0360e063a4cac5419ef7c5cd5b3c99ad70f3be5ba79209"
+dependencies = [
+ "ecdsa 0.16.9",
+ "elliptic-curve 0.13.8",
+ "primeorder",
+ "sha2 0.10.8",
+]
+
+[[package]]
 name = "pairing"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15725,6 +15737,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "chrono",
+ "ciborium",
  "consensus-config",
  "coset",
  "criterion",
@@ -15754,6 +15767,7 @@ dependencies = [
  "num_enum 0.6.1",
  "once_cell",
  "p256",
+ "p384",
  "parking_lot 0.12.1",
  "passkey-authenticator",
  "passkey-client",
@@ -15763,9 +15777,13 @@ dependencies = [
  "proptest-derive",
  "rand 0.8.5",
  "roaring",
+ "rustls 0.23.12",
+ "rustls-pemfile 2.1.2",
+ "rustls-webpki 0.102.6",
  "schemars",
  "serde",
  "serde-name",
+ "serde_bytes",
  "serde_json",
  "serde_with 3.9.0",
  "serde_yaml 0.8.26",
@@ -15785,6 +15803,7 @@ dependencies = [
  "tracing",
  "typed-store-error",
  "url",
+ "x509-parser",
 ]
 
 [[package]]
