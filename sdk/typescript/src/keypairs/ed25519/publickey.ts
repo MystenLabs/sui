@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromBase64 } from '@mysten/bcs';
-import nacl from 'tweetnacl';
+import { ed25519 } from '@noble/curves/ed25519';
 
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
 import { bytesEqual, PublicKey } from '../../cryptography/publickey.js';
@@ -81,6 +81,6 @@ export class Ed25519PublicKey extends PublicKey {
 			bytes = signature;
 		}
 
-		return nacl.sign.detached.verify(message, bytes, this.toRawBytes());
+		return ed25519.verify(bytes, message, this.toRawBytes());
 	}
 }
