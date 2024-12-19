@@ -1,5 +1,13 @@
 # @mysten/deepbook
 
+## 0.8.34
+
+### Patch Changes
+
+- Updated dependencies [b2928a9]
+- Updated dependencies [a872b97]
+  - @mysten/sui@1.18.0
+
 ## 0.8.33
 
 ### Patch Changes

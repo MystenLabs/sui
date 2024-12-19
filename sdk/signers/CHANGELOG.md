@@ -1,5 +1,13 @@
 # @mysten/signers
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [b2928a9]
+- Updated dependencies [a872b97]
+  - @mysten/sui@1.18.0
+
 ## 0.1.2
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 1.18.0
+
+### Minor Changes
+
+- b2928a9: Update generated openrpc types which removes deprecated/non-functional filters for events
+- a872b97: Add `latest` as an exported graphql schema
+
 ## 1.17.0
 
 ### Minor Changes

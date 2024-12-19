@@ -1,5 +1,15 @@
 # @mysten/zksend
 
+## 0.12.10
+
+### Patch Changes
+
+- a872b97: Use `latest` as schema for graphql types
+- Updated dependencies [b2928a9]
+- Updated dependencies [a872b97]
+  - @mysten/sui@1.18.0
+  - @mysten/wallet-standard@0.13.20
+
 ## 0.12.9
 
 ### Patch Changes
