@@ -195,7 +195,9 @@ async fn transaction_manager_object_dependency() {
         })
         .collect();
     let shared_object = Object::shared_for_testing();
+    let initial_shared_version = shared_object.owner().start_version().unwrap();
     let shared_object_2 = Object::shared_for_testing();
+    let initial_shared_version_2 = shared_object_2.owner().start_version().unwrap();
 
     let state = init_state_with_objects(
         [
@@ -216,7 +218,7 @@ async fn transaction_manager_object_dependency() {
     let shared_version = 1000.into();
     let shared_object_arg_read = ObjectArg::SharedObject {
         id: shared_object.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version,
         mutable: false,
     };
     let transaction_read_0 = make_transaction(
@@ -257,7 +259,7 @@ async fn transaction_manager_object_dependency() {
     // Enqueue one transaction with the same shared object in mutable mode.
     let shared_object_arg_default = ObjectArg::SharedObject {
         id: shared_object.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version,
         mutable: true,
     };
     let transaction_default = make_transaction(
@@ -282,7 +284,7 @@ async fn transaction_manager_object_dependency() {
     let shared_version_2 = 1000.into();
     let shared_object_arg_read_2 = ObjectArg::SharedObject {
         id: shared_object_2.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version: initial_shared_version_2,
         mutable: false,
     };
     let transaction_read_2 = make_transaction(
@@ -755,7 +757,9 @@ async fn transaction_manager_with_cancelled_transactions() {
     let (owner, _keypair) = deterministic_random_account_key();
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
     let shared_object_1 = Object::shared_for_testing();
+    let initial_shared_version_1 = shared_object_1.owner().start_version().unwrap();
     let shared_object_2 = Object::shared_for_testing();
+    let initial_shared_version_2 = shared_object_2.owner().start_version().unwrap();
     let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
 
     let state = init_state_with_objects(vec![
@@ -775,12 +779,12 @@ async fn transaction_manager_with_cancelled_transactions() {
     // Enqueue one transaction with 2 shared object inputs and 1 owned input.
     let shared_object_arg_1 = ObjectArg::SharedObject {
         id: shared_object_1.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version: initial_shared_version_1,
         mutable: true,
     };
     let shared_object_arg_2 = ObjectArg::SharedObject {
         id: shared_object_2.id(),
-        initial_shared_version: 0.into(),
+        initial_shared_version: initial_shared_version_2,
         mutable: true,
     };
 

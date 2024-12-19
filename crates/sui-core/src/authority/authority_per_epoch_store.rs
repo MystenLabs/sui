@@ -1451,7 +1451,8 @@ impl AuthorityPerEpochStore {
                         let Some(version) = shared_locks.get(&(*id, initial_shared_version)) else {
                             panic!(
                                 "Shared object locks should have been set. key: {key:?}, obj \
-                                id: {id:?}",
+                                id: {id:?}, initial_shared_version: {initial_shared_version:?}, \
+                                shared_locks: {shared_locks:?}",
                             )
                         };
                         InputKey::VersionedObject {
