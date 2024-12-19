@@ -29,6 +29,7 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
+const VERIFY_ZKLOGIN: &str = "verifyZkloginSignature";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Clone, Copy, Debug)]
@@ -229,6 +230,14 @@ impl<'a> LimitsTraversal<'a> {
                 let name = &f.node.name.node;
                 if name == DRY_RUN_TX_BLOCK || name == EXECUTE_TX_BLOCK {
                     for (_name, value) in &f.node.arguments {
+                        self.check_tx_arg(value)?;
+                    }
+                } else if name == VERIFY_ZKLOGIN {
+                    if let Some(value) = f.node.get_argument("bytes") {
+                        self.check_tx_arg(value)?;
+                    }
+
+                    if let Some(value) = f.node.get_argument("signature") {
                         self.check_tx_arg(value)?;
                     }
                 }
@@ -607,9 +616,9 @@ impl<'a> Reporter<'a> {
         self.graphql_error(
             code::BAD_USER_INPUT,
             format!(
-                "{message}. Requests are limited to {max_tx_payload} bytes or fewer on \
-                 transaction payloads (all inputs to executeTransactionBlock or \
-                 dryRunTransactionBlock) and the rest of the request (the query part) must be \
+                "{message}. Requests are limited to {max_tx_payload} bytes or fewer on transaction \
+                 payloads (all inputs to executeTransactionBlock, dryRunTransactionBlock, or \
+                 verifyZkloginSignature) and the rest of the request (the query part) must be \
                  {max_query_payload} bytes or fewer.",
                 max_tx_payload = self.limits.max_tx_payload_size,
                 max_query_payload = self.limits.max_query_payload_size,
