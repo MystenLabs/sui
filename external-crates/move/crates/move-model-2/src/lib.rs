@@ -10,6 +10,6 @@ pub mod compiled_model;
 pub mod display;
 pub mod source_model;
 
-pub use source_model::ModuleId;
-pub use source_model::QualifiedMemberId;
-pub use source_model::TModuleId;
+pub use compiled_model::ModuleId;
+pub use compiled_model::QualifiedMemberId;
+pub use compiled_model::TModuleId;

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
 
-use move_binary_format::file_format::{self, SignatureToken, VariantTag};
+use crate::compiled_model::{self, BinaryModel, ModuleId, QualifiedMemberId, TModuleId};
+use move_binary_format::file_format::{self};
 use move_compiler::{
     self,
     compiled_unit::AnnotatedCompiledUnit,
@@ -19,10 +19,8 @@ use move_compiler::{
         NumericalAddress,
     },
 };
-use move_core_types::{
-    account_address::AccountAddress, annotated_value, language_storage::ModuleId as CoreModuleId,
-};
-use move_ir_types::{ast as ir, location::Spanned};
+use move_core_types::account_address::AccountAddress;
+use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
 
 //**************************************************************************************************
@@ -33,31 +31,17 @@ pub struct Model {
     files: MappedFiles,
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     info: Arc<TypingProgramInfo>,
-    // keeping separate in anticipation of compiled model
-    compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
-    // TODO package
+    // compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
+    compiled_model: BinaryModel,
     packages: BTreeMap<AccountAddress, PackageData>,
-    //     compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
-    //     module_deps: BTreeMap<ModuleId, BTreeMap<ModuleId, /* is immediate */ bool>>,
-    //     // reverse mapping of module_deps
-    //     module_used_by: BTreeMap<ModuleId, BTreeSet<ModuleId>>,
-    //     function_immediate_deps: BTreeMap<QualifiedMemberId, BTreeSet<QualifiedMemberId>>,
-    //     // reverse mapping of function_immediate_deps
-    //     function_called_by: BTreeMap<QualifiedMemberId, BTreeSet<QualifiedMemberId>>,
 }
-
-pub trait TModuleId {
-    fn module_id(&self) -> ModuleId;
-}
-
-pub type ModuleId = (AccountAddress, Symbol);
-pub type QualifiedMemberId = (ModuleId, Symbol);
 
 #[derive(Clone, Copy)]
 pub struct Package<'a> {
     addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
     model: &'a Model,
+    compiled: &'a compiled_model::Package,
     data: &'a PackageData,
 }
 
@@ -65,6 +49,7 @@ pub struct Package<'a> {
 pub struct Module<'a> {
     id: ModuleId,
     package: Package<'a>,
+    compiled: &'a compiled_model::Module,
     data: &'a ModuleData,
 }
 
@@ -86,6 +71,8 @@ pub enum Datatype<'a> {
 pub struct Struct<'a> {
     name: Symbol,
     module: Module<'a>,
+    compiled: &'a compiled_model::Struct,
+    #[allow(unused)]
     data: &'a StructData,
 }
 
@@ -93,6 +80,8 @@ pub struct Struct<'a> {
 pub struct Enum<'a> {
     name: Symbol,
     module: Module<'a>,
+    compiled: &'a compiled_model::Enum,
+    #[allow(unused)]
     data: &'a EnumData,
 }
 
@@ -100,13 +89,15 @@ pub struct Enum<'a> {
 pub struct Variant<'a> {
     name: Symbol,
     enum_: Enum<'a>,
-    data: &'a VariantData,
+    compiled: &'a compiled_model::Variant,
 }
 
 #[derive(Clone, Copy)]
 pub struct Function<'a> {
     name: Symbol,
     module: Module<'a>,
+    compiled: &'a compiled_model::Function,
+    #[allow(unused)]
     data: &'a FunctionData,
 }
 
@@ -114,6 +105,8 @@ pub struct Function<'a> {
 pub struct Constant<'a> {
     name: Symbol,
     module: Module<'a>,
+    compiled: &'a compiled_model::Constant,
+    #[allow(unused)]
     data: &'a ConstantData,
 }
 
@@ -172,15 +165,18 @@ impl Model {
                 (*addr, data)
             })
             .collect();
-        let mut model = Self {
+        let compiled_modules = compiled_units
+            .into_iter()
+            .flat_map(|(_addr, units)| units.into_iter().map(|(_, unit)| unit.named_module.module))
+            .collect::<Vec<_>>();
+        let compiled_model = BinaryModel::new(&compiled_modules);
+        let model = Self {
             files,
             root_named_address_map,
             info,
-            compiled_units,
+            compiled_model,
             packages,
         };
-        model.compute_dependencies();
-        model.compute_function_dependencies();
         Ok(model)
     }
 
@@ -189,6 +185,7 @@ impl Model {
         Some(Package {
             addr: *addr,
             model: self,
+            compiled: &self.compiled_model.packages[addr],
             data,
         })
     }
@@ -248,6 +245,7 @@ impl<'a> Package<'a> {
         Some(Module {
             id: (self.addr, name),
             package: *self,
+            compiled: &self.compiled.modules[&name],
             data,
         })
     }
@@ -275,6 +273,7 @@ impl<'a> Module<'a> {
         Some(Struct {
             name,
             module: *self,
+            compiled: &self.compiled.structs[&name],
             data,
         })
     }
@@ -288,6 +287,7 @@ impl<'a> Module<'a> {
         Some(Enum {
             name,
             module: *self,
+            compiled: &self.compiled.enums[&name],
             data,
         })
     }
@@ -301,6 +301,7 @@ impl<'a> Module<'a> {
         Some(Function {
             name,
             module: *self,
+            compiled: &self.compiled.functions[&name],
             data,
         })
     }
@@ -314,6 +315,7 @@ impl<'a> Module<'a> {
         Some(Constant {
             name,
             module: *self,
+            compiled: &self.compiled.constants[&name],
             data,
         })
     }
@@ -357,12 +359,16 @@ impl<'a> Module<'a> {
         self.model().info.modules.get(self.ident()).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a AnnotatedCompiledUnit {
-        &self.model().compiled_units[&self.id.0][&self.id.1]
+    pub fn compiled(&self) -> &'a compiled_model::Module {
+        &self.model().compiled_model.packages[&self.package.addr].modules[&self.name()]
     }
 
     pub fn ident(&self) -> &'a E::ModuleIdent {
         &self.data.ident
+    }
+
+    pub fn name(&self) -> Symbol {
+        self.ident().value.module.0.value
     }
 
     pub fn id(&self) -> ModuleId {
@@ -380,11 +386,11 @@ impl<'a> Module<'a> {
     }
 
     pub fn deps(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
-        &self.data.deps
+        &self.compiled.deps
     }
 
     pub fn used_by(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
-        &self.data.used_by
+        &self.compiled.used_by
     }
 }
 
@@ -409,24 +415,8 @@ impl<'a> Struct<'a> {
         self.module.info().structs.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a file_format::StructDefinition {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .struct_def_at(self.data.compiled_idx)
-    }
-
-    pub fn compiled_idx(&self) -> file_format::StructDefinitionIndex {
-        self.data.compiled_idx
-    }
-
-    pub fn datatype_handle(&self) -> &'a file_format::DatatypeHandle {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .datatype_handle_at(self.compiled().struct_handle)
+    pub fn compiled(&self) -> &'a compiled_model::Struct {
+        self.compiled
     }
 
     pub fn doc(&self) -> &str {
@@ -459,39 +449,22 @@ impl<'a> Enum<'a> {
         self.module.info().enums.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &file_format::EnumDefinition {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .enum_def_at(self.data.compiled_idx)
-    }
-
-    pub fn compiled_idx(&self) -> file_format::EnumDefinitionIndex {
-        self.data.compiled_idx
-    }
-
-    pub fn datatype_handle(&self) -> &'a file_format::DatatypeHandle {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .datatype_handle_at(self.compiled().enum_handle)
+    pub fn compiled(&self) -> &'a compiled_model::Enum {
+        self.compiled
     }
 
     pub fn variants(&self) -> impl Iterator<Item = Variant<'a>> + '_ {
-        self.data
+        self.compiled
             .variants
             .keys()
             .map(move |name| self.variant(*name))
     }
 
     pub fn variant(&self, name: Symbol) -> Variant<'a> {
-        let data = self.data.variants.get(&name).unwrap();
         Variant {
             name,
             enum_: *self,
-            data,
+            compiled: &self.compiled.variants[&name],
         }
     }
 
@@ -525,16 +498,8 @@ impl<'a> Variant<'a> {
         self.enum_.info().variants.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a file_format::VariantDefinition {
-        self.module()
-            .compiled()
-            .named_module
-            .module
-            .variant_def_at(self.data.enum_idx, self.data.tag)
-    }
-
-    pub fn tag(&self) -> VariantTag {
-        self.data.tag
+    pub fn compiled(&self) -> &'a compiled_model::Variant {
+        self.compiled
     }
 
     pub fn doc(&self) -> &str {
@@ -567,54 +532,22 @@ impl<'a> Function<'a> {
         self.module.info().functions.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a file_format::FunctionDefinition {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .function_def_at(self.data.compiled_idx)
-    }
-
-    pub fn compiled_idx(&self) -> file_format::FunctionDefinitionIndex {
-        self.data.compiled_idx
+    pub fn compiled(&self) -> &'a compiled_model::Function {
+        self.compiled
     }
 
     pub fn doc(&self) -> &str {
         todo!()
     }
 
-    pub fn function_handle(&self) -> &'a file_format::FunctionHandle {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .function_handle_at(self.compiled().function)
-    }
-
-    pub fn compiled_parameters(&self) -> &'a file_format::Signature {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .signature_at(self.function_handle().parameters)
-    }
-
-    pub fn compiled_return_type(&self) -> &'a file_format::Signature {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .signature_at(self.function_handle().return_)
-    }
-
-    /// Returns an iterator over the functions  called by this function.
+    /// Returns an the functions called by this function.
     pub fn calls(&self) -> &'a BTreeSet<QualifiedMemberId> {
-        &self.data.calls
+        &self.compiled.calls
     }
 
-    /// Returns an iterator over the functions that call this function.
+    /// Returns the functions that call this function.
     pub fn called_by(&self) -> &'a BTreeSet<QualifiedMemberId> {
-        &self.data.called_by
+        &self.compiled.called_by
     }
 }
 
@@ -639,96 +572,18 @@ impl<'a> Constant<'a> {
         self.module.info().constants.get_(&self.name).unwrap()
     }
 
-    pub fn compiled(&self) -> &'a file_format::Constant {
-        self.module
-            .compiled()
-            .named_module
-            .module
-            .constant_at(self.data.compiled_idx)
-    }
-
-    pub fn compiled_idx(&self) -> file_format::ConstantPoolIndex {
-        self.data.compiled_idx
+    pub fn compiled(&self) -> &'a compiled_model::Constant {
+        self.compiled
     }
 
     pub fn doc(&self) -> &str {
         todo!()
-    }
-
-    /// Returns the value of the constant as a `annotated_move::MoveValue`.
-    /// This result will be cached and it will be deserialized only once.
-    pub fn value(&self) -> &'a annotated_value::MoveValue {
-        self.data.value.get_or_init(|| {
-            let compiled = self.compiled();
-            let constant_layout = Self::annotated_constant_layout(&compiled.type_);
-            annotated_value::MoveValue::simple_deserialize(&compiled.data, &constant_layout)
-                .unwrap()
-        })
-    }
-
-    /// If the constant is a vector<u8>, it will rendered as a UTF8 string.
-    /// If it has some other type (or if the data is not a valid UTF8 string),
-    /// it will will call display on the `annotated_move::MoveValue`
-    pub fn display_value(&self) -> String {
-        let compiled = self.compiled();
-        if matches!(&compiled.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
-        {
-            if let Some(str) = bcs::from_bytes::<Vec<u8>>(&compiled.data)
-                .ok()
-                .and_then(|data| String::from_utf8(data).ok())
-            {
-                return format!("\"{str}\"");
-            }
-        }
-
-        format!("{}", self.value())
-    }
-
-    fn annotated_constant_layout(ty: &SignatureToken) -> annotated_value::MoveTypeLayout {
-        use annotated_value::MoveTypeLayout as L;
-        use SignatureToken as ST;
-        match ty {
-            ST::Bool => L::Bool,
-            ST::U8 => L::U8,
-            ST::U16 => L::U16,
-            ST::U32 => L::U16,
-            ST::U64 => L::U64,
-            ST::U128 => L::U128,
-            ST::U256 => L::U16,
-            ST::Address => L::Address,
-            ST::Signer => L::Signer,
-            ST::Vector(inner) => L::Vector(Box::new(Self::annotated_constant_layout(inner))),
-
-            ST::Datatype(_)
-            | ST::DatatypeInstantiation(_)
-            | ST::Reference(_)
-            | ST::MutableReference(_)
-            | ST::TypeParameter(_) => unreachable!("{ty:?} is not supported in constants"),
-        }
     }
 }
 
 //**************************************************************************************************
 // Traits
 //**************************************************************************************************
-
-impl TModuleId for CoreModuleId {
-    fn module_id(&self) -> ModuleId {
-        (*self.address(), self.name().as_str().into())
-    }
-}
-
-impl TModuleId for ModuleId {
-    fn module_id(&self) -> ModuleId {
-        *self
-    }
-}
-
-impl TModuleId for (&AccountAddress, &Symbol) {
-    fn module_id(&self) -> ModuleId {
-        (*self.0, *self.1)
-    }
-}
 
 impl TModuleId for (NumericalAddress, Symbol) {
     fn module_id(&self) -> ModuleId {
@@ -749,12 +604,6 @@ impl TModuleId for ModuleIdent_ {
     }
 }
 
-impl<T: TModuleId> TModuleId for &T {
-    fn module_id(&self) -> ModuleId {
-        T::module_id(*self)
-    }
-}
-
 impl<T: TModuleId> TModuleId for Spanned<T> {
     fn module_id(&self) -> ModuleId {
         T::module_id(&self.value)
@@ -765,6 +614,8 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 // Internals
 //**************************************************************************************************
 
+// The *Data structs are not used currently, but if we need extra source information these provide
+// a place to store it.
 struct PackageData {
     // Based on the root packages named address map
     name: Option<Symbol>,
@@ -777,167 +628,24 @@ struct ModuleData {
     enums: BTreeMap<Symbol, EnumData>,
     functions: BTreeMap<Symbol, FunctionData>,
     constants: BTreeMap<Symbol, ConstantData>,
-    deps: BTreeMap<ModuleId, /* is immediate */ bool>,
-    used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
 }
 
-pub struct StructData {
-    compiled_idx: file_format::StructDefinitionIndex,
-}
+struct StructData {}
 
 struct EnumData {
-    compiled_idx: file_format::EnumDefinitionIndex,
+    #[allow(unused)]
     variants: BTreeMap<Symbol, VariantData>,
 }
 
-struct VariantData {
-    enum_idx: file_format::EnumDefinitionIndex,
-    tag: VariantTag,
-}
+struct VariantData {}
 
-struct FunctionData {
-    compiled_idx: file_format::FunctionDefinitionIndex,
-    calls: BTreeSet<QualifiedMemberId>,
-    // reverse mapping of function_immediate_deps
-    called_by: BTreeSet<QualifiedMemberId>,
-}
+struct FunctionData {}
 
-struct ConstantData {
-    compiled_idx: file_format::ConstantPoolIndex,
-    value: OnceCell<annotated_value::MoveValue>,
-}
+struct ConstantData {}
 
 //**************************************************************************************************
 // Construction
 //**************************************************************************************************
-
-impl Model {
-    fn compute_dependencies(&mut self) {
-        fn visit(
-            compiled_units: &BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
-            acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
-            id: ModuleId,
-            unit: &AnnotatedCompiledUnit,
-        ) {
-            if acc.contains_key(&id) {
-                return;
-            }
-
-            let immediate_deps = unit
-                .named_module
-                .module
-                .immediate_dependencies()
-                .into_iter()
-                .map(|id| (*id.address(), Symbol::from(id.name().as_str())))
-                .collect::<Vec<_>>();
-            for immediate_dep in &immediate_deps {
-                let unit = &compiled_units[&immediate_dep.0][&immediate_dep.1];
-                visit(compiled_units, acc, *immediate_dep, unit);
-            }
-            let mut deps = BTreeMap::new();
-            for immediate_dep in immediate_deps {
-                deps.insert(immediate_dep, true);
-                for transitive_dep in acc.get(&immediate_dep).unwrap().keys() {
-                    if !deps.contains_key(transitive_dep) {
-                        deps.insert(*transitive_dep, false);
-                    }
-                }
-            }
-            acc.insert(id, deps);
-        }
-
-        let mut module_deps = BTreeMap::new();
-        for (a, units) in &self.compiled_units {
-            for (m, unit) in units {
-                let id = (*a, *m);
-                visit(&self.compiled_units, &mut module_deps, id, unit);
-            }
-        }
-        let mut module_used_by = module_deps
-            .keys()
-            .map(|id| (*id, BTreeMap::new()))
-            .collect::<BTreeMap<_, _>>();
-        for (id, deps) in &module_deps {
-            for (dep, immediate) in deps {
-                let immediate = *immediate;
-                let used_by = module_used_by.get_mut(dep).unwrap();
-                let is_immediate = used_by.entry(*id).or_insert(false);
-                *is_immediate = *is_immediate || immediate;
-            }
-        }
-        for (a, package) in &mut self.packages {
-            for (m, data) in &mut package.modules {
-                let id = (*a, *m);
-                data.deps = module_deps.remove(&id).unwrap();
-                data.used_by = module_used_by.remove(&id).unwrap();
-            }
-        }
-    }
-
-    fn compute_function_dependencies(&mut self) {
-        let mut function_immediate_deps: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
-        let units = self
-            .compiled_units
-            .iter()
-            .flat_map(|(a, units)| units.iter().map(|(m, u)| ((*a, *m), u)));
-        for (id, unit) in units {
-            let module = &unit.named_module.module;
-            for fdef in module.function_defs() {
-                let fhandle = module.function_handle_at(fdef.function);
-                let fname = module.identifier_at(fhandle.name);
-                let qualified_id = (id, Symbol::from(fname.as_str()));
-                let callees = fdef
-                    .code
-                    .as_ref()
-                    .iter()
-                    .flat_map(|c| c.code.iter())
-                    .filter_map(|instr| match instr {
-                        file_format::Bytecode::Call(i) => Some(*i),
-                        file_format::Bytecode::CallGeneric(i) => {
-                            Some(module.function_instantiation_at(*i).handle)
-                        }
-                        _ => None,
-                    })
-                    .map(|i| {
-                        let callee_handle = module.function_handle_at(i);
-                        let callee_module = module
-                            .module_id_for_handle(module.module_handle_at(callee_handle.module))
-                            .module_id();
-                        let callee_name = module.identifier_at(fhandle.name);
-                        (callee_module, Symbol::from(callee_name.as_str()))
-                    })
-                    .collect();
-                function_immediate_deps.insert(qualified_id, callees);
-            }
-        }
-
-        // ensure the map is populated for all functions
-        let mut function_called_by = function_immediate_deps
-            .values()
-            .flatten()
-            .map(|callee| (*callee, BTreeSet::new()))
-            .collect::<BTreeMap<_, _>>();
-        for (caller, callees) in &function_immediate_deps {
-            for callee in callees {
-                function_called_by.get_mut(callee).unwrap().insert(*caller);
-            }
-        }
-        for (a, package) in &mut self.packages {
-            for (m, data) in &mut package.modules {
-                let id = (*a, *m);
-                for (fname, fdata) in &mut data.functions {
-                    let qualified_id = (id, *fname);
-                    fdata.calls = function_immediate_deps
-                        .remove(&qualified_id)
-                        .unwrap_or(BTreeSet::new());
-                    fdata.called_by = function_called_by
-                        .remove(&qualified_id)
-                        .unwrap_or(BTreeSet::new());
-                }
-            }
-        }
-    }
-}
 
 impl PackageData {
     fn new(
@@ -973,12 +681,12 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _sinfo)| {
                 let name = *name;
-                let (idx, _struct_def) = unit
+                let (_idx, _struct_def) = unit
                     .named_module
                     .module
                     .find_struct_def_by_name(name.as_str())
                     .unwrap();
-                let struct_ = StructData::new(idx);
+                let struct_ = StructData::new();
                 (name, struct_)
             })
             .collect();
@@ -987,12 +695,12 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _einfo)| {
                 let name = *name;
-                let (idx, enum_def) = unit
+                let (_idx, enum_def) = unit
                     .named_module
                     .module
                     .find_enum_def_by_name(name.as_str())
                     .unwrap();
-                let enum_ = EnumData::new(&unit.named_module.module, idx, enum_def);
+                let enum_ = EnumData::new(&unit.named_module.module, enum_def);
                 (name, enum_)
             })
             .collect();
@@ -1001,12 +709,12 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _finfo)| {
                 let name = *name;
-                let (idx, _function_def) = unit
+                let (_idx, _function_def) = unit
                     .named_module
                     .module
                     .find_function_def_by_name(name.as_str())
                     .unwrap();
-                let function = FunctionData::new(idx);
+                let function = FunctionData::new();
                 (name, function)
             })
             .collect();
@@ -1015,15 +723,7 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _cinfo)| {
                 let name = *name;
-                let cname = ir::ConstantName(name);
-                let idx = *unit
-                    .named_module
-                    .source_map
-                    .constant_map
-                    .get(&cname)
-                    .unwrap();
-                let idx = file_format::ConstantPoolIndex(idx);
-                let constant = ConstantData::new(idx);
+                let constant = ConstantData::new();
                 (name, constant)
             })
             .collect();
@@ -1033,60 +733,43 @@ impl ModuleData {
             enums,
             functions,
             constants,
-            deps: BTreeMap::new(),
-            used_by: BTreeMap::new(),
         }
     }
 }
 
 impl StructData {
-    fn new(compiled_idx: file_format::StructDefinitionIndex) -> Self {
-        Self { compiled_idx }
+    fn new() -> Self {
+        Self {}
     }
 }
 
 impl EnumData {
-    fn new(
-        module: &file_format::CompiledModule,
-        compiled_idx: file_format::EnumDefinitionIndex,
-        def: &file_format::EnumDefinition,
-    ) -> Self {
+    fn new(module: &file_format::CompiledModule, def: &file_format::EnumDefinition) -> Self {
         let mut variants = BTreeMap::new();
-        for (tag_idx, variant) in def.variants.iter().enumerate() {
-            let tag = tag_idx as u16;
+        for (_tag, variant) in def.variants.iter().enumerate() {
             let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());
-            let data = VariantData::new(compiled_idx, tag);
+            let data = VariantData::new();
             let prev = variants.insert(name, data);
             assert!(prev.is_none());
         }
-        Self {
-            compiled_idx,
-            variants,
-        }
+        Self { variants }
     }
 }
 
 impl VariantData {
-    fn new(enum_idx: file_format::EnumDefinitionIndex, tag: VariantTag) -> Self {
-        Self { enum_idx, tag }
+    fn new() -> Self {
+        Self {}
     }
 }
 
 impl FunctionData {
-    fn new(compiled_idx: file_format::FunctionDefinitionIndex) -> Self {
-        Self {
-            compiled_idx,
-            calls: BTreeSet::new(),
-            called_by: BTreeSet::new(),
-        }
+    fn new() -> Self {
+        Self {}
     }
 }
 
 impl ConstantData {
-    fn new(compiled_idx: file_format::ConstantPoolIndex) -> Self {
-        Self {
-            compiled_idx,
-            value: OnceCell::new(),
-        }
+    fn new() -> Self {
+        Self {}
     }
 }

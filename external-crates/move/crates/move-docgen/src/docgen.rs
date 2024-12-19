@@ -574,12 +574,12 @@ impl<'env> Docgen<'env> {
             self.end_collapsed();
         }
 
-        for s in module_env.structs().sorted_by_key(|s| s.compiled_idx()) {
+        for s in module_env.structs().sorted_by_key(|s| s.compiled().def_idx) {
             self.gen_struct(s);
         }
 
         if module_env.enums().next().is_some() {
-            for e in module_env.enums().sorted_by_key(|e| e.compiled_idx()) {
+            for e in module_env.enums().sorted_by_key(|e| e.compiled().def_idx) {
                 self.gen_enum(e);
             }
         }
@@ -597,7 +597,7 @@ impl<'env> Docgen<'env> {
                     info.entry.is_some() || !matches!(info.visibility, Visibility::Public(_))
                 }
             })
-            .sorted_by_key(|f| f.compiled_idx())
+            .sorted_by_key(|f| f.compiled().def_idx)
             .collect_vec();
         if !funs.is_empty() {
             for f in funs {
@@ -935,7 +935,7 @@ impl<'env> Docgen<'env> {
         let is_error_const = info
             .attributes
             .contains_key_(&known_attributes::ErrorAttribute.into());
-        let rendered_value = match (is_error_const, const_env.value()) {
+        let rendered_value = match (is_error_const, const_env.compiled().value()) {
             (true, MoveValue::Vector(values))
                 if values
                     .first()

@@ -1,18 +1,30 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::source_model::QualifiedMemberId;
 use move_binary_format::file_format::{
     self, AbilitySet, CodeOffset, CodeUnit, CompiledModule, ConstantPoolIndex, DatatypeHandleIndex,
     DatatypeTyParameter, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinition,
     FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex, LocalIndex, MemberCount,
     SignatureIndex, SignatureToken, StructDefInstantiationIndex, StructDefinition,
     StructDefinitionIndex, StructFieldInformation, TypeParameterIndex, VariantHandleIndex,
-    VariantInstantiationHandleIndex, VariantJumpTable, Visibility,
+    VariantInstantiationHandleIndex, VariantJumpTable, VariantTag, Visibility,
 };
-use move_core_types::{account_address::AccountAddress, u256::U256};
+use move_core_types::{
+    account_address::AccountAddress, annotated_value, language_storage::ModuleId as CoreModuleId,
+    u256::U256,
+};
 use move_symbol_pool::Symbol;
-use std::collections::BTreeMap;
+use std::{
+    cell::OnceCell,
+    collections::{BTreeMap, BTreeSet},
+};
+
+pub type ModuleId = (AccountAddress, Symbol);
+pub type QualifiedMemberId = (ModuleId, Symbol);
+
+pub trait TModuleId {
+    fn module_id(&self) -> ModuleId;
+}
 
 #[derive(Debug, Clone)]
 pub struct BinaryModel {
@@ -30,9 +42,12 @@ pub struct Module {
     pub name: Symbol,
     pub package: AccountAddress,
     pub structs: BTreeMap<Symbol, Struct>,
+    pub enums: BTreeMap<Symbol, Enum>,
     pub functions: BTreeMap<Symbol, Function>,
     pub constants: BTreeMap<Symbol, Constant>,
     pub module: CompiledModule,
+    pub deps: BTreeMap<ModuleId, /* is immediate */ bool>,
+    pub used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,13 +64,14 @@ pub struct Enum {
     pub name: Symbol,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
-    pub variants: Vec<Variant>,
+    pub variants: BTreeMap<Symbol, Variant>,
     pub def_idx: EnumDefinitionIndex,
 }
 
 #[derive(Debug, Clone)]
 pub struct Variant {
     pub name: Symbol,
+    pub tag: VariantTag,
     pub fields: Vec<Field>,
 }
 
@@ -74,6 +90,9 @@ pub struct Function {
     pub visibility: u8,
     pub code: Option<Code>,
     pub def_idx: FunctionDefinitionIndex,
+    pub calls: BTreeSet<QualifiedMemberId>,
+    // reverse mapping of function_immediate_deps
+    pub called_by: BTreeSet<QualifiedMemberId>,
 }
 
 #[repr(u8)]
@@ -95,10 +114,12 @@ pub struct Code {
 pub struct Constant {
     pub type_: Type,
     // refer to the value in the `CompiledModule`
-    pub constant: ConstantPoolIndex,
+    pub def_idx: ConstantPoolIndex,
+    pub data: Vec<u8>,
+    value: OnceCell<annotated_value::MoveValue>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Bool,
     U8,
@@ -203,6 +224,87 @@ pub struct FieldRef {
 }
 
 //**************************************************************************************************
+// API
+//**************************************************************************************************
+
+impl Constant {
+    /// Returns the value of the constant as a `annotated_move::MoveValue`.
+    /// This result will be cached and it will be deserialized only once.
+    pub fn value(&self) -> &annotated_value::MoveValue {
+        self.value.get_or_init(|| {
+            let constant_layout = Self::annotated_constant_layout(&self.type_);
+            annotated_value::MoveValue::simple_deserialize(&self.data, &constant_layout).unwrap()
+        })
+    }
+
+    /// If the constant is a vector<u8>, it will rendered as a UTF8 string.
+    /// If it has some other type (or if the data is not a valid UTF8 string),
+    /// it will will call display on the `annotated_move::MoveValue`
+    pub fn display_value(&self) -> String {
+        if matches!(&self.type_, Type::Vector(x) if &**x == &Type::U8) {
+            if let Some(str) = bcs::from_bytes::<Vec<u8>>(&self.data)
+                .ok()
+                .and_then(|data| String::from_utf8(data).ok())
+            {
+                return format!("\"{str}\"");
+            }
+        }
+
+        format!("{}", self.value())
+    }
+
+    fn annotated_constant_layout(ty: &Type) -> annotated_value::MoveTypeLayout {
+        use annotated_value::MoveTypeLayout as L;
+        use Type as T;
+        match ty {
+            T::Bool => L::Bool,
+            T::U8 => L::U8,
+            T::U16 => L::U16,
+            T::U32 => L::U16,
+            T::U64 => L::U64,
+            T::U128 => L::U128,
+            T::U256 => L::U16,
+            T::Address => L::Address,
+            T::Vector(inner) => L::Vector(Box::new(Self::annotated_constant_layout(inner))),
+
+            T::Datatype(_)
+            | T::DatatypeInstantiation(_)
+            | T::Reference(_)
+            | T::MutableReference(_)
+            | T::TypeParameter(_) => unreachable!("{ty:?} is not supported in constants"),
+        }
+    }
+}
+
+//**************************************************************************************************
+// Traits
+//**************************************************************************************************
+
+impl TModuleId for CoreModuleId {
+    fn module_id(&self) -> ModuleId {
+        (*self.address(), self.name().as_str().into())
+    }
+}
+
+impl TModuleId for ModuleId {
+    fn module_id(&self) -> ModuleId {
+        *self
+    }
+}
+
+impl TModuleId for (&AccountAddress, &Symbol) {
+    fn module_id(&self) -> ModuleId {
+        (*self.0, *self.1)
+    }
+}
+
+impl<T: TModuleId> TModuleId for &T {
+    fn module_id(&self) -> ModuleId {
+        T::module_id(*self)
+    }
+}
+
+//**************************************************************************************************
 // Construction
 //**************************************************************************************************
 
@@ -218,7 +320,143 @@ impl BinaryModel {
             package.insert(module);
         }
 
-        Self { packages }
+        let mut model = Self { packages };
+        model.compute_dependencies();
+        model.compute_function_dependencies();
+        model
+    }
+
+    fn compute_dependencies(&mut self) {
+        fn visit(
+            packages: &BTreeMap<AccountAddress, Package>,
+            acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
+            id: ModuleId,
+            module: &Module,
+        ) {
+            if acc.contains_key(&id) {
+                return;
+            }
+
+            let immediate_deps = module
+                .module
+                .immediate_dependencies()
+                .into_iter()
+                .map(|id| (*id.address(), Symbol::from(id.name().as_str())))
+                .collect::<Vec<_>>();
+            for immediate_dep in &immediate_deps {
+                let unit = &packages[&immediate_dep.0].modules[&immediate_dep.1];
+                visit(packages, acc, *immediate_dep, unit);
+            }
+            let mut deps = BTreeMap::new();
+            for immediate_dep in immediate_deps {
+                deps.insert(immediate_dep, true);
+                for transitive_dep in acc.get(&immediate_dep).unwrap().keys() {
+                    if !deps.contains_key(transitive_dep) {
+                        deps.insert(*transitive_dep, false);
+                    }
+                }
+            }
+            acc.insert(id, deps);
+        }
+
+        assert!(self.packages.values().all(|p| p
+            .modules
+            .values()
+            .all(|m| m.deps.is_empty() && m.used_by.is_empty())));
+        let mut module_deps = BTreeMap::new();
+        for (a, package) in &self.packages {
+            for (m, module) in &package.modules {
+                let id = (*a, *m);
+                visit(&self.packages, &mut module_deps, id, module);
+            }
+        }
+        let mut module_used_by = module_deps
+            .keys()
+            .map(|id| (*id, BTreeMap::new()))
+            .collect::<BTreeMap<_, _>>();
+        for (id, deps) in &module_deps {
+            for (dep, immediate) in deps {
+                let immediate = *immediate;
+                let used_by = module_used_by.get_mut(dep).unwrap();
+                let is_immediate = used_by.entry(*id).or_insert(false);
+                *is_immediate = *is_immediate || immediate;
+            }
+        }
+        for (a, package) in &mut self.packages {
+            for (m, data) in &mut package.modules {
+                let id = (*a, *m);
+                data.deps = module_deps.remove(&id).unwrap();
+                data.used_by = module_used_by.remove(&id).unwrap();
+            }
+        }
+    }
+
+    fn compute_function_dependencies(&mut self) {
+        assert!(self.packages.values().all(|p| p.modules.values().all(|m| m
+            .functions
+            .values()
+            .all(|f| f.calls.is_empty() && f.called_by.is_empty()))));
+        let mut function_immediate_deps: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
+        let units = self
+            .packages
+            .iter()
+            .flat_map(|(a, p)| p.modules.iter().map(|(m, u)| ((*a, *m), u)));
+        for (id, unit) in units {
+            let module = &unit.module;
+            for fdef in module.function_defs() {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                let qualified_id = (id, Symbol::from(fname.as_str()));
+                let callees = fdef
+                    .code
+                    .as_ref()
+                    .iter()
+                    .flat_map(|c| c.code.iter())
+                    .filter_map(|instr| match instr {
+                        file_format::Bytecode::Call(i) => Some(*i),
+                        file_format::Bytecode::CallGeneric(i) => {
+                            Some(module.function_instantiation_at(*i).handle)
+                        }
+                        _ => None,
+                    })
+                    .map(|i| {
+                        let callee_handle = module.function_handle_at(i);
+                        let callee_module = module
+                            .module_id_for_handle(module.module_handle_at(callee_handle.module))
+                            .module_id();
+                        let callee_name = module.identifier_at(fhandle.name);
+                        (callee_module, Symbol::from(callee_name.as_str()))
+                    })
+                    .collect();
+                function_immediate_deps.insert(qualified_id, callees);
+            }
+        }
+
+        // ensure the map is populated for all functions
+        let mut function_called_by = function_immediate_deps
+            .values()
+            .flatten()
+            .map(|callee| (*callee, BTreeSet::new()))
+            .collect::<BTreeMap<_, _>>();
+        for (caller, callees) in &function_immediate_deps {
+            for callee in callees {
+                function_called_by.get_mut(callee).unwrap().insert(*caller);
+            }
+        }
+        for (a, package) in &mut self.packages {
+            for (m, data) in &mut package.modules {
+                let id = (*a, *m);
+                for (fname, fdata) in &mut data.functions {
+                    let qualified_id = (id, *fname);
+                    fdata.calls = function_immediate_deps
+                        .remove(&qualified_id)
+                        .unwrap_or(BTreeSet::new());
+                    fdata.called_by = function_called_by
+                        .remove(&qualified_id)
+                        .unwrap_or(BTreeSet::new());
+                }
+            }
+        }
     }
 }
 
@@ -231,7 +469,8 @@ impl Package {
     }
 
     fn insert(&mut self, module: Module) {
-        self.modules.insert(module.name, module);
+        let prev = self.modules.insert(module.name, module);
+        assert!(prev.is_none());
     }
 }
 
@@ -250,6 +489,15 @@ impl Module {
                 (struct_.name, struct_)
             })
             .collect::<BTreeMap<_, _>>();
+        let enums = compiled_module
+            .enum_defs()
+            .iter()
+            .enumerate()
+            .map(|(idx, def)| {
+                let enum_ = make_enum(compiled_module, def, EnumDefinitionIndex(idx as u16));
+                (enum_.name, enum_)
+            })
+            .collect::<BTreeMap<_, _>>();
         let functions = compiled_module
             .function_defs()
             .iter()
@@ -265,9 +513,12 @@ impl Module {
             name,
             package,
             structs,
+            enums,
             functions,
             constants,
             module: compiled_module.clone(),
+            deps: BTreeMap::new(),
+            used_by: BTreeMap::new(),
         }
     }
 }
@@ -297,6 +548,43 @@ fn make_struct(
         abilities,
         type_parameters,
         fields,
+        def_idx,
+    }
+}
+
+fn make_enum(
+    module: &CompiledModule,
+    def: &file_format::EnumDefinition,
+    def_idx: EnumDefinitionIndex,
+) -> Enum {
+    let handle = module.datatype_handle_at(def.enum_handle);
+    let name = identifier_at(module, handle.name);
+    let abilities = handle.abilities;
+    let type_parameters = handle.type_parameters.clone();
+    let variants = def
+        .variants
+        .iter()
+        .enumerate()
+        .map(|(idx, variant)| {
+            let name = identifier_at(module, variant.variant_name);
+            let tag = idx as u16;
+            let fields = variant
+                .fields
+                .iter()
+                .map(|field| Field {
+                    name: identifier_at(module, field.name),
+                    type_: make_type(module, &field.signature.0),
+                })
+                .collect();
+            (name, Variant { name, tag, fields })
+        })
+        .collect();
+
+    Enum {
+        name,
+        abilities,
+        type_parameters,
+        variants,
         def_idx,
     }
 }
@@ -339,6 +627,8 @@ fn make_fun(
         visibility,
         code,
         def_idx,
+        calls: BTreeSet::new(),
+        called_by: BTreeSet::new(),
     }
 }
 
