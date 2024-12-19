@@ -2901,7 +2901,7 @@ input ObjectFilter {
 	"""
 	Filter for live objects by their ID and version. NOTE:  this input filter has been
 	deprecated in favor of `multiGetObjects` query as it does not make sense to query for live
-	objects by their versions. This filter will be removed with v1.40.0 release.
+	objects by their versions. This filter will be removed with v1.42.0 release.
 	"""
 	objectKeys: [ObjectKey!]
 }
