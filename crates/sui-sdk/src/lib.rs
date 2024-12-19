@@ -36,7 +36,7 @@
 //! the Sui devnet, and the Sui testnet is shown below.
 //! To successfully run this program, make sure to spin up a local
 //! network with a local validator, a fullnode, and a faucet server
-//! (see [https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) for more information).
+//! (see the [Rust SDK examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) on GitHub for more information).
 //!
 //! ```rust,no_run
 //! use sui_sdk::SuiClientBuilder;
