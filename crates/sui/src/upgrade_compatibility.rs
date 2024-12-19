@@ -159,12 +159,8 @@ pub(crate) enum UpgradeCompatibilityModeError {
     FunctionMissing {
         name: Identifier,
     },
-    FriendNew {
-        new_friend: ModuleId,
-    },
-    FriendMissing {
-        old_friend: ModuleId,
-    },
+    FriendNew,
+    FriendMissing,
 }
 
 /// Check if a specifc error breaks 'compatible' upgrades
@@ -538,7 +534,12 @@ impl InclusionCheckMode for CliInclusionCheckMode {
     }
 
     fn friend_mismatch(&mut self, old_count: usize, new_count: usize) {
-        todo!()
+        if old_count < new_count {
+            self.errors.push(UpgradeCompatibilityModeError::FriendNew);
+        } else {
+            self.errors
+                .push(UpgradeCompatibilityModeError::FriendMissing);
+        }
     }
 
     fn finish(self, inclusion: &InclusionCheck) -> Result<(), Self::Error> {
@@ -664,6 +665,7 @@ upgrade_codes!(
         ModuleMismatch: { msg: "module incompatible" },
         Missing: { msg: "missing declaration" },
         VersionMismatch: { msg: "file format version downgrade" },
+        FriendMismatch: { msg: "friend mismatch" },
     ],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
@@ -904,6 +906,7 @@ fn compatibility_diag_from_error(
             name,
             old_struct,
             new_struct,
+            is_compatible,
             compiled_unit_with_source,
             lookup,
         ),
@@ -955,7 +958,14 @@ fn compatibility_diag_from_error(
             name,
             old_enum,
             new_enum,
-        } => enum_type_param_mismatch(name, old_enum, new_enum, compiled_unit_with_source, lookup),
+        } => enum_type_param_mismatch(
+            name,
+            old_enum,
+            new_enum,
+            is_compatible,
+            compiled_unit_with_source,
+            lookup,
+        ),
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
             missing_definition_diag(
                 "public function",
@@ -1040,7 +1050,9 @@ fn compatibility_diag_from_error(
             file_format_version_downgrade_diag(old_version, new_version, compiled_unit_with_source)
         }
         UpgradeCompatibilityModeError::FriendNew { .. }
-        | &UpgradeCompatibilityModeError::FriendMissing { .. } => unreachable!("Not implemented"),
+        | UpgradeCompatibilityModeError::FriendMissing { .. } => {
+            friend_link_diag(compiled_unit_with_source)
+        }
     }
 }
 
@@ -1718,6 +1730,7 @@ fn struct_type_param_mismatch_diag(
     name: &Identifier,
     old_struct: &Struct,
     new_struct: &Struct,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -1739,6 +1752,7 @@ fn struct_type_param_mismatch_diag(
         name,
         &old_struct.type_parameters,
         &new_struct.type_parameters,
+        public_visibility_related_error,
         def_loc,
         &struct_sourcemap.type_parameters,
     )
@@ -2083,7 +2097,14 @@ fn struct_changed_diag(
     }
 
     if old_struct.type_parameters != new_struct.type_parameters {
-        todo!();
+        diags.extend(struct_type_param_mismatch_diag(
+            struct_name,
+            old_struct,
+            new_struct,
+            true,
+            compiled_unit_with_source,
+            lookup,
+        )?);
     }
 
     if old_struct.fields != new_struct.fields {
@@ -2235,6 +2256,7 @@ fn enum_type_param_mismatch(
     enum_name: &Identifier,
     old_enum: &Enum,
     new_enum: &Enum,
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     compiled_unit_with_source: &CompiledUnitWithSource,
     lookup: &IdentifierTableLookup,
 ) -> Result<Diagnostics, Error> {
@@ -2256,6 +2278,7 @@ fn enum_type_param_mismatch(
         enum_name,
         &old_enum.type_parameters,
         &new_enum.type_parameters,
+        public_visibility_related_error,
         def_loc,
         &enum_sourcemap.type_parameters,
     )
@@ -2267,6 +2290,7 @@ fn type_parameter_diag(
     name: &Identifier,
     old_type_parameters: &[DatatypeTyParameter],
     new_type_parameters: &[DatatypeTyParameter],
+    public_visibility_related_error: bool, // give a different code for errors which are public visibility related
     def_loc: Loc,
     type_parameter_locs: &[SourceName],
 ) -> Result<Diagnostics, Error> {
@@ -2298,10 +2322,17 @@ fn type_parameter_diag(
             ),
             Vec::<(Loc, String)>::new(),
             vec![
-                format!(
-                    "{capital_declaration_kind}s are part of a module's public interface and \
-                cannot be changed during an upgrade."
-                ),
+                if public_visibility_related_error {
+                    format!(
+                        "{capital_declaration_kind}s are part of a module's public interface \
+                        and cannot be changed during a 'compatible' upgrade.",
+                    )
+                } else {
+                    format!(
+                        "{capital_declaration_kind}s cannot be changed during an 'additive' or \
+                        'dependency only' upgrade."
+                    )
+                },
                 format!(
                     "Restore the original {declaration_kind}'s type {} \
                     for {declaration_kind} '{name}' including the ordering.",
@@ -2402,6 +2433,7 @@ fn type_param_phantom_labels(old_phantom: bool, new_phantom: bool) -> Option<(St
     })
 }
 
+/// Return a diagnostic for package file format version mismatch
 fn file_format_version_downgrade_diag(
     old_version: &u32,
     new_version: &u32,
@@ -2428,6 +2460,27 @@ fn file_format_version_downgrade_diag(
             "File format version downgrades are not supported.".to_string(),
             "Please upgrade to the latest version of the move language tooling.".to_string(),
         ],
+    ));
+
+    Ok(diags)
+}
+
+/// Return a diagnostic for a friend link mismatch
+fn friend_link_diag(
+    compiled_unit_with_source: &CompiledUnitWithSource,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let def_loc = compiled_unit_with_source
+        .unit
+        .source_map
+        .definition_location;
+
+    diags.add(Diagnostic::new(
+        Declarations::FriendMismatch,
+        (def_loc, "Friends links are mismatched".to_string()),
+        Vec::<(Loc, String)>::new(),
+        vec!["Restore the original friend declarations.".to_string()],
     ));
 
     Ok(diags)
