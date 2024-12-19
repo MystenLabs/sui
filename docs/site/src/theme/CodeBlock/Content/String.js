@@ -59,23 +59,21 @@ export default function CodeBlockString({
   // Change component to render title as anchor.
   let sourceLink;
   if (title) {
-    if (!title.match(/^http/)){
-      if (title.match(/^\github:/)) {
-        const parts = title.split("/");
-        const githubOrgName = parts[0].split(":")[1];
-        const githubRepoName = parts[1];
-        sourceLink = `${GITHUB}/${githubOrgName}/${githubRepoName}/${GITHUB_BLOB}/${parts.slice(2).join("/")}`;
-      } else {
-        sourceLink = `https://github.com/MystenLabs/sui/tree/main/${title}`;
-      }
-    } else {
+    if (title.match(/^http/)) {
       sourceLink = title;
+    } else if (title.match(/github:/)) {
+      const parts = title.split("/");
+      const githubOrgName = parts[0].split(":")[1];
+      const githubRepoName = parts[1];
+      sourceLink = `${GITHUB}/${githubOrgName}/${githubRepoName}/${GITHUB_BLOB}/${parts.slice(2).join("/")}`;
+    } else {
+      sourceLink = `https://github.com/MystenLabs/sui/tree/main/${title}`;
     }
   }
 
   const tailwind = "relative ";
 
-  const displayTitle = title.replace("github:", "");
+  const displayTitle = title ? title.replace("github:", "") : "";
 
   return (
     <Container

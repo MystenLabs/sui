@@ -622,12 +622,7 @@ const addCodeInject = async function (source) {
     return res;
   }
 
-  if (source.match(/(?<!`)\{@inject: .+\}/g)) {
-    fileString = replacePlaceHolders(await addMarkdownIncludes(fileString));
-  } else {
-    console.log(this.resourcePath);
-    fileString = source;
-  }
+  fileString = replacePlaceHolders(await addMarkdownIncludes(fileString));
 
   return callback && callback(null, fileString);
 };
