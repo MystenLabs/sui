@@ -104,7 +104,7 @@ pub enum Definition {
     Address(AddressDefinition),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DocComment(pub(crate) Option<Spanned<String>>);
 
 #[derive(Debug, Clone)]

@@ -1354,6 +1354,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 value,
             },
         ) = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         w.write(format!("const#{index} {}:", name));
