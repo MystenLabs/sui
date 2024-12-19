@@ -247,7 +247,7 @@ impl Module {
             .enumerate()
             .map(|(idx, def)| {
                 let struct_ = make_struct(compiled_module, def, StructDefinitionIndex(idx as u16));
-                (struct_.name.clone(), struct_)
+                (struct_.name, struct_)
             })
             .collect::<BTreeMap<_, _>>();
         let functions = compiled_module
@@ -256,7 +256,7 @@ impl Module {
             .enumerate()
             .map(|(idx, def)| {
                 let fun = make_fun(compiled_module, def, FunctionDefinitionIndex(idx as u16));
-                (fun.name.clone(), fun)
+                (fun.name, fun)
             })
             .collect::<BTreeMap<_, _>>();
         let constants = BTreeMap::<Symbol, Constant>::new();
@@ -365,8 +365,8 @@ fn make_type(module: &CompiledModule, token: &SignatureToken) -> Type {
                 .collect();
             Type::DatatypeInstantiation(Box::new((member_id, types)))
         }
-        Reference(token) => Type::Reference(Box::new(make_type(module, &*token))),
-        MutableReference(token) => Type::MutableReference(Box::new(make_type(module, &*token))),
+        Reference(token) => Type::Reference(Box::new(make_type(module, token))),
+        MutableReference(token) => Type::MutableReference(Box::new(make_type(module, token))),
         TypeParameter(idx) => Type::TypeParameter(*idx),
         U16 => Type::U16,
         U32 => Type::U32,

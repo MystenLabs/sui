@@ -9,15 +9,19 @@ use crate::code_writer::{CodeWriter, CodeWriterLabel};
 use itertools::Itertools;
 use move_binary_format::file_format;
 use move_compiler::{
-    diagnostics::ByteSpan,
-    expansion::ast::{TargetKind, Visibility},
-    parser::keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS},
+    expansion::ast::{self as E, Visibility},
+    naming::ast as N,
+    parser::{
+        ast::TargetKind,
+        keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS},
+    },
+    shared::{files::ByteSpan, known_attributes},
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, annotated_value::MoveValue};
 use move_ir_types::location::Loc;
 use move_model_2::{
     display as model_display,
-    source_model::{self as model, Model},
+    source_model::{self as model, Constant, Enum, Model},
     ModuleId, QualifiedMemberId,
 };
 use move_symbol_pool::Symbol;
@@ -26,6 +30,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
+    env,
     fmt::Write as FmtWrite,
     fs::{self, File},
     io::{Read, Write},
@@ -442,7 +447,7 @@ impl<'env> Docgen<'env> {
             .file_name()
             .expect("file name")
             .to_os_string();
-        if !matches!(module_env.info().target_kind, TargetKind::External) {
+        if !matches!(module_env.info().target_kind, TargetKind::External(_)) {
             // Try to locate the file in the provided search path.
             self.options.doc_path.iter().find_map(|dir| {
                 let mut path = PathBuf::from(dir);
@@ -575,11 +580,8 @@ impl<'env> Docgen<'env> {
         }
 
         if !module_env.enums().next().is_some() {
-            for s in module_env
-                .enums()
-                .sorted_by(|a, b| Ord::cmp(&a.get_loc(), &b.get_loc()))
-            {
-                self.gen_enum(&s);
+            for e in module_env.enums().sorted_by_key(|e| e.compiled_idx()) {
+                self.gen_enum(e);
             }
         }
 
@@ -884,7 +886,10 @@ impl<'env> Docgen<'env> {
         let env = struct_env.model();
         let module_env = struct_env.module();
         let name = struct_env.name();
-        self.section_header("Struct", &self.label_for_module_item(module_env, name));
+        self.section_header(
+            &format!("Struct `{name}`"),
+            &self.label_for_module_item(module_env, name),
+        );
         self.increment_section_nest();
         self.doc_text(env, struct_env.doc());
         self.code_block(env, &self.struct_header_display(struct_env));
@@ -901,15 +906,17 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates documentation for an enum.
-    fn gen_enum(&self, enum_env: &EnumEnv<'_>) {
-        let name = enum_env.get_name();
+    fn gen_enum(&mut self, enum_env: Enum<'_>) {
+        let env = enum_env.model();
+        let module_env = enum_env.module();
+        let name = enum_env.name();
         self.section_header(
-            &format!("Enum `{}`", self.name_string(enum_env.get_name())),
-            &self.label_for_module_item(&enum_env.module_env, name),
+            &format!("Enum `{name}`"),
+            &self.label_for_module_item(module_env, name),
         );
         self.increment_section_nest();
-        self.doc_text(enum_env.get_doc());
-        self.code_block(&self.enum_header_display(enum_env));
+        self.doc_text(env, enum_env.doc());
+        self.code_block(env, &self.enum_header_display(enum_env));
 
         if self.options.include_impl || (self.options.include_specs && self.options.specs_inlined) {
             // Include field documentation if either impls or specs are present and inlined,
@@ -922,31 +929,27 @@ impl<'env> Docgen<'env> {
         self.decrement_section_nest();
     }
 
-    /// Returns "Struct `N`" or "Resource `N`".
-    fn struct_title(&self, struct_env: &StructEnv<'_>) -> String {
-        // NOTE(mengxu): although we no longer declare structs with the `resource` keyword, it
-        // might be helpful in keeping `Resource N` in struct title as the boogie translator still
-        // depends on the `is_resource()` predicate to add additional functions to structs declared
-        // with the `key` ability.
-        format!(
-            "{} `{}`",
-            if struct_env.has_memory() {
-                "Resource"
-            } else {
-                "Struct"
-            },
-            self.name_string(struct_env.get_name())
-        )
-    }
-
     /// Generates declaration for named constant
-    fn named_constant_display(&self, const_env: &NamedConstantEnv<'_>) -> String {
-        let name = self.name_string(const_env.get_name());
-        let is_error_const = const_env.get_attributes().iter().any(|attr|
-            matches!(attr, Attribute::Apply(_, sym, _) if self.name_string(*sym).to_string() == *"error")
-        );
-        let rendered_value = match (is_error_const, const_env.get_value()) {
-            (true, Value::ByteArray(bytes)) => {
+    fn named_constant_display(&self, const_env: Constant<'_>) -> String {
+        let name = const_env.name();
+        let info = const_env.info();
+        let is_error_const = info
+            .attributes
+            .contains_key_(&known_attributes::ErrorAttribute.into());
+        let rendered_value = match (is_error_const, const_env.value()) {
+            (true, MoveValue::Vector(values))
+                if values
+                    .first()
+                    .map(|v| matches!(v, MoveValue::U8(_)))
+                    .unwrap_or(true) =>
+            {
+                let bytes = values
+                    .iter()
+                    .map(|v| match v {
+                        MoveValue::U8(b) => *b,
+                        _ => panic!("unexpected heterogeneous vector"),
+                    })
+                    .collect::<Vec<_>>();
                 if let Ok(s) = std::str::from_utf8(&bytes) {
                     format!("b\"{s}\"")
                 } else {
@@ -956,33 +959,25 @@ impl<'env> Docgen<'env> {
             (_, value) => value.to_string(),
         };
         let error_const_annot = if is_error_const { "#[error]\n" } else { "" };
-        format!(
-            "{}const {}: {} = {};",
-            error_const_annot,
-            name,
-            const_env.get_type().display(&TypeDisplayContext::WithEnv {
-                env: self.env,
-                type_param_names: None,
-            }),
-            rendered_value,
-        )
+        let ty = model_display::type_(&info.signature);
+        format!("{error_const_annot}const {name}: {ty} = {rendered_value};",)
     }
 
     /// Generates code signature for a struct.
     fn struct_header_display(&self, struct_env: model::Struct<'_>) -> String {
         let name = struct_env.name();
-        let type_params = struct_env
-            .info()
+        let info = struct_env.info();
+        let type_params = info
             .type_parameters
             .iter()
             .map(|tp| tp.param.user_specified_name.value)
             .join(", ");
-        let ability_tokens = self.ability_tokens(struct_env.struct_handle().abilities);
+        let ability_tokens = self.compiler_ability_tokens(&info.abilities);
         if ability_tokens.is_empty() {
-            format!("struct {}{}", name, type_params)
+            format!("public struct {name}{type_params}")
         } else {
             format!(
-                "struct {}{} has {}",
+                "public struct {}{} has {}",
                 name,
                 type_params,
                 ability_tokens.join(", ")
@@ -1011,10 +1006,11 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates code signature for an enum.
-    fn enum_header_display(&self, enum_env: &EnumEnv<'_>) -> String {
-        let name = self.name_string(enum_env.get_name());
-        let type_params = self.type_parameter_list_display(&enum_env.get_named_type_parameters());
-        let ability_tokens = self.ability_tokens(enum_env.get_abilities());
+    fn enum_header_display(&self, enum_env: Enum<'_>) -> String {
+        let name = enum_env.name();
+        let env_info = enum_env.info();
+        let type_params = self.datatype_type_parameter_list_display(&env_info.type_parameters);
+        let ability_tokens = self.compiler_ability_tokens(&env_info.abilities);
         if ability_tokens.is_empty() {
             format!("public enum {}{}", name, type_params)
         } else {
@@ -1027,35 +1023,29 @@ impl<'env> Docgen<'env> {
         }
     }
 
-    fn gen_enum_variants(&self, enum_env: &EnumEnv<'_>) {
-        let tctx = {
-            let type_param_names = Some(
-                enum_env
-                    .get_named_type_parameters()
-                    .iter()
-                    .map(|TypeParameter(name, _)| *name)
-                    .collect_vec(),
-            );
-            TypeDisplayContext::WithEnv {
-                env: self.env,
-                type_param_names,
-            }
-        };
+    fn gen_enum_variants(&mut self, enum_env: Enum<'_>) {
         self.begin_definitions();
-        for variant_env in enum_env.get_variants() {
+        for variant_env in enum_env.variants() {
+            let variant_name = variant_env.name();
             self.definition_text(
-                &format!("Variant `{}`", self.name_string(variant_env.get_name()),),
-                variant_env.get_doc(),
+                enum_env.model(),
+                &format!("Variant `{variant_name}`"),
+                variant_env.doc(),
             );
-            for field in variant_env.get_fields() {
+            let fields = match &variant_env.info().fields {
+                move_compiler::naming::ast::VariantFields::Defined(_, fields) => fields
+                    .iter()
+                    .map(|(_, field, (idx, ty))| (*idx, *field, ty))
+                    .sorted_by_key(|(idx, _, _)| *idx)
+                    .collect(),
+                move_compiler::naming::ast::VariantFields::Empty => vec![],
+            };
+            for (_, field, ty) in fields {
                 self.begin_definitions();
                 self.definition_text(
-                    &format!(
-                        "`{}: {}`",
-                        self.name_string(field.get_name()),
-                        field.get_type().display(&tctx)
-                    ),
-                    field.get_doc(),
+                    enum_env.model(),
+                    &format!("`{}: {}`", field, model_display::type_(ty)),
+                    variant_env.field_doc(field),
                 );
                 self.end_definitions();
             }
@@ -1139,22 +1129,41 @@ impl<'env> Docgen<'env> {
     // ============================================================================================
     // Helpers
 
-    /// Collect tokens in an ability set
-    fn ability_tokens(&self, abilities: file_format::AbilitySet) -> Vec<&'static str> {
+    fn ability_tokens(&self, key: bool, store: bool, drop: bool, copy: bool) -> Vec<&'static str> {
         let mut ability_tokens = vec![];
-        if abilities.has_copy() {
-            ability_tokens.push("copy");
-        }
-        if abilities.has_drop() {
-            ability_tokens.push("drop");
-        }
-        if abilities.has_store() {
-            ability_tokens.push("store");
-        }
-        if abilities.has_key() {
+        if key {
             ability_tokens.push("key");
         }
+        if copy {
+            ability_tokens.push("copy");
+        }
+        if drop {
+            ability_tokens.push("drop");
+        }
+        if store {
+            ability_tokens.push("store");
+        }
         ability_tokens
+    }
+
+    /// Collect tokens in an ability set
+    fn file_format_ability_tokens(&self, abilities: file_format::AbilitySet) -> Vec<&'static str> {
+        self.ability_tokens(
+            abilities.has_key(),
+            abilities.has_store(),
+            abilities.has_drop(),
+            abilities.has_copy(),
+        )
+    }
+
+    fn compiler_ability_tokens(&self, ability_set: &E::AbilitySet) -> Vec<&'static str> {
+        use move_compiler::parser::ast::Ability_;
+        self.ability_tokens(
+            ability_set.has_ability_(Ability_::Key),
+            ability_set.has_ability_(Ability_::Store),
+            ability_set.has_ability_(Ability_::Drop),
+            ability_set.has_ability_(Ability_::Copy),
+        )
     }
 
     /// Increments section nest.
@@ -1560,17 +1569,66 @@ impl<'env> Docgen<'env> {
         writeln!(self.writer, "<dd>\n{}\n</dd>", self.decorate_text(env, def)).unwrap();
     }
 
+    /// Display a type parameter.
+    fn type_parameter_display(&self, name: Symbol, ability_constraints: &E::AbilitySet) -> String {
+        let ability_tokens = self.compiler_ability_tokens(ability_constraints).join(", ");
+        if ability_tokens.is_empty() {
+            name.to_string()
+        } else {
+            format!("{name}: {ability_tokens}")
+        }
+    }
+
+    fn function_type_parameter_list_display(&self, tps: &[N::TParam]) -> String {
+        if tps.is_empty() {
+            "".to_owned()
+        } else {
+            format!(
+                "<{}>",
+                tps.iter()
+                    .map(|tp| {
+                        let name = tp.user_specified_name.value;
+                        let constraints = &tp.abilities;
+                        self.type_parameter_display(name, constraints)
+                    })
+                    .join(", ")
+            )
+        }
+    }
+
+    fn datatype_type_parameter_list_display(&self, tps: &[N::DatatypeTypeParameter]) -> String {
+        if tps.is_empty() {
+            "".to_owned()
+        } else {
+            format!(
+                "<{}>",
+                tps.iter()
+                    .map(|tp| {
+                        let name = tp.param.user_specified_name.value;
+                        let constraints = &tp.param.abilities;
+                        let display = self.type_parameter_display(name, constraints);
+                        if tp.is_phantom {
+                            format!("phantom {display}")
+                        } else {
+                            display
+                        }
+                    })
+                    .join(", ")
+            )
+        }
+    }
+
     /// Retrieves source of code fragment with adjusted indentation.
     /// Typically code has the first line unindented because location tracking starts
     /// at the first keyword of the item (e.g. `public fun`), but subsequent lines are then
     /// indented. This uses a heuristic by guessing the indentation from the context.
     fn get_source_with_indent(&self, env: &Model, loc: Loc) -> String {
         let files = env.files();
-        let source = files.source(&loc.file_hash()).unwrap();
+        let (_, source) = files.get(&loc.file_hash()).unwrap();
         let source: &str = source.as_ref();
         // Compute the indentation of this source fragment by looking at some
         // characters preceding it.
-        let ByteSpan { start, end } = files.byte_location(loc).byte_span;
+        let ByteSpan { start, end } = files.byte_span(loc).byte_span;
         let source = &source[start..end];
         let peek_start = start.saturating_sub(60);
         let source_before = &source[peek_start..start];

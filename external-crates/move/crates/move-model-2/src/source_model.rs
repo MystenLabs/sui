@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use move_binary_format::file_format::{self, SignatureToken};
+use move_binary_format::file_format::{self, SignatureToken, VariantTag};
 use move_compiler::{
     self,
     compiled_unit::AnnotatedCompiledUnit,
@@ -94,6 +94,13 @@ pub struct Enum<'a> {
     name: Symbol,
     module: Module<'a>,
     data: &'a EnumData,
+}
+
+#[derive(Clone, Copy)]
+pub struct Variant<'a> {
+    name: Symbol,
+    enum_: Enum<'a>,
+    data: &'a VariantData,
 }
 
 #[derive(Clone, Copy)]
@@ -460,6 +467,10 @@ impl<'a> Enum<'a> {
             .enum_def_at(self.data.compiled_idx)
     }
 
+    pub fn compiled_idx(&self) -> file_format::EnumDefinitionIndex {
+        self.data.compiled_idx
+    }
+
     pub fn datatype_handle(&self) -> &'a file_format::DatatypeHandle {
         self.module
             .compiled()
@@ -468,7 +479,69 @@ impl<'a> Enum<'a> {
             .datatype_handle_at(self.compiled().enum_handle)
     }
 
+    pub fn variants(&self) -> impl Iterator<Item = Variant<'a>> + '_ {
+        self.data
+            .variants
+            .keys()
+            .map(move |name| self.variant(*name))
+    }
+
+    pub fn variant(&self, name: Symbol) -> Variant<'a> {
+        let data = self.data.variants.get(&name).unwrap();
+        Variant {
+            name,
+            enum_: *self,
+            data,
+        }
+    }
+
     pub fn doc(&self) -> &str {
+        todo!()
+    }
+}
+
+impl<'a> Variant<'a> {
+    pub fn name(&self) -> Symbol {
+        self.name
+    }
+
+    pub fn package(&self) -> Package<'a> {
+        self.enum_.package()
+    }
+
+    pub fn model(&self) -> &'a Model {
+        self.enum_.model()
+    }
+
+    pub fn module(&self) -> Module<'a> {
+        self.enum_.module()
+    }
+
+    pub fn enum_(&self) -> Enum<'a> {
+        self.enum_
+    }
+
+    pub fn info(&self) -> &'a N::VariantDefinition {
+        self.enum_.info().variants.get_(&self.name).unwrap()
+    }
+
+    pub fn compiled(&self) -> &'a file_format::VariantDefinition {
+        self.module()
+            .compiled()
+            .named_module
+            .module
+            .variant_def_at(self.data.enum_idx, self.data.tag)
+    }
+
+    pub fn tag(&self) -> VariantTag {
+        self.data.tag
+    }
+
+    pub fn doc(&self) -> &str {
+        todo!()
+    }
+
+    pub fn field_doc(&self, _field: Symbol) -> &str {
         todo!()
     }
 }
@@ -714,6 +787,12 @@ pub struct StructData {
 
 struct EnumData {
     compiled_idx: file_format::EnumDefinitionIndex,
+    variants: BTreeMap<Symbol, VariantData>,
+}
+
+struct VariantData {
+    enum_idx: file_format::EnumDefinitionIndex,
+    tag: VariantTag,
 }
 
 struct FunctionData {
@@ -908,12 +987,12 @@ impl ModuleData {
             .iter()
             .map(|(_loc, name, _einfo)| {
                 let name = *name;
-                let (idx, _enum_def) = unit
+                let (idx, enum_def) = unit
                     .named_module
                     .module
                     .find_enum_def_by_name(name.as_str())
                     .unwrap();
-                let enum_ = EnumData::new(idx);
+                let enum_ = EnumData::new(&unit.named_module.module, idx, enum_def);
                 (name, enum_)
             })
             .collect();
@@ -967,8 +1046,29 @@ impl StructData {
 }
 
 impl EnumData {
-    fn new(compiled_idx: file_format::EnumDefinitionIndex) -> Self {
-        Self { compiled_idx }
+    fn new(
+        module: &file_format::CompiledModule,
+        compiled_idx: file_format::EnumDefinitionIndex,
+        def: &file_format::EnumDefinition,
+    ) -> Self {
+        let mut variants = BTreeMap::new();
+        for (tag_idx, variant) in def.variants.iter().enumerate() {
+            let tag = tag_idx as u16;
+            let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());
+            let data = VariantData::new(compiled_idx, tag);
+            let prev = variants.insert(name, data);
+            assert!(prev.is_none());
+        }
+        Self {
+            compiled_idx,
+            variants,
+        }
+    }
+}
+
+impl VariantData {
+    fn new(enum_idx: file_format::EnumDefinitionIndex, tag: VariantTag) -> Self {
+        Self { enum_idx, tag }
     }
 }
 
