@@ -34,7 +34,7 @@ export type TransactionObjectArgument =
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
 
-function createTransactionResult(index: number) {
+function createTransactionResult(index: number, length = Infinity): TransactionResult {
 	const baseResult = { $kind: 'Result' as const, Result: index };
 
 	const nestedResults: {
@@ -71,7 +71,7 @@ function createTransactionResult(index: number) {
 			if (property === Symbol.iterator) {
 				return function* () {
 					let i = 0;
-					while (true) {
+					while (i < length) {
 						yield nestedResultFor(i);
 						i++;
 					}
@@ -410,20 +410,24 @@ export class Transaction {
 
 	// Method shorthands:
 
-	splitCoins(
-		coin: TransactionObjectArgument | string,
-		amounts: (TransactionArgument | SerializedBcs<any> | number | string | bigint)[],
-	) {
-		return this.add(
-			Commands.SplitCoins(
-				typeof coin === 'string' ? this.object(coin) : this.#resolveArgument(coin),
-				amounts.map((amount) =>
-					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
-						? this.pure.u64(amount)
-						: this.#normalizeTransactionArgument(amount),
-				),
+	splitCoins<
+		const Amounts extends (TransactionArgument | SerializedBcs<any> | number | string | bigint)[],
+	>(coin: TransactionObjectArgument | string, amounts: Amounts) {
+		const command = Commands.SplitCoins(
+			typeof coin === 'string' ? this.object(coin) : this.#resolveArgument(coin),
+			amounts.map((amount) =>
+				typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
+					? this.pure.u64(amount)
+					: this.#normalizeTransactionArgument(amount),
 			),
 		);
+		const index = this.#data.commands.push(command);
+		return createTransactionResult(index - 1, amounts.length) as Extract<
+			Argument,
+			{ Result: unknown }
+		> & {
+			[K in keyof Amounts]: Extract<Argument, { NestedResult: unknown }>;
+		};
 	}
 	mergeCoins(
 		destination: TransactionObjectArgument | string,
