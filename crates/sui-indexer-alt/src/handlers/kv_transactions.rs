@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::handlers::cp_sequence_numbers::PrunableRange;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
 use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
 use sui_pg_db as db;
@@ -65,5 +67,14 @@ impl Handler for KvTransactions {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let range_mapping = PrunableRange::get_range(conn, from, to).await?;
+        let (from_tx, to_tx) = range_mapping.tx_interval();
+        let filter = kv_transactions::table
+            .filter(kv_transactions::cp_sequence_number.between(from_tx as i64, to_tx as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }

@@ -4,7 +4,9 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::Result;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::handlers::cp_sequence_numbers::PrunableRange;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
 use sui_pg_db as db;
@@ -56,5 +58,14 @@ impl Handler for EvEmitMod {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+        let range_mapping = PrunableRange::get_range(conn, from, to).await?;
+        let (from_tx, to_tx) = range_mapping.tx_interval();
+        let filter = ev_emit_mod::table
+            .filter(ev_emit_mod::tx_sequence_number.between(from_tx as i64, to_tx as i64 - 1));
+
+        Ok(diesel::delete(filter).execute(conn).await?)
     }
 }
