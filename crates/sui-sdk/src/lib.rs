@@ -66,7 +66,6 @@
 //!     println!("Sui mainnet version: {}", sui_mainnet.api_version());
 //!
 //!     Ok(())
-//!
 //! }
 //! ```
 //!
