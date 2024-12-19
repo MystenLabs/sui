@@ -28,5 +28,5 @@ error[E01002]: unexpected token
   │         ^^^
   │         │
   │         Unexpected 'foo'
-  │         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+  │         Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 

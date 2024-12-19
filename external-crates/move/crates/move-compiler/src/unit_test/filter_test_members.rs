@@ -79,6 +79,10 @@ impl FilterContext for Context<'_> {
                     matches!(attr.1, TestingAttribute::Test | TestingAttribute::RandTest)
                 }))
     }
+
+    fn should_remove_sequence_item(&self, _item: &P::SequenceItem) -> bool {
+        false
+    }
 }
 
 //***************************************************************************
