@@ -5,7 +5,6 @@
 // with @noble/hashes to be browser compatible.
 
 import { fromHex } from '@mysten/bcs';
-import { ed25519 } from '@noble/curves/ed25519';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 
@@ -20,11 +19,11 @@ type Keys = {
 const ED25519_CURVE = 'ed25519 seed';
 const HARDENED_OFFSET = 0x80000000;
 
-export const pathRegex = new RegExp("^m(\\/[0-9]+')+$");
+const pathRegex = new RegExp("^m(\\/[0-9]+')+$");
 
-export const replaceDerive = (val: string): string => val.replace("'", '');
+const replaceDerive = (val: string): string => val.replace("'", '');
 
-export const getMasterKeyFromSeed = (seed: Hex): Keys => {
+const getMasterKeyFromSeed = (seed: Hex): Keys => {
 	const h = hmac.create(sha512, ED25519_CURVE);
 	const I = h.update(fromHex(seed)).digest();
 	const IL = I.slice(0, 32);
@@ -54,15 +53,7 @@ const CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
 	};
 };
 
-export const getPublicKey = (privateKey: Uint8Array, withZeroByte = true): Uint8Array => {
-	const publicKey = ed25519.getPublicKey(privateKey).subarray(32);
-	const newArr = new Uint8Array(publicKey.length + 1);
-	newArr.set([0]);
-	newArr.set(publicKey, 1);
-	return withZeroByte ? newArr : publicKey;
-};
-
-export const isValidPath = (path: string): boolean => {
+const isValidPath = (path: string): boolean => {
 	if (!pathRegex.test(path)) {
 		return false;
 	}
