@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 #[path = "unit_tests/passkey_authenticator_test.rs"]
-mod passkey_authenticator_test;
+pub mod passkey_authenticator_test;
 
 /// An passkey authenticator with parsed fields. See field defition below. Can be initialized from [struct RawPasskeyAuthenticator].
 #[derive(Debug, Clone, JsonSchema)]
