@@ -55,16 +55,20 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 
 	override toSuiAddress(): string {
 		if (this.#legacyAddress) {
-			const legacyBytes = normalizeZkLoginPublicKeyBytes(this.#data, true);
-			const addressBytes = new Uint8Array(legacyBytes.length + 1);
-			addressBytes[0] = this.flag();
-			addressBytes.set(legacyBytes, 1);
-			return normalizeSuiAddress(
-				bytesToHex(blake2b(addressBytes, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
-			);
+			return this.#toLegacyAddress();
 		}
 
 		return super.toSuiAddress();
+	}
+
+	#toLegacyAddress() {
+		const legacyBytes = normalizeZkLoginPublicKeyBytes(this.#data, true);
+		const addressBytes = new Uint8Array(legacyBytes.length + 1);
+		addressBytes[0] = this.flag();
+		addressBytes.set(legacyBytes, 1);
+		return normalizeSuiAddress(
+			bytesToHex(blake2b(addressBytes, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+		);
 	}
 
 	/**
@@ -117,6 +121,13 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 			intentScope: 'TRANSACTION_DATA',
 			client: this.#client,
 		});
+	}
+
+	/**
+	 * Verifies that the public key is associated with the provided address
+	 */
+	override verifyAddress(address: string): boolean {
+		return address === super.toSuiAddress() || address === this.#toLegacyAddress();
 	}
 }
 

@@ -83,9 +83,27 @@ const { signature } = await keypair.signPersonalMessage(message);
 
 const publicKey = await verifyPersonalMessageSignature(message, signature);
 
-if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
+if (publicKey.verifyAddress(keypair.getPublicKey().toSuiAddress())) {
 	throw new Error('Signature was valid, but was signed by a different key pair');
 }
+```
+
+## Verifying that a signature is valid for a specific address
+
+`verifyPersonalMessageSignature` and `verifyTransactionSignature` accept an optional `address`, and
+will throw an error if the signature is not valid for the provided address.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+
+const keypair = new Ed25519Keypair();
+const message = new TextEncoder().encode('hello world');
+const { signature } = await keypair.signPersonalMessage(message);
+
+await verifyPersonalMessageSignature(message, signature, {
+	address: keypair.getPublicKey().toSuiAddress(),
+});
 ```
 
 ## Verifying transaction signatures
@@ -108,14 +126,10 @@ const bytes = await tx.build({ client });
 const keypair = new Ed25519Keypair();
 const { signature } = await keypair.signTransaction(bytes);
 
-// if you have a public key, you can verify it
-//   const isValid = await publicKey.verifyTransaction(bytes, signature);
-// or get the public key from the transaction
-const publicKey = await verifyTransactionSignature(bytes, signature);
-
-if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
-	throw new Error('Signature was valid, but was signed by a different keyPair');
-}
+await verifyTransactionSignature(bytes, signature, {
+	// optionally verify that the signature is valid for a specific address
+	address: keypair.getPublicKey().toSuiAddress(),
+});
 ```
 
 ## Verifying zkLogin signatures
@@ -136,6 +150,34 @@ const publicKey = await verifyPersonalMessageSignature(message, zkSignature, {
 	}),
 });
 ```
+
+For some zklogin accounts, there are 2 valid addresses for a given set of inputs. This means you may
+run into issues if you try to compare the address returned by `publicKey.toSuiAddress()` directly
+with an expected address.
+
+Instead, you can either pass in the expected address during verification, or use the
+`publicKey.verifyAddress(address)` method:
+
+```typescript
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+
+const publicKey = await verifyPersonalMessageSignature(message, zkSignature, {
+	client: new SuiGraphQLClient({
+		url: 'https://sui-testnet.mystenlabs.com/graphql',
+	}),
+	// Pass in the expected address, and the verification method will throw an error if the signature is not valid for the provided address
+	address: '0x...expectedAddress',
+});
+// or
+
+if (!publicKey.verifyAddress('0x...expectedAddress')) {
+	throw new Error('Signature was valid, but was signed by a different key pair');
+}
+```
+
+Both of these methods will check the signature against both the standard and
+[legacy versions of the zklogin address](https://sdk.mystenlabs.com/typescript/zklogin#legacy-addresses).
 
 ## Deriving a key pair from a mnemonic
 
