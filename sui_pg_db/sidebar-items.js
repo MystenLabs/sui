@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["reset_database"],"mod":["temp"],"struct":["Db","DbArgs"],"type":["Connection","ManagedConnection"]};
