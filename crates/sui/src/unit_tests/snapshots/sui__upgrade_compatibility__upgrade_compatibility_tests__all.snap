@@ -165,7 +165,7 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:88:36
    │
 88 │     public fun function_change_arg(a: u8) {} // now has u8 instead of u64
-   │                                    ^ Unexpected parameter u8, expected u64
+   │                                    ^ Unexpected parameter 'u8', expected 'u64'
    │
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's parameter for function 'function_change_arg'.
