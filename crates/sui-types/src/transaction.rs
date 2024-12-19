@@ -2355,6 +2355,15 @@ impl SenderSignedData {
                         });
                     }
                 }
+                GenericSignature::PasskeySessionAuthenticator(_) => {
+                    if !config.passkey_session_auth() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "passkey session is not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
             }
         }
