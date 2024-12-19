@@ -14,10 +14,24 @@ use move_compiler::{
     PASS_CFGIR,
 };
 use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
-use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
+use move_disassembler::disassembler::Disassembler;
+use move_package::{
+    compilation::{
+        build_plan::BuildPlan,
+        compiled_package::{CompiledUnitWithSource, OnDiskCompiledPackage, OnDiskPackage},
+        package_layout::CompiledPackageLayout,
+    },
+    BuildConfig,
+};
+use move_symbol_pool::Symbol;
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{io::Write, path::Path, process::ExitStatus};
+use std::{
+    collections::BTreeSet,
+    io::Write,
+    path::{Path, PathBuf},
+    process::ExitStatus,
+};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -192,7 +206,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
     let mut warning_diags = None;
-    build_plan.compile_with_driver(writer, |compiler| {
+    let compiled_package = build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
@@ -214,6 +228,32 @@ pub fn run_move_unit_tests<W: Write + Send>(
         warning_diags = Some(warnings);
         Ok((files, units))
     })?;
+
+    // if tracing is enabled, generate textual representation for Move bytecode to support
+    // lower-level debugging
+    if unit_test_config.trace_execution.is_some() {
+        let build_path = pkg_path.join(CompiledPackageLayout::Root.path());
+        let on_disk_package = OnDiskCompiledPackage {
+            root_path: build_path.join(root_package.as_str()),
+            package: OnDiskPackage {
+                compiled_package_info: compiled_package.compiled_package_info.clone(),
+                dependencies: compiled_package
+                    .deps_compiled_units
+                    .iter()
+                    .map(|(package_name, _)| *package_name)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect(),
+            },
+        };
+        for unit in &compiled_package.root_compiled_units {
+            save_disassembly(&on_disk_package, root_package, unit)?;
+        }
+
+        for (dep_name, unit) in &compiled_package.deps_compiled_units {
+            save_disassembly(&on_disk_package, *dep_name, unit)?;
+        }
+    }
 
     let (test_plan, mapped_files, units) = test_plan.unwrap();
     let test_plan = test_plan.unwrap();
@@ -254,6 +294,29 @@ pub fn run_move_unit_tests<W: Write + Send>(
         output_map_to_file(coverage_map_path, &coverage_map).unwrap();
     }
     Ok((UnitTestResult::Success, warning_diags))
+}
+
+fn save_disassembly(
+    compiled_package: &OnDiskCompiledPackage,
+    package_name: Symbol,
+    unit: &CompiledUnitWithSource,
+) -> Result<()> {
+    let root_package = compiled_package.package.compiled_package_info.package_name;
+    let bytecode_modules_dir = CompiledPackageLayout::CompiledModules.path();
+    let file_path = if root_package == package_name {
+        PathBuf::new()
+    } else {
+        CompiledPackageLayout::Dependencies
+            .path()
+            .join(package_name.as_str())
+    }
+    .join(unit.unit.name.as_str());
+    compiled_package.save_under(
+        bytecode_modules_dir.join(&file_path).with_extension("mvb"),
+        Disassembler::from_unit(&unit.unit)
+            .disassemble()?
+            .as_bytes(),
+    )
 }
 
 impl From<UnitTestResult> for ExitStatus {

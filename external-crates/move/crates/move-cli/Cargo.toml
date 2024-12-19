@@ -33,6 +33,7 @@ move-ir-types.workspace = true
 move-compiler.workspace = true
 move-stdlib.workspace = true
 move-stdlib-natives.workspace = true
+move-symbol-pool.workspace = true
 move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true

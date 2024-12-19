@@ -1788,6 +1788,7 @@ dependencies = [
  "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
+ "move-symbol-pool",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
