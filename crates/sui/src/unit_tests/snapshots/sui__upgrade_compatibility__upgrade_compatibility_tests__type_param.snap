@@ -90,7 +90,7 @@ error[Compatibility E01005]: type parameter mismatch
 46 │     public fun add_type_param<T, U>(a: T): T { return a }
    │                ^^^^^^^^^^^^^^ Expected 1 type parameter, found 2
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during an 'compatible' upgrade.
    = Restore the original function's type parameter for function 'add_type_param', expected 1 type parameter.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -99,7 +99,7 @@ error[Compatibility E01005]: type parameter mismatch
 49 │     public fun remove_type_param<T>(a: T): T { return a }
    │                ^^^^^^^^^^^^^^^^^ Expected 2 type parameters, found 1
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during an 'compatible' upgrade.
    = Restore the original function's type parameters for function 'remove_type_param', expected 2 type parameters.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -108,7 +108,7 @@ error[Compatibility E01005]: type parameter mismatch
 52 │     public fun add_constraint<T: copy>(a: T): T { return a }
    │                               ^ Unexpected type parameter constraint: 'copy', expected none
    │
-   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Functions are part of a module's public interface and cannot be removed or changed during an 'compatible' upgrade.
    = Restore the original function's type parameter for function 'add_constraint'.
 
 error[Compatibility E03001]: function signature mismatch
