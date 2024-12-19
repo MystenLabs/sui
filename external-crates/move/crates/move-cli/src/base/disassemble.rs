@@ -66,7 +66,9 @@ impl Disassemble {
                         source_path,
                     )
                 } else {
-                    println!("{}", Disassembler::from_unit(&unit.unit).disassemble()?);
+                    let (disassembled_string, _) =
+                        Disassembler::from_unit(&unit.unit).disassemble()?;
+                    println!("{}", disassembled_string);
                     if debug {
                         println!("\n{:#?}", &unit.unit.module)
                     }

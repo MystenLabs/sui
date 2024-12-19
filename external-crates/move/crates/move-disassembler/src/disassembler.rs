@@ -17,13 +17,20 @@ use move_binary_format::{
 };
 use move_bytecode_source_map::{
     mapping::SourceMapping,
-    source_map::{FunctionSourceMap, SourceName},
+    source_map::{FunctionSourceMap, SourceMap, SourceName},
 };
-use move_command_line_common::display::{try_render_constant, RenderResult};
+use move_command_line_common::{
+    display::{try_render_constant, RenderResult},
+    files::FileHash,
+};
 use move_compiler::compiled_unit::CompiledUnit;
 use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_coverage::coverage_map::{ExecCoverageMap, FunctionCoverage};
-use move_ir_types::location::Loc;
+use move_ir_types::{
+    ast::{ModuleIdent, ModuleName},
+    location::Loc,
+};
+use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::{self, Write},
@@ -94,6 +101,22 @@ impl<'a> Write for BoundedBuffer<'a> {
         self.budget -= s.len();
         self.buf.push_str(s);
         Ok(())
+    }
+}
+
+trait ByteLength {
+    fn byte_len(&self) -> u32;
+}
+
+impl<'a> ByteLength for BoundedBuffer<'a> {
+    fn byte_len(&self) -> u32 {
+        self.buf.len() as u32
+    }
+}
+
+impl ByteLength for String {
+    fn byte_len(&self) -> u32 {
+        self.len() as u32
     }
 }
 
@@ -197,18 +220,18 @@ impl<'a> Disassembler<'a> {
         self.coverage_map = Some(coverage_map);
     }
 
-    pub fn disassemble(&self) -> Result<String> {
+    pub fn disassemble(&self) -> Result<(String, SourceMap)> {
         let mut buffer = String::new();
-        if let Some(budget) = self.options.max_output_size {
+        let bytecode_map = if let Some(budget) = self.options.max_output_size {
             self.print_module(&mut BoundedBuffer {
                 buf: &mut buffer,
                 budget,
             })
-            .map_err(|e| anyhow::anyhow!("{e}: Module exceeded max allowed disassembly size"))?;
+            .map_err(|e| anyhow::anyhow!("{e}: Module exceeded max allowed disassembly size"))?
         } else {
-            self.print_module(&mut buffer)?;
+            self.print_module(&mut buffer)?
         };
-        Ok(buffer)
+        Ok((buffer, bytecode_map))
     }
 }
 
@@ -216,26 +239,33 @@ impl<'a> Disassembler<'a> {
 // * disassemble_* and print_* functions are functions that output to the buffer
 // * format_* functions return a string that can be used in the buffer
 impl<'a> Disassembler<'a> {
-    fn print_module(&self, buffer: &mut impl Write) -> Result<()> {
+    fn print_module(&self, buffer: &mut (impl Write + ByteLength)) -> Result<SourceMap> {
         // NB: The order in which these are called is important as each function is effectful.
-        self.print_header(buffer)?;
+        let bytecode_map = self.print_header(buffer)?;
         self.print_imports(buffer)?;
         self.print_user_defined_types(buffer)?;
         self.print_function_definitions(buffer)?;
         self.print_constants(buffer)?;
         self.print_footer(buffer)?;
-        Ok(())
+        Ok(bytecode_map)
     }
 
-    fn print_header(&self, buffer: &mut impl Write) -> Result<()> {
+    fn print_header(&self, buffer: &mut (impl Write + ByteLength)) -> Result<SourceMap> {
         let (addr, n) = &self.source_mapper.source_map.module_name;
-        any_writeln!(
+        any_write!(
             buffer,
-            "// Move bytecode v{version}\nmodule {addr}.{name} {{",
+            "// Move bytecode v{version}\nmodule {addr}.",
             version = self.source_mapper.bytecode.version(),
             addr = addr.short_str_lossless(),
-            name = n,
-        )
+        )?;
+        let mod_def_start_offset = buffer.byte_len();
+        any_write!(buffer, "{name}", name = n)?;
+        let mod_def_end_offset = buffer.byte_len();
+        any_writeln!(buffer, " {{")?;
+        let mod_def_loc = Loc::new(FileHash::empty(), mod_def_start_offset, mod_def_end_offset);
+        let mod_ident = ModuleIdent::new(ModuleName(Symbol::from(n.as_str())), addr.clone());
+        let bytecode_map = SourceMap::new(mod_def_loc, mod_ident);
+        Ok(bytecode_map)
     }
 
     fn print_imports(&self, buffer: &mut impl Write) -> Result<()> {

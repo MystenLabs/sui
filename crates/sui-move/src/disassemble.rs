@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use move_binary_format::CompiledModule;
+use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_cli::base;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -69,7 +70,10 @@ impl Disassemble {
             println!("{module:#?}");
         } else {
             let d = Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
-            println!("{}", d.disassemble()?);
+            let (disassembled_string, bytecode_map) = d.disassemble()?;
+            println!("{}", disassembled_string);
+            println!("%BYTECODE MAP%");
+            println!("{}", serialize_to_json_string(&bytecode_map)?);
         }
 
         Ok(())

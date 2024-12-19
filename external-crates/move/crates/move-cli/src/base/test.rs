@@ -6,6 +6,7 @@ use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
 use move_binary_format::CompiledModule;
+use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     diagnostics::{self, Diagnostics},
@@ -311,11 +312,16 @@ fn save_disassembly(
             .join(package_name.as_str())
     }
     .join(unit.unit.name.as_str());
+    let (disassembled_string, bytecode_map) = Disassembler::from_unit(&unit.unit).disassemble()?;
     compiled_package.save_under(
         bytecode_modules_dir.join(&file_path).with_extension("mvb"),
-        Disassembler::from_unit(&unit.unit)
-            .disassemble()?
-            .as_bytes(),
+        disassembled_string.as_bytes(),
+    )?;
+    compiled_package.save_under(
+        bytecode_modules_dir
+            .join(&file_path)
+            .with_extension("mvbsm"),
+        &serialize_to_json_string(&bytecode_map)?.as_bytes(),
     )
 }
 

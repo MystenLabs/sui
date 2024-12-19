@@ -625,11 +625,11 @@ where
         .map_err(|e| SuiError::ObjectSerializationError {
             error: e.to_string(),
         })?;
-        let bytecode_str = d
-            .disassemble()
-            .map_err(|e| SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            })?;
+        let (bytecode_str, _) =
+            d.disassemble()
+                .map_err(|e| SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                })?;
         disassembled.insert(module.name().to_string(), Value::String(bytecode_str));
     }
     Ok(disassembled)

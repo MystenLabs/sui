@@ -18,6 +18,7 @@ prometheus.workspace = true
 bin-version.workspace = true
 
 move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
 move-cli.workspace = true
 move-compiler.workspace = true
 move-disassembler.workspace = true

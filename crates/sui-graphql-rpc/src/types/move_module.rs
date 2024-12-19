@@ -415,18 +415,17 @@ impl MoveModule {
 
     /// Textual representation of the module's bytecode.
     async fn disassembly(&self) -> Result<Option<String>> {
-        Ok(Some(
-            Disassembler::from_module_with_max_size(
-                self.parsed.bytecode(),
-                Loc::invalid(),
-                *move_package::MAX_DISASSEMBLED_MODULE_SIZE,
-            )
-            .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
-            .extend()?
-            .disassemble()
-            .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
-            .extend()?,
-        ))
+        let (disassembled_string, _) = Disassembler::from_module_with_max_size(
+            self.parsed.bytecode(),
+            Loc::invalid(),
+            *move_package::MAX_DISASSEMBLED_MODULE_SIZE,
+        )
+        .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
+        .extend()?
+        .disassemble()
+        .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
+        .extend()?;
+        Ok(Some(disassembled_string))
     }
 }
 

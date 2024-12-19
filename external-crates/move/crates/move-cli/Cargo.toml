@@ -26,6 +26,7 @@ move-bytecode-verifier.workspace = true
 move-disassembler.workspace = true
 move-docgen.workspace = true
 move-command-line-common.workspace = true
+move-bytecode-source-map.workspace = true
 move-bytecode-utils.workspace = true
 move-coverage.workspace = true
 move-core-types.workspace = true

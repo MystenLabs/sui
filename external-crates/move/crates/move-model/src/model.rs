@@ -2130,9 +2130,10 @@ impl<'env> ModuleEnv<'env> {
                 max_output_size: None,
             },
         );
-        disas
+        let (disassemble_string, _) = disas
             .disassemble()
-            .expect("Failed to disassemble a verified module")
+            .expect("Failed to disassemble a verified module");
+        disassemble_string
     }
 
     fn match_module_name(&self, module_name: &str) -> bool {
