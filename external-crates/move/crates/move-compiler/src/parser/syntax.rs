@@ -559,6 +559,18 @@ fn match_doc_comments(context: &mut Context) -> DocComment {
     DocComment(comment_opt)
 }
 
+fn check_no_doc_comment(context: &mut Context, loc: Loc, case: &str, doc: DocComment) {
+    if let Some(doc_loc) = doc.loc() {
+        let doc_msg = "Unexpected documentation comment";
+        let msg = format!("Documentation comments are not supported on {case}");
+        context.add_diag(diag!(
+            Syntax::InvalidDocComment,
+            (doc_loc, doc_msg),
+            (loc, msg),
+        ));
+    }
+}
+
 //**************************************************************************************************
 // Identifiers, Addresses, and Names
 //**************************************************************************************************
@@ -4093,8 +4105,8 @@ fn parse_address_block(
         context.add_diag(diag);
     }
 
+    check_no_doc_comment(context, loc, "'address' blocks", doc);
     Ok(AddressDefinition {
-        doc,
         attributes,
         loc,
         addr,
@@ -4284,15 +4296,7 @@ fn parse_use_decl(
     }
     let end_loc = context.tokens.previous_end_loc();
     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
-    if let Some(doc_loc) = doc.loc() {
-        let doc_msg = "Unexpected documentation comment";
-        let msg = "Documentation comments are not supported on 'use' declarations";
-        context.add_diag(diag!(
-            Syntax::InvalidDocComment,
-            (doc_loc, doc_msg),
-            (loc, msg),
-        ));
-    }
+    check_no_doc_comment(context, loc, "'use' declarations", doc);
     Ok(UseDecl {
         attributes,
         loc,

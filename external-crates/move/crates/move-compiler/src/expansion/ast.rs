@@ -5,8 +5,8 @@
 use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     parser::ast::{
-        self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
-        FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
+        self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, DocComment,
+        Field, FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
         MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
@@ -120,6 +120,7 @@ pub type ModuleIdent = Spanned<ModuleIdent_>;
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
@@ -162,6 +163,7 @@ pub struct DatatypeTypeParameter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -174,13 +176,14 @@ pub struct StructDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StructFields {
-    Positional(Vec<Type>),
-    Named(Fields<Type>),
+    Positional(Vec<(DocComment, Type)>),
+    Named(Fields<(DocComment, Type)>),
     Native(Loc),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -193,6 +196,7 @@ pub struct EnumDefinition {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariantDefinition {
+    pub doc: DocComment,
     // index in the original order as defined in the source file
     pub index: usize,
     pub loc: Loc,
@@ -201,8 +205,8 @@ pub struct VariantDefinition {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum VariantFields {
-    Named(Fields<Type>),
-    Positional(Vec<Type>),
+    Named(Fields<(DocComment, Type)>),
+    Positional(Vec<(DocComment, Type)>),
     Empty,
 }
 
@@ -234,6 +238,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -252,6 +257,7 @@ pub struct Function {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Constant {
+    pub doc: DocComment,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -1102,6 +1108,7 @@ impl AstDebug for Attributes {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            doc,
             package_name,
             attributes,
             loc: _loc,
@@ -1114,6 +1121,7 @@ impl AstDebug for ModuleDefinition {
             constants,
             warning_filter,
         } = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(format!("{}", n))
@@ -1159,6 +1167,7 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
         let (
             name,
             StructDefinition {
+                doc,
                 index,
                 attributes,
                 loc: _loc,
@@ -1168,6 +1177,7 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
                 warning_filter,
             },
         ) = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         if let StructFields::Native(_) = fields {
@@ -1180,14 +1190,16 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
         match fields {
             StructFields::Named(fields) => w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
-                    let (idx, st) = idx_st;
+                    let (idx, (doc, st)) = idx_st;
+                    doc.ast_debug(w);
                     w.write(format!("{}#{}: ", idx, f));
                     st.ast_debug(w);
                     true
                 });
             }),
             StructFields::Positional(fields) => w.block(|w| {
-                w.list(fields.iter().enumerate(), ",", |w, (idx, ty)| {
+                w.list(fields.iter().enumerate(), ",", |w, (idx, (doc, ty))| {
+                    doc.ast_debug(w);
                     w.write(format!("{idx}#pos{idx}: "));
                     ty.ast_debug(w);
                     true
@@ -1203,6 +1215,7 @@ impl AstDebug for (DatatypeName, &EnumDefinition) {
         let (
             name,
             EnumDefinition {
+                doc,
                 index,
                 attributes,
                 loc: _loc,
@@ -1212,6 +1225,7 @@ impl AstDebug for (DatatypeName, &EnumDefinition) {
                 warning_filter,
             },
         ) = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
 
@@ -1231,24 +1245,27 @@ impl AstDebug for (VariantName, &VariantDefinition) {
         let (
             name,
             VariantDefinition {
+                doc,
                 index,
                 loc: _loc,
                 fields,
             },
         ) = self;
-
+        doc.ast_debug(w);
         w.write(format!("variant#{index} {name}"));
         match fields {
             VariantFields::Named(fields) => w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
-                    let (idx, st) = idx_st;
+                    let (idx, (doc, st)) = idx_st;
+                    doc.ast_debug(w);
                     w.write(format!("{}#{}: ", idx, f));
                     st.ast_debug(w);
                     true
                 });
             }),
             VariantFields::Positional(fields) => w.block(|w| {
-                w.list(fields.iter().enumerate(), ",", |w, (idx, ty)| {
+                w.list(fields.iter().enumerate(), ",", |w, (idx, (doc, ty))| {
+                    doc.ast_debug(w);
                     w.write(format!("{idx}#pos{idx}: "));
                     ty.ast_debug(w);
                     true
@@ -1264,6 +1281,7 @@ impl AstDebug for (FunctionName, &Function) {
         let (
             name,
             Function {
+                doc,
                 index,
                 attributes,
                 loc: _loc,
@@ -1275,6 +1293,7 @@ impl AstDebug for (FunctionName, &Function) {
                 warning_filter,
             },
         ) = self;
+        doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         visibility.ast_debug(w);
@@ -1326,6 +1345,7 @@ impl AstDebug for (ConstantName, &Constant) {
         let (
             name,
             Constant {
+                doc,
                 warning_filter,
                 index,
                 attributes,

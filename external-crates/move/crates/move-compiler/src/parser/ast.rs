@@ -109,7 +109,6 @@ pub struct DocComment(pub(crate) Option<Spanned<String>>);
 
 #[derive(Debug, Clone)]
 pub struct AddressDefinition {
-    pub doc: DocComment,
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
     pub addr: LeadingNameAccess,
@@ -1443,13 +1442,11 @@ impl AstDebug for Definition {
 impl AstDebug for AddressDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let AddressDefinition {
-            doc,
             attributes,
             loc: _loc,
             addr,
             modules,
         } = self;
-        doc.ast_debug(w);
         attributes.ast_debug(w);
         w.write(format!("address {}", addr));
         w.writeln(" {{");
