@@ -378,6 +378,17 @@ impl Package {
                     resolving_table.define((pkg_id, *name), Some(addr))?;
                     continue;
                 }
+                // There is no lock file, but perhaps there is a `published-at` in the manifest.
+                else if let Some(published_at) = self
+                    .source_package
+                    .package
+                    .custom_properties
+                    .get(&Symbol::from("published-at"))
+                {
+                    let addr = AccountAddress::from_str(published_at)?;
+                    resolving_table.define((pkg_id, *name), Some(addr))?;
+                    continue;
+                }
             }
             resolving_table.define((pkg_id, *name), *addr)?;
         }
