@@ -332,10 +332,10 @@ impl Query {
     async fn multi_get_objects(
         &self,
         ctx: &Context<'_>,
-        object_keys: Vec<ObjectKey>,
+        keys: Vec<ObjectKey>,
     ) -> Result<Vec<Object>> {
         let cfg: &ServiceConfig = ctx.data_unchecked();
-        if object_keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
+        if keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
             return Err(Error::Client(format!(
                 "Number of keys exceeds max limit of '{}'",
                 cfg.limits.max_multi_get_objects_keys
@@ -343,10 +343,9 @@ impl Query {
             .into());
         }
 
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        Object::query_many(ctx, object_keys, checkpoint)
-            .await
-            .extend()
+        let Watermark { hi_cp, .. } = *ctx.data()?;
+
+        Object::query_many(ctx, keys, hi_cp).await.extend()
     }
 
     /// The coin objects that exist in the network.
