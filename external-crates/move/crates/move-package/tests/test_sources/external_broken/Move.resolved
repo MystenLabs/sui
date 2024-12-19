@@ -1,1 +1,6 @@
-Failed to resolve dependencies for package 'Root': Parsing response from '../resolvers/broken.sh' for dependency 'A' of package 'Root': Deserializing packages: expected an equals, found an identifier at line 1 column 8
+Failed to resolve dependencies for package 'Root': Parsing response from '../resolvers/broken.sh' for dependency 'A' of package 'Root': Deserializing packages: TOML parse error at line 1, column 8
+  |
+1 | Broken response (not a lock file) from resolver for dependencies of A.
+  |        ^
+expected `.`, `=`
+

@@ -1,1 +1,6 @@
-Unable to parse Move package manifest: duplicate key: `a` for key `addresses` at line 4 column 1
+Unable to parse Move package manifest: TOML parse error at line 6, column 1
+  |
+6 | a = "0x2"
+  | ^
+duplicate key `a` in table `addresses`
+
