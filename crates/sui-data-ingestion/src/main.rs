@@ -13,7 +13,7 @@ use sui_data_ingestion::{
 };
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
-use sui_kvstore::{BigTableClient, KvWorker};
+use sui_kvstore::{BigTableClient, BigTableProgressStore, KvWorker};
 use tokio::signal;
 use tokio::sync::oneshot;
 
@@ -119,12 +119,30 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let metrics = DataIngestionMetrics::new(&registry);
 
+    let mut bigtable_store = None;
+    for task in &config.tasks {
+        if let Task::BigTableKV(kv_config) = &task.task {
+            std::env::set_var(
+                "GOOGLE_APPLICATION_CREDENTIALS",
+                kv_config.credentials.clone(),
+            );
+            let bigtable_client = BigTableClient::new_remote(
+                kv_config.instance_id.clone(),
+                false,
+                Some(Duration::from_secs(kv_config.timeout_secs as u64)),
+            )
+            .await?;
+            bigtable_store = Some(BigTableProgressStore::new(bigtable_client));
+        }
+    }
+
     let progress_store = DynamoDBProgressStore::new(
         &config.progress_store.aws_access_key_id,
         &config.progress_store.aws_secret_access_key,
         config.progress_store.aws_region,
         config.progress_store.table_name,
         config.is_backfill,
+        bigtable_store,
     )
     .await;
     let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);
@@ -160,7 +178,6 @@ async fn main() -> Result<()> {
                 executor.register(worker_pool).await?;
             }
             Task::BigTableKV(kv_config) => {
-                std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", kv_config.credentials);
                 let client = BigTableClient::new_remote(
                     kv_config.instance_id,
                     false,

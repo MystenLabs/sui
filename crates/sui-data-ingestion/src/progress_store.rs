@@ -11,12 +11,14 @@ use aws_sdk_s3::config::{Credentials, Region};
 use std::str::FromStr;
 use std::time::Duration;
 use sui_data_ingestion_core::ProgressStore;
+use sui_kvstore::BigTableProgressStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 pub struct DynamoDBProgressStore {
     client: Client,
     table_name: String,
     is_backfill: bool,
+    bigtable_store: Option<BigTableProgressStore>,
 }
 
 impl DynamoDBProgressStore {
@@ -26,6 +28,7 @@ impl DynamoDBProgressStore {
         aws_region: String,
         table_name: String,
         is_backfill: bool,
+        bigtable_store: Option<BigTableProgressStore>,
     ) -> Self {
         let credentials = Credentials::new(
             aws_access_key_id,
@@ -50,6 +53,7 @@ impl DynamoDBProgressStore {
             client,
             table_name,
             is_backfill,
+            bigtable_store,
         }
     }
 }
@@ -78,6 +82,13 @@ impl ProgressStore for DynamoDBProgressStore {
     ) -> Result<()> {
         if self.is_backfill && checkpoint_number % 1000 != 0 {
             return Ok(());
+        }
+        if task_name == "bigtable" {
+            if let Some(ref mut bigtable_store) = self.bigtable_store {
+                bigtable_store
+                    .save(task_name.clone(), checkpoint_number)
+                    .await?;
+            }
         }
         let backoff = backoff::ExponentialBackoff::default();
         backoff::future::retry(backoff, || async {
