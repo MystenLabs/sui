@@ -1,5 +1,22 @@
 # @mysten/sui.js
 
+## 1.18.0
+
+### Minor Changes
+
+- 4f012b9: Improve typing for the return type of splitCoins and update the splitCoins result type to
+  have a concrete size
+- 85bd9e4: Add a new `address` options on methods that verify signatures that ensures the signature
+  is valid for the provided address
+- 5e3709d: remove dependency on tweetnacl
+- b2928a9: Update generated openrpc types which removes deprecated/non-functional filters for events
+- 85bd9e4: Add a new `publicKey.verifyAddress` method on PublicKey instances
+- a872b97: Add `latest` as an exported graphql schema
+
+### Patch Changes
+
+- dc0e21e: Remove duplicate applyEffects in serial transaction executor
+
 ## 1.17.0
 
 ### Minor Changes
