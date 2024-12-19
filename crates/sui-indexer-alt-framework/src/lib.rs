@@ -135,7 +135,7 @@ impl Indexer {
             metrics_address,
         } = indexer_args;
 
-        let db = Db::new(db_args)
+        let db = Db::for_write(db_args)
             .await
             .context("Failed to connect to database")?;
 

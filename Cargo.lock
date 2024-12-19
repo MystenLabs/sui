@@ -14036,6 +14036,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-jsonrpc"
+version = "1.40.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.7.5",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "jsonrpsee",
+ "sui-indexer-alt-schema",
+ "sui-pg-db",
+ "sui-types",
+ "telemetry-subscribers",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "sui-indexer-alt-schema"
 version = "1.40.0"
 dependencies = [
@@ -14213,6 +14234,8 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
  "mysten-metrics",
  "schemars",
  "serde",
@@ -15715,14 +15738,11 @@ dependencies = [
  "im",
  "indexmap 2.2.6",
  "itertools 0.13.0",
- "jsonrpsee",
  "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
  "move-core-types",
- "move-disassembler",
- "move-ir-types",
  "move-vm-profiler",
  "move-vm-test-utils",
  "move-vm-types",
