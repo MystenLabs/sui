@@ -53,7 +53,7 @@ error[Compatibility E01005]: type parameter mismatch
 20 │     public struct StructTypeParamMismatch<T> { a: T } // changed S to T
    │                   ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be changed during a 'compatible' upgrade.
    = Restore the original struct's type parameters for struct 'StructTypeParamMismatch' including the ordering.
 
 error[Compatibility E01002]: type mismatch

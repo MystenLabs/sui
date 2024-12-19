@@ -8,7 +8,7 @@ error[Compatibility E01005]: type parameter mismatch
 13 │     public struct StructTypeParamAddU<T, U> has copy, drop { x : T }
    │                   ^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 1, found 2
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be changed during a 'compatible' upgrade.
    = Restore the original struct's type parameter for struct 'StructTypeParamAddU' including the ordering.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -61,7 +61,7 @@ error[Compatibility E01005]: type parameter mismatch
 29 │     public enum EnumTypeParamAddU<T, U> has copy, drop {
    │                 ^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 1, found 2
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade.
+   = Enums are part of a module's public interface and cannot be changed during a 'compatible' upgrade.
    = Restore the original enum's type parameter for enum 'EnumTypeParamAddU' including the ordering.
 
 error[Compatibility E01005]: type parameter mismatch
@@ -70,7 +70,7 @@ error[Compatibility E01005]: type parameter mismatch
 34 │     public enum EnumTypeParamRemoveU<T> has copy, drop {
    │                 ^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
    │
-   = Enums are part of a module's public interface and cannot be changed during an upgrade.
+   = Enums are part of a module's public interface and cannot be changed during a 'compatible' upgrade.
    = Restore the original enum's type parameters for enum 'EnumTypeParamRemoveU' including the ordering.
 
 error[Compatibility E01005]: type parameter mismatch
