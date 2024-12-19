@@ -16,7 +16,7 @@ use handlers::{
     tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
-use sui_indexer_alt_framework::handlers::cp_mapping::CpMapping;
+use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
     concurrent::{ConcurrentConfig, PrunerConfig},
@@ -63,7 +63,7 @@ pub async fn start_indexer(
         obj_info_pruner,
         coin_balance_buckets,
         coin_balance_buckets_pruner,
-        cp_mapping,
+        cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
         kv_checkpoints,
@@ -203,7 +203,7 @@ pub async fn start_indexer(
     );
 
     // Unpruned concurrent pipelines
-    add_concurrent!(CpMapping, cp_mapping);
+    add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
     add_concurrent!(KvCheckpoints, kv_checkpoints);

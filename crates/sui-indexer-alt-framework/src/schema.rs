@@ -3,7 +3,7 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    cp_mapping (cp_sequence_number) {
+    cp_sequence_numbers (cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_lo -> Int8,
         epoch -> Int8,
@@ -23,4 +23,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(cp_mapping, watermarks,);
+diesel::allow_tables_to_appear_in_same_query!(cp_sequence_numbers, watermarks,);
