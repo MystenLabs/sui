@@ -309,7 +309,7 @@ impl<T: TModuleId> TModuleId for &T {
 //**************************************************************************************************
 
 impl BinaryModel {
-    pub fn new(compiled_modules: &[CompiledModule]) -> Self {
+    pub fn new(compiled_modules: Vec<CompiledModule>) -> Self {
         let mut packages = BTreeMap::new();
 
         for compiled_module in compiled_modules {
@@ -475,7 +475,7 @@ impl Package {
 }
 
 impl Module {
-    fn new(compiled_module: &CompiledModule) -> Self {
+    fn new(compiled_module: CompiledModule) -> Self {
         let module_id = compiled_module.self_id();
         let name = module_id.name().as_str().into();
         let package = *module_id.address();
@@ -485,7 +485,7 @@ impl Module {
             .iter()
             .enumerate()
             .map(|(idx, def)| {
-                let struct_ = make_struct(compiled_module, def, StructDefinitionIndex(idx as u16));
+                let struct_ = make_struct(&compiled_module, def, StructDefinitionIndex(idx as u16));
                 (struct_.name, struct_)
             })
             .collect::<BTreeMap<_, _>>();
@@ -494,7 +494,7 @@ impl Module {
             .iter()
             .enumerate()
             .map(|(idx, def)| {
-                let enum_ = make_enum(compiled_module, def, EnumDefinitionIndex(idx as u16));
+                let enum_ = make_enum(&compiled_module, def, EnumDefinitionIndex(idx as u16));
                 (enum_.name, enum_)
             })
             .collect::<BTreeMap<_, _>>();
@@ -503,7 +503,7 @@ impl Module {
             .iter()
             .enumerate()
             .map(|(idx, def)| {
-                let fun = make_fun(compiled_module, def, FunctionDefinitionIndex(idx as u16));
+                let fun = make_fun(&compiled_module, def, FunctionDefinitionIndex(idx as u16));
                 (fun.name, fun)
             })
             .collect::<BTreeMap<_, _>>();
@@ -516,7 +516,7 @@ impl Module {
             enums,
             functions,
             constants,
-            module: compiled_module.clone(),
+            module: compiled_module,
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
         }

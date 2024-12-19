@@ -7,8 +7,6 @@ use crate::{
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
     parser::{syntax::make_loc, token_set::TokenSet},
-    shared::CompilationEnv,
-    FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
@@ -188,8 +186,8 @@ pub struct Lexer<'input> {
     pub text: &'input str,
     file_hash: FileHash,
     edition: Edition,
-    doc_comments: FileCommentMap,
-    matched_doc_comments: MatchedFileCommentMap,
+    current_doc_comment: Option<(u32, u32, String)>,
+    unmatched_doc_comments: Vec<(u32, u32, String)>,
     prev_end: usize,
     cur_start: usize,
     cur_end: usize,
@@ -203,8 +201,8 @@ impl<'input> Lexer<'input> {
             text,
             file_hash,
             edition,
-            doc_comments: FileCommentMap::new(),
-            matched_doc_comments: MatchedFileCommentMap::new(),
+            current_doc_comment: None,
+            unmatched_doc_comments: vec![],
             prev_end: 0,
             cur_start: 0,
             cur_end: 0,
@@ -279,12 +277,20 @@ impl<'input> Lexer<'input> {
         &mut self,
         offset: usize,
     ) -> Result<(&'input str, bool), Box<Diagnostic>> {
+        self.trim_whitespace_and_comments_impl(offset)
+    }
+
+    fn trim_whitespace_and_comments_impl(
+        &mut self,
+        offset: usize,
+    ) -> Result<(&'input str, bool), Box<Diagnostic>> {
         let mut trimmed_preceding_eol;
         let mut text = &self.text[offset..];
 
         // A helper function to compute the index of the start of the given substring.
         let len = text.len();
         let get_offset = |substring: &str| offset + len - substring.len();
+        let mut in_doc_comment = false;
 
         // Loop until we find text that isn't whitespace, and that isn't part of
         // a multi-line or single-line comment.
@@ -293,6 +299,8 @@ impl<'input> Lexer<'input> {
             (text, trimmed_preceding_eol) = trim_start_whitespace(text);
 
             if text.starts_with("/*") {
+                in_doc_comment = false;
+                self.advance_doc_comment();
                 // Continue the loop immediately after the multi-line comment.
                 // There may be whitespace or another comment following this one.
                 text = self.parse_block_comment(get_offset(text))?;
@@ -304,14 +312,19 @@ impl<'input> Lexer<'input> {
 
                 // If this was a documentation comment, record it in our map.
                 if is_doc {
+                    if !in_doc_comment {
+                        in_doc_comment = true;
+                        self.advance_doc_comment();
+                    }
                     let end = get_offset(text);
                     let mut comment = &self.text[(start + 3)..end];
                     comment = comment.trim_end_matches('\r');
 
-                    self.doc_comments
-                        .insert((start as u32, end as u32), comment.to_string());
+                    self.append_current_doc_comment(start, end, comment);
+                } else {
+                    in_doc_comment = false;
+                    self.advance_doc_comment();
                 }
-
                 // Continue the loop on the following line, which may contain leading
                 // whitespace or comments of its own.
                 continue;
@@ -368,9 +381,10 @@ impl<'input> Lexer<'input> {
                     // If the comment was not empty -- fuzzy ot handle `/**/`, which triggers the
                     // doc comment check but is not actually a doc comment.
                     if comment.start + 3 < end && comment.is_doc_comment {
-                        self.doc_comments.insert(
-                            (comment.start as u32, end as u32),
-                            self.text[(comment.start + 3)..end].to_string(),
+                        self.append_current_doc_comment(
+                            comment.start,
+                            end,
+                            &self.text[(comment.start + 3)..end],
                         );
                     }
                     text = &text[2..];
@@ -394,6 +408,26 @@ impl<'input> Lexer<'input> {
             }
         }
         Ok(text)
+    }
+
+    pub fn advance_doc_comment(&mut self) {
+        self.current_doc_comment
+            .take()
+            .map(|c| self.unmatched_doc_comments.push(c));
+        self.current_doc_comment = None;
+    }
+
+    fn append_current_doc_comment(&mut self, start: usize, end: usize, comment: &str) {
+        match self.current_doc_comment.as_mut() {
+            None => {
+                self.current_doc_comment = Some((start as u32, end as u32, comment.to_string()));
+            }
+            Some((_doc_start, doc_end, s)) => {
+                *doc_end = end as u32;
+                s.push_str("\n");
+                s.push_str(comment);
+            }
+        }
     }
 
     // Trim until reaching whitespace: space, tab, lf(\n) and crlf(\r\n).
@@ -463,63 +497,16 @@ impl<'input> Lexer<'input> {
     // Calling this function during parsing effectively marks a valid point for documentation
     // comments. The documentation comments are not stored in the AST, but can be retrieved by
     // using the start position of an item as an index into `matched_doc_comments`.
-    pub fn match_doc_comments(&mut self) {
-        if let Some(comments) = self.read_doc_comments() {
-            self.attach_doc_comments(comments);
-        };
-    }
-
-    // Matches the doc comments after the last token (or the beginning of the file) to the position
-    // of the current token. This moves the comments out of `doc_comments` and
-    // into `matched_doc_comments`. At the end of parsing, if `doc_comments` is not empty, errors
-    // for stale doc comments will be produced.
-    pub fn read_doc_comments(&mut self) -> Option<String> {
-        let start = self.previous_end_loc() as u32;
-        let end = self.cur_start as u32;
-        let mut matched = vec![];
-        let merged = self
-            .doc_comments
-            .range((start, start)..(end, end))
-            .map(|(span, s)| {
-                matched.push(*span);
-                s.clone()
-            })
-            .collect::<Vec<String>>()
-            .join("\n");
-        if !matched.is_empty() {
-            for span in matched {
-                self.doc_comments.remove(&span);
-            }
-            Some(merged)
-        } else {
-            None
-        }
-    }
-
-    // Calling this function during parsing adds the `doc_comments` to the current location. The
-    // documentation comments are not stored in the AST, but can be retrieved by using the start
-    // position of an item as an index into `matched_doc_comments`.
-    pub fn attach_doc_comments(&mut self, doc_comments: String) {
-        let attachment_location = self.cur_start as u32;
-        self.matched_doc_comments
-            .insert(attachment_location, doc_comments);
+    pub fn take_doc_comment(&mut self) -> Option<(u32, u32, String)> {
+        self.current_doc_comment.take()
     }
 
     // At the end of parsing, checks whether there are any unmatched documentation comments,
     // producing errors if so. Otherwise returns a map from file position to associated
     // documentation.
-    pub fn check_and_get_doc_comments(&mut self, env: &CompilationEnv) -> MatchedFileCommentMap {
-        let msg = "Documentation comment cannot be matched to a language item";
-        let diags = self
-            .doc_comments
-            .iter()
-            .map(|((start, end), _)| {
-                let loc = Loc::new(self.file_hash, *start, *end);
-                diag!(Syntax::InvalidDocComment, (loc, msg))
-            })
-            .collect();
-        env.diagnostic_reporter_at_top_level().add_diags(diags);
-        std::mem::take(&mut self.matched_doc_comments)
+    pub fn take_unmatched_doc_comments(&mut self) -> Vec<(u32, u32, String)> {
+        self.advance_doc_comment();
+        std::mem::take(&mut self.unmatched_doc_comments)
     }
 
     /// Advance to the next token. This function will keep trying to advance the lexer until it

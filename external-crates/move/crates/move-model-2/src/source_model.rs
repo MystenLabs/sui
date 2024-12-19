@@ -168,8 +168,8 @@ impl Model {
         let compiled_modules = compiled_units
             .into_iter()
             .flat_map(|(_addr, units)| units.into_iter().map(|(_, unit)| unit.named_module.module))
-            .collect::<Vec<_>>();
-        let compiled_model = BinaryModel::new(&compiled_modules);
+            .collect();
+        let compiled_model = BinaryModel::new(compiled_modules);
         let model = Self {
             files,
             root_named_address_map,
