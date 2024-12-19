@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 #[path = "unit_tests/upgrade_compatibility_tests.rs"]
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
 use anyhow::{anyhow, Context, Error};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
-use std::sync::Arc;
-
 use move_binary_format::compatibility::InclusionCheck;
 use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
     StructDefinitionIndex, TableIndex,
 };
+use move_binary_format::normalized::{Field, Type, Variant};
 use move_binary_format::{
     compatibility::Compatibility,
     compatibility_mode::CompatibilityMode,
@@ -38,6 +38,9 @@ use move_core_types::{
 };
 use move_ir_types::location::Loc;
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs;
+use std::sync::Arc;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
@@ -1301,6 +1304,58 @@ fn struct_ability_mismatch_diag(
     Ok(diags)
 }
 
+fn field_to_string(field: &Field) -> (String, String, String) {
+    let mut field_full = format!("'{}: {}'", field.name, field.type_);
+    let mut field_name = format!("'{}'", field.name);
+    let field_type = format!("'{}'", field.type_);
+
+    if let Some(pos_num) = Regex::new(r"^pos(\d)+$")
+        .ok()
+        .and_then(|r| r.captures(field.name.as_str()))
+        .map(|c| c.get(1).unwrap().as_str())
+    {
+        field_name = format!("at position {}", pos_num);
+        field_full = format!("{} {}", field_type, field_name);
+    }
+
+    (field_full, field_name, field_type)
+}
+
+use regex::Regex;
+/// returns a message for the given field
+fn field_mismatch_message(old_field: &Field, new_field: &Field) -> (Declarations, String) {
+    let (old_field_full, old_field_name, old_field_type) = field_to_string(old_field);
+    let (new_field_full, new_field_name, new_field_type) = field_to_string(new_field);
+
+    match (
+        old_field.name != new_field.name,
+        old_field.type_ != new_field.type_,
+    ) {
+        (true, true) => (
+            Declarations::FieldMismatch,
+            format!(
+                "Mismatched field {}, expected {}.",
+                new_field_full, old_field_full
+            ),
+        ),
+        (true, false) => (
+            Declarations::FieldMismatch,
+            format!(
+                "Mismatched field name {}, expected {}.",
+                new_field_name, old_field_name
+            ),
+        ),
+        (false, true) => (
+            Declarations::TypeMismatch,
+            format!(
+                "Mismatched field type {}, expected {}.",
+                new_field_type, old_field_type
+            ),
+        ),
+        (false, false) => unreachable!("Fields should not be the same"),
+    }
+}
+
 /// Return a diagnostic for a field mismatch
 /// start by checking the lengths of the fields and return a diagnostic if they are different
 /// if the lengths are the same check each field piece wise and return a diagnostic for each mismatch
@@ -1326,15 +1381,27 @@ fn struct_field_mismatch_diag(
 
     let def_loc = struct_sourcemap.definition_location;
 
-    if old_struct.fields.len() != new_struct.fields.len() {
+    let old_fields: Vec<&Field> = old_struct
+        .fields
+        .iter()
+        .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
+        .collect();
+
+    let new_fields: Vec<&Field> = new_struct
+        .fields
+        .iter()
+        .filter(|f| f.name != Identifier::new("dummy_field").unwrap() && f.type_ != Type::Bool)
+        .collect();
+
+    if old_fields.len() != new_fields.len() {
         diags.add(Diagnostic::new(
             Declarations::TypeMismatch,
             (
                 def_loc,
                 format!(
                     "Incorrect number of fields: expected {}, found {}",
-                    old_struct.fields.len(),
-                    new_struct.fields.len()
+                    old_fields.len(),
+                    new_fields.len()
                 ),
             ),
             Vec::<(Loc, String)>::new(),
@@ -1345,50 +1412,19 @@ fn struct_field_mismatch_diag(
                 format!(
                     "Restore the original struct's {} \
                     for struct '{struct_name}' including the ordering.",
-                    singular_or_plural(old_struct.fields.len(), "field", "fields")
+                    singular_or_plural(old_fields.len(), "field", "fields")
                 ),
             ],
         ));
-    } else if old_struct.fields != new_struct.fields {
-        for (i, (old_field, new_field)) in old_struct
-            .fields
-            .iter()
-            .zip(new_struct.fields.iter())
-            .enumerate()
-        {
+    } else if old_fields != new_fields {
+        for (i, (old_field, new_field)) in old_fields.iter().zip(new_fields.iter()).enumerate() {
             if old_field != new_field {
                 let field_loc = struct_sourcemap
                     .fields
                     .get(i)
                     .context("Unable to get field location")?;
 
-                let (code, label) = match (
-                    old_field.name != new_field.name,
-                    old_field.type_ != new_field.type_,
-                ) {
-                    (true, true) => (
-                        Declarations::FieldMismatch,
-                        format!(
-                            "Mismatched field '{}: {}' expected '{}: {}'.",
-                            new_field.name, new_field.type_, old_field.name, old_field.type_
-                        ),
-                    ),
-                    (true, false) => (
-                        Declarations::FieldMismatch,
-                        format!(
-                            "Mismatched field name '{}', expected '{}'.",
-                            new_field.name, old_field.name
-                        ),
-                    ),
-                    (false, true) => (
-                        Declarations::TypeMismatch,
-                        format!(
-                            "Mismatched field type '{}', expected '{}'.",
-                            new_field.type_, old_field.type_
-                        ),
-                    ),
-                    (false, false) => unreachable!("Fields should not be the same"),
-                };
+                let (code, label) = field_mismatch_message(old_field, new_field);
 
                 diags.add(Diagnostic::new(
                     code,
@@ -1401,7 +1437,7 @@ fn struct_field_mismatch_diag(
                         format!(
                             "Restore the original struct's {} for \
                             struct '{struct_name}' including the ordering.",
-                            singular_or_plural(old_struct.fields.len(), "field", "fields")
+                            singular_or_plural(old_fields.len(), "field", "fields")
                         ),
                     ],
                 ));
@@ -1509,6 +1545,65 @@ fn enum_ability_mismatch_diag(
     Ok(diags)
 }
 
+fn enum_variant_field_error(
+    old_variant: &Variant,
+    new_variant: &Variant,
+    variant_loc: Loc,
+    def_loc: Loc,
+) -> (DiagnosticInfo, Vec<String>) {
+    if old_variant.fields.len() != new_variant.fields.len() {
+        return (
+            Declarations::FieldMismatch.into(),
+            vec![format!(
+                "Mismatched variant field count, expected {}, found {}.",
+                old_variant.fields.len(),
+                new_variant.fields.len()
+            )],
+        );
+    }
+
+    match (
+        old_variant.name != new_variant.name,
+        old_variant.fields != new_variant.fields,
+    ) {
+        (true, true) => (
+            Enums::VariantMismatch.into(),
+            vec![format!(
+                "Mismatched variant '{}', expected '{}'.",
+                new_variant.name, old_variant.name
+            )],
+        ),
+        (true, false) => (
+            Enums::VariantMismatch.into(),
+            vec![format!(
+                "Mismatched variant name '{}', expected '{}'.",
+                new_variant.name, old_variant.name
+            )],
+        ),
+        (false, true) => {
+            let mut errors: Vec<String> = vec![];
+
+            for (i, (old_field, new_field)) in old_variant
+                .fields
+                .iter()
+                .zip(new_variant.fields.iter())
+                .enumerate()
+            {
+                if old_field != new_field {
+                    errors.push(format!(
+                        "Mismatched field {}, expected {}.",
+                        field_to_string(old_field).0,
+                        field_to_string(new_field).2
+                    ));
+                }
+            }
+
+            (Declarations::FieldMismatch.into(), errors)
+        }
+        (false, false) => unreachable!("Variants should not be the same"),
+    }
+}
+
 /// Return a diagnostic for a type parameter mismatch
 /// start by checking the lengths of the type parameters and return a diagnostic if they are different
 /// if the lengths are the same check each type parameter piece wise and return a diagnostic for each mismatch
@@ -1548,65 +1643,26 @@ fn enum_variant_mismatch_diag(
                 .0
                  .1;
 
-            let (code, label): (DiagnosticInfo, String) = match (
-                old_variant.name != new_variant.name,
-                old_variant.fields != new_variant.fields,
-            ) {
-                (true, true) => (
-                    Enums::VariantMismatch.into(),
-                    format!(
-                        "Mismatched variant '{}', expected '{}'.",
-                        new_variant.name, old_variant.name
-                    ),
-                ),
-                (true, false) => (
-                    Enums::VariantMismatch.into(),
-                    format!(
-                        "Mismatched variant name '{}', expected '{}'.",
-                        new_variant.name, old_variant.name
-                    ),
-                ),
-                (false, true) => {
-                    let new_variant_fields = new_variant
-                        .fields
-                        .iter()
-                        .map(|f| format!("{:?}", f))
-                        .collect::<Vec<_>>()
-                        .join(", ");
+            let (code, labels) =
+                enum_variant_field_error(old_variant, new_variant, variant_loc, def_loc);
 
-                    let old_variant_fields = old_variant
-                        .fields
-                        .iter()
-                        .map(|f| format!("{:?}", f))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    (
-                        Declarations::FieldMismatch.into(),
-                        format!(
-                            "Mismatched variant field '{}', expected '{}'.",
-                            new_variant_fields, old_variant_fields
-                        ),
-                    )
-                }
-                (false, false) => unreachable!("Variants should not be the same"),
-            };
-
-            diags.add(Diagnostic::new(
-                code,
-                (variant_loc, label),
-                vec![(def_loc, "Enum definition".to_string())],
-                vec![
-                    "Enums are part of a module's public interface \
+            for label in labels {
+                diags.add(Diagnostic::new(
+                    code.clone(),
+                    (variant_loc, label),
+                    vec![(def_loc, "Enum definition".to_string())],
+                    vec![
+                        "Enums are part of a module's public interface \
                     and cannot be changed during an upgrade."
-                        .to_string(),
-                    format!(
-                        "Restore the original enum's {} for \
+                            .to_string(),
+                        format!(
+                            "Restore the original enum's {} for \
                         enum '{enum_name}' including the ordering.",
-                        singular_or_plural(old_enum.variants.len(), "variant", "variants")
-                    ),
-                ],
-            ));
+                            singular_or_plural(old_enum.variants.len(), "variant", "variants")
+                        ),
+                    ],
+                ));
+            }
         }
     }
 
