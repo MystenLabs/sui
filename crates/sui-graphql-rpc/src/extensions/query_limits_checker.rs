@@ -381,7 +381,7 @@ impl<'a> LimitsTraversal<'a> {
     ///
     /// This check must be done after the input limit check, because it relies on the query depth
     /// being bounded to protect it from recursing too deeply.
-    fn check_output_limits(&mut self, op: &'a Positioned<OperationDefinition>) -> ServerResult<()> {
+    fn check_output_limits(&mut self, op: &Positioned<OperationDefinition>) -> ServerResult<()> {
         for selection in &op.node.selection_set.node.items {
             self.traverse_selection_for_output(selection, 1, None)?;
         }
@@ -397,7 +397,7 @@ impl<'a> LimitsTraversal<'a> {
     /// size of the connection's page.
     fn traverse_selection_for_output(
         &mut self,
-        selection: &'a Positioned<Selection>,
+        selection: &Positioned<Selection>,
         multiplicity: u32,
         page_size: Option<u32>,
     ) -> ServerResult<()> {
