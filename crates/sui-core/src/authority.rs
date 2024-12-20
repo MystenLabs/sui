@@ -199,6 +199,10 @@ mod batch_verification_tests;
 #[path = "unit_tests/coin_deny_list_tests.rs"]
 mod coin_deny_list_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/auth_unit_test_utils.rs"]
+pub mod auth_unit_test_utils;
+
 pub mod authority_test_utils;
 
 pub mod authority_per_epoch_store;
