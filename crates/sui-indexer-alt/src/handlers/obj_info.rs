@@ -18,7 +18,12 @@ use sui_types::{
     object::{Object, Owner},
 };
 
-pub(crate) struct ObjInfo;
+use crate::consistent_pruning::PruningLookupTable;
+
+#[derive(Default)]
+pub(crate) struct ObjInfo {
+    pruning_lookup_table: Arc<PruningLookupTable>,
+}
 
 pub(crate) enum ProcessedObjInfoUpdate {
     Insert(Object),
