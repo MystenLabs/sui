@@ -607,10 +607,9 @@ pub struct Flags {
 
     /// Compile in verify mode
     #[clap(
-        short = cli::VERIFY_SHORT,
-        long = cli::VERIFY,
+        long = cli::SPEC,
     )]
-    verify: bool,
+    spec: bool,
 
     /// If set, warnings become errors.
     #[clap(
@@ -664,7 +663,7 @@ impl Flags {
     pub fn empty() -> Self {
         Self {
             test: false,
-            verify: false,
+            spec: false,
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
@@ -679,7 +678,7 @@ impl Flags {
     pub fn testing() -> Self {
         Self {
             test: true,
-            verify: false,
+            spec: false,
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
@@ -693,7 +692,7 @@ impl Flags {
 
     pub fn set_verify(self, value: bool) -> Self {
         Self {
-            verify: value,
+            spec: value,
             ..self
         }
     }
@@ -755,8 +754,8 @@ impl Flags {
         self.test
     }
 
-    pub fn is_verifying(&self) -> bool {
-        self.verify
+    pub fn is_spec(&self) -> bool {
+        self.spec
     }
 
     pub fn keep_testing_functions(&self) -> bool {

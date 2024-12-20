@@ -48,15 +48,14 @@ impl FilterContext for Context<'_> {
     // An AST element should be removed if:
     // * It is annotated #[spec_only] and verify mode is not set
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        if self.env.flags().is_verifying() {
+        if self.env.flags().is_spec() {
             return false;
         }
-        use known_attributes::VerificationAttribute;
+        use known_attributes::SpecAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
         //
         let is_spec_only = flattened_attrs.iter().find(|(_, attr)| {
-            matches!(attr, VerificationAttribute::SpecOnly)
-                || matches!(attr, VerificationAttribute::Spec)
+            matches!(attr, SpecAttribute::SpecOnly) || matches!(attr, SpecAttribute::Spec)
         });
         self.has_spec_code = self.has_spec_code || is_spec_only.is_some();
         is_spec_only.is_some()
@@ -120,16 +119,14 @@ pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program
     filter_program(&mut context, prog)
 }
 
-fn verification_attributes(
-    attrs: &P::Attributes,
-) -> Vec<(Loc, known_attributes::VerificationAttribute)> {
+fn verification_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::SpecAttribute)> {
     use known_attributes::KnownAttribute;
     attrs
         .value
         .iter()
         .filter_map(
             |attr| match KnownAttribute::resolve(attr.value.attribute_name().value)? {
-                KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
+                KnownAttribute::Spec(verify_attr) => Some((attr.loc, verify_attr)),
                 _ => None,
             },
         )

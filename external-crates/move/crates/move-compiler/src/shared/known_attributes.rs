@@ -20,7 +20,7 @@ pub enum AttributePosition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum KnownAttribute {
     Testing(TestingAttribute),
-    Verification(VerificationAttribute),
+    Spec(SpecAttribute),
     Native(NativeAttribute),
     Diagnostic(DiagnosticAttribute),
     DefinesPrimitive(DefinesPrimitive),
@@ -43,7 +43,7 @@ pub enum TestingAttribute {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum VerificationAttribute {
+pub enum SpecAttribute {
     // Denotes a function is a spec
     Spec,
     // Focus on this function, deactivates verification for all other functions
@@ -102,9 +102,9 @@ impl KnownAttribute {
             TestingAttribute::TEST_ONLY => TestingAttribute::TestOnly.into(),
             TestingAttribute::EXPECTED_FAILURE => TestingAttribute::ExpectedFailure.into(),
             TestingAttribute::RAND_TEST => TestingAttribute::RandTest.into(),
-            VerificationAttribute::SPEC => VerificationAttribute::Spec.into(),
-            VerificationAttribute::SPEC_ONLY => VerificationAttribute::SpecOnly.into(),
-            VerificationAttribute::FOCUS => VerificationAttribute::Focus.into(),
+            SpecAttribute::SPEC => SpecAttribute::Spec.into(),
+            SpecAttribute::SPEC_ONLY => SpecAttribute::SpecOnly.into(),
+            SpecAttribute::FOCUS => SpecAttribute::Focus.into(),
             NativeAttribute::BYTECODE_INSTRUCTION => NativeAttribute::BytecodeInstruction.into(),
             DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow.into(),
             DiagnosticAttribute::LINT_ALLOW => DiagnosticAttribute::LintAllow.into(),
@@ -120,7 +120,7 @@ impl KnownAttribute {
     pub const fn name(&self) -> &str {
         match self {
             Self::Testing(a) => a.name(),
-            Self::Verification(a) => a.name(),
+            Self::Spec(a) => a.name(),
             Self::Native(a) => a.name(),
             Self::Diagnostic(a) => a.name(),
             Self::DefinesPrimitive(a) => a.name(),
@@ -134,7 +134,7 @@ impl KnownAttribute {
     pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
         match self {
             Self::Testing(a) => a.expected_positions(),
-            Self::Verification(a) => a.expected_positions(),
+            Self::Spec(a) => a.expected_positions(),
             Self::Native(a) => a.expected_positions(),
             Self::Diagnostic(a) => a.expected_positions(),
             Self::DefinesPrimitive(a) => a.expected_positions(),
@@ -203,7 +203,7 @@ impl TestingAttribute {
     }
 }
 
-impl VerificationAttribute {
+impl SpecAttribute {
     pub const SPEC: &'static str = "spec";
     pub const SPEC_ONLY: &'static str = "spec_only";
     pub const FOCUS: &'static str = "focus";
@@ -393,7 +393,7 @@ impl fmt::Display for KnownAttribute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Testing(a) => a.fmt(f),
-            Self::Verification(a) => a.fmt(f),
+            Self::Spec(a) => a.fmt(f),
             Self::Native(a) => a.fmt(f),
             Self::Diagnostic(a) => a.fmt(f),
             Self::DefinesPrimitive(a) => a.fmt(f),
@@ -411,7 +411,7 @@ impl fmt::Display for TestingAttribute {
     }
 }
 
-impl fmt::Display for VerificationAttribute {
+impl fmt::Display for SpecAttribute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name())
     }
@@ -468,9 +468,9 @@ impl From<TestingAttribute> for KnownAttribute {
         Self::Testing(a)
     }
 }
-impl From<VerificationAttribute> for KnownAttribute {
-    fn from(a: VerificationAttribute) -> Self {
-        Self::Verification(a)
+impl From<SpecAttribute> for KnownAttribute {
+    fn from(a: SpecAttribute) -> Self {
+        Self::Spec(a)
     }
 }
 impl From<NativeAttribute> for KnownAttribute {

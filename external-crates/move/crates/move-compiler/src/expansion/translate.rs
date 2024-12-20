@@ -1141,7 +1141,7 @@ fn known_attributes(
 fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute) {
     match known {
         KnownAttribute::Testing(_)
-        | KnownAttribute::Verification(_)
+        | KnownAttribute::Spec(_)
         | KnownAttribute::Native(_)
         | KnownAttribute::Diagnostic(_)
         | KnownAttribute::DefinesPrimitive(_)

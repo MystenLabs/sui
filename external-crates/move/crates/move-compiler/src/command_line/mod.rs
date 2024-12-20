@@ -26,8 +26,7 @@ pub const SOURCE_MAP_SHORT: char = 'm';
 pub const TEST: &str = "test";
 pub const TEST_SHORT: char = 't';
 
-pub const VERIFY: &str = "verify";
-pub const VERIFY_SHORT: char = 'v';
+pub const SPEC: &str = "verify";
 
 pub const WARNINGS_ARE_ERRORS: &str = "warnings-are-errors";
 
