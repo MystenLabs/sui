@@ -17,9 +17,11 @@ query paginateMoveModuleLists(
 	$hasMoreFriends: Boolean!
 	$hasMoreStructs: Boolean!
 	$hasMoreFunctions: Boolean!
+	$hasMoreEnums: Boolean!
 	$afterFriends: String
 	$afterStructs: String
 	$afterFunctions: String
+	$afterEnums: String
 ) {
 	object(address: $packageId) {
 		asMovePackage {
@@ -43,6 +45,15 @@ query paginateMoveModuleLists(
 					}
 					nodes {
 						...RPC_MOVE_STRUCT_FIELDS
+					}
+				}
+				enums(after: $afterEnums) @include(if: $hasMoreEnums) {
+					pageInfo {
+						hasNextPage
+						endCursor
+					}
+					nodes {
+						...RPC_MOVE_ENUM_FIELDS
 					}
 				}
 				functions(after: $afterFunctions) @include(if: $hasMoreFunctions) {
@@ -82,6 +93,15 @@ fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
 			...RPC_MOVE_STRUCT_FIELDS
 		}
 	}
+	enums {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		nodes {
+			...RPC_MOVE_ENUM_FIELDS
+		}
+	}
 	fileFormatVersion
 	functions {
 		pageInfo {
@@ -90,6 +110,24 @@ fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
 		}
 		nodes {
 			...RPC_MOVE_FUNCTION_FIELDS
+		}
+	}
+}
+
+fragment RPC_MOVE_ENUM_FIELDS on MoveEnum {
+	name
+	abilities
+	typeParameters {
+		isPhantom
+		constraints
+	}
+	variants {
+		name
+		fields {
+			name
+			type {
+				signature
+			}
 		}
 	}
 }

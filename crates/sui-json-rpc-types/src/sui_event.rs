@@ -403,5 +403,17 @@ mod test {
                 .unwrap()
                 .into_bytes()
         );
+
+        // Roundtrip base64
+        let event = serde_json::from_str::<BcsEvent>(tagged_base64).unwrap();
+        let json = serde_json::to_string(&event).unwrap();
+        let from_json = serde_json::from_str::<BcsEvent>(&json).unwrap();
+        assert_eq!(event, from_json);
+
+        // Roundtrip base58
+        let event = serde_json::from_str::<BcsEvent>(tagged_base58).unwrap();
+        let json = serde_json::to_string(&event).unwrap();
+        let from_json = serde_json::from_str::<BcsEvent>(&json).unwrap();
+        assert_eq!(event, from_json);
     }
 }

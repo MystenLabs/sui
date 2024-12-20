@@ -111,5 +111,49 @@ error[Compatibility E01005]: type parameter mismatch
    = Functions are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original function's type parameter for function 'add_constraint'.
 
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:58:58
+   │
+58 │     public fun swap_type_params<T: drop, U: drop + copy>(a: U, b: T): T { return b }
+   │                                 -                        ^ Unexpected parameter 'U', expected 'T'
+   │                                 │                         
+   │                                 Type parameter 'T' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's parameters for function 'swap_type_params'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:58:64
+   │
+58 │     public fun swap_type_params<T: drop, U: drop + copy>(a: U, b: T): T { return b }
+   │                                          -                     ^ Unexpected parameter 'T', expected 'U'
+   │                                          │                      
+   │                                          Type parameter 'U' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's parameters for function 'swap_type_params'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:61:78
+   │
+61 │     public fun swap_type_params_return<T: drop, U: drop + copy>(a: T, b: U): U { return b }
+   │                                        -                                     ^ Unexpected return type 'U', expected 'T'
+   │                                        │                                      
+   │                                        Type parameter 'T' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's return type for function 'swap_type_params_return'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:67:64
+   │
+67 │     public fun vec_changed_type_param<T: drop, U: drop + copy>(_: vector<U>) {}
+   │                                       -                        ^ Unexpected parameter 'vector<U>', expected 'vector<T>'
+   │                                       │                         
+   │                                       Type parameter 'T' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be changed during an upgrade.
+   = Restore the original function's parameter for function 'vec_changed_type_param'.
+
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

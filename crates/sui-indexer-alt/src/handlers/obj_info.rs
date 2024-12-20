@@ -95,15 +95,6 @@ impl Handler for ObjInfo {
     }
 }
 
-impl ProcessedObjInfo {
-    pub fn object_id(&self) -> ObjectID {
-        match &self.update {
-            ProcessedObjInfoUpdate::Insert(object) => object.id(),
-            ProcessedObjInfoUpdate::Delete(object_id) => *object_id,
-        }
-    }
-}
-
 impl FieldCount for ProcessedObjInfo {
     const FIELD_COUNT: usize = StoredObjInfo::FIELD_COUNT;
 }

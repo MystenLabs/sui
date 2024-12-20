@@ -333,7 +333,7 @@ impl CheckpointReader {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let reader = Self {
             path,
-            remote_store_url,
+            remote_store_url: remote_store_url.map(transform_ingestion_url),
             remote_store_options,
             current_checkpoint_number: starting_checkpoint_number,
             last_pruned_watermark: starting_checkpoint_number,
@@ -427,5 +427,16 @@ impl DataLimiter {
         }
         self.queue = self.queue.split_off(&watermark);
         self.in_progress = self.queue.values().sum();
+    }
+}
+
+fn transform_ingestion_url(ingestion_url: String) -> String {
+    // temporary code to redirect ingestion traffic directly to the bucket
+    if ingestion_url.contains("checkpoints.mainnet.sui.io") {
+        "https://storage.googleapis.com/mysten-mainnet-checkpoints".to_string()
+    } else if ingestion_url.contains("checkpoints.testnet.sui.io") {
+        "https://storage.googleapis.com/mysten-testnet-checkpoints".to_string()
+    } else {
+        ingestion_url
     }
 }

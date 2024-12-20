@@ -1,0 +1,6 @@
+{
+	"private": true,
+	"import": "../../../dist/esm/graphql/schemas/latest/index.js",
+	"main": "../../../dist/cjs/graphql/schemas/latest/index.js",
+	"sideEffects": false
+}

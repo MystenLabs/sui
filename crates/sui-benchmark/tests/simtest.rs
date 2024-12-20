@@ -909,6 +909,9 @@ mod test {
                 // having queued certs which are missing dependencies.
                 check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
+                max_txn_age_in_queue: Duration::from_secs(10000),
+                max_transaction_manager_queue_length: 10000,
+                max_transaction_manager_per_object_queue_length: 10000,
                 ..Default::default()
             })
             .with_execution_cache_config(cache_config)
@@ -1012,7 +1015,7 @@ mod test {
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
                 randomness_weight: 1,
-                randomized_transaction_weight: 1,
+                randomized_transaction_weight: 0,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
