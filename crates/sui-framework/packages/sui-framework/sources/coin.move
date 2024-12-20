@@ -190,6 +190,10 @@ public fun divide_into_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): ve
     vec
 }
 
+public fun send_to_account<T>(self: Coin<T>, recipient: address) {
+    self.into_balance().send_to_account(recipient);
+}
+
 /// Make any Coin with a zero value. Useful for placeholding
 /// bids/payments or preemptively making empty balances.
 public fun zero<T>(ctx: &mut TxContext): Coin<T> {

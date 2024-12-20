@@ -43,6 +43,9 @@ const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 /// The hardcoded ID for the Bridge Object.
 const SUI_BRIDGE_ID: address = @0x9;
 
+/// The hardcoded ID for the Account Root Object.
+const SUI_ACCOUNT_ROOT_ID: address = @0x10;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -127,6 +130,17 @@ public(package) fun randomness_state(): UID {
         id: ID { bytes: SUI_RANDOM_ID },
     }
 }
+
+public(package) fun sui_account_root_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_ACCOUNT_ROOT_ID },
+    }
+}
+
+public(package) fun sui_account_root_address(): address {
+    SUI_ACCOUNT_ROOT_ID
+}
+
 
 /// Create the `UID` for the singleton `DenyList` object.
 /// This should only be called once from `deny_list`.
