@@ -352,7 +352,6 @@ impl ConsensusAdapter {
 
     fn await_submit_delay(
         &self,
-        committee: &Committee,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transactions: &[ConsensusTransaction],
     ) -> (impl Future<Output = ()>, usize, usize, usize) {
@@ -385,7 +384,7 @@ impl ConsensusAdapter {
                     let multipler = gas_price / epoch_store.reference_gas_price();
                     let amplification_factor = if multipler >= k { multipler } else { 0 };
                     self.await_submit_delay_user_transaction(
-                        committee,
+                        epoch_store.committee(),
                         digest,
                         amplification_factor as usize,
                     )
@@ -408,8 +407,8 @@ impl ConsensusAdapter {
     ) -> (Duration, usize, usize, usize) {
         let (mut position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
-        if position < amplification_factor {
-            position = 0;
+        if amplification_factor > 0 {
+            position = (position + 1).saturating_sub(amplification_factor);
         }
 
         const DEFAULT_LATENCY: Duration = Duration::from_secs(1); // > p50 consensus latency with global deployment
@@ -705,7 +704,7 @@ impl ConsensusAdapter {
 
         // Create the waiter until the node's turn comes to submit to consensus
         let (await_submit, position, positions_moved, preceding_disconnected) =
-            self.await_submit_delay(epoch_store.committee(), epoch_store, &transactions[..]);
+            self.await_submit_delay(epoch_store, &transactions[..]);
 
         // Create the waiter until the transaction is processed by consensus or via checkpoint
         let processed_via_consensus_or_checkpoint =
@@ -1371,11 +1370,11 @@ mod adapter_tests {
         assert_eq!(delay_step, Duration::from_secs(14));
         assert!(!positions_moved > 0);
 
-        // With an amplification factor of 7, the position should remain the same.
+        // With an amplification factor of 7, the position should be moved to 1.
         let (delay_step, position, _, _) =
             consensus_adapter.await_submit_delay_user_transaction(&committee, &tx_digest, 7);
-        assert_eq!(position, 7);
-        assert_eq!(delay_step, Duration::from_secs(14));
+        assert_eq!(position, 1);
+        assert_eq!(delay_step, Duration::from_secs(2));
 
         // With an amplification factor > 7, the position should become 0.
         let (delay_step, position, _, _) =
