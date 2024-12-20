@@ -58,7 +58,7 @@ pub async fn start_faucet(
 
     let governor_cfg = Arc::new(
         GovernorConfigBuilder::default()
-            .const_period(Duration::from_secs(10))
+            .const_per_millisecond(100)
             .burst_size(max_request_per_second as u32)
             .key_extractor(GlobalKeyExtractor)
             .finish()
