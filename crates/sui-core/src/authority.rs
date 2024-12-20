@@ -216,8 +216,6 @@ pub mod transaction_deferral;
 pub(crate) mod authority_store;
 pub mod backpressure;
 
-pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
-
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
     tx_orders: IntCounter,
@@ -820,6 +818,13 @@ pub struct AuthorityState {
     pub overload_info: AuthorityOverloadInfo,
 
     pub validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+
+    /// Cached chain identifier to avoid repeated database lookups.
+    ///
+    /// The value is derived from the genesis checkpoint and stored in a thread-safe `OnceCell`.
+    /// After the first fetch from storage, subsequent accesses will return the cached value without
+    /// additional database queries.
+    chain_identifier: OnceCell<ChainIdentifier>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -2910,6 +2915,7 @@ impl AuthorityState {
             config,
             overload_info: AuthorityOverloadInfo::default(),
             validator_tx_finalizer,
+            chain_identifier: OnceCell::new(),
         });
 
         // Start a task to execute ready certificates.
@@ -3471,7 +3477,7 @@ impl AuthorityState {
 
     /// Chain Identifier is the digest of the genesis checkpoint.
     pub fn get_chain_identifier(&self) -> Option<ChainIdentifier> {
-        if let Some(digest) = CHAIN_IDENTIFIER.get() {
+        if let Some(digest) = self.chain_identifier.get() {
             return Some(*digest);
         }
 
@@ -3481,7 +3487,9 @@ impl AuthorityState {
             .ok()?
             .tap_none(|| error!("Genesis checkpoint is missing from DB"))?;
         // It's ok if the value is already set due to data races.
-        let _ = CHAIN_IDENTIFIER.set(ChainIdentifier::from(*checkpoint.digest()));
+        let _ = self
+            .chain_identifier
+            .set(ChainIdentifier::from(*checkpoint.digest()));
         Some(ChainIdentifier::from(*checkpoint.digest()))
     }
 
