@@ -12,7 +12,6 @@ use crate::{
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::{string_utils::*, *},
-    MatchedFileCommentMap,
 };
 
 use move_command_line_common::files::FileHash;
@@ -1557,7 +1556,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     while context.tokens.peek() == Tok::Use {
         let start_loc = context.tokens.start_loc();
         let tmp = parse_use_decl(
-            DocComment(None),
+            DocComment::empty(),
             vec![],
             start_loc,
             Modifiers::empty(),

@@ -45,7 +45,7 @@ simple_visitor!(
         }
 
         if let N::StructFields::Defined(_, sfields) = &sdef.fields {
-            for (_floc, _fname, (_, ftype)) in sfields {
+            for (_floc, _fname, (_, (_, ftype))) in sfields {
                 if is_field_coin_type(ftype) {
                     let msg = "Sub-optimal 'sui::coin::Coin' field type. Using \
                         'sui::balance::Balance' instead will be more space efficient";

@@ -794,6 +794,10 @@ impl Attribute_ {
 }
 
 impl DocComment {
+    pub fn empty() -> Self {
+        Self(None)
+    }
+
     pub fn loc(&self) -> Option<Loc> {
         self.0.as_ref().map(|sp!(loc, _)| *loc)
     }

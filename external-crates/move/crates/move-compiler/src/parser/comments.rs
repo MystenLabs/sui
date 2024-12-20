@@ -8,10 +8,6 @@ use move_command_line_common::{
     files::FileHash,
 };
 use move_ir_types::location::*;
-use std::collections::BTreeMap;
-
-/// Types to represent comments.
-pub type CommentMap = BTreeMap<FileHash, MatchedFileCommentMap>;
 
 // We restrict strings to only ascii visual characters (0x20 <= c <= 0x7E) or a permitted newline
 // character--\r--,--\n--or a tab--\t.
