@@ -46,13 +46,13 @@ async fn get_transaction() {
         .into_inner();
 
     assert!(digest.is_some());
-    assert!(transaction.is_some());
+    assert!(transaction.is_none());
     assert!(transaction_bcs.is_none());
-    assert!(signatures.is_some());
+    assert!(signatures.is_none());
     assert!(signatures_bytes.is_none());
-    assert!(effects.is_some());
+    assert!(effects.is_none());
     assert!(effects_bcs.is_none());
-    assert!(events.is_some());
+    assert!(events.is_none());
     assert!(events_bcs.is_none());
     assert!(checkpoint.is_some());
     assert!(timestamp.is_some());
