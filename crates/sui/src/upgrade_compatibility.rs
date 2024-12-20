@@ -8,6 +8,7 @@ mod upgrade_compatibility_tests;
 use anyhow::{anyhow, Context, Error};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use move_binary_format::compatibility::InclusionCheck;
@@ -37,7 +38,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
 };
-use move_ir_types::location::Loc;
+use move_ir_types::location::{ByteIndex, Loc};
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
@@ -455,6 +456,7 @@ upgrade_codes!(
         FieldMismatch: { msg: "field mismatch" },
         TypeParamMismatch: { msg: "type parameter mismatch" },
         ModuleMismatch: { msg: "module incompatible" },
+        ModuleMissing: { msg: "module missing" },
     ],
     Enums: [
         VariantMismatch: { msg: "variant mismatch" },
@@ -470,6 +472,7 @@ pub(crate) async fn check_compatibility(
     client: &SuiClient,
     package_id: ObjectID,
     new_package: CompiledPackage,
+    package_path: PathBuf,
     upgrade_policy: u8,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
@@ -500,12 +503,13 @@ pub(crate) async fn check_compatibility(
     let policy =
         UpgradePolicy::try_from(upgrade_policy).map_err(|_| anyhow!("Invalid upgrade policy"))?;
 
-    compare_packages(existing_modules, new_package, policy)
+    compare_packages(existing_modules, new_package, package_path, policy)
 }
 
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
-    new_package: CompiledPackage,
+    mut new_package: CompiledPackage,
+    package_path: PathBuf,
     policy: UpgradePolicy,
 ) -> Result<(), Error> {
     let new_modules_map: HashMap<Identifier, CompiledModule> = new_package
@@ -573,15 +577,30 @@ fn compare_packages(
         return Ok(());
     }
 
-    let mut files: FilesSourceText = HashMap::new();
-    let mut file_set = HashSet::new();
-
     let mut diags = Diagnostics::new();
-    let mut missing_modules: Vec<String> = vec![];
+
+    // add move toml
+    let move_toml_path = package_path.join("Move.toml");
+    let move_toml_contents = Arc::from(
+        fs::read_to_string(&move_toml_path)
+            .context("Unable to read Move.toml")?
+            .to_string(),
+    );
+    let move_toml_hash = FileHash::new(&move_toml_contents);
+
+    new_package.package.file_map.add(
+        FileHash::new(&move_toml_contents),
+        FileName::from(move_toml_path.to_string_lossy()),
+        Arc::clone(&move_toml_contents),
+    );
 
     for (name, err) in errors {
-        if let UpgradeCompatibilityModeError::ModuleMissing { name } = &err {
-            missing_modules.push(name.to_string());
+        if let UpgradeCompatibilityModeError::ModuleMissing { name, .. } = &err {
+            diags.extend(missing_module_diag(
+                name,
+                &move_toml_hash,
+                &move_toml_contents,
+            )?);
             continue;
         }
 
@@ -589,24 +608,6 @@ fn compare_packages(
             .package
             .get_module_by_name_from_root(name.as_str())
             .context("Unable to get module")?;
-
-        if !file_set.contains(&compiled_unit_with_source.source_path) {
-            let file_contents: Arc<str> =
-                fs::read_to_string(&compiled_unit_with_source.source_path)
-                    .context("Unable to read source file")?
-                    .into();
-            let file_hash = FileHash::new(&file_contents);
-
-            files.insert(
-                file_hash,
-                (
-                    FileName::from(compiled_unit_with_source.source_path.to_string_lossy()),
-                    file_contents,
-                ),
-            );
-
-            file_set.insert(&compiled_unit_with_source.source_path);
-        }
 
         diags.extend(diag_from_error(
             &err,
@@ -617,23 +618,15 @@ fn compare_packages(
 
     // use colors but inline
     Err(anyhow!(
-        "{}{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
+        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
         Its upgrade policy is set to '{}'.",
         if !diags.is_empty() {
             String::from_utf8(report_diagnostics_to_buffer(
-                &files.into(),
+                &new_package.package.file_map,
                 diags,
                 use_colors()
             ))
             .context("Unable to convert buffer to string")?
-        } else {
-            "".to_string()
-        },
-        if !missing_modules.is_empty() {
-            format!(
-                "The following modules are missing from the new package: {}\n",
-                format_list(missing_modules.iter().map(|m| format!("'{m}'")), None)
-            )
         } else {
             "".to_string()
         },
@@ -808,6 +801,39 @@ fn module_compatibility_error_diag(
                 "The upgrade policy is set to '{}'.",
                 policy.to_string().to_lowercase()
             ),
+        ],
+    ));
+
+    Ok(diags)
+}
+
+fn missing_module_diag(
+    module_name: &Identifier,
+    move_toml_hash: &FileHash,
+    move_toml_contents: &Arc<str>,
+) -> Result<Diagnostics, Error> {
+    const PACKAGE_TABLE: &str = "[package]";
+    let mut diags = Diagnostics::new();
+
+    let start: usize = move_toml_contents.find(PACKAGE_TABLE).unwrap_or_default();
+    // default to the end of the package table definition
+    // get the third newline after the start of the package table declaration if it exists
+    let end = move_toml_contents[start..]
+        .match_indices('\n')
+        .take(3)
+        .last()
+        .map(|(idx, _)| start + idx)
+        .unwrap_or(start + PACKAGE_TABLE.len());
+
+    let loc = Loc::new(move_toml_hash.clone(), start as ByteIndex, end as ByteIndex);
+
+    diags.add(Diagnostic::new(
+        Declarations::ModuleMissing,
+        (loc, format!("Package is missing module '{module_name}'",)),
+        Vec::<(Loc, String)>::new(),
+        vec![
+            "Modules which are part package cannot be removed during an upgrade.".to_string(),
+            format!("add missing module '{module_name}' back to the package."),
         ],
     ));
 

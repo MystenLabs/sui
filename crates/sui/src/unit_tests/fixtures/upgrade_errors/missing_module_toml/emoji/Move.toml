@@ -1,0 +1,5 @@
+# Emojis are 4 bytes long, this test ensures proper parsing of UTF-8 bytes and check for improper mixing of byte and character indexes.
+😀[package]😀
+😀
+😀name = "emoji"😀
+😀
