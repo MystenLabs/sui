@@ -17,7 +17,6 @@ use sui_config::node::AuthorityOverloadConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_macros::nondeterministic;
-use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
@@ -190,22 +189,29 @@ pub fn create_fake_cert_and_effect_digest<'a>(
     )
 }
 
-pub fn compile_basics_package() -> CompiledPackage {
-    compile_example_package("../../examples/move/basics")
+#[cfg(test)]
+mod build_utils {
+    use std::path::PathBuf;
+    use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
+
+    pub fn compile_basics_package() -> CompiledPackage {
+        compile_example_package("../../examples/move/basics")
+    }
+
+    pub fn compile_managed_coin_package() -> CompiledPackage {
+        compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
+    }
+
+    pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push(relative_path);
+
+        BuildConfig::new_for_testing().build(&path).unwrap()
+    }
 }
 
-pub fn compile_managed_coin_package() -> CompiledPackage {
-    compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
-}
-
-pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push(relative_path);
-
-    BuildConfig::new_for_testing().build(&path).unwrap()
-}
-
+#[cfg(test)]
 async fn init_genesis(
     committee_size: usize,
     mut genesis_objects: Vec<Object>,
@@ -215,7 +221,10 @@ async fn init_genesis(
     ObjectID,
 ) {
     // add object_basics package object to genesis
-    let modules: Vec<_> = compile_basics_package().get_modules().cloned().collect();
+    let modules: Vec<_> = build_utils::compile_basics_package()
+        .get_modules()
+        .cloned()
+        .collect();
     let genesis_move_packages: Vec<_> = BuiltInFramework::genesis_move_packages().collect();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let pkg = Object::new_package(
@@ -265,6 +274,7 @@ async fn init_genesis(
     (genesis, key_pairs, pkg_id)
 }
 
+#[cfg(test)]
 pub async fn init_local_authorities(
     committee_size: usize,
     genesis_objects: Vec<Object>,
@@ -285,6 +295,7 @@ pub async fn init_local_authorities(
     (aggregator, authorities, genesis, framework)
 }
 
+#[cfg(test)]
 pub async fn init_local_authorities_with_overload_thresholds(
     committee_size: usize,
     genesis_objects: Vec<Object>,
@@ -307,6 +318,7 @@ pub async fn init_local_authorities_with_overload_thresholds(
     (aggregator, authorities, genesis, framework)
 }
 
+#[cfg(test)]
 pub async fn init_local_authorities_with_genesis(
     genesis: &Genesis,
     authorities: Vec<Arc<AuthorityState>>,
