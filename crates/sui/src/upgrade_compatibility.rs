@@ -588,6 +588,13 @@ fn compare_packages(
             .to_string(),
     );
     let move_toml_hash = FileHash::new(&move_toml_contents);
+
+    new_package.package.file_map.add(
+        FileHash::new(&move_toml_contents),
+        FileName::from(move_toml_path.to_string_lossy()),
+        Arc::clone(&move_toml_contents),
+    );
+
     for (name, err) in errors {
         if let UpgradeCompatibilityModeError::ModuleMissing { name, .. } = &err {
             diags.extend(missing_module_diag(
@@ -609,12 +616,6 @@ fn compare_packages(
             &lookup[&name],
         )?);
     }
-
-    new_package.package.file_map.add(
-        FileHash::new(&move_toml_contents),
-        FileName::from(move_toml_path.to_string_lossy()),
-        move_toml_contents,
-    );
 
     // use colors but inline
     Err(anyhow!(
