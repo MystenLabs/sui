@@ -8,7 +8,7 @@ error[Compatibility E01003]: ability mismatch
 10 │     public struct AddExtraAbility has copy {} // added copy
    │                   ^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of struct 'AddExtraAbility': none.
 
 error[Compatibility E01003]: ability mismatch
@@ -17,7 +17,7 @@ error[Compatibility E01003]: ability mismatch
 11 │     public struct RemoveAbility has drop {} // removed copy
    │                   ^^^^^^^^^^^^^ Missing ability: 'copy'
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of struct 'RemoveAbility': 'copy' and 'drop'.
 
 error[Compatibility E01003]: ability mismatch
@@ -26,7 +26,7 @@ error[Compatibility E01003]: ability mismatch
 12 │     public struct AddAndRemoveAbility has drop, store {} // remove copy, add store
    │                   ^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'store'
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of struct 'AddAndRemoveAbility': 'copy' and 'drop'.
 
 error[Compatibility E01003]: ability mismatch
@@ -35,7 +35,7 @@ error[Compatibility E01003]: ability mismatch
 13 │     public struct RemoveMultipleAbilities has drop {} // remove copy, store
    │                   ^^^^^^^^^^^^^^^^^^^^^^^ Missing abilities: 'copy' and 'store'
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of struct 'RemoveMultipleAbilities': 'copy', 'drop', and 'store'.
 
 error[Compatibility E01003]: ability mismatch
@@ -44,7 +44,7 @@ error[Compatibility E01003]: ability mismatch
 14 │     public struct AddMultipleAbilities has drop, copy {}
    │                   ^^^^^^^^^^^^^^^^^^^^ Unexpected abilities: 'copy' and 'drop'
    │
-   = Structs are part of a module's public interface and cannot be changed during an upgrade.
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of struct 'AddMultipleAbilities': none.
 
 error[Compatibility E01002]: type mismatch
