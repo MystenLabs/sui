@@ -74,6 +74,7 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
     /// the number of rows affected. This function is optional, and defaults to not pruning at all.
     async fn prune(
+        &self,
         _from: u64,
         _to_exclusive: u64,
         _conn: &mut db::Connection<'_>,
@@ -214,9 +215,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     // the global cancel signal. We achieve this by creating a child cancel token that we call
     // cancel on once the committer tasks have shutdown.
     let pruner_cancel = cancel.child_token();
+    let handler = Arc::new(handler);
 
     let processor = processor(
-        handler,
+        handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
@@ -259,7 +261,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.clone(),
     );
 
-    let pruner = pruner::<H>(pruner_config, db, metrics, pruner_cancel.clone());
+    let pruner = pruner(handler, pruner_config, db, metrics, pruner_cancel.clone());
 
     tokio::spawn(async move {
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
