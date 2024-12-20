@@ -47,7 +47,7 @@ async fn get_object() {
     assert_eq!(object_id, Some(id.into()));
     assert!(version.is_some());
     assert!(digest.is_some());
-    assert!(object.is_some());
+    assert!(object.is_none());
     assert!(object_bcs.is_none()); // By default object_bcs isn't returned
 
     let GetObjectResponse {

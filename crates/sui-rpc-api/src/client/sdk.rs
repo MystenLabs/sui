@@ -126,7 +126,10 @@ impl Client {
     pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<Object>> {
         let url = self.url().join(&format!("objects/{object_id}"))?;
 
-        let request = self.inner.get(url);
+        let request = self.inner.get(url).query(&crate::types::GetObjectOptions {
+            object: Some(true),
+            object_bcs: None,
+        });
 
         self.json::<crate::ObjectResponse>(request)
             .await?
@@ -142,7 +145,10 @@ impl Client {
             .url()
             .join(&format!("objects/{object_id}/version/{version}"))?;
 
-        let request = self.inner.get(url);
+        let request = self.inner.get(url).query(&crate::types::GetObjectOptions {
+            object: Some(true),
+            object_bcs: None,
+        });
 
         self.json::<crate::ObjectResponse>(request)
             .await?

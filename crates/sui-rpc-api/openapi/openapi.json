@@ -117,9 +117,9 @@
           {
             "in": "query",
             "name": "signature",
-            "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -127,9 +127,9 @@
           {
             "in": "query",
             "name": "summary",
-            "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -249,9 +249,9 @@
           {
             "in": "query",
             "name": "object",
-            "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request that `Object` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request that `Object` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -315,9 +315,9 @@
           {
             "in": "query",
             "name": "object",
-            "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request that `Object` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request that `Object` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request that `Object` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -480,9 +480,9 @@
           {
             "in": "query",
             "name": "signature",
-            "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `ValidatorAggregatedSignature` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -490,9 +490,9 @@
           {
             "in": "query",
             "name": "summary",
-            "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `CheckpointSummary` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -559,9 +559,9 @@
           {
             "in": "query",
             "name": "effects",
-            "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -579,9 +579,9 @@
           {
             "in": "query",
             "name": "events",
-            "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -599,9 +599,9 @@
           {
             "in": "query",
             "name": "signatures",
-            "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -619,9 +619,9 @@
           {
             "in": "query",
             "name": "transaction",
-            "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `Transaction` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `Transaction` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -691,9 +691,9 @@
           {
             "in": "query",
             "name": "effects",
-            "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `TransactionEffects` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -711,9 +711,9 @@
           {
             "in": "query",
             "name": "events",
-            "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `TransactionEvents` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -731,9 +731,9 @@
           {
             "in": "query",
             "name": "signatures",
-            "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `Vec<UserSignature>` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -751,9 +751,9 @@
           {
             "in": "query",
             "name": "transaction",
-            "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+            "description": "Request `Transaction` be included in the response\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `Transaction` be included in the response\n\nDefaults to `true` if not provided.",
+              "description": "Request `Transaction` be included in the response\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -816,9 +816,9 @@
           {
             "in": "query",
             "name": "effects",
-            "description": "Request `TransactionEffects` be included in the Response.\n\nDefaults to `true` if not provided.",
+            "description": "Request `TransactionEffects` be included in the Response.\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `TransactionEffects` be included in the Response.\n\nDefaults to `true` if not provided.",
+              "description": "Request `TransactionEffects` be included in the Response.\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"
@@ -836,9 +836,9 @@
           {
             "in": "query",
             "name": "events",
-            "description": "Request `TransactionEvents` be included in the Response.\n\nDefaults to `true` if not provided.",
+            "description": "Request `TransactionEvents` be included in the Response.\n\nDefaults to `false` if not provided.",
             "schema": {
-              "description": "Request `TransactionEvents` be included in the Response.\n\nDefaults to `true` if not provided.",
+              "description": "Request `TransactionEvents` be included in the Response.\n\nDefaults to `false` if not provided.",
               "type": "boolean"
             },
             "style": "form"

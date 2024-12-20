@@ -96,7 +96,7 @@ pub struct ObjectResponse {
 pub struct GetObjectOptions {
     /// Request that `Object` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object: Option<bool>,
     /// Request that `Object` formated as BCS be included in the response
@@ -108,7 +108,7 @@ pub struct GetObjectOptions {
 
 impl GetObjectOptions {
     pub fn include_object(&self) -> bool {
-        self.object.unwrap_or(true)
+        self.object.unwrap_or(false)
     }
 
     pub fn include_object_bcs(&self) -> bool {
@@ -149,7 +149,7 @@ pub struct CheckpointResponse {
 pub struct GetCheckpointOptions {
     /// Request `CheckpointSummary` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<bool>,
 
@@ -161,7 +161,7 @@ pub struct GetCheckpointOptions {
 
     /// Request `ValidatorAggregatedSignature` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<bool>,
 
@@ -180,7 +180,7 @@ pub struct GetCheckpointOptions {
 
 impl GetCheckpointOptions {
     pub fn include_summary(&self) -> bool {
-        self.summary.unwrap_or(true)
+        self.summary.unwrap_or(false)
     }
 
     pub fn include_summary_bcs(&self) -> bool {
@@ -188,7 +188,7 @@ impl GetCheckpointOptions {
     }
 
     pub fn include_signature(&self) -> bool {
-        self.signature.unwrap_or(true)
+        self.signature.unwrap_or(false)
     }
 
     pub fn include_contents(&self) -> bool {
@@ -256,7 +256,7 @@ pub struct TransactionResponse {
 pub struct GetTransactionOptions {
     /// Request `Transaction` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<bool>,
 
@@ -268,7 +268,7 @@ pub struct GetTransactionOptions {
 
     /// Request `Vec<UserSignature>` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signatures: Option<bool>,
 
@@ -280,7 +280,7 @@ pub struct GetTransactionOptions {
 
     /// Request `TransactionEffects` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<bool>,
 
@@ -292,7 +292,7 @@ pub struct GetTransactionOptions {
 
     /// Request `TransactionEvents` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<bool>,
 
@@ -305,7 +305,7 @@ pub struct GetTransactionOptions {
 
 impl GetTransactionOptions {
     pub fn include_transaction(&self) -> bool {
-        self.transaction.unwrap_or(true)
+        self.transaction.unwrap_or(false)
     }
 
     pub fn include_transaction_bcs(&self) -> bool {
@@ -313,7 +313,7 @@ impl GetTransactionOptions {
     }
 
     pub fn include_signatures(&self) -> bool {
-        self.signatures.unwrap_or(true)
+        self.signatures.unwrap_or(false)
     }
 
     pub fn include_signatures_bytes(&self) -> bool {
@@ -321,7 +321,7 @@ impl GetTransactionOptions {
     }
 
     pub fn include_effects(&self) -> bool {
-        self.effects.unwrap_or(true)
+        self.effects.unwrap_or(false)
     }
 
     pub fn include_effects_bcs(&self) -> bool {
@@ -329,7 +329,7 @@ impl GetTransactionOptions {
     }
 
     pub fn include_events(&self) -> bool {
-        self.events.unwrap_or(true)
+        self.events.unwrap_or(false)
     }
 
     pub fn include_events_bcs(&self) -> bool {
@@ -342,7 +342,7 @@ impl GetTransactionOptions {
 pub struct ExecuteTransactionOptions {
     /// Request `TransactionEffects` be included in the Response.
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<bool>,
 
@@ -354,7 +354,7 @@ pub struct ExecuteTransactionOptions {
 
     /// Request `TransactionEvents` be included in the Response.
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<bool>,
 
@@ -369,24 +369,11 @@ pub struct ExecuteTransactionOptions {
     /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub balance_changes: Option<bool>,
-    // TODO determine if we want to provide the same level of options for Objects here as we do in
-    // the get_object apis
-    // /// Request input `Object`s be included in the Response.
-    // ///
-    // /// Defaults to `false` if not provided.
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub input_objects: Option<bool>,
-
-    // /// Request output `Object`s be included in the Response.
-    // ///
-    // /// Defaults to `false` if not provided.
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub output_objects: Option<bool>,
 }
 
 impl ExecuteTransactionOptions {
     pub fn include_effects(&self) -> bool {
-        self.effects.unwrap_or(true)
+        self.effects.unwrap_or(false)
     }
 
     pub fn include_effects_bcs(&self) -> bool {
@@ -394,7 +381,7 @@ impl ExecuteTransactionOptions {
     }
 
     pub fn include_events(&self) -> bool {
-        self.events.unwrap_or(true)
+        self.events.unwrap_or(false)
     }
 
     pub fn include_events_bcs(&self) -> bool {
@@ -462,7 +449,7 @@ pub enum EffectsFinality {
 pub struct GetFullCheckpointOptions {
     /// Request `CheckpointSummary` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<bool>,
 
@@ -474,7 +461,7 @@ pub struct GetFullCheckpointOptions {
 
     /// Request `ValidatorAggregatedSignature` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<bool>,
 
@@ -492,7 +479,7 @@ pub struct GetFullCheckpointOptions {
 
     /// Request `Transaction` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<bool>,
 
@@ -504,7 +491,7 @@ pub struct GetFullCheckpointOptions {
 
     /// Request `TransactionEffects` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<bool>,
 
@@ -516,7 +503,7 @@ pub struct GetFullCheckpointOptions {
 
     /// Request `TransactionEvents` be included in the response
     ///
-    /// Defaults to `true` if not provided.
+    /// Defaults to `false` if not provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<bool>,
 
@@ -553,7 +540,7 @@ pub struct GetFullCheckpointOptions {
 
 impl GetFullCheckpointOptions {
     pub fn include_summary(&self) -> bool {
-        self.summary.unwrap_or(true)
+        self.summary.unwrap_or(false)
     }
 
     pub fn include_summary_bcs(&self) -> bool {
@@ -561,7 +548,7 @@ impl GetFullCheckpointOptions {
     }
 
     pub fn include_signature(&self) -> bool {
-        self.signature.unwrap_or(true)
+        self.signature.unwrap_or(false)
     }
 
     pub fn include_contents(&self) -> bool {
@@ -573,7 +560,7 @@ impl GetFullCheckpointOptions {
     }
 
     pub fn include_transaction(&self) -> bool {
-        self.transaction.unwrap_or(true)
+        self.transaction.unwrap_or(false)
     }
 
     pub fn include_transaction_bcs(&self) -> bool {
@@ -581,7 +568,7 @@ impl GetFullCheckpointOptions {
     }
 
     pub fn include_effects(&self) -> bool {
-        self.effects.unwrap_or(true)
+        self.effects.unwrap_or(false)
     }
 
     pub fn include_effects_bcs(&self) -> bool {
@@ -589,7 +576,7 @@ impl GetFullCheckpointOptions {
     }
 
     pub fn include_events(&self) -> bool {
-        self.events.unwrap_or(true)
+        self.events.unwrap_or(false)
     }
 
     pub fn include_events_bcs(&self) -> bool {

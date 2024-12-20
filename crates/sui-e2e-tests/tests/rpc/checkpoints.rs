@@ -71,9 +71,9 @@ async fn get_checkpoint() {
 
     assert!(sequence_number.is_some());
     assert!(digest.is_some());
-    assert!(summary.is_some());
+    assert!(summary.is_none());
     assert!(summary_bcs.is_none());
-    assert!(signature.is_some());
+    assert!(signature.is_none());
     assert!(contents.is_none());
     assert!(contents_bcs.is_none());
 
@@ -210,9 +210,9 @@ async fn get_full_checkpoint() {
 
     assert!(sequence_number.is_some());
     assert!(digest.is_some());
-    assert!(summary.is_some());
+    assert!(summary.is_none());
     assert!(summary_bcs.is_none());
-    assert!(signature.is_some());
+    assert!(signature.is_none());
     assert!(contents.is_none());
     assert!(contents_bcs.is_none());
 
@@ -230,14 +230,14 @@ async fn get_full_checkpoint() {
     } in transactions
     {
         assert!(digest.is_some());
-        assert!(transaction.is_some());
+        assert!(transaction.is_none());
         assert!(transaction_bcs.is_none());
-        assert!(effects.is_some());
+        assert!(effects.is_none());
         assert!(effects_bcs.is_none());
         if digest == Some(transaction_digest.into()) {
             found_transaction = true;
-            assert!(events.is_some());
         }
+        assert!(events.is_none());
         assert!(events_bcs.is_none());
         assert!(input_objects.is_none());
         assert!(output_objects.is_none());
