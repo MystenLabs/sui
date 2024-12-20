@@ -20,13 +20,15 @@ use crate::{
 use super::{Handler, PrunerConfig};
 
 /// The pruner task is responsible for deleting old data from the database. It will periodically
-/// check the `watermarks` table to see if there is any data that should be pruned -- between
-/// `pruner_hi` (inclusive), and `reader_lo` (exclusive).
+/// check the `watermarks` table to see if there is any data that should be pruned between the
+/// `pruner_hi` (inclusive), and `reader_lo` (exclusive) checkpoints. This task will also provide a
+/// mapping of the pruned checkpoints to their corresponding epoch and tx, which the handler can
+/// then use to delete the corresponding data from the database.
 ///
 /// To ensure that the pruner does not interfere with reads that are still in flight, it respects
 /// the watermark's `pruner_timestamp`, which records the time that `reader_lo` was last updated.
-/// The task will not prune data until at least `config.delay()` has passed since
-/// `pruner_timestamp` to give in-flight reads time to land.
+/// The task will not prune data until at least `config.delay()` has passed since `pruner_timestamp`
+/// to give in-flight reads time to land.
 ///
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
