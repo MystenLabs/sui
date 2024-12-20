@@ -27,6 +27,10 @@ pub trait Processor {
     /// How much concurrency to use when processing checkpoint data.
     const FANOUT: usize = 10;
 
+    /// Whether the pruner requires processed values in order to prune.
+    /// This will determine the first checkpoint to process when we start the pipeline.
+    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = false;
+
     /// The type of value being inserted by the handler.
     type Value: Send + Sync + 'static;
 
@@ -44,7 +48,7 @@ pub trait Processor {
 /// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
 /// an error -- there is no retry logic at this level.
 pub(super) fn processor<P: Processor + Send + Sync + 'static>(
-    processor: P,
+    processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
@@ -57,7 +61,6 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
             &metrics.latest_processed_checkpoint_timestamp_lag_ms,
             &metrics.latest_processed_checkpoint,
         );
-        let processor = Arc::new(processor);
 
         match ReceiverStream::new(rx)
             .try_for_each_spawned(P::FANOUT, |checkpoint| {
