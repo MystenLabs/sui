@@ -394,10 +394,6 @@ impl QualifiedInstId<DatatypeId> {
 pub struct GlobalEnv {
     /// A Files database for the codespan crate which supports diagnostics.
     source_files: Files<String>,
-    /// A map of FileId in the Files database to information about documentation comments in a file.
-    /// The comments are represented as map from ByteIndex into string, where the index is the
-    /// start position of the associated language item in the source.
-    doc_comments: BTreeMap<FileId, BTreeMap<ByteIndex, String>>,
     /// A mapping from file hash to file name and associated FileId. Though this information is
     /// already in `source_files`, we can't get it out of there so need to book keep here.
     file_hash_map: BTreeMap<FileHash, (String, FileId)>,
@@ -467,7 +463,6 @@ impl GlobalEnv {
         let internal_loc = fake_loc("<internal>");
         GlobalEnv {
             source_files,
-            doc_comments: Default::default(),
             unknown_loc,
             unknown_move_ir_loc,
             internal_loc,
@@ -634,11 +629,6 @@ impl GlobalEnv {
             }
         }
         target_modules
-    }
-
-    /// Adds documentation for a file.
-    pub fn add_documentation(&mut self, file_id: FileId, docs: BTreeMap<ByteIndex, String>) {
-        self.doc_comments.insert(file_id, docs);
     }
 
     /// Adds diagnostic to the environment.
@@ -1233,14 +1223,6 @@ impl GlobalEnv {
         )
     }
 
-    /// Get documentation associated with an item at Loc.
-    pub fn get_doc(&self, loc: &Loc) -> &str {
-        self.doc_comments
-            .get(&loc.file_id)
-            .and_then(|comments| comments.get(&loc.span.start()).map(|s| s.as_str()))
-            .unwrap_or("")
-    }
-
     /// Attempt to compute a struct tag for (`mid`, `sid`, `ts`). Returns `Some` if all types in
     /// `ts` are closed, `None` otherwise
     pub fn get_struct_tag(
@@ -1642,11 +1624,6 @@ impl<'env> ModuleEnv<'env> {
             }
             false
         }
-    }
-
-    /// Returns documentation associated with this module.
-    pub fn get_doc(&self) -> &str {
-        self.env.get_doc(&self.data.loc)
     }
 
     /// Shortcut for accessing the symbol pool.
@@ -2250,11 +2227,6 @@ impl<'env> EnumEnv<'env> {
         &self.data.attributes
     }
 
-    /// Get documentation associated with this enum.
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
-    }
-
     /// Gets the id associated with this enum.
     pub fn get_id(&self) -> DatatypeId {
         DatatypeId(self.data.name)
@@ -2484,23 +2456,6 @@ impl<'env> VariantEnv<'env> {
         self.data.loc.clone()
     }
 
-    /// Get documentation associated with this struct.
-    pub fn get_doc(&self) -> &str {
-        let def_idx = self.enum_env.data.def_idx;
-        let Ok(emap) = self
-            .enum_env
-            .module_env
-            .data
-            .source_map
-            .get_enum_source_map(def_idx)
-        else {
-            return "";
-        };
-        let variant_loc = emap.variants[self.data.tag].0 .1;
-        let loc = self.enum_env.module_env.env.to_loc(&variant_loc);
-        self.enum_env.module_env.env.get_doc(&loc)
-    }
-
     /// Gets the id associated with this variant.
     pub fn get_id(&self) -> VariantId {
         VariantId(self.data.name)
@@ -2651,11 +2606,6 @@ impl<'env> StructEnv<'env> {
     /// Returns the attributes of this struct.
     pub fn get_attributes(&self) -> &[Attribute] {
         &self.data.attributes
-    }
-
-    /// Get documentation associated with this struct.
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Gets the id associated with this struct.
@@ -2904,49 +2854,6 @@ impl<'env> FieldEnv<'env> {
         }
     }
 
-    /// Get documentation associated with this field.
-    pub fn get_doc(&self) -> &str {
-        match &self.data.info {
-            FieldInfo::DeclaredStruct { def_idx } => {
-                let Ok(smap) = self
-                    .parent_env
-                    .module_env()
-                    .data
-                    .source_map
-                    .get_struct_source_map(*def_idx)
-                else {
-                    return "";
-                };
-                let loc = self
-                    .parent_env
-                    .module_env()
-                    .env
-                    .to_loc(&smap.fields[self.data.offset]);
-                self.parent_env.module_env().env.get_doc(&loc)
-            }
-            FieldInfo::DeclaredEnum { def_idx } => {
-                let EnclosingEnv::Variant(v) = &self.parent_env else {
-                    unreachable!()
-                };
-                let Ok(emap) = self
-                    .parent_env
-                    .module_env()
-                    .data
-                    .source_map
-                    .get_enum_source_map(*def_idx)
-                else {
-                    return "";
-                };
-                let loc = self
-                    .parent_env
-                    .module_env()
-                    .env
-                    .to_loc(&emap.variants[v.data.tag].1[self.data.offset]);
-                self.parent_env.module_env().env.get_doc(&loc)
-            }
-        }
-    }
-
     /// Gets the type of this field.
     pub fn get_type(&self) -> Type {
         match &self.data.info {
@@ -3023,11 +2930,6 @@ impl<'env> NamedConstantEnv<'env> {
     /// Returns the id of this constant
     pub fn get_id(&self) -> NamedConstantId {
         NamedConstantId(self.data.name)
-    }
-
-    /// Returns documentation associated with this constant
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Returns the location of this constant
@@ -3163,11 +3065,6 @@ impl<'env> FunctionEnv<'env> {
     /// Gets the qualified id of this function.
     pub fn get_qualified_id(&self) -> QualifiedId<FunId> {
         self.module_env.get_id().qualified(self.get_id())
-    }
-
-    /// Get documentation associated with this function.
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Gets the definition index of this function.

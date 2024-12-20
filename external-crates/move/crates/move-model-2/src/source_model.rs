@@ -381,10 +381,6 @@ impl<'a> Module<'a> {
             .filename(&self.info().defined_loc.file_hash())
     }
 
-    pub fn doc(&self) -> &str {
-        todo!()
-    }
-
     pub fn deps(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
         &self.compiled.deps
     }
@@ -417,14 +413,6 @@ impl<'a> Struct<'a> {
 
     pub fn compiled(&self) -> &'a compiled_model::Struct {
         self.compiled
-    }
-
-    pub fn doc(&self) -> &str {
-        todo!()
-    }
-
-    pub fn field_doc(&self, _field: Symbol) -> &str {
-        todo!()
     }
 }
 
@@ -467,10 +455,6 @@ impl<'a> Enum<'a> {
             compiled: &self.compiled.variants[&name],
         }
     }
-
-    pub fn doc(&self) -> &str {
-        todo!()
-    }
 }
 
 impl<'a> Variant<'a> {
@@ -501,14 +485,6 @@ impl<'a> Variant<'a> {
     pub fn compiled(&self) -> &'a compiled_model::Variant {
         self.compiled
     }
-
-    pub fn doc(&self) -> &str {
-        todo!()
-    }
-
-    pub fn field_doc(&self, _field: Symbol) -> &str {
-        todo!()
-    }
 }
 
 impl<'a> Function<'a> {
@@ -534,10 +510,6 @@ impl<'a> Function<'a> {
 
     pub fn compiled(&self) -> &'a compiled_model::Function {
         self.compiled
-    }
-
-    pub fn doc(&self) -> &str {
-        todo!()
     }
 
     /// Returns an the functions called by this function.
@@ -574,10 +546,6 @@ impl<'a> Constant<'a> {
 
     pub fn compiled(&self) -> &'a compiled_model::Constant {
         self.compiled
-    }
-
-    pub fn doc(&self) -> &str {
-        todo!()
     }
 }
 
