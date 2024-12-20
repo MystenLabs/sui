@@ -29,12 +29,12 @@ use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
-pub(crate) mod bootstrap;
-pub mod config;
-pub(crate) mod handlers;
-
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
+pub(crate) mod bootstrap;
+pub mod config;
+pub(crate) mod consistent_pruning;
+pub(crate) mod handlers;
 
 pub async fn start_indexer(
     db_args: DbArgs,
@@ -193,7 +193,7 @@ pub async fn start_indexer(
     add_sequential!(SumPackages, sum_packages);
 
     add_consistent!(
-        ObjInfo, obj_info;
+        ObjInfo::default(), obj_info;
         ObjInfoPruner, obj_info_pruner
     );
 

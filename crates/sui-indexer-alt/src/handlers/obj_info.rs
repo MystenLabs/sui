@@ -11,7 +11,12 @@ use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_pg_db as db;
 use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object};
 
-pub(crate) struct ObjInfo;
+use crate::consistent_pruning::PruningLookupTable;
+
+#[derive(Default)]
+pub(crate) struct ObjInfo {
+    pruning_lookup_table: Arc<PruningLookupTable>,
+}
 
 pub(crate) enum ProcessedObjInfoUpdate {
     Insert(Object),

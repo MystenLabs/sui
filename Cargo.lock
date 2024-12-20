@@ -14027,6 +14027,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap",
+ "dashmap",
  "diesel",
  "diesel-async",
  "diesel_migrations",
