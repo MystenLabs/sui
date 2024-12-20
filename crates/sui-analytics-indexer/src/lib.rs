@@ -109,7 +109,7 @@ pub struct AnalyticsIndexerConfig {
     #[clap(long, value_enum, default_value = "csv", global = true)]
     pub file_format: FileFormat,
     // Type of data to write i.e. checkpoint, object, transaction, etc
-    #[clap(long, value_enum, long, global = true)]
+    #[clap(long, value_enum)]
     pub file_type: FileType,
     #[clap(
         long,

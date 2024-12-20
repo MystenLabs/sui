@@ -269,3 +269,33 @@ pub(crate) struct WrappedObjectEntry {
     pub(crate) json_path: String,
     pub(crate) struct_tag: Option<String>,
 }
+
+
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct OwnershipEntry {
+    // indexes
+    pub(crate) object_id: String,
+    pub(crate) version: u64,
+    pub(crate) digest: String,
+    pub(crate) type_: Option<String>,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    pub(crate) owner_type: Option<OwnerType>,
+    pub(crate) owner_address: Option<String>,
+    pub(crate) object_status: ObjectStatus,
+    pub(crate) initial_shared_version: Option<u64>,
+    pub(crate) previous_transaction: String,
+    pub(crate) has_public_transfer: bool,
+    pub(crate) storage_rebate: Option<u64>,
+    pub(crate) bcs: Option<String>,
+    pub(crate) coin_type: Option<String>,
+    pub(crate) coin_balance: Option<u64>,
+    pub(crate) struct_tag: Option<String>,
+    pub(crate) object_json: Option<String>,
+    pub(crate) previous_owner: Option<String>,
+    pub(crate) previous_version: Option<u64>,
+    pub(crate) previous_checkpoint: Option<u64>,    
+    pub(crate) previous_coin_type: Option<String>,
+    pub(crate) previous_type: Option<String>,
+}

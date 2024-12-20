@@ -29,6 +29,7 @@ pub mod package_handler;
 pub mod transaction_handler;
 pub mod transaction_objects_handler;
 pub mod wrapped_object_handler;
+pub mod ownership_handler;
 const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
     "0x1::string::String",
     "0x1::ascii::String",
