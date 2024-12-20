@@ -85,13 +85,10 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
-      - name: Install Foundryup
-        run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup;' } | bash
-          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry
         run: |
-          foundryup -i nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup -i nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
@@ -112,13 +109,10 @@ jobs:
     runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - name: Install Foundryup
-        run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup;' } | bash
-          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry
         run: |
-          foundryup -i nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup -i nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
