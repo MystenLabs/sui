@@ -45,7 +45,7 @@ use move_binary_format::{
         FunctionHandleIndex, FunctionInstantiation, SignatureIndex, SignatureToken,
         StructDefinitionIndex, StructFieldInformation, VariantJumpTable, Visibility,
     },
-    normalized::{FunctionRef, Type as MType},
+    normalized::{Enum, FunctionRef, Type as MType},
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
@@ -1508,6 +1508,14 @@ impl GlobalEnv {
         self.get_module(qid.module_id).into_struct(qid.id)
     }
 
+    pub fn get_enum_qid(&self, qid: QualifiedId<DatatypeId>) -> EnumEnv<'_> {
+        self.get_module(qid.module_id).into_enum(qid.id)
+    }
+
+    pub fn get_struct_or_enum_qid(&self, qid: QualifiedId<DatatypeId>) -> StructOrEnumEnv<'_> {
+        self.get_module(qid.module_id).into_struct_or_enum(qid.id)
+    }
+
     /// Gets a function by qualified id.
     pub fn get_function_qid(&self, qid: QualifiedId<FunId>) -> FunctionEnv<'_> {
         self.get_module(qid.module_id).into_function(qid.id)
@@ -2504,6 +2512,32 @@ impl<'env> ModuleEnv<'env> {
         self.clone().into_enums()
     }
 
+    /// Gets a StructEnv or an EnumEnv by id.
+    pub fn get_struct_or_enum(&self, id: DatatypeId) -> StructOrEnumEnv<'_> {
+        self.find_struct(id.symbol())
+            .map(|struct_env| StructOrEnumEnv::Struct(struct_env))
+            .or_else(|| {
+                self.find_enum(id.symbol())
+                    .map(|enum_env| StructOrEnumEnv::Enum(enum_env))
+            })
+            .expect(&format!(
+                "DatatypeId undefined: {}",
+                QualifiedSymbol {
+                    module_name: self.get_name().clone(),
+                    symbol: id.symbol(),
+                }
+                .display_full(self.symbol_pool())
+            ))
+    }
+
+    /// Gets a StructEnv or an EnumEnv by id, consuming this module env.
+    pub fn into_struct_or_enum(self, id: DatatypeId) -> StructOrEnumEnv<'env> {
+        match self.get_struct_or_enum(id) {
+            StructOrEnumEnv::Struct { .. } => StructOrEnumEnv::Struct(self.into_struct(id)),
+            StructOrEnumEnv::Enum { .. } => StructOrEnumEnv::Enum(self.into_enum(id)),
+        }
+    }
+
     /// Returns an iterator over all object types declared by this module
     pub fn get_objects(&'env self) -> impl Iterator<Item = StructEnv<'env>> {
         self.clone()
@@ -2828,6 +2862,11 @@ impl<'env> ModuleEnv<'env> {
             || self.is_module_in_ext("table")
             || self.is_module_in_ext("table_with_length")
     }
+}
+
+pub enum StructOrEnumEnv<'env> {
+    Struct(StructEnv<'env>),
+    Enum(EnumEnv<'env>),
 }
 
 // =================================================================================================
@@ -4848,7 +4887,10 @@ pub trait GetNameString {
 
 impl GetNameString for QualifiedId<DatatypeId> {
     fn get_name_for_display(&self, env: &GlobalEnv) -> String {
-        env.get_struct_qid(*self).get_full_name_str()
+        match env.get_struct_or_enum_qid(*self) {
+            StructOrEnumEnv::Struct(struct_env) => struct_env.get_full_name_str(),
+            StructOrEnumEnv::Enum(enum_env) => enum_env.get_full_name_str(),
+        }
     }
 }
 

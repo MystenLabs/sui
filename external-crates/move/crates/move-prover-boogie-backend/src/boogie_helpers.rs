@@ -13,8 +13,8 @@ use move_binary_format::file_format::TypeParameterIndex;
 use move_model::{
     ast::{MemoryLabel, TempIndex, Value},
     model::{
-        DatatypeId, EnclosingEnv, FieldEnv, FunctionEnv, GlobalEnv, ModuleEnv, QualifiedInstId,
-        SpecFunId, StructEnv, SCRIPT_MODULE_NAME,
+        DatatypeId, EnclosingEnv, EnumEnv, FieldEnv, FunctionEnv, GlobalEnv, ModuleEnv,
+        QualifiedInstId, SpecFunId, StructEnv, StructOrEnumEnv, VariantEnv, SCRIPT_MODULE_NAME,
     },
     pragmas::INTRINSIC_TYPE_MAP,
     symbol::Symbol,
@@ -83,6 +83,45 @@ pub fn boogie_field_update(field_env: &FieldEnv<'_>, inst: &[Type]) -> String {
         "$Update'{}'_{}",
         suffix,
         field_env.get_name().display(struct_env.symbol_pool()),
+    )
+}
+
+/// Return boogie name of given enum.
+pub fn boogie_enum_name(enum_env: &EnumEnv<'_>, inst: &[Type]) -> String {
+    format!(
+        "${}_{}{}",
+        boogie_module_name(&enum_env.module_env),
+        enum_env.get_name().display(enum_env.symbol_pool()),
+        boogie_inst_suffix(enum_env.module_env.env, inst)
+    )
+}
+
+/// Return field selector for given field.
+pub fn boogie_enum_field_name(field_env: &FieldEnv<'_>) -> String {
+    let EnclosingEnv::Variant(variant_env) = &field_env.parent_env else {
+        unreachable!();
+    };
+    format!(
+        "${}_{}",
+        variant_env
+            .get_name()
+            .display(variant_env.enum_env.symbol_pool()),
+        field_env
+            .get_name()
+            .display(variant_env.enum_env.symbol_pool()),
+    )
+}
+
+pub fn boogie_enum_variant_ctor_name(variant_env: &VariantEnv<'_>, inst: &[Type]) -> String {
+    format!(
+        "${}_{}_{}{}",
+        boogie_module_name(&variant_env.enum_env.module_env),
+        variant_env
+            .enum_env
+            .get_name()
+            .display(variant_env.symbol_pool()),
+        variant_env.get_name().display(variant_env.symbol_pool()),
+        boogie_inst_suffix(variant_env.enum_env.module_env.env, inst)
     )
 }
 
@@ -265,9 +304,10 @@ pub fn boogie_type(env: &GlobalEnv, ty: &Type) -> String {
             Range | EventStore => panic!("unexpected type"),
         },
         Vector(et) => format!("Vec ({})", boogie_type(env, et)),
-        Datatype(mid, sid, inst) => {
-            boogie_struct_name(&env.get_module(*mid).into_struct(*sid), inst)
-        }
+        Datatype(mid, did, inst) => match env.get_struct_or_enum_qid(mid.qualified(*did)) {
+            StructOrEnumEnv::Struct(struct_env) => boogie_struct_name(&struct_env, inst),
+            StructOrEnumEnv::Enum(enum_env) => boogie_enum_name(&enum_env, inst),
+        },
         Reference(_, bt) => format!("$Mutation ({})", boogie_type(env, bt)),
         TypeParameter(idx) => boogie_type_param(env, *idx),
         Fun(..) | Tuple(..) | TypeDomain(..) | ResourceDomain(..) | Error | Var(..) => {
@@ -386,9 +426,12 @@ pub fn boogie_type_suffix_bv(env: &GlobalEnv, ty: &Type, bv_flag: bool) -> Strin
             "vec{}",
             boogie_inst_suffix_bv(env, &[et.as_ref().to_owned()], &[bv_flag])
         ),
-        Datatype(mid, sid, inst) => {
-            boogie_type_suffix_for_struct(&env.get_module(*mid).into_struct(*sid), inst, bv_flag)
-        }
+        Datatype(mid, did, inst) => match env.get_struct_or_enum_qid(mid.qualified(*did)) {
+            StructOrEnumEnv::Struct(struct_env) => {
+                boogie_type_suffix_for_struct(&struct_env, inst, bv_flag)
+            }
+            StructOrEnumEnv::Enum(enum_env) => boogie_enum_name(&enum_env, inst),
+        },
         TypeParameter(idx) => boogie_type_param(env, *idx),
         Fun(..) | Tuple(..) | TypeDomain(..) | ResourceDomain(..) | Error | Var(..)
         | Reference(..) => format!("<<unsupported {:?}>>", ty),

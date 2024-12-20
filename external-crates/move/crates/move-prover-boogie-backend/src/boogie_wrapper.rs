@@ -25,7 +25,9 @@ use move_binary_format::file_format::FunctionDefinitionIndex;
 use move_model::{
     ast::TempIndex,
     code_writer::CodeWriter,
-    model::{FunId, GlobalEnv, Loc, ModuleId, NodeId, QualifiedId, StructEnv},
+    model::{
+        EnumEnv, FunId, GlobalEnv, Loc, ModuleId, NodeId, QualifiedId, StructEnv, StructOrEnumEnv,
+    },
     pragmas::INTRINSIC_TYPE_MAP,
     ty::{PrimitiveType, Type},
 };
@@ -136,7 +138,7 @@ impl<'env> BoogieWrapper<'env> {
                 task,
                 self.options.num_instances,
                 self.options.sequential_task,
-                self.options.hard_timeout_secs
+                self.options.hard_timeout_secs,
             )
         };
         let output = match output_res {
@@ -1421,11 +1423,20 @@ impl ModelValue {
             }
             Type::Vector(param) => self.pretty_vector(wrapper, model, param),
             Type::Datatype(module_id, struct_id, params) => {
-                let struct_env = wrapper.env.get_struct_qid(module_id.qualified(*struct_id));
-                if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-                    self.pretty_table(wrapper, model, &params[0], &params[1])
-                } else {
-                    self.pretty_struct(wrapper, model, &struct_env, params)
+                match wrapper
+                    .env
+                    .get_struct_or_enum_qid(module_id.qualified(*struct_id))
+                {
+                    StructOrEnumEnv::Struct(struct_env) => {
+                        if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+                            self.pretty_table(wrapper, model, &params[0], &params[1])
+                        } else {
+                            self.pretty_struct(wrapper, model, &struct_env, params)
+                        }
+                    }
+                    StructOrEnumEnv::Enum(enum_env) => {
+                        self.pretty_enum(wrapper, model, &enum_env, params)
+                    }
                 }
             }
             Type::Reference(_, bt) => {
@@ -1557,6 +1568,17 @@ impl ModelValue {
             ))
             .append(Self::pretty_vec_or_struct_body(entries)),
         )
+    }
+
+    /// Pretty prints an enum.
+    pub fn pretty_enum(
+        &self,
+        wrapper: &BoogieWrapper,
+        model: &Model,
+        struct_env: &EnumEnv,
+        inst: &[Type],
+    ) -> Option<PrettyDoc> {
+        Some(PrettyDoc::text("<unimplemented enum pretty printer>"))
     }
 
     /// Pretty prints a table.

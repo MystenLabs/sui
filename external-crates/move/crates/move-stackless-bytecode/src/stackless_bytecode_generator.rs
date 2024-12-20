@@ -85,6 +85,16 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     self.fallthrough_labels.insert(fall_through_label);
                 }
             };
+            if let MoveBytecode::VariantSwitch(jump_table_idx) = bytecode {
+                let JumpTableInner::Full(ref jump_table) =
+                    self.func_env.get_jump_tables()[jump_table_idx.0 as usize].jump_table;
+                for offset in jump_table {
+                    if label_map.get(offset).is_none() {
+                        let label = Label::new(label_map.len());
+                        label_map.insert(*offset, label);
+                    }
+                }
+            }
         }
 
         // Generate bytecode.

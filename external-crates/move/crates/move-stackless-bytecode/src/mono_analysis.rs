@@ -14,11 +14,10 @@ use std::{
 use itertools::Itertools;
 
 use move_model::{
-    ast,
-    ast::{Condition, ConditionKind, ExpData},
+    ast::{self, Condition, ConditionKind, ExpData},
     model::{
-        DatatypeId, FunId, GlobalEnv, ModuleId, QualifiedId, QualifiedInstId, SpecFunId, SpecVarId,
-        StructEnv,
+        DatatypeId, EnumEnv, FunId, GlobalEnv, ModuleId, QualifiedId, QualifiedInstId, SpecFunId,
+        SpecVarId, StructEnv, StructOrEnumEnv,
     },
     pragmas::INTRINSIC_TYPE_MAP,
     ty::{Type, TypeDisplayContext, TypeInstantiationDerivation, TypeUnificationAdapter, Variance},
@@ -649,8 +648,11 @@ impl<'a> Analyzer<'a> {
             Type::Vector(et) => {
                 self.info.vec_inst.insert(et.as_ref().clone());
             }
-            Type::Datatype(mid, sid, targs) => {
-                self.add_struct(self.env.get_module(*mid).into_struct(*sid), targs)
+            Type::Datatype(mid, did, targs) => {
+                match self.env.get_struct_or_enum_qid(mid.qualified(*did)) {
+                    StructOrEnumEnv::Struct(struct_env) => self.add_struct(struct_env, targs),
+                    StructOrEnumEnv::Enum(enum_env) => self.add_enum(enum_env, targs),
+                }
             }
             Type::TypeParameter(idx) => {
                 self.info.type_params.insert(*idx);
@@ -679,6 +681,19 @@ impl<'a> Analyzer<'a> {
                 .or_default()
                 .insert(targs.to_owned());
             for field in struct_.get_fields() {
+                self.add_type(&field.get_type().instantiate(targs));
+            }
+        }
+    }
+
+    fn add_enum(&mut self, enum_: EnumEnv<'_>, targs: &[Type]) {
+        self.info
+            .structs
+            .entry(enum_.get_qualified_id())
+            .or_default()
+            .insert(targs.to_owned());
+        for variant in enum_.get_variants() {
+            for field in variant.get_fields() {
                 self.add_type(&field.get_type().instantiate(targs));
             }
         }

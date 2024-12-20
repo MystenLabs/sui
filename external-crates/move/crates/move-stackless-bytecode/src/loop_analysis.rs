@@ -301,6 +301,13 @@ impl LoopAnalysisProcessor {
                         .unwrap_or(else_label);
                     Bytecode::Branch(*attr_id, new_if_label, new_else_label, *idx)
                 }
+                Bytecode::VariantSwitch(attr_id, idx, labels) => {
+                    let new_labels = labels
+                        .iter()
+                        .map(|label| *invariant_checker_labels.get(label).unwrap_or(label))
+                        .collect();
+                    Bytecode::VariantSwitch(*attr_id, *idx, new_labels)
+                }
                 _ => panic!("Expect a branch statement"),
             };
             builder.data.code[code_offset] = updated_goto;
@@ -478,7 +485,9 @@ impl LoopAnalysisProcessor {
                         val_targets,
                         mut_targets,
                         back_edges,
-                        loop_invariant: LoopInvariant { code: invariant_code },
+                        loop_invariant: LoopInvariant {
+                            code: invariant_code,
+                        },
                         spec_global_var_mut,
                     },
                 );

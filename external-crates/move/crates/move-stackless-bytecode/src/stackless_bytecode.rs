@@ -127,6 +127,10 @@ pub enum Operation {
     Pack(ModuleId, DatatypeId, Vec<Type>),
     Unpack(ModuleId, DatatypeId, Vec<Type>),
 
+    // Variants
+    PackVariant(ModuleId, DatatypeId, VariantId, Vec<Type>),
+    UnpackVariant(ModuleId, DatatypeId, VariantId, Vec<Type>, RefType),
+
     // Resources
     MoveTo(ModuleId, DatatypeId, Vec<Type>),
     MoveFrom(ModuleId, DatatypeId, Vec<Type>),
@@ -186,10 +190,6 @@ pub enum Operation {
     Eq,
     Neq,
     CastU256,
-
-    // Variants
-    PackVariant(ModuleId, DatatypeId, VariantId, Vec<Type>),
-    UnpackVariant(ModuleId, DatatypeId, VariantId, Vec<Type>, RefType),
 
     // Debugging
     TraceLocal(TempIndex),
@@ -367,6 +367,7 @@ pub enum AbortAction {
 /// The stackless bytecode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Bytecode {
+    Load(AttrId, TempIndex, Constant),
     Assign(AttrId, TempIndex, TempIndex, AssignKind),
 
     Call(
@@ -378,11 +379,9 @@ pub enum Bytecode {
     ),
     Ret(AttrId, Vec<TempIndex>),
 
-    VariantSwitch(AttrId, TempIndex, Vec<Label>),
-
-    Load(AttrId, TempIndex, Constant),
     Branch(AttrId, Label, Label, TempIndex),
     Jump(AttrId, Label),
+    VariantSwitch(AttrId, TempIndex, Vec<Label>),
     Label(AttrId, Label),
     Abort(AttrId, TempIndex),
     Nop(AttrId),
@@ -576,6 +575,7 @@ impl Bytecode {
             Branch(attr, if_label, else_label, cond) => {
                 Branch(attr, if_label, else_label, f(true, cond))
             }
+            VariantSwitch(attr, idx, labels) => VariantSwitch(attr, f(true, idx), labels),
             Abort(attr, cond) => Abort(attr, f(true, cond)),
             Prop(attr, kind, exp) => {
                 let new_exp = Bytecode::remap_exp(func_target, &mut |idx| f(true, idx), exp);
@@ -619,6 +619,17 @@ impl Bytecode {
                     Unpack(mid, sid, tys) => {
                         Unpack(*mid, *sid, Type::instantiate_slice(tys, params))
                     }
+                    // enum
+                    PackVariant(mid, sid, vid, tys) => {
+                        PackVariant(*mid, *sid, *vid, Type::instantiate_slice(tys, params))
+                    }
+                    UnpackVariant(mid, sid, vid, tys, ref_type) => UnpackVariant(
+                        *mid,
+                        *sid,
+                        *vid,
+                        Type::instantiate_slice(tys, params),
+                        *ref_type,
+                    ),
                     BorrowField(mid, sid, tys, field_num) => {
                         BorrowField(*mid, *sid, Type::instantiate_slice(tys, params), *field_num)
                     }
@@ -773,6 +784,11 @@ impl Bytecode {
                 *subst.get(if_label).unwrap_or(if_label),
                 *subst.get(else_label).unwrap_or(else_label),
                 *idx,
+            ),
+            VariantSwitch(attr_id, idx, labels) => VariantSwitch(
+                *attr_id,
+                *idx,
+                labels.iter().map(|l| *subst.get(l).unwrap_or(l)).collect(),
             ),
             _ => self.clone(),
         }

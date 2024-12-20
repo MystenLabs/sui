@@ -275,6 +275,24 @@ impl<'a> LiveVarAnalysis<'a> {
                     new_bytecodes.append(&mut bytecodes);
                     transformed_code.push(Bytecode::Branch(attr_id, then_label, else_label, src));
                 }
+                Bytecode::VariantSwitch(attr_id, src, labels) => {
+                    let new_labels = labels
+                        .into_iter()
+                        .map(|label| {
+                            let (new_label, mut bytecodes) = self.create_block_to_destroy_refs(
+                                label,
+                                self.lost_refs_along_edge(
+                                    annotations,
+                                    code_offset as CodeOffset,
+                                    label_to_code_offset[&label],
+                                ),
+                            );
+                            new_bytecodes.append(&mut bytecodes);
+                            new_label
+                        })
+                        .collect();
+                    transformed_code.push(Bytecode::VariantSwitch(attr_id, src, new_labels));
+                }
                 Bytecode::Load(_, dest, _) | Bytecode::Assign(_, dest, _, _)
                     if !annotation_at.after.contains(&dest) =>
                 {
