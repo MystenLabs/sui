@@ -1422,6 +1422,7 @@ pub fn make_constant_type(
     context.emit_warning_if_deprecated(m, c.0, None);
     let (defined_loc, signature) = {
         let ConstantInfo {
+            doc: _,
             attributes: _,
             defined_loc,
             signature,

@@ -411,9 +411,9 @@ impl<'input> Lexer<'input> {
     }
 
     pub fn advance_doc_comment(&mut self) {
-        self.current_doc_comment
-            .take()
-            .map(|c| self.unmatched_doc_comments.push(c));
+        if let Some(c) = self.current_doc_comment.take() {
+            self.unmatched_doc_comments.push(c)
+        }
         self.current_doc_comment = None;
     }
 
@@ -424,7 +424,7 @@ impl<'input> Lexer<'input> {
             }
             Some((_doc_start, doc_end, s)) => {
                 *doc_end = end as u32;
-                s.push_str("\n");
+                s.push('\n');
                 s.push_str(comment);
             }
         }

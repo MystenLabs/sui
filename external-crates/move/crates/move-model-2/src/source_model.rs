@@ -714,7 +714,7 @@ impl StructData {
 impl EnumData {
     fn new(module: &file_format::CompiledModule, def: &file_format::EnumDefinition) -> Self {
         let mut variants = BTreeMap::new();
-        for (_tag, variant) in def.variants.iter().enumerate() {
+        for variant in &def.variants {
             let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());
             let data = VariantData::new();
             let prev = variants.insert(name, data);

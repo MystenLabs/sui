@@ -18,7 +18,7 @@ use move_compiler::{
     shared::{files::ByteSpan, known_attributes},
 };
 use move_core_types::{account_address::AccountAddress, annotated_value::MoveValue};
-use move_ir_types::location::Loc;
+use move_ir_types::location::*;
 use move_model_2::{
     display as model_display,
     source_model::{self as model, Constant, Enum, Model},
@@ -526,13 +526,14 @@ impl<'env> Docgen<'env> {
         // Print header
         let module_env = env.module(id);
         let module_name = module_env.ident();
+        let module_info = module_env.info();
         let label = info.label.clone();
         self.section_header(&format!("Module `{}`", module_name), &label);
 
         self.increment_section_nest();
 
         // Document module overview.
-        self.doc_text(env, module_env.doc());
+        self.doc_text(env, module_info.doc.text());
 
         // If this is a standalone doc, generate TOC header.
         let toc_label = if info_is_included {
@@ -873,7 +874,7 @@ impl<'env> Docgen<'env> {
         let current_module = env.module(current_module);
         for const_env in current_module.constants() {
             self.label(&self.label_for_module_item(current_module, const_env.name()));
-            self.doc_text(env, const_env.doc());
+            self.doc_text(env, const_env.info().doc.text());
             self.code_block(env, &self.named_constant_display(const_env));
         }
 
@@ -885,19 +886,20 @@ impl<'env> Docgen<'env> {
         let env = struct_env.model();
         let module_env = struct_env.module();
         let name = struct_env.name();
+        let struct_info = struct_env.info();
         self.section_header(
             &format!("Struct `{name}`"),
             &self.label_for_module_item(module_env, name),
         );
         self.increment_section_nest();
-        self.doc_text(env, struct_env.doc());
+        self.doc_text(env, struct_info.doc.text());
         self.code_block(env, &self.struct_header_display(struct_env));
 
         if self.options.include_impl || (self.options.include_specs && self.options.specs_inlined) {
             // Include field documentation if either impls or specs are present and inlined,
             // because they are used by both.
             self.begin_collapsed("Fields");
-            self.gen_struct_fields(struct_env);
+            self.gen_struct_fields(env, struct_info);
             self.end_collapsed();
         }
 
@@ -909,12 +911,13 @@ impl<'env> Docgen<'env> {
         let env = enum_env.model();
         let module_env = enum_env.module();
         let name = enum_env.name();
+        let enum_info = enum_env.info();
         self.section_header(
             &format!("Enum `{name}`"),
             &self.label_for_module_item(module_env, name),
         );
         self.increment_section_nest();
-        self.doc_text(env, enum_env.doc());
+        self.doc_text(env, enum_info.doc.text());
         self.code_block(env, &self.enum_header_display(enum_env));
 
         if self.options.include_impl || (self.options.include_specs && self.options.specs_inlined) {
@@ -984,21 +987,21 @@ impl<'env> Docgen<'env> {
         }
     }
 
-    fn gen_struct_fields(&mut self, struct_env: model::Struct<'_>) {
+    fn gen_struct_fields(&mut self, env: &Model, struct_info: &N::StructDefinition) {
         self.begin_definitions();
-        let fields = match &struct_env.info().fields {
+        let fields = match &struct_info.fields {
             move_compiler::naming::ast::StructFields::Defined(_, fields) => fields
                 .iter()
-                .map(|(_, field, (idx, ty))| (*idx, *field, ty))
-                .sorted_by_key(|(idx, _, _)| *idx)
+                .map(|(_, field, (idx, (doc, ty)))| (*idx, doc, *field, ty))
+                .sorted_by_key(|(idx, _, _, _)| *idx)
                 .collect(),
             move_compiler::naming::ast::StructFields::Native(_) => vec![],
         };
-        for (_, field, ty) in fields {
+        for (_, doc, field, ty) in fields {
             self.definition_text(
-                struct_env.model(),
+                env,
                 &format!("`{}: {}`", field, model_display::type_(ty)),
-                struct_env.field_doc(field),
+                doc.text(),
             );
         }
         self.end_definitions();
@@ -1026,25 +1029,26 @@ impl<'env> Docgen<'env> {
         self.begin_definitions();
         for variant_env in enum_env.variants() {
             let variant_name = variant_env.name();
+            let variant_info = variant_env.info();
             self.definition_text(
                 enum_env.model(),
                 &format!("Variant `{variant_name}`"),
-                variant_env.doc(),
+                variant_info.doc.text(),
             );
-            let fields = match &variant_env.info().fields {
+            let fields = match &variant_info.fields {
                 move_compiler::naming::ast::VariantFields::Defined(_, fields) => fields
                     .iter()
-                    .map(|(_, field, (idx, ty))| (*idx, *field, ty))
-                    .sorted_by_key(|(idx, _, _)| *idx)
+                    .map(|(_, field, (idx, (doc, ty)))| (*idx, doc, *field, ty))
+                    .sorted_by_key(|(idx, _, _, _)| *idx)
                     .collect(),
                 move_compiler::naming::ast::VariantFields::Empty => vec![],
             };
-            for (_, field, ty) in fields {
+            for (_, doc, field, ty) in fields {
                 self.begin_definitions();
                 self.definition_text(
                     enum_env.model(),
                     &format!("`{}: {}`", field, model_display::type_(ty)),
-                    variant_env.field_doc(field),
+                    doc.text(),
                 );
                 self.end_definitions();
             }
@@ -1058,20 +1062,18 @@ impl<'env> Docgen<'env> {
         let module_env = func_env.module();
         let name = func_env.name();
         let full_name = format!("{}::{}", module_env.ident(), name);
+        let func_info = func_env.info();
         self.section_header(
             &format!("Function `{full_name}`"),
             &self.label_for_module_item(module_env, name),
         );
         self.increment_section_nest();
-        self.doc_text(env, func_env.doc());
+        self.doc_text(env, func_info.doc.text());
         let sig = self.function_header_display(name, func_env);
         self.code_block(env, &sig);
         if self.options.include_impl {
             self.begin_collapsed("Implementation");
-            self.code_block(
-                env,
-                &self.get_source_with_indent(env, func_env.info().full_loc),
-            );
+            self.code_block(env, &self.get_source_with_indent(env, func_info.full_loc));
             self.end_collapsed();
         }
         if self.options.include_call_diagrams {

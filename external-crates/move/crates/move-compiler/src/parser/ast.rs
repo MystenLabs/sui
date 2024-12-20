@@ -802,8 +802,13 @@ impl DocComment {
         self.0.as_ref().map(|sp!(loc, _)| *loc)
     }
 
-    pub fn text(&self) -> Option<Spanned<&str>> {
+    pub fn comment(&self) -> Option<Spanned<&str>> {
         self.0.as_ref().map(|sp!(loc, s)| sp(*loc, s.as_str()))
+    }
+
+    /// Returns the empty string if there is no doc comment.
+    pub fn text(&self) -> &str {
+        self.0.as_ref().map(|sp!(_, s)| s.as_str()).unwrap_or("")
     }
 }
 

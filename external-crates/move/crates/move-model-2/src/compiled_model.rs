@@ -241,7 +241,7 @@ impl Constant {
     /// If it has some other type (or if the data is not a valid UTF8 string),
     /// it will will call display on the `annotated_move::MoveValue`
     pub fn display_value(&self) -> String {
-        if matches!(&self.type_, Type::Vector(x) if &**x == &Type::U8) {
+        if matches!(&self.type_, Type::Vector(x) if **x == Type::U8) {
             if let Some(str) = bcs::from_bytes::<Vec<u8>>(&self.data)
                 .ok()
                 .and_then(|data| String::from_utf8(data).ok())

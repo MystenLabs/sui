@@ -3990,6 +3990,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
     ) = &mut e.exp
     {
         let ConstantInfo {
+            doc: _,
             attributes,
             defined_loc,
             signature: _,

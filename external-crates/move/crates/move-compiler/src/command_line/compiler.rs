@@ -411,8 +411,7 @@ impl Compiler {
 
         let res: Result<_, (Pass, Diagnostics)> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
-                .run::<TARGET>()
-                .map(|compiler| (compiler));
+                .run::<TARGET>();
 
         Ok((mapped_files, res))
     }
