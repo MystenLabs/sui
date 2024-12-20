@@ -21,7 +21,7 @@ use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use watermarks::CommitterWatermark;
+use watermarks::{CommitterWatermark, PrunerWatermark};
 
 pub mod handlers;
 pub mod ingestion;
@@ -196,7 +196,8 @@ impl Indexer {
         handler: H,
         config: ConcurrentConfig,
     ) -> Result<()> {
-        let Some(watermark) = self.add_pipeline::<H>().await? else {
+        let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
+        let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
             return Ok(());
         };
 
@@ -236,7 +237,7 @@ impl Indexer {
         handler: H,
         config: SequentialConfig,
     ) -> Result<()> {
-        let Some(watermark) = self.add_pipeline::<H>().await? else {
+        let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
         };
 
@@ -366,8 +367,13 @@ impl Indexer {
     /// handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is disabled,
     /// `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
     /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
+    ///
+    /// If `start_from_pruner_watermark` is true, the indexer will start ingestion from just after
+    /// the pruner watermark, so that the pruner have access to the processed values for any
+    /// unpruned checkpoints.
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
+        start_from_pruner_watermark: bool,
     ) -> Result<Option<Option<CommitterWatermark<'static>>>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
@@ -388,11 +394,25 @@ impl Indexer {
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
+        let expected_first_checkpoint = if start_from_pruner_watermark {
+            // If the pruner of this pipeline requires processed values in order to prune,
+            // we must start ingestion from just after the pruner watermark,
+            // so that we can process all values needed by the pruner.
+            PrunerWatermark::get(&mut conn, P::NAME, Default::default())
+                .await
+                .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
+                .map(|w| (w.pruner_hi as u64) + 1)
+                .unwrap_or_default()
+        } else {
+            watermark
+                .as_ref()
+                .map(|w| w.checkpoint_hi_inclusive as u64 + 1)
+                .unwrap_or_default()
+        };
+
         // TODO(amnn): Test this (depends on supporting migrations and tempdb).
-        self.first_checkpoint_from_watermark = watermark
-            .as_ref()
-            .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
-            .min(self.first_checkpoint_from_watermark);
+        self.first_checkpoint_from_watermark =
+            expected_first_checkpoint.min(self.first_checkpoint_from_watermark);
 
         Ok(Some(watermark))
     }
