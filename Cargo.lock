@@ -13485,6 +13485,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-deepbookv3"
+version = "1.40.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "lazy_static",
+ "serde",
+ "serde_json",
+ "shared-crypto",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "sui-default-config"
 version = "1.40.0"
 dependencies = [
