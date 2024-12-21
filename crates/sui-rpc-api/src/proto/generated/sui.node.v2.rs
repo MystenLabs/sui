@@ -46,42 +46,42 @@ pub struct GetTransactionRequest {
 pub struct GetTransactionOptions {
     /// Include the sui.types.Transaction message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "1")]
     pub transaction: ::core::option::Option<bool>,
     /// Include the Transaction formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "2")]
     pub transaction_bcs: ::core::option::Option<bool>,
     /// Include the set of sui.types.UserSignature's in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "3")]
     pub signatures: ::core::option::Option<bool>,
     /// Include the set of UserSignature's encoded as bytes in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "8")]
     pub signatures_bytes: ::core::option::Option<bool>,
     /// Include the sui.types.TransactionEffects message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "4")]
     pub effects: ::core::option::Option<bool>,
     /// Include the TransactionEffects formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "5")]
     pub effects_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.TransactionEvents message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "6")]
     pub events: ::core::option::Option<bool>,
     /// Include the TransactionEvents formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "7")]
     pub events_bcs: ::core::option::Option<bool>,
 }
@@ -134,12 +134,12 @@ pub struct GetObjectRequest {
 pub struct GetObjectOptions {
     /// Include the sui.types.Object message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "1")]
     pub object: ::core::option::Option<bool>,
     /// Include the Object formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "2")]
     pub object_bcs: ::core::option::Option<bool>,
 }
@@ -170,27 +170,27 @@ pub struct GetCheckpointRequest {
 pub struct GetCheckpointOptions {
     /// Include the sui.types.CheckpointSummary in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "3")]
     pub summary: ::core::option::Option<bool>,
     /// Include the CheckpointSummary formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "4")]
     pub summary_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.ValidatorAggregatedSignature in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "5")]
     pub signature: ::core::option::Option<bool>,
     /// Include the sui.types.CheckpointContents message in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "6")]
     pub contents: ::core::option::Option<bool>,
     /// Include the CheckpointContents formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "7")]
     pub contents_bcs: ::core::option::Option<bool>,
 }
@@ -228,71 +228,77 @@ pub struct GetFullCheckpointRequest {
 pub struct GetFullCheckpointOptions {
     /// Include the sui.types.CheckpointSummary in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "3")]
     pub summary: ::core::option::Option<bool>,
     /// Include the CheckpointSummary formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "4")]
     pub summary_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.ValidatorAggregatedSignature in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "5")]
     pub signature: ::core::option::Option<bool>,
     /// Include the sui.types.CheckpointContents message in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "6")]
     pub contents: ::core::option::Option<bool>,
     /// Include the CheckpointContents formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "7")]
     pub contents_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.Transaction message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "8")]
     pub transaction: ::core::option::Option<bool>,
     /// Include the Transaction formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "9")]
     pub transaction_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.TransactionEffects message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "10")]
     pub effects: ::core::option::Option<bool>,
     /// Include the TransactionEffects formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "11")]
     pub effects_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.TransactionEvents message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "12")]
     pub events: ::core::option::Option<bool>,
     /// Include the TransactionEvents formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "13")]
     pub events_bcs: ::core::option::Option<bool>,
+    /// Include the input objects for transactions in the response.
+    ///
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "14")]
     pub input_objects: ::core::option::Option<bool>,
+    /// Include the output objects for transactions in the response.
+    ///
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "15")]
     pub output_objects: ::core::option::Option<bool>,
     /// Include the sui.types.Object message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "16")]
     pub object: ::core::option::Option<bool>,
     /// Include the Object formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "17")]
     pub object_bcs: ::core::option::Option<bool>,
 }
@@ -423,27 +429,27 @@ pub struct ExecuteTransactionRequest {
 pub struct ExecuteTransactionOptions {
     /// Include the sui.types.TransactionEffects message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "4")]
     pub effects: ::core::option::Option<bool>,
     /// Include the TransactionEffects formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "5")]
     pub effects_bcs: ::core::option::Option<bool>,
     /// Include the sui.types.TransactionEvents message in the response.
     ///
-    /// Defaults to true if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "6")]
     pub events: ::core::option::Option<bool>,
     /// Include the TransactionEvents formatted as BCS in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "7")]
     pub events_bcs: ::core::option::Option<bool>,
     /// Include the BalanceChanges in the response.
     ///
-    /// Defaults to false if not included
+    /// Defaults to `false` if not included
     #[prost(bool, optional, tag = "8")]
     pub balance_changes: ::core::option::Option<bool>,
 }

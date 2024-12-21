@@ -64,35 +64,35 @@ message GetTransactionRequest {
 message GetTransactionOptions {
   // Include the sui.types.Transaction message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool transaction = 1;
   // Include the Transaction formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool transaction_bcs = 2;
   // Include the set of sui.types.UserSignature's in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool signatures = 3;
   // Include the set of UserSignature's encoded as bytes in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool signatures_bytes = 8;
   // Include the sui.types.TransactionEffects message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool effects = 4;
   // Include the TransactionEffects formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool effects_bcs = 5;
   // Include the sui.types.TransactionEvents message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool events = 6;
   // Include the TransactionEvents formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool events_bcs = 7;
 }
 
@@ -129,11 +129,11 @@ message GetObjectRequest {
 message GetObjectOptions {
   // Include the sui.types.Object message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool object = 1;
   // Include the Object formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool object_bcs = 2;
 }
 
@@ -157,23 +157,23 @@ message GetCheckpointRequest {
 message GetCheckpointOptions {
   // Include the sui.types.CheckpointSummary in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool summary = 3;
   // Include the CheckpointSummary formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool summary_bcs = 4;
   // Include the sui.types.ValidatorAggregatedSignature in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool signature = 5;
   // Include the sui.types.CheckpointContents message in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool contents = 6;
   // Include the CheckpointContents formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool contents_bcs = 7;
 }
 
@@ -200,60 +200,67 @@ message GetFullCheckpointRequest {
 message GetFullCheckpointOptions {
   // Include the sui.types.CheckpointSummary in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool summary = 3;
   // Include the CheckpointSummary formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool summary_bcs = 4;
   // Include the sui.types.ValidatorAggregatedSignature in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool signature = 5;
   // Include the sui.types.CheckpointContents message in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool contents = 6;
   // Include the CheckpointContents formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool contents_bcs = 7;
 
   // Include the sui.types.Transaction message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool transaction = 8;
   // Include the Transaction formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool transaction_bcs = 9;
   // Include the sui.types.TransactionEffects message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool effects = 10;
   // Include the TransactionEffects formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool effects_bcs = 11;
   // Include the sui.types.TransactionEvents message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool events = 12;
   // Include the TransactionEvents formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool events_bcs = 13;
 
+  // Include the input objects for transactions in the response.
+  //
+  // Defaults to `false` if not included
   optional bool input_objects = 14;
+
+  // Include the output objects for transactions in the response.
+  //
+  // Defaults to `false` if not included
   optional bool output_objects = 15;
 
   // Include the sui.types.Object message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool object = 16;
   // Include the Object formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool object_bcs = 17;
 }
 
@@ -340,23 +347,23 @@ message ExecuteTransactionRequest {
 message ExecuteTransactionOptions {
   // Include the sui.types.TransactionEffects message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool effects = 4;
   // Include the TransactionEffects formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool effects_bcs = 5;
   // Include the sui.types.TransactionEvents message in the response.
   //
-  // Defaults to true if not included
+  // Defaults to `false` if not included
   optional bool events = 6;
   // Include the TransactionEvents formatted as BCS in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool events_bcs = 7;
 
   // Include the BalanceChanges in the response.
   //
-  // Defaults to false if not included
+  // Defaults to `false` if not included
   optional bool balance_changes = 8;
 }

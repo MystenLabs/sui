@@ -4,11 +4,11 @@
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-    /// Enable serving of unstable APIs
+    /// Enable the experimental REST api
     ///
-    /// Defaults to `false`, with unstable APIs being disabled
+    /// Defaults to `false`
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub enable_unstable_apis: Option<bool>,
+    pub enable_experimental_rest_api: Option<bool>,
 
     /// Enable indexing of transactions and objects
     ///
@@ -30,11 +30,8 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn enable_unstable_apis(&self) -> bool {
-        // TODO
-        // Until the rest service as a whole is "stabalized" with a sane set of default stable
-        // apis, have the default be to enable all apis
-        self.enable_unstable_apis.unwrap_or(true)
+    pub fn enable_experimental_rest_api(&self) -> bool {
+        self.enable_experimental_rest_api.unwrap_or(false)
     }
 
     pub fn enable_indexing(&self) -> bool {
