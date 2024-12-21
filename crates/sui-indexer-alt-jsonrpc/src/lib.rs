@@ -5,14 +5,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Context;
-use jsonrpsee::server::{RpcModule, RpcServiceBuilder, Server, ServerBuilder};
+use jsonrpsee::server::{RpcModule, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::{MetricsService, RpcMetrics};
 use sui_pg_db::Db;
 use tokio::join;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tower_layer::{Identity, Stack};
+use tower_layer::Identity;
 use tracing::info;
 
 use crate::api::governance::{GovernanceImpl, GovernanceServer};
@@ -38,8 +38,11 @@ pub struct RpcArgs {
 }
 
 pub struct RpcService {
-    /// The JSON-RPC server.
-    server: Server<Identity, Stack<MetricsLayer, Identity>>,
+    /// The address that the server will start listening for requests on, when it is run.
+    rpc_listen_address: SocketAddr,
+
+    /// A partially built/configured JSON-RPC server.
+    server: ServerBuilder<Identity, Identity>,
 
     /// Metrics for the RPC service.
     metrics: Arc<RpcMetrics>,
@@ -56,9 +59,8 @@ pub struct RpcService {
 
 impl RpcService {
     /// Create a new instance of the JSON-RPC service, configured by `rpc_args`. The service will
-    /// bind to its socket upon construction (and will fail if this is not possible), but will not
-    /// accept connections until [Self::run] is called.
-    pub async fn new(rpc_args: RpcArgs, cancel: CancellationToken) -> anyhow::Result<Self> {
+    /// not accept connections until [Self::run] is called.
+    pub fn new(rpc_args: RpcArgs, cancel: CancellationToken) -> anyhow::Result<Self> {
         let RpcArgs {
             rpc_listen_address,
             metrics_address,
@@ -68,17 +70,12 @@ impl RpcService {
         let (metrics, metrics_service) = MetricsService::new(metrics_address, cancel.clone())
             .context("Failed to create metrics service")?;
 
-        let middleware = RpcServiceBuilder::new().layer(MetricsLayer(metrics.clone()));
-
         let server = ServerBuilder::new()
             .http_only()
-            .max_connections(max_rpc_connections)
-            .set_rpc_middleware(middleware)
-            .build(rpc_listen_address)
-            .await
-            .context("Failed to bind server")?;
+            .max_connections(max_rpc_connections);
 
         Ok(Self {
+            rpc_listen_address,
             server,
             metrics,
             metrics_service,
@@ -104,24 +101,31 @@ impl RpcService {
     /// the service stops.
     pub async fn run(self) -> anyhow::Result<JoinHandle<()>> {
         let Self {
+            rpc_listen_address,
             server,
-            metrics: _,
+            metrics,
             metrics_service,
             modules,
             cancel,
         } = self;
 
-        let listen_address = server
-            .local_addr()
-            .context("Can't start RPC service without listen address")?;
+        let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
+            metrics,
+            modules.method_names().map(|n| n.to_owned()).collect(),
+        ));
 
         let h_metrics = metrics_service
             .run()
             .await
             .context("Failed to start metrics service")?;
 
-        info!("Starting JSON-RPC service on {listen_address}",);
-        let handle = server.start(modules);
+        info!("Starting JSON-RPC service on {rpc_listen_address}",);
+        let handle = server
+            .set_rpc_middleware(middleware)
+            .build(rpc_listen_address)
+            .await
+            .context("Failed to bind JSON-RPC service")?
+            .start(modules);
 
         // Set-up a helper task that will tear down the RPC service when the cancellation token is
         // triggered.
@@ -154,9 +158,7 @@ pub async fn start_rpc(args: Args) -> anyhow::Result<()> {
     let Args { db_args, rpc_args } = args;
 
     let cancel = CancellationToken::new();
-    let mut rpc = RpcService::new(rpc_args, cancel)
-        .await
-        .context("Failed to start RPC service")?;
+    let mut rpc = RpcService::new(rpc_args, cancel).context("Failed to create RPC service")?;
 
     let db = Db::for_read(db_args)
         .await
@@ -199,7 +201,6 @@ mod tests {
             },
             cancel,
         )
-        .await
         .expect("Failed to create test JSON-RPC service")
     }
 
@@ -348,7 +349,6 @@ mod tests {
             },
             cancel.clone(),
         )
-        .await
         .unwrap();
 
         let handle = rpc.run().await.unwrap();
@@ -373,7 +373,6 @@ mod tests {
             },
             cancel.clone(),
         )
-        .await
         .unwrap();
 
         #[rpc(server, namespace = "test")]
@@ -439,7 +438,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_received
-                .with_label_values(&["test_baz"])
+                .with_label_values(&["<UNKNOWN>"])
                 .get(),
             1
         );
@@ -447,7 +446,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_succeeded
-                .with_label_values(&["test_baz"])
+                .with_label_values(&["<UNKNOWN>"])
                 .get(),
             0
         );
@@ -455,7 +454,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_failed
-                .with_label_values(&["test_baz", &format!("{METHOD_NOT_FOUND_CODE}")])
+                .with_label_values(&["<UNKNOWN>", &format!("{METHOD_NOT_FOUND_CODE}")])
                 .get(),
             1
         );
