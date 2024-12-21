@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use diesel::dsl::Limit;
 use diesel::pg::Pg;
 use diesel::query_builder::QueryFragment;
@@ -12,14 +14,28 @@ use jsonrpsee::types::{error::INTERNAL_ERROR_CODE, ErrorObject};
 use sui_pg_db as db;
 use tracing::debug;
 
+use crate::metrics::RpcMetrics;
+
 pub(crate) mod governance;
 
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
-/// RPC layer, and to handle debug logging of database queries.
-struct Connection<'p>(db::Connection<'p>);
+/// RPC layer, metrics collection, and debug logging of database queries.
+#[derive(Clone)]
+pub(crate) struct Reader {
+    db: db::Db,
+    metrics: Arc<RpcMetrics>,
+}
+
+pub(crate) struct Connection<'p> {
+    conn: db::Connection<'p>,
+    metrics: Arc<RpcMetrics>,
+}
 
 #[derive(thiserror::Error, Debug)]
-enum DbError {
+pub(crate) enum DbError {
+    #[error(transparent)]
+    Create(anyhow::Error),
+
     #[error(transparent)]
     Connect(anyhow::Error),
 
@@ -27,11 +43,25 @@ enum DbError {
     RunQuery(#[from] DieselError),
 }
 
-impl<'p> Connection<'p> {
-    async fn get(db: &'p db::Db) -> Result<Self, DbError> {
-        Ok(Self(db.connect().await.map_err(DbError::Connect)?))
+impl Reader {
+    pub(crate) async fn new(
+        db_args: db::DbArgs,
+        metrics: Arc<RpcMetrics>,
+    ) -> Result<Self, DbError> {
+        let db = db::Db::for_read(db_args).await.map_err(DbError::Create)?;
+
+        Ok(Self { db, metrics })
     }
 
+    pub(crate) async fn connect(&self) -> Result<Connection<'_>, DbError> {
+        Ok(Connection {
+            conn: self.db.connect().await.map_err(DbError::Connect)?,
+            metrics: self.metrics.clone(),
+        })
+    }
+}
+
+impl<'p> Connection<'p> {
     async fn first<'q, Q, U>(&mut self, query: Q) -> Result<U, DbError>
     where
         U: Send,
@@ -41,13 +71,27 @@ impl<'p> Connection<'p> {
     {
         let query = query.limit(1);
         debug!("{}", diesel::debug_query(&query));
-        Ok(query.get_result(&mut self.0).await?)
+
+        let _guard = self.metrics.db_latency.start_timer();
+        let res = query.get_result(&mut self.conn).await;
+
+        if res.is_ok() {
+            self.metrics.db_requests_succeeded.inc();
+        } else {
+            self.metrics.db_requests_failed.inc();
+        }
+
+        Ok(res?)
     }
 }
 
 impl From<DbError> for ErrorObject<'static> {
     fn from(err: DbError) -> Self {
         match err {
+            DbError::Create(err) => {
+                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
+            }
+
             DbError::Connect(err) => {
                 ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
             }
