@@ -1246,10 +1246,10 @@ impl DependencyGraph {
         for (id, pkg) in &self.package_table {
             writeln!(writer, "\n[[move.package]]")?;
 
-            writeln!(writer, "id = {}", str_escape(id.as_str())?)?;
+            writeln!(writer, "id = {}", str_escape(id.as_str()))?;
             writeln!(writer, "source = {}", PackageTOML(pkg))?;
             if let Some(version) = &pkg.version {
-                writeln!(writer, "version = {}", str_escape(version.as_str())?)?;
+                writeln!(writer, "version = {}", str_escape(version.as_str()))?;
             }
 
             self.write_dependencies_to_lock(*id, &mut writer)?;
@@ -1259,7 +1259,7 @@ impl DependencyGraph {
         let mut dev_dependencies = None;
         let mut packages = None;
         if !writer.is_empty() {
-            let toml = writer.parse::<toml_edit::Document>()?;
+            let toml = writer.parse::<toml_edit::DocumentMut>()?;
             if let Some(value) = toml.get("dependencies").and_then(|v| v.as_value()) {
                 dependencies = Some(value.clone());
             }
@@ -1572,10 +1572,10 @@ impl fmt::Display for Package {
                 subdir,
             }) => {
                 write!(f, "git = ")?;
-                f.write_str(&str_escape(git_url.as_str())?)?;
+                f.write_str(&str_escape(git_url.as_str()))?;
 
                 write!(f, ", rev = ")?;
-                f.write_str(&str_escape(git_rev.as_str())?)?;
+                f.write_str(&str_escape(git_rev.as_str()))?;
 
                 write!(f, ", subdir = ")?;
                 f.write_str(&path_escape(subdir)?)?;
@@ -1583,7 +1583,7 @@ impl fmt::Display for Package {
 
             PM::DependencyKind::OnChain(PM::OnChainInfo { id }) => {
                 write!(f, "id = ")?;
-                f.write_str(&str_escape(id.as_str())?)?;
+                f.write_str(&str_escape(id.as_str()))?;
             }
         }
 
@@ -1628,14 +1628,14 @@ impl<'a> fmt::Display for DependencyTOML<'a> {
         f.write_str("{ ")?;
 
         write!(f, "id = ")?;
-        f.write_str(&str_escape(id.as_str())?)?;
+        f.write_str(&str_escape(id.as_str()))?;
 
         write!(f, ", name = ")?;
-        f.write_str(&str_escape(dep_name.as_str())?)?;
+        f.write_str(&str_escape(dep_name.as_str()))?;
 
         if let Some(digest) = digest {
             write!(f, ", digest = ")?;
-            f.write_str(&str_escape(digest.as_str())?)?;
+            f.write_str(&str_escape(digest.as_str()))?;
         }
 
         if let Some(subst) = subst {
@@ -1655,18 +1655,18 @@ impl<'a> fmt::Display for SubstTOML<'a> {
             addr: &PM::NamedAddress,
             subst: &PM::SubstOrRename,
         ) -> fmt::Result {
-            f.write_str(&str_escape(addr.as_str())?)?;
+            f.write_str(&str_escape(addr.as_str()))?;
             write!(f, " = ")?;
 
             match subst {
                 PM::SubstOrRename::RenameFrom(named) => {
-                    f.write_str(&str_escape(named.as_str())?)?;
+                    f.write_str(&str_escape(named.as_str()))?;
                 }
 
                 PM::SubstOrRename::Assign(account) => {
                     f.write_str(&str_escape(
                         &account.to_canonical_string(/* with_prefix */ false),
-                    )?)?;
+                    ))?;
                 }
             }
 
@@ -1694,13 +1694,13 @@ impl<'a> fmt::Display for SubstTOML<'a> {
 }
 
 /// Escape a string to output in a TOML file.
-fn str_escape(s: &str) -> Result<String, fmt::Error> {
-    toml::to_string(s).map_err(|_| fmt::Error)
+fn str_escape(s: &str) -> String {
+    format!("\"{}\"", s)
 }
 
 /// Escape a path to output in a TOML file.
 fn path_escape(p: &Path) -> Result<String, fmt::Error> {
-    str_escape(p.to_str().ok_or(fmt::Error)?)
+    Ok(str_escape(p.to_str().ok_or(fmt::Error)?))
 }
 
 fn format_deps(

@@ -675,7 +675,7 @@ dependencies = [
  "arrow-schema",
  "chrono",
  "half 2.3.1",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "lexical-core",
  "num",
  "serde",
@@ -875,7 +875,7 @@ dependencies = [
  "futures-util",
  "handlebars",
  "http 1.1.0",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "lru 0.7.8",
  "mime",
  "multer",
@@ -948,7 +948,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cf4d4e86208f4f9b81a503943c07e6e7f29ad3505e6c9ce6431fe64dc241681"
 dependencies = [
  "bytes",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "serde",
  "serde_json",
 ]
@@ -2713,16 +2713,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "combine"
-version = "4.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ed6e9d84f0b51a7f52daf1c7d71dd136fd7a3f41a8462b8cdb8c78d920fad4"
-dependencies = [
- "bytes",
- "memchr",
-]
-
-[[package]]
 name = "comfy-table"
 version = "6.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3403,7 +3393,7 @@ version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "718f6cd8c54ae5249fd42b0c86639df0100b8a86eea2e5f1b915cde2e1481453"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "lalrpop-util",
  "logos",
 ]
@@ -4516,7 +4506,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.79",
- "toml 0.8.16",
+ "toml 0.8.19",
  "walkdir",
 ]
 
@@ -5479,7 +5469,7 @@ dependencies = [
  "fixedbitset 0.4.2",
  "guppy-summaries",
  "guppy-workspace-hack",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
  "nested",
  "once_cell",
@@ -5528,7 +5518,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.9",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "slab",
  "tokio",
  "tokio-util 0.7.10",
@@ -5547,7 +5537,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.1.0",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "slab",
  "tokio",
  "tokio-util 0.7.10",
@@ -5641,6 +5631,12 @@ dependencies = [
  "ahash 0.8.11",
  "allocator-api2",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 
 [[package]]
 name = "hashers"
@@ -6339,12 +6335,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.6"
+version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
+checksum = "62f822373a4fe84d4bb149bf54e584a7f4abec90e072ed49cda0edea5b95471f"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.1",
+ "hashbrown 0.15.2",
  "serde",
 ]
 
@@ -7403,7 +7399,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd01039851e82f8799046eabbb354056283fb265c8ec0996af940f4e85a380ff"
 dependencies = [
  "serde",
- "toml 0.8.16",
+ "toml 0.8.19",
 ]
 
 [[package]]
@@ -7599,7 +7595,7 @@ name = "move-bytecode-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "petgraph 0.5.1",
@@ -7717,7 +7713,7 @@ dependencies = [
  "move-vm-types",
  "serde_yaml 0.8.26",
  "tempfile",
- "toml_edit 0.14.4",
+ "toml_edit 0.22.22",
  "walkdir",
 ]
 
@@ -7807,7 +7803,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -7960,8 +7956,8 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sha2 0.9.9",
  "tempfile",
- "toml 0.5.11",
- "toml_edit 0.14.4",
+ "toml 0.8.19",
+ "toml_edit 0.22.22",
  "treeline",
  "vfs",
  "walkdir",
@@ -7994,7 +7990,7 @@ dependencies = [
  "once_cell",
  "serde",
  "simplelog",
- "toml 0.5.11",
+ "toml 0.8.19",
 ]
 
 [[package]]
@@ -8507,7 +8503,7 @@ dependencies = [
  "fastcrypto-tbls",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "mysten-util-mem-derive",
  "once_cell",
  "parking_lot 0.12.1",
@@ -9094,7 +9090,7 @@ name = "openapiv3"
 version = "2.0.0"
 source = "git+https://github.com/bmwill/openapiv3.git?rev=ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963#ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "schemars",
  "serde",
  "serde_json",
@@ -9114,7 +9110,7 @@ checksum = "1e32339a5dc40459130b3bd269e9892439f55b33e772d2a9d402a789baaf4e8a"
 dependencies = [
  "futures-core",
  "futures-sink",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "js-sys",
  "once_cell",
  "pin-project-lite",
@@ -9510,7 +9506,7 @@ dependencies = [
  "ciborium",
  "coset",
  "data-encoding",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -9701,7 +9697,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset 0.4.2",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
 ]
 
 [[package]]
@@ -11866,7 +11862,7 @@ version = "1.0.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ff5456707a1de34e7e37f2a6fd3d3f808c318259cbd01ab6377795054b483d8"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itoa",
  "memchr",
  "ryu",
@@ -11951,7 +11947,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -13293,7 +13289,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "im",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
  "jsonrpsee",
  "lru 0.10.0",
@@ -13507,7 +13503,7 @@ dependencies = [
  "fastcrypto-zkp",
  "fs_extra",
  "futures",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "insta",
  "jsonrpsee",
  "move-binary-format",
@@ -14125,7 +14121,7 @@ dependencies = [
  "futures",
  "http-body 0.4.5",
  "hyper 1.4.1",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
  "jsonrpsee",
  "mockall",
@@ -14436,7 +14432,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-vdf",
  "fastcrypto-zkp",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives",
@@ -14497,7 +14493,7 @@ dependencies = [
  "better_any",
  "fastcrypto",
  "fastcrypto-zkp",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives-v2",
@@ -15448,7 +15444,7 @@ dependencies = [
  "bcs",
  "clap",
  "futures",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -15736,7 +15732,7 @@ dependencies = [
  "fastcrypto-tbls",
  "fastcrypto-zkp",
  "im",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
  "lru 0.10.0",
  "move-binary-format",
@@ -16760,14 +16756,14 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.8.16"
+version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81967dd0dd2c1ab0bc3468bd7caecc32b8a4aa47d0c8c695d8c2b2108168d62c"
+checksum = "a1ed1f98e3fdc28d6d910e6737ae6ab1a93bf1985935a1193e68f93eeb68d24e"
 dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime 0.6.8",
- "toml_edit 0.22.17",
+ "toml_edit 0.22.22",
 ]
 
 [[package]]
@@ -16782,18 +16778,6 @@ version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0dd7358ecb8fc2f8d014bf86f6f638ce72ba252a2c3a2572f2a795f1d23efb41"
 dependencies = [
- "serde",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5376256e44f2443f8896ac012507c19a012df0fe8758b55246ae51a2279db51f"
-dependencies = [
- "combine",
- "indexmap 1.9.3",
- "itertools 0.10.5",
  "serde",
 ]
 
@@ -16824,11 +16808,11 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.17"
+version = "0.22.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d9f8729f5aea9562aac1cc0441f5d6de3cff1ee0c5d67293eeca5eb36ee7c16"
+checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "serde",
  "serde_spanned",
  "toml_datetime 0.6.8",
@@ -17004,7 +16988,7 @@ checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
 dependencies = [
  "futures-core",
  "futures-util",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "pin-project-lite",
  "slab",
  "sync_wrapper 0.1.2",
