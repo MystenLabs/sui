@@ -21,7 +21,7 @@ use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use watermarks::CommitterWatermark;
+use watermarks::{CommitterWatermark, PrunerWatermark};
 
 pub mod ingestion;
 pub(crate) mod metrics;
@@ -387,11 +387,25 @@ impl Indexer {
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
+        let expected_first_checkpoint = if P::PRUNING_REQUIRES_PROCESSED_VALUES {
+            // If the pruner of this pipeline requires processed values in order to prune,
+            // we must start ingestion from just after the pruner watermark,
+            // so that we can process all values needed by the pruner.
+            PrunerWatermark::get(&mut conn, P::NAME, Default::default())
+                .await
+                .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
+                .map(|w| (w.pruner_hi as u64) + 1)
+                .unwrap_or_default()
+        } else {
+            watermark
+                .as_ref()
+                .map(|w| w.checkpoint_hi_inclusive as u64 + 1)
+                .unwrap_or_default()
+        };
+
         // TODO(amnn): Test this (depends on supporting migrations and tempdb).
-        self.first_checkpoint_from_watermark = watermark
-            .as_ref()
-            .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
-            .min(self.first_checkpoint_from_watermark);
+        self.first_checkpoint_from_watermark =
+            expected_first_checkpoint.min(self.first_checkpoint_from_watermark);
 
         Ok(Some(watermark))
     }
