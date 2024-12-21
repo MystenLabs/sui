@@ -1770,25 +1770,17 @@ impl AuthorityPerEpochStore {
                     // completes.
                     match cache_reader.get_object(id) {
                         Some(obj) => {
-                            let obj_start_version = obj.owner().start_version();
-                            if obj_start_version.is_none() {
-                                // The current version in the objects table is not Shared or ConsensusV2,
-                                // so it can't match the provided initial version. Treat it as absent.
-                                ((*id, *initial_version), *initial_version)
-                            } else {
-                                let obj_start_version = obj_start_version.unwrap();
-                                assert!(*initial_version >= obj_start_version,
-                                    "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
-                                if self.epoch_start_config().use_version_assignment_tables_v3()
-                                    && obj_start_version == *initial_version
-                                {
-                                    ((*id, *initial_version), obj.version())
-                                } else {
-                                    // If existing object's start version does not match the version
-                                    // in the transaction, we treat the object as absent.
-                                    ((*id, *initial_version), *initial_version)
+                            if obj.owner().start_version() == Some(*initial_version) {
+                                ((*id, *initial_version), obj.version())
+                             } else {
+                                // If we can't find a matching start version, treat the object as
+                                // if it's absent.
+                                if let Some(obj_start_version) = obj.owner().start_version() {
+                                    assert!(*initial_version >= obj_start_version,
+                                        "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
                                 }
-                            }
+                                ((*id, *initial_version), *initial_version)
+                             }
                         }
                         None => ((*id, *initial_version), *initial_version),
                     }
