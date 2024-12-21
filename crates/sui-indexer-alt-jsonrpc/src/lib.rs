@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use anyhow::Context;
-use jsonrpsee::server::{RpcModule, Server, ServerBuilder};
+use jsonrpsee::server::{RpcModule, RpcServiceBuilder, Server, ServerBuilder};
+use metrics::middleware::MetricsLayer;
+use metrics::{MetricsService, RpcMetrics};
 use sui_pg_db::Db;
+use tokio::join;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+use tower_layer::{Identity, Stack};
 use tracing::info;
 
 use crate::api::governance::{GovernanceImpl, GovernanceServer};
@@ -14,12 +20,17 @@ use crate::args::Args;
 
 mod api;
 pub mod args;
+mod metrics;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
     /// Address to listen to for incoming JSON-RPC connections.
-    #[clap(long, default_value_t = Self::default().listen_address)]
-    listen_address: SocketAddr,
+    #[clap(long, default_value_t = Self::default().rpc_listen_address)]
+    rpc_listen_address: SocketAddr,
+
+    /// Address to serve Prometheus metrics from.
+    #[clap(long, default_value_t = Self::default().metrics_address)]
+    metrics_address: SocketAddr,
 
     /// The maximum number of concurrent connections to accept.
     #[clap(long, default_value_t = Self::default().max_rpc_connections)]
@@ -28,33 +39,57 @@ pub struct RpcArgs {
 
 pub struct RpcService {
     /// The JSON-RPC server.
-    server: Server,
+    server: Server<Identity, Stack<MetricsLayer, Identity>>,
+
+    /// Metrics for the RPC service.
+    metrics: Arc<RpcMetrics>,
+
+    /// Service for serving Prometheus metrics.
+    metrics_service: MetricsService,
 
     /// All the methods added to the server so far.
     modules: RpcModule<()>,
+
+    /// Cancellation token controlling all services.
+    cancel: CancellationToken,
 }
 
 impl RpcService {
     /// Create a new instance of the JSON-RPC service, configured by `rpc_args`. The service will
     /// bind to its socket upon construction (and will fail if this is not possible), but will not
     /// accept connections until [Self::run] is called.
-    pub async fn new(rpc_args: RpcArgs) -> anyhow::Result<Self> {
+    pub async fn new(rpc_args: RpcArgs, cancel: CancellationToken) -> anyhow::Result<Self> {
         let RpcArgs {
-            listen_address,
+            rpc_listen_address,
+            metrics_address,
             max_rpc_connections,
         } = rpc_args;
+
+        let (metrics, metrics_service) = MetricsService::new(metrics_address, cancel.clone())
+            .context("Failed to create metrics service")?;
+
+        let middleware = RpcServiceBuilder::new().layer(MetricsLayer(metrics.clone()));
 
         let server = ServerBuilder::new()
             .http_only()
             .max_connections(max_rpc_connections)
-            .build(listen_address)
+            .set_rpc_middleware(middleware)
+            .build(rpc_listen_address)
             .await
             .context("Failed to bind server")?;
 
         Ok(Self {
             server,
+            metrics,
+            metrics_service,
             modules: RpcModule::new(()),
+            cancel,
         })
+    }
+
+    /// Return a copy of the metrics to inspect for testing purposes.
+    pub fn metrics_for_test(&self) -> Arc<RpcMetrics> {
+        self.metrics.clone()
     }
 
     /// Add an [RpcModule] to the service. The module's methods are combined with the existing
@@ -68,18 +103,39 @@ impl RpcService {
     /// Start the service (it will accept connections) and return a handle that will resolve when
     /// the service stops.
     pub async fn run(self) -> anyhow::Result<JoinHandle<()>> {
-        let Self { server, modules } = self;
+        let Self {
+            server,
+            metrics: _,
+            metrics_service,
+            modules,
+            cancel,
+        } = self;
 
         let listen_address = server
             .local_addr()
             .context("Can't start RPC service without listen address")?;
 
-        info!("Starting JSON-RPC service on {listen_address}",);
+        let h_metrics = metrics_service
+            .run()
+            .await
+            .context("Failed to start metrics service")?;
 
+        info!("Starting JSON-RPC service on {listen_address}",);
         let handle = server.start(modules);
+
+        // Set-up a helper task that will tear down the RPC service when the cancellation token is
+        // triggered.
+        let cancel_handle = handle.clone();
+        let cancel_cancel = cancel.clone();
+        let h_cancel = tokio::spawn(async move {
+            cancel_cancel.cancelled().await;
+            cancel_handle.stop()
+        });
 
         Ok(tokio::spawn(async move {
             handle.stopped().await;
+            cancel.cancel();
+            let _ = join!(h_cancel, h_metrics);
         }))
     }
 }
@@ -87,7 +143,8 @@ impl RpcService {
 impl Default for RpcArgs {
     fn default() -> Self {
         Self {
-            listen_address: "0.0.0.0:6000".parse().unwrap(),
+            rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
+            metrics_address: "0.0.0.0:9184".parse().unwrap(),
             max_rpc_connections: 100,
         }
     }
@@ -96,7 +153,8 @@ impl Default for RpcArgs {
 pub async fn start_rpc(args: Args) -> anyhow::Result<()> {
     let Args { db_args, rpc_args } = args;
 
-    let mut rpc = RpcService::new(rpc_args)
+    let cancel = CancellationToken::new();
+    let mut rpc = RpcService::new(rpc_args, cancel)
         .await
         .context("Failed to start RPC service")?;
 
@@ -116,9 +174,12 @@ mod tests {
     use std::{
         collections::BTreeSet,
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        time::Duration,
     };
 
-    use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+    use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::METHOD_NOT_FOUND_CODE};
+    use reqwest::Client;
+    use serde_json::json;
     use sui_pg_db::temp::get_available_port;
 
     use super::*;
@@ -129,10 +190,15 @@ mod tests {
     }
 
     async fn test_service() -> RpcService {
-        RpcService::new(RpcArgs {
-            listen_address: test_listen_address(),
-            ..Default::default()
-        })
+        let cancel = CancellationToken::new();
+        RpcService::new(
+            RpcArgs {
+                rpc_listen_address: test_listen_address(),
+                metrics_address: test_listen_address(),
+                ..Default::default()
+            },
+            cancel,
+        )
         .await
         .expect("Failed to create test JSON-RPC service")
     }
@@ -269,5 +335,135 @@ mod tests {
 
         rpc.add_module(FooImpl.into_rpc()).unwrap();
         assert!(rpc.add_module(BarImpl.into_rpc()).is_err(),)
+    }
+
+    #[tokio::test]
+    async fn test_graceful_shutdown() {
+        let cancel = CancellationToken::new();
+        let rpc = RpcService::new(
+            RpcArgs {
+                rpc_listen_address: test_listen_address(),
+                metrics_address: test_listen_address(),
+                ..Default::default()
+            },
+            cancel.clone(),
+        )
+        .await
+        .unwrap();
+
+        let handle = rpc.run().await.unwrap();
+
+        cancel.cancel();
+        tokio::time::timeout(Duration::from_millis(500), handle)
+            .await
+            .expect("Shutdown should not timeout")
+            .expect("Shutdown should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_request_metrics() {
+        let cancel = CancellationToken::new();
+        let rpc_listen_address = test_listen_address();
+
+        let mut rpc = RpcService::new(
+            RpcArgs {
+                rpc_listen_address,
+                metrics_address: test_listen_address(),
+                ..Default::default()
+            },
+            cancel.clone(),
+        )
+        .await
+        .unwrap();
+
+        #[rpc(server, namespace = "test")]
+        trait Foo {
+            #[method(name = "bar")]
+            fn bar(&self) -> RpcResult<u64>;
+        }
+
+        struct FooImpl;
+
+        impl FooServer for FooImpl {
+            fn bar(&self) -> RpcResult<u64> {
+                Ok(42)
+            }
+        }
+
+        rpc.add_module(FooImpl.into_rpc()).unwrap();
+
+        let metrics = rpc.metrics_for_test();
+        let handle = rpc.run().await.unwrap();
+
+        let url = format!("http://{}/", rpc_listen_address);
+        let client = Client::new();
+
+        client
+            .post(&url)
+            .json(&json!({
+                "jsonrpc": "2.0",
+                "method": "test_bar",
+                "id": 1,
+            }))
+            .send()
+            .await
+            .expect("Request should succeed");
+
+        client
+            .post(&url)
+            .json(&json!({
+                "jsonrpc": "2.0",
+                "method": "test_baz",
+                "id": 1,
+            }))
+            .send()
+            .await
+            .expect("Request should succeed");
+
+        assert_eq!(
+            metrics
+                .requests_received
+                .with_label_values(&["test_bar"])
+                .get(),
+            1
+        );
+
+        assert_eq!(
+            metrics
+                .requests_succeeded
+                .with_label_values(&["test_bar"])
+                .get(),
+            1
+        );
+
+        assert_eq!(
+            metrics
+                .requests_received
+                .with_label_values(&["test_baz"])
+                .get(),
+            1
+        );
+
+        assert_eq!(
+            metrics
+                .requests_succeeded
+                .with_label_values(&["test_baz"])
+                .get(),
+            0
+        );
+
+        assert_eq!(
+            metrics
+                .requests_failed
+                .with_label_values(&["test_baz", &format!("{METHOD_NOT_FOUND_CODE}")])
+                .get(),
+            1
+        );
+
+        cancel.cancel();
+        tokio::time::timeout(Duration::from_millis(500), handle)
+            .await
+            .expect("Shutdown should not timeout")
+            .expect("Shutdown should succeed");
     }
 }

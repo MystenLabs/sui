@@ -18,12 +18,20 @@ clap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 jsonrpsee = { workspace = true, features = ["macros", "server"] }
+pin-project-lite.workspace = true
+prometheus.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
+tower-layer.workspace = true
 tracing.workspace = true
 url.workspace = true
 
 sui-indexer-alt-schema.workspace = true
 sui-pg-db.workspace = true
 sui-types.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+serde_json.workspace = true
