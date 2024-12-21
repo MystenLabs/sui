@@ -401,6 +401,7 @@ once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "52"
+pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"

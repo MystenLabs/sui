@@ -814,7 +814,7 @@ async fn metrics(Extension(registry): Extension<Registry>) -> (StatusCode, Strin
         Ok(s) => (StatusCode::OK, s),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encoding metrics: {e}"),
+            format!("unable to encode metrics: {e}"),
         ),
     }
 }
