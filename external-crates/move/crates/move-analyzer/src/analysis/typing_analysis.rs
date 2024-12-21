@@ -705,7 +705,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             self.add_type_param(&stp.param);
         }
         if let N::StructFields::Defined(positional, fields) = &sdef.fields {
-            for (fpos, fname, (_, ty)) in fields {
+            for (fpos, fname, (_, (_, ty))) in fields {
                 self.visit_type(None, ty);
                 if !*positional {
                     // Enter self-definition for field name (unwrap safe - done when inserting def),
@@ -798,7 +798,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             ),
         );
         if let N::VariantFields::Defined(positional, fields) = &vdef.fields {
-            for (floc, fname, (_, ty)) in fields {
+            for (floc, fname, (_, (_, ty))) in fields {
                 self.visit_type(None, ty);
                 if !*positional {
                     // enter self-definition for field name (unwrap safe - done when inserting def),
