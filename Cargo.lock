@@ -14287,6 +14287,7 @@ dependencies = [
  "sui-data-ingestion-core",
  "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "tokio",
  "tonic 0.12.3",
  "tracing",
