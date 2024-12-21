@@ -34,7 +34,7 @@ use sui_types::{
     transaction::InputObjects,
     SUI_DENY_LIST_OBJECT_ID,
 };
-use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
+use sui_types::{is_system_package, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -927,6 +927,32 @@ impl<'backing> TemporaryStore<'backing> {
                 })?;
             }
         }
+
+        for event in &self.execution_results.user_events {
+            let ty = &event.type_;
+            if ty.address != SUI_FRAMEWORK_ADDRESS || ty.module.as_str() != "account" {
+                continue;
+            }
+
+            let sui_in_event = event.get_total_sui_in_event(layout_resolver).map_err(|e| {
+                make_invariant_violation!(
+                    "Failed looking up SUI in event with type {:?} in SUI conservation checking: {e:#?}",
+                    ty
+                )
+            })?;
+
+            if ty.name.as_str() == "Split" {
+                total_input_sui += sui_in_event;
+            } else if ty.name.as_str() == "Merge" {
+                total_output_sui += sui_in_event;
+            } else {
+                unreachable!(
+                    "Unexpected event type in SUI conservation checking: {:?}",
+                    ty
+                );
+            }
+        }
+
         // note: storage_cost flows into the storage_rebate field of the output objects, which is
         // why it is not accounted for here.
         // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow

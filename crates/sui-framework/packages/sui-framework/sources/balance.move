@@ -6,6 +6,9 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance;
 
+use sui::account;
+use sui::mergable::{Sum, make_sum};
+
 /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
 public use fun sui::coin::from_balance as Balance.into_coin;
 
@@ -30,6 +33,15 @@ public struct Supply<phantom T> has store {
 /// Can be used to store coins which don't need the key ability.
 public struct Balance<phantom T> has store {
     value: u64,
+}
+
+public struct MergableBalance<phantom T> has store {
+    value: Sum,
+}
+
+fun mergable_from_balance<T>(balance: Balance<T>): MergableBalance<T> {
+    let Balance { value } = balance;
+    MergableBalance { value: make_sum(value) }
 }
 
 /// Get the amount stored in a `Balance`.
@@ -91,6 +103,21 @@ public fun withdraw_all<T>(self: &mut Balance<T>): Balance<T> {
 public fun destroy_zero<T>(balance: Balance<T>) {
     assert!(balance.value == 0, ENonZero);
     let Balance { value: _ } = balance;
+}
+
+public fun send_to_account<T>(balance: Balance<T>, recipient: address) {
+    let balance = mergable_from_balance(balance);
+    account::transfer_to_account(balance, recipient);
+}
+
+public fun withdraw_from_account<T>(reservation: &mut account::Reservation<MergableBalance<T>>, amount: u64): Balance<T> {
+    // Conservation: we create a debit which will be subtracted from the account (if and only iff
+    // reservation is sufficient) and a corresponding credit which will be returned.
+    // Since reservation cannot underflow, and the two balances are equal, nothing is created or destroyed.
+    let debit = MergableBalance<T> { value: make_sum(amount) };
+    let credit = Balance { value: amount };
+    account::withdraw_from_account(reservation, debit, amount);
+    credit
 }
 
 const SUI_TYPE_NAME: vector<u8> =

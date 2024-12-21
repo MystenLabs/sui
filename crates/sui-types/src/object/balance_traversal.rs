@@ -13,19 +13,19 @@ use crate::balance::Balance;
 /// Traversal to gather the total balances of all coin types visited.
 #[derive(Default)]
 pub(crate) struct BalanceTraversal {
-    balances: BTreeMap<TypeTag, u64>,
+    balances: BTreeMap<TypeTag, u128>,
 }
 
 /// Helper traversal to accumulate the values of all u64s visited. Used by `BalanceTraversal` to
 /// get the value of a `Balance` struct's field.
 #[derive(Default)]
 struct Accumulator {
-    total: u64,
+    total: u128,
 }
 
 impl BalanceTraversal {
     /// Consume the traversal to get at its balance mapping.
-    pub(crate) fn finish(self) -> BTreeMap<TypeTag, u64> {
+    pub(crate) fn finish(self) -> BTreeMap<TypeTag, u128> {
         self.balances
     }
 }
@@ -57,6 +57,15 @@ impl<'b, 'l> Traversal<'b, 'l> for Accumulator {
         _driver: &ValueDriver<'_, 'b, 'l>,
         value: u64,
     ) -> Result<(), Self::Error> {
+        self.total += value as u128;
+        Ok(())
+    }
+
+    fn traverse_u128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u128,
+    ) -> Result<(), Self::Error> {
         self.total += value;
         Ok(())
     }
@@ -64,7 +73,8 @@ impl<'b, 'l> Traversal<'b, 'l> for Accumulator {
 
 /// Returns `Some(T)` if the struct is a `sui::balance::Balance<T>`, and `None` otherwise.
 fn is_balance(s: &StructTag) -> Option<TypeTag> {
-    (Balance::is_balance(s) && s.type_params.len() == 1).then(|| s.type_params[0].clone())
+    (Balance::is_balance_or_mergable(s) && s.type_params.len() == 1)
+        .then(|| s.type_params[0].clone())
 }
 
 #[cfg(test)]
