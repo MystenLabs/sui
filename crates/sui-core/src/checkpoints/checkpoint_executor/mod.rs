@@ -70,9 +70,6 @@ use crate::{
 mod data_ingestion_handler;
 pub mod metrics;
 
-#[cfg(test)]
-pub(crate) mod tests;
-
 type CheckpointExecutionBuffer = FuturesOrdered<
     JoinHandle<(
         VerifiedCheckpoint,
