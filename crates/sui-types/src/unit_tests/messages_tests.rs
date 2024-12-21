@@ -1099,7 +1099,7 @@ fn test_consensus_commit_prologue_v3_transaction() {
         0,
         42,
         ConsensusCommitDigest::default(),
-        Vec::new(),
+        ConsensusDeterminedVersionAssignments::empty_for_testing(),
     );
     assert!(tx.contains_shared_object());
     assert_eq!(

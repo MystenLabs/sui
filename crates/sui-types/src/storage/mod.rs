@@ -7,7 +7,7 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
-use crate::base_types::{TransactionDigest, VersionNumber};
+use crate::base_types::{ConsensusObjectSequenceKey, TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
@@ -598,5 +598,7 @@ pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
         key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>>;
+    ) -> SuiResult<Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>>;
+
+    fn is_initial_shared_version_unknown(&self) -> bool;
 }

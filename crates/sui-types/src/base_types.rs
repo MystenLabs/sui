@@ -155,6 +155,10 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
+/// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
+/// based on the object ID and initial shared version.
+pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
+
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of
@@ -1068,6 +1072,9 @@ impl SequenceNumber {
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
     pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
         SequenceNumber(SequenceNumber::MAX.value() + 3);
+    // Used to represent a sequence number whose value is unknown.
+    // For internal use only. This should never appear on chain.
+    pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 4);
 
     pub const fn new() -> Self {
         SequenceNumber(0)

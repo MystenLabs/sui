@@ -13,7 +13,7 @@ use std::time::Duration;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, ProtocolConfig};
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ConsensusObjectSequenceKey, ObjectID, ObjectRef, SuiAddress};
 use sui_types::execution_config_utils::to_binary_config;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
@@ -101,7 +101,7 @@ pub type ImmObjects = Arc<RwLock<HashMap<StructTag, Vec<ObjectRef>>>>;
 
 /// Map from StructTag to a vector of shared objects, where each shared object is a tuple of
 /// (object ID, initial shared version).
-pub type SharedObjects = Arc<RwLock<HashMap<StructTag, Vec<(ObjectID, SequenceNumber)>>>>;
+pub type SharedObjects = Arc<RwLock<HashMap<StructTag, Vec<ConsensusObjectSequenceKey>>>>;
 
 pub struct SurferState {
     pub id: usize,
@@ -395,7 +395,7 @@ impl SurferState {
         &self,
         type_tag: &StructTag,
         n: usize,
-    ) -> (ObjectID, SequenceNumber) {
+    ) -> ConsensusObjectSequenceKey {
         self.shared_objects.read().await.get(type_tag).unwrap()[n]
     }
 }
