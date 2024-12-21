@@ -43,8 +43,10 @@ rustls.workspace = true
 serde.workspace = true
 shared-crypto.workspace = true
 strum_macros.workspace = true
+sui-config.workspace = true
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
+sui-simulator.workspace = true
 sui-tls.workspace = true
 tap.workspace = true
 thiserror.workspace = true
@@ -58,10 +60,10 @@ tower-http.workspace = true
 tracing.workspace = true
 typed-store.workspace = true
 tonic-rustls.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
-tempfile.workspace = true
 telemetry-subscribers.workspace = true
 
 [build-dependencies]
