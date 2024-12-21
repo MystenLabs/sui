@@ -13,10 +13,9 @@ use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
-use crate::test_utils::make_transfer_object_transaction;
-use crate::test_utils::{
+use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
+use crate::unit_test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
-    make_transfer_object_move_transaction,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiError;

@@ -29,7 +29,7 @@ use crate::test_authority_clients::{
     HandleTransactionTestAuthorityClient, LocalAuthorityClient, LocalAuthorityClientFaultConfig,
     MockAuthorityApi,
 };
-use crate::test_utils::init_local_authorities;
+use crate::unit_test_utils::init_local_authorities;
 use sui_framework::BuiltInFramework;
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::time::Instant;
