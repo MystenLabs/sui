@@ -1,0 +1,8 @@
+warning[W09003]: unused assignment
+  ┌─ tests/linter/incorrect_almost_swapped.move:4:13
+  │
+4 │         let foo = 1;
+  │             ^^^ Unused assignment for variable 'foo'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_foo')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
