@@ -1,0 +1,15 @@
+---
+source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+expression: output
+---
+error[Compatibility E01007]: module missing
+  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/missing_module_toml/emoji/Move.toml:2:2
+  │  
+2 │   😀[package]😀
+  │ ╭───^
+3 │ │ 😀
+4 │ │ 😀name = "emoji"😀
+  │ ╰──────────────────^ Package is missing module 'identifier'
+  │  
+  = Modules which are part package cannot be removed during an upgrade.
+  = add missing module 'identifier' back to the package.
