@@ -3,15 +3,18 @@
 
 const fs = require("fs");
 const path = require("path");
+const https = require("https");
 const utils = require("./utils.js");
 
-const addCodeInject = function (source) {
+const GITHUB = "https://raw.githubusercontent.com/";
+const GITHUB_RAW = "refs/heads/main/";
+
+const addCodeInject = async function (source) {
   let fileString = source;
   const callback = this.async();
   const options = this.getOptions();
 
   const markdownFilename = path.basename(this.resourcePath);
-  const repoPath = path.join(__dirname, "../../../../..");
 
   // Do not load and render markdown files without docusaurus header.
   // These files are only used to be included in other files and should not generate their own web page
@@ -19,11 +22,54 @@ const addCodeInject = function (source) {
     return callback && callback(null, "");
   }
 
-  function addMarkdownIncludes(fileContent) {
+  const fetchFile = (url) => {
+    return new Promise((res, rej) => {
+      let data = "";
+      https
+        .get(url, (response) => {
+          if (response.statusCode !== 200) {
+            console.error(
+              `Failed to fetch GitHub data: ${response.statusCode}`,
+            );
+            res("Error loading content");
+          }
+
+          response.on("data", (chunk) => {
+            data += chunk;
+          });
+
+          response.on("end", () => {
+            res(data);
+          });
+        })
+        .on("error", (err) => {
+          rej(`Error: ${err.message}`);
+        });
+    });
+  };
+
+  const pathBuild = (srcPath) => {
+    const parts = srcPath.split("/");
+    if (parts[0].includes("github")) {
+      const githubOrgName = parts[0].split(":")[1];
+      const githubRepoName = parts[1];
+      return path.join(
+        GITHUB,
+        githubOrgName,
+        githubRepoName,
+        GITHUB_RAW,
+        parts.slice(2).join("/"),
+      );
+    } else {
+      return path.join(__dirname, "../../../../..", srcPath);
+    }
+  };
+
+  async function addMarkdownIncludes(fileContent) {
     let res = fileContent;
     const matches = fileContent.match(/(?<!`)\{@\w+: .+\}/g);
     if (matches) {
-      matches.forEach((match) => {
+      for (const match of matches) {
         const replacer = new RegExp(match, "g");
         const key = "{@inject: ";
 
@@ -31,12 +77,10 @@ const addCodeInject = function (source) {
           const parts = match.split(" ");
           const [, , ...options] = parts.length > 2 ? parts : [];
           let injectFileFull = parts[1].replace(/\}$/, "");
-
-          const injectFile = injectFileFull.split("#")[0];
-
+          let injectFile = injectFileFull.split("#")[0];
           let fileExt = injectFile.substring(injectFile.lastIndexOf(".") + 1);
           let language = "";
-          const fullPath = path.join(repoPath, injectFile);
+          const fullPath = pathBuild(injectFile);
 
           switch (fileExt) {
             case "lock":
@@ -64,10 +108,16 @@ const addCodeInject = function (source) {
           const isMove = language === "move";
           const isTs = language === "ts" || language === "js";
 
-          if (fs.existsSync(fullPath)) {
-            let injectFileContent = fs
-              .readFileSync(fullPath, "utf8")
-              .replaceAll(`\t`, "  ");
+          if (fs.existsSync(fullPath) || fullPath.match(/^https/)) {
+            let injectFileContent;
+            if (fullPath.match(/^https/)) {
+              injectFileContent = await fetchFile(fullPath);
+            } else {
+              injectFileContent = fs
+                .readFileSync(fullPath, "utf8")
+                .replaceAll(`\t`, "  ");
+            }
+
             const marker =
               injectFileFull.indexOf("#") > 0
                 ? injectFileFull.substring(injectFileFull.indexOf("#"))
@@ -507,7 +557,7 @@ const addCodeInject = function (source) {
                 options,
               );
               res = res.replace(replacer, injectFileContent);
-              res = addMarkdownIncludes(res);
+              res = await addMarkdownIncludes(res);
             } else {
               // Handle import of all the code
               const processed = utils.processOptions(
@@ -546,7 +596,7 @@ const addCodeInject = function (source) {
             }
           }
         }
-      });
+      }
     }
     return res;
   }
@@ -570,7 +620,7 @@ const addCodeInject = function (source) {
     return res;
   }
 
-  fileString = replacePlaceHolders(addMarkdownIncludes(fileString));
+  fileString = replacePlaceHolders(await addMarkdownIncludes(fileString));
 
   return callback && callback(null, fileString);
 };
