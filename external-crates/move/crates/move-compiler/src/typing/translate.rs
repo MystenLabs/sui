@@ -303,6 +303,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     let compiled_visibility =
         match public_testing_visibility(context.env, context.current_package, &name, entry) {
             Some(PublicForTesting::Entry(loc)) => Visibility::Public(loc),
+            Some(PublicForTesting::SuiInit) => Visibility::Public(Loc::invalid()),
             None => visibility,
         };
     function_signature(context, macro_, &signature);
