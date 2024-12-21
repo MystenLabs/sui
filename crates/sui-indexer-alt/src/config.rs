@@ -140,6 +140,7 @@ pub struct PipelineLayer {
     pub coin_balance_buckets_pruner: Option<ConcurrentLayer>,
 
     // All concurrent pipelines
+    pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
     pub kv_checkpoints: Option<ConcurrentLayer>,
@@ -273,6 +274,7 @@ impl PipelineLayer {
             obj_info_pruner: Some(Default::default()),
             coin_balance_buckets: Some(Default::default()),
             coin_balance_buckets_pruner: Some(Default::default()),
+            cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
             kv_checkpoints: Some(Default::default()),
@@ -409,6 +411,7 @@ impl Merge for PipelineLayer {
             coin_balance_buckets_pruner: self
                 .coin_balance_buckets_pruner
                 .merge(other.coin_balance_buckets_pruner),
+            cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
             kv_checkpoints: self.kv_checkpoints.merge(other.kv_checkpoints),
