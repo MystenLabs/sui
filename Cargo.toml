@@ -591,6 +591,9 @@ passkey-authenticator = { version = "0.2.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
 
+p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha384"] }
+ciborium = "0.2"
+
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
