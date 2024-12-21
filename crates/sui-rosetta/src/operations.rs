@@ -558,6 +558,93 @@ impl Operations {
         };
         balance_change.chain(gas)
     }
+
+    /// Checks to see if transferObjects is used on GasCoin
+    fn is_gascoin_transfer(tx: SuiTransactionBlockKind) -> bool {
+        match tx {
+            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
+                let SuiProgrammableTransactionBlock {
+                    inputs: _,
+                    commands,
+                } = &pt;
+                return commands.iter().any(|command| match command {
+                    SuiCommand::TransferObjects(objs, _) => {
+                        objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
+                    }
+                    _ => false,
+                });
+            }
+            _ => {}
+        }
+        false
+    }
+
+    /// If GasCoin is transferred as a part of transferObjects, operations need to be
+    /// updated such that:
+    /// 1) gas owner needs to be assigned back to the previous owner
+    /// 2) SuiBalanceChange type needs to be converted to PaySui for
+    ///    previous and new gas owners and their balances need to be adjusted for the gas
+    fn process_gascoin_transfer(
+        coin_change_operations: &mut impl Iterator<Item = crate::operations::Operation>,
+        tx: SuiTransactionBlockKind,
+        prev_gas_owner: SuiAddress,
+        new_gas_owner: SuiAddress,
+        gas_used: i128,
+    ) -> Result<Vec<Operation>, anyhow::Error> {
+        let mut gascoin_transfer_operations = vec![];
+        if Self::is_gascoin_transfer(tx) {
+            coin_change_operations.into_iter().for_each(|operation| {
+                match operation.type_ {
+                    OperationType::Gas => {
+                        // change gas account back to the previous owner as it is the one
+                        // who paid for the txn (this is the format Rosetta wants to process)
+                        gascoin_transfer_operations.push(Operation::gas(prev_gas_owner, gas_used))
+                    }
+                    OperationType::SuiBalanceChange => {
+                        operation.account.map(|account| {
+                            let mut amount = match operation.amount {
+                                Some(amount) => amount,
+                                None => return,
+                            };
+                            let mut is_convert_to_pay_sui = false;
+                            if account.address == prev_gas_owner && amount.currency == *SUI {
+                                // previous owner's balance needs to be adjusted for gas
+                                amount.value -= gas_used;
+                                is_convert_to_pay_sui = true;
+                            } else if account.address == new_gas_owner && amount.currency == *SUI {
+                                // new owner's balance needs to be adjusted for gas
+                                amount.value += gas_used;
+                                is_convert_to_pay_sui = true;
+                            }
+                            if is_convert_to_pay_sui {
+                                gascoin_transfer_operations.push(Operation::pay_sui(
+                                    operation.status,
+                                    account.address,
+                                    amount.value,
+                                ));
+                            } else {
+                                gascoin_transfer_operations.push(Operation::balance_change(
+                                    operation.status,
+                                    account.address,
+                                    amount.value,
+                                    amount.currency,
+                                ));
+                            }
+                        });
+                    }
+                    _ => {}
+                }
+            });
+            // sanity check to make sure all the operations have been processed
+            if coin_change_operations.count() != 0 {
+                return Err(anyhow!(
+                    "Unable to process all balance-change operations. Remaining count({})",
+                    coin_change_operations.count()
+                ));
+            }
+        }
+        Ok(gascoin_transfer_operations)
+    }
 }
 
 impl Operations {
@@ -592,7 +679,7 @@ impl Operations {
             - gas_summary.computation_cost as i128;
 
         let status = Some(effect.into_status().into());
-        let ops = Operations::try_from_data(tx.data, status)?;
+        let ops = Operations::try_from_data(tx.data.clone(), status)?;
         let ops = ops.into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -662,17 +749,28 @@ impl Operations {
         }
 
         // Extract coin change operations from balance changes
-        let coin_change_operations = Self::process_balance_change(
+        let mut coin_change_operations = Self::process_balance_change(
             gas_owner,
             gas_used,
             balance_changes,
             status,
-            accounted_balances,
+            accounted_balances.clone(),
         );
+
+        // Take {gas, previous gas owner, new gas owner} out of coin_change_operations
+        // and convert BalanceChange to PaySui when GasCoin is transferred
+        let gascoin_transfer_operations = Self::process_gascoin_transfer(
+            &mut coin_change_operations,
+            tx.data.transaction().clone(),
+            tx.data.gas_data().owner,
+            gas_owner,
+            gas_used,
+        )?;
 
         let ops: Operations = ops
             .into_iter()
             .chain(coin_change_operations)
+            .chain(gascoin_transfer_operations)
             .chain(staking_balance)
             .collect();
 
