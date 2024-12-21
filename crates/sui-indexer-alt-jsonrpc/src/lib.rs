@@ -8,14 +8,16 @@ use anyhow::Context;
 use jsonrpsee::server::{RpcModule, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::{MetricsService, RpcMetrics};
-use sui_pg_db::Db;
 use tokio::join;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::info;
 
-use crate::api::governance::{GovernanceImpl, GovernanceServer};
+use crate::api::{
+    governance::{GovernanceImpl, GovernanceServer},
+    Reader,
+};
 use crate::args::Args;
 
 mod api;
@@ -84,8 +86,8 @@ impl RpcService {
         })
     }
 
-    /// Return a copy of the metrics to inspect for testing purposes.
-    pub fn metrics_for_test(&self) -> Arc<RpcMetrics> {
+    /// Return a copy of the metrics.
+    pub fn metrics(&self) -> Arc<RpcMetrics> {
         self.metrics.clone()
     }
 
@@ -160,11 +162,9 @@ pub async fn start_rpc(args: Args) -> anyhow::Result<()> {
     let cancel = CancellationToken::new();
     let mut rpc = RpcService::new(rpc_args, cancel).context("Failed to create RPC service")?;
 
-    let db = Db::for_read(db_args)
-        .await
-        .context("Failed to connect to database")?;
+    let reader = Reader::new(db_args, rpc.metrics()).await?;
 
-    rpc.add_module(GovernanceImpl(db.clone()).into_rpc())?;
+    rpc.add_module(GovernanceImpl(reader.clone()).into_rpc())?;
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
     let _ = h_rpc.await;
@@ -391,7 +391,7 @@ mod tests {
 
         rpc.add_module(FooImpl.into_rpc()).unwrap();
 
-        let metrics = rpc.metrics_for_test();
+        let metrics = rpc.metrics();
         let handle = rpc.run().await.unwrap();
 
         let url = format!("http://{}/", rpc_listen_address);
