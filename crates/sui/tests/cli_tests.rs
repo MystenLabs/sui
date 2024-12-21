@@ -1657,6 +1657,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         "{}",
         err
     );
+
     Ok(())
 }
 
