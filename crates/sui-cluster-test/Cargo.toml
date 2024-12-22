@@ -43,3 +43,4 @@ telemetry-subscribers.workspace = true
 
 test-cluster.workspace = true
 move-core-types.workspace = true
+sui-move-build.workspace = true
