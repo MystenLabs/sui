@@ -4,7 +4,7 @@ Thanks for considering making a contribution to the Sui network or its documenta
 
 ## Contribute to Sui
 
-See [Sui Environment Setup](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-environment.mdx) for approach to submitting code fixes and enhancements.
+See [Sui Environment Setup](https://github.com/MystenLabs/sui/blob/main/docs/content/references/contribute/sui-environment.mdx) for approach to submitting code fixes and enhancements.
 
 If you want to contribute code that creates a feature on Sui, start with a [Sui Improvement Proposal](https://github.com/sui-foundation/sips/tree/main) before developing the logic.
 
