@@ -9,6 +9,8 @@ use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+pub mod db;
+
 #[derive(clap::Args, Debug, Clone)]
 pub struct MetricsArgs {
     /// Address to serve Prometheus metrics from.

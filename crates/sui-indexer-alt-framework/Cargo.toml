@@ -30,6 +30,7 @@ tracing.workspace = true
 url.workspace = true
 
 sui-field-count.workspace = true
+sui-indexer-alt-metrics.workspace = true
 sui-pg-db.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
