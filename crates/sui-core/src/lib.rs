@@ -73,6 +73,9 @@ mod transfer_to_object_tests;
 #[cfg(test)]
 #[path = "unit_tests/type_param_tests.rs"]
 mod type_param_tests;
+#[cfg(test)]
+#[path = "unit_tests/unit_test_utils.rs"]
+mod unit_test_utils;
 
 pub mod signature_verifier;
 
