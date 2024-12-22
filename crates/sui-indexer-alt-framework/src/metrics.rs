@@ -1,25 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    net::SocketAddr,
-    sync::{atomic::AtomicU64, Arc},
-};
+use std::sync::{atomic::AtomicU64, Arc};
 
-use anyhow::Result;
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{
     core::{Collector, Desc},
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry, TextEncoder,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use sui_pg_db::Db;
-use tokio::{net::TcpListener, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::{ingestion::error::Error, pipeline::Processor};
 
@@ -51,13 +44,6 @@ const DB_UPDATE_LATENCY_SEC_BUCKETS: &[f64] = &[
 const BATCH_SIZE_BUCKETS: &[f64] = &[
     1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0,
 ];
-
-/// Service to expose prometheus metrics from the indexer.
-pub(crate) struct MetricsService {
-    addr: SocketAddr,
-    registry: Registry,
-    cancel: CancellationToken,
-}
 
 #[derive(Clone)]
 pub(crate) struct IndexerMetrics {
@@ -149,7 +135,7 @@ pub(crate) struct IndexerMetrics {
 }
 
 /// Collects information about the database connection pool.
-struct DbConnectionStatsCollector {
+pub(crate) struct DbConnectionStatsCollector {
     db: Db,
     desc: Vec<(MetricType, Desc)>,
 }
@@ -163,57 +149,13 @@ pub(crate) struct CheckpointLagMetricReporter {
     latest_checkpoint_time_lag_gauge: IntGauge,
     /// Metric to report the sequence number of the checkpoint with the highest sequence number observed so far.
     latest_checkpoint_sequence_number_gauge: IntGauge,
-
     // Internal state to keep track of the highest checkpoint sequence number reported so far.
     latest_reported_checkpoint: AtomicU64,
 }
 
-impl MetricsService {
-    /// Create a new metrics service, exposing Mysten-wide metrics, and Indexer-specific metrics.
-    /// Returns the Indexer-specific metrics and the service itself (which must be run with
-    /// [Self::run]).
-    pub(crate) fn new(
-        addr: SocketAddr,
-        db: Db,
-        cancel: CancellationToken,
-    ) -> Result<(Arc<IndexerMetrics>, MetricsService)> {
-        let registry = Registry::new_custom(Some("indexer_alt".to_string()), None)?;
-
-        let metrics = IndexerMetrics::new(&registry);
-        registry.register(Box::new(DbConnectionStatsCollector::new(db)))?;
-
-        let service = Self {
-            addr,
-            registry,
-            cancel,
-        };
-
-        Ok((Arc::new(metrics), service))
-    }
-
-    /// Start the service. The service will run until the cancellation token is triggered.
-    pub(crate) async fn run(self) -> Result<JoinHandle<()>> {
-        let listener = TcpListener::bind(&self.addr).await?;
-        let app = Router::new()
-            .route("/metrics", get(metrics))
-            .layer(Extension(self.registry));
-
-        Ok(tokio::spawn(async move {
-            info!("Starting metrics service on {}", self.addr);
-            axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    self.cancel.cancelled().await;
-                    info!("Shutdown received, stopping metrics service");
-                })
-                .await
-                .unwrap();
-        }))
-    }
-}
-
 impl IndexerMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
+    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
             total_ingested_checkpoints: register_int_counter_with_registry!(
                 "indexer_total_ingested_checkpoints",
                 "Total number of checkpoints fetched from the remote store",
@@ -651,7 +593,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-        }
+        })
     }
 
     /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
@@ -673,7 +615,7 @@ impl IndexerMetrics {
 }
 
 impl DbConnectionStatsCollector {
-    fn new(db: Db) -> Self {
+    pub(crate) fn new(db: Db) -> Self {
         let desc = vec![
             (
                 MetricType::GAUGE,
@@ -808,17 +750,6 @@ impl CheckpointLagMetricReporter {
     }
 }
 
-/// Route handler for metrics service
-async fn metrics(Extension(registry): Extension<Registry>) -> (StatusCode, String) {
-    match TextEncoder.encode_to_string(&registry.gather()) {
-        Ok(s) => (StatusCode::OK, s),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encode metrics: {e}"),
-        ),
-    }
-}
-
 fn desc(name: &str, help: &str) -> Desc {
     desc_with_labels(name, help, &[])
 }
@@ -904,12 +835,14 @@ fn summary(desc: &Desc, sum: f64, count: u64) -> MetricFamily {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::sync::Arc;
+
     use prometheus::Registry;
 
     use super::IndexerMetrics;
 
     /// Construct metrics for test purposes.
-    pub fn test_metrics() -> IndexerMetrics {
+    pub fn test_metrics() -> Arc<IndexerMetrics> {
         IndexerMetrics::new(&Registry::new())
     }
 }
