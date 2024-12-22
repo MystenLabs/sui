@@ -8,17 +8,17 @@ use anyhow::Context;
 use api::rpc_module::RpcModule;
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
-use metrics::{MetricsService, RpcMetrics};
+use metrics::RpcMetrics;
+use prometheus::Registry;
 use serde_json::json;
 use sui_open_rpc::Project;
-use tokio::join;
-use tokio::task::JoinHandle;
+use sui_pg_db::DbArgs;
+use tokio::{join, signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::info;
 
 use crate::api::{governance::Governance, Reader};
-use crate::args::Args;
 
 mod api;
 pub mod args;
@@ -29,10 +29,6 @@ pub struct RpcArgs {
     /// Address to listen to for incoming JSON-RPC connections.
     #[clap(long, default_value_t = Self::default().rpc_listen_address)]
     rpc_listen_address: SocketAddr,
-
-    /// Address to serve Prometheus metrics from.
-    #[clap(long, default_value_t = Self::default().metrics_address)]
-    metrics_address: SocketAddr,
 
     /// The maximum number of concurrent connections to accept.
     #[clap(long, default_value_t = Self::default().max_rpc_connections)]
@@ -49,9 +45,6 @@ pub struct RpcService {
     /// Metrics for the RPC service.
     metrics: Arc<RpcMetrics>,
 
-    /// Service for serving Prometheus metrics.
-    metrics_service: MetricsService,
-
     /// All the methods added to the server so far.
     modules: jsonrpsee::RpcModule<()>,
 
@@ -65,15 +58,17 @@ pub struct RpcService {
 impl RpcService {
     /// Create a new instance of the JSON-RPC service, configured by `rpc_args`. The service will
     /// not accept connections until [Self::run] is called.
-    pub fn new(rpc_args: RpcArgs, cancel: CancellationToken) -> anyhow::Result<Self> {
+    pub fn new(
+        rpc_args: RpcArgs,
+        registry: &Registry,
+        cancel: CancellationToken,
+    ) -> anyhow::Result<Self> {
         let RpcArgs {
             rpc_listen_address,
-            metrics_address,
             max_rpc_connections,
         } = rpc_args;
 
-        let (metrics, metrics_service) = MetricsService::new(metrics_address, cancel.clone())
-            .context("Failed to create metrics service")?;
+        let metrics = RpcMetrics::new(registry);
 
         let server = ServerBuilder::new()
             .http_only()
@@ -94,7 +89,6 @@ impl RpcService {
             rpc_listen_address,
             server,
             metrics,
-            metrics_service,
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
@@ -122,7 +116,6 @@ impl RpcService {
             rpc_listen_address,
             server,
             metrics,
-            metrics_service,
             mut modules,
             schema,
             cancel,
@@ -135,11 +128,6 @@ impl RpcService {
         modules
             .register_method("rpc.discover", move |_, _, _| json!(schema.clone()))
             .context("Failed to add schema discovery method")?;
-
-        let h_metrics = metrics_service
-            .run()
-            .await
-            .context("Failed to start metrics service")?;
 
         let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
             metrics,
@@ -162,10 +150,22 @@ impl RpcService {
             cancel_handle.stop()
         });
 
+        // Set-up another helper task that will listen for Ctrl-C and trigger the cancellation
+        // token.
+        let ctrl_c_cancel = cancel.clone();
+        let h_ctrl_c = tokio::spawn(async move {
+            tokio::select! {
+                _ = ctrl_c_cancel.cancelled() => {}
+                _ = signal::ctrl_c() => {
+                    ctrl_c_cancel.cancel();
+                }
+            }
+        });
+
         Ok(tokio::spawn(async move {
             handle.stopped().await;
             cancel.cancel();
-            let _ = join!(h_cancel, h_metrics);
+            let _ = join!(h_cancel, h_ctrl_c);
         }))
     }
 }
@@ -174,25 +174,25 @@ impl Default for RpcArgs {
     fn default() -> Self {
         Self {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
-            metrics_address: "0.0.0.0:9184".parse().unwrap(),
             max_rpc_connections: 100,
         }
     }
 }
 
-pub async fn start_rpc(args: Args) -> anyhow::Result<()> {
-    let Args { db_args, rpc_args } = args;
-
-    let cancel = CancellationToken::new();
-    let mut rpc = RpcService::new(rpc_args, cancel).context("Failed to create RPC service")?;
+pub async fn start_rpc(
+    db_args: DbArgs,
+    rpc_args: RpcArgs,
+    registry: &Registry,
+    cancel: CancellationToken,
+) -> anyhow::Result<JoinHandle<()>> {
+    let mut rpc =
+        RpcService::new(rpc_args, registry, cancel).context("Failed to create RPC service")?;
 
     let reader = Reader::new(db_args, rpc.metrics()).await?;
 
     rpc.add_module(Governance(reader.clone()))?;
 
-    let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
-    let _ = h_rpc.await;
-    Ok(())
+    rpc.run().await.context("Failed to start RPC service")
 }
 
 #[cfg(test)]
@@ -263,9 +263,9 @@ mod tests {
         let rpc = RpcService::new(
             RpcArgs {
                 rpc_listen_address: test_listen_address(),
-                metrics_address: test_listen_address(),
                 ..Default::default()
             },
+            &Registry::new(),
             cancel.clone(),
         )
         .unwrap();
@@ -287,9 +287,9 @@ mod tests {
         let mut rpc = RpcService::new(
             RpcArgs {
                 rpc_listen_address,
-                metrics_address: test_listen_address(),
                 ..Default::default()
             },
+            &Registry::new(),
             cancel.clone(),
         )
         .unwrap();
@@ -370,9 +370,9 @@ mod tests {
         let mut rpc = RpcService::new(
             RpcArgs {
                 rpc_listen_address,
-                metrics_address: test_listen_address(),
                 ..Default::default()
             },
+            &Registry::new(),
             cancel.clone(),
         )
         .unwrap();
@@ -546,9 +546,9 @@ mod tests {
         RpcService::new(
             RpcArgs {
                 rpc_listen_address: test_listen_address(),
-                metrics_address: test_listen_address(),
                 ..Default::default()
             },
+            &Registry::new(),
             cancel,
         )
         .expect("Failed to create test JSON-RPC service")

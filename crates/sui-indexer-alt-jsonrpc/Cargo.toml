@@ -29,6 +29,7 @@ tower-layer.workspace = true
 tracing.workspace = true
 url.workspace = true
 
+sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
