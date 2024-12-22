@@ -188,7 +188,7 @@ pub async fn start_rpc(
     let mut rpc =
         RpcService::new(rpc_args, registry, cancel).context("Failed to create RPC service")?;
 
-    let reader = Reader::new(db_args, rpc.metrics()).await?;
+    let reader = Reader::new(db_args, rpc.metrics(), registry).await?;
 
     rpc.add_module(Governance(reader.clone()))?;
 

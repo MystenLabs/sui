@@ -10,13 +10,14 @@ use diesel::{
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
-use metrics::{DbConnectionStatsCollector, IndexerMetrics};
+use metrics::IndexerMetrics;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
     sequential::{self, SequentialConfig},
     Processor,
 };
 use prometheus::Registry;
+use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use task::graceful_shutdown;
 use tempfile::tempdir;
@@ -142,7 +143,10 @@ impl Indexer {
             .context("Failed to run pending migrations")?;
 
         let metrics = IndexerMetrics::new(registry);
-        registry.register(Box::new(DbConnectionStatsCollector::new(db.clone())))?;
+        registry.register(Box::new(DbConnectionStatsCollector::new(
+            Some("indexer_db"),
+            db.clone(),
+        )))?;
 
         let ingestion_service = IngestionService::new(
             client_args,

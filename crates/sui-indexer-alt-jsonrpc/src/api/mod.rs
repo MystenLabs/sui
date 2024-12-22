@@ -11,6 +11,8 @@ use diesel::result::Error as DieselError;
 use diesel_async::methods::LoadQuery;
 use diesel_async::RunQueryDsl;
 use jsonrpsee::types::{error::INTERNAL_ERROR_CODE, ErrorObject};
+use prometheus::Registry;
+use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tracing::debug;
 
@@ -48,8 +50,16 @@ impl Reader {
     pub(crate) async fn new(
         db_args: db::DbArgs,
         metrics: Arc<RpcMetrics>,
+        registry: &Registry,
     ) -> Result<Self, DbError> {
         let db = db::Db::for_read(db_args).await.map_err(DbError::Create)?;
+
+        registry
+            .register(Box::new(DbConnectionStatsCollector::new(
+                Some("rpc_db"),
+                db.clone(),
+            )))
+            .map_err(|e| DbError::Create(e.into()))?;
 
         Ok(Self { db, metrics })
     }
