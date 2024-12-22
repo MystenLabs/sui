@@ -1,18 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{http::StatusCode, routing::get, Extension, Router};
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, Registry, TextEncoder,
+    HistogramVec, IntCounter, IntCounterVec, Registry,
 };
-use tokio::{net::TcpListener, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
-use tracing::info;
 
 pub(crate) mod middleware;
 
@@ -22,13 +17,6 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
     200.0, 500.0, 1000.0,
 ];
-
-/// Service to expose prometheus metrics from the JSON-RPC service.
-pub struct MetricsService {
-    addr: SocketAddr,
-    registry: Registry,
-    cancel: CancellationToken,
-}
 
 #[derive(Clone)]
 pub struct RpcMetrics {
@@ -43,49 +31,8 @@ pub struct RpcMetrics {
     pub requests_failed: IntCounterVec,
 }
 
-impl MetricsService {
-    /// Create a new metrics service, exposing JSON-RPC-specific metrics. Returns the RPC-specific
-    /// metrics and the service itself (which must be run with [Self::run]).
-    pub(crate) fn new(
-        addr: SocketAddr,
-        cancel: CancellationToken,
-    ) -> anyhow::Result<(Arc<RpcMetrics>, Self)> {
-        let registry = Registry::new_custom(Some("jsonrpc_alt".to_string()), None)?;
-
-        let metrics = RpcMetrics::new(&registry);
-
-        let service = Self {
-            addr,
-            registry,
-            cancel,
-        };
-
-        Ok((metrics, service))
-    }
-
-    /// Start the service. The service will run until the cancellation token is triggered.
-    pub(crate) async fn run(self) -> anyhow::Result<JoinHandle<()>> {
-        let listener = TcpListener::bind(&self.addr).await?;
-
-        let app = Router::new()
-            .route("/metrics", get(metrics))
-            .layer(Extension(self.registry));
-
-        Ok(tokio::spawn(async move {
-            info!("Starting metrics service on {}", self.addr);
-            axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    self.cancel.cancelled().await;
-                    info!("Shutdown received, stopping metrics service");
-                })
-                .await
-                .unwrap();
-        }))
-    }
-}
-
 impl RpcMetrics {
-    fn new(registry: &Registry) -> Arc<Self> {
+    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             db_latency: register_histogram_with_registry!(
                 "db_latency",
@@ -145,16 +92,5 @@ impl RpcMetrics {
             )
             .unwrap(),
         })
-    }
-}
-
-/// Route handler for metrics service
-async fn metrics(Extension(registry): Extension<Registry>) -> (StatusCode, String) {
-    match TextEncoder.encode_to_string(&registry.gather()) {
-        Ok(s) => (StatusCode::OK, s),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encode metrics: {e}"),
-        ),
     }
 }

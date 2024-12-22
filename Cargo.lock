@@ -14101,6 +14101,7 @@ dependencies = [
  "prometheus",
  "reqwest 0.12.5",
  "serde_json",
+ "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
  "sui-open-rpc",
  "sui-open-rpc-macros",
