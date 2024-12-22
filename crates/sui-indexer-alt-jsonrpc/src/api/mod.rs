@@ -17,6 +17,7 @@ use tracing::debug;
 use crate::metrics::RpcMetrics;
 
 pub(crate) mod governance;
+pub(crate) mod rpc_module;
 
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
 /// RPC layer, metrics collection, and debug logging of database queries.

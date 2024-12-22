@@ -14100,6 +14100,8 @@ dependencies = [
  "reqwest 0.12.5",
  "serde_json",
  "sui-indexer-alt-schema",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
  "sui-pg-db",
  "sui-types",
  "telemetry-subscribers",
