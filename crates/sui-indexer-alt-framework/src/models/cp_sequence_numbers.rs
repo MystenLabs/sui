@@ -17,83 +17,74 @@ pub struct StoredCpSequenceNumbers {
     pub epoch: i64,
 }
 
-/// A struct that can be instantiated by the pruner task to map a `from` and `to` checkpoint to its
-/// corresponding `tx_lo` and containing epoch. The `from` checkpoint is expected to be inclusive,
-/// and the `to` checkpoint is exclusive. This requires the existence of the `checkpoint_metadata`
-/// table.
-pub struct PrunableRange {
-    from: StoredCpSequenceNumbers,
-    to: StoredCpSequenceNumbers,
+/// Inclusive start and exclusive end range of prunable txs.
+pub async fn tx_interval(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
+    let result = get_range(conn, cps).await?;
+
+    Ok(Range {
+        start: result.0.tx_lo as u64,
+        end: result.1.tx_lo as u64,
+    })
 }
 
-impl PrunableRange {
-    /// Gets the tx and epoch mappings for both the start and end checkpoints.
-    ///
-    /// The values are expected to exist since the cp_mapping table must have enough information to
-    /// encompass the retention of other tables.
-    pub async fn get_range(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Self> {
-        let Range {
-            start: from_cp,
-            end: to_cp,
-        } = cps;
+/// Inclusive start and exclusive end range of epochs.
+///
+/// The two values in the tuple represent which epoch the `from` and `to` checkpoints come from,
+/// respectively.
+pub async fn epoch_interval(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
+    let result = get_range(conn, cps).await?;
 
-        // Only error if from_cp is not <= to_cp. from_cp can be equal to to_cp, because there may
-        // be multiple transactions within the same checkpoint.
-        if from_cp > to_cp {
-            bail!(format!(
-                "Invalid checkpoint range: `from` {from_cp} is greater than `to` {to_cp}"
-            ));
-        }
+    Ok(Range {
+        start: result.0.epoch as u64,
+        end: result.1.epoch as u64,
+    })
+}
 
-        let results = cp_sequence_numbers::table
-            .select(StoredCpSequenceNumbers::as_select())
-            .filter(cp_sequence_numbers::cp_sequence_number.eq_any([from_cp as i64, to_cp as i64]))
-            .order(cp_sequence_numbers::cp_sequence_number.asc())
-            .load::<StoredCpSequenceNumbers>(conn)
-            .await
-            .map_err(anyhow::Error::from)?;
+/// Gets the tx and epoch mappings for both the start and end checkpoints.
+///
+/// The values are expected to exist since the cp_mapping table must have enough information to
+/// encompass the retention of other tables.
+pub(crate) async fn get_range(
+    conn: &mut Connection<'_>,
+    cps: Range<u64>,
+) -> Result<(StoredCpSequenceNumbers, StoredCpSequenceNumbers)> {
+    let Range {
+        start: from_cp,
+        end: to_cp,
+    } = cps;
 
-        let Some(from) = results
-            .iter()
-            .find(|cp| cp.cp_sequence_number == from_cp as i64)
-        else {
-            bail!(format!(
-                "No checkpoint mapping found for checkpoint {from_cp}"
-            ));
-        };
-        let Some(to) = results
-            .iter()
-            .find(|cp| cp.cp_sequence_number == to_cp as i64)
-        else {
-            bail!(format!(
-                "No checkpoint mapping found for checkpoint {to_cp}"
-            ));
-        };
-
-        Ok(PrunableRange {
-            from: from.clone(),
-            to: to.clone(),
-        })
+    // Only error if from_cp is not <= to_cp. from_cp can be equal to to_cp, because there may
+    // be multiple transactions within the same checkpoint.
+    if from_cp > to_cp {
+        bail!(format!(
+            "Invalid checkpoint range: `from` {from_cp} is greater than `to` {to_cp}"
+        ));
     }
 
-    /// Inclusive start and exclusive end range of prunable checkpoints.
-    pub fn checkpoint_interval(&self) -> (u64, u64) {
-        (
-            self.from.cp_sequence_number as u64,
-            self.to.cp_sequence_number as u64,
-        )
-    }
+    let results = cp_sequence_numbers::table
+        .select(StoredCpSequenceNumbers::as_select())
+        .filter(cp_sequence_numbers::cp_sequence_number.eq_any([from_cp as i64, to_cp as i64]))
+        .order(cp_sequence_numbers::cp_sequence_number.asc())
+        .load::<StoredCpSequenceNumbers>(conn)
+        .await
+        .map_err(anyhow::Error::from)?;
 
-    /// Inclusive start and exclusive end range of prunable txs.
-    pub fn tx_interval(&self) -> (u64, u64) {
-        (self.from.tx_lo as u64, self.to.tx_lo as u64)
-    }
+    let Some(from) = results
+        .iter()
+        .find(|cp| cp.cp_sequence_number == from_cp as i64)
+    else {
+        bail!(format!(
+            "No checkpoint mapping found for checkpoint {from_cp}"
+        ));
+    };
+    let Some(to) = results
+        .iter()
+        .find(|cp| cp.cp_sequence_number == to_cp as i64)
+    else {
+        bail!(format!(
+            "No checkpoint mapping found for checkpoint {to_cp}"
+        ));
+    };
 
-    /// Inclusive start and exclusive end range of epochs.
-    ///
-    /// The two values in the tuple represent which epoch the `from` and `to` checkpoints come from,
-    /// respectively.
-    pub fn epoch_interval(&self) -> (u64, u64) {
-        (self.from.epoch as u64, self.to.epoch as u64)
-    }
+    Ok((from.clone(), to.clone()))
 }
