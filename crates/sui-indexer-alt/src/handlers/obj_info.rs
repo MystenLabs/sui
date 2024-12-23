@@ -3,20 +3,13 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
-use sui_indexer_alt_schema::{
-    objects::{StoredObjInfo, StoredOwnerKind},
-    schema::obj_info,
-};
+use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_pg_db as db;
-use sui_types::{
-    base_types::ObjectID,
-    full_checkpoint_content::CheckpointData,
-    object::{Object, Owner},
-};
+use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object};
 
 pub(crate) struct ObjInfo;
 
@@ -105,36 +98,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
     fn try_into(self) -> Result<StoredObjInfo> {
         match &self.update {
             ProcessedObjInfoUpdate::Insert(object) => {
-                let type_ = object.type_();
-                let (owner_kind, owner_id) = match object.owner() {
-                    Owner::AddressOwner(a) => (StoredOwnerKind::Address, Some(a.to_vec())),
-                    Owner::ObjectOwner(o) => (StoredOwnerKind::Object, Some(o.to_vec())),
-                    Owner::Shared { .. } | Owner::Immutable { .. } => {
-                        (StoredOwnerKind::Shared, None)
-                    }
-                    Owner::ConsensusV2 { authenticator, .. } => (
-                        StoredOwnerKind::Address,
-                        Some(authenticator.as_single_owner().to_vec()),
-                    ),
-                };
-                Ok(StoredObjInfo {
-                    object_id: object.id().to_vec(),
-                    cp_sequence_number: self.cp_sequence_number as i64,
-                    owner_kind: Some(owner_kind),
-                    owner_id,
-                    package: type_.map(|t| t.address().to_vec()),
-                    module: type_.map(|t| t.module().to_string()),
-                    name: type_.map(|t| t.name().to_string()),
-                    instantiation: type_
-                        .map(|t| bcs::to_bytes(&t.type_params()))
-                        .transpose()
-                        .map_err(|e| {
-                            anyhow!(
-                                "Failed to serialize type parameters for {}: {e}",
-                                object.id().to_canonical_display(/* with_prefix */ true),
-                            )
-                        })?,
-                })
+                StoredObjInfo::from_object(object, self.cp_sequence_number as i64)
             }
             ProcessedObjInfoUpdate::Delete(object_id) => Ok(StoredObjInfo {
                 object_id: object_id.to_vec(),
