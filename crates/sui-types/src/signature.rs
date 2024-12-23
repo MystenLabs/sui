@@ -3,7 +3,7 @@
 
 use crate::committee::EpochId;
 use crate::crypto::{
-    CompressedSignature, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes,
+    CompressedSignature, PasskeyAuthenticatorAsBytes, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes
 };
 use crate::digests::ZKLoginInputsDigest;
 use crate::error::SuiError;
@@ -149,14 +149,17 @@ impl GenericSignature {
                         })?)
                             .into(),
                     )),
-                    SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
-                        (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
-                            SuiError::InvalidSignature {
-                                error: "Cannot parse secp256r1 sig".to_string(),
-                            }
-                        })?)
-                            .into(),
-                    )),
+                    SignatureScheme::Secp256r1 | SignatureScheme::PasskeyAuthenticator => {
+                        Ok(CompressedSignature::Secp256r1(
+                            (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
+                                SuiError::InvalidSignature {
+                                    error: "Cannot parse secp256r1 sig".to_string(),
+                                }
+                            })?)
+                                .into(),
+                        ))
+                    }
+
                     _ => Err(SuiError::UnsupportedFeatureError {
                         error: "Unsupported signature scheme".to_string(),
                     }),
@@ -164,6 +167,9 @@ impl GenericSignature {
             }
             GenericSignature::ZkLoginAuthenticator(s) => Ok(CompressedSignature::ZkLogin(
                 ZkLoginAuthenticatorAsBytes(s.as_ref().to_vec()),
+            )),
+            GenericSignature::PasskeyAuthenticator(s) => Ok(CompressedSignature::Passkey(
+                PasskeyAuthenticatorAsBytes(s.as_ref().to_vec()),
             )),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
@@ -202,6 +208,7 @@ impl GenericSignature {
                 }
             }
             GenericSignature::ZkLoginAuthenticator(s) => s.get_pk(),
+            GenericSignature::PasskeyAuthenticator(s) => s.get_pk(),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
             }),
