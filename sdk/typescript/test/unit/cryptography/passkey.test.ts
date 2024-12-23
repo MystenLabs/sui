@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { bcs } from '../../../src/bcs';
 import { messageWithIntent } from '../../../src/cryptography';
 import { PasskeyKeypair } from '../../../src/keypairs/passkey';
-import { PasskeyProvider } from '../../../src/keypairs/passkey/keypair';
+import { findUniquePublicKey, PasskeyProvider } from '../../../src/keypairs/passkey/keypair';
 import {
 	parseSerializedPasskeySignature,
 	PasskeyPublicKey,
@@ -326,5 +326,31 @@ describe('passkey signer E2E testing', () => {
 		const pubkey = new PasskeyPublicKey(parsed.publicKey!);
 		const isValid = await pubkey.verifyTransaction(txBytes, sig);
 		expect(isValid).toBe(true);
+	});
+
+	it('should sign and recover to an unique public key', async () => {
+		const sk = secp256r1.utils.randomPrivateKey();
+		const pk = secp256r1.getPublicKey(sk);
+		const authenticatorData = new Uint8Array([]);
+		const mockProvider = new MockPasskeySigner({
+			sk: sk,
+			pk: pk,
+			authenticatorData: authenticatorData,
+		});
+
+		const signer = await PasskeyKeypair.getPasskeyInstance(mockProvider);
+		const address = signer.getPublicKey().toSuiAddress();
+
+		const testMessage = new TextEncoder().encode('Hello world!');
+		const possiblePks = await PasskeyKeypair.signAndRecover(mockProvider, testMessage);
+
+		const testMessage2 = new TextEncoder().encode('Hello world 2!');
+		const possiblePks2 = await PasskeyKeypair.signAndRecover(mockProvider, testMessage2);
+
+		const uniquePk = findUniquePublicKey(possiblePks, possiblePks2);
+		const signer2 = new PasskeyKeypair(mockProvider, uniquePk.toRawBytes());
+
+		// the address from recovered pk is the same as the one constructed from the same mock provider
+		expect(signer2.getPublicKey().toSuiAddress()).toEqual(address);
 	});
 });
