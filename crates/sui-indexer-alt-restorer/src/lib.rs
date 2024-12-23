@@ -11,13 +11,14 @@ use sui_pg_db::DbArgs;
 use crate::snapshot::SnapshotRestorer;
 
 #[derive(Parser, Debug, Clone)]
-#[clap(name = "sui-indexer-restorer")]
+#[clap(name = "sui-indexer-alt-restorer")]
 pub struct Args {
     /// Restore from end of this epoch.
     #[clap(long, env = "START_EPOCH", required = true)]
     pub start_epoch: u64,
 
-    /// Endpoint to fetch snapshot files from.
+    /// Url of the endpoint to fetch snapshot files from,
+    /// for example https://formal-snapshot.mainnet.sui.io
     #[clap(long, env = "ENDPOINT", required = true)]
     pub endpoint: String,
 

@@ -67,7 +67,7 @@ impl SnapshotRestorer {
             true, // skip_reset_local_store
         )
         .await?;
-        let db = Db::new(args.db_args.clone()).await?;
+        let db = Db::for_write(args.db_args.clone()).await?;
 
         Ok(Self {
             restore_args: args.clone(),
@@ -135,7 +135,6 @@ impl SnapshotRestorer {
 
                     async move {
                         let mut conn = db.connect().await?;
-                        let object_file_path = file_metadata.file_path(&epoch_dir);
                         let (bytes, _) = download_bytes(
                             remote_object_store,
                             &file_metadata,
@@ -146,28 +145,16 @@ impl SnapshotRestorer {
                             Some(512), // max_timeout_secs
                         )
                         .await;
-                        info!(
-                            path = ?object_file_path,
-                            "Finished downloading move object file"
-                        );
-                        let mut object_infos = vec![];
-                        LiveObjectIter::new(&file_metadata, bytes.clone()).map(|obj_iter| {
-                            for object in obj_iter {
-                                match object {
-                                    LiveObject::Normal(obj) => {
-                                        let object_info =
-                                            StoredObjInfo::from_object(&obj, next_cp as i64);
-                                        object_infos.push(object_info);
-                                    }
-                                    LiveObject::Wrapped(_) => {}
+                        let object_infos = LiveObjectIter::new(&file_metadata, bytes.clone())?
+                            .filter_map(|object| match object {
+                                LiveObject::Normal(obj) => {
+                                    Some(StoredObjInfo::from_object(&obj, next_cp as i64))
                                 }
-                            }
-                        })?;
-                        let object_infos =
-                            object_infos.into_iter().collect::<Result<Vec<_>, _>>()?;
+                                LiveObject::Wrapped(_) => None,
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
 
                         // NOTE: chunk to avoid hitting the PG limit
-                        let object_info_count = object_infos.len();
                         let chunk_size: usize = i16::MAX as usize / StoredObjInfo::FIELD_COUNT;
                         for chunk in object_infos.chunks(chunk_size) {
                             diesel::insert_into(obj_info::table)
@@ -177,7 +164,7 @@ impl SnapshotRestorer {
                                 .await?;
                         }
                         bar.inc(1);
-                        info!(count = object_info_count, "Restored move objects");
+                        bar.set_message(format!("Bucket: {}, Part: {}", bucket, part_num));
                         Ok::<(), anyhow::Error>(())
                     }
                 },

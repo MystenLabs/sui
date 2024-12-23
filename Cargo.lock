@@ -14079,6 +14079,7 @@ dependencies = [
  "sui-snapshot",
  "sui-storage",
  "sui-types",
+ "telemetry-subscribers",
  "tokio",
  "tracing",
 ]
