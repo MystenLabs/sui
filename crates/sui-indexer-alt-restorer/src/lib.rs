@@ -18,7 +18,7 @@ pub struct Args {
     pub start_epoch: u64,
 
     /// Url of the endpoint to fetch snapshot files from,
-    /// for example https://formal-snapshot.mainnet.sui.io
+    /// for example <https://formal-snapshot.mainnet.sui.io>
     #[clap(long, env = "ENDPOINT", required = true)]
     pub endpoint: String,
 
