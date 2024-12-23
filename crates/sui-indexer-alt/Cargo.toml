@@ -15,6 +15,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
+dashmap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
