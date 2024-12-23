@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::schema::cp_sequence_numbers;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use std::ops::Range;
 use sui_field_count::FieldCount;
 use sui_pg_db::Connection;
-use tracing::warn;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = cp_sequence_numbers)]
@@ -26,28 +26,23 @@ pub struct PrunableRange {
     to: StoredCpSequenceNumbers,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum RangeError {
-    #[error("Invalid checkpoint range: `from` {0} is greater than `to` {1}")]
-    InvalidCheckpointRange(u64, u64),
-    #[error("No checkpoint mapping found for checkpoints {0} and {1}")]
-    NoCheckpointMapping(u64, u64),
-    #[error("Database error: {0}")]
-    DbError(diesel::result::Error),
-}
-
 impl PrunableRange {
     /// Gets the tx and epoch mappings for both the start and end checkpoints.
     ///
     /// The values are expected to exist since the cp_mapping table must have enough information to
     /// encompass the retention of other tables.
-    pub async fn get_range(
-        conn: &mut Connection<'_>,
-        from_cp: u64,
-        to_cp: u64,
-    ) -> Result<Self, RangeError> {
+    pub async fn get_range(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Self> {
+        let Range {
+            start: from_cp,
+            end: to_cp,
+        } = cps;
+
+        // Only error if from_cp is not <= to_cp. from_cp can be equal to to_cp, because there may
+        // be multiple transactions within the same checkpoint.
         if from_cp > to_cp {
-            return Err(RangeError::InvalidCheckpointRange(from_cp, to_cp));
+            bail!(format!(
+                "Invalid checkpoint range: `from` {from_cp} is greater than `to` {to_cp}"
+            ));
         }
 
         let results = cp_sequence_numbers::table
@@ -56,16 +51,28 @@ impl PrunableRange {
             .order(cp_sequence_numbers::cp_sequence_number.asc())
             .load::<StoredCpSequenceNumbers>(conn)
             .await
-            .map_err(RangeError::DbError)?;
+            .map_err(anyhow::Error::from)?;
 
-        let [first, last] = results.as_slice() else {
-            warn!("No checkpoint mapping found for checkpoint {from_cp} and {to_cp}. Found {} mapping(s) instead of 2", results.len());
-            return Err(RangeError::NoCheckpointMapping(from_cp, to_cp));
+        let Some(from) = results
+            .iter()
+            .find(|cp| cp.cp_sequence_number == from_cp as i64)
+        else {
+            bail!(format!(
+                "No checkpoint mapping found for checkpoint {from_cp}"
+            ));
+        };
+        let Some(to) = results
+            .iter()
+            .find(|cp| cp.cp_sequence_number == to_cp as i64)
+        else {
+            bail!(format!(
+                "No checkpoint mapping found for checkpoint {to_cp}"
+            ));
         };
 
         Ok(PrunableRange {
-            from: first.clone(),
-            to: last.clone(),
+            from: from.clone(),
+            to: to.clone(),
         })
     }
 
