@@ -4114,16 +4114,19 @@ impl AuthorityState {
         }
 
         // get the unique set of digests from the event_keys
-        let event_digests = event_keys
+        let transaction_digests = event_keys
             .iter()
-            .map(|(digest, _, _, _)| *digest)
+            .map(|(_, digest, _, _)| *digest)
             .collect::<HashSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
 
-        let events = kv_store.multi_get_events(&event_digests).await?;
+        let events = kv_store
+            .multi_get_events_by_tx_digests(&transaction_digests)
+            .await?;
 
-        let events_map: HashMap<_, _> = event_digests.iter().zip(events.into_iter()).collect();
+        let events_map: HashMap<_, _> =
+            transaction_digests.iter().zip(events.into_iter()).collect();
 
         let stored_events = event_keys
             .into_iter()
@@ -4131,7 +4134,7 @@ impl AuthorityState {
                 (
                     k,
                     events_map
-                        .get(&k.0)
+                        .get(&k.1)
                         .expect("fetched digest is missing")
                         .clone()
                         .and_then(|e| e.data.get(k.2).cloned()),
@@ -5308,12 +5311,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
-    ) -> SuiResult<(
-        Vec<Option<Transaction>>,
-        Vec<Option<TransactionEffects>>,
-        Vec<Option<TransactionEvents>>,
-    )> {
+    ) -> SuiResult<(Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>)> {
         let txns = if !transactions.is_empty() {
             self.get_transaction_cache_reader()
                 .multi_get_transaction_blocks(transactions)
@@ -5331,13 +5329,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             vec![]
         };
 
-        let evts = if !events.is_empty() {
-            self.get_transaction_cache_reader().multi_get_events(events)
-        } else {
-            vec![]
-        };
-
-        Ok((txns, fx, evts))
+        Ok((txns, fx))
     }
 
     #[instrument(skip(self))]
