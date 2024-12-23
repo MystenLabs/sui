@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use super::{ApiEndpoint, RouteHandler};
 use crate::RpcService;
 use crate::RpcServiceError;
 use crate::{reader::StateReader, Result};
@@ -22,25 +22,7 @@ impl ApiEndpoint<RpcService> for GetCoinInfo {
         "/coins/{coin_type}"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Coins")
-            .operation_id("GetCoinInfo")
-            .path_parameter::<StructTag>("coin_type", generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<CoinInfo>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_coin_info)
     }
 }

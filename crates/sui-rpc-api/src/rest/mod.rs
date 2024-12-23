@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use axum::{handler::Handler, http::Method, routing::MethodRouter};
 use axum::{
     response::{Redirect, ResponseParts},
     routing::get,
@@ -10,7 +11,6 @@ use axum::{
 };
 
 use crate::{reader::StateReader, RpcService};
-use openapi::ApiEndpoint;
 
 pub mod accept;
 pub mod accounts;
@@ -21,7 +21,6 @@ pub mod content_type;
 pub mod health;
 pub mod info;
 pub mod objects;
-pub mod openapi;
 pub mod system;
 pub mod transactions;
 
@@ -30,11 +29,9 @@ pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
 
 pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
-    // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
     &checkpoints::GetCheckpoint,
-    // unstable APIs
     &accounts::ListAccountObjects,
     &objects::GetObject,
     &objects::GetObjectWithVersion,
@@ -55,12 +52,21 @@ pub const ENDPOINTS: &[&dyn ApiEndpoint<RpcService>] = &[
 ];
 
 pub fn build_rest_router(service: RpcService) -> axum::Router {
-    let mut api = openapi::Api::new(info(service.software_version()));
+    let mut api = Router::new();
 
-    api.register_endpoints(ENDPOINTS.iter().copied());
+    for endpoint in ENDPOINTS {
+        let handler = endpoint.handler();
+        assert_eq!(handler.method(), endpoint.method());
+
+        // we need to replace any path parameters wrapped in braces to be prefaced by a colon
+        // until axum updates matchit: https://github.com/tokio-rs/axum/pull/2645
+        let path = endpoint.path().replace('{', ":").replace('}', "");
+
+        api = api.route(&path, handler.handler);
+    }
 
     Router::new()
-        .nest("/v2/", api.to_router().with_state(service))
+        .nest("/v2/", api.with_state(service))
         .route("/v2", get(|| async { Redirect::permanent("/v2/") }))
         // Previously the service used to be hosted at `/rest`. In an effort to migrate folks
         // to the new versioned route, we'll issue redirects from `/rest` -> `/v2`.
@@ -110,60 +116,34 @@ impl axum::extract::FromRef<RpcService>
     }
 }
 
-pub fn info(version: &'static str) -> openapiv3::v3_1::Info {
-    use openapiv3::v3_1::Contact;
-    use openapiv3::v3_1::License;
-
-    openapiv3::v3_1::Info {
-        title: "Sui Node Api".to_owned(),
-        description: Some("REST Api for interacting with the Sui Blockchain".to_owned()),
-        contact: Some(Contact {
-            name: Some("Mysten Labs".to_owned()),
-            url: Some("https://github.com/MystenLabs/sui".to_owned()),
-            ..Default::default()
-        }),
-        license: Some(License {
-            name: "Apache 2.0".to_owned(),
-            url: Some("https://www.apache.org/licenses/LICENSE-2.0.html".to_owned()),
-            ..Default::default()
-        }),
-        version: version.to_owned(),
-        ..Default::default()
-    }
-}
-
 async fn redirect(axum::extract::Path(path): axum::extract::Path<String>) -> Redirect {
     Redirect::permanent(&format!("/v2/{path}"))
 }
 
-pub(crate) mod _schemars {
-    use schemars::schema::InstanceType;
-    use schemars::schema::Metadata;
-    use schemars::schema::SchemaObject;
-    use schemars::JsonSchema;
+pub trait ApiEndpoint<S> {
+    fn method(&self) -> Method;
+    fn path(&self) -> &'static str;
+    fn handler(&self) -> RouteHandler<S>;
+}
 
-    pub(crate) struct U64;
+pub struct RouteHandler<S> {
+    method: axum::http::Method,
+    handler: MethodRouter<S>,
+}
 
-    impl JsonSchema for U64 {
-        fn schema_name() -> String {
-            "u64".to_owned()
-        }
+impl<S: Clone> RouteHandler<S> {
+    pub fn new<H, T>(method: axum::http::Method, handler: H) -> Self
+    where
+        H: Handler<T, S>,
+        T: 'static,
+        S: Send + Sync + 'static,
+    {
+        let handler = MethodRouter::new().on(method.clone().try_into().unwrap(), handler);
 
-        fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-            SchemaObject {
-                metadata: Some(Box::new(Metadata {
-                    description: Some("Radix-10 encoded 64-bit unsigned integer".to_owned()),
-                    ..Default::default()
-                })),
-                instance_type: Some(InstanceType::String.into()),
-                format: Some("u64".to_owned()),
-                ..Default::default()
-            }
-            .into()
-        }
+        Self { method, handler }
+    }
 
-        fn is_referenceable() -> bool {
-            false
-        }
+    pub fn method(&self) -> &axum::http::Method {
+        &self.method
     }
 }

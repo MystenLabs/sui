@@ -19,10 +19,7 @@ use sui_sdk_types::CheckpointSequenceNumber;
 use sui_sdk_types::TransactionDigest;
 use tap::Pipe;
 
-use crate::rest::openapi::ApiEndpoint;
-use crate::rest::openapi::OperationBuilder;
-use crate::rest::openapi::ResponseBuilder;
-use crate::rest::openapi::RouteHandler;
+use super::{ApiEndpoint, RouteHandler};
 use crate::rest::PageCursor;
 use crate::types::GetTransactionOptions;
 use crate::types::TransactionResponse;
@@ -40,25 +37,6 @@ impl ApiEndpoint<RpcService> for GetTransaction {
 
     fn path(&self) -> &'static str {
         "/transactions/{transaction}"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("GetTransaction")
-            .path_parameter::<TransactionDigest>("transaction", generator)
-            .query_parameters::<GetTransactionOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<TransactionResponse>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -102,26 +80,6 @@ impl ApiEndpoint<RpcService> for ListTransactions {
 
     fn path(&self) -> &'static str {
         "/transactions"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("ListTransactions")
-            .query_parameters::<ListTransactionsCursorParameters>(generator)
-            .query_parameters::<GetTransactionOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<Vec<TransactionResponse>>(generator)
-                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
-                    .build(),
-            )
-            .response(410, ResponseBuilder::new().build())
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -250,10 +208,9 @@ impl serde::Serialize for TransactionCursor {
     }
 }
 
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ListTransactionsCursorParameters {
     pub limit: Option<u32>,
-    #[schemars(with = "Option<String>")]
     pub start: Option<TransactionCursor>,
     pub direction: Option<Direction>,
 }

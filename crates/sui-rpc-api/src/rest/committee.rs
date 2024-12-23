@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    Result, RpcService,
-};
+use super::{ApiEndpoint, RouteHandler};
+use crate::{Result, RpcService};
 use axum::{
     extract::{Path, State},
     Json,
@@ -20,22 +18,6 @@ impl ApiEndpoint<RpcService> for GetLatestCommittee {
 
     fn path(&self) -> &'static str {
         "/system/committee"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("System")
-            .operation_id("GetLatestCommittee")
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ValidatorCommittee>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -56,24 +38,6 @@ impl ApiEndpoint<RpcService> for GetCommittee {
 
     fn path(&self) -> &'static str {
         "/system/committee/{epoch}"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("System")
-            .operation_id("GetCommittee")
-            .path_parameter::<EpochId>("epoch", generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ValidatorCommittee>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
