@@ -6,8 +6,9 @@ use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
-    GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
+    restore_from_db_checkpoint, resubmit_transaction_block, verify_archive,
+    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
@@ -118,6 +119,10 @@ pub enum ToolCommand {
         /// If true, show the input transaction as well as the effects
         #[arg(long = "show-tx")]
         show_input_tx: bool,
+
+        /// Resubmit the transaction for execution
+        #[arg(long = "resubmit")]
+        resubmit: bool,
     },
 
     /// Tool to read validator & node db.
@@ -570,11 +575,16 @@ impl ToolCommand {
                 digest,
                 show_input_tx,
                 fullnode_rpc_url,
+                resubmit,
             } => {
-                print!(
-                    "{}",
-                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
-                );
+                if resubmit {
+                    resubmit_transaction_block(digest, fullnode_rpc_url).await?;
+                } else {
+                    print!(
+                        "{}",
+                        get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
+                    );
+                }
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
