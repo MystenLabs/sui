@@ -79,7 +79,7 @@ public fun update_authorized_individuals(
 
 /// Process a payment that has been made, removing it from the register and
 /// returning the coin that can then be combined or sent elsewhere by the authorized individual.
-/// Payments can only be processed by either an account in the / `authorized_individuals` set or by the owner of the cash register.
+/// Payments can only be processed by either an account in the `authorized_individuals` set or by the owner of the cash register.
 public fun process_payment(
     register: &mut CashRegister,
     payment_ticket: Receiving<IdentifiedPayment>,
