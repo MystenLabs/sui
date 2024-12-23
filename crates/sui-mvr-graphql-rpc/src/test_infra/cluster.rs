@@ -32,7 +32,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const VALIDATOR_COUNT: usize = 4;
-const EPOCH_DURATION_MS: u64 = 10000;
+const EPOCH_DURATION_MS: u64 = 30_000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
