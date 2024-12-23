@@ -11,7 +11,7 @@ use diesel_async::RunQueryDsl;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use object_store::path::Path;
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{debug, info};
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::LiveObject;
@@ -89,7 +89,7 @@ impl SnapshotRestorer {
             .into_iter()
             .map(|(bucket, (part_num, metadata))| (*bucket, (part_num, metadata.clone())))
             .collect();
-
+        info!("Start snapshot restore.");
         self.restore_object_infos(
             owned_input_files,
             epoch_dir,
@@ -134,6 +134,11 @@ impl SnapshotRestorer {
                     let next_cp = self.next_checkpoint_after_epoch;
 
                     async move {
+                        debug!(
+                            bucket = bucket,
+                            part_num = part_num,
+                            "Start downloading move object file"
+                        );
                         let mut conn = db.connect().await?;
                         let (bytes, _) = download_bytes(
                             remote_object_store,
@@ -145,6 +150,11 @@ impl SnapshotRestorer {
                             Some(512), // max_timeout_secs
                         )
                         .await;
+                        debug!(
+                            bucket = bucket,
+                            part_num = part_num,
+                            "Finished downloading move object file"
+                        );
                         let object_infos = LiveObjectIter::new(&file_metadata, bytes.clone())?
                             .filter_map(|object| match object {
                                 LiveObject::Normal(obj) => {
@@ -153,9 +163,15 @@ impl SnapshotRestorer {
                                 LiveObject::Wrapped(_) => None,
                             })
                             .collect::<Result<Vec<_>, _>>()?;
-
+                        let num_object_infos = object_infos.len();
                         // NOTE: chunk to avoid hitting the PG limit
                         let chunk_size: usize = i16::MAX as usize / StoredObjInfo::FIELD_COUNT;
+                        debug!(
+                            bucket = bucket,
+                            part_num = part_num,
+                            num_object_infos = num_object_infos,
+                            "Start inserting object infos"
+                        );
                         for chunk in object_infos.chunks(chunk_size) {
                             diesel::insert_into(obj_info::table)
                                 .values(chunk)
@@ -163,6 +179,12 @@ impl SnapshotRestorer {
                                 .execute(&mut conn)
                                 .await?;
                         }
+                        debug!(
+                            bucket = bucket,
+                            part_num = part_num,
+                            num_object_infos = num_object_infos,
+                            "Finished inserting object infos"
+                        );
                         bar.inc(1);
                         bar.set_message(format!("Bucket: {}, Part: {}", bucket, part_num));
                         Ok::<(), anyhow::Error>(())
