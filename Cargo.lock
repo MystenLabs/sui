@@ -15306,6 +15306,7 @@ dependencies = [
  "serde_json",
  "sui-config",
  "sui-core",
+ "sui-indexer-alt-framework",
  "sui-protocol-config",
  "sui-storage",
  "sui-types",
