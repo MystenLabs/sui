@@ -10,7 +10,7 @@ use std::{
 };
 
 use codespan::LineIndex;
-use itertools::Itertools;
+use itertools::{chain, Itertools};
 #[allow(unused_imports)]
 use log::{debug, info, log, warn, Level};
 
@@ -1084,8 +1084,9 @@ impl<'env> EnumTranslator<'env> {
                     })
                     .collect_vec()
             })
+            .chain(vec!["$variant_id: int".to_string()])
             .join(", ");
-        emitln!(writer, "    {}($variant_id: int, {})", enum_name, fields);
+        emitln!(writer, "    {}({})", enum_name, fields);
         emitln!(writer, "}");
 
         // Emit constructors
@@ -1132,26 +1133,25 @@ impl<'env> EnumTranslator<'env> {
             "", // not inlined!
             &format!("$IsValid'{}'(e: {}): bool", suffix, enum_name),
             || {
-                let mut sep = "";
-                for variant in enum_env.get_variants() {
-                    for field in variant.get_fields() {
-                        let sel = format!("e->{}", boogie_enum_field_name(&field));
-                        let ty = &field.get_type().instantiate(self.type_inst);
-                        let bv_flag = self.field_bv_flag(&field.get_id());
-                        emitln!(
-                            writer,
-                            "{}{}",
-                            sep,
-                            boogie_well_formed_expr_bv(env, &sel, ty, bv_flag)
-                        );
-                        sep = "  && ";
-                    }
-                }
-                emitln!(
-                    writer,
-                    "  && 0 <= e->$variant_id && e->$variant_id < {}",
-                    enum_env.get_variants().count()
-                );
+                let well_formed_checks = enum_env
+                    .get_variants()
+                    .flat_map(|variant| {
+                        variant
+                            .get_fields()
+                            .map(|field| {
+                                let sel = format!("e->{}", boogie_enum_field_name(&field));
+                                let ty = &field.get_type().instantiate(self.type_inst);
+                                let bv_flag = self.field_bv_flag(&field.get_id());
+                                boogie_well_formed_expr_bv(env, &sel, ty, bv_flag)
+                            })
+                            .collect_vec()
+                    })
+                    .chain(vec![format!(
+                        "0 <= e->$variant_id && e->$variant_id < {}",
+                        enum_env.get_variants().count()
+                    )])
+                    .join("\n  && ");
+                emitln!(writer, "{}", well_formed_checks);
             },
         );
 
@@ -1162,25 +1162,29 @@ impl<'env> EnumTranslator<'env> {
                 suffix, enum_name, enum_name
             ),
             || {
-                let mut sep = "";
-                for variant in enum_env.get_variants() {
-                    for field in variant.get_fields() {
-                        let sel_fun = boogie_enum_field_name(&field);
-                        let bv_flag = self.field_bv_flag(&field.get_id());
-                        let field_suffix =
-                            boogie_type_suffix_bv(env, &self.inst(&field.get_type()), bv_flag);
-                        emit!(
-                            writer,
-                            "{}$IsEqual'{}'(e1->{}, e2->{})",
-                            sep,
-                            field_suffix,
-                            sel_fun,
-                            sel_fun,
-                        );
-                        sep = "\n&& ";
-                    }
-                }
-                emit!(writer, "\n&& e1->$variant_id == e2->$variant_id");
+                let equality_checks = enum_env
+                    .get_variants()
+                    .flat_map(|variant| {
+                        variant
+                            .get_fields()
+                            .map(|field| {
+                                let sel_fun = boogie_enum_field_name(&field);
+                                let bv_flag = self.field_bv_flag(&field.get_id());
+                                let field_suffix = boogie_type_suffix_bv(
+                                    env,
+                                    &self.inst(&field.get_type()),
+                                    bv_flag,
+                                );
+                                format!(
+                                    "$IsEqual'{}'(e1->{}, e2->{})",
+                                    field_suffix, sel_fun, sel_fun,
+                                )
+                            })
+                            .collect_vec()
+                    })
+                    .chain(vec!["e1->$variant_id == e2->$variant_id".to_string()])
+                    .join("\n  && ");
+                emit!(writer, "{}", equality_checks);
             },
         );
 
