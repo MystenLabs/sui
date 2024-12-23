@@ -169,6 +169,7 @@ jobs:
       - name: Indexer Alt Framework schema
         run: |
           ./crates/sui-indexer-alt-framework/generate_schema.sh
+          cargo fmt -- crates/sui-indexer-alt-framework/src/schema.rs
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
