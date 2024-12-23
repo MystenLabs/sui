@@ -9,7 +9,7 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use sui_sdk_types::types::{EpochId, ValidatorCommittee};
+use sui_sdk_types::{EpochId, ValidatorCommittee};
 
 pub struct GetLatestCommittee;
 

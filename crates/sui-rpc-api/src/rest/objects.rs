@@ -12,7 +12,7 @@ use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
-use sui_sdk_types::types::{ObjectId, TypeTag, Version};
+use sui_sdk_types::{ObjectId, TypeTag, Version};
 use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
 use sui_types::{
     storage::{DynamicFieldIndexInfo, DynamicFieldKey},
@@ -181,7 +181,7 @@ async fn list_dynamic_fields(
     Ok((PageCursor(cursor), Json(dynamic_fields)))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ListDynamicFieldsQueryParameters {
     pub limit: Option<u32>,
     pub start: Option<ObjectId>,
@@ -199,7 +199,7 @@ impl ListDynamicFieldsQueryParameters {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, schemars::JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 /// DynamicFieldInfo
 pub struct DynamicFieldInfo {
     pub parent: ObjectId,
@@ -236,9 +236,7 @@ impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
     }
 }
 
-#[derive(
-    Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug, schemars::JsonSchema,
-)]
+#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum DynamicFieldType {
     Field,

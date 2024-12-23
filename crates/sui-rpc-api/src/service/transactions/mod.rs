@@ -5,7 +5,7 @@ use crate::types::GetTransactionOptions;
 use crate::types::TransactionResponse;
 use crate::Result;
 use crate::RpcService;
-use sui_sdk_types::types::TransactionDigest;
+use sui_sdk_types::TransactionDigest;
 use tap::Pipe;
 
 mod execution;

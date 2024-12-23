@@ -38,5 +38,5 @@ async fn get_committee() {
     assert_eq!(latest_committee, epoch_0_committee);
 
     // ensure we can convert proto committee type to sdk_types committee
-    sui_sdk_types::types::ValidatorCommittee::try_from(&latest_committee).unwrap();
+    sui_sdk_types::ValidatorCommittee::try_from(&latest_committee).unwrap();
 }

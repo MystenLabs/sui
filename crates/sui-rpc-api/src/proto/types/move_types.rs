@@ -5,15 +5,15 @@ use tap::Pipe;
 // Identifier
 //
 
-impl From<sui_sdk_types::types::Identifier> for super::Identifier {
-    fn from(value: sui_sdk_types::types::Identifier) -> Self {
+impl From<sui_sdk_types::Identifier> for super::Identifier {
+    fn from(value: sui_sdk_types::Identifier) -> Self {
         Self {
             identifier: Some(value.into_inner().into()),
         }
     }
 }
 
-impl TryFrom<&super::Identifier> for sui_sdk_types::types::Identifier {
+impl TryFrom<&super::Identifier> for sui_sdk_types::Identifier {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Identifier) -> Result<Self, Self::Error> {
@@ -30,8 +30,8 @@ impl TryFrom<&super::Identifier> for sui_sdk_types::types::Identifier {
 // StructTag
 //
 
-impl From<sui_sdk_types::types::StructTag> for super::StructTag {
-    fn from(value: sui_sdk_types::types::StructTag) -> Self {
+impl From<sui_sdk_types::StructTag> for super::StructTag {
+    fn from(value: sui_sdk_types::StructTag) -> Self {
         Self {
             address: Some(value.address.into()),
             module: Some(value.module.into()),
@@ -41,7 +41,7 @@ impl From<sui_sdk_types::types::StructTag> for super::StructTag {
     }
 }
 
-impl TryFrom<&super::StructTag> for sui_sdk_types::types::StructTag {
+impl TryFrom<&super::StructTag> for sui_sdk_types::StructTag {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::StructTag) -> Result<Self, Self::Error> {
@@ -79,10 +79,10 @@ impl TryFrom<&super::StructTag> for sui_sdk_types::types::StructTag {
 // TypeTag
 //
 
-impl From<sui_sdk_types::types::TypeTag> for super::TypeTag {
-    fn from(value: sui_sdk_types::types::TypeTag) -> Self {
+impl From<sui_sdk_types::TypeTag> for super::TypeTag {
+    fn from(value: sui_sdk_types::TypeTag) -> Self {
         use super::type_tag::Tag;
-        use sui_sdk_types::types::TypeTag;
+        use sui_sdk_types::TypeTag;
 
         let tag = match value {
             TypeTag::U8 => Tag::U8(()),
@@ -102,7 +102,7 @@ impl From<sui_sdk_types::types::TypeTag> for super::TypeTag {
     }
 }
 
-impl TryFrom<&super::TypeTag> for sui_sdk_types::types::TypeTag {
+impl TryFrom<&super::TypeTag> for sui_sdk_types::TypeTag {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::TypeTag) -> Result<Self, Self::Error> {

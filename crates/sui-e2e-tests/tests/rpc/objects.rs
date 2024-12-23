@@ -8,7 +8,7 @@ use sui_rpc_api::proto::node::node_client::NodeClient;
 use sui_rpc_api::proto::node::GetObjectOptions;
 use sui_rpc_api::proto::node::GetObjectRequest;
 use sui_rpc_api::proto::node::GetObjectResponse;
-use sui_sdk_types::types::ObjectId;
+use sui_sdk_types::ObjectId;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]

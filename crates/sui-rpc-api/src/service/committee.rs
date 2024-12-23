@@ -3,7 +3,7 @@
 
 use crate::Result;
 use crate::RpcService;
-use sui_sdk_types::types::{EpochId, ValidatorCommittee};
+use sui_sdk_types::{EpochId, ValidatorCommittee};
 
 impl RpcService {
     pub fn get_committee(&self, epoch: Option<EpochId>) -> Result<ValidatorCommittee> {

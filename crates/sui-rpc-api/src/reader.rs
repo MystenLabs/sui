@@ -3,10 +3,8 @@
 
 use std::sync::Arc;
 
-use sui_sdk_types::types::{
-    CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee,
-};
-use sui_sdk_types::types::{Object, ObjectId, Version};
+use sui_sdk_types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
+use sui_sdk_types::{Object, ObjectId, Version};
 use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::ObjectStore;
 use sui_types::storage::RpcStateReader;
@@ -66,11 +64,11 @@ impl StateReader {
 
     pub fn get_transaction(
         &self,
-        digest: sui_sdk_types::types::TransactionDigest,
+        digest: sui_sdk_types::TransactionDigest,
     ) -> crate::Result<(
-        sui_sdk_types::types::SignedTransaction,
-        sui_sdk_types::types::TransactionEffects,
-        Option<sui_sdk_types::types::TransactionEvents>,
+        sui_sdk_types::SignedTransaction,
+        sui_sdk_types::TransactionEffects,
+        Option<sui_sdk_types::TransactionEvents>,
     )> {
         use super::rest::transactions::TransactionNotFoundError;
         use sui_types::effects::TransactionEffectsAPI;
@@ -115,7 +113,7 @@ impl StateReader {
 
     pub fn get_transaction_read(
         &self,
-        digest: sui_sdk_types::types::TransactionDigest,
+        digest: sui_sdk_types::TransactionDigest,
     ) -> crate::Result<TransactionRead> {
         let (
             SignedTransaction {
@@ -165,11 +163,11 @@ impl StateReader {
 
 #[derive(Debug)]
 pub struct TransactionRead {
-    pub digest: sui_sdk_types::types::TransactionDigest,
-    pub transaction: sui_sdk_types::types::Transaction,
-    pub signatures: Vec<sui_sdk_types::types::UserSignature>,
-    pub effects: sui_sdk_types::types::TransactionEffects,
-    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+    pub digest: sui_sdk_types::TransactionDigest,
+    pub transaction: sui_sdk_types::Transaction,
+    pub signatures: Vec<sui_sdk_types::UserSignature>,
+    pub effects: sui_sdk_types::TransactionEffects,
+    pub events: Option<sui_sdk_types::TransactionEvents>,
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
 }
