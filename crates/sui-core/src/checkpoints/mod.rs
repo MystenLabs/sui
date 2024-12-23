@@ -21,6 +21,7 @@ use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::fatal;
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
+use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
@@ -827,8 +828,19 @@ impl CheckpointBuilder {
         info!("CheckpointBuilder waiting for startup signal");
         let mut built_notify = Some(startup_wait.await.unwrap());
         info!("Starting CheckpointBuilder");
+
+        // On the first iteration of the loop, only build up to the highest point that
+        // we built before a crash, and then send the notification that we are caught up.
+        let mut highest_locally_built = Some(
+            self.tables
+                .get_latest_locally_computed_checkpoint()
+                .map(|c| *c.sequence_number())
+                .unwrap_or(0),
+        );
+
         loop {
-            self.maybe_build_checkpoints().await;
+            self.maybe_build_checkpoints(highest_locally_built.take().unwrap_or(u64::MAX))
+                .await;
 
             if let Some(notify) = built_notify.take() {
                 notify.send(()).unwrap();
@@ -838,7 +850,7 @@ impl CheckpointBuilder {
         }
     }
 
-    async fn maybe_build_checkpoints(&mut self) {
+    async fn maybe_build_checkpoints(&mut self, limit: CheckpointSequenceNumber) {
         let _scope = monitored_scope("BuildCheckpoints");
 
         // Collect info about the most recently built checkpoint.
@@ -895,14 +907,26 @@ impl CheckpointBuilder {
                 checkpoint_commit_height = height,
                 "Making checkpoint at commit height"
             );
-            if let Err(e) = self
+
+            match self
                 .make_checkpoint(std::mem::take(&mut grouped_pending_checkpoints))
                 .await
             {
-                error!("Error while making checkpoint, will retry in 1s: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                self.metrics.checkpoint_errors.inc();
-                return;
+                Ok(seq) => {
+                    if seq >= limit {
+                        info!(
+                            "exiting checkpoint construction loop early because of limit {}",
+                            limit
+                        );
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!("Error while making checkpoint, will retry in 1s: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    self.metrics.checkpoint_errors.inc();
+                    return;
+                }
             }
             // ensure that the task can be cancelled at end of epoch, even if no other await yields
             // execution.
@@ -915,7 +939,10 @@ impl CheckpointBuilder {
     }
 
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
-    async fn make_checkpoint(&self, pendings: Vec<PendingCheckpointV2>) -> anyhow::Result<()> {
+    async fn make_checkpoint(
+        &self,
+        pendings: Vec<PendingCheckpointV2>,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
         let last_details = pendings.last().unwrap().details().clone();
 
         // Keeps track of the effects that are already included in the current checkpoint.
@@ -932,14 +959,17 @@ impl CheckpointBuilder {
             let txn_in_checkpoint = self
                 .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
                 .await?;
+            info!("hay");
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
         }
         let new_checkpoint = self
             .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
             .await?;
+        let highest_sequence = *new_checkpoint.last().0.sequence_number();
+        info!("hay");
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoint)
             .await?;
-        Ok(())
+        Ok(highest_sequence)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -952,6 +982,7 @@ impl CheckpointBuilder {
         roots: Vec<TransactionKey>,
         effects_in_current_checkpoint: &mut BTreeSet<TransactionDigest>,
     ) -> SuiResult<Vec<TransactionEffects>> {
+        info!(?roots, "hay");
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
@@ -961,11 +992,13 @@ impl CheckpointBuilder {
             .notify_read_executed_digests(&roots)
             .in_monitored_scope("CheckpointNotifyDigests")
             .await?;
+        info!(?root_digests, "hay");
         let root_effects = self
             .effects_store
             .notify_read_executed_effects(&root_digests)
             .in_monitored_scope("CheckpointNotifyRead")
             .await;
+        info!("hay");
 
         let _scope = monitored_scope("CheckpointBuilder");
 
@@ -980,6 +1013,7 @@ impl CheckpointBuilder {
             let consensus_commit_prologue = self
                 .extract_consensus_commit_prologue(&root_digests, &root_effects)
                 .await?;
+            info!("hay");
 
             // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
             // other dependencies that haven't been included in any previous checkpoints.
@@ -1063,7 +1097,7 @@ impl CheckpointBuilder {
     async fn write_checkpoints(
         &self,
         height: CheckpointHeight,
-        new_checkpoints: Vec<(CheckpointSummary, CheckpointContents)>,
+        new_checkpoints: NonEmpty<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
         let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
         let mut batch = self.tables.checkpoint_content.batch();
@@ -1122,6 +1156,7 @@ impl CheckpointBuilder {
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store, &self.tables)
                 .await?;
+            info!("hay");
         }
 
         for (local_checkpoint, _) in &new_checkpoints {
@@ -1198,7 +1233,7 @@ impl CheckpointBuilder {
         &self,
         all_effects: Vec<TransactionEffects>,
         details: &PendingCheckpointInfo,
-    ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
+    ) -> anyhow::Result<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
         let total = all_effects.len();
         let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
@@ -1274,9 +1309,11 @@ impl CheckpointBuilder {
                 all_effects_and_transaction_sizes.push((effects, size));
             }
 
+            info!("hay");
             self.epoch_store
                 .consensus_messages_processed_notify_for_checkpoint(transaction_keys)
                 .await?;
+            info!("hay");
         }
 
         let signatures = self
@@ -1336,6 +1373,7 @@ impl CheckpointBuilder {
                         sequence_number,
                     )
                     .await?;
+                info!("hay");
 
                 let committee = system_state_obj
                     .get_current_epoch_committee()
@@ -1357,10 +1395,12 @@ impl CheckpointBuilder {
                     state_acc
                         .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
                         .await?;
+                    info!("hay");
                     state_acc
                         .digest_epoch(self.epoch_store.clone(), sequence_number)
                         .await?
                 };
+                info!("hay");
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
@@ -1434,7 +1474,7 @@ impl CheckpointBuilder {
             checkpoints.push((summary, contents));
         }
 
-        Ok(checkpoints)
+        Ok(NonEmpty::from_vec(checkpoints).expect("at least one checkpoint"))
     }
 
     fn get_epoch_total_gas_cost(

@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_common::fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -1374,12 +1375,17 @@ impl SuiNode {
             .await;
 
         info!("consensus manager started");
+
+        // wait for checkpoints to be re-built.
         let (tx, rx) = tokio::sync::oneshot::channel();
         startup_sender
             .send(tx)
             .expect("Failed to send startup signal");
 
-        rx.await.expect("Failed to receive startup signal");
+        tokio::time::timeout(Duration::from_secs(10), rx)
+            .await
+            .unwrap_or_else(|_| fatal!("Failed to receive startup signal"))
+            .expect("Failed to receive startup signal");
 
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(

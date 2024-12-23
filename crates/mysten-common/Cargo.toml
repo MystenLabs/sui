@@ -19,3 +19,4 @@ sui-types.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 anyhow.workspace = true
+itertools.workspace = true

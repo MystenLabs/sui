@@ -168,9 +168,13 @@ mod test {
                     test_cluster_clone.start_node(validator).await;
                 }
             }
+            info!("restarter_task finished");
         });
+        info!("xxx step");
         test_simulated_load(test_cluster.clone(), 330).await;
+        info!("xxx step");
         restarter_task.await.unwrap();
+        info!("xxx step");
         test_cluster.wait_for_epoch_all_nodes(1).await;
     }
 
@@ -1196,6 +1200,8 @@ mod test {
             assert!(!results.unique_move_functions_called.is_empty());
         });
 
+        info!("joining bench_task and surfer_task");
         let _ = futures::join!(bench_task, surfer_task);
+        info!("complete");
     }
 }
