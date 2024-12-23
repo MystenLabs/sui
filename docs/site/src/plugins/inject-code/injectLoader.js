@@ -103,7 +103,7 @@ const addCodeInject = function (source) {
                   fn = fn.trim();
                   let funStr = "";
                   if (isMove) {
-                    funStr = `^(\\s*)*?(pub(lic)? )?fu?n \\b${fn}\\b.*?}\\n(\\s*?})?(?=\\n)?`;
+                    funStr = `^(\\s*)*?(pub(lic)? )?(entry )?fu?n \\b${fn}\\b.*?}\\n(\\s*?})?(?=\\n)?`;
                   } else if (isTs) {
                     funStr = `^(\\s*)(async )?(export (default )?)?function \\b${fn}\\b.*?\\n\\1}\\n`;
                   }
