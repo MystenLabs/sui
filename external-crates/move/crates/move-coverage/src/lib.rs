@@ -7,6 +7,7 @@ use move_binary_format::CompiledModule;
 use std::io::Write;
 
 pub mod coverage_map;
+pub mod lcov;
 pub mod source_coverage;
 pub mod summary;
 
