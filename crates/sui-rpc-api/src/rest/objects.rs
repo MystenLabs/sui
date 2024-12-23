@@ -1,13 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{ApiEndpoint, RouteHandler};
 use crate::types::{GetObjectOptions, ObjectResponse};
-use crate::{
-    reader::StateReader,
-    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    rest::PageCursor,
-    Result, RpcService, RpcServiceError,
-};
+use crate::{reader::StateReader, rest::PageCursor, Result, RpcService, RpcServiceError};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::Json;
@@ -31,26 +27,7 @@ impl ApiEndpoint<RpcService> for GetObject {
         "/objects/{object_id}"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Objects")
-            .operation_id("GetObject")
-            .path_parameter::<ObjectId>("object_id", generator)
-            .query_parameters::<GetObjectOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ObjectResponse>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_object)
     }
 }
@@ -76,27 +53,7 @@ impl ApiEndpoint<RpcService> for GetObjectWithVersion {
         "/objects/{object_id}/version/{version}"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Objects")
-            .operation_id("GetObjectWithVersion")
-            .path_parameter::<ObjectId>("object_id", generator)
-            .path_parameter::<Version>("version", generator)
-            .query_parameters::<GetObjectOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ObjectResponse>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_object_with_version)
     }
 }
@@ -122,26 +79,7 @@ impl ApiEndpoint<RpcService> for ListDynamicFields {
         "/objects/{object_id}/dynamic-fields"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Objects")
-            .operation_id("ListDynamicFields")
-            .path_parameter::<ObjectId>("object_id", generator)
-            .query_parameters::<ListDynamicFieldsQueryParameters>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<Vec<DynamicFieldInfo>>(generator)
-                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
-                    .build(),
-            )
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_dynamic_fields)
     }
 }

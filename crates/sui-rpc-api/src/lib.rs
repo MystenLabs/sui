@@ -148,7 +148,7 @@ impl RpcService {
     }
 }
 
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {
     Ascending,

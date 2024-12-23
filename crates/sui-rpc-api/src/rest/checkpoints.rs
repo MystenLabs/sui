@@ -7,14 +7,13 @@ use axum::Json;
 use sui_sdk_types::{CheckpointSequenceNumber, SignedCheckpointSummary};
 use sui_types::storage::ReadStore;
 
+use super::{ApiEndpoint, RouteHandler};
 use crate::reader::StateReader;
-use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::rest::PageCursor;
 use crate::service::checkpoints::CheckpointId;
 use crate::types::{CheckpointResponse, GetCheckpointOptions};
 use crate::Result;
 use crate::{Direction, RpcService};
-use documented::Documented;
 
 /// Fetch a Checkpoint
 ///
@@ -22,7 +21,6 @@ use documented::Documented;
 /// `CheckpointDigest` and optionally request its contents.
 ///
 /// If the checkpoint has been pruned and is not available, a 410 will be returned.
-#[derive(Documented)]
 pub struct GetCheckpoint;
 
 impl ApiEndpoint<RpcService> for GetCheckpoint {
@@ -32,32 +30,6 @@ impl ApiEndpoint<RpcService> for GetCheckpoint {
 
     fn path(&self) -> &'static str {
         "/checkpoints/{checkpoint}"
-    }
-
-    fn stable(&self) -> bool {
-        true
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Checkpoint")
-            .operation_id("Get Checkpoint")
-            .description(Self::DOCS)
-            .path_parameter::<CheckpointId>("checkpoint", generator)
-            .query_parameters::<GetCheckpointOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<CheckpointResponse>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .response(410, ResponseBuilder::new().build())
-            .response(500, ResponseBuilder::new().build())
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -74,7 +46,7 @@ async fn get_checkpoint(
 }
 
 /// Query parameters for the GetCheckpoint endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct GetCheckpointQueryParameters {
     /// Request `CheckpointContents` be included in the response
     #[serde(default)]
@@ -88,7 +60,6 @@ pub struct GetCheckpointQueryParameters {
 ///
 /// If the requested page is below the Node's `lowest_available_checkpoint`, a 410 will be
 /// returned.
-#[derive(Documented)]
 pub struct ListCheckpoints;
 
 impl ApiEndpoint<RpcService> for ListCheckpoints {
@@ -98,34 +69,6 @@ impl ApiEndpoint<RpcService> for ListCheckpoints {
 
     fn path(&self) -> &'static str {
         "/checkpoints"
-    }
-
-    fn stable(&self) -> bool {
-        // Before making this api stable we'll need to properly handle the options that can be
-        // provided as inputs.
-        false
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Checkpoint")
-            .operation_id("List Checkpoints")
-            .description(Self::DOCS)
-            .query_parameters::<ListCheckpointsPaginationParameters>(generator)
-            .query_parameters::<GetCheckpointOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<Vec<CheckpointResponse>>(generator)
-                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
-                    .build(),
-            )
-            .response(410, ResponseBuilder::new().build())
-            .response(500, ResponseBuilder::new().build())
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -199,7 +142,7 @@ async fn list_checkpoints(
     Ok((PageCursor(cursor), Json(checkpoints)))
 }
 
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ListCheckpointsPaginationParameters {
     /// Page size limit for the response.
     ///

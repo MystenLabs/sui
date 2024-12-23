@@ -2966,15 +2966,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
-name = "convert_case"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
 name = "copy_dir"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3708,7 +3699,7 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case 0.4.0",
+ "convert_case",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "rustc_version",
@@ -3992,30 +3983,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with 2.1.0",
-]
-
-[[package]]
-name = "documented"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feadfed35b96a5634e08fc503677ded669549ae2cf7f0b01d5964f09d95487fd"
-dependencies = [
- "documented-macros",
- "phf",
- "thiserror 1.0.64",
-]
-
-[[package]]
-name = "documented-macros"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "973659d4a62084e32a7f9332509455436d33684b316bb3bc2bb6dcea51a68c63"
-dependencies = [
- "convert_case 0.6.0",
- "optfield",
- "proc-macro2 1.0.87",
- "quote 1.0.37",
- "syn 2.0.87",
 ]
 
 [[package]]
@@ -9105,17 +9072,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "openapiv3"
-version = "2.0.0"
-source = "git+https://github.com/bmwill/openapiv3.git?rev=ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963#ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963"
-dependencies = [
- "indexmap 2.2.6",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9202,17 +9158,6 @@ dependencies = [
  "thiserror 1.0.64",
  "tokio",
  "tokio-stream",
-]
-
-[[package]]
-name = "optfield"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa59f025cde9c698fcb4fcb3533db4621795374065bee908215263488f2d2a1d"
-dependencies = [
- "proc-macro2 1.0.87",
- "quote 1.0.37",
- "syn 2.0.87",
 ]
 
 [[package]]
@@ -15059,7 +15004,6 @@ dependencies = [
  "bcs",
  "bytes",
  "diffy",
- "documented",
  "fastcrypto",
  "http 1.1.0",
  "itertools 0.13.0",
@@ -15067,7 +15011,6 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "mysten-network",
- "openapiv3",
  "paste",
  "prometheus",
  "proptest",
@@ -15077,11 +15020,9 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.5",
  "roaring",
- "schemars",
  "serde",
  "serde_json",
  "serde_with 3.9.0",
- "serde_yaml 0.8.26",
  "sui-protocol-config",
  "sui-sdk-types",
  "sui-transaction-builder 0.1.0",

@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    reader::StateReader,
-    rest::accept::AcceptFormat,
-    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    Result, RpcService, RpcServiceError,
-};
+use super::{ApiEndpoint, RouteHandler};
+use crate::{reader::StateReader, rest::accept::AcceptFormat, Result, RpcService, RpcServiceError};
 use axum::{
     extract::{Path, State},
     Json,
@@ -25,22 +21,6 @@ impl ApiEndpoint<RpcService> for GetSystemStateSummary {
 
     fn path(&self) -> &'static str {
         "/system"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("System")
-            .operation_id("GetSystemStateSummary")
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<SystemStateSummary>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -487,24 +467,6 @@ impl ApiEndpoint<RpcService> for GetCurrentProtocolConfig {
         "/system/protocol"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("System")
-            .operation_id("GetCurrentProtocolConfig")
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ProtocolConfigResponse>(generator)
-                    .header::<String>(X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION, generator)
-                    .header::<String>(X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION, generator)
-                    .build(),
-            )
-            .build()
-    }
-
     fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_current_protocol_config)
     }
@@ -544,26 +506,6 @@ impl ApiEndpoint<RpcService> for GetProtocolConfig {
 
     fn path(&self) -> &'static str {
         "/system/protocol/{version}"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("System")
-            .operation_id("GetProtocolConfig")
-            .path_parameter::<u64>("version", generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ProtocolConfigResponse>(generator)
-                    .header::<String>(X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION, generator)
-                    .header::<String>(X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION, generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -683,22 +625,6 @@ impl ApiEndpoint<RpcService> for GetGasInfo {
 
     fn path(&self) -> &'static str {
         "/system/gas"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("System")
-            .operation_id("GetGasInfo")
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<GasInfo>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {

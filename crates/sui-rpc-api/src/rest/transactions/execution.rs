@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{ApiEndpoint, RouteHandler};
 use crate::response::Bcs;
-use crate::rest::openapi::{
-    ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
-};
 use crate::types::ExecuteTransactionOptions;
 use crate::types::ExecuteTransactionResponse;
 use crate::{Result, RpcService};
@@ -24,24 +22,6 @@ impl ApiEndpoint<RpcService> for ExecuteTransaction {
 
     fn path(&self) -> &'static str {
         "/transactions"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("ExecuteTransaction")
-            .query_parameters::<ExecuteTransactionOptions>(generator)
-            .request_body(RequestBodyBuilder::new().bcs_content().build())
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ExecuteTransactionResponse>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
@@ -75,24 +55,6 @@ impl ApiEndpoint<RpcService> for SimulateTransaction {
 
     fn path(&self) -> &'static str {
         "/transactions/simulate"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("SimulateTransaction")
-            .query_parameters::<SimulateTransactionQueryParameters>(generator)
-            .request_body(RequestBodyBuilder::new().bcs_content().build())
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<TransactionSimulationResponse>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {

@@ -6,12 +6,8 @@ use std::collections::HashMap;
 
 use super::execution::SimulateTransactionQueryParameters;
 use super::TransactionSimulationResponse;
+use super::{ApiEndpoint, RouteHandler};
 use crate::reader::StateReader;
-use crate::rest::openapi::ApiEndpoint;
-use crate::rest::openapi::OperationBuilder;
-use crate::rest::openapi::RequestBodyBuilder;
-use crate::rest::openapi::ResponseBuilder;
-use crate::rest::openapi::RouteHandler;
 use crate::service::objects::ObjectNotFoundError;
 use crate::Result;
 use crate::RpcService;
@@ -53,28 +49,6 @@ impl ApiEndpoint<RpcService> for ResolveTransaction {
 
     fn path(&self) -> &'static str {
         "/transactions/resolve"
-    }
-
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Transactions")
-            .operation_id("ResolveTransaction")
-            .query_parameters::<ResolveTransactionQueryParameters>(generator)
-            .request_body(
-                RequestBodyBuilder::new()
-                    .json_content::<unresolved::Transaction>(generator)
-                    .build(),
-            )
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ResolveTransactionResponse>(generator)
-                    .build(),
-            )
-            .build()
     }
 
     fn handler(&self) -> RouteHandler<RpcService> {
