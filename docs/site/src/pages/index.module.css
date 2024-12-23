@@ -175,7 +175,7 @@
 .TwoColItem p {
   flex: 8;
   color: var(--sui-gray);
-  font-family: Inter;
+  font-family: 'Inter', sans-serif;
   font-size: 1.125rem;
   font-weight: 500;
   line-height: 1.6875rem;
