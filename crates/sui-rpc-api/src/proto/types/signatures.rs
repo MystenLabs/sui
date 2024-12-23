@@ -6,10 +6,8 @@ use tap::Pipe;
 // ValidatorAggregatedSignature
 //
 
-impl From<sui_sdk_types::types::ValidatorAggregatedSignature>
-    for super::ValidatorAggregatedSignature
-{
-    fn from(value: sui_sdk_types::types::ValidatorAggregatedSignature) -> Self {
+impl From<sui_sdk_types::ValidatorAggregatedSignature> for super::ValidatorAggregatedSignature {
+    fn from(value: sui_sdk_types::ValidatorAggregatedSignature) -> Self {
         Self {
             epoch: Some(value.epoch),
             signature: Some(value.signature.as_bytes().to_vec().into()),
@@ -18,9 +16,7 @@ impl From<sui_sdk_types::types::ValidatorAggregatedSignature>
     }
 }
 
-impl TryFrom<&super::ValidatorAggregatedSignature>
-    for sui_sdk_types::types::ValidatorAggregatedSignature
-{
+impl TryFrom<&super::ValidatorAggregatedSignature> for sui_sdk_types::ValidatorAggregatedSignature {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ValidatorAggregatedSignature) -> Result<Self, Self::Error> {
@@ -32,7 +28,7 @@ impl TryFrom<&super::ValidatorAggregatedSignature>
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("signature"))?
             .as_ref()
-            .pipe(sui_sdk_types::types::Bls12381Signature::from_bytes)
+            .pipe(sui_sdk_types::Bls12381Signature::from_bytes)
             .map_err(TryFromProtoError::from_error)?;
         let bitmap = value
             .bitmap
@@ -88,8 +84,8 @@ impl TryFrom<&super::RoaringBitmap> for roaring::RoaringBitmap {
 // ValidatorCommitteeMember
 //
 
-impl From<sui_sdk_types::types::ValidatorCommitteeMember> for super::ValidatorCommitteeMember {
-    fn from(value: sui_sdk_types::types::ValidatorCommitteeMember) -> Self {
+impl From<sui_sdk_types::ValidatorCommitteeMember> for super::ValidatorCommitteeMember {
+    fn from(value: sui_sdk_types::ValidatorCommitteeMember) -> Self {
         Self {
             public_key: Some(value.public_key.as_bytes().to_vec().into()),
             stake: Some(value.stake),
@@ -97,7 +93,7 @@ impl From<sui_sdk_types::types::ValidatorCommitteeMember> for super::ValidatorCo
     }
 }
 
-impl TryFrom<&super::ValidatorCommitteeMember> for sui_sdk_types::types::ValidatorCommitteeMember {
+impl TryFrom<&super::ValidatorCommitteeMember> for sui_sdk_types::ValidatorCommitteeMember {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -107,7 +103,7 @@ impl TryFrom<&super::ValidatorCommitteeMember> for sui_sdk_types::types::Validat
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("public_key"))?
             .as_ref()
-            .pipe(sui_sdk_types::types::Bls12381PublicKey::from_bytes)
+            .pipe(sui_sdk_types::Bls12381PublicKey::from_bytes)
             .map_err(TryFromProtoError::from_error)?;
         let stake = stake.ok_or_else(|| TryFromProtoError::missing("stake"))?;
         Ok(Self { public_key, stake })
@@ -118,8 +114,8 @@ impl TryFrom<&super::ValidatorCommitteeMember> for sui_sdk_types::types::Validat
 // ValidatorCommittee
 //
 
-impl From<sui_sdk_types::types::ValidatorCommittee> for super::ValidatorCommittee {
-    fn from(value: sui_sdk_types::types::ValidatorCommittee) -> Self {
+impl From<sui_sdk_types::ValidatorCommittee> for super::ValidatorCommittee {
+    fn from(value: sui_sdk_types::ValidatorCommittee) -> Self {
         Self {
             epoch: Some(value.epoch),
             members: value.members.into_iter().map(Into::into).collect(),
@@ -127,7 +123,7 @@ impl From<sui_sdk_types::types::ValidatorCommittee> for super::ValidatorCommitte
     }
 }
 
-impl TryFrom<&super::ValidatorCommittee> for sui_sdk_types::types::ValidatorCommittee {
+impl TryFrom<&super::ValidatorCommittee> for sui_sdk_types::ValidatorCommittee {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ValidatorCommittee) -> Result<Self, Self::Error> {
@@ -149,15 +145,15 @@ impl TryFrom<&super::ValidatorCommittee> for sui_sdk_types::types::ValidatorComm
 // Bn254FieldElement
 //
 
-impl From<sui_sdk_types::types::Bn254FieldElement> for super::Bn254FieldElement {
-    fn from(value: sui_sdk_types::types::Bn254FieldElement) -> Self {
+impl From<sui_sdk_types::Bn254FieldElement> for super::Bn254FieldElement {
+    fn from(value: sui_sdk_types::Bn254FieldElement) -> Self {
         Self {
             element: Some(value.padded().to_vec().into()),
         }
     }
 }
 
-impl TryFrom<&super::Bn254FieldElement> for sui_sdk_types::types::Bn254FieldElement {
+impl TryFrom<&super::Bn254FieldElement> for sui_sdk_types::Bn254FieldElement {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Bn254FieldElement) -> Result<Self, Self::Error> {
@@ -177,8 +173,8 @@ impl TryFrom<&super::Bn254FieldElement> for sui_sdk_types::types::Bn254FieldElem
 // CircomG1
 //
 
-impl From<sui_sdk_types::types::CircomG1> for super::CircomG1 {
-    fn from(value: sui_sdk_types::types::CircomG1) -> Self {
+impl From<sui_sdk_types::CircomG1> for super::CircomG1 {
+    fn from(value: sui_sdk_types::CircomG1) -> Self {
         let [e0, e1, e2] = value.0;
 
         Self {
@@ -189,7 +185,7 @@ impl From<sui_sdk_types::types::CircomG1> for super::CircomG1 {
     }
 }
 
-impl TryFrom<&super::CircomG1> for sui_sdk_types::types::CircomG1 {
+impl TryFrom<&super::CircomG1> for sui_sdk_types::CircomG1 {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CircomG1) -> Result<Self, Self::Error> {
@@ -217,8 +213,8 @@ impl TryFrom<&super::CircomG1> for sui_sdk_types::types::CircomG1 {
 // CircomG2
 //
 
-impl From<sui_sdk_types::types::CircomG2> for super::CircomG2 {
-    fn from(value: sui_sdk_types::types::CircomG2) -> Self {
+impl From<sui_sdk_types::CircomG2> for super::CircomG2 {
+    fn from(value: sui_sdk_types::CircomG2) -> Self {
         let [[e00, e01], [e10, e11], [e20, e21]] = value.0;
 
         Self {
@@ -232,7 +228,7 @@ impl From<sui_sdk_types::types::CircomG2> for super::CircomG2 {
     }
 }
 
-impl TryFrom<&super::CircomG2> for sui_sdk_types::types::CircomG2 {
+impl TryFrom<&super::CircomG2> for sui_sdk_types::CircomG2 {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CircomG2) -> Result<Self, Self::Error> {
@@ -277,10 +273,8 @@ impl TryFrom<&super::CircomG2> for sui_sdk_types::types::CircomG2 {
 // ZkLoginClaim
 //
 
-impl From<sui_sdk_types::types::Claim> for super::ZkLoginClaim {
-    fn from(
-        sui_sdk_types::types::Claim { value, index_mod_4 }: sui_sdk_types::types::Claim,
-    ) -> Self {
+impl From<sui_sdk_types::Claim> for super::ZkLoginClaim {
+    fn from(sui_sdk_types::Claim { value, index_mod_4 }: sui_sdk_types::Claim) -> Self {
         Self {
             value: Some(value),
             index_mod_4: Some(index_mod_4.into()),
@@ -288,7 +282,7 @@ impl From<sui_sdk_types::types::Claim> for super::ZkLoginClaim {
     }
 }
 
-impl TryFrom<&super::ZkLoginClaim> for sui_sdk_types::types::Claim {
+impl TryFrom<&super::ZkLoginClaim> for sui_sdk_types::Claim {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -310,8 +304,8 @@ impl TryFrom<&super::ZkLoginClaim> for sui_sdk_types::types::Claim {
 // ZkLoginProof
 //
 
-impl From<sui_sdk_types::types::ZkLoginProof> for super::ZkLoginProof {
-    fn from(value: sui_sdk_types::types::ZkLoginProof) -> Self {
+impl From<sui_sdk_types::ZkLoginProof> for super::ZkLoginProof {
+    fn from(value: sui_sdk_types::ZkLoginProof) -> Self {
         Self {
             a: Some(value.a.into()),
             b: Some(value.b.into()),
@@ -320,7 +314,7 @@ impl From<sui_sdk_types::types::ZkLoginProof> for super::ZkLoginProof {
     }
 }
 
-impl TryFrom<&super::ZkLoginProof> for sui_sdk_types::types::ZkLoginProof {
+impl TryFrom<&super::ZkLoginProof> for sui_sdk_types::ZkLoginProof {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ZkLoginProof) -> Result<Self, Self::Error> {
@@ -348,14 +342,14 @@ impl TryFrom<&super::ZkLoginProof> for sui_sdk_types::types::ZkLoginProof {
 // ZkLoginInputs
 //
 
-impl From<sui_sdk_types::types::ZkLoginInputs> for super::ZkLoginInputs {
+impl From<sui_sdk_types::ZkLoginInputs> for super::ZkLoginInputs {
     fn from(
-        sui_sdk_types::types::ZkLoginInputs {
+        sui_sdk_types::ZkLoginInputs {
             proof_points,
             iss_base64_details,
             header_base64,
             address_seed,
-        }: sui_sdk_types::types::ZkLoginInputs,
+        }: sui_sdk_types::ZkLoginInputs,
     ) -> Self {
         Self {
             proof_points: Some(proof_points.into()),
@@ -366,7 +360,7 @@ impl From<sui_sdk_types::types::ZkLoginInputs> for super::ZkLoginInputs {
     }
 }
 
-impl TryFrom<&super::ZkLoginInputs> for sui_sdk_types::types::ZkLoginInputs {
+impl TryFrom<&super::ZkLoginInputs> for sui_sdk_types::ZkLoginInputs {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ZkLoginInputs) -> Result<Self, Self::Error> {
@@ -404,8 +398,8 @@ impl TryFrom<&super::ZkLoginInputs> for sui_sdk_types::types::ZkLoginInputs {
 // ZkLoginAuthenticator
 //
 
-impl From<sui_sdk_types::types::ZkLoginAuthenticator> for super::ZkLoginAuthenticator {
-    fn from(value: sui_sdk_types::types::ZkLoginAuthenticator) -> Self {
+impl From<sui_sdk_types::ZkLoginAuthenticator> for super::ZkLoginAuthenticator {
+    fn from(value: sui_sdk_types::ZkLoginAuthenticator) -> Self {
         Self {
             inputs: Some(value.inputs.into()),
             max_epoch: Some(value.max_epoch),
@@ -414,7 +408,7 @@ impl From<sui_sdk_types::types::ZkLoginAuthenticator> for super::ZkLoginAuthenti
     }
 }
 
-impl TryFrom<&super::ZkLoginAuthenticator> for sui_sdk_types::types::ZkLoginAuthenticator {
+impl TryFrom<&super::ZkLoginAuthenticator> for sui_sdk_types::ZkLoginAuthenticator {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ZkLoginAuthenticator) -> Result<Self, Self::Error> {
@@ -444,8 +438,8 @@ impl TryFrom<&super::ZkLoginAuthenticator> for sui_sdk_types::types::ZkLoginAuth
 // ZkLoginPublicIdentifier
 //
 
-impl From<&sui_sdk_types::types::ZkLoginPublicIdentifier> for super::ZkLoginPublicIdentifier {
-    fn from(value: &sui_sdk_types::types::ZkLoginPublicIdentifier) -> Self {
+impl From<&sui_sdk_types::ZkLoginPublicIdentifier> for super::ZkLoginPublicIdentifier {
+    fn from(value: &sui_sdk_types::ZkLoginPublicIdentifier) -> Self {
         Self {
             iss: Some(value.iss().to_owned()),
             address_seed: Some(value.address_seed().to_owned().into()),
@@ -453,7 +447,7 @@ impl From<&sui_sdk_types::types::ZkLoginPublicIdentifier> for super::ZkLoginPubl
     }
 }
 
-impl TryFrom<&super::ZkLoginPublicIdentifier> for sui_sdk_types::types::ZkLoginPublicIdentifier {
+impl TryFrom<&super::ZkLoginPublicIdentifier> for sui_sdk_types::ZkLoginPublicIdentifier {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ZkLoginPublicIdentifier) -> Result<Self, Self::Error> {
@@ -478,9 +472,9 @@ impl TryFrom<&super::ZkLoginPublicIdentifier> for sui_sdk_types::types::ZkLoginP
 // SignatureScheme
 //
 
-impl From<sui_sdk_types::types::SignatureScheme> for super::SignatureScheme {
-    fn from(value: sui_sdk_types::types::SignatureScheme) -> Self {
-        use sui_sdk_types::types::SignatureScheme::*;
+impl From<sui_sdk_types::SignatureScheme> for super::SignatureScheme {
+    fn from(value: sui_sdk_types::SignatureScheme) -> Self {
+        use sui_sdk_types::SignatureScheme::*;
 
         match value {
             Ed25519 => Self::Ed25519,
@@ -494,7 +488,7 @@ impl From<sui_sdk_types::types::SignatureScheme> for super::SignatureScheme {
     }
 }
 
-impl TryFrom<&super::SignatureScheme> for sui_sdk_types::types::SignatureScheme {
+impl TryFrom<&super::SignatureScheme> for sui_sdk_types::SignatureScheme {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::SignatureScheme) -> Result<Self, Self::Error> {
@@ -522,19 +516,19 @@ impl TryFrom<&super::SignatureScheme> for sui_sdk_types::types::SignatureScheme 
 // SimpleSignature
 //
 
-impl From<sui_sdk_types::types::SimpleSignature> for super::SimpleSignature {
-    fn from(value: sui_sdk_types::types::SimpleSignature) -> Self {
+impl From<sui_sdk_types::SimpleSignature> for super::SimpleSignature {
+    fn from(value: sui_sdk_types::SimpleSignature) -> Self {
         let scheme: super::SignatureScheme = value.scheme().into();
         let (signature, public_key) = match &value {
-            sui_sdk_types::types::SimpleSignature::Ed25519 {
+            sui_sdk_types::SimpleSignature::Ed25519 {
                 signature,
                 public_key,
             } => (signature.as_bytes(), public_key.as_bytes()),
-            sui_sdk_types::types::SimpleSignature::Secp256k1 {
+            sui_sdk_types::SimpleSignature::Secp256k1 {
                 signature,
                 public_key,
             } => (signature.as_bytes(), public_key.as_bytes()),
-            sui_sdk_types::types::SimpleSignature::Secp256r1 {
+            sui_sdk_types::SimpleSignature::Secp256r1 {
                 signature,
                 public_key,
             } => (signature.as_bytes(), public_key.as_bytes()),
@@ -548,13 +542,13 @@ impl From<sui_sdk_types::types::SimpleSignature> for super::SimpleSignature {
     }
 }
 
-impl TryFrom<&super::SimpleSignature> for sui_sdk_types::types::SimpleSignature {
+impl TryFrom<&super::SimpleSignature> for sui_sdk_types::SimpleSignature {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::SimpleSignature) -> Result<Self, Self::Error> {
         use super::SignatureScheme::*;
-        use sui_sdk_types::types::{Ed25519PublicKey, Ed25519Signature};
-        use sui_sdk_types::types::{
+        use sui_sdk_types::{Ed25519PublicKey, Ed25519Signature};
+        use sui_sdk_types::{
             Secp256k1PublicKey, Secp256k1Signature, Secp256r1PublicKey, Secp256r1Signature,
         };
 
@@ -594,8 +588,8 @@ impl TryFrom<&super::SimpleSignature> for sui_sdk_types::types::SimpleSignature 
 // PasskeyAuthenticator
 //
 
-impl From<sui_sdk_types::types::PasskeyAuthenticator> for super::PasskeyAuthenticator {
-    fn from(value: sui_sdk_types::types::PasskeyAuthenticator) -> Self {
+impl From<sui_sdk_types::PasskeyAuthenticator> for super::PasskeyAuthenticator {
+    fn from(value: sui_sdk_types::PasskeyAuthenticator) -> Self {
         Self {
             authenticator_data: Some(value.authenticator_data().to_vec().into()),
             client_data_json: Some(value.client_data_json().to_owned()),
@@ -604,7 +598,7 @@ impl From<sui_sdk_types::types::PasskeyAuthenticator> for super::PasskeyAuthenti
     }
 }
 
-impl TryFrom<&super::PasskeyAuthenticator> for sui_sdk_types::types::PasskeyAuthenticator {
+impl TryFrom<&super::PasskeyAuthenticator> for sui_sdk_types::PasskeyAuthenticator {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::PasskeyAuthenticator) -> Result<Self, Self::Error> {
@@ -634,10 +628,10 @@ impl TryFrom<&super::PasskeyAuthenticator> for sui_sdk_types::types::PasskeyAuth
 // MultisigMemberPublicKey
 //
 
-impl From<&sui_sdk_types::types::MultisigMemberPublicKey> for super::MultisigMemberPublicKey {
-    fn from(value: &sui_sdk_types::types::MultisigMemberPublicKey) -> Self {
+impl From<&sui_sdk_types::MultisigMemberPublicKey> for super::MultisigMemberPublicKey {
+    fn from(value: &sui_sdk_types::MultisigMemberPublicKey) -> Self {
         use super::multisig_member_public_key::Scheme;
-        use sui_sdk_types::types::MultisigMemberPublicKey::*;
+        use sui_sdk_types::MultisigMemberPublicKey::*;
 
         let scheme = match value {
             Ed25519(public_key) => Scheme::Ed25519(public_key.as_bytes().to_vec().into()),
@@ -652,12 +646,12 @@ impl From<&sui_sdk_types::types::MultisigMemberPublicKey> for super::MultisigMem
     }
 }
 
-impl TryFrom<&super::MultisigMemberPublicKey> for sui_sdk_types::types::MultisigMemberPublicKey {
+impl TryFrom<&super::MultisigMemberPublicKey> for sui_sdk_types::MultisigMemberPublicKey {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MultisigMemberPublicKey) -> Result<Self, Self::Error> {
         use super::multisig_member_public_key::Scheme;
-        use sui_sdk_types::types::{Ed25519PublicKey, Secp256k1PublicKey, Secp256r1PublicKey};
+        use sui_sdk_types::{Ed25519PublicKey, Secp256k1PublicKey, Secp256r1PublicKey};
 
         match value
             .scheme
@@ -681,8 +675,8 @@ impl TryFrom<&super::MultisigMemberPublicKey> for sui_sdk_types::types::Multisig
 // MultisigMember
 //
 
-impl From<&sui_sdk_types::types::MultisigMember> for super::MultisigMember {
-    fn from(value: &sui_sdk_types::types::MultisigMember) -> Self {
+impl From<&sui_sdk_types::MultisigMember> for super::MultisigMember {
+    fn from(value: &sui_sdk_types::MultisigMember) -> Self {
         Self {
             public_key: Some(value.public_key().into()),
             weight: Some(value.weight().into()),
@@ -690,7 +684,7 @@ impl From<&sui_sdk_types::types::MultisigMember> for super::MultisigMember {
     }
 }
 
-impl TryFrom<&super::MultisigMember> for sui_sdk_types::types::MultisigMember {
+impl TryFrom<&super::MultisigMember> for sui_sdk_types::MultisigMember {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MultisigMember) -> Result<Self, Self::Error> {
@@ -712,8 +706,8 @@ impl TryFrom<&super::MultisigMember> for sui_sdk_types::types::MultisigMember {
 // MultisigCommittee
 //
 
-impl From<&sui_sdk_types::types::MultisigCommittee> for super::MultisigCommittee {
-    fn from(value: &sui_sdk_types::types::MultisigCommittee) -> Self {
+impl From<&sui_sdk_types::MultisigCommittee> for super::MultisigCommittee {
+    fn from(value: &sui_sdk_types::MultisigCommittee) -> Self {
         Self {
             members: value.members().iter().map(Into::into).collect(),
             threshold: Some(value.threshold().into()),
@@ -721,7 +715,7 @@ impl From<&sui_sdk_types::types::MultisigCommittee> for super::MultisigCommittee
     }
 }
 
-impl TryFrom<&super::MultisigCommittee> for sui_sdk_types::types::MultisigCommittee {
+impl TryFrom<&super::MultisigCommittee> for sui_sdk_types::MultisigCommittee {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MultisigCommittee) -> Result<Self, Self::Error> {
@@ -743,10 +737,10 @@ impl TryFrom<&super::MultisigCommittee> for sui_sdk_types::types::MultisigCommit
 // MultisigMemberSignature
 //
 
-impl From<&sui_sdk_types::types::MultisigMemberSignature> for super::MultisigMemberSignature {
-    fn from(value: &sui_sdk_types::types::MultisigMemberSignature) -> Self {
+impl From<&sui_sdk_types::MultisigMemberSignature> for super::MultisigMemberSignature {
+    fn from(value: &sui_sdk_types::MultisigMemberSignature) -> Self {
         use super::multisig_member_signature::Signature;
-        use sui_sdk_types::types::MultisigMemberSignature::*;
+        use sui_sdk_types::MultisigMemberSignature::*;
 
         let signature = match value {
             Ed25519(signautre) => Signature::Ed25519(signautre.as_bytes().to_vec().into()),
@@ -761,12 +755,12 @@ impl From<&sui_sdk_types::types::MultisigMemberSignature> for super::MultisigMem
     }
 }
 
-impl TryFrom<&super::MultisigMemberSignature> for sui_sdk_types::types::MultisigMemberSignature {
+impl TryFrom<&super::MultisigMemberSignature> for sui_sdk_types::MultisigMemberSignature {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MultisigMemberSignature) -> Result<Self, Self::Error> {
         use super::multisig_member_signature::Signature;
-        use sui_sdk_types::types::{Ed25519Signature, Secp256k1Signature, Secp256r1Signature};
+        use sui_sdk_types::{Ed25519Signature, Secp256k1Signature, Secp256r1Signature};
 
         match value
             .signature
@@ -792,10 +786,8 @@ impl TryFrom<&super::MultisigMemberSignature> for sui_sdk_types::types::Multisig
 // MultisigAggregatedSignature
 //
 
-impl From<&sui_sdk_types::types::MultisigAggregatedSignature>
-    for super::MultisigAggregatedSignature
-{
-    fn from(value: &sui_sdk_types::types::MultisigAggregatedSignature) -> Self {
+impl From<&sui_sdk_types::MultisigAggregatedSignature> for super::MultisigAggregatedSignature {
+    fn from(value: &sui_sdk_types::MultisigAggregatedSignature) -> Self {
         Self {
             signatures: value.signatures().iter().map(Into::into).collect(),
             bitmap: Some(value.bitmap().into()),
@@ -805,9 +797,7 @@ impl From<&sui_sdk_types::types::MultisigAggregatedSignature>
     }
 }
 
-impl TryFrom<&super::MultisigAggregatedSignature>
-    for sui_sdk_types::types::MultisigAggregatedSignature
-{
+impl TryFrom<&super::MultisigAggregatedSignature> for sui_sdk_types::MultisigAggregatedSignature {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MultisigAggregatedSignature) -> Result<Self, Self::Error> {
@@ -845,10 +835,10 @@ impl TryFrom<&super::MultisigAggregatedSignature>
 // UserSignature
 //
 
-impl From<sui_sdk_types::types::UserSignature> for super::UserSignature {
-    fn from(value: sui_sdk_types::types::UserSignature) -> Self {
+impl From<sui_sdk_types::UserSignature> for super::UserSignature {
+    fn from(value: sui_sdk_types::UserSignature) -> Self {
         use super::user_signature::Signature;
-        use sui_sdk_types::types::UserSignature::*;
+        use sui_sdk_types::UserSignature::*;
 
         let signature = match value {
             Simple(simple) => Signature::Simple(simple.into()),
@@ -863,7 +853,7 @@ impl From<sui_sdk_types::types::UserSignature> for super::UserSignature {
     }
 }
 
-impl TryFrom<&super::UserSignature> for sui_sdk_types::types::UserSignature {
+impl TryFrom<&super::UserSignature> for sui_sdk_types::UserSignature {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::UserSignature) -> Result<Self, Self::Error> {

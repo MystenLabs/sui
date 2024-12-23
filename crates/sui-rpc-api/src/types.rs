@@ -40,7 +40,8 @@ pub const X_SUI_TIMESTAMP_MS: &str = "x-sui-timestamp-ms";
 #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct NodeInfo {
     /// The chain identifier of the chain that this Node is on
-    pub chain_id: sui_sdk_types::types::CheckpointDigest,
+    #[schemars(with = "String")]
+    pub chain_id: sui_sdk_types::CheckpointDigest,
 
     /// Human readable name of the chain that this Node is on
     pub chain: std::borrow::Cow<'static, str>,
@@ -75,24 +76,22 @@ pub struct NodeInfo {
 }
 
 #[serde_with::serde_as]
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ObjectResponse {
-    pub object_id: sui_sdk_types::types::ObjectId,
+    pub object_id: sui_sdk_types::ObjectId,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::rest::_schemars::U64")]
-    pub version: sui_sdk_types::types::Version,
-    pub digest: sui_sdk_types::types::ObjectDigest,
+    pub version: sui_sdk_types::Version,
+    pub digest: sui_sdk_types::ObjectDigest,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub object: Option<sui_sdk_types::types::Object>,
+    pub object: Option<sui_sdk_types::Object>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_bcs: Option<Vec<u8>>,
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct GetObjectOptions {
     /// Request that `Object` be included in the response
     ///
@@ -117,30 +116,27 @@ impl GetObjectOptions {
 }
 
 #[serde_with::serde_as]
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CheckpointResponse {
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::rest::_schemars::U64")]
-    pub sequence_number: sui_sdk_types::types::CheckpointSequenceNumber,
+    pub sequence_number: sui_sdk_types::CheckpointSequenceNumber,
 
-    pub digest: sui_sdk_types::types::CheckpointDigest,
+    pub digest: sui_sdk_types::CheckpointDigest,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<sui_sdk_types::types::CheckpointSummary>,
+    pub summary: Option<sui_sdk_types::CheckpointSummary>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary_bcs: Option<Vec<u8>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<sui_sdk_types::types::ValidatorAggregatedSignature>,
+    pub signature: Option<sui_sdk_types::ValidatorAggregatedSignature>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub contents: Option<sui_sdk_types::types::CheckpointContents>,
+    pub contents: Option<sui_sdk_types::CheckpointContents>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contents_bcs: Option<Vec<u8>>,
 }
@@ -201,53 +197,47 @@ impl GetCheckpointOptions {
 }
 
 #[serde_with::serde_as]
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct TransactionResponse {
-    pub digest: sui_sdk_types::types::TransactionDigest,
+    pub digest: sui_sdk_types::TransactionDigest,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction: Option<sui_sdk_types::types::Transaction>,
+    pub transaction: Option<sui_sdk_types::Transaction>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_bcs: Option<Vec<u8>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signatures: Option<Vec<sui_sdk_types::types::UserSignature>>,
+    pub signatures: Option<Vec<sui_sdk_types::UserSignature>>,
 
     #[serde_as(as = "Option<Vec<fastcrypto::encoding::Base64>>")]
-    #[schemars(with = "Option<Vec<String>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signatures_bytes: Option<Vec<Vec<u8>>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub effects: Option<sui_sdk_types::types::TransactionEffects>,
+    pub effects: Option<sui_sdk_types::TransactionEffects>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects_bcs: Option<Vec<u8>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+    pub events: Option<sui_sdk_types::TransactionEvents>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events_bcs: Option<Vec<u8>>,
 
     #[serde_as(
         as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
     )]
-    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<u64>,
 
     #[serde_as(
         as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
     )]
-    #[schemars(with = "Option<crate::rest::_schemars::U64>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
 }
@@ -403,44 +393,41 @@ impl ExecuteTransactionOptions {
 
 /// Response type for the execute transaction endpoint
 #[serde_with::serde_as]
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExecuteTransactionResponse {
     pub finality: EffectsFinality,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub effects: Option<sui_sdk_types::types::TransactionEffects>,
+    pub effects: Option<sui_sdk_types::TransactionEffects>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects_bcs: Option<Vec<u8>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+    pub events: Option<sui_sdk_types::TransactionEvents>,
 
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events_bcs: Option<Vec<u8>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub balance_changes: Option<Vec<sui_sdk_types::types::BalanceChange>>,
-    // pub input_objects: Option<Vec<sui_sdk_types::types::Object>>,
-    // pub output_objects: Option<Vec<sui_sdk_types::types::Object>>,
+    pub balance_changes: Option<Vec<sui_sdk_types::BalanceChange>>,
+    // pub input_objects: Option<Vec<sui_sdk_types::Object>>,
+    // pub output_objects: Option<Vec<sui_sdk_types::Object>>,
 }
 
 #[serde_with::serde_as]
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "finality", rename_all = "snake_case")]
 pub enum EffectsFinality {
     Certified {
         /// Validator aggregated signature
-        signature: sui_sdk_types::types::ValidatorAggregatedSignature,
+        signature: sui_sdk_types::ValidatorAggregatedSignature,
     },
     Checkpointed {
         #[serde_as(as = "sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>")]
-        #[schemars(with = "crate::rest::_schemars::U64")]
-        checkpoint: sui_sdk_types::types::CheckpointSequenceNumber,
+        checkpoint: sui_sdk_types::CheckpointSequenceNumber,
     },
     QuorumExecuted,
 }
@@ -613,13 +600,13 @@ impl GetFullCheckpointOptions {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FullCheckpointResponse {
-    pub sequence_number: sui_sdk_types::types::CheckpointSequenceNumber,
-    pub digest: sui_sdk_types::types::CheckpointDigest,
+    pub sequence_number: sui_sdk_types::CheckpointSequenceNumber,
+    pub digest: sui_sdk_types::CheckpointDigest,
 
-    pub summary: Option<sui_sdk_types::types::CheckpointSummary>,
+    pub summary: Option<sui_sdk_types::CheckpointSummary>,
     pub summary_bcs: Option<Vec<u8>>,
-    pub signature: Option<sui_sdk_types::types::ValidatorAggregatedSignature>,
-    pub contents: Option<sui_sdk_types::types::CheckpointContents>,
+    pub signature: Option<sui_sdk_types::ValidatorAggregatedSignature>,
+    pub contents: Option<sui_sdk_types::CheckpointContents>,
     pub contents_bcs: Option<Vec<u8>>,
 
     pub transactions: Vec<FullCheckpointTransaction>,
@@ -627,15 +614,15 @@ pub struct FullCheckpointResponse {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FullCheckpointTransaction {
-    pub digest: sui_sdk_types::types::TransactionDigest,
+    pub digest: sui_sdk_types::TransactionDigest,
 
-    pub transaction: Option<sui_sdk_types::types::Transaction>,
+    pub transaction: Option<sui_sdk_types::Transaction>,
     pub transaction_bcs: Option<Vec<u8>>,
 
-    pub effects: Option<sui_sdk_types::types::TransactionEffects>,
+    pub effects: Option<sui_sdk_types::TransactionEffects>,
     pub effects_bcs: Option<Vec<u8>>,
 
-    pub events: Option<sui_sdk_types::types::TransactionEvents>,
+    pub events: Option<sui_sdk_types::TransactionEvents>,
     pub events_bcs: Option<Vec<u8>>,
 
     pub input_objects: Option<Vec<FullCheckpointObject>>,
@@ -644,10 +631,10 @@ pub struct FullCheckpointTransaction {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FullCheckpointObject {
-    pub object_id: sui_sdk_types::types::ObjectId,
-    pub version: sui_sdk_types::types::Version,
-    pub digest: sui_sdk_types::types::ObjectDigest,
+    pub object_id: sui_sdk_types::ObjectId,
+    pub version: sui_sdk_types::Version,
+    pub digest: sui_sdk_types::ObjectDigest,
 
-    pub object: Option<sui_sdk_types::types::Object>,
+    pub object: Option<sui_sdk_types::Object>,
     pub object_bcs: Option<Vec<u8>>,
 }

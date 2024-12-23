@@ -4,7 +4,7 @@
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::Json;
-use sui_sdk_types::types::{CheckpointSequenceNumber, SignedCheckpointSummary};
+use sui_sdk_types::{CheckpointSequenceNumber, SignedCheckpointSummary};
 use sui_types::storage::ReadStore;
 
 use crate::reader::StateReader;

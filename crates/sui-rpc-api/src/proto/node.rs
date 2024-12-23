@@ -29,8 +29,8 @@ pub use file_descriptor_set::FILE_DESCRIPTOR_SET;
 // BalanceChange
 //
 
-impl From<sui_sdk_types::types::BalanceChange> for BalanceChange {
-    fn from(value: sui_sdk_types::types::BalanceChange) -> Self {
+impl From<sui_sdk_types::BalanceChange> for BalanceChange {
+    fn from(value: sui_sdk_types::BalanceChange) -> Self {
         Self {
             address: Some(value.address.into()),
             coin_type: Some(value.coin_type.into()),
@@ -39,7 +39,7 @@ impl From<sui_sdk_types::types::BalanceChange> for BalanceChange {
     }
 }
 
-impl TryFrom<&BalanceChange> for sui_sdk_types::types::BalanceChange {
+impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
     type Error = TryFromProtoError;
 
     fn try_from(value: &BalanceChange) -> Result<Self, Self::Error> {

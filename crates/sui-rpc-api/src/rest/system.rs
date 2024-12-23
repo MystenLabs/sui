@@ -3,7 +3,6 @@
 
 use crate::{
     reader::StateReader,
-    rest::_schemars::U64,
     rest::accept::AcceptFormat,
     rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     Result, RpcService, RpcServiceError,
@@ -12,11 +11,10 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sui_protocol_config::{ProtocolConfig, ProtocolConfigValue, ProtocolVersion};
-use sui_sdk_types::types::{Address, ObjectId};
+use sui_sdk_types::{Address, ObjectId};
 
 pub struct GetSystemStateSummary;
 
@@ -70,32 +68,26 @@ async fn get_system_state_summary(
 }
 
 #[serde_with::serde_as]
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SystemStateSummary {
     /// The current epoch ID, starting from 0.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub epoch: u64,
     /// The current protocol version, starting from 1.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub protocol_version: u64,
     /// The current version of the system state data structure type.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub system_state_version: u64,
     /// The storage rebates of all the objects on-chain stored in the storage fund.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub storage_fund_total_object_storage_rebates: u64,
     /// The non-refundable portion of the storage fund coming from storage reinvestment, non-refundable
     /// storage rebates and any leftover staking rewards.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub storage_fund_non_refundable_balance: u64,
     /// The reference gas price for the current epoch.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub reference_gas_price: u64,
     /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
     /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
@@ -103,84 +95,68 @@ pub struct SystemStateSummary {
     pub safe_mode: bool,
     /// Amount of storage rewards accumulated (and not yet distributed) during safe mode.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub safe_mode_storage_rewards: u64,
     /// Amount of computation rewards accumulated (and not yet distributed) during safe mode.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub safe_mode_computation_rewards: u64,
     /// Amount of storage rebates accumulated (and not yet burned) during safe mode.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub safe_mode_storage_rebates: u64,
     /// Amount of non-refundable storage fee accumulated during safe mode.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub safe_mode_non_refundable_storage_fee: u64,
     /// Unix timestamp of the current epoch start
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub epoch_start_timestamp_ms: u64,
 
     // System parameters
     /// The duration of an epoch, in milliseconds.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub epoch_duration_ms: u64,
 
     /// The starting epoch in which stake subsidies start being paid out
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub stake_subsidy_start_epoch: u64,
 
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub max_validator_count: u64,
 
     /// Lower-bound on the amount of stake required to become a validator.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub min_validator_joining_stake: u64,
 
     /// Validators with stake amount below `validator_low_stake_threshold` are considered to
     /// have low stake and will be escorted out of the validator set after being below this
     /// threshold for more than `validator_low_stake_grace_period` number of epochs.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub validator_low_stake_threshold: u64,
 
     /// Validators with stake below `validator_very_low_stake_threshold` will be removed
     /// immediately at epoch change, no grace period.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub validator_very_low_stake_threshold: u64,
 
     /// A validator can have stake below `validator_low_stake_threshold`
     /// for this many epochs before being kicked out.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub validator_low_stake_grace_period: u64,
 
     // Stake subsidy information
     /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub stake_subsidy_balance: u64,
     /// This counter may be different from the current epoch number if
     /// in some epochs we decide to skip the subsidy.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub stake_subsidy_distribution_counter: u64,
     /// The amount of stake subsidy to be drawn down per epoch.
     /// This amount decays and decreases over time.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub stake_subsidy_current_distribution_amount: u64,
     /// Number of distributions to occur before the distribution amount decays.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub stake_subsidy_period_length: u64,
     /// The rate at which the distribution amount decays at the end of each
     /// period. Expressed in basis points.
@@ -189,7 +165,6 @@ pub struct SystemStateSummary {
     // Validator set
     /// Total amount of stake from all active validators at the beginning of the epoch.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub total_stake: u64,
     /// The list of active validators in the current epoch.
     pub active_validators: Vec<ValidatorSummary>,
@@ -197,34 +172,28 @@ pub struct SystemStateSummary {
     pub pending_active_validators_id: ObjectId,
     /// Number of new validators that will join at the end of the epoch.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub pending_active_validators_size: u64,
     /// Removal requests from the validators. Each element is an index
     /// pointing to `active_validators`.
     #[serde_as(as = "Vec<sui_types::sui_serde::BigInt<u64>>")]
-    #[schemars(with = "Vec<U64>")]
     pub pending_removals: Vec<u64>,
     /// ID of the object that maps from staking pool's ID to the sui address of a validator.
     pub staking_pool_mappings_id: ObjectId,
     /// Number of staking pool mappings.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub staking_pool_mappings_size: u64,
     /// ID of the object that maps from a staking pool ID to the inactive validator that has that pool as its staking pool.
     pub inactive_pools_id: ObjectId,
     /// Number of inactive staking pools.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub inactive_pools_size: u64,
     /// ID of the object that stores preactive validators, mapping their addresses to their `Validator` structs.
     pub validator_candidates_id: ObjectId,
     /// Number of preactive validators.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub validator_candidates_size: u64,
     /// Map storing the number of epochs for which each validator has been below the low stake threshold.
     #[serde_as(as = "Vec<(_, sui_types::sui_serde::BigInt<u64>)>")]
-    #[schemars(with = "Vec<(Address, U64)>")]
     pub at_risk_validators: Vec<(Address, u64)>,
     /// A map storing the records of validator reporting each other.
     pub validator_report_records: Vec<(Address, Vec<Address>)>,
@@ -233,15 +202,14 @@ pub struct SystemStateSummary {
 /// This is the REST type for the sui validator. It flattens all inner structures
 /// to top-level fields so that they are decoupled from the internal definitions.
 #[serde_with::serde_as]
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ValidatorSummary {
     // Metadata
     pub address: Address,
-    pub protocol_public_key: sui_sdk_types::types::Bls12381PublicKey,
-    pub network_public_key: sui_sdk_types::types::Ed25519PublicKey,
-    pub worker_public_key: sui_sdk_types::types::Ed25519PublicKey,
+    pub protocol_public_key: sui_sdk_types::Bls12381PublicKey,
+    pub network_public_key: sui_sdk_types::Ed25519PublicKey,
+    pub worker_public_key: sui_sdk_types::Ed25519PublicKey,
     #[serde_as(as = "fastcrypto::encoding::Base64")]
-    #[schemars(with = "String")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
@@ -251,11 +219,10 @@ pub struct ValidatorSummary {
     pub p2p_address: String,
     pub primary_address: String,
     pub worker_address: String,
-    pub next_epoch_protocol_public_key: Option<sui_sdk_types::types::Bls12381PublicKey>,
-    pub next_epoch_network_public_key: Option<sui_sdk_types::types::Ed25519PublicKey>,
-    pub next_epoch_worker_public_key: Option<sui_sdk_types::types::Ed25519PublicKey>,
+    pub next_epoch_protocol_public_key: Option<sui_sdk_types::Bls12381PublicKey>,
+    pub next_epoch_network_public_key: Option<sui_sdk_types::Ed25519PublicKey>,
+    pub next_epoch_worker_public_key: Option<sui_sdk_types::Ed25519PublicKey>,
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
-    #[schemars(with = "Option<String>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
     pub next_epoch_net_address: Option<String>,
     pub next_epoch_p2p_address: Option<String>,
@@ -263,23 +230,17 @@ pub struct ValidatorSummary {
     pub next_epoch_worker_address: Option<String>,
 
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub voting_power: u64,
     pub operation_cap_id: ObjectId,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub gas_price: u64,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub commission_rate: u64,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub next_epoch_stake: u64,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub next_epoch_gas_price: u64,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub next_epoch_commission_rate: u64,
 
     // Staking pool information
@@ -287,41 +248,32 @@ pub struct ValidatorSummary {
     pub staking_pool_id: ObjectId,
     /// The epoch at which this pool became active.
     #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
-    #[schemars(with = "Option<U64>")]
     pub staking_pool_activation_epoch: Option<u64>,
     /// The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},
     #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
-    #[schemars(with = "Option<U64>")]
     pub staking_pool_deactivation_epoch: Option<u64>,
     /// The total number of SUI tokens in this pool.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub staking_pool_sui_balance: u64,
     /// The epoch stake rewards will be added here at the end of each epoch.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub rewards_pool: u64,
     /// Total number of pool tokens issued by the pool.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub pool_token_balance: u64,
     /// Pending stake amount for this epoch.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub pending_stake: u64,
     /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub pending_total_sui_withdraw: u64,
     /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub pending_pool_token_withdraw: u64,
     /// ID of the exchange rate table object.
     pub exchange_rates_id: ObjectId,
     /// Number of exchange rates in the table.
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "U64")]
     pub exchange_rates_size: u64,
 }
 
@@ -375,18 +327,14 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSum
 
         Self {
             address: sui_address.into(),
-            protocol_public_key: sui_sdk_types::types::Bls12381PublicKey::from_bytes(
+            protocol_public_key: sui_sdk_types::Bls12381PublicKey::from_bytes(
                 protocol_pubkey_bytes,
             )
             .unwrap(),
-            network_public_key: sui_sdk_types::types::Ed25519PublicKey::from_bytes(
-                network_pubkey_bytes,
-            )
-            .unwrap(),
-            worker_public_key: sui_sdk_types::types::Ed25519PublicKey::from_bytes(
-                worker_pubkey_bytes,
-            )
-            .unwrap(),
+            network_public_key: sui_sdk_types::Ed25519PublicKey::from_bytes(network_pubkey_bytes)
+                .unwrap(),
+            worker_public_key: sui_sdk_types::Ed25519PublicKey::from_bytes(worker_pubkey_bytes)
+                .unwrap(),
             proof_of_possession_bytes,
             name,
             description,
@@ -397,11 +345,11 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSum
             primary_address,
             worker_address,
             next_epoch_protocol_public_key: next_epoch_protocol_pubkey_bytes
-                .map(|bytes| sui_sdk_types::types::Bls12381PublicKey::from_bytes(bytes).unwrap()),
+                .map(|bytes| sui_sdk_types::Bls12381PublicKey::from_bytes(bytes).unwrap()),
             next_epoch_network_public_key: next_epoch_network_pubkey_bytes
-                .map(|bytes| sui_sdk_types::types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
+                .map(|bytes| sui_sdk_types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
             next_epoch_worker_public_key: next_epoch_worker_pubkey_bytes
-                .map(|bytes| sui_sdk_types::types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
+                .map(|bytes| sui_sdk_types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
             next_epoch_proof_of_possession,
             next_epoch_net_address,
             next_epoch_p2p_address,
@@ -692,11 +640,10 @@ fn supported_protocol_headers() -> SupportedProtocolHeaders {
     ]
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename = "ProtocolConfig")]
 pub struct ProtocolConfigResponse {
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "U64")]
     pub protocol_version: u64,
     pub feature_flags: BTreeMap<String, bool>,
     pub attributes: BTreeMap<String, String>,
@@ -780,9 +727,8 @@ async fn get_gas_info(
     }))
 }
 
-#[derive(serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GasInfo {
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "U64")]
     pub reference_gas_price: u64,
 }

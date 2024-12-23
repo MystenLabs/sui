@@ -10,9 +10,8 @@ use crate::types::ExecuteTransactionResponse;
 use crate::{Result, RpcService};
 use axum::extract::{Query, State};
 use axum::Json;
-use schemars::JsonSchema;
 use std::net::SocketAddr;
-use sui_sdk_types::types::{
+use sui_sdk_types::{
     BalanceChange, Object, SignedTransaction, Transaction, TransactionEffects, TransactionEvents,
 };
 
@@ -113,7 +112,7 @@ async fn simulate_transaction(
 }
 
 /// Response type for the transaction simulation endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct TransactionSimulationResponse {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
@@ -123,21 +122,18 @@ pub struct TransactionSimulationResponse {
 }
 
 /// Query parameters for the simulate transaction endpoint
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct SimulateTransactionQueryParameters {
     /// Request `BalanceChanges` be included in the Response.
     #[serde(default)]
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "bool")]
     pub balance_changes: bool,
     /// Request input `Object`s be included in the Response.
     #[serde(default)]
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "bool")]
     pub input_objects: bool,
     /// Request output `Object`s be included in the Response.
     #[serde(default)]
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
-    #[schemars(with = "bool")]
     pub output_objects: bool,
 }

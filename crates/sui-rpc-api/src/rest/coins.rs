@@ -7,9 +7,8 @@ use crate::RpcServiceError;
 use crate::{reader::StateReader, Result};
 use axum::extract::{Path, State};
 use axum::Json;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use sui_sdk_types::types::{ObjectId, StructTag};
+use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 pub struct GetCoinInfo;
@@ -127,14 +126,14 @@ impl From<CoinNotFoundError> for crate::RpcServiceError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoinInfo {
     pub coin_type: StructTag,
     pub metadata: Option<CoinMetadata>,
     pub treasury: Option<CoinTreasury>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct CoinMetadata {
     pub id: ObjectId,
     /// Number of decimal places the coin uses.
@@ -163,11 +162,10 @@ impl From<sui_types::coin::CoinMetadata> for CoinMetadata {
 }
 
 #[serde_with::serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct CoinTreasury {
     pub id: Option<ObjectId>,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::rest::_schemars::U64")]
     pub total_supply: u64,
 }
 

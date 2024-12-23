@@ -473,6 +473,7 @@ fn path_parameter<T: JsonSchema>(
     })
 }
 
+#[allow(unused)]
 fn query_parameters<T: JsonSchema>(generator: &mut SchemaGenerator) -> Vec<ReferenceOr<Parameter>> {
     let mut params = Vec::new();
 
@@ -546,24 +547,19 @@ impl OperationBuilder {
         self
     }
 
-    pub fn path_parameter<T: JsonSchema>(
-        &mut self,
-        name: &str,
-        generator: &mut SchemaGenerator,
-    ) -> &mut Self {
+    // pub fn path_parameter<T: JsonSchema>(
+    pub fn path_parameter<T>(&mut self, name: &str, generator: &mut SchemaGenerator) -> &mut Self {
         self.inner
             .parameters
-            .push(path_parameter::<T>(name, generator));
+            .push(path_parameter::<String>(name, generator));
         self
     }
 
-    pub fn query_parameters<T: JsonSchema>(
-        &mut self,
-        generator: &mut SchemaGenerator,
-    ) -> &mut Self {
-        self.inner
-            .parameters
-            .extend(query_parameters::<T>(generator));
+    // pub fn query_parameters<T: JsonSchema>(
+    pub fn query_parameters<T>(&mut self, _generator: &mut SchemaGenerator) -> &mut Self {
+        // self.inner
+        //     .parameters
+        //     .extend(query_parameters::<T>(generator));
         self
     }
 
@@ -634,18 +630,8 @@ impl ResponseBuilder {
         self
     }
 
-    pub fn json_content<T: JsonSchema>(&mut self, generator: &mut SchemaGenerator) -> &mut Self {
-        let schema_object = SchemaObject {
-            json_schema: generator.subschema_for::<T>(),
-            external_docs: None,
-            example: None,
-        };
-        let media_type = MediaType {
-            schema: Some(schema_object),
-            ..Default::default()
-        };
-
-        self.content(mime::APPLICATION_JSON.as_ref(), media_type)
+    pub fn json_content<T>(&mut self, _generator: &mut SchemaGenerator) -> &mut Self {
+        self.content(mime::APPLICATION_JSON.as_ref(), MediaType::default())
     }
 
     pub fn text_content(&mut self) -> &mut Self {
@@ -678,18 +664,19 @@ impl RequestBodyBuilder {
         self
     }
 
-    pub fn json_content<T: JsonSchema>(&mut self, generator: &mut SchemaGenerator) -> &mut Self {
-        let schema_object = SchemaObject {
-            json_schema: generator.subschema_for::<T>(),
-            external_docs: None,
-            example: None,
-        };
-        let media_type = MediaType {
-            schema: Some(schema_object),
-            ..Default::default()
-        };
+    // pub fn json_content<T: JsonSchema>(&mut self, generator: &mut SchemaGenerator) -> &mut Self {
+    pub fn json_content<T>(&mut self, _generator: &mut SchemaGenerator) -> &mut Self {
+        // let schema_object = SchemaObject {
+        //     json_schema: generator.subschema_for::<T>(),
+        //     external_docs: None,
+        //     example: None,
+        // };
+        // let media_type = MediaType {
+        //     schema: Some(schema_object),
+        //     ..Default::default()
+        // };
 
-        self.content(mime::APPLICATION_JSON.as_ref(), media_type)
+        self.content(mime::APPLICATION_JSON.as_ref(), MediaType::default())
     }
 
     pub fn bcs_content(&mut self) -> &mut Self {
