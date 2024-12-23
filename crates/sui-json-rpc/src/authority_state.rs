@@ -24,7 +24,7 @@ use sui_types::base_types::{
 };
 use sui_types::bridge::Bridge;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::digests::{ChainIdentifier, TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
 use sui_types::error::{SuiError, UserInputError};
@@ -57,7 +57,6 @@ pub trait StateRead: Send + Sync {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
     ) -> StateReadResult<KVStoreTransactionData>;
 
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead>;
@@ -235,14 +234,12 @@ impl StateRead for AuthorityState {
         &self,
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
     ) -> StateReadResult<KVStoreTransactionData> {
         Ok(
             <AuthorityState as TransactionKeyValueStoreTrait>::multi_get(
                 self,
                 transactions,
                 effects,
-                events,
             )
             .await?,
         )

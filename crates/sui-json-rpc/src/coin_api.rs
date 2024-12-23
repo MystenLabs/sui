@@ -435,7 +435,7 @@ mod tests {
     use sui_types::balance::Supply;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
-    use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
+    use sui_types::digests::{ObjectDigest, TransactionDigest};
     use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
@@ -455,7 +455,6 @@ mod tests {
                 &self,
                 transactions: &[TransactionDigest],
                 effects: &[TransactionDigest],
-                events: &[TransactionEventsDigest],
             ) -> SuiResult<KVStoreTransactionData>;
 
             async fn multi_get_checkpoints(
@@ -1399,7 +1398,7 @@ mod tests {
                 .return_once(move |_| Ok(transaction_digest));
             mock_state
                 .expect_multi_get()
-                .return_once(move |_, _, _| Ok((vec![], vec![Some(transaction_effects)], vec![])));
+                .return_once(move |_, _| Ok((vec![], vec![Some(transaction_effects)])));
 
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
