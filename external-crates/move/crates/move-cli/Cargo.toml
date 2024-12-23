@@ -43,6 +43,8 @@ move-symbol-pool.workspace = true
 move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
 move-model-2.workspace = true
+move-trace-format.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
