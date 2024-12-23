@@ -22,7 +22,7 @@ use move_model::{
     emit, emitln,
     model::{
         DatatypeId, EnumEnv, FieldId, FunId, FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedId,
-        QualifiedInstId, RefType, StructEnv,
+        QualifiedInstId, RefType, StructEnv, StructOrEnumEnv,
     },
     pragmas::{ADDITION_OVERFLOW_UNCHECKED_PRAGMA, SEED_PRAGMA, TIMEOUT_PRAGMA},
     ty::{PrimitiveType, Type, TypeDisplayContext, BOOL_TYPE},
@@ -2474,7 +2474,12 @@ impl<'env> FunctionTranslator<'env> {
                         );
                     }
                     UnpackVariant(mid, eid, vid, _inst, ref_type) => {
-                        assert_ne!(ref_type, &RefType::ByMutRef);
+                        assert_ne!(
+                            ref_type,
+                            &RefType::ByMutRef,
+                            "UnpackVariant with ByMutRef in {}",
+                            self.fun_target.func_env.get_full_name_str()
+                        );
 
                         let enum_env = env.get_module(*mid).into_enum(*eid);
                         let variant_env = enum_env.get_variant(*vid);
@@ -3718,6 +3723,29 @@ fn struct_has_native_equality(
     true
 }
 
+fn enum_has_native_equality(
+    enum_env: &EnumEnv<'_>,
+    inst: &[Type],
+    options: &BoogieOptions,
+) -> bool {
+    if options.native_equality {
+        // Everything has native equality
+        return true;
+    }
+    for variant in enum_env.get_variants() {
+        for field in variant.get_fields() {
+            if !has_native_equality(
+                enum_env.module_env.env,
+                options,
+                &field.get_type().instantiate(inst),
+            ) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 pub fn has_native_equality(env: &GlobalEnv, options: &BoogieOptions, ty: &Type) -> bool {
     if options.native_equality {
         // Everything has native equality
@@ -3725,9 +3753,12 @@ pub fn has_native_equality(env: &GlobalEnv, options: &BoogieOptions, ty: &Type) 
     }
     match ty {
         Type::Vector(..) => false,
-        Type::Datatype(mid, sid, sinst) => {
-            struct_has_native_equality(&env.get_struct_qid(mid.qualified(*sid)), sinst, options)
-        }
+        Type::Datatype(mid, did, inst) => match &env.get_struct_or_enum_qid(mid.qualified(*did)) {
+            StructOrEnumEnv::Struct(struct_env) => {
+                struct_has_native_equality(&struct_env, inst, options)
+            }
+            StructOrEnumEnv::Enum(enum_env) => enum_has_native_equality(&enum_env, inst, options),
+        },
         Type::Primitive(_)
         | Type::Tuple(_)
         | Type::TypeParameter(_)

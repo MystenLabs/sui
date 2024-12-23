@@ -336,9 +336,10 @@ pub fn boogie_bv_type(env: &GlobalEnv, ty: &Type) -> String {
             Num => "<<num is not unsupported here>>".to_string(),
         },
         Vector(et) => format!("Vec ({})", boogie_bv_type(env, et)),
-        Datatype(mid, sid, inst) => {
-            boogie_struct_name_bv(&env.get_module(*mid).into_struct(*sid), inst, true)
-        }
+        Datatype(mid, did, inst) => match env.get_struct_or_enum_qid(mid.qualified(*did)) {
+            StructOrEnumEnv::Struct(struct_env) => boogie_struct_name_bv(&struct_env, inst, true),
+            StructOrEnumEnv::Enum(enum_env) => boogie_enum_name(&enum_env, inst),
+        },
         Reference(_, bt) => format!("$Mutation ({})", boogie_bv_type(env, bt)),
         TypeParameter(idx) => boogie_type_param(env, *idx),
         Fun(..) | Tuple(..) | TypeDomain(..) | ResourceDomain(..) | Error | Var(..) => {

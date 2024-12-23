@@ -11,11 +11,11 @@
 //! (which depends on the compilation scheme). It also handles PackRef/PackRefDeep
 //! instructions introduced by memory instrumentation, as well as the Pack instructions.
 
+use move_binary_format::normalized::Struct;
 use move_model::{
-    ast,
-    ast::{ConditionKind, Exp, ExpData, QuantKind, TempIndex},
+    ast::{self, ConditionKind, Exp, ExpData, QuantKind, TempIndex},
     exp_generator::ExpGenerator,
-    model::{FunctionEnv, Loc, NodeId, StructEnv},
+    model::{FunctionEnv, Loc, NodeId, StructEnv, StructOrEnumEnv},
     pragmas::{INTRINSIC_FUN_MAP_SPEC_GET, INTRINSIC_TYPE_MAP},
     ty::Type,
 };
@@ -169,43 +169,49 @@ impl<'a> Instrumenter<'a> {
         let env = self.builder.global_env();
         let ty = env.get_node_type(value.node_id());
         match ty.skip_reference() {
-            Type::Datatype(mid, sid, targs) => {
-                let struct_env = env.get_module(*mid).into_struct(*sid);
-                if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-                    let decl = env
-                        .intrinsics
-                        .get_decl_for_struct(&mid.qualified(*sid))
-                        .expect("intrinsic declaration");
-                    let spec_fun_get = decl
-                        .lookup_spec_fun(env, INTRINSIC_FUN_MAP_SPEC_GET)
-                        .expect("intrinsic map_get function");
+            Type::Datatype(mid, did, targs) => {
+                match env.get_struct_or_enum_qid(mid.qualified(*did)) {
+                    StructOrEnumEnv::Struct(struct_env) => {
+                        if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+                            let decl = env
+                                .intrinsics
+                                .get_decl_for_struct(&mid.qualified(*did))
+                                .expect("intrinsic declaration");
+                            let spec_fun_get = decl
+                                .lookup_spec_fun(env, INTRINSIC_FUN_MAP_SPEC_GET)
+                                .expect("intrinsic map_get function");
 
-                    // When dealing with a map, we cannot maintain individual locations for
-                    // invariants. Instead we choose just one as a representative.
-                    // TODO(refactoring): we should use the spec block position instead.
-                    let mut loc = env.unknown_loc();
-                    let quant = self.builder.mk_map_quant_opt(
-                        QuantKind::Forall,
-                        value,
-                        spec_fun_get,
-                        &targs[0],
-                        &targs[1],
-                        &mut |e| {
-                            let invs = self.translate_invariant(deep, e);
-                            if !invs.is_empty() {
-                                loc = invs[0].0.clone();
+                            // When dealing with a map, we cannot maintain individual locations for
+                            // invariants. Instead we choose just one as a representative.
+                            // TODO(refactoring): we should use the spec block position instead.
+                            let mut loc = env.unknown_loc();
+                            let quant = self.builder.mk_map_quant_opt(
+                                QuantKind::Forall,
+                                value,
+                                spec_fun_get,
+                                &targs[0],
+                                &targs[1],
+                                &mut |e| {
+                                    let invs = self.translate_invariant(deep, e);
+                                    if !invs.is_empty() {
+                                        loc = invs[0].0.clone();
+                                    }
+                                    self.builder.mk_join_bool(
+                                        ast::Operation::And,
+                                        invs.into_iter().map(|(_, e)| e),
+                                    )
+                                },
+                            );
+                            if let Some(e) = quant {
+                                vec![(loc, e)]
+                            } else {
+                                vec![]
                             }
-                            self.builder
-                                .mk_join_bool(ast::Operation::And, invs.into_iter().map(|(_, e)| e))
-                        },
-                    );
-                    if let Some(e) = quant {
-                        vec![(loc, e)]
-                    } else {
-                        vec![]
+                        } else {
+                            self.translate_invariant_for_struct(deep, value, struct_env, targs)
+                        }
                     }
-                } else {
-                    self.translate_invariant_for_struct(deep, value, struct_env, targs)
+                    StructOrEnumEnv::Enum { .. } => vec![],
                 }
             }
             Type::Vector(ety) => {

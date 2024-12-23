@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
     exp_generator::ExpGenerator,
-    model::{FunctionEnv, StructEnv},
+    model::{FunctionEnv, StructEnv, StructOrEnumEnv},
     ty::{Type, BOOL_TYPE},
 };
 
@@ -91,10 +91,13 @@ impl<'a> Instrumenter<'a> {
         use Type::*;
         let env = self.builder.global_env();
         match ty.skip_reference() {
-            Datatype(mid, sid, inst) => {
-                self.is_pack_ref_struct(&env.get_struct_qid(mid.qualified(*sid)))
-                    || inst.iter().any(|t| self.is_pack_ref_ty(t))
-            }
+            Datatype(mid, did, inst) => match env.get_struct_or_enum_qid(mid.qualified(*did)) {
+                StructOrEnumEnv::Struct(struct_env) => {
+                    self.is_pack_ref_struct(&struct_env)
+                        || inst.iter().any(|t| self.is_pack_ref_ty(t))
+                }
+                StructOrEnumEnv::Enum { .. } => false,
+            },
             Vector(et) => self.is_pack_ref_ty(et.as_ref()),
             Primitive(_)
             | Tuple(_)

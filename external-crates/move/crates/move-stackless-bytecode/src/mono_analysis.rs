@@ -70,9 +70,17 @@ impl MonoInfo {
                 Type::TypeParameter(*param_idx).display(&tctx)
             )?;
         }
-        for (sid, insts) in &self.structs {
-            let sname = env.get_struct(*sid).get_full_name_str();
-            writeln!(f, "struct {} = {{", sname)?;
+        for (did, insts) in &self.structs {
+            match env.get_struct_or_enum_qid(*did) {
+                StructOrEnumEnv::Struct(struct_env) => {
+                    let sname = struct_env.get_full_name_str();
+                    writeln!(f, "struct {} = {{", sname)?;
+                }
+                StructOrEnumEnv::Enum(enum_env) => {
+                    let ename = enum_env.get_full_name_str();
+                    writeln!(f, "enum {} = {{", ename)?;
+                }
+            }
             for inst in insts {
                 writeln!(f, "  <{}>", display_inst(inst))?;
             }
