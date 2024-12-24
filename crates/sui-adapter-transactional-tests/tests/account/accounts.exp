@@ -1,0 +1,27 @@
+processed 4 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-24:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6878000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-28:
+//# programmable --sender A --inputs 10 @B
+//> SplitCoins(Gas, [Input(0)]);
+//> test::transfer_coin_to_account::transfer(Result(0), Input(1))
+events: Event { package_id: test, transaction_module: Identifier("transfer_coin_to_account"), sender: A, type_: StructTag { address: sui, module: Identifier("account"), name: Identifier("Merge"), type_params: [Struct(StructTag { address: sui, module: Identifier("balance"), name: Identifier("MergableBalance"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] })] }, contents: [208, 93, 188, 187, 197, 237, 63, 178, 23, 244, 180, 137, 94, 178, 29, 20, 158, 175, 202, 79, 151, 158, 3, 135, 81, 125, 177, 175, 126, 100, 12, 17, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 30-32:
+//# programmable --sender B --inputs 10 @B
+//> sui::account::reserve<sui::balance::MergableBalance<sui::sui::SUI>>(Input(1), Input(0));
+//> test::transfer_coin_to_account::withdraw(Result(0), Input(0))
+events: Event { package_id: test, transaction_module: Identifier("transfer_coin_to_account"), sender: B, type_: StructTag { address: sui, module: Identifier("account"), name: Identifier("Split"), type_params: [Struct(StructTag { address: sui, module: Identifier("balance"), name: Identifier("MergableBalance"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] })] }, contents: [208, 93, 188, 187, 197, 237, 63, 178, 23, 244, 180, 137, 94, 178, 29, 20, 158, 175, 202, 79, 151, 158, 3, 135, 81, 125, 177, 175, 126, 100, 12, 17, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
