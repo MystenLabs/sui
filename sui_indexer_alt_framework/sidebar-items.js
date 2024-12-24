@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["handlers","ingestion","pipeline","task"],"struct":["Indexer","IndexerArgs"]};
