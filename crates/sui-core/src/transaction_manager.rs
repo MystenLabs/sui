@@ -343,15 +343,13 @@ impl TransactionManager {
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
-        let transaction_manager = TransactionManager {
+        TransactionManager {
             object_cache_read,
             transaction_cache_read,
             metrics: metrics.clone(),
             inner: RwLock::new(RwLock::new(Inner::new(epoch_store.epoch(), metrics))),
             tx_ready_certificates,
-        };
-        transaction_manager.enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store);
-        transaction_manager
+        }
     }
 
     /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available

@@ -116,19 +116,37 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     }
 }
 
-impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> NotifyRead<K, V> {
+impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug, V: Clone + Unpin> NotifyRead<K, V> {
     pub async fn read(&self, keys: &[K], fetch: impl FnOnce(&[K]) -> Vec<Option<V>>) -> Vec<V> {
         let registrations = self.register_all(keys);
 
         let results = fetch(keys);
 
-        let results = results
-            .into_iter()
-            .zip(registrations)
-            .map(|(a, r)| match a {
+        let results =
+            itertools::izip!(keys, results.into_iter(), registrations).map(|(k, a, r)| match a {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
+                None => Either::Right({
+                    #[cfg(msim)]
+                    {
+                        let mut r = r;
+                        async move {
+                            loop {
+                                tokio::select! {
+                                    _ = tokio::time::sleep(tokio::time::Duration::from_millis(1000)) => {
+                                        tracing::debug!("Waiting for notify_read of {:?}", k);
+                                    }
+                                    r = &mut r => {
+                                        break r;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    #[cfg(not(msim))]
+                    r
+                })
             });
 
         join_all(results).await
