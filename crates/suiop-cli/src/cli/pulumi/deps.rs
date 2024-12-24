@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{command::CommandOptions, run_cmd};
 use anyhow::Result;
 use serde_yaml::Value;
@@ -115,6 +118,7 @@ pub fn update_deps_cmd(filepath: PathBuf, runtime: Option<String>) -> Result<()>
             error_messages
         ))
     } else {
+        info!("Successfully updated dependencies");
         Ok(())
     }
 }
