@@ -22,11 +22,11 @@ pub mod temp;
 pub struct DbArgs {
     /// The URL of the database to connect to.
     #[arg(long, default_value_t = Self::default().database_url)]
-    database_url: Url,
+    pub database_url: Url,
 
     /// Number of connections to keep in the pool.
     #[arg(long, default_value_t = Self::default().db_connection_pool_size)]
-    db_connection_pool_size: u32,
+    pub db_connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available, in milliseconds.
     #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
