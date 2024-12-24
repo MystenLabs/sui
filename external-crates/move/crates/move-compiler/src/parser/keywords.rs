@@ -3,32 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub const KEYWORDS: &[&str] = &[
-    "abort",
-    "acquires",
-    "as",
-    "break",
-    "const",
-    "continue",
-    "copy",
-    "else",
-    "false",
-    "friend",
-    "fun",
-    "has",
-    "if",
-    "invariant",
-    "let",
-    "loop",
-    "module",
-    "move",
-    "native",
-    "public",
-    "return",
-    "spec",
-    "struct",
-    "true",
-    "use",
-    "while",
+    "abort", "acquires", "as", "break", "const", "continue", "copy", "else", "false", "friend",
+    "fun", "has", "if", "let", "loop", "module", "move", "native", "public", "return", "struct",
+    "true", "use", "while",
 ];
 
 pub const CONTEXTUAL_KEYWORDS: &[&str] = &[

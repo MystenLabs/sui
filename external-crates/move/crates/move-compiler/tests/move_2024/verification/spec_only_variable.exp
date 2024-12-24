@@ -1,0 +1,6 @@
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/verification/spec_only_variable.move:7:17
+  │
+7 │         let y = x_spec;
+  │                 ^^^^^^ Unbound variable 'x_spec'
+
