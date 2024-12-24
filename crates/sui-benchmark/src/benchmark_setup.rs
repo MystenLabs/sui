@@ -28,7 +28,7 @@ use tracing::info;
 pub enum Env {
     // Mode where benchmark in run on a validator cluster that gets spun up locally
     Local,
-    // Mode where benchmark is run on a already running remote cluster
+    // Mode where benchmark is run on an already running remote cluster
     Remote,
 }
 
