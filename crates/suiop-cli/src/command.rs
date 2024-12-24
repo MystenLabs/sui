@@ -6,6 +6,7 @@ use anyhow::Context;
 use anyhow::Result;
 use spinners::Spinner;
 use spinners::Spinners;
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
 use std::process::Stdio;
@@ -16,6 +17,7 @@ const SPINNER: Spinners = Spinners::Dots12;
 pub struct CommandOptions {
     shared_stdio: bool,
     show_spinner: bool,
+    pub current_dir: Option<PathBuf>,
 }
 
 impl CommandOptions {
@@ -23,6 +25,7 @@ impl CommandOptions {
         CommandOptions {
             shared_stdio,
             show_spinner,
+            current_dir: None,
         }
     }
 }
@@ -32,6 +35,7 @@ impl Default for CommandOptions {
         CommandOptions {
             shared_stdio: false,
             show_spinner: true,
+            current_dir: None,
         }
     }
 }
@@ -41,6 +45,7 @@ pub fn run_cmd(cmd_in: Vec<&str>, options: Option<CommandOptions>) -> Result<Out
     let opts = options.unwrap_or_default();
 
     let mut cmd = Command::new(cmd_in[0]);
+    cmd.current_dir(opts.current_dir.unwrap_or_default());
     // add extra args
     let cmd = if cmd_in.len() > 1 {
         cmd.args(cmd_in[1..].iter())

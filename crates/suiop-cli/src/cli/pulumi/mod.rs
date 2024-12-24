@@ -1,16 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod deps;
 mod init;
 mod setup;
+
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::arg;
 use clap::Parser;
 use clap::ValueEnum;
+use deps::update_deps_cmd;
 use init::ProjectType;
 use setup::ensure_gcloud;
 use setup::ensure_pulumi_setup;
+
+fn validate_runtime(s: &str) -> Result<String, String> {
+    match s.to_lowercase().as_str() {
+        "typescript" | "go" | "python" => Ok(s.to_lowercase()),
+        _ => Err(String::from("Runtime must be typescript, go, or python")),
+    }
+}
 
 #[derive(ValueEnum, PartialEq, Clone, Debug)]
 pub enum PulumiProjectRuntime {
@@ -47,6 +58,17 @@ pub enum PulumiAction {
         #[arg(long, default_value = "go")]
         runtime: PulumiProjectRuntime,
     },
+    /// update dependencies for pulumi programs in a given directory
+    #[command(name = "update-deps", aliases = ["u"])]
+    UpdateDeps {
+        /// Starting directory path
+        #[arg(required = true)]
+        filepath: PathBuf,
+
+        /// Optional runtime filter (typescript, go, python)
+        #[arg(value_parser = validate_runtime)]
+        runtime: Option<String>,
+    },
 }
 
 pub fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
@@ -62,6 +84,9 @@ pub fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
                 ensure_gcloud()?;
             }
             project_type.create_project(kms, project_name.clone(), runtime)
+        }
+        PulumiAction::UpdateDeps { filepath, runtime } => {
+            update_deps_cmd(filepath.clone(), runtime.clone())
         }
     }
 }
