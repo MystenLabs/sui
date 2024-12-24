@@ -28,7 +28,7 @@ use watermarks::CommitterWatermark;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod pipeline;
-pub(crate) mod schema;
+pub mod schema;
 pub mod task;
 pub(crate) mod watermarks;
 

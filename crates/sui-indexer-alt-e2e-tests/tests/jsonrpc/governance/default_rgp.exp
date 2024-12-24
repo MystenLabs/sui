@@ -1,0 +1,9 @@
+processed 2 tasks
+
+task 1, lines 6-10:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": "1000"
+}

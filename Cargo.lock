@@ -13910,6 +13910,7 @@ dependencies = [
  "async-trait",
  "datatest-stable",
  "msim",
+ "serde_json",
  "sui-graphql-rpc",
  "sui-transactional-test-runner",
  "telemetry-subscribers",
@@ -14127,6 +14128,29 @@ dependencies = [
  "toml 0.7.4",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "sui-indexer-alt-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "datatest-stable",
+ "diesel",
+ "diesel-async",
+ "prometheus",
+ "reqwest 0.12.5",
+ "serde_json",
+ "sui-indexer-alt",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-jsonrpc",
+ "sui-pg-db",
+ "sui-transactional-test-runner",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-util 0.7.10",
+ "url",
 ]
 
 [[package]]
@@ -15843,6 +15867,7 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "regex",
+ "serde",
  "serde_json",
  "simulacrum",
  "sui-config",

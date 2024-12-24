@@ -3,7 +3,9 @@
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+use anyhow::bail;
 use async_trait::async_trait;
+use serde_json::Value;
 use std::{path::Path, sync::Arc, time::Duration};
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, ExecutorCluster};
 use sui_transactional_test_runner::{
@@ -20,12 +22,6 @@ pub struct OffchainReaderForAdapter {
 
 #[async_trait]
 impl OffchainStateReader for OffchainReaderForAdapter {
-    async fn wait_for_objects_snapshot_catchup(&self, base_timeout: Duration) {
-        self.cluster
-            .wait_for_objects_snapshot_catchup(base_timeout)
-            .await
-    }
-
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         self.cluster
             .wait_for_checkpoint_catchup(checkpoint, base_timeout)
@@ -42,7 +38,7 @@ impl OffchainStateReader for OffchainReaderForAdapter {
         &self,
         query: String,
         show_usage: bool,
-    ) -> Result<TestResponse, anyhow::Error> {
+    ) -> anyhow::Result<TestResponse> {
         let result = self
             .cluster
             .graphql_client
@@ -54,6 +50,10 @@ impl OffchainStateReader for OffchainReaderForAdapter {
             response_body: result.response_body_json_pretty(),
             service_version: result.graphql_version().ok(),
         })
+    }
+
+    async fn execute_jsonrpc(&self, _: String, _: Value) -> anyhow::Result<TestResponse> {
+        bail!("JSON-RPC queries are not supported in these tests")
     }
 }
 

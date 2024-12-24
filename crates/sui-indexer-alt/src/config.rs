@@ -74,7 +74,7 @@ pub struct IngestionLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct ConsistencyLayer {
-    consistent_range: Option<u64>,
+    pub consistent_range: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,

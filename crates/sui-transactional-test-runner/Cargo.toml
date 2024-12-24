@@ -23,6 +23,7 @@ regex.workspace = true
 tempfile.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 futures.workspace = true
 criterion.workspace = true
