@@ -33,6 +33,7 @@ impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";
     type Value = ProcessedObjInfo;
 
+    // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
@@ -175,13 +176,14 @@ mod tests {
 
     #[test]
     fn test_process_basics() {
+        let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(1);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint1)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert_eq!(processed.cp_sequence_number, 1);
@@ -195,7 +197,7 @@ mod tests {
             .mutate_object(0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
         assert!(result.is_empty());
 
         builder = builder
@@ -203,7 +205,7 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint3 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint3)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint3)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert_eq!(processed.cp_sequence_number, 3);
@@ -217,7 +219,7 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint4 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint4)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint4)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert_eq!(processed.cp_sequence_number, 4);
@@ -229,6 +231,7 @@ mod tests {
 
     #[test]
     fn test_process_noop() {
+        let obj_info = ObjInfo::default();
         // In this checkpoint, an object is created and deleted in the same checkpoint.
         // We expect that no updates are made to the table.
         let mut builder = TestCheckpointDataBuilder::new(1)
@@ -239,12 +242,13 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert!(result.is_empty());
     }
 
     #[test]
     fn test_process_wrap() {
+        let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
@@ -256,7 +260,7 @@ mod tests {
             .wrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -269,7 +273,7 @@ mod tests {
             .unwrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -280,12 +284,13 @@ mod tests {
 
     #[test]
     fn test_process_shared_object() {
+        let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
             .create_shared_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -296,6 +301,7 @@ mod tests {
 
     #[test]
     fn test_process_immutable_object() {
+        let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
@@ -307,7 +313,7 @@ mod tests {
             .change_object_owner(0, Owner::Immutable)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -318,6 +324,7 @@ mod tests {
 
     #[test]
     fn test_process_object_owned_object() {
+        let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
@@ -329,7 +336,7 @@ mod tests {
             .change_object_owner(0, Owner::ObjectOwner(dbg_addr(0)))
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -340,6 +347,7 @@ mod tests {
 
     #[test]
     fn test_process_consensus_v2_object() {
+        let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
@@ -357,7 +365,7 @@ mod tests {
             )
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(

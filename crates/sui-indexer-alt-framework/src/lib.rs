@@ -16,8 +16,9 @@ use pipeline::{
     sequential::{self, SequentialConfig},
     Processor,
 };
-use sui_pg_db::{Db, DbArgs};
+use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use task::graceful_shutdown;
+use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -173,6 +174,25 @@ impl Indexer {
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
         })
+    }
+
+    pub async fn new_for_testing() -> (Self, TempDb) {
+        let temp_db = TempDb::new().unwrap();
+        let db_args = DbArgs::new_for_testing(temp_db.database().url().clone());
+        let indexer = Indexer::new(
+            db_args,
+            IndexerArgs::default(),
+            ClientArgs {
+                remote_store_url: None,
+                local_ingestion_path: Some(tempdir().unwrap().into_path()),
+            },
+            IngestionConfig::default(),
+            &MIGRATIONS,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        (indexer, temp_db)
     }
 
     /// The database connection pool used by the indexer.
@@ -410,7 +430,6 @@ impl Indexer {
                 .unwrap_or_default()
         };
 
-        // TODO(amnn): Test this (depends on supporting migrations and tempdb).
         self.first_checkpoint_from_watermark =
             expected_first_checkpoint.min(self.first_checkpoint_from_watermark);
 
@@ -427,5 +446,136 @@ impl Default for IndexerArgs {
             skip_watermark: false,
             metrics_address: "0.0.0.0:9184".parse().unwrap(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use sui_field_count::FieldCount;
+    use sui_pg_db as db;
+    use sui_types::full_checkpoint_content::CheckpointData;
+
+    use super::*;
+
+    #[derive(FieldCount)]
+    struct V {
+        _v: u64,
+    }
+
+    macro_rules! define_test_concurrent_pipeline {
+        ($name:ident) => {
+            define_test_concurrent_pipeline!($name, false);
+        };
+        ($name:ident, $pruning_requires_processed_values:expr) => {
+            struct $name;
+            impl Processor for $name {
+                const NAME: &'static str = stringify!($name);
+                type Value = V;
+                fn process(
+                    &self,
+                    _checkpoint: &Arc<CheckpointData>,
+                ) -> anyhow::Result<Vec<Self::Value>> {
+                    todo!()
+                }
+            }
+
+            #[async_trait]
+            impl concurrent::Handler for $name {
+                const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
+                async fn commit(
+                    _values: &[Self::Value],
+                    _conn: &mut db::Connection<'_>,
+                ) -> anyhow::Result<usize> {
+                    todo!()
+                }
+            }
+        };
+    }
+
+    define_test_concurrent_pipeline!(ConcurrentPipeline1);
+    define_test_concurrent_pipeline!(ConcurrentPipeline2);
+    define_test_concurrent_pipeline!(ConcurrentPipeline3, true);
+
+    #[tokio::test]
+    async fn test_add_new_pipeline() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 1);
+    }
+
+    #[tokio::test]
+    async fn test_add_existing_pipeline() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let watermark = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
+        watermark
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+    }
+
+    #[tokio::test]
+    async fn test_add_multiple_pipelines() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
+        watermark1
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        let watermark2 = CommitterWatermark::new_for_testing(ConcurrentPipeline2::NAME, 20);
+        watermark2
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline2, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 21);
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+    }
+
+    #[tokio::test]
+    async fn test_add_multiple_pipelines_pruning_requires_processed_values() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing().await;
+        let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
+        watermark1
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+
+        let watermark3 = CommitterWatermark::new_for_testing(ConcurrentPipeline3::NAME, 20);
+        watermark3
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap();
+        let pruner_watermark = PrunerWatermark::new_for_testing(ConcurrentPipeline3::NAME, 5);
+        assert!(pruner_watermark
+            .update(&mut indexer.db().connect().await.unwrap())
+            .await
+            .unwrap());
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline3, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_checkpoint_from_watermark, 6);
     }
 }

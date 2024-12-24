@@ -76,3 +76,88 @@ impl PruningLookupTable {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pruning_lookup_table_mutations() {
+        let table = PruningLookupTable::default();
+        let obj1 = ObjectID::random();
+        let obj2 = ObjectID::random();
+
+        // Checkpoint 1: obj1 mutated
+        let mut info1 = PruningInfo::new();
+        info1.add_mutated_object(obj1);
+        table.insert(1, info1);
+
+        // Checkpoint 2: obj2 mutated
+        let mut info2 = PruningInfo::new();
+        info2.add_mutated_object(obj2);
+        table.insert(2, info2);
+
+        // Prune checkpoints 1-2
+        let result = table.take(1, 2).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[&obj1], 1);
+        assert_eq!(result[&obj2], 2);
+    }
+
+    #[test]
+    fn test_pruning_lookup_table_deletions() {
+        let table = PruningLookupTable::default();
+        let obj = ObjectID::random();
+
+        // Checkpoint 1: obj mutated
+        let mut info1 = PruningInfo::new();
+        info1.add_mutated_object(obj);
+        table.insert(1, info1);
+
+        // Checkpoint 2: obj deleted
+        let mut info2 = PruningInfo::new();
+        info2.add_deleted_object(obj);
+        table.insert(2, info2);
+
+        // Prune checkpoints 1-2
+        let result = table.take(1, 2).unwrap();
+        assert_eq!(result.len(), 1);
+        // For deleted objects, we prune up to and including the deletion checkpoint
+        assert_eq!(result[&obj], 3);
+    }
+
+    #[test]
+    fn test_missing_checkpoint() {
+        let table = PruningLookupTable::default();
+        let obj = ObjectID::random();
+
+        let mut info = PruningInfo::new();
+        info.add_mutated_object(obj);
+        table.insert(1, info);
+
+        // Try to prune checkpoint that doesn't exist in the lookup table.
+        assert!(table.take(2, 2).is_err());
+    }
+
+    #[test]
+    fn test_multiple_updates() {
+        let table = PruningLookupTable::default();
+        let obj = ObjectID::random();
+
+        // Checkpoint 1: obj mutated
+        let mut info1 = PruningInfo::new();
+        info1.add_mutated_object(obj);
+        table.insert(1, info1);
+
+        // Checkpoint 2: obj mutated again
+        let mut info2 = PruningInfo::new();
+        info2.add_mutated_object(obj);
+        table.insert(2, info2);
+
+        // Prune checkpoints 1-2
+        let result = table.take(1, 2).unwrap();
+        assert_eq!(result.len(), 1);
+        // Should use the latest mutation checkpoint
+        assert_eq!(result[&obj], 2);
+    }
+}
