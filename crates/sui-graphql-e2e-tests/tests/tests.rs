@@ -3,7 +3,9 @@
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+use anyhow::bail;
 use async_trait::async_trait;
+use serde_json::Value;
 use std::{path::Path, sync::Arc, time::Duration};
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, ExecutorCluster};
 use sui_transactional_test_runner::{
@@ -42,7 +44,7 @@ impl OffchainStateReader for OffchainReaderForAdapter {
         &self,
         query: String,
         show_usage: bool,
-    ) -> Result<TestResponse, anyhow::Error> {
+    ) -> anyhow::Result<TestResponse> {
         let result = self
             .cluster
             .graphql_client
@@ -54,6 +56,10 @@ impl OffchainStateReader for OffchainReaderForAdapter {
             response_body: result.response_body_json_pretty(),
             service_version: result.graphql_version().ok(),
         })
+    }
+
+    async fn execute_jsonrpc(&self, _: String, _: Value) -> anyhow::Result<TestResponse> {
+        bail!("JSON-RPC queries are not supported in these tests")
     }
 }
 
