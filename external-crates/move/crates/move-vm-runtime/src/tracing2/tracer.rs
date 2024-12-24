@@ -10,13 +10,14 @@ use move_binary_format::{
     file_format::{ConstantPoolIndex, SignatureIndex},
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveTypeLayout, MoveValue},
-    language_storage::TypeTag,
+    account_address::AccountAddress, annotated_value::MoveTypeLayout, language_storage::TypeTag,
 };
-use move_trace_format::format::{
-    DataLoad, Effect as EF, Location, MoveTraceBuilder, Read, RefType, TraceIndex, TraceValue,
-    TypeTagWithRefs, Write,
+use move_trace_format::{
+    format::{
+        DataLoad, Effect as EF, Location, MoveTraceBuilder, Read, RefType, TraceIndex, TraceValue,
+        TypeTagWithRefs, Write,
+    },
+    value::SerializableMoveValue,
 };
 use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
 use smallvec::SmallVec;
@@ -357,7 +358,7 @@ impl<'a> VMTracer<'a> {
         loc: &RuntimeLocation,
         frame: Option<&Frame>,
         interpreter: &Interpreter,
-    ) -> Option<MoveValue> {
+    ) -> Option<SerializableMoveValue> {
         Some(match loc {
             RuntimeLocation::Local(fidx, loc_idx) => {
                 let local_ty = self
@@ -379,6 +380,7 @@ impl<'a> VMTracer<'a> {
                             .copy_loc(*loc_idx)
                             .ok()?
                             .as_annotated_move_value_for_tracing_only(&local_ty.layout?)?
+                            .into()
                     }
                     ReferenceType::Empty { .. } => {
                         panic!("We tried to access a local that was not initialized")
@@ -396,7 +398,9 @@ impl<'a> VMTracer<'a> {
                     }
                     None => {
                         let value = interpreter.operand_stack.value.get(*stack_idx)?;
-                        value.as_annotated_move_value_for_tracing_only(&ty.layout)?
+                        value
+                            .as_annotated_move_value_for_tracing_only(&ty.layout)?
+                            .into()
                     }
                 }
             }
@@ -436,16 +440,16 @@ impl<'a> VMTracer<'a> {
         self.trace.effect(EF::DataLoad(DataLoad {
             ref_type: ref_type.clone(),
             location: location.as_trace_location(),
-            snapshot: value.clone(),
+            snapshot: value.clone().into(),
         }));
         let trace_value = match &ref_type {
             RefType::Imm => TraceValue::ImmRef {
                 location: location.as_trace_location(),
-                snapshot: Box::new(value),
+                snapshot: Box::new(value.into()),
             },
             RefType::Mut => TraceValue::MutRef {
                 location: location.as_trace_location(),
-                snapshot: Box::new(value),
+                snapshot: Box::new(value.into()),
             },
         };
         self.loaded_data.insert(id, trace_value);
@@ -503,7 +507,9 @@ impl<'a> VMTracer<'a> {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
                 let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
                 assert!(ref_type.is_none());
-                Some(TraceValue::RuntimeValue { value: move_value })
+                Some(TraceValue::RuntimeValue {
+                    value: move_value.into(),
+                })
             })
             .collect::<Option<_>>()?;
 
@@ -568,7 +574,9 @@ impl<'a> VMTracer<'a> {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
                 let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
                 assert!(ref_type.is_none());
-                Some(TraceValue::RuntimeValue { value: move_value })
+                Some(TraceValue::RuntimeValue {
+                    value: move_value.into(),
+                })
             })
             .collect::<Option<_>>()?;
         self.trace.close_frame(
@@ -1293,7 +1301,7 @@ impl<'a> VMTracer<'a> {
                     panic!("Expected vector, got {:?}", ref_ty.layout,);
                 };
                 let EF::Pop(TraceValue::RuntimeValue {
-                    value: MoveValue::U64(i),
+                    value: SerializableMoveValue::U64(i),
                 }) = &self.effects[0]
                 else {
                     unreachable!();

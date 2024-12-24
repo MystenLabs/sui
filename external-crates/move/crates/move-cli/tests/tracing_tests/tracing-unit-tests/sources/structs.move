@@ -4,6 +4,13 @@ module 0x1::packs {
 
     public struct GenX<A, B, C>(A, B, C) has drop;
 
+    public enum Foo has drop {
+        A,
+        B(u64),
+        C(u64, bool),
+        D(X, address),
+    }
+
     #[test]
     fun test_pack_order() {
         let a = 1;
@@ -40,5 +47,11 @@ module 0x1::packs {
         let x = GenX(a, b, c);
         let GenX(a, b, c) = x;
         assert!(c == 0u8 && b, a);
+    }
+
+    #[test]
+    fun test_enums_structs() {
+        let x = X(1, true, 0);
+        let _foo = Foo::D(x, @0x1);
     }
 }
