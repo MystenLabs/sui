@@ -14054,6 +14054,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "datatest-stable",
+ "diesel",
+ "diesel-async",
+ "msim",
+ "prometheus",
+ "reqwest 0.12.5",
+ "serde_json",
+ "sui-indexer-alt",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-jsonrpc",
+ "sui-pg-db",
+ "sui-transactional-test-runner",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-util 0.7.10",
+ "url",
+]
+
+[[package]]
 name = "sui-indexer-alt-framework"
 version = "1.42.0"
 dependencies = [
