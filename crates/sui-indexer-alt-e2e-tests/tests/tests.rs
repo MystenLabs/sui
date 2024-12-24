@@ -193,10 +193,6 @@ impl OffchainReader {
 
 #[async_trait::async_trait]
 impl OffchainStateReader for OffchainReader {
-    async fn wait_for_objects_snapshot_catchup(&self, _: Duration) {
-        // Not necessary for `sui-indexer-alt`
-    }
-
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         let _ = tokio::time::timeout(base_timeout, self.wait_for_checkpoint(checkpoint)).await;
     }
