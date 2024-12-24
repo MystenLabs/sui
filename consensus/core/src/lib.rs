@@ -28,6 +28,8 @@ mod network;
 mod stake_aggregator;
 mod storage;
 mod subscriber;
+#[cfg(any(test, msim))]
+mod swarm;
 mod synchronizer;
 mod threshold_clock;
 mod transaction;
@@ -36,6 +38,10 @@ mod universal_committer;
 #[cfg(test)]
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
+#[cfg(msim)]
+#[path = "tests/simtests.rs"]
+mod simtests;
+
 mod round_prober;
 #[cfg(test)]
 mod test_dag;
