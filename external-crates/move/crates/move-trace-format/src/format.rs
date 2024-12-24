@@ -4,15 +4,14 @@
 // IDEA: Post trace analysis -- report when values are dropped.
 
 use crate::interface::{NopTracer, Tracer, Writer};
+use crate::value::SerializableMoveValue;
 use move_binary_format::{
     file_format::{Bytecode, FunctionDefinitionIndex as BinaryFunctionDefinitionIndex},
     file_format_common::instruction_opcode,
 };
-use move_core_types::{
-    annotated_value::MoveValue,
-    language_storage::{ModuleId, TypeTag},
-};
-use serde::Serialize;
+use move_core_types::language_storage::{ModuleId, TypeTag};
+use serde::{Deserialize, Serialize};
+use std::io::{BufRead, BufReader};
 use std::{fmt::Display, sync::mpsc::Receiver};
 
 /// An index into the trace. This should be used when referring to locations in the trace.
@@ -42,7 +41,7 @@ const CHANNEL_BUFFER_SIZE: usize = 100;
 ///
 /// Note that we track aliasing through the locations so you can always trace back to the root
 /// value for the reference.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     // Local index in a frame. The frame is identified by the index in the trace where it was created.
     // The `usize` is the index into the locals of the frame.
@@ -57,7 +56,7 @@ pub enum Location {
 
 /// A Read event. This represents a read from a location, with the value read and whether the value
 /// was moved or not.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Read {
     pub location: Location,
     pub root_value_read: TraceValue,
@@ -67,7 +66,7 @@ pub struct Read {
 /// A Write event. This represents a write to a location with the value written and a snapshot of
 /// the value that was written. Note that the `root_value_after_write` is a snapshot of the
 /// _entire_ (root) value that was written after the write.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Write {
     pub location: Location,
     pub root_value_after_write: TraceValue,
@@ -76,24 +75,24 @@ pub struct Write {
 /// A TraceValue is a value in the standard MoveValue domain + references.
 /// References hold their own snapshot of the root value they point to, along with the rooted path to
 /// the value that they reference within that snapshot.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TraceValue {
     RuntimeValue {
-        value: MoveValue,
+        value: SerializableMoveValue,
     },
     ImmRef {
         location: Location,
         // Snapshot of the root value.
-        snapshot: Box<MoveValue>,
+        snapshot: Box<SerializableMoveValue>,
     },
     MutRef {
         location: Location,
         // Snapshot of the root value.
-        snapshot: Box<MoveValue>,
+        snapshot: Box<SerializableMoveValue>,
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RefType {
     Imm,
     Mut,
@@ -102,14 +101,14 @@ pub enum RefType {
 /// Type tag with references. This is a type tag that also supports references.
 /// if ref_type is None, this is a value type. If ref_type is Some, this is a reference type of the
 /// given reference type.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TypeTagWithRefs {
     pub type_: TypeTag,
     pub ref_type: Option<RefType>,
 }
 
 /// A `Frame` represents a stack frame in the Move VM and a given instantiation of a function.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Frame {
     // The frame id is the offset in the trace where this frame was opened.
     pub frame_id: TraceIndex,
@@ -126,7 +125,7 @@ pub struct Frame {
 
 /// An instruction effect is a single effect of an instruction. This can be a push/pop of a value
 /// or a reference to a value, or a read/write of a value.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Effect {
     // Pop a value off the stack (pre-effect only)
     Pop(TraceValue),
@@ -148,16 +147,16 @@ pub enum Effect {
 /// Represent a data load event. This is a load of a value from storage. We only record loads by
 /// reference in the trace, and we snapshot the value at the reference location at the time of load
 /// and record its global reference ID (i.e., the location in the trace at which it was loaded).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DataLoad {
     pub ref_type: RefType,
     pub location: Location,
-    pub snapshot: MoveValue,
+    pub snapshot: SerializableMoveValue,
 }
 
 /// A TraceEvent is a single event in the Move VM, external events can also be interleaved in the
 /// trace. MoveVM events, are well structured, and can be a frame event or an instruction event.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TraceEvent {
     OpenFrame {
         frame: Box<Frame>,
@@ -178,7 +177,7 @@ pub enum TraceEvent {
     External(Box<serde_json::Value>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TraceVersionData {
     version: TraceVersion,
 }
@@ -204,14 +203,14 @@ pub struct MoveTraceBuilder {
 }
 
 impl TraceValue {
-    pub fn snapshot(&self) -> &MoveValue {
+    pub fn snapshot(&self) -> &SerializableMoveValue {
         match self {
             TraceValue::ImmRef { snapshot, .. } | TraceValue::MutRef { snapshot, .. } => snapshot,
             TraceValue::RuntimeValue { value } => value,
         }
     }
 
-    pub fn value_mut(&mut self) -> Option<&mut MoveValue> {
+    pub fn value_mut(&mut self) -> Option<&mut SerializableMoveValue> {
         match self {
             TraceValue::RuntimeValue { value, .. } => Some(value),
             _ => None,
@@ -242,6 +241,7 @@ impl BufferedEventStream {
                 },
             )
             .unwrap();
+            writeln!(&mut events).unwrap();
             let mut buf = Vec::new();
             for event in rx {
                 serde_json::to_writer(&mut buf, &event).unwrap();
@@ -471,5 +471,70 @@ impl Display for Effect {
                 write!(f, "g{ref_type}{location} ~~> {snapshot}")
             }
         }
+    }
+}
+
+// Streaming reader for Move traces
+
+pub struct MoveTraceReader<'a, R: std::io::Read> {
+    pub version: TraceVersion,
+    reader: BufReader<zstd::stream::Decoder<'a, BufReader<R>>>,
+}
+
+impl<'a, R: std::io::Read> MoveTraceReader<'a, R> {
+    pub fn new(data: R) -> std::io::Result<Self> {
+        let data = zstd::stream::Decoder::new(data)?;
+        let mut reader = std::io::BufReader::new(data);
+        let mut buf = String::new();
+        reader.read_line(&mut buf)?;
+        let version: TraceVersionData = serde_json::from_str(&buf)?;
+        Ok(Self {
+            version: version.version,
+            reader,
+        })
+    }
+
+    pub fn next_event(&mut self) -> std::io::Result<Option<TraceEvent>> {
+        let mut buf = String::new();
+        match self.reader.read_line(&mut buf) {
+            Ok(0) => Ok(None),
+            Ok(_) => Ok(Some(serde_json::from_str(&buf)?)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<'a, R: std::io::Read> Iterator for MoveTraceReader<'a, R> {
+    type Item = std::io::Result<TraceEvent>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next_event() {
+            Ok(Some(event)) => Some(Ok(event)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
+        }
+    }
+}
+
+#[test]
+fn emit_trace() {
+    let mut builder = MoveTraceBuilder::new();
+    for i in 0..10 {
+        builder.push_event(TraceEvent::External(Box::new(serde_json::json!({
+            "event": "external",
+            "data": i,
+        }))));
+    }
+
+    let bytes = builder.into_trace().into_compressed_json_bytes();
+    let reader = MoveTraceReader::new(std::io::Cursor::new(bytes)).unwrap();
+    assert_eq!(reader.version, TRACE_VERSION);
+
+    for (i, event) in reader.enumerate() {
+        let event = event.unwrap();
+        let TraceEvent::External(event) = event else {
+            panic!("unexpected event: {:?}", event);
+        };
+        assert_eq!(event.get("data").unwrap().as_u64().unwrap(), i as u64);
     }
 }
