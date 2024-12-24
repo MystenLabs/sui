@@ -28,11 +28,11 @@ mod metrics;
 pub struct RpcArgs {
     /// Address to listen to for incoming JSON-RPC connections.
     #[clap(long, default_value_t = Self::default().rpc_listen_address)]
-    rpc_listen_address: SocketAddr,
+    pub rpc_listen_address: SocketAddr,
 
     /// The maximum number of concurrent connections to accept.
     #[clap(long, default_value_t = Self::default().max_rpc_connections)]
-    max_rpc_connections: u32,
+    pub max_rpc_connections: u32,
 }
 
 pub struct RpcService {
