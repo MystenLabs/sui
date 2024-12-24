@@ -15,10 +15,6 @@ pub struct TestResponse {
 /// these methods are used in the `RunGraphqlCommand` to stabilize the off-chain indexed state.
 #[async_trait]
 pub trait OffchainStateReader: Send + Sync + 'static {
-    /// Polls the objects snapshot table until it is within the allowed lag from the latest
-    /// checkpoint.
-    async fn wait_for_objects_snapshot_catchup(&self, base_timeout: Duration);
-
     /// Polls the checkpoint table until the given checkpoint is committed.
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration);
 

@@ -22,12 +22,6 @@ pub struct OffchainReaderForAdapter {
 
 #[async_trait]
 impl OffchainStateReader for OffchainReaderForAdapter {
-    async fn wait_for_objects_snapshot_catchup(&self, base_timeout: Duration) {
-        self.cluster
-            .wait_for_objects_snapshot_catchup(base_timeout)
-            .await
-    }
-
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         self.cluster
             .wait_for_checkpoint_catchup(checkpoint, base_timeout)
