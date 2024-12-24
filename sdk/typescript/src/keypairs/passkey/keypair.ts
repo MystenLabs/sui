@@ -98,7 +98,7 @@ export class BrowserPasskeyProvider implements PasskeyProvider {
  * A passkey signer used for signing transactions. This is a client side implementation for [SIP-9](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md).
  */
 export class PasskeyKeypair extends Signer {
-	private publicKey: Uint8Array;
+	private publicKey?: Uint8Array;
 	private provider: PasskeyProvider;
 
 	/**
@@ -109,13 +109,21 @@ export class PasskeyKeypair extends Signer {
 	}
 
 	/**
-	 * Creates an instance of Passkey signer. It's expected to call the static `getPasskeyInstance` method to create an instance.
-	 * For example:
+	 * Creates an instance of Passkey signer. If no passkey wallet had created before, use `getPasskeyInstance`. For example:
 	 * ```
 	 * const signer = await PasskeyKeypair.getPasskeyInstance();
 	 * ```
+	 *
+	 * If there are existing passkey wallet, use `signAndRecover` to
+	 * identify the correct public key and then initialize the instance. For example:
+	 * ```
+	 * const possiblePks = await PasskeyKeypair.signAndRecover(provider, [blah]);
+	 * const possiblePks2 = await PasskeyKeypair.signAndRecover(provider, [blah2]);
+	 * const uniquePk = intersect(possiblePks, possiblePks2)
+	 * const signer = new PasskeyKeypair(provider, uniquePk.toBytes());
+	 * ```
 	 */
-	constructor(publicKey: Uint8Array, provider: PasskeyProvider) {
+	constructor(provider: PasskeyProvider, publicKey?: Uint8Array) {
 		super();
 		this.publicKey = publicKey;
 		this.provider = provider;
@@ -123,6 +131,11 @@ export class PasskeyKeypair extends Signer {
 
 	/**
 	 * Creates an instance of Passkey signer invoking the passkey from navigator.
+	 * Note that this will invoke the passkey device to create a fresh credential.
+	 * Should only be called if passkey wallet is created for the first time.
+	 * todo: should rename this to `createFreshPasskeyInstance`?
+	 * @param provider - the passkey provider.
+	 * @returns the passkey instance.
 	 */
 	static async getPasskeyInstance(provider: PasskeyProvider): Promise<PasskeyKeypair> {
 		// create a passkey secp256r1 with the provider.
@@ -135,7 +148,7 @@ export class PasskeyKeypair extends Signer {
 			const pubkeyUncompressed = parseDerSPKI(new Uint8Array(derSPKI));
 			const pubkey = secp256r1.ProjectivePoint.fromHex(pubkeyUncompressed);
 			const pubkeyCompressed = pubkey.toRawBytes(true);
-			return new PasskeyKeypair(pubkeyCompressed, provider);
+			return new PasskeyKeypair(provider, pubkeyCompressed);
 		}
 	}
 
@@ -143,7 +156,7 @@ export class PasskeyKeypair extends Signer {
 	 * Return the public key for this passkey.
 	 */
 	getPublicKey(): PublicKey {
-		return new PasskeyPublicKey(this.publicKey);
+		return new PasskeyPublicKey(this.publicKey!);
 	}
 
 	/**
@@ -166,16 +179,16 @@ export class PasskeyKeypair extends Signer {
 
 		if (
 			normalized.length !== PASSKEY_SIGNATURE_SIZE ||
-			this.publicKey.length !== PASSKEY_PUBLIC_KEY_SIZE
+			this.publicKey!.length !== PASSKEY_PUBLIC_KEY_SIZE
 		) {
 			throw new Error('Invalid signature or public key length');
 		}
 
 		// construct userSignature as flag || sig || pubkey for the secp256r1 signature.
-		const arr = new Uint8Array(1 + normalized.length + this.publicKey.length);
+		const arr = new Uint8Array(1 + normalized.length + this.publicKey!.length);
 		arr.set([SIGNATURE_SCHEME_TO_FLAG['Secp256r1']]);
 		arr.set(normalized, 1);
-		arr.set(this.publicKey, 1 + normalized.length);
+		arr.set(this.publicKey!, 1 + normalized.length);
 
 		// serialize all fields into a passkey signature according to https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md#signature-encoding
 		return PasskeyAuthenticator.serialize({
@@ -205,5 +218,50 @@ export class PasskeyKeypair extends Signer {
 			signature: toBase64(serializedSignature),
 			bytes: toBase64(bytes),
 		};
+	}
+
+	/**
+	 * Given a message, asks the passkey device to sign it and return all possible public keys.
+	 * There can be at most 4.
+	 * See: https://bitcoin.stackexchange.com/questions/81232/how-is-public-key-extracted-from-message-digital-signature-address
+	 *
+	 * This is useful if the user previously created passkey wallet but the wallet session does
+	 * not have the public key / address. The wallet first call By calling this method twice for
+	 * different messages, the wallet can compare the returned public keys and uniquely identify
+	 * the previously created passkey wallet. Alternatively, one call can be made and all possible
+	 * public keys should be checked onchain to see if there is any assets.
+	 *
+	 * Once the correct public key / address is identified, a passkey instance can then be initialized
+	 * with this public key. For example:
+	 * ```
+	 * const suiAddress = correctPublicKey.toSuiAddress();
+	 * const pkBytes = correctPublicKey.toBytes();
+	 *
+	 * const instance = new PasskeyKeypair(provider, pkBytes);
+	 * const signature = await instance.sign(message);
+	 * ```
+	 *
+	 * @param provider - the passkey provider.
+	 * @param message - the message to sign.
+	 * @returns all possible public keys.
+	 */
+	static async signAndRecover(
+		provider: PasskeyProvider,
+		message: Uint8Array,
+	): Promise<PublicKey[]> {
+		const instance = new PasskeyKeypair(provider);
+		const signature = await instance.sign(message);
+		const res = [];
+		for (let i = 0; i < 4; i++) {
+			const s = secp256r1.Signature.fromCompact(signature).addRecoveryBit(i);
+			try {
+				const pubkey = s.recoverPublicKey(message);
+				const pk = new PasskeyPublicKey(pubkey.toRawBytes(true));
+				res.push(pk);
+			} catch {
+				continue;
+			}
+		}
+		return res;
 	}
 }
