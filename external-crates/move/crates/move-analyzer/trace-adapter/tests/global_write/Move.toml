@@ -1,0 +1,10 @@
+[package]
+name = "global_write"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "/Users/adamwelc/sui/crates/sui-framework/packages/sui-framework/" }
+
+[addresses]
+global_write = "0x0"
+Sui = "0x2"

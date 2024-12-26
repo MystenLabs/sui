@@ -519,21 +519,25 @@ export function readTrace(
                 const location = effect.Write ? effect.Write.location : effect.Read!.location;
                 const loc = processJSONLocalLocation(location, localLifetimeEnds);
                 if (effect.Write) {
-                    if (!loc) {
-                        throw new Error('Unsupported location type in Write effect');
+                    if (loc !== undefined) {
+                        // Process a write only if the location is supported.
+                        // We can see global location here in some cases when source-level
+                        // assignment does not involve an explicit local variable, along
+                        // the lines of:
+                        //
+                        // field::borrow_mut(...).next = ...
+                        const value = 'RuntimeValue' in effect.Write.root_value_after_write
+                            ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
+                            : traceRefValueFromJSON(effect.Write.root_value_after_write);
+                        events.push({
+                            type: TraceEventKind.Effect,
+                            effect: {
+                                type: TraceEffectKind.Write,
+                                loc,
+                                value
+                            }
+                        });
                     }
-                    // process a write only if the location is supported
-                    const value = 'RuntimeValue' in effect.Write.root_value_after_write
-                        ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
-                        : traceRefValueFromJSON(effect.Write.root_value_after_write);
-                    events.push({
-                        type: TraceEventKind.Effect,
-                        effect: {
-                            type: TraceEffectKind.Write,
-                            loc,
-                            value
-                        }
-                    });
                 }
             }
             if (effect.ExecutionError) {
