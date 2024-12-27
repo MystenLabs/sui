@@ -191,17 +191,17 @@ impl<'p> PrunerWatermark<'p> {
         (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
     }
 
-    /// Whether the pruner has any work left to do on the range in this watermark.
-    pub(crate) fn is_empty(&self) -> bool {
-        self.pruner_hi >= self.reader_lo
-    }
-
     /// The next chunk of checkpoints that the pruner should work on, to advance the watermark.
-    /// Returns a tuple (from, to) where `from` is inclusive and `to` is exclusive.
-    pub(crate) fn next_chunk(&mut self, size: u64) -> (u64, u64) {
+    /// If no more checkpoints to prune, returns `None`.
+    /// Otherwise, returns a tuple (from, to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive.
+    pub(crate) fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
+        if self.pruner_hi >= self.reader_lo {
+            return None;
+        }
+
         let from = self.pruner_hi as u64;
-        let to = (from + size).min(self.reader_lo as u64);
-        (from, to)
+        let to_exclusive = (from + size).min(self.reader_lo as u64);
+        Some((from, to_exclusive))
     }
 
     /// Update the pruner high watermark (only) for an existing watermark row, as long as this
