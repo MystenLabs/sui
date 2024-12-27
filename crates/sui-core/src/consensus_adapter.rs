@@ -387,14 +387,10 @@ impl ConsensusAdapter {
         let (duration, position, positions_moved, preceding_disconnected) =
             match min_digest_and_gas_price {
                 Some((digest, gas_price)) => {
-                    let protocol_config_k = epoch_store.protocol_config().sip_45_k();
-                    let k = if protocol_config_k == 0 {
-                        // Disable amplification if k is not set.
-                        u64::MAX
-                    } else {
-                        protocol_config_k
-                    };
-
+                    let k = epoch_store
+                        .protocol_config()
+                        .sip_45_consensus_amplification_threshold_as_option()
+                        .unwrap_or(u64::MAX);
                     let multipler = gas_price / epoch_store.reference_gas_price();
                     amplification_factor = if multipler >= k { multipler } else { 0 };
                     self.await_submit_delay_user_transaction(

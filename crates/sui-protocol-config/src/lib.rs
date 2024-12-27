@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 70;
+const MAX_PROTOCOL_VERSION: u64 = 71;
 
 // Record history of protocol version allocations here:
 //
@@ -203,6 +203,7 @@ const MAX_PROTOCOL_VERSION: u64 = 70;
 //             Add new gas model version to update charging of native functions.
 //             Add std::uq64_64 module to Move stdlib.
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
+// Version 71: [SIP-45] Increase max gas price to 1T.  Enable consensus amplification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1335,7 +1336,8 @@ pub struct ProtocolConfig {
     gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
 
     /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.
-    sip_45_k: Option<u64>,
+    /// This is the threshold for activating consensus amplification.
+    sip_45_consensus_amplification_threshold: Option<u64>,
 }
 
 // feature flags
@@ -2255,7 +2257,7 @@ impl ProtocolConfig {
 
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
-            sip_45_k: None,
+            sip_45_consensus_amplification_threshold: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3012,8 +3014,6 @@ impl ProtocolConfig {
                         // Enable probing for accepted rounds in round prober for testnet
                         cfg.feature_flags
                             .consensus_round_prober_probe_accepted_rounds = true;
-                        // [SIP-45] Set max gas price to 1T.
-                        cfg.max_gas_price = Some(1_000_000_000_000);
                     }
 
                     cfg.poseidon_bn254_cost_per_block = Some(388);
@@ -3090,8 +3090,13 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(1200);
 
                     cfg.validator_validate_metadata_cost_base = Some(20000);
-
-                    cfg.sip_45_k = Some(5);
+                }
+                71 => {
+                    if chain != Chain::Mainnet {
+                        // [SIP-45] Set max gas price to 1T.
+                        cfg.max_gas_price = Some(1_000_000_000_000);
+                    }
+                    cfg.sip_45_consensus_amplification_threshold = Some(5);
                 }
                 // Use this template when making changes:
                 //
