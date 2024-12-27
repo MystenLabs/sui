@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
                 client_args,
                 indexer_config,
                 true,
+                None,
             )
             .await?;
         }

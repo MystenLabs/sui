@@ -1,0 +1,12 @@
+[ingestion]
+checkpoint-buffer-size = 10
+ingestion-concurrency = 2
+retry-interval-ms = 200
+
+[consistency]
+consistent-range = 10
+
+[committer]
+write-concurrency = 2
+collect-interval-ms = 500
+watermark-interval-ms = 500

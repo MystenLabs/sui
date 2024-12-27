@@ -59,6 +59,7 @@ pub async fn run_benchmark(
         client_args,
         indexer_config,
         false, /* with_genesis */
+        None,
     )
     .await?;
 

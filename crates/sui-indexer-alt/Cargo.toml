@@ -41,6 +41,7 @@ sui-synthetic-ingestion = { workspace = true, optional = true }
 rand.workspace = true
 tempfile.workspace = true
 wiremock.workspace = true
+simulacrum.workspace = true
 
 [features]
 default = []

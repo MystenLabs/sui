@@ -1,0 +1,5 @@
+[pipeline.kv_checkpoints.pruner]
+interval-ms = 200
+delay-ms = 100
+retention = 1
+max-chunk-size = 1

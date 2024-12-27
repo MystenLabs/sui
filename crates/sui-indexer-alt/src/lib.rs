@@ -46,6 +46,7 @@ pub async fn start_indexer(
     // TODO: There is probably a better way to handle this.
     // For instance, we could also pass in dummy genesis data in the benchmark mode.
     with_genesis: bool,
+    cancel: Option<CancellationToken>,
 ) -> anyhow::Result<()> {
     let IndexerConfig {
         ingestion,
@@ -88,7 +89,7 @@ pub async fn start_indexer(
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
-    let cancel = CancellationToken::new();
+    let cancel = cancel.unwrap_or_else(CancellationToken::new);
     let retry_interval = ingestion.retry_interval();
 
     let mut indexer = Indexer::new(
