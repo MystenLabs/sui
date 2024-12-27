@@ -144,26 +144,26 @@ public fun to_vec<Element>(t: Option<Element>): vector<Element> {
 // === Macro Functions ===
 
 /// Destroy `Option<T>` and call the closure `f` on the value inside if it holds one.
-public macro fun destroy<$T>($o: Option<$T>, $f: |$T|) {
+public macro fun destroy<$T>($o: Option<$T>, $f: |$T| -> _) {
     let o = $o;
     o.do!($f);
 }
 
 /// Destroy `Option<T>` and call the closure `f` on the value inside if it holds one.
-public macro fun do<$T>($o: Option<$T>, $f: |$T|) {
+public macro fun do<$T>($o: Option<$T>, $f: |$T| -> _) {
     let o = $o;
     if (o.is_some()) $f(o.destroy_some())
     else o.destroy_none()
 }
 
 /// Execute a closure on the value inside `t` if it holds one.
-public macro fun do_ref<$T>($o: &Option<$T>, $f: |&$T|) {
+public macro fun do_ref<$T>($o: &Option<$T>, $f: |&$T| -> _) {
     let o = $o;
     if (o.is_some()) $f(o.borrow());
 }
 
 /// Execute a closure on the mutable reference to the value inside `t` if it holds one.
-public macro fun do_mut<$T>($o: &mut Option<$T>, $f: |&mut $T|) {
+public macro fun do_mut<$T>($o: &mut Option<$T>, $f: |&mut $T| -> _) {
     let o = $o;
     if (o.is_some()) $f(o.borrow_mut());
 }
