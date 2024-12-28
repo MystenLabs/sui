@@ -218,7 +218,11 @@ pub async fn init_state_with_ids_and_versions<
 ) -> Arc<AuthorityState> {
     let state = TestAuthorityBuilder::new().build().await;
     for (address, object_id, version) in objects {
-        let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
+        let obj = Object::with_id_owner_version_for_testing(
+            object_id,
+            version,
+            Owner::AddressOwner(address),
+        );
         state.insert_genesis_object(obj).await;
     }
     state

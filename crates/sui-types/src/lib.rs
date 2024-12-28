@@ -80,6 +80,7 @@ pub mod sui_sdk_types_conversions;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod supported_protocol_versions;
+pub mod test_checkpoint_data_builder;
 pub mod traffic_control;
 pub mod transaction;
 pub mod transaction_executor;
