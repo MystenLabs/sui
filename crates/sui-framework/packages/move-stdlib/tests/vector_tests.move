@@ -646,6 +646,11 @@ fun test_do_macro() {
 }
 
 #[test]
+fun test_do_macro_with_return_value() {
+    vector[10, 20, 30].do!(|e| e);
+}
+
+#[test]
 fun test_map_macro() {
     let e = vector<u8>[];
     assert!(e.map!(|e| e + 1) == vector[]);
@@ -739,6 +744,17 @@ fun zip_do_macro() {
     let mut res = vector[];
     v1.zip_do!(v2, |a, b| res.push_back(a + b));
     assert!(res == vector[5, 7, 9]);
+}
+
+#[test]
+fun zip_do_undroppable_macro() {
+    let v1 = vector[NotDroppable {}, NotDroppable {}];
+    let v2 = vector[NotDroppable {}, NotDroppable {}];
+
+    v1.zip_do!(v2, |a, b| {
+        let NotDroppable {} = a;
+        let NotDroppable {} = b;
+    });
 }
 
 #[test, expected_failure]
