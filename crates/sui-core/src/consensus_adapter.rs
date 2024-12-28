@@ -391,8 +391,9 @@ impl ConsensusAdapter {
                         .protocol_config()
                         .sip_45_consensus_amplification_threshold_as_option()
                         .unwrap_or(u64::MAX);
-                    let multipler = gas_price / epoch_store.reference_gas_price();
-                    amplification_factor = if multipler >= k { multipler } else { 0 };
+                    let multiplier =
+                        gas_price / std::cmp::max(epoch_store.reference_gas_price(), 1);
+                    amplification_factor = if multiplier >= k { multiplier } else { 0 };
                     self.await_submit_delay_user_transaction(
                         epoch_store.committee(),
                         digest,
