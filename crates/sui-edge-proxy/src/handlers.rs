@@ -12,7 +12,7 @@ use axum::{
 };
 use bytes::Bytes;
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 enum PeerRole {
@@ -75,7 +75,7 @@ pub async fn proxy_handler(
         .and_then(|h| h.to_str().ok())
     {
         Some("sui_executeTransactionBlock") => {
-            info!("Using execution peer");
+            debug!("Using execution peer");
             proxy_request(state, parts, body_bytes, PeerRole::Execution).await
         }
         _ => {
