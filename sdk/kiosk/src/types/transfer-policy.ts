@@ -4,6 +4,7 @@
 import type { ObjectOwner } from '@mysten/sui/client';
 import type { Transaction, TransactionObjectArgument } from '@mysten/sui/transactions';
 
+import type { KioskClient } from '../client/kiosk-client.js';
 import type { ObjectArgument } from './index.js';
 
 /** The Transfer Policy module. */
@@ -66,4 +67,6 @@ export type RuleResolvingParams = {
 	purchasedItem: TransactionObjectArgument;
 	packageId: string;
 	extraArgs: Record<string, any>; // extraParams contains more possible {key, values} to pass for custom rules.
+
+	kioskClient: KioskClient;
 };
