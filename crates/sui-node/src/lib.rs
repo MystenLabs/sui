@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_common::fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -530,6 +531,10 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+            checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read cannot fail")
+                .unwrap_or(0),
         );
 
         info!("created epoch store");
@@ -564,8 +569,6 @@ impl SuiNode {
                 "buffer_stake_for_protocol_upgrade_bps is currently overridden"
             );
         }
-
-        info!("creating checkpoint store");
 
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -728,10 +731,6 @@ impl SuiNode {
                 .await
                 .unwrap();
         }
-
-        checkpoint_store
-            .reexecute_local_checkpoints(&state, &epoch_store)
-            .await;
 
         // Start the loop that receives new randomness and generates transactions for it.
         RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
@@ -1299,16 +1298,17 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
-        let (checkpoint_service, checkpoint_service_tasks) = Self::start_checkpoint_service(
-            config,
-            consensus_adapter.clone(),
-            checkpoint_store,
-            epoch_store.clone(),
-            state.clone(),
-            state_sync_handle,
-            accumulator,
-            checkpoint_metrics.clone(),
-        );
+        let (checkpoint_service, checkpoint_service_tasks, startup_sender) =
+            Self::start_checkpoint_service(
+                config,
+                consensus_adapter.clone(),
+                checkpoint_store,
+                epoch_store.clone(),
+                state.clone(),
+                state_sync_handle,
+                accumulator,
+                checkpoint_metrics.clone(),
+            );
 
         // create a new map that gets injected into both the consensus handler and the consensus adapter
         // the consensus handler will write values forwarded from consensus, and the consensus adapter
@@ -1371,6 +1371,19 @@ impl SuiNode {
             )
             .await;
 
+        info!("consensus manager started");
+
+        // wait for checkpoints to be re-built.
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        startup_sender
+            .send(tx)
+            .expect("Failed to send startup signal");
+
+        tokio::time::timeout(Duration::from_secs(10), rx)
+            .await
+            .unwrap_or_else(|_| fatal!("Failed to receive startup signal"))
+            .expect("Failed to receive startup signal");
+
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
                 config,
@@ -1402,7 +1415,11 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Weak<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
-    ) -> (Arc<CheckpointService>, JoinSet<()>) {
+    ) -> (
+        Arc<CheckpointService>,
+        JoinSet<()>,
+        tokio::sync::oneshot::Sender<tokio::sync::oneshot::Sender<()>>,
+    ) {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
         let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
 
@@ -1874,6 +1891,15 @@ impl SuiNode {
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
 
+        let last_checkpoint_seq = *last_checkpoint.sequence_number();
+
+        assert_eq!(
+            Some(last_checkpoint_seq),
+            self.checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("Error loading highest executed checkpoint sequence number")
+        );
+
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
@@ -1891,6 +1917,7 @@ impl SuiNode {
                 epoch_start_configuration,
                 accumulator,
                 &self.config.expensive_safety_check_config,
+                last_checkpoint_seq,
             )
             .await
             .expect("Reconfigure authority state cannot fail");

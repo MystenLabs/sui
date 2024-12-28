@@ -972,18 +972,13 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// Commits transactions only to the db. Called by checkpoint builder. See
-    /// ExecutionCache::commit_transactions for more info
-    pub(crate) fn commit_transactions(
-        &self,
-        transactions: &[(TransactionDigest, VerifiedTransaction)],
-    ) -> SuiResult {
+    /// Commits transactions only (not effects or other transaction outputs) to the db.
+    /// See ExecutionCache::persist_transaction for more info
+    pub(crate) fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) -> SuiResult {
         let mut batch = self.perpetual_tables.transactions.batch();
         batch.insert_batch(
             &self.perpetual_tables.transactions,
-            transactions
-                .iter()
-                .map(|(digest, tx)| (*digest, tx.serializable_ref())),
+            [(tx.digest(), tx.clone().into_unsigned().serializable_ref())],
         )?;
         batch.write()?;
         Ok(())

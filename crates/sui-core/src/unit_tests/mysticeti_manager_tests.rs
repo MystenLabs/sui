@@ -34,7 +34,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
     ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
-    let (checkpoint_service, _) = CheckpointService::spawn(
+    let (checkpoint_service, _, startup) = CheckpointService::spawn(
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
@@ -46,6 +46,11 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         3,
         100_000,
     );
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    startup.send(tx).unwrap();
+    tokio::task::spawn(async move {
+        rx.await.unwrap();
+    });
     checkpoint_service
 }
 

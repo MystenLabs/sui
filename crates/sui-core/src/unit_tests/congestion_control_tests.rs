@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
+use crate::authority::shared_object_congestion_tracker::{Debt, SharedObjectCongestionTracker};
 use crate::{
     authority::{
         authority_tests::{
@@ -292,7 +292,7 @@ async fn test_congestion_control_execution_cancellation() {
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     register_fail_point_arg("initial_congestion_tracker", move || {
         Some(SharedObjectCongestionTracker::new(
-            [(shared_object_1.0, 10)],
+            [(shared_object_1.0, Debt(10))],
             PerObjectCongestionControlMode::TotalGasBudget,
             Some(
                 test_setup

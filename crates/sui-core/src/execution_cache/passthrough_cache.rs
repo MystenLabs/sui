@@ -23,6 +23,7 @@ use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -360,9 +361,8 @@ impl ExecutionCacheCommit for PassthroughCache {
         ready(()).boxed()
     }
 
-    fn persist_transactions(&self, _digests: &[TransactionDigest]) -> BoxFuture<'_, ()> {
-        // Nothing needs to be done since they were already committed in write_transaction_outputs
-        ready(()).boxed()
+    fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {
+        self.store.persist_transaction(tx).expect("db error");
     }
 
     fn approximate_pending_transaction_count(&self) -> u64 {
