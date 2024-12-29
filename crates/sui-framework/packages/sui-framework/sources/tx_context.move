@@ -109,6 +109,13 @@ public fun dummy(): TxContext {
 }
 
 #[test_only]
+/// Create a dummy `TxContext` for testing with a specific sender
+public fun dummy_with_sender(sender: address): TxContext {
+    let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
+    new(sender, tx_hash, 0, 0, 0)
+}
+
+#[test_only]
 /// Utility for creating 256 unique input hashes.
 /// These hashes are guaranteed to be unique given a unique `hint: u64`
 fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
