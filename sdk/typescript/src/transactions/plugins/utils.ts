@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isValidNamedPackage, isValidNamedType } from '../../utils/move-registry.js';
+import type { TransactionPlugin } from '../json-rpc-resolver.js';
 import type { TransactionDataBuilder } from '../TransactionData.js';
 
 export type NamedPackagesPluginCache = {
@@ -145,3 +146,27 @@ const batch = <T>(arr: T[], size: number): T[][] => {
 	}
 	return batches;
 };
+
+export function parallelPlugins(...plugins: TransactionPlugin[]): TransactionPlugin {
+	return async (data, options, outerNext) => {
+		const nextCalls = new Set<number>();
+		let nextCalled = false;
+		// TODO: this probably isn't supported widely enough
+		const { promise, resolve, reject } = Promise.withResolvers<void>();
+		function next(i: number) {
+			if (nextCalled) {
+				return promise;
+			}
+
+			nextCalls.add(i);
+
+			if (nextCalls.size === plugins.length) {
+				outerNext().then(resolve, reject);
+			}
+
+			return promise;
+		}
+
+		await Promise.all(plugins.map((plugin, i) => plugin(data, options, () => next(i))));
+	};
+}
