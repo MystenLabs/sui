@@ -6,11 +6,12 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    iter,
     str::FromStr,
 };
 
 use codespan::LineIndex;
-use itertools::{chain, Itertools};
+use itertools::Itertools;
 #[allow(unused_imports)]
 use log::{debug, info, log, warn, Level};
 
@@ -1162,27 +1163,34 @@ impl<'env> EnumTranslator<'env> {
                 suffix, enum_name, enum_name
             ),
             || {
-                let equality_checks = enum_env
-                    .get_variants()
-                    .flat_map(|variant| {
-                        variant
-                            .get_fields()
-                            .map(|field| {
-                                let sel_fun = boogie_enum_field_name(&field);
-                                let bv_flag = self.field_bv_flag(&field.get_id());
-                                let field_suffix = boogie_type_suffix_bv(
-                                    env,
-                                    &self.inst(&field.get_type()),
-                                    bv_flag,
-                                );
-                                format!(
-                                    "$IsEqual'{}'(e1->{}, e2->{})",
-                                    field_suffix, sel_fun, sel_fun,
-                                )
-                            })
-                            .collect_vec()
-                    })
-                    .chain(vec!["e1->$variant_id == e2->$variant_id".to_string()])
+                let equality_checks = iter::once("e1->$variant_id == e2->$variant_id".to_string())
+                    .chain(enum_env.get_variants().map(|variant| {
+                        let variant_equality_checks = if variant.get_field_count() == 0 {
+                            "true".to_string()
+                        } else {
+                            variant
+                                .get_fields()
+                                .map(|field| {
+                                    let sel_fun = boogie_enum_field_name(&field);
+                                    let bv_flag = self.field_bv_flag(&field.get_id());
+                                    let field_suffix = boogie_type_suffix_bv(
+                                        env,
+                                        &self.inst(&field.get_type()),
+                                        bv_flag,
+                                    );
+                                    format!(
+                                        "$IsEqual'{}'(e1->{}, e2->{})",
+                                        field_suffix, sel_fun, sel_fun,
+                                    )
+                                })
+                                .join("\n    && ")
+                        };
+                        format!(
+                            "(e1->$variant_id == {} ==> {})",
+                            variant.get_tag(),
+                            variant_equality_checks,
+                        )
+                    }))
                     .join("\n  && ");
                 emit!(writer, "{}", equality_checks);
             },
