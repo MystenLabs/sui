@@ -1374,6 +1374,7 @@
                 "address_to_u256_cost_base": {
                   "u64": "52"
                 },
+                "allowed_txn_cost_overage_burst_per_object_in_commit": null,
                 "base_tx_cost_fixed": {
                   "u64": "2000"
                 },
