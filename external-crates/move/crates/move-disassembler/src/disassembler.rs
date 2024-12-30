@@ -552,8 +552,10 @@ impl<'a> Disassembler<'a> {
             return Ok(());
         };
 
+        let params_len = self.source_mapper.bytecode.signature_at(parameters).0.len();
+
         any_writeln!(buffer, " {{")?;
-        self.disassemble_locals(buffer, function_source_map, code.locals)?;
+        self.disassemble_locals(buffer, function_source_map, code.locals, params_len)?;
         self.disassemble_bytecode(buffer, function_source_map, &name, parameters, code)?;
         self.disassemble_jump_tables(buffer, code)?;
         any_writeln!(buffer, "}}")
@@ -564,6 +566,7 @@ impl<'a> Disassembler<'a> {
         buffer: &mut impl Write,
         function_source_map: &FunctionSourceMap,
         locals_idx: SignatureIndex,
+        parameter_len: usize,
     ) -> Result<()> {
         if !self.options.print_locals {
             return Ok(());
@@ -571,8 +574,13 @@ impl<'a> Disassembler<'a> {
 
         let signature = self.source_mapper.bytecode.signature_at(locals_idx);
         for (local_idx, (name, _)) in function_source_map.locals.iter().enumerate() {
-            any_write!(buffer, "L{local_idx}:\t{name}: ")?;
-            self.disassemble_type_for_local(buffer, function_source_map, local_idx, signature)?;
+            any_write!(buffer, "L{}:\t{}: ", local_idx + parameter_len, name)?;
+            self.disassemble_type_for_local(
+                buffer,
+                function_source_map,
+                parameter_len + local_idx,
+                signature,
+            )?;
             any_writeln!(buffer)?;
         }
 
