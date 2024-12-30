@@ -13,6 +13,7 @@ struct S {
 }
 
 public foo(Arg0: u64): vector<u64> {
+L1:	loc0: u64
 B0:
 	0: Call bar(): u64
 	1: StLoc[1](loc0: u64)

@@ -32,6 +32,7 @@ struct FooCoin {
 }
 
 public borrow_mut_field(Arg0: &mut FooCoin) {
+L1:	loc0: &mut u64
 B0:
 	0: MoveLoc[0](Arg0: &mut FooCoin)
 	1: MutBorrowField[0](FooCoin.value: u64)
@@ -54,6 +55,7 @@ struct FooCoin<Ty0> {
 }
 
 public borrow_mut_field(Arg0: &mut FooCoin<address>) {
+L1:	loc0: &mut u64
 B0:
 	0: MoveLoc[0](Arg0: &mut FooCoin<address>)
 	1: MutBorrowFieldGeneric[0](FooCoin.value: u64)
