@@ -113,3 +113,207 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sui_types::{
+        base_types::{dbg_addr, SequenceNumber},
+        object::{Authenticator, Owner},
+        test_checkpoint_data_builder::TestCheckpointDataBuilder,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_process_basics() {
+        let mut builder = TestCheckpointDataBuilder::new(1);
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert_eq!(processed.cp_sequence_number, 1);
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+
+        builder = builder
+            .start_transaction(0)
+            .mutate_object(0)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        assert!(result.is_empty());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let checkpoint3 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint3)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert_eq!(processed.cp_sequence_number, 3);
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+
+        builder = builder
+            .start_transaction(0)
+            .delete_object(0)
+            .finish_transaction();
+        let checkpoint4 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint4)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert_eq!(processed.cp_sequence_number, 4);
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Delete(_)
+        ));
+    }
+
+    #[test]
+    fn test_process_noop() {
+        // In this checkpoint, an object is created and deleted in the same checkpoint.
+        // We expect that no updates are made to the table.
+        let mut builder = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction()
+            .start_transaction(0)
+            .delete_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_process_wrap() {
+        let mut builder = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .wrap_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Delete(_)
+        ));
+
+        builder = builder
+            .start_transaction(0)
+            .unwrap_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+    }
+
+    #[test]
+    fn test_process_shared_object() {
+        let mut builder = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_shared_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+    }
+
+    #[test]
+    fn test_process_immutable_object() {
+        let mut builder = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .change_object_owner(0, Owner::Immutable)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+    }
+
+    #[test]
+    fn test_process_object_owned_object() {
+        let mut builder = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .change_object_owner(0, Owner::ObjectOwner(dbg_addr(0)))
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+    }
+
+    #[test]
+    fn test_process_consensus_v2_object() {
+        let mut builder = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .change_object_owner(
+                0,
+                Owner::ConsensusV2 {
+                    start_version: SequenceNumber::from_u64(1),
+                    authenticator: Box::new(Authenticator::SingleOwner(dbg_addr(0))),
+                },
+            )
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Insert(_)
+        ));
+    }
+}
