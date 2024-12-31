@@ -20,6 +20,7 @@ pub struct Config {
     pub(crate) accept_http1: bool,
     enable_connect_protocol: bool,
     pub(crate) max_connection_age: Option<Duration>,
+    pub(crate) allow_insecure: bool,
 }
 
 impl Default for Config {
@@ -39,6 +40,7 @@ impl Default for Config {
             accept_http1: true,
             enable_connect_protocol: true,
             max_connection_age: None,
+            allow_insecure: false,
         }
     }
 }
@@ -190,6 +192,21 @@ impl Config {
     pub fn accept_http1(self, accept_http1: bool) -> Self {
         Config {
             accept_http1,
+            ..self
+        }
+    }
+
+    /// Allow accepting insecure connections when a tls_config is provided.
+    ///
+    /// This will allow clients to connect both using TLS as well as without TLS on the same
+    /// network interface.
+    ///
+    /// Default is `false`.
+    ///
+    /// NOTE: This presently will only work for `tokio::net::TcpStream` IO connections
+    pub fn allow_insecure(self, allow_insecure: bool) -> Self {
+        Config {
+            allow_insecure,
             ..self
         }
     }

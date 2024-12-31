@@ -234,7 +234,31 @@ where
     fn handle_incomming(&mut self, io: L::Io, remote_addr: L::Addr) {
         if let Some(tls) = self.tls_config.clone() {
             let tls_acceptor = TlsAcceptor::from(tls);
+            let allow_insecure = self.config.allow_insecure;
             self.pending_connections.spawn(async move {
+                if allow_insecure {
+                    // XXX: If we want to allow for supporting insecure traffic from other types of
+                    // io, we'll need to implement a generic peekable IO type
+                    if let Some(tcp) =
+                        <dyn std::any::Any>::downcast_ref::<tokio::net::TcpStream>(&io)
+                    {
+                        // Determine whether new connection is TLS.
+                        let mut buf = [0; 1];
+                        // `peek` blocks until at least some data is available, so if there is no error then
+                        // it must return the one byte we are requesting.
+                        tcp.peek(&mut buf).await?;
+                        // First byte of a TLS handshake is 0x16, so if it isn't 0x16 then its
+                        // insecure
+                        if buf != [0x16] {
+                            tracing::trace!("accepting insecure connection");
+                            return Ok((ServerIo::new_io(io), remote_addr));
+                        }
+                    } else {
+                        tracing::warn!("'allow_insecure' is configured but io type is not 'tokio::net::TcpStream'");
+                    }
+                }
+
+                tracing::trace!("accepting TLS connection");
                 let io = tls_acceptor.accept(io).await?;
                 Ok((ServerIo::new_tls_io(io), remote_addr))
             });
