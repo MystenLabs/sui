@@ -7,6 +7,7 @@ use hyper_util::service::TowerToHyperService;
 use io::ServerIo;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 use tower::{Service, ServiceBuilder, ServiceExt};
@@ -82,7 +83,7 @@ impl Builder {
         Self::serve_with_listener(self, listener, service)
     }
 
-    pub fn serve_with_listener<L, S, ResponseBody>(
+    fn serve_with_listener<L, S, ResponseBody>(
         self,
         listener: L,
         service: S,
@@ -311,6 +312,10 @@ where
     }
 
     async fn shutdown(mut self) {
+        // The time we are willing to wait for a connection to get gracefully shutdown before we
+        // attempt to forcefully shutdown all active connections
+        const CONNECTION_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
+
         // Just to be careful make sure the token is canceled
         self.graceful_shutdown_token.cancel();
 
@@ -322,7 +327,20 @@ where
             "waiting for {} connections to close",
             self.connection_handlers.len()
         );
-        while self.connection_handlers.join_next().await.is_some() {}
+
+        let graceful_shutdown =
+            async { while self.connection_handlers.join_next().await.is_some() {} };
+
+        if tokio::time::timeout(CONNECTION_SHUTDOWN_GRACE_PERIOD, graceful_shutdown)
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                "Failed to stop all connection handlers in {:?}. Forcing shutdown.",
+                CONNECTION_SHUTDOWN_GRACE_PERIOD
+            );
+            self.connection_handlers.shutdown().await;
+        }
     }
 }
 
