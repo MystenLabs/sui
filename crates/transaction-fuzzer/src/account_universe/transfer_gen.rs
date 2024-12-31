@@ -469,17 +469,6 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                     max_gas_price: PROTOCOL_CONFIG.max_gas_price(),
                 },
             }),
-            // NOTE: at protocol version 71, gas budget can be both too high and too low.
-            // So the variants here need to be ordered same as the checks in gas_v2.rs
-            RunInfo {
-                gas_budget_too_high: true,
-                ..
-            } => Err(SuiError::UserInputError {
-                error: UserInputError::GasBudgetTooHigh {
-                    gas_budget: self.gas,
-                    max_budget: PROTOCOL_CONFIG.max_tx_gas(),
-                },
-            }),
             RunInfo {
                 gas_budget_too_low: true,
                 ..
@@ -487,6 +476,15 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                 error: UserInputError::GasBudgetTooLow {
                     gas_budget: self.gas,
                     min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed() * self.gas_price,
+                },
+            }),
+            RunInfo {
+                gas_budget_too_high: true,
+                ..
+            } => Err(SuiError::UserInputError {
+                error: UserInputError::GasBudgetTooHigh {
+                    gas_budget: self.gas,
+                    max_budget: PROTOCOL_CONFIG.max_tx_gas(),
                 },
             }),
             RunInfo {
