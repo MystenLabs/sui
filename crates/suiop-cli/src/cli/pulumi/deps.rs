@@ -20,7 +20,13 @@ fn update_dependencies(path: &Path, runtime: &str) -> Result<()> {
     let output = match runtime {
         "go" => run_cmd(vec!["go", "get", "-u"], Some(cmd_opts.clone()))
             .and_then(|_o| run_cmd(vec!["go", "mod", "tidy"], Some(cmd_opts))),
-        "python" => run_cmd(vec!["poetry", "update"], Some(cmd_opts)),
+        "python" => {
+            if !path.join("pyproject.toml").exists() {
+                run_cmd(vec!["pulumi", "install"], Some(cmd_opts))
+            } else {
+                run_cmd(vec!["poetry", "update"], Some(cmd_opts))
+            }
+        }
         "typescript" => run_cmd(vec!["pnpm", "update"], Some(cmd_opts)),
         _ => unreachable!(),
     }?;
