@@ -203,7 +203,7 @@ const MAX_PROTOCOL_VERSION: u64 = 71;
 //             Add new gas model version to update charging of native functions.
 //             Add std::uq64_64 module to Move stdlib.
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
-// Version 71: [SIP-45] Increase max gas price to 1T.  Enable consensus amplification.
+// Version 71: [SIP-45] Enable consensus amplification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3092,10 +3092,6 @@ impl ProtocolConfig {
                     cfg.validator_validate_metadata_cost_base = Some(20000);
                 }
                 71 => {
-                    if chain != Chain::Mainnet {
-                        // [SIP-45] Set max gas price to 1T.
-                        cfg.max_gas_price = Some(1_000_000_000_000);
-                    }
                     cfg.sip_45_consensus_amplification_threshold = Some(5);
                 }
                 // Use this template when making changes:
