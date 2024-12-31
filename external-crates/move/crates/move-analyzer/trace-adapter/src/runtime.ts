@@ -43,6 +43,7 @@ export type RuntimeValueType = string | CompoundType | IRuntimeRefValue;
 export interface IRuntimeVariableLoc {
     frameID: number;
     localIndex: number;
+    indexPath: number[];
 }
 
 /**
@@ -789,7 +790,7 @@ export class Runtime extends EventEmitter {
      * @returns string representation of the variable.
      */
     private varToString(tabs: string, variable: IRuntimeVariable): string {
-        return this.valueToString(tabs, variable.value, variable.name, variable.type);
+        return this.valueToString(tabs, variable.value, variable.name, [], variable.type);
     }
 
     /**
@@ -804,7 +805,7 @@ export class Runtime extends EventEmitter {
             : compoundValue.type;
         let res = '(' + type + ') {\n';
         for (const [name, value] of compoundValue.fields) {
-            res += this.valueToString(tabs + this.singleTab, value, name);
+            res += this.valueToString(tabs + this.singleTab, value, name, []);
         }
         res += tabs + '}\n';
         return res;
@@ -839,7 +840,8 @@ export class Runtime extends EventEmitter {
         if (!local) {
             return res;
         }
-        return this.valueToString(tabs, local.value, name, type);
+        const indexPath = [...refValue.loc.indexPath];
+        return this.valueToString(tabs, local.value, name, indexPath, type);
     }
 
     /**
@@ -847,6 +849,8 @@ export class Runtime extends EventEmitter {
      *
      * @param value runtime value.
      * @param name name of the variable containing the value.
+     * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
+     * first field/vector element and then seventh field/vector element)
      * @param type optional type of the variable containing the value.
      * @returns string representation of the value.
      */
@@ -854,6 +858,7 @@ export class Runtime extends EventEmitter {
         tabs: string,
         value: RuntimeValueType,
         name: string,
+        indexPath: number[],
         type?: string
     ): string {
         let res = '';
@@ -863,19 +868,32 @@ export class Runtime extends EventEmitter {
                 res += tabs + 'type: ' + type + '\n';
             }
         } else if (Array.isArray(value)) {
-            res += tabs + name + ' : [\n';
-            for (let i = 0; i < value.length; i++) {
-                res += this.valueToString(tabs + this.singleTab, value[i], String(i));
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index !== undefined) {
+                    res += this.valueToString(tabs, value[index], name, indexPath, type);
+                }
+            } else {
+                res += tabs + name + ' : [\n';
+                for (let i = 0; i < value.length; i++) {
+                    res += this.valueToString(tabs + this.singleTab, value[i], String(i), indexPath);
+                }
+                res += tabs + ']\n';
+                if (type) {
+                    res += tabs + 'type: ' + type + '\n';
+                }
             }
-            res += tabs + ']\n';
-            if (type) {
-                res += tabs + 'type: ' + type + '\n';
-            }
-            return res;
         } else if ('fields' in value) {
-            res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
-            if (type) {
-                res += tabs + 'type: ' + type + '\n';
+            if (indexPath.length > 0) {
+                const index = indexPath.pop();
+                if (index !== undefined) {
+                    res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
+                }
+            } else {
+                res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+                if (type) {
+                    res += tabs + 'type: ' + type + '\n';
+                }
             }
         } else {
             res += this.refValueToString(tabs, value, name, type);

@@ -517,7 +517,7 @@ export function readTrace(
                 // if a local is read or written, set its end of lifetime
                 // to infinite (end of frame)
                 const location = effect.Write ? effect.Write.location : effect.Read!.location;
-                const loc = processJSONLocalLocation(location, localLifetimeEnds);
+                const loc = processJSONLocalLocation(location, [], localLifetimeEnds);
                 if (effect.Write) {
                     if (loc !== undefined) {
                         // Process a write only if the location is supported.
@@ -788,12 +788,15 @@ function JSONTraceAddressToHexString(address: string): string {
  * Processes a location of a local variable in a JSON trace: sets the end of its lifetime
  * when requested and returns its location
  * @param traceLocation location in the trace.
+ * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
+ * first field/vector element and then seventh field/vector element)
  * @param localLifetimeEnds map of local variable lifetimes (defined if local variable
  * lifetime should happen).
  * @returns variable location.
  */
 function processJSONLocalLocation(
     traceLocation: JSONTraceLocation,
+    indexPath: number[],
     localLifetimeEnds?: Map<number, number[]>,
 ): IRuntimeVariableLoc | undefined {
     if ('Local' in traceLocation) {
@@ -804,9 +807,10 @@ function processJSONLocalLocation(
             lifetimeEnds[localIndex] = FRAME_LIFETIME;
             localLifetimeEnds.set(frameID, lifetimeEnds);
         }
-        return { frameID, localIndex };
+        return { frameID, localIndex, indexPath };
     } else if ('Indexed' in traceLocation) {
-        return processJSONLocalLocation(traceLocation.Indexed[0], localLifetimeEnds);
+        indexPath.push(traceLocation.Indexed[1]);
+        return processJSONLocalLocation(traceLocation.Indexed[0], indexPath, localLifetimeEnds);
     } else {
         // Currently, there is nothing that needs to be done for 'Global' locations,
         // neither with respect to lifetime nor with respect to location itself.
@@ -829,14 +833,14 @@ function processJSONLocalLocation(
  */
 function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
     if ('MutRef' in value) {
-        const loc = processJSONLocalLocation(value.MutRef.location);
+        const loc = processJSONLocalLocation(value.MutRef.location, []);
         if (!loc) {
             throw new Error('Unsupported location type in MutRef');
         }
         const ret: IRuntimeRefValue = { mutable: true, loc };
         return ret;
     } else {
-        const loc = processJSONLocalLocation(value.ImmRef.location);
+        const loc = processJSONLocalLocation(value.ImmRef.location, []);
         if (!loc) {
             throw new Error('Unsupported location type in ImmRef');
         }
