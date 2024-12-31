@@ -26,7 +26,7 @@ binary stored in a different location.
 If you want to build, test, and trace Move code using the extension, you must install the `sui` binary on
 your machine - see [here](https://docs.sui.io/guides/developer/getting-started/sui-install) for
 instructions. The extension assumes that the `sui` binary is in your system path, but you can set
-its custom location location using VSCode's settings (`⌘` + `,` on macOS, or use the menu item *Code >
+its custom location using VSCode's settings (`⌘` + `,` on macOS, or use the menu item *Code >
 Preferences > Settings*). Search for the `move.sui.path` user setting, set it to the new location of
 the `sui` binary, and restart VSCode.
 
