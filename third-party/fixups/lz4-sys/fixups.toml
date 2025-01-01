@@ -1,0 +1,33 @@
+buildscript = []
+
+[[platform_fixup.'cfg(target_os = "linux")'.buildscript]]
+[platform_fixup.'cfg(target_os = "linux")'.buildscript.cxx_library]
+name = "lz4-sys-linux"
+srcs = ["liblz4/lib/*.c"]
+include_paths = ["lib"]
+compiler_flags = [
+    "-O3",
+    "-Wall",
+    "-Wextra",
+    "-Wundef",
+    "-Wshadow",
+    "-Wcast-align",
+    "-Werror",
+    "-pedantic",
+]
+
+[[platform_fixup.'cfg(all(target_os = "macos"))'.buildscript]]
+[platform_fixup.'cfg(all(target_os = "macos"))'.buildscript.cxx_library]
+name = "lz4-sys-macos"
+srcs = ["liblz4/lib/*.c"]
+include_paths = ["lib"]
+compiler_flags = [
+    "-O3",
+    "-Wall",
+    "-Wextra",
+    "-Wundef",
+    "-Wshadow",
+    "-Wcast-align",
+    "-Werror",
+    "-pedantic",
+]
