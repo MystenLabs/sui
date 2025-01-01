@@ -1,8 +1,18 @@
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/parser/spec_parsing_quantifier_fail.move:2:5
-  │  
-2 │ ╭     spec module {
-3 │ │         invariant forall x: num y: num : x == y;
-4 │ │     }
-  │ ╰─────^ Specification blocks are deprecated and are no longer used
+  │
+2 │     spec module {
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_parsing_quantifier_fail.move:2:17
+  │
+2 │     spec module {
+  │                 ^
+  │                 │
+  │                 Unexpected '{'
+  │                 Expected an address or an identifier
 

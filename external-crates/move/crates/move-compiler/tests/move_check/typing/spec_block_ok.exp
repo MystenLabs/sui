@@ -1,6 +1,6 @@
-warning[W00001]: DEPRECATED. will be removed
+error[E03004]: unbound type
   ┌─ tests/move_check/typing/spec_block_ok.move:3:10
   │
 3 │         (spec {}: ())
-  │          ^^^^^^^ Specification blocks are deprecated and are no longer used
+  │          ^^^^ Unbound type 'spec' in current scope
 

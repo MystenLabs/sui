@@ -4,7 +4,7 @@ module a::m {
     spec foo {}
 
     // not an error
-    #[verify_only]
+    #[spec_only]
     fun foo() {}
 }
 

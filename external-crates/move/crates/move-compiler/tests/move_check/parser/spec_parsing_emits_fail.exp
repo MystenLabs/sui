@@ -1,8 +1,9 @@
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/parser/spec_parsing_emits_fail.move:2:5
-  │  
-2 │ ╭     spec with_emits {
-3 │ │         emits _msg;
-4 │ │     }
-  │ ╰─────^ Specification blocks are deprecated and are no longer used
+  │
+2 │     spec with_emits {
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
