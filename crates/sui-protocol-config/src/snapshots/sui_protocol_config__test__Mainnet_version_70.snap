@@ -331,6 +331,7 @@ consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
+allowed_txn_cost_overage_burst_per_object_in_commit: 185000000
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
