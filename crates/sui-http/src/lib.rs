@@ -47,6 +47,10 @@ pub struct Builder {
 }
 
 impl Builder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn config(mut self, config: Config) -> Self {
         self.config = config;
         self
@@ -112,6 +116,7 @@ impl Builder {
             Arc::new(tls)
         });
 
+        let (watch_sender, watch_reciever) = tokio::sync::watch::channel(());
         let server = Server {
             config: self.config,
             tls_config,
@@ -126,12 +131,14 @@ impl Builder {
             connection_handlers: JoinSet::new(),
             connections: connections.clone(),
             graceful_shutdown_token: graceful_shutdown_token.clone(),
+            _watch_reciever: watch_reciever,
         };
 
         let handle = ServerHandle(Arc::new(HandleInner {
             local_addr,
             connections,
             graceful_shutdown_token,
+            watch_sender,
         }));
 
         tokio::spawn(server.serve());
@@ -149,6 +156,7 @@ struct HandleInner<A = std::net::SocketAddr> {
     local_addr: A,
     connections: ActiveConnections<A>,
     graceful_shutdown_token: tokio_util::sync::CancellationToken,
+    watch_sender: tokio::sync::watch::Sender<()>,
 }
 
 impl<A> ServerHandle<A> {
@@ -157,9 +165,29 @@ impl<A> ServerHandle<A> {
         &self.0.local_addr
     }
 
-    /// Trigger a graceful shutdown of the server
-    pub fn graceful_shutdown(&self) {
+    /// Trigger a graceful shutdown of the server, but don't wait till the server has completed
+    /// shutting down
+    pub fn trigger_shutdown(&self) {
         self.0.graceful_shutdown_token.cancel();
+    }
+
+    /// Completes once the network has been shutdown.
+    ///
+    /// This explicitly *does not* trigger the network to shutdown, see `trigger_shutdown` or
+    /// `shutdown` if you want to trigger shutting down the server.
+    pub async fn wait_for_shutdown(&self) {
+        self.0.watch_sender.closed().await
+    }
+
+    /// Triggers a shutdown of the server and waits for it to complete shutting down.
+    pub async fn shutdown(&self) {
+        self.trigger_shutdown();
+        self.wait_for_shutdown().await;
+    }
+
+    /// Checks if the Server has been shutdown.
+    pub fn is_shutdown(&self) -> bool {
+        self.0.watch_sender.is_closed()
     }
 
     pub fn connections(
@@ -188,6 +216,8 @@ struct Server<L: Listener> {
     connection_handlers: JoinSet<()>,
     connections: ActiveConnections<L::Addr>,
     graceful_shutdown_token: tokio_util::sync::CancellationToken,
+    // Used to signal to a ServerHandle when the server has completed shutting down
+    _watch_reciever: tokio::sync::watch::Receiver<()>,
 }
 
 impl<L> Server<L>
@@ -344,20 +374,50 @@ where
     }
 }
 
-#[tokio::test]
-async fn foo() {
+#[cfg(test)]
+mod tests {
+    use super::*;
     use axum::Router;
 
-    // build our application with a single route
-    let app = Router::new().route("/", axum::routing::get(|| async { "Hello, World!" }));
+    #[tokio::test]
+    async fn simple() {
+        const MESSAGE: &str = "Hello, World!";
 
-    // run our app with hyper, listening globally on port 3000
-    let _handle = Builder {
-        config: Default::default(),
-        tls_config: None,
+        let app = Router::new().route("/", axum::routing::get(|| async { MESSAGE }));
+
+        let handle = Builder::new().serve(("localhost", 0), app).unwrap();
+
+        let url = format!("http://{}", handle.local_addr());
+
+        let response = reqwest::get(url).await.unwrap().bytes().await.unwrap();
+
+        assert_eq!(response, MESSAGE.as_bytes());
     }
-    .serve("127.0.0.1:3000", app)
-    .unwrap();
 
-    dbg!(reqwest::get("http://127.0.0.1:3000").await.unwrap());
+    #[tokio::test]
+    async fn shutdown() {
+        const MESSAGE: &str = "Hello, World!";
+
+        let app = Router::new().route("/", axum::routing::get(|| async { MESSAGE }));
+
+        let handle = Builder::new().serve(("localhost", 0), app).unwrap();
+
+        let url = format!("http://{}", handle.local_addr());
+
+        let response = reqwest::get(url).await.unwrap().bytes().await.unwrap();
+
+        // a request was just made so we should have 1 active connection
+        assert_eq!(handle.connections().len(), 1);
+
+        assert_eq!(response, MESSAGE.as_bytes());
+
+        assert!(!handle.is_shutdown());
+
+        handle.shutdown().await;
+
+        assert!(handle.is_shutdown());
+
+        // Now that the network has been shutdown there should be zero connections
+        assert_eq!(handle.connections().len(), 0);
+    }
 }
