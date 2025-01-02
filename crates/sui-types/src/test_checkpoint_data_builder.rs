@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{ident_str, language_storage::TypeTag};
 use sui_protocol_config::ProtocolConfig;
 
 use crate::{
@@ -57,6 +57,7 @@ struct CheckpointBuilder {
 struct TransactionBuilder {
     sender_idx: u8,
     gas: ObjectRef,
+    move_calls: Vec<(ObjectID, &'static str, &'static str)>,
     created_objects: BTreeMap<ObjectID, Object>,
     mutated_objects: BTreeMap<ObjectID, Object>,
     unwrapped_objects: BTreeSet<ObjectID>,
@@ -70,6 +71,7 @@ impl TransactionBuilder {
         Self {
             sender_idx,
             gas,
+            move_calls: vec![],
             created_objects: BTreeMap::new(),
             mutated_objects: BTreeMap::new(),
             unwrapped_objects: BTreeSet::new(),
@@ -316,11 +318,23 @@ impl TestCheckpointDataBuilder {
         self
     }
 
+    pub fn add_move_call(
+        mut self,
+        package: ObjectID,
+        module: &'static str,
+        function: &'static str,
+    ) -> Self {
+        let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
+        tx_builder.move_calls.push((package, module, function));
+        self
+    }
+
     /// Complete the current transaction and add it to the checkpoint.
     pub fn finish_transaction(mut self) -> Self {
         let TransactionBuilder {
             sender_idx,
             gas,
+            move_calls,
             created_objects,
             mutated_objects,
             unwrapped_objects,
@@ -331,7 +345,19 @@ impl TestCheckpointDataBuilder {
         let sender = dbg_addr(sender_idx);
         let events = events.map(|events| TransactionEvents { data: events });
         let events_digest = events.as_ref().map(|events| events.digest());
-        let pt = ProgrammableTransactionBuilder::new().finish();
+        let mut pt_builder = ProgrammableTransactionBuilder::new();
+        for (package, module, function) in move_calls {
+            pt_builder
+                .move_call(
+                    package,
+                    ident_str!(module).to_owned(),
+                    ident_str!(function).to_owned(),
+                    vec![],
+                    vec![],
+                )
+                .unwrap();
+        }
+        let pt = pt_builder.finish();
         let tx_data = TransactionData::new(
             TransactionKind::ProgrammableTransaction(pt),
             sender,
@@ -462,7 +488,7 @@ mod tests {
 
     use move_core_types::ident_str;
 
-    use crate::transaction::TransactionDataAPI;
+    use crate::transaction::{Command, ProgrammableMoveCall, TransactionDataAPI};
 
     use super::*;
     #[test]
@@ -730,7 +756,7 @@ mod tests {
             .start_transaction(0)
             .with_events(vec![Event::new(
                 &ObjectID::ZERO,
-                &ident_str!("test"),
+                ident_str!("test"),
                 dbg_addr(0),
                 GAS::type_(),
                 vec![],
@@ -740,6 +766,30 @@ mod tests {
         let tx = &checkpoint.transactions[0];
         assert!(tx.effects.events_digest().is_some());
         assert_eq!(tx.events.as_ref().unwrap().data.len(), 1);
+    }
+
+    #[test]
+    fn test_move_call() {
+        let checkpoint = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .add_move_call(ObjectID::ZERO, "test", "test")
+            .finish_transaction()
+            .build_checkpoint();
+        let tx = &checkpoint.transactions[0];
+        assert!(tx
+            .transaction
+            .transaction_data()
+            .kind()
+            .iter_commands()
+            .any(|cmd| {
+                cmd == &Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: ObjectID::ZERO,
+                    module: "test".to_string(),
+                    function: "test".to_string(),
+                    type_arguments: vec![],
+                    arguments: vec![],
+                }))
+            }));
     }
 
     #[test]
