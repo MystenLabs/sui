@@ -19,9 +19,7 @@ use sui_config::genesis::{
 use sui_execution::{self, Executor};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::base_types::{
-    ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
-};
+use sui_types::base_types::{ExecutionDigests, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::bridge::{BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
@@ -1063,12 +1061,13 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    let mut genesis_ctx = TxContext::new(&SuiAddress::default(), genesis_digest, epoch_data);
     let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
         &*store,
         protocol_config,
         metrics,
-        &mut genesis_ctx,
+        epoch_data.epoch_id(),
+        epoch_data.epoch_start_timestamp(),
+        genesis_digest,
         CheckedInputObjects::new_for_genesis(loaded_dependencies),
         pt,
     )?;
@@ -1191,12 +1190,13 @@ pub fn generate_genesis_system_object(
         builder.finish()
     };
 
-    let mut genesis_ctx = TxContext::new(&SuiAddress::default(), genesis_digest, epoch_data);
     let InnerTemporaryStore { mut written, .. } = executor.update_genesis_state(
         &*store,
         &protocol_config,
         metrics,
-        &mut genesis_ctx,
+        epoch_data.epoch_id(),
+        epoch_data.epoch_start_timestamp(),
+        genesis_digest,
         CheckedInputObjects::new_for_genesis(vec![]),
         pt,
     )?;
