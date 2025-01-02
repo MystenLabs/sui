@@ -162,6 +162,15 @@ impl Db {
     }
 }
 
+impl DbArgs {
+    pub fn new_for_testing(database_url: Url) -> Self {
+        Self {
+            database_url,
+            ..Default::default()
+        }
+    }
+}
+
 impl Default for DbArgs {
     fn default() -> Self {
         Self {

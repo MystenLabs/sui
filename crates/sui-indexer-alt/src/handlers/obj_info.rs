@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
+use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
@@ -11,7 +12,12 @@ use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_pg_db as db;
 use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object};
 
-pub(crate) struct ObjInfo;
+use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
+
+#[derive(Default)]
+pub(crate) struct ObjInfo {
+    pruning_lookup_table: Arc<PruningLookupTable>,
+}
 
 pub(crate) enum ProcessedObjInfoUpdate {
     Insert(Object),
@@ -27,6 +33,7 @@ impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";
     type Value = ProcessedObjInfo;
 
+    // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
@@ -36,6 +43,7 @@ impl Processor for ObjInfo {
             .map(|o| (o.id(), o))
             .collect::<BTreeMap<_, _>>();
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
+        let mut prune_info = PruningInfo::new();
         for object_id in checkpoint_input_objects.keys() {
             if !latest_live_output_objects.contains_key(object_id) {
                 // If an input object is not in the latest live output objects, it must have been deleted
@@ -49,6 +57,7 @@ impl Processor for ObjInfo {
                         update: ProcessedObjInfoUpdate::Delete(*object_id),
                     },
                 );
+                prune_info.add_deleted_object(*object_id);
             }
         }
         for (object_id, object) in latest_live_output_objects.iter() {
@@ -66,8 +75,15 @@ impl Processor for ObjInfo {
                         update: ProcessedObjInfoUpdate::Insert((*object).clone()),
                     },
                 );
+                // We do not need to prune if the object was created in this checkpoint,
+                // because this object would not have been in the table prior to this checkpoint.
+                if checkpoint_input_objects.contains_key(object_id) {
+                    prune_info.add_mutated_object(*object_id);
+                }
             }
         }
+        self.pruning_lookup_table
+            .insert(cp_sequence_number, prune_info);
 
         Ok(values.into_values().collect())
     }
@@ -85,6 +101,40 @@ impl Handler for ObjInfo {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+
+    async fn prune(&self, from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+        use sui_indexer_alt_schema::schema::obj_info::dsl;
+
+        let to_prune = self.pruning_lookup_table.take(from, to)?;
+
+        // For each (object_id, cp_sequence_number_exclusive), delete all entries in obj_info with
+        // cp_sequence_number less than cp_sequence_number_exclusive that match the object_id.
+
+        let values = to_prune
+            .iter()
+            .map(|(object_id, seq_number)| {
+                let object_id_hex = hex::encode(object_id);
+                format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, seq_number)
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "
+            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
+                VALUES {}
+            )
+            DELETE FROM obj_info
+            USING to_prune_data
+            WHERE obj_info.{:?} = to_prune_data.object_id
+              AND obj_info.{:?} < to_prune_data.cp_sequence_number_exclusive
+            ",
+            values,
+            dsl::object_id,
+            dsl::cp_sequence_number,
+        );
+        let rows_deleted = sql_query(query).execute(conn).await?;
+        Ok(rows_deleted)
     }
 }
 
