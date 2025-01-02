@@ -14673,6 +14673,7 @@ dependencies = [
  "sui-archival",
  "sui-config",
  "sui-core",
+ "sui-http",
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-macros",

@@ -17,7 +17,6 @@ use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -228,7 +227,7 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
     /// The http server responsible for serving JSON-RPC as well as the experimental rest service
-    _http_server: Option<tokio::task::JoinHandle<()>>,
+    _http_server: Option<sui_http::ServerHandle>,
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
@@ -2024,7 +2023,7 @@ pub async fn build_http_server(
     prometheus_registry: &Registry,
     _custom_runtime: Option<Handle>,
     software_version: &'static str,
-) -> Result<Option<tokio::task::JoinHandle<()>>> {
+) -> Result<Option<sui_http::ServerHandle>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
         return Ok(None);
@@ -2125,25 +2124,23 @@ pub async fn build_http_server(
         rpc_service.into_router().await
     };
 
-    router = router.merge(rpc_router);
+    let layers = ServiceBuilder::new()
+        .map_request(|mut request: axum::http::Request<_>| {
+            if let Some(connect_info) = request.extensions().get::<sui_http::ConnectInfo>() {
+                let axum_connect_info = axum::extract::ConnectInfo(connect_info.remote_addr);
+                request.extensions_mut().insert(axum_connect_info);
+            }
+            request
+        })
+        .layer(axum::middleware::from_fn(server_timing_middleware));
 
-    let listener = tokio::net::TcpListener::bind(&config.json_rpc_address)
-        .await
-        .unwrap();
-    let addr = listener.local_addr().unwrap();
+    router = router.merge(rpc_router).layer(layers);
 
-    router = router.layer(axum::middleware::from_fn(server_timing_middleware));
+    let handle = sui_http::Builder::new()
+        .serve(&config.json_rpc_address, router)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let handle = tokio::spawn(async move {
-        axum::serve(
-            listener,
-            router.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .await
-        .unwrap()
-    });
-
-    info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
+    info!(local_addr =? handle.local_addr(), "Sui JSON-RPC server listening on {}", handle.local_addr());
 
     Ok(Some(handle))
 }
