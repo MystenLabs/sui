@@ -79,6 +79,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_positions_moved: Histogram,
     pub sequencing_certificate_preceding_disconnected: Histogram,
     pub sequencing_certificate_processed: IntCounterVec,
+    pub sequencing_certificate_amplification_factor: Histogram,
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_estimated_latency: IntGauge,
@@ -185,6 +186,12 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
                 .unwrap(),
+                sequencing_certificate_amplification_factor: register_histogram_with_registry!(
+                    "sequencing_certificate_amplification_factor",
+                    "The amplification factor used by consensus adapter to submit to consensus.",
+                    SEQUENCING_CERTIFICATE_POSITION_BUCKETS.to_vec(),
+                    registry,
+                ).unwrap(),
         }
     }
 
@@ -354,11 +361,11 @@ impl ConsensusAdapter {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transactions: &[ConsensusTransaction],
-    ) -> (impl Future<Output = ()>, usize, usize, usize) {
+    ) -> (impl Future<Output = ()>, usize, usize, usize, usize) {
         if transactions.iter().any(|tx| tx.is_user_transaction()) {
             // UserTransactions are generally sent to just one validator and should
             // be submitted to consensus without delay.
-            return (tokio::time::sleep(Duration::ZERO), 0, 0, 0);
+            return (tokio::time::sleep(Duration::ZERO), 0, 0, 0, 0);
         }
 
         // Use the minimum digest to compute submit delay.
@@ -375,14 +382,18 @@ impl ConsensusAdapter {
                 _ => None,
             })
             .min();
+        let mut amplification_factor = 0;
 
         let (duration, position, positions_moved, preceding_disconnected) =
             match min_digest_and_gas_price {
                 Some((digest, gas_price)) => {
-                    // TODO: Make this configurable.
-                    let k = 5;
-                    let multipler = gas_price / epoch_store.reference_gas_price();
-                    let amplification_factor = if multipler >= k { multipler } else { 0 };
+                    let k = epoch_store
+                        .protocol_config()
+                        .sip_45_consensus_amplification_threshold_as_option()
+                        .unwrap_or(u64::MAX);
+                    let multiplier =
+                        gas_price / std::cmp::max(epoch_store.reference_gas_price(), 1);
+                    amplification_factor = if multiplier >= k { multiplier } else { 0 };
                     self.await_submit_delay_user_transaction(
                         epoch_store.committee(),
                         digest,
@@ -396,6 +407,7 @@ impl ConsensusAdapter {
             position,
             positions_moved,
             preceding_disconnected,
+            amplification_factor as usize,
         )
     }
 
@@ -703,7 +715,7 @@ impl ConsensusAdapter {
         let mut guard = InflightDropGuard::acquire(&self, tx_type);
 
         // Create the waiter until the node's turn comes to submit to consensus
-        let (await_submit, position, positions_moved, preceding_disconnected) =
+        let (await_submit, position, positions_moved, preceding_disconnected, amplification_factor) =
             self.await_submit_delay(epoch_store, &transactions[..]);
 
         // Create the waiter until the transaction is processed by consensus or via checkpoint
@@ -763,6 +775,7 @@ impl ConsensusAdapter {
             guard.position = Some(position);
             guard.positions_moved = Some(positions_moved);
             guard.preceding_disconnected = Some(preceding_disconnected);
+            guard.amplification_factor = Some(amplification_factor);
 
             let _permit: SemaphorePermit = self
                 .submit_semaphore
@@ -1154,6 +1167,7 @@ struct InflightDropGuard<'a> {
     position: Option<usize>,
     positions_moved: Option<usize>,
     preceding_disconnected: Option<usize>,
+    amplification_factor: Option<usize>,
     tx_type: &'static str,
     processed_method: ProcessedMethod,
 }
@@ -1185,6 +1199,7 @@ impl<'a> InflightDropGuard<'a> {
             position: None,
             positions_moved: None,
             preceding_disconnected: None,
+            amplification_factor: None,
             tx_type,
             processed_method: ProcessedMethod::Consensus,
         }
@@ -1224,6 +1239,13 @@ impl<'a> Drop for InflightDropGuard<'a> {
                 .metrics
                 .sequencing_certificate_preceding_disconnected
                 .observe(preceding_disconnected as f64);
+        };
+
+        if let Some(amplification_factor) = self.amplification_factor {
+            self.adapter
+                .metrics
+                .sequencing_certificate_amplification_factor
+                .observe(amplification_factor as f64);
         };
 
         let latency = self.start.elapsed();

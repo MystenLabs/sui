@@ -144,7 +144,7 @@ impl CoreThread {
                     let exists = *self.rx_subscriber_exists.borrow();
                     self.core.set_subscriber_exists(exists);
                     if !should_propose_before && self.core.should_propose() {
-                        // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
+                        // If core cannot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
                         self.core.new_block(Round::MAX, true)?;
                     }
@@ -159,7 +159,7 @@ impl CoreThread {
                         state.accepted_quorum_rounds
                     );
                     if !should_propose_before && self.core.should_propose() {
-                        // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
+                        // If core cannot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
                         self.core.new_block(Round::MAX, true)?;
                     }

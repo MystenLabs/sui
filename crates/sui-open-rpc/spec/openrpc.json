@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "70",
+              "maxSupportedProtocolVersion": "71",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1903,6 +1903,7 @@
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
+                "sip_45_consensus_amplification_threshold": null,
                 "storage_fund_reinvest_rate": {
                   "u64": "500"
                 },
