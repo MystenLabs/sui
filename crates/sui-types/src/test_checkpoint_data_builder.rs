@@ -128,8 +128,23 @@ impl TestCheckpointDataBuilder {
     /// `object_idx` is a convenient representation of the object's ID.
     /// The object will be created as a SUI coin object, with default balance,
     /// and the transaction sender as its owner.
-    pub fn create_object(self, object_idx: u64) -> Self {
+    pub fn create_owned_object(self, object_idx: u64) -> Self {
         self.create_sui_object(object_idx, GAS_VALUE_FOR_TESTING)
+    }
+
+    /// Create a new shared object in the transaction.
+    /// `object_idx` is a convenient representation of the object's ID.
+    /// The object will be created as a SUI coin object, with default balance,
+    /// and it is a shared object.
+    pub fn create_shared_object(self, object_idx: u64) -> Self {
+        self.create_coin_object_with_owner(
+            object_idx,
+            Owner::Shared {
+                initial_shared_version: SequenceNumber::MIN,
+            },
+            GAS_VALUE_FOR_TESTING,
+            GAS::type_tag(),
+        )
     }
 
     /// Create a new SUI coin object in the transaction.
@@ -151,9 +166,24 @@ impl TestCheckpointDataBuilder {
     /// `balance` is the amount of SUI to be created.
     /// `coin_type` is the type of the coin to be created.
     pub fn create_coin_object(
-        mut self,
+        self,
         object_idx: u64,
         owner_idx: u8,
+        balance: u64,
+        coin_type: TypeTag,
+    ) -> Self {
+        self.create_coin_object_with_owner(
+            object_idx,
+            Owner::AddressOwner(dbg_addr(owner_idx)),
+            balance,
+            coin_type,
+        )
+    }
+
+    fn create_coin_object_with_owner(
+        mut self,
+        object_idx: u64,
+        owner: Owner,
         balance: u64,
         coin_type: TypeTag,
     ) -> Self {
@@ -167,11 +197,7 @@ impl TestCheckpointDataBuilder {
             object_id,
             balance,
         );
-        let object = Object::new_move(
-            move_object,
-            Owner::AddressOwner(dbg_addr(owner_idx)),
-            TransactionDigest::ZERO,
-        );
+        let object = Object::new_move(move_object, owner, TransactionDigest::ZERO);
         tx_builder.created_objects.insert(object_id, object);
         self
     }
@@ -264,6 +290,18 @@ impl TestCheckpointDataBuilder {
         let object_id = derive_object_id(object_idx);
         assert!(self.live_objects.contains_key(&object_id));
         tx_builder.deleted_objects.insert(object_id);
+        self
+    }
+
+    /// Freeze an existing object in the transaction.
+    /// `object_idx` is a convenient representation of the object's ID.
+    pub fn freeze_object(mut self, object_idx: u64) -> Self {
+        let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
+        let object_id = derive_object_id(object_idx);
+        assert!(self.live_objects.contains_key(&object_id));
+        let mut object = self.live_objects.get(&object_id).unwrap().clone();
+        object.owner = Owner::Immutable;
+        tx_builder.mutated_objects.insert(object_id, object);
         self
     }
 
@@ -473,7 +511,7 @@ mod tests {
     fn test_object_creation() {
         let checkpoint = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
-            .create_object(0)
+            .create_owned_object(0)
             .finish_transaction()
             .build_checkpoint();
 
@@ -499,7 +537,7 @@ mod tests {
     fn test_object_mutation() {
         let checkpoint = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
-            .create_object(0)
+            .create_owned_object(0)
             .finish_transaction()
             .start_transaction(0)
             .mutate_object(0)
@@ -525,7 +563,7 @@ mod tests {
     fn test_object_deletion() {
         let checkpoint = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
-            .create_object(0)
+            .create_owned_object(0)
             .finish_transaction()
             .start_transaction(0)
             .delete_object(0)
@@ -547,7 +585,7 @@ mod tests {
     fn test_object_wrapping() {
         let checkpoint = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
-            .create_object(0)
+            .create_owned_object(0)
             .finish_transaction()
             .start_transaction(0)
             .wrap_object(0)
@@ -578,7 +616,7 @@ mod tests {
     fn test_object_transfer() {
         let checkpoint = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
-            .create_object(0)
+            .create_owned_object(0)
             .finish_transaction()
             .start_transaction(1)
             .transfer_object(0, 1)
@@ -599,6 +637,41 @@ mod tests {
             .iter()
             .any(|((id, ..), owner)| *id == obj_id
                 && owner.get_owner_address().unwrap() == dbg_addr(1)));
+    }
+
+    #[test]
+    fn test_shared_object() {
+        let checkpoint = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_shared_object(0)
+            .finish_transaction()
+            .build_checkpoint();
+
+        let tx = &checkpoint.transactions[0];
+        let obj_id = derive_object_id(0);
+        assert!(tx
+            .output_objects
+            .iter()
+            .any(|obj| obj.id() == obj_id && obj.owner().is_shared()));
+    }
+
+    #[test]
+    fn test_freeze_object() {
+        let checkpoint = TestCheckpointDataBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction()
+            .start_transaction(0)
+            .freeze_object(0)
+            .finish_transaction()
+            .build_checkpoint();
+
+        let tx = &checkpoint.transactions[1];
+        let obj_id = derive_object_id(0);
+        assert!(tx
+            .output_objects
+            .iter()
+            .any(|obj| obj.id() == obj_id && obj.owner().is_immutable()));
     }
 
     #[test]
@@ -673,7 +746,7 @@ mod tests {
     fn test_multiple_checkpoints() {
         let mut builder = TestCheckpointDataBuilder::new(1)
             .start_transaction(0)
-            .create_object(0)
+            .create_owned_object(0)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
         builder = builder
