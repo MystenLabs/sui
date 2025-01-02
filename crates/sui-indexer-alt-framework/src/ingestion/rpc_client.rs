@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchResult, IngestionClientTrait};
+use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
 use anyhow::anyhow;
 use bytes::Bytes;
 use sui_rpc_api::Client;
@@ -32,7 +32,16 @@ impl IngestionClientTrait for RpcIngestionClient {
             .client
             .get_full_checkpoint(checkpoint)
             .await
-            .map_err(|e| anyhow!(e))?;
+            .map_err(|e| {
+                if e.message().contains("not found") {
+                    FetchError::NotFound
+                } else {
+                    FetchError::Transient {
+                        reason: "io_error",
+                        error: anyhow!(e),
+                    }
+                }
+            })?;
         Ok(Bytes::from(
             Blob::encode(&data, BlobEncoding::Bcs)?.to_bytes(),
         ))
