@@ -69,6 +69,10 @@ name = "programmable_transactions_api"
 path = "examples/programmable_transactions_api.rs"
 
 [[example]]
+name = "programmable_transactions_allow_sponsor_api"
+path = "examples/programmable_transactions_allow_sponsor_api.rs"
+
+[[example]]
 name = "sui_client"
 path = "examples/sui_client.rs"
 
