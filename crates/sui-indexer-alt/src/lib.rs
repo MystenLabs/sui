@@ -94,7 +94,7 @@ pub async fn start_indexer(
         indexer_args,
         client_args,
         ingestion,
-        &MIGRATIONS,
+        Some(&MIGRATIONS),
         cancel.clone(),
     )
     .await?;
