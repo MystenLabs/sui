@@ -13,6 +13,15 @@ pub type ConnectionId = usize;
 #[derive(Debug)]
 pub struct ConnectionInfo<A>(Arc<Inner<A>>);
 
+#[derive(Clone, Debug)]
+pub struct PeerCertificates(Arc<Vec<tokio_rustls::rustls::pki_types::CertificateDer<'static>>>);
+
+impl PeerCertificates {
+    pub fn peer_certs(&self) -> &[tokio_rustls::rustls::pki_types::CertificateDer<'static>] {
+        self.0.as_ref()
+    }
+}
+
 impl<A> ConnectionInfo<A> {
     pub(crate) fn new(
         address: A,
@@ -22,7 +31,7 @@ impl<A> ConnectionInfo<A> {
         Self(Arc::new(Inner {
             address,
             time_established: std::time::Instant::now(),
-            peer_certificates,
+            peer_certificates: peer_certificates.map(PeerCertificates),
             graceful_shutdown_token,
         }))
     }
@@ -37,16 +46,8 @@ impl<A> ConnectionInfo<A> {
         self.0.time_established
     }
 
-    pub fn peer_certificates(
-        &self,
-    ) -> Option<&[tokio_rustls::rustls::pki_types::CertificateDer<'static>]> {
-        self.0.peer_certificates.as_deref().map(AsRef::as_ref)
-    }
-
-    pub(crate) fn peer_certs_owned(
-        &self,
-    ) -> Option<Arc<Vec<tokio_rustls::rustls::pki_types::CertificateDer<'static>>>> {
-        self.0.peer_certificates.clone()
+    pub fn peer_certificates(&self) -> Option<&PeerCertificates> {
+        self.0.peer_certificates.as_ref()
     }
 
     /// A stable identifier for this connection
@@ -67,7 +68,7 @@ struct Inner<A = std::net::SocketAddr> {
     // Time that the connection was established
     time_established: std::time::Instant,
 
-    peer_certificates: Option<Arc<Vec<tokio_rustls::rustls::pki_types::CertificateDer<'static>>>>,
+    peer_certificates: Option<PeerCertificates>,
     graceful_shutdown_token: tokio_util::sync::CancellationToken,
 }
 
