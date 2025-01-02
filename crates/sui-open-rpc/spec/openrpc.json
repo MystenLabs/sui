@@ -1346,6 +1346,7 @@
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
+                "record_consensus_determined_version_assignments_in_prologue_v2": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
@@ -5666,6 +5667,54 @@
                         "items": [
                           {
                             "$ref": "#/components/schemas/ObjectID"
+                          },
+                          {
+                            "$ref": "#/components/schemas/SequenceNumber2"
+                          }
+                        ],
+                        "maxItems": 2,
+                        "minItems": 2
+                      }
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "CancelledTransactionsV2"
+            ],
+            "properties": {
+              "CancelledTransactionsV2": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/TransactionDigest"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "type": "array",
+                            "items": [
+                              {
+                                "$ref": "#/components/schemas/ObjectID"
+                              },
+                              {
+                                "$ref": "#/components/schemas/SequenceNumber2"
+                              }
+                            ],
+                            "maxItems": 2,
+                            "minItems": 2
                           },
                           {
                             "$ref": "#/components/schemas/SequenceNumber2"

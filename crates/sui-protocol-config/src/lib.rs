@@ -506,8 +506,11 @@ struct FeatureFlags {
     // Controls whether consensus handler should record consensus determined shared object version
     // assignments in consensus commit prologue transaction.
     // The purpose of doing this is to enable replaying transaction without transaction effects.
+    // V2 also records initial shared versions for consensus objects.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    record_consensus_determined_version_assignments_in_prologue_v2: bool,
 
     // Run verification of framework upgrades using a new/fresh VM.
     #[serde(skip_serializing_if = "is_false")]
@@ -1565,6 +1568,11 @@ impl ProtocolConfig {
     pub fn record_consensus_determined_version_assignments_in_prologue(&self) -> bool {
         self.feature_flags
             .record_consensus_determined_version_assignments_in_prologue
+    }
+
+    pub fn record_consensus_determined_version_assignments_in_prologue_v2(&self) -> bool {
+        self.feature_flags
+            .record_consensus_determined_version_assignments_in_prologue_v2
     }
 
     pub fn prepend_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
