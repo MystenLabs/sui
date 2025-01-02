@@ -8447,6 +8447,7 @@ dependencies = [
  "prometheus",
  "serde",
  "snap",
+ "sui-http",
  "tokio",
  "tokio-rustls 0.26.0",
  "tokio-stream",
