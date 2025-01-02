@@ -38,7 +38,7 @@ pub type StoreError = typed_store_error::TypedStoreError;
 /// The definer of the struct can specify the default options for each table using annotations
 /// We can also supply column family options on the default ones
 /// A user defined function of signature () -> Options can be provided for each table
-/// If a an override function is not specified, the default in `typed_store::rocks::default_db_options` is used
+/// If an override function is not specified, the default in `typed_store::rocks::default_db_options` is used
 /// ```
 /// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;

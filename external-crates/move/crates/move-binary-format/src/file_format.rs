@@ -565,7 +565,7 @@ impl FunctionDefinition {
         self.code.is_none()
     }
 
-    // Deprecated public bit, deprecated in favor a the Visibility enum
+    // Deprecated public bit, deprecated in favor of the Visibility enum
     pub const DEPRECATED_PUBLIC_BIT: u8 = 0b01;
 
     /// A native function implemented in Rust.
