@@ -427,6 +427,7 @@ pub struct BasicAuthInterceptor {
 impl Interceptor for BasicAuthInterceptor {
     fn call(&mut self, mut request: Request<()>) -> std::result::Result<Request<()>, Status> {
         if let Some(auth) = self.basic_auth.as_ref() {
+            println!("intercepted call with auth: {:?}", auth);
             request.metadata_mut().insert("authorization", auth.clone());
         }
         Ok(request)
