@@ -33,6 +33,7 @@ pub use listener::ListenerExt;
 pub use connection_info::ConnectInfo;
 pub use connection_info::ConnectionId;
 pub use connection_info::ConnectionInfo;
+pub use connection_info::PeerCertificates;
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 /// h2 alpn in plain format for rustls.
@@ -310,7 +311,7 @@ where
             local_addr: self.local_addr.clone(),
             remote_addr: connection_info.remote_address().clone(),
         };
-        let peer_certificates = connection_info.peer_certs_owned();
+        let peer_certificates = connection_info.peer_certificates().cloned();
         let hyper_io = hyper_util::rt::TokioIo::new(io);
 
         let hyper_svc = TowerToHyperService::new(self.service.clone().map_request(
