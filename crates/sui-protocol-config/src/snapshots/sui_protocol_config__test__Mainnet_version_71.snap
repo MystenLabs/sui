@@ -1,7 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
-snapshot_kind: text
 ---
 version: 71
 feature_flags:
@@ -332,6 +331,7 @@ consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
+allowed_txn_cost_overage_burst_per_object_in_commit: 185000000
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
@@ -341,3 +341,4 @@ max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 3700000
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
+
