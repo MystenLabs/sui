@@ -115,6 +115,7 @@ members = [
     "crates/sui-graphql-rpc",
     "crates/sui-graphql-rpc-client",
     "crates/sui-graphql-rpc-headers",
+    "crates/sui-http",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
     "crates/sui-indexer-alt-framework",
