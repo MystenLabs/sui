@@ -9,8 +9,8 @@
 		"start": "npx ts-node --esm src/index.ts"
 	},
 	"dependencies": {
-		"@mysten/bcs": "workspace:*",
-		"@mysten/sui": "workspace:*",
+		"@mysten/bcs": "^1.2.0",
+		"@mysten/sui": "^1.18.0",
 		"p-limit": "^6.1.0"
 	},
 	"devDependencies": {
