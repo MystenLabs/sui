@@ -1,4 +1,4 @@
-// Test abort on an a native function when stepping out
+// Test abort on a native function when stepping out
 // of a function containing the native call (before this
 // call is stepped into or over).
 module abort_native::m;

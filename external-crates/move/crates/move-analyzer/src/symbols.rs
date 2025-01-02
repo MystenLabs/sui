@@ -2256,7 +2256,7 @@ fn run_typing_analysis(
     computation_data
 }
 
-// Given use-defs for a the main program or dependencies, update the per-file
+// Given use-defs for the main program or dependencies, update the per-file
 // use-def map
 fn update_file_use_defs(
     computation_data: &SymbolsComputationData,
