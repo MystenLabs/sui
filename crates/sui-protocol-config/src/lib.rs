@@ -3016,9 +3016,6 @@ impl ProtocolConfig {
                             .consensus_round_prober_probe_accepted_rounds = true;
                     }
 
-                    // Enable bursts for congestion control. (10x the per-commit budget)
-                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
-
                     cfg.poseidon_bn254_cost_per_block = Some(388);
 
                     cfg.gas_model_version = Some(9);
@@ -3096,6 +3093,9 @@ impl ProtocolConfig {
                 }
                 71 => {
                     cfg.sip_45_consensus_amplification_threshold = Some(5);
+
+                    // Enable bursts for congestion control. (10x the per-commit budget)
+                    cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
                 }
                 // Use this template when making changes:
                 //
