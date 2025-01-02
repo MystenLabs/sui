@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
         Command::ResetDatabase { skip_migrations } => {
             reset_database(
                 args.db_args,
-                (!skip_migrations).then(|| Indexer::migrations(&MIGRATIONS)),
+                (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
             )
             .await?;
         }
