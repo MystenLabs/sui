@@ -16,7 +16,6 @@ async-trait.workspace = true
 axum.workspace = true
 bcs.workspace = true
 bytes.workspace = true
-chrono.workspace = true
 consensus-core.workspace = true
 consensus-config.workspace = true
 count-min-sketch.workspace = true
@@ -27,9 +26,7 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 futures.workspace = true
 im.workspace = true
-indexmap.workspace = true
 itertools.workspace = true
-jsonrpsee.workspace = true
 lru.workspace = true
 mockall.workspace = true
 num_cpus.workspace = true
@@ -45,13 +42,11 @@ scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
-signature.workspace = true
 static_assertions.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
-tokio-retry.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
 twox-hash.workspace = true
@@ -89,7 +84,6 @@ sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-tls.workspace = true
 sui-types.workspace = true
-zeroize.workspace = true
 nonempty.workspace = true
 
 [dev-dependencies]
@@ -112,9 +106,6 @@ sui-move.workspace = true
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof.workspace = true
 test-fuzz.workspace = true
-
-sui-macros.workspace = true
-sui-protocol-config.workspace = true
 
 # moka uses `quanta` by default for timing, which is not compatible with the simulator
 [target.'cfg(msim)'.dependencies]
