@@ -111,7 +111,7 @@ Response: {"salt":"129390038577185583942388216820280642146"}
 
 User salt is used to disconnect the OAuth identifier (sub) from the on-chain Sui address to avoid linking Web2 credentials with Web3 credentials. While losing or misusing the salt could enable this link, it wouldn't compromise fund control or zkLogin asset authority. See more discussion [here](#security-and-privacy).
 
-## Get the user's Sui address
+## Get the user's Sui address {#address-definition}
 
 Once the OAuth flow completes, the JWT can be found in the redirect URL. Along with the user salt, the zkLogin address can be derived as follows:
 
