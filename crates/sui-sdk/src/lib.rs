@@ -231,13 +231,15 @@ impl SuiClientBuilder {
 
         let ws = if let Some(url) = self.ws_url {
             let mut builder = WsClientBuilder::default()
-                .max_request_body_size(2 << 30)
+                .max_request_size(2 << 30)
                 .max_concurrent_requests(self.max_concurrent_requests)
                 .set_headers(headers.clone())
                 .request_timeout(self.request_timeout);
 
             if let Some(duration) = self.ws_ping_interval {
-                builder = builder.ping_interval(duration)
+                builder = builder.enable_ws_ping(
+                    jsonrpsee::ws_client::PingConfig::new().ping_interval(duration),
+                );
             }
 
             builder.build(url).await.ok()
@@ -246,7 +248,7 @@ impl SuiClientBuilder {
         };
 
         let http = HttpClientBuilder::default()
-            .max_request_body_size(2 << 30)
+            .max_request_size(2 << 30)
             .max_concurrent_requests(self.max_concurrent_requests)
             .set_headers(headers.clone())
             .request_timeout(self.request_timeout)

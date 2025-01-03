@@ -11,11 +11,13 @@ pub type SuiRpcResult<T = ()> = Result<T, Error>;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    RpcError(#[from] jsonrpsee::core::Error),
+    RpcError(#[from] jsonrpsee::core::ClientError),
     #[error(transparent)]
     JsonRpcError(JsonRpcError),
     #[error(transparent)]
     BcsSerialisationError(#[from] bcs::Error),
+    #[error(transparent)]
+    JsonSerializationError(#[from] serde_json::Error),
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
     #[error("Subscription error : {0}")]
