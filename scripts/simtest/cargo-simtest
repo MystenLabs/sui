@@ -54,9 +54,9 @@ if [ -n "$LOCAL_MSIM_PATH" ]; then
 else
   cargo_patch_args=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "e26b3360ca3dee67b25a034da85af0cccc560f19"'
+    --config 'patch.crates-io.tokio.rev = "2a170f4cd81c5cd10f5e4a5e810068f3045f41b6"'
     --config 'patch.crates-io.futures-timer.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.futures-timer.rev = "e26b3360ca3dee67b25a034da85af0cccc560f19"'
+    --config 'patch.crates-io.futures-timer.rev = "2a170f4cd81c5cd10f5e4a5e810068f3045f41b6"'
   )
 fi
 
