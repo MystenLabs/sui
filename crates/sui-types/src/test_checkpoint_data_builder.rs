@@ -108,7 +108,7 @@ impl TestCheckpointDataBuilder {
     /// A proper SuiAddress will be derived from it.
     pub fn start_transaction(mut self, sender_idx: u8) -> Self {
         assert!(self.checkpoint_builder.next_transaction.is_none());
-        let sender = dbg_addr(sender_idx);
+        let sender = Self::derive_address(sender_idx);
         let gas_id = self.gas_map.entry(sender).or_insert_with(|| {
             let gas = Object::with_owner_for_testing(sender);
             let id = gas.id();
@@ -176,7 +176,7 @@ impl TestCheckpointDataBuilder {
     ) -> Self {
         self.create_coin_object_with_owner(
             object_idx,
-            Owner::AddressOwner(dbg_addr(owner_idx)),
+            Owner::AddressOwner(Self::derive_address(owner_idx)),
             balance,
             coin_type,
         )
@@ -190,7 +190,7 @@ impl TestCheckpointDataBuilder {
         coin_type: TypeTag,
     ) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         assert!(!self.live_objects.contains_key(&object_id));
         let move_object = MoveObject::new_coin(
             Coin::type_(coin_type).into(),
@@ -208,7 +208,7 @@ impl TestCheckpointDataBuilder {
     /// `object_idx` is a convenient representation of the object's ID.
     pub fn mutate_object(mut self, object_idx: u64) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         let object = self
             .live_objects
             .get(&object_id)
@@ -222,7 +222,10 @@ impl TestCheckpointDataBuilder {
     /// `object_idx` is a convenient representation of the object's ID.
     /// `recipient_idx` is a convenient representation of the recipient's address.
     pub fn transfer_object(self, object_idx: u64, recipient_idx: u8) -> Self {
-        self.change_object_owner(object_idx, Owner::AddressOwner(dbg_addr(recipient_idx)))
+        self.change_object_owner(
+            object_idx,
+            Owner::AddressOwner(Self::derive_address(recipient_idx)),
+        )
     }
 
     /// Change the owner of an existing object.
@@ -230,7 +233,7 @@ impl TestCheckpointDataBuilder {
     /// `owner` is the new owner of the object.
     pub fn change_object_owner(mut self, object_idx: u64, owner: Owner) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         let mut object = self.live_objects.get(&object_id).unwrap().clone();
         object.owner = owner;
         tx_builder.mutated_objects.insert(object_id, object);
@@ -250,7 +253,7 @@ impl TestCheckpointDataBuilder {
         amount: u64,
     ) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         let mut object = self
             .live_objects
             .get(&object_id)
@@ -272,7 +275,7 @@ impl TestCheckpointDataBuilder {
     /// `object_idx` is a convenient representation of the object's ID.
     pub fn wrap_object(mut self, object_idx: u64) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         assert!(self.live_objects.contains_key(&object_id));
         tx_builder.wrapped_objects.insert(object_id);
         self
@@ -282,7 +285,7 @@ impl TestCheckpointDataBuilder {
     /// `object_idx` is a convenient representation of the object's ID.
     pub fn unwrap_object(mut self, object_idx: u64) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         assert!(self.wrapped_objects.contains_key(&object_id));
         tx_builder.unwrapped_objects.insert(object_id);
         self
@@ -292,7 +295,7 @@ impl TestCheckpointDataBuilder {
     /// `object_idx` is a convenient representation of the object's ID.
     pub fn delete_object(mut self, object_idx: u64) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
+        let object_id = Self::derive_object_id(object_idx);
         assert!(self.live_objects.contains_key(&object_id));
         tx_builder.deleted_objects.insert(object_id);
         self
@@ -333,7 +336,7 @@ impl TestCheckpointDataBuilder {
             deleted_objects,
             events,
         } = self.checkpoint_builder.next_transaction.take().unwrap();
-        let sender = dbg_addr(sender_idx);
+        let sender = Self::derive_address(sender_idx);
         let events = events.map(|events| TransactionEvents { data: events });
         let events_digest = events.as_ref().map(|events| events.digest());
         let mut pt_builder = ProgrammableTransactionBuilder::new();
@@ -467,10 +470,14 @@ impl TestCheckpointDataBuilder {
             transactions,
         }
     }
-}
 
-fn derive_object_id(object_idx: u64) -> ObjectID {
-    ObjectID::derive_id(TransactionDigest::ZERO, object_idx)
+    pub fn derive_object_id(object_idx: u64) -> ObjectID {
+        ObjectID::derive_id(TransactionDigest::ZERO, object_idx)
+    }
+
+    pub fn derive_address(address_idx: u8) -> SuiAddress {
+        dbg_addr(address_idx)
+    }
 }
 
 #[cfg(test)]
@@ -494,7 +501,10 @@ mod tests {
         assert_eq!(checkpoint.checkpoint_summary.epoch, 5);
         assert_eq!(checkpoint.transactions.len(), 1);
         let tx = &checkpoint.transactions[0];
-        assert_eq!(tx.transaction.sender_address(), dbg_addr(0));
+        assert_eq!(
+            tx.transaction.sender_address(),
+            TestCheckpointDataBuilder::derive_address(0)
+        );
         assert_eq!(tx.effects.mutated().len(), 1); // gas object
         assert_eq!(tx.effects.deleted().len(), 0);
         assert_eq!(tx.effects.created().len(), 0);
@@ -521,7 +531,14 @@ mod tests {
             .iter()
             .map(|tx| tx.transaction.transaction_data().sender())
             .collect();
-        assert_eq!(senders, vec![dbg_addr(0), dbg_addr(1), dbg_addr(2)]);
+        assert_eq!(
+            senders,
+            vec![
+                TestCheckpointDataBuilder::derive_address(0),
+                TestCheckpointDataBuilder::derive_address(1),
+                TestCheckpointDataBuilder::derive_address(2)
+            ]
+        );
     }
 
     #[test]
@@ -533,7 +550,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[0];
-        let created_obj_id = derive_object_id(0);
+        let created_obj_id = TestCheckpointDataBuilder::derive_object_id(0);
 
         // Verify object appears in output objects
         assert!(tx
@@ -547,7 +564,8 @@ mod tests {
             .created()
             .iter()
             .any(|((id, ..), owner)| *id == created_obj_id
-                && owner.get_owner_address().unwrap() == dbg_addr(0)));
+                && owner.get_owner_address().unwrap()
+                    == TestCheckpointDataBuilder::derive_address(0)));
     }
 
     #[test]
@@ -562,7 +580,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[1];
-        let obj_id = derive_object_id(0);
+        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
 
         // Verify object appears in input and output objects
         assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
@@ -588,7 +606,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[1];
-        let obj_id = derive_object_id(0);
+        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
 
         // Verify object appears in input objects but not output
         assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
@@ -613,7 +631,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[1];
-        let obj_id = derive_object_id(0);
+        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
 
         assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
         assert!(!tx.output_objects.iter().any(|obj| obj.id() == obj_id));
@@ -641,7 +659,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[1];
-        let obj_id = derive_object_id(0);
+        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
 
         // Verify object appears in input and output objects
         assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
@@ -653,7 +671,8 @@ mod tests {
             .mutated()
             .iter()
             .any(|((id, ..), owner)| *id == obj_id
-                && owner.get_owner_address().unwrap() == dbg_addr(1)));
+                && owner.get_owner_address().unwrap()
+                    == TestCheckpointDataBuilder::derive_address(1)));
     }
 
     #[test]
@@ -665,7 +684,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[0];
-        let obj_id = derive_object_id(0);
+        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
         assert!(tx
             .output_objects
             .iter()
@@ -684,7 +703,7 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[1];
-        let obj_id = derive_object_id(0);
+        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
         assert!(tx
             .output_objects
             .iter()
@@ -703,13 +722,13 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[0];
-        let obj_id0 = derive_object_id(0);
+        let obj_id0 = TestCheckpointDataBuilder::derive_object_id(0);
         assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id0
             && obj.is_gas_coin()
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 100));
 
         let tx = &checkpoint.transactions[1];
-        let obj_id1 = derive_object_id(1);
+        let obj_id1 = TestCheckpointDataBuilder::derive_object_id(1);
         assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id0
             && obj.is_gas_coin()
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 90));
@@ -731,8 +750,8 @@ mod tests {
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[1];
-        let obj_id0 = derive_object_id(0);
-        let obj_id1 = derive_object_id(1);
+        let obj_id0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id1 = TestCheckpointDataBuilder::derive_object_id(1);
         assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id0
             && obj.coin_type_maybe().unwrap() == type_tag
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 90));
@@ -748,7 +767,7 @@ mod tests {
             .with_events(vec![Event::new(
                 &ObjectID::ZERO,
                 ident_str!("test"),
-                dbg_addr(0),
+                TestCheckpointDataBuilder::derive_address(0),
                 GAS::type_(),
                 vec![],
             )])
