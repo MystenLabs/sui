@@ -601,7 +601,7 @@ impl Operations {
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let mut gascoin_transfer_operations = vec![];
         if Self::is_gascoin_transfer(tx) {
-            coin_change_operations.into_iter().for_each(|operation| {
+            for operation in coin_change_operations.into_iter() {
                 match operation.type_ {
                     OperationType::Gas => {
                         // change gas account back to the previous owner as it is the one
@@ -609,46 +609,44 @@ impl Operations {
                         gascoin_transfer_operations.push(Operation::gas(prev_gas_owner, gas_used))
                     }
                     OperationType::SuiBalanceChange => {
-                        operation.account.map(|account| {
-                            let mut amount = match operation.amount {
-                                Some(amount) => amount,
-                                None => return,
-                            };
-                            let mut is_convert_to_pay_sui = false;
-                            if account.address == prev_gas_owner && amount.currency == *SUI {
-                                // previous owner's balance needs to be adjusted for gas
-                                amount.value -= gas_used;
-                                is_convert_to_pay_sui = true;
-                            } else if account.address == new_gas_owner && amount.currency == *SUI {
-                                // new owner's balance needs to be adjusted for gas
-                                amount.value += gas_used;
-                                is_convert_to_pay_sui = true;
-                            }
-                            if is_convert_to_pay_sui {
-                                gascoin_transfer_operations.push(Operation::pay_sui(
-                                    operation.status,
-                                    account.address,
-                                    amount.value,
-                                ));
-                            } else {
-                                gascoin_transfer_operations.push(Operation::balance_change(
-                                    operation.status,
-                                    account.address,
-                                    amount.value,
-                                    amount.currency,
-                                ));
-                            }
-                        });
+                        let account = operation
+                            .account
+                            .ok_or_else(|| anyhow!("Missing account for a balance-change"))?;
+                        let mut amount = operation
+                            .amount
+                            .ok_or_else(|| anyhow!("Missing amount for a balance-change"))?;
+                        let mut is_convert_to_pay_sui = false;
+                        if account.address == prev_gas_owner && amount.currency == *SUI {
+                            // previous owner's balance needs to be adjusted for gas
+                            amount.value -= gas_used;
+                            is_convert_to_pay_sui = true;
+                        } else if account.address == new_gas_owner && amount.currency == *SUI {
+                            // new owner's balance needs to be adjusted for gas
+                            amount.value += gas_used;
+                            is_convert_to_pay_sui = true;
+                        }
+                        if is_convert_to_pay_sui {
+                            gascoin_transfer_operations.push(Operation::pay_sui(
+                                operation.status,
+                                account.address,
+                                amount.value,
+                            ));
+                        } else {
+                            gascoin_transfer_operations.push(Operation::balance_change(
+                                operation.status,
+                                account.address,
+                                amount.value,
+                                amount.currency,
+                            ));
+                        }
                     }
-                    _ => {}
+                    _ => {
+                        return Err(anyhow!(
+                            "Discarding unsupported operation type {:?}",
+                            operation.type_
+                        ))
+                    }
                 }
-            });
-            // sanity check to make sure all the operations have been processed
-            if coin_change_operations.count() != 0 {
-                return Err(anyhow!(
-                    "Unable to process all balance-change operations. Remaining count({})",
-                    coin_change_operations.count()
-                ));
             }
         }
         Ok(gascoin_transfer_operations)
