@@ -13244,7 +13244,6 @@ dependencies = [
  "axum 0.7.5",
  "bcs",
  "bytes",
- "chrono",
  "clap",
  "consensus-config",
  "consensus-core",
@@ -13262,9 +13261,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "im",
- "indexmap 2.2.6",
  "itertools 0.13.0",
- "jsonrpsee",
  "lru 0.10.0",
  "mockall",
  "moka",
@@ -13298,7 +13295,6 @@ dependencies = [
  "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "shared-crypto",
- "signature 1.6.4",
  "static_assertions",
  "sui-archival",
  "sui-authority-aggregation",
@@ -13325,12 +13321,10 @@ dependencies = [
  "test-fuzz",
  "thiserror 1.0.64",
  "tokio",
- "tokio-retry",
  "tokio-stream",
  "tracing",
  "twox-hash",
  "typed-store",
- "zeroize",
 ]
 
 [[package]]
@@ -16571,17 +16565,6 @@ dependencies = [
  "tokio-postgres",
  "tokio-rustls 0.26.0",
  "x509-certificate",
-]
-
-[[package]]
-name = "tokio-retry"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
-dependencies = [
- "pin-project",
- "rand 0.8.5",
- "tokio",
 ]
 
 [[package]]
