@@ -31,7 +31,14 @@ use self::{
     transfer::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
-    tx_context::TxContextDeriveIdCostParams,
+    tx_context::{
+        TxContextDeriveIdCostParams, TxContextNativeDigestCostParams,
+        TxContextNativeEpochCostParams, TxContextNativeEpochTimestampMsCostParams,
+        TxContextNativeIdsCreatedCostParams, TxContextNativeIncEpochCostParams,
+        TxContextNativeIncEpochTimestampCostParams, TxContextNativeIncIdsCreatedCostParams,
+        TxContextNativeReplaceCostParams, TxContextNativeSenderCostParams,
+        TxContextNativeSponsorCostParams,
+    },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
@@ -112,6 +119,17 @@ pub struct NativesCostTable {
 
     // TxContext
     pub tx_context_derive_id_cost_params: TxContextDeriveIdCostParams,
+    pub tx_context_native_digest_cost_params: TxContextNativeDigestCostParams,
+    pub tx_context_native_epoch_cost_params: TxContextNativeEpochCostParams,
+    pub tx_context_native_epoch_timestamp_ms_cost_params: TxContextNativeEpochTimestampMsCostParams,
+    pub tx_context_native_sender_cost_params: TxContextNativeSenderCostParams,
+    pub tx_context_native_sponsor_cost_params: TxContextNativeSponsorCostParams,
+    pub tx_context_native_ids_created_cost_params: TxContextNativeIdsCreatedCostParams,
+    pub tx_context_native_inc_ids_created_cost_params: TxContextNativeIncIdsCreatedCostParams,
+    pub tx_context_native_inc_epoch_cost_params: TxContextNativeIncEpochCostParams,
+    pub tx_context_native_inc_epoch_timestamp_cost_params:
+        TxContextNativeIncEpochTimestampCostParams,
+    pub tx_context_native_replace_cost_params: TxContextNativeReplaceCostParams,
 
     // Type
     pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
@@ -338,6 +356,38 @@ impl NativesCostTable {
                 tx_context_derive_id_cost_base: protocol_config
                     .tx_context_derive_id_cost_base()
                     .into(),
+            },
+            tx_context_native_digest_cost_params: TxContextNativeDigestCostParams {
+                tx_context_native_digest_cost_base: 10.into(),
+            },
+            tx_context_native_epoch_cost_params: TxContextNativeEpochCostParams {
+                tx_context_native_epoch_cost_base: 10.into(),
+            },
+            tx_context_native_epoch_timestamp_ms_cost_params:
+                TxContextNativeEpochTimestampMsCostParams {
+                    tx_context_native_epoch_timestamp_ms_cost_base: 10.into(),
+                },
+            tx_context_native_sender_cost_params: TxContextNativeSenderCostParams {
+                tx_context_native_sender_cost_base: 10.into(),
+            },
+            tx_context_native_sponsor_cost_params: TxContextNativeSponsorCostParams {
+                tx_context_native_sponsor_cost_base: 10.into(),
+            },
+            tx_context_native_ids_created_cost_params: TxContextNativeIdsCreatedCostParams {
+                tx_context_native_ids_created_cost_base: 10.into(),
+            },
+            tx_context_native_inc_ids_created_cost_params: TxContextNativeIncIdsCreatedCostParams {
+                tx_context_native_inc_ids_created_cost_base: 20.into(),
+            },
+            tx_context_native_inc_epoch_cost_params: TxContextNativeIncEpochCostParams {
+                tx_context_native_inc_epoch_cost_base: 20.into(),
+            },
+            tx_context_native_inc_epoch_timestamp_cost_params:
+                TxContextNativeIncEpochTimestampCostParams {
+                    tx_context_native_inc_epoch_timestamp_cost_base: 20.into(),
+                },
+            tx_context_native_replace_cost_params: TxContextNativeReplaceCostParams {
+                tx_context_native_replace_cost_base: 100.into(),
             },
             type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
                 types_is_one_time_witness_cost_base: protocol_config
@@ -1011,6 +1061,56 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "tx_context",
             "derive_id",
             make_native!(tx_context::derive_id),
+        ),
+        (
+            "tx_context",
+            "native_sender",
+            make_native!(tx_context::native_sender),
+        ),
+        (
+            "tx_context",
+            "native_digest",
+            make_native!(tx_context::native_digest),
+        ),
+        (
+            "tx_context",
+            "native_epoch",
+            make_native!(tx_context::native_epoch),
+        ),
+        (
+            "tx_context",
+            "native_epoch_timestamp_ms",
+            make_native!(tx_context::native_epoch_timestamp_ms),
+        ),
+        (
+            "tx_context",
+            "native_ids_created",
+            make_native!(tx_context::native_ids_created),
+        ),
+        (
+            "tx_context",
+            "native_inc_ids_created",
+            make_native!(tx_context::native_inc_ids_created),
+        ),
+        (
+            "tx_context",
+            "native_inc_epoch",
+            make_native!(tx_context::native_inc_epoch),
+        ),
+        (
+            "tx_context",
+            "native_inc_epoch_timestamp",
+            make_native!(tx_context::native_inc_epoch_timestamp),
+        ),
+        (
+            "tx_context",
+            "native_sponsor",
+            make_native!(tx_context::native_sponsor),
+        ),
+        (
+            "tx_context",
+            "native_replace",
+            make_native!(tx_context::native_replace),
         ),
         (
             "types",

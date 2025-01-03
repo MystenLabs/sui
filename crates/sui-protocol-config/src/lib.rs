@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 72;
+const MAX_PROTOCOL_VERSION: u64 = 73;
 
 // Record history of protocol version allocations here:
 //
@@ -208,6 +208,7 @@ const MAX_PROTOCOL_VERSION: u64 = 72;
 //             Max gas budget moved to 50_000 SUI
 //             Max gas price moved to 50 SUI
 //             Variants as type nodes.
+// Version 73: Native TxContext in Move.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3150,6 +3151,7 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.variant_nodes = true;
                 }
+                73 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
