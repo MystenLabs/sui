@@ -727,7 +727,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         .into_axum_router()
         .route_layer(layers);
 
-        let tls_server_config = sui_tls::create_rustls_server_config(
+        let tls_server_config = sui_tls::create_rustls_server_config_with_client_verifier(
             self.network_keypair.clone().private_key().into_inner(),
             certificate_server_name(&self.context),
             AllowPublicKeys::new(

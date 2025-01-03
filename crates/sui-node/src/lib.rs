@@ -1495,7 +1495,6 @@ impl SuiNode {
         let tls_config = sui_tls::create_rustls_server_config(
             config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
-            sui_tls::AllowAll,
         );
         let server = server_builder
             .bind(config.network_address(), Some(tls_config))
