@@ -347,7 +347,7 @@ fn thdb_config() -> Config {
 
 #[cfg(not(debug_assertions))]
 pub fn default_cells_per_mutex() -> usize {
-    256
+    64
 }
 
 #[cfg(debug_assertions)]
