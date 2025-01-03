@@ -31,7 +31,7 @@ def update_git_sparse_checkout(crates_to_checkout):
     """
 
     # You can add any default directories you always want checked out here
-    default_directories = ["scripts"]
+    default_directories = ["scripts", ".cargo", ".changeset", ".config", ".github"]
 
     # 1) Initialize sparse checkout (if not already).
     subprocess.check_call(["git", "sparse-checkout", "init", "--cone"])
