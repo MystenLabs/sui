@@ -476,7 +476,8 @@ mod test {
         let max_deferral_rounds;
         let cap_factor_denominator;
         let absolute_cap_factor;
-        let allow_overage_factor;
+        let mut allow_overage_factor = 0;
+        let mut burst_limit_factor = 0;
         let separate_randomness_budget;
         {
             let mut rng = thread_rng();
@@ -494,13 +495,14 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-            allow_overage_factor = if rng.gen_bool(0.5) {
-                0
-            } else {
-                rng.gen_range(1..100)
-            };
+            if rng.gen_bool(0.5) {
+                allow_overage_factor = rng.gen_range(1..100);
+            }
             cap_factor_denominator = rng.gen_range(1..100);
             absolute_cap_factor = rng.gen_range(2..50);
+            if allow_overage_factor > 1 && rng.gen_bool(0.5) {
+                burst_limit_factor = rng.gen_range(1..allow_overage_factor);
+            }
             separate_randomness_budget = rng.gen_bool(0.5);
         }
 
@@ -508,7 +510,9 @@ mod test {
             "test_simulated_load_shared_object_congestion_control setup.
              mode: {mode:?}, checkpoint_budget_factor: {checkpoint_budget_factor:?},
              max_deferral_rounds: {max_deferral_rounds:?},
-             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?},
+             txn_count_limit: {txn_count_limit:?},
+             allow_overage_factor: {allow_overage_factor:?},
+             burst_limit_factor: {burst_limit_factor:?},
              cap_factor_denominator: {cap_factor_denominator:?},
              absolute_cap_factor: {absolute_cap_factor:?},
              separate_randomness_budget: {separate_randomness_budget:?}",
@@ -543,6 +547,9 @@ mod test {
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
                 allow_overage_factor * total_gas_limit,
+            );
+            config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                burst_limit_factor * total_gas_limit,
             );
             if separate_randomness_budget {
                 config
