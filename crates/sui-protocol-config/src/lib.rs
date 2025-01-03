@@ -185,7 +185,6 @@ const MAX_PROTOCOL_VERSION: u64 = 71;
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
-<<<<<<< HEAD
 // Version 64: Revert congestion control change.
 // Version 65: Enable distributed vote scoring in mainnet.
 // Version 66: Revert distributed vote scoring in mainnet.
@@ -570,7 +569,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
 
-<<<<<<< HEAD
     // Enable uncompressed group elements in BLS123-81 G1
     #[serde(skip_serializing_if = "is_false")]
     uncompressed_g1_group_elements: bool,
@@ -1711,7 +1709,6 @@ impl ProtocolConfig {
         self.feature_flags.relocate_event_module
     }
 
-<<<<<<< HEAD
     pub fn uncompressed_g1_group_elements(&self) -> bool {
         self.feature_flags.uncompressed_g1_group_elements
     }
@@ -1733,7 +1730,7 @@ impl ProtocolConfig {
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
     }
-    
+
     pub fn transaction_context_native(&self) -> bool {
         self.feature_flags.transaction_context_native
     }
