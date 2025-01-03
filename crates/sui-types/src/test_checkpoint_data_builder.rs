@@ -221,15 +221,18 @@ impl TestCheckpointDataBuilder {
     /// Transfer an existing object to a new owner.
     /// `object_idx` is a convenient representation of the object's ID.
     /// `recipient_idx` is a convenient representation of the recipient's address.
-    pub fn transfer_object(mut self, object_idx: u64, recipient_idx: u8) -> Self {
+    pub fn transfer_object(self, object_idx: u64, recipient_idx: u8) -> Self {
+        self.change_object_owner(object_idx, Owner::AddressOwner(dbg_addr(recipient_idx)))
+    }
+
+    /// Change the owner of an existing object.
+    /// `object_idx` is a convenient representation of the object's ID.
+    /// `owner` is the new owner of the object.
+    pub fn change_object_owner(mut self, object_idx: u64, owner: Owner) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
         let object_id = derive_object_id(object_idx);
-        let mut object = self
-            .live_objects
-            .get(&object_id)
-            .cloned()
-            .expect("Transferring an object that doesn't exist");
-        object.owner = Owner::AddressOwner(dbg_addr(recipient_idx));
+        let mut object = self.live_objects.get(&object_id).unwrap().clone();
+        object.owner = owner;
         tx_builder.mutated_objects.insert(object_id, object);
         self
     }
@@ -292,18 +295,6 @@ impl TestCheckpointDataBuilder {
         let object_id = derive_object_id(object_idx);
         assert!(self.live_objects.contains_key(&object_id));
         tx_builder.deleted_objects.insert(object_id);
-        self
-    }
-
-    /// Freeze an existing object in the transaction.
-    /// `object_idx` is a convenient representation of the object's ID.
-    pub fn freeze_object(mut self, object_idx: u64) -> Self {
-        let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
-        let object_id = derive_object_id(object_idx);
-        assert!(self.live_objects.contains_key(&object_id));
-        let mut object = self.live_objects.get(&object_id).unwrap().clone();
-        object.owner = Owner::Immutable;
-        tx_builder.mutated_objects.insert(object_id, object);
         self
     }
 
@@ -688,7 +679,7 @@ mod tests {
             .create_owned_object(0)
             .finish_transaction()
             .start_transaction(0)
-            .freeze_object(0)
+            .change_object_owner(0, Owner::Immutable)
             .finish_transaction()
             .build_checkpoint();
 
