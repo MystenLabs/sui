@@ -802,7 +802,7 @@ impl Object {
             .collect();
 
         let data = loader.load_many(keys).await?;
-        let objects = data
+        let objects: Vec<_> = data
             .into_iter()
             .filter_map(|(lookup_key, bcs)| {
                 Object::new_serialized(
@@ -813,7 +813,7 @@ impl Object {
                     lookup_key.version,
                 )
             })
-            .collect::<Vec<_>>();
+            .collect();
 
         Ok(objects)
     }

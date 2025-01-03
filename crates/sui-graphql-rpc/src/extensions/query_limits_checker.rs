@@ -30,7 +30,7 @@ pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
 const MULTI_GET_PREFIX: &str = "multiGet";
-const MULTI_GET_OBJECT_KEYS: &str = "keys";
+const MULTI_GET_KEYS: &str = "keys";
 const VERIFY_ZKLOGIN: &str = "verifyZkloginSignature";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
@@ -496,7 +496,7 @@ impl<'a> LimitsTraversal<'a> {
             return Ok(None);
         }
 
-        let keys = f.node.get_argument(MULTI_GET_OBJECT_KEYS);
+        let keys = f.node.get_argument(MULTI_GET_KEYS);
         let Some(page_size) = self.resolve_list_size(keys) else {
             return Ok(None);
         };
