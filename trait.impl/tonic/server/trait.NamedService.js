@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"sui_network":[["impl&lt;T&gt; <a class=\"trait\" href=\"https://docs.rs/tonic/0.12.3/tonic/server/trait.NamedService.html\" title=\"trait tonic::server::NamedService\">NamedService</a> for <a class=\"struct\" href=\"sui_network/api/struct.ValidatorServer.html\" title=\"struct sui_network::api::ValidatorServer\">ValidatorServer</a>&lt;T&gt;"]],
+"sui_rpc_api":[["impl&lt;T&gt; <a class=\"trait\" href=\"https://docs.rs/tonic/0.12.3/tonic/server/trait.NamedService.html\" title=\"trait tonic::server::NamedService\">NamedService</a> for <a class=\"struct\" href=\"sui_rpc_api/proto/node/node_server/struct.NodeServer.html\" title=\"struct sui_rpc_api::proto::node::node_server::NodeServer\">NodeServer</a>&lt;T&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

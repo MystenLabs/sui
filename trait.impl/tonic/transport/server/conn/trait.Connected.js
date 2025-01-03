@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"mysten_network":[["impl <a class=\"trait\" href=\"https://docs.rs/tonic/0.12.3/tonic/transport/server/conn/trait.Connected.html\" title=\"trait tonic::transport::server::conn::Connected\">Connected</a> for <a class=\"enum\" href=\"mysten_network/server/enum.TcpOrTlsStream.html\" title=\"enum mysten_network::server::TcpOrTlsStream\">TcpOrTlsStream</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"simulacrum":[["impl <a class=\"trait\" href=\"sui_types/mock_checkpoint_builder/trait.ValidatorKeypairProvider.html\" title=\"trait sui_types::mock_checkpoint_builder::ValidatorKeypairProvider\">ValidatorKeypairProvider</a> for <a class=\"struct\" href=\"simulacrum/struct.CommitteeWithKeys.html\" title=\"struct simulacrum::CommitteeWithKeys\">CommitteeWithKeys</a>&lt;'_&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

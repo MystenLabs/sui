@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cache","cache_local","get_cached","get_cached_local"],"struct":["CacheResult"]};

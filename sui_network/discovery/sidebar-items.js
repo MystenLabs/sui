@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Builder","DiscoveryClient","DiscoveryServer","GetKnownPeersResponseV2","Handle","NodeInfo","NodeInfoDigest","TrustedPeerChangeEvent","UnstartedDiscovery"],"trait":["Discovery"],"type":["SignedNodeInfo","VerifiedSignedNodeInfo"]};
