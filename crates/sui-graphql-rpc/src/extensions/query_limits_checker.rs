@@ -29,6 +29,8 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
+const MULTI_GET_PREFIX: &str = "multiGet";
+const MULTI_GET_KEYS: &str = "keys";
 const VERIFY_ZKLOGIN: &str = "verifyZkloginSignature";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
@@ -228,6 +230,7 @@ impl<'a> LimitsTraversal<'a> {
         match &item.node {
             Selection::Field(f) => {
                 let name = &f.node.name.node;
+
                 if name == DRY_RUN_TX_BLOCK || name == EXECUTE_TX_BLOCK {
                     for (_name, value) in &f.node.arguments {
                         self.check_tx_arg(value)?;
@@ -415,12 +418,15 @@ impl<'a> LimitsTraversal<'a> {
                     self.output_budget -= multiplicity;
                 }
 
-                // If the field being traversed is a connection field, increase multiplicity by a
-                // factor of page size. This operation can fail due to overflow, which will be
-                // treated as a limits check failure, even if the resulting value does not get used
-                // for anything.
                 let name = &f.node.name.node;
+
+                // Handle regular connection fields and multiGet queries
                 let multiplicity = 'm: {
+                    // check if it is a multiGet query and return the number of keys
+                    if let Some(page_size) = self.multi_get_page_size(f)? {
+                        break 'm multiplicity * page_size;
+                    }
+
                     if !CONNECTION_FIELDS.contains(&name.as_str()) {
                         break 'm multiplicity;
                     }
@@ -428,7 +434,6 @@ impl<'a> LimitsTraversal<'a> {
                     let Some(page_size) = page_size else {
                         break 'm multiplicity;
                     };
-
                     multiplicity
                         .checked_mul(page_size)
                         .ok_or_else(|| self.output_node_error())?
@@ -477,6 +482,23 @@ impl<'a> LimitsTraversal<'a> {
             (Some(f), Some(l)) => f.max(l),
             (Some(p), _) | (_, Some(p)) => p,
             (None, None) => self.reporter.limits.default_page_size as u64,
+        };
+
+        Ok(Some(
+            page_size.try_into().map_err(|_| self.output_node_error())?,
+        ))
+    }
+
+    // If the field `f` is a multiGet query, extract the number of keys, otherwise return `None`.
+    // Returns an error if the number of keys cannot be represented as a `u32`.
+    fn multi_get_page_size(&mut self, f: &Positioned<Field>) -> ServerResult<Option<u32>> {
+        if !f.node.name.node.starts_with(MULTI_GET_PREFIX) {
+            return Ok(None);
+        }
+
+        let keys = f.node.get_argument(MULTI_GET_KEYS);
+        let Some(page_size) = self.resolve_list_size(keys) else {
+            return Ok(None);
         };
 
         Ok(Some(
@@ -546,6 +568,21 @@ impl<'a> LimitsTraversal<'a> {
             _ => return None,
         }
         .as_u64()
+    }
+
+    /// Find the size of a list, resolving variables if necessary.
+    fn resolve_list_size(&self, value: Option<&Positioned<Value>>) -> Option<usize> {
+        match &value?.node {
+            Value::List(list) => Some(list.len()),
+            Value::Variable(var) => {
+                if let ConstValue::List(list) = self.variables.get(var)? {
+                    Some(list.len())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 
     /// Error returned if transaction payloads exceed limit. Also sets the transaction payload
