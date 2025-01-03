@@ -320,7 +320,7 @@ impl IndexerReader {
 
     /// Retrieve the system state data for the given epoch. If no epoch is given,
     /// it will retrieve the latest epoch's data and return the system state.
-    /// System state of the an epoch is written at the end of the epoch, so system state
+    /// System state of the epoch is written at the end of the epoch, so system state
     /// of the current epoch is empty until the epoch ends. You can call
     /// `get_latest_sui_system_state` for current epoch instead.
     pub async fn get_epoch_sui_system_state(
