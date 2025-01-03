@@ -120,17 +120,6 @@ pub trait ReadApi {
         descending_order: bool,
     ) -> RpcResult<CheckpointPage>;
 
-    #[method(name = "getCheckpoints", version <= "0.31")]
-    async fn get_checkpoints_deprecated_limit(
-        &self,
-        /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
-        cursor: Option<BigInt<u64>>,
-        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.
-        limit: Option<BigInt<u64>>,
-        /// query result ordering, default to false (ascending order), oldest record first.
-        descending_order: bool,
-    ) -> RpcResult<CheckpointPage>;
-
     /// Return transaction events.
     #[method(name = "getEvents")]
     async fn get_events(
