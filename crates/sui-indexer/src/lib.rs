@@ -82,7 +82,6 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
 
     HttpClientBuilder::default()
         .max_request_size(2 << 30)
-        .max_concurrent_requests(usize::MAX)
         .set_headers(headers.clone())
         .build(rpc_client_url)
         .map_err(|e| {
