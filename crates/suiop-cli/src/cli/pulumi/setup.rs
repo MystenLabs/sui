@@ -34,7 +34,7 @@ fn ensure_pulumi_authed() -> Result<()> {
             vec!["bash", "-c", "pulumi login"],
             Some(CommandOptions::new(true, false)),
         )?;
-        info!("logged in sucessfully")
+        info!("logged in successfully")
     } else {
         debug!("authed");
     }

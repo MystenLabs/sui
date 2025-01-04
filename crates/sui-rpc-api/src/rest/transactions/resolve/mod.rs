@@ -399,7 +399,7 @@ fn resolve_arg(
             let value = Base64::decode(&v).map_err(|e| {
                 RpcServiceError::new(
                     axum::http::StatusCode::BAD_REQUEST,
-                    format!("argument is an invalid pure arguement: {e}"),
+                    format!("argument is an invalid pure argument: {e}"),
                 )
             })?;
             CallArg::Pure(value)
@@ -409,7 +409,7 @@ fn resolve_arg(
             let value = serde_json::from_value(serde_json::Value::from(array)).map_err(|e| {
                 RpcServiceError::new(
                     axum::http::StatusCode::BAD_REQUEST,
-                    format!("argument is an invalid pure arguement: {e}"),
+                    format!("argument is an invalid pure argument: {e}"),
                 )
             })?;
             CallArg::Pure(value)
@@ -544,7 +544,7 @@ fn resolve_shared_input(
     resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
 }
 
-// Checks if the provided input argument is used as a recieving object
+// Checks if the provided input argument is used as a receiving object
 fn is_input_argument_receiving(
     called_packages: &HashMap<ObjectId, NormalizedPackage>,
     commands: &[Command],
