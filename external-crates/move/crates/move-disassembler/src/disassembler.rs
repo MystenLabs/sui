@@ -572,24 +572,10 @@ impl<'a> Disassembler<'a> {
             return Ok(());
         }
 
-        if function_source_map.locals.len() <= parameter_len {
-            return Ok(());
-        }
-
         let signature = self.source_mapper.bytecode.signature_at(locals_idx);
-        for (local_idx, (name, _)) in function_source_map
-            .locals
-            .iter()
-            .skip(parameter_len)
-            .enumerate()
-        {
-            any_write!(buffer, "L{local_idx}:\t{name}: ")?;
-            self.disassemble_type_for_local(
-                buffer,
-                function_source_map,
-                parameter_len + local_idx,
-                signature,
-            )?;
+        for (local_idx, (name, _)) in function_source_map.locals.iter().enumerate() {
+            any_write!(buffer, "L{}:\t{}: ", local_idx + parameter_len, name)?;
+            self.disassemble_type_for_local(buffer, function_source_map, local_idx, signature)?;
             any_writeln!(buffer)?;
         }
 

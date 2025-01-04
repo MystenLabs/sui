@@ -11,6 +11,8 @@ enum EnumWithTwoVariants<Ty0> {
 }
 
 public f<Ty0>(Arg0: Ty0, Arg1: Ty0): Ty0 {
+L2:	loc0: EnumWithTwoVariants<Ty0>
+L3:	loc1: Ty0
 B0:
 	0: MoveLoc[0](Arg0: Ty0)
 	1: PackVariantGeneric(VariantInstantiationHandleIndex(0))
