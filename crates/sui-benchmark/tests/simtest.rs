@@ -593,7 +593,7 @@ mod test {
     // Tests cluster defense against failing transaction floods Traffic Control
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_expected_failure_traffic_control() {
-        // TODO: can we get away with significatly increasing this?
+        // TODO: can we get away with significantly increasing this?
         let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
         let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
 
@@ -662,7 +662,7 @@ mod test {
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();
         let test_cluster = Arc::new(
-            init_test_cluster_builder(4, 1000)
+            init_test_cluster_builder(4, 5000)
                 .with_data_ingestion_dir(path.clone())
                 .build()
                 .await,
