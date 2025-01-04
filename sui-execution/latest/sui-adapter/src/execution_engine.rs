@@ -122,7 +122,7 @@ mod checked {
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
 
-        let mut tx_ctx = TxContext::new_from_components(
+        let tx_ctx = TxContext::new_from_components(
             &transaction_signer,
             &transaction_digest,
             epoch_id,
@@ -136,7 +136,7 @@ mod checked {
             &mut temporary_store,
             transaction_kind,
             &mut gas_charger,
-            &mut tx_ctx,
+            tx_ctx,
             move_vm,
             protocol_config,
             metrics,
@@ -257,7 +257,7 @@ mod checked {
             metrics,
             move_vm,
             &mut temporary_store,
-            tx_context,
+            tx_context.clone(),
             &mut gas_charger,
             pt,
         )?;
@@ -270,7 +270,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
         gas_charger: &mut GasCharger,
-        tx_ctx: &mut TxContext,
+        tx_ctx: TxContext,
         move_vm: &Arc<MoveVM>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -292,6 +292,7 @@ mod checked {
 
         let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
         let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+        let digest = tx_ctx.digest();
 
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
@@ -371,7 +372,7 @@ mod checked {
         if let Err(e) = run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
-            tx_ctx,
+            digest,
             move_vm,
             protocol_config.simple_conservation_checks(),
             enable_expensive_checks,
@@ -390,7 +391,7 @@ mod checked {
     fn run_conservation_checks<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
-        tx_ctx: &mut TxContext,
+        tx_digest: TransactionDigest,
         move_vm: &Arc<MoveVM>,
         simple_conservation_checks: bool,
         enable_expensive_checks: bool,
@@ -449,7 +450,7 @@ mod checked {
                     // we will create or destroy SUI otherwise
                     panic!(
                         "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_ctx.digest(),
+                        tx_digest,
                         recovery_err,
                         gas_charger.summary()
                     )
@@ -545,7 +546,7 @@ mod checked {
     fn execution_loop<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
-        tx_ctx: &mut TxContext,
+        tx_ctx: TxContext,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -855,7 +856,7 @@ mod checked {
         builder: ProgrammableTransactionBuilder,
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        mut tx_ctx: TxContext,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -878,21 +879,22 @@ mod checked {
             metrics.clone(),
             move_vm,
             temporary_store,
-            tx_ctx,
+            tx_ctx.clone(),
             gas_charger,
             advance_epoch_pt,
         );
+        tx_ctx.add_ids_created(temporary_store.objects_created_count() as u64);
 
         #[cfg(msim)]
         let result = maybe_modify_result(result, change_epoch.epoch);
 
         if result.is_err() {
             tracing::error!(
-            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
-            result.as_ref().err(),
-            temporary_store.objects(),
-            change_epoch,
-        );
+                "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
+                result.as_ref().err(),
+                temporary_store.objects(),
+                change_epoch,
+            );
             temporary_store.drop_writes();
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();
@@ -907,11 +909,12 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    tx_ctx,
+                    tx_ctx.clone(),
                     gas_charger,
                     advance_epoch_safe_mode_pt,
                 )
                 .expect("Advance epoch with safe mode must succeed");
+                tx_ctx.add_ids_created(temporary_store.objects_created_count() as u64);
             }
         }
 
@@ -948,12 +951,13 @@ mod checked {
     fn process_system_packages(
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: TxContext,
         move_vm: &MoveVM,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
     ) {
+        let digest = tx_ctx.digest();
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -976,7 +980,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    tx_ctx,
+                    tx_ctx.clone(),
                     gas_charger,
                     publish_pt,
                 )
@@ -986,7 +990,7 @@ mod checked {
                     &deserialized_modules,
                     version,
                     dependencies,
-                    tx_ctx.digest(),
+                    digest,
                 );
 
                 info!(
@@ -1015,7 +1019,7 @@ mod checked {
     fn setup_consensus_commit(
         consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: TxContext,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -1152,7 +1156,7 @@ mod checked {
     fn setup_authenticator_state_update(
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: TxContext,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -1217,7 +1221,7 @@ mod checked {
     fn setup_randomness_state_update(
         update: RandomnessStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
+        tx_ctx: TxContext,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,

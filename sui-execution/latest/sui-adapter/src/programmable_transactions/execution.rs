@@ -71,7 +71,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
-        tx_context: &mut TxContext,
+        tx_context: TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
