@@ -5,6 +5,7 @@ use std::{time::Duration, vec};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::object::Owner;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -120,8 +121,11 @@ async fn transaction_manager_basics() {
     transaction_manager.check_empty_for_testing();
 
     // Enqueue a transaction with a new gas object, empty input.
-    let gas_object_new =
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 0.into(), owner);
+    let gas_object_new = Object::with_id_owner_version_for_testing(
+        ObjectID::random(),
+        0.into(),
+        Owner::AddressOwner(owner),
+    );
     let transaction = make_transaction(gas_object_new.clone(), vec![]);
     let tx_start_time = Instant::now();
     transaction_manager.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
@@ -386,7 +390,11 @@ async fn transaction_manager_receiving_notify_commit() {
     let obj_id = ObjectID::random();
     let object_arguments: Vec<_> = (0..10)
         .map(|i| {
-            let object = Object::with_id_owner_version_for_testing(obj_id, i.into(), owner);
+            let object = Object::with_id_owner_version_for_testing(
+                obj_id,
+                i.into(),
+                Owner::AddressOwner(owner),
+            );
             // Every other transaction receives the object, and we create a run of multiple receives in
             // a row at the beginning to test that the TM doesn't get stuck in either configuration of:
             // ImmOrOwnedObject => Receiving,
@@ -475,8 +483,10 @@ async fn transaction_manager_receiving_object_ready_notifications() {
     transaction_manager.check_empty_for_testing();
 
     let obj_id = ObjectID::random();
-    let receiving_object_new0 = Object::with_id_owner_version_for_testing(obj_id, 0.into(), owner);
-    let receiving_object_new1 = Object::with_id_owner_version_for_testing(obj_id, 1.into(), owner);
+    let receiving_object_new0 =
+        Object::with_id_owner_version_for_testing(obj_id, 0.into(), Owner::AddressOwner(owner));
+    let receiving_object_new1 =
+        Object::with_id_owner_version_for_testing(obj_id, 1.into(), Owner::AddressOwner(owner));
     let receiving_object_arg0 =
         ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
     let receive_object_transaction0 = make_transaction(
@@ -561,8 +571,10 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
     transaction_manager.check_empty_for_testing();
 
     let obj_id = ObjectID::random();
-    let receiving_object_new0 = Object::with_id_owner_version_for_testing(obj_id, 0.into(), owner);
-    let receiving_object_new1 = Object::with_id_owner_version_for_testing(obj_id, 1.into(), owner);
+    let receiving_object_new0 =
+        Object::with_id_owner_version_for_testing(obj_id, 0.into(), Owner::AddressOwner(owner));
+    let receiving_object_new1 =
+        Object::with_id_owner_version_for_testing(obj_id, 1.into(), Owner::AddressOwner(owner));
     let receiving_object_arg0 =
         ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
     let receive_object_transaction0 = make_transaction(
@@ -661,8 +673,11 @@ async fn transaction_manager_receiving_object_ready_if_current_version_greater()
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect();
-    let receiving_object =
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 10.into(), owner);
+    let receiving_object = Object::with_id_owner_version_for_testing(
+        ObjectID::random(),
+        10.into(),
+        Owner::AddressOwner(owner),
+    );
     gas_objects.push(receiving_object.clone());
     let state = init_state_with_objects(gas_objects.clone()).await;
 
@@ -674,10 +689,16 @@ async fn transaction_manager_receiving_object_ready_if_current_version_greater()
     // TM should be empty at the beginning.
     transaction_manager.check_empty_for_testing();
 
-    let receiving_object_new0 =
-        Object::with_id_owner_version_for_testing(receiving_object.id(), 0.into(), owner);
-    let receiving_object_new1 =
-        Object::with_id_owner_version_for_testing(receiving_object.id(), 1.into(), owner);
+    let receiving_object_new0 = Object::with_id_owner_version_for_testing(
+        receiving_object.id(),
+        0.into(),
+        Owner::AddressOwner(owner),
+    );
+    let receiving_object_new1 = Object::with_id_owner_version_for_testing(
+        receiving_object.id(),
+        1.into(),
+        Owner::AddressOwner(owner),
+    );
     let receiving_object_arg0 =
         ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
     let receive_object_transaction0 = make_transaction(
