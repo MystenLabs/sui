@@ -8,11 +8,7 @@ use diesel::query_dsl::methods::LimitDsl;
 use diesel::result::Error as DieselError;
 use diesel_async::methods::LoadQuery;
 use diesel_async::RunQueryDsl;
-use jsonrpsee::core::Error as RpcError;
-use jsonrpsee::types::{
-    error::{CallError, INTERNAL_ERROR_CODE},
-    ErrorObject,
-};
+use jsonrpsee::types::{error::INTERNAL_ERROR_CODE, ErrorObject};
 use sui_pg_db as db;
 use tracing::debug;
 
@@ -49,20 +45,16 @@ impl<'p> Connection<'p> {
     }
 }
 
-impl From<DbError> for RpcError {
-    fn from(err: DbError) -> RpcError {
+impl From<DbError> for ErrorObject<'static> {
+    fn from(err: DbError) -> Self {
         match err {
-            DbError::Connect(err) => RpcError::Call(CallError::Custom(ErrorObject::owned(
-                INTERNAL_ERROR_CODE,
-                err.to_string(),
-                None::<()>,
-            ))),
+            DbError::Connect(err) => {
+                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
+            }
 
-            DbError::RunQuery(err) => RpcError::Call(CallError::Custom(ErrorObject::owned(
-                INTERNAL_ERROR_CODE,
-                err.to_string(),
-                None::<()>,
-            ))),
+            DbError::RunQuery(err) => {
+                ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)
+            }
         }
     }
 }
