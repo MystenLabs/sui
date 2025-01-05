@@ -16,7 +16,7 @@ export const menuContainer = style({
 export const menuContent = style({
 	display: 'flex',
 	flexDirection: 'column',
-	width: 180,
+	min-width: 180,
 	maxHeight: 200,
 	marginTop: 4,
 	padding: 8,
