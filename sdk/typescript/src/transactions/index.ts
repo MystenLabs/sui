@@ -53,4 +53,4 @@ export {
 	type NamedPackagesPluginOptions,
 } from './plugins/NamedPackagesPlugin.js';
 
-export { type NamedPackagesPluginCache } from './plugins/utils.js';
+export { type NamedPackagesPluginCache, parallelPlugins } from './plugins/utils.js';
