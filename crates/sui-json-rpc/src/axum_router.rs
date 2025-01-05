@@ -25,8 +25,9 @@ use sui_core::traffic_controller::{
     metrics::TrafficControllerMetrics, parse_ip, policies::TrafficTally, TrafficController,
 };
 use sui_json_rpc_api::TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
+use sui_types::error::Weight;
 use sui_types::traffic_control::ClientIdSource;
-use sui_types::traffic_control::{PolicyConfig, Weight};
+use sui_types::traffic_control::PolicyConfig;
 use tracing::error;
 
 use crate::routing_layer::RpcRouter;
@@ -248,15 +249,29 @@ fn handle_traffic_resp(
     client: Option<IpAddr>,
     response: &MethodResponse,
 ) {
+    let result = response.result.clone();
+    let deserialized_result = serde_json::from_str::<serde_json::Value>(&result).unwrap();
+    let quorum_driver_weight = deserialized_result
+        .as_object()
+        .and_then(|obj| obj.get("error"))
+        .and_then(|obj| obj.get("data"))
+        .and_then(|data| data.as_str())
+        .and_then(|weight_str| serde_json::from_str::<Weight>(weight_str).ok());
     let error = response.error_code.map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
         direct: client,
         through_fullnode: None,
-        error_info: error.map(|e| {
-            let error_type = e.to_string();
-            let error_weight = normalize(e);
-            (error_weight, error_type)
-        }),
+        error_info: quorum_driver_weight
+            // TODO: disambiguate the type of QuorumDriverError, perhaps
+            // by serializing more context on the error
+            .map(|w| (w, String::from("QuorumDriverError")))
+            .or_else(|| {
+                error.map(|e| {
+                    let error_type = e.to_string();
+                    let error_weight = normalize(e);
+                    (error_weight, error_type)
+                })
+            }),
         // For now, count everything as spam with equal weight
         // on the rpc node side, including gas-charging endpoints
         // such as `sui_executeTransactionBlock`, as this can enable

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::path::PathBuf;
 
+use crate::error::Weight;
 // These values set to loosely attempt to limit
 // memory usage for a single sketch to ~20MB
 // For reference, see
@@ -12,7 +13,6 @@ use std::path::PathBuf;
 pub const DEFAULT_SKETCH_CAPACITY: usize = 50_000;
 pub const DEFAULT_SKETCH_PROBABILITY: f64 = 0.999;
 pub const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
-use rand::distributions::Distribution;
 
 const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
@@ -69,43 +69,6 @@ pub enum ClientIdSource {
     #[default]
     SocketAddr,
     XForwardedFor(usize),
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Weight(f32);
-
-impl Weight {
-    pub fn new(value: f32) -> Result<Self, &'static str> {
-        if (0.0..=1.0).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err("Weight must be between 0.0 and 1.0")
-        }
-    }
-
-    pub fn one() -> Self {
-        Self(1.0)
-    }
-
-    pub fn zero() -> Self {
-        Self(0.0)
-    }
-
-    pub fn value(&self) -> f32 {
-        self.0
-    }
-
-    pub fn is_sampled(&self) -> bool {
-        let mut rng = rand::thread_rng();
-        let sample = rand::distributions::Uniform::new(0.0, 1.0).sample(&mut rng);
-        sample <= self.value()
-    }
-}
-
-impl PartialEq for Weight {
-    fn eq(&self, other: &Self) -> bool {
-        self.value() == other.value()
-    }
 }
 
 #[serde_as]
