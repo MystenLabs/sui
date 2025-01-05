@@ -22,9 +22,10 @@ use jsonrpsee::types::{ErrorObject, Id, InvalidRequest, Params, Request};
 use jsonrpsee::{core::server::rpc_module::Methods, server::logger::Logger};
 use serde_json::value::RawValue;
 use sui_core::traffic_controller::{
-    metrics::TrafficControllerMetrics, parse_ip, policies::TrafficTally, TrafficController,
+    metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
 };
 use sui_json_rpc_api::TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
+use sui_network::parse_ip;
 use sui_types::traffic_control::ClientIdSource;
 use sui_types::traffic_control::{PolicyConfig, Weight};
 use tracing::error;

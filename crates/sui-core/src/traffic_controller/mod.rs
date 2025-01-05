@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use fs::File;
 use prometheus::IntGauge;
 use std::fs;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -23,6 +23,7 @@ use mysten_metrics::spawn_monitored_task;
 use rand::Rng;
 use std::fmt::Debug;
 use std::time::{Duration, Instant, SystemTime};
+use sui_network::parse_ip;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
@@ -833,16 +834,4 @@ impl TrafficSim {
             Duration::from_millis(avg_time_blocked)
         );
     }
-}
-
-pub fn parse_ip(ip: &str) -> Option<IpAddr> {
-    ip.parse::<IpAddr>().ok().or_else(|| {
-        ip.parse::<SocketAddr>()
-            .ok()
-            .map(|socket_addr| socket_addr.ip())
-            .or_else(|| {
-                error!("Failed to parse value of {:?} to ip address or socket.", ip,);
-                None
-            })
-    })
 }

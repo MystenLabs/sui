@@ -55,7 +55,6 @@ use crate::{
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
-    traffic_controller::parse_ip,
     traffic_controller::policies::TrafficTally,
     traffic_controller::TrafficController,
 };
@@ -65,6 +64,7 @@ use crate::{
 };
 use nonempty::{nonempty, NonEmpty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
+use sui_network::parse_ip;
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
