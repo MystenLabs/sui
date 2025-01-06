@@ -7,92 +7,12 @@ use insta::{assert_debug_snapshot, assert_snapshot};
 use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
 use std::io::Read;
 use std::path::Path;
-use std::{fs, fs::File, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf, process::Command};
 
-/// Note: tests use [insta] and [insta-cmd]; you can review and update expected test results using
-/// cargo insta test --review
+// Note: tests use [insta] and [insta-cmd]; you can review and update expected test results using
+// cargo insta test --review
 
-/// # Test infrastructure //////////////////////////////////////////////////////////////////////////
-
-/// create a `sui-move` Command that runs in a new temporary directory
-fn sui_move() -> (Project, Command) {
-    let project = Project::new().unwrap();
-    let mut cmd = Command::new(get_cargo_bin("sui-move"));
-    cmd.current_dir(project.path());
-    (project, cmd)
-}
-
-/// create a file in `[proj]/[path]` containing `[contents]`
-fn new_file<P: AsRef<Path>>(proj: &mut Project, path: P, contents: &str) -> anyhow::Result<()> {
-    let fullpath = proj.path().join(&path);
-    let parent = fullpath
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("joined path is expected to have a parent"))?;
-    fs::create_dir_all(parent)?;
-    proj.new_file(path, contents)
-}
-
-/// return the contents of the file `[proj]/[path]`
-fn slurp_file<P: AsRef<Path>>(proj: &Project, path: P) -> anyhow::Result<String> {
-    let mut buf: String = String::new();
-    File::open(proj.path().join(path))?.read_to_string(&mut buf)?;
-    Ok(buf)
-}
-
-/// return the set of files (and directories) recursively contained in the directory at [root].
-/// Results are normalized relative to [root] and returned in sorted order.
-/// [root] is included (even if it doesn't exist)
-fn recursive_paths<P: AsRef<Path>>(root: P) -> Vec<PathBuf> {
-    // dump [files rooted at [path] into [accum]
-    fn add_files(accum: &mut Vec<PathBuf>, path: &Path, root: &Path) {
-        for child in path.read_dir().into_iter().flatten() {
-            add_files(
-                accum,
-                &child.expect("read_dir returns a valid dir").path(),
-                root,
-            )
-        }
-        accum.push(path.strip_prefix(root).unwrap().to_path_buf());
-    }
-
-    let mut result = vec![];
-    add_files(&mut result, root.as_ref(), root.as_ref());
-    result.sort();
-    result
-}
-
-/// # Infrastructure tests ////////////////////////////////////////////////////////////////////////
-
-#[test]
-fn test_new_file_slurp() {
-    let mut proj = Project::new().unwrap();
-    new_file(&mut proj, "foo/bar/baz.txt", "test text").unwrap();
-    assert_snapshot!(slurp_file(&proj, "foo/bar/baz.txt").unwrap(), @"test text");
-}
-
-#[test]
-fn test_new_file_recursive_paths() {
-    let mut proj = Project::new().unwrap();
-    new_file(&mut proj, "foo/bar.txt", "foo/bar").unwrap();
-    new_file(&mut proj, "foo/baz/baz.txt", "foo/baz/baz").unwrap();
-    new_file(&mut proj, "qux.txt", "qux").unwrap();
-    new_file(&mut proj, "quux/.foo", "qux").unwrap();
-
-    assert_debug_snapshot!(recursive_paths(proj.path()), @r###"
-    [
-        "",
-        "foo",
-        "foo/bar.txt",
-        "foo/baz",
-        "foo/baz/baz.txt",
-        "quux",
-        "quux/.foo",
-        "qux.txt",
-    ]
-    "###);
-}
-
-/// # Tests for `sui move new` /////////////////////////////////////////////////////////////////////
+// # Tests for `sui move new` /////////////////////////////////////////////////////////////////////
 
 #[test]
 /// Check files created by `sui-move new example`, where `example/` doesn't exist
@@ -239,11 +159,11 @@ fn test_new_gitignore_has_build() {
     new_file(
         &mut proj,
         "example/.gitignore",
-        r###"
-first_ignore
-build/*
-another_ignore
-        "###,
+        "\
+            first_ignore\n\
+            build/*\n\
+            another_ignore\n\
+        ",
     )
     .unwrap();
 
@@ -383,3 +303,83 @@ another_ignore
 //     assert_snapshot!(slurp_file(&mut proj, "example/Move.toml").expect("Move.toml should exist"), @"dummy");
 //     assert_snapshot!(slurp_file(&mut proj, "example/.gitignore").expect(".gitignore should exist"), @"existing_ignore\n");
 // }
+
+// # Test infrastructure //////////////////////////////////////////////////////////////////////////
+
+/// create a `sui-move` Command that runs in a new temporary directory
+fn sui_move() -> (Project, Command) {
+    let project = Project::new().unwrap();
+    let mut cmd = Command::new(get_cargo_bin("sui-move"));
+    cmd.current_dir(project.path());
+    (project, cmd)
+}
+
+/// create a file in `[proj]/[path]` containing `[contents]`
+fn new_file(proj: &mut Project, path: impl AsRef<Path>, contents: &str) -> anyhow::Result<()> {
+    let fullpath = proj.path().join(&path);
+    let parent = fullpath
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("joined path is expected to have a parent"))?;
+    fs::create_dir_all(parent)?;
+    proj.new_file(path, contents)
+}
+
+/// return the contents of the file `[proj]/[path]`
+fn slurp_file(proj: &Project, path: impl AsRef<Path>) -> anyhow::Result<String> {
+    fs::read_to_string(proj.path().join(path))
+}
+
+/// return the set of files (and directories) recursively contained in the directory at [root].
+/// Results are normalized relative to [root] and returned in sorted order.
+/// [root] is included (even if it doesn't exist)
+fn recursive_paths(root: impl AsRef<Path>) -> Vec<PathBuf> {
+    // dump [files rooted at [path] into [accum]
+    fn add_files(accum: &mut Vec<PathBuf>, path: &Path, root: &Path) {
+        for child in path.read_dir().into_iter().flatten() {
+            add_files(
+                accum,
+                &child.expect("read_dir returns a valid dir").path(),
+                root,
+            )
+        }
+        accum.push(path.strip_prefix(root).unwrap().to_path_buf());
+    }
+
+    let mut result = vec![];
+    add_files(&mut result, root.as_ref(), root.as_ref());
+    result.sort();
+    result
+}
+
+// # Infrastructure tests ////////////////////////////////////////////////////////////////////////
+
+#[test]
+/// slurping a new file gives the correct contents.
+fn test_new_file_slurp() {
+    let mut proj = Project::new().unwrap();
+    new_file(&mut proj, "foo/bar/baz.txt", "test text").unwrap();
+    assert_snapshot!(slurp_file(&proj, "foo/bar/baz.txt").unwrap(), @"test text");
+}
+
+#[test]
+/// [`recursive_paths`] gives correct results after creating a bunch of new files
+fn test_new_file_recursive_paths() {
+    let mut proj = Project::new().unwrap();
+    new_file(&mut proj, "foo/bar.txt", "foo/bar").unwrap();
+    new_file(&mut proj, "foo/baz/baz.txt", "foo/baz/baz").unwrap();
+    new_file(&mut proj, "qux.txt", "qux").unwrap();
+    new_file(&mut proj, "quux/.foo", "qux").unwrap();
+
+    assert_debug_snapshot!(recursive_paths(proj.path()), @r###"
+    [
+        "",
+        "foo",
+        "foo/bar.txt",
+        "foo/baz",
+        "foo/baz/baz.txt",
+        "quux",
+        "quux/.foo",
+        "qux.txt",
+    ]
+    "###);
+}
