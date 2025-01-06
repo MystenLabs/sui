@@ -342,6 +342,7 @@ fn thdb_config() -> Config {
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     config.max_dirty_keys = 1024;
+    config.max_maps = 32; // 32Gb of mapped space
     config
 }
 
