@@ -350,7 +350,7 @@ async fn test_congestion_control_execution_cancellation() {
         .unwrap();
     authority_state_2
         .epoch_store_for_testing()
-        .acquire_shared_locks_from_effects(
+        .acquire_shared_version_assignments_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
             &effects,
             authority_state_2.get_object_cache_reader().as_ref(),
