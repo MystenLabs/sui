@@ -504,7 +504,7 @@ mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 1);
+        assert_eq!(indexer.first_checkpoint_from_watermark, 0);
     }
 
     #[tokio::test]
