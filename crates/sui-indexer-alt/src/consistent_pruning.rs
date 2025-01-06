@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::bail;
 use dashmap::DashMap;
 use sui_types::base_types::ObjectID;
 
@@ -52,12 +53,24 @@ impl PruningLookupTable {
         self.table.insert(checkpoint, prune_info);
     }
 
-    /// Given a range of checkpoints to prune (both inclusive), return the set of objects
-    /// that should be pruned, as well as the checkpoint upper bound (exclusive) that
+    /// Given a range of checkpoints to prune (from inclusive, to_exclusive exclusive), return the set of objects
+    /// that should be pruned, and for each object the checkpoint upper bound (exclusive) that
     /// the objects should be pruned at.
-    pub fn take(&self, cp_from: u64, cp_to: u64) -> anyhow::Result<BTreeMap<ObjectID, u64>> {
+    pub fn take(
+        &self,
+        cp_from: u64,
+        cp_to_exclusive: u64,
+    ) -> anyhow::Result<BTreeMap<ObjectID, u64>> {
+        if cp_from >= cp_to_exclusive {
+            bail!(
+                "No valid range to take from the lookup table: from={}, to_exclusive={}",
+                cp_from,
+                cp_to_exclusive
+            );
+        }
+
         let mut result: BTreeMap<ObjectID, u64> = BTreeMap::new();
-        for cp in cp_from..=cp_to {
+        for cp in cp_from..cp_to_exclusive {
             let info = self
                 .table
                 .remove(&cp)
@@ -98,7 +111,7 @@ mod tests {
         table.insert(2, info2);
 
         // Prune checkpoints 1-2
-        let result = table.take(1, 2).unwrap();
+        let result = table.take(1, 3).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[&obj1], 1);
         assert_eq!(result[&obj2], 2);
@@ -120,7 +133,7 @@ mod tests {
         table.insert(2, info2);
 
         // Prune checkpoints 1-2
-        let result = table.take(1, 2).unwrap();
+        let result = table.take(1, 3).unwrap();
         assert_eq!(result.len(), 1);
         // For deleted objects, we prune up to and including the deletion checkpoint
         assert_eq!(result[&obj], 3);
@@ -136,7 +149,7 @@ mod tests {
         table.insert(1, info);
 
         // Try to prune checkpoint that doesn't exist in the lookup table.
-        assert!(table.take(2, 2).is_err());
+        assert!(table.take(2, 3).is_err());
     }
 
     #[test]
@@ -155,7 +168,7 @@ mod tests {
         table.insert(2, info2);
 
         // Prune checkpoints 1-2
-        let result = table.take(1, 2).unwrap();
+        let result = table.take(1, 3).unwrap();
         assert_eq!(result.len(), 1);
         // Should use the latest mutation checkpoint
         assert_eq!(result[&obj], 2);

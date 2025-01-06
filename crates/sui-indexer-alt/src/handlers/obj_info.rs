@@ -103,10 +103,16 @@ impl Handler for ObjInfo {
             .await?)
     }
 
-    async fn prune(&self, from: u64, to: u64, conn: &mut db::Connection<'_>) -> Result<usize> {
+    // TODO: Add tests for this function.
+    async fn prune(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut db::Connection<'_>,
+    ) -> Result<usize> {
         use sui_indexer_alt_schema::schema::obj_info::dsl;
 
-        let to_prune = self.pruning_lookup_table.take(from, to)?;
+        let to_prune = self.pruning_lookup_table.take(from, to_exclusive)?;
 
         // For each (object_id, cp_sequence_number_exclusive), delete all entries in obj_info with
         // cp_sequence_number less than cp_sequence_number_exclusive that match the object_id.
