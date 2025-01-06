@@ -45,7 +45,7 @@ pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 pub const TICKER_PATH: &str = "/ticker";
 pub const LAST_TRADE_PATH: &str = "/last_trade/:pool_name";
-pub const TOTAL_TRADES_PATH: &str = "/total_trades";
+pub const TRADE_COUNT_PATH: &str = "/trade_count";
 pub const ASSETS_PATH: &str = "/assets";
 pub const SUMMARY_PATH: &str = "/summary";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
@@ -86,7 +86,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
         .route(TICKER_PATH, get(ticker))
         .route(LAST_TRADE_PATH, get(last_trade))
-        .route(TOTAL_TRADES_PATH, get(total_trades))
+        .route(TRADE_COUNT_PATH, get(trade_count))
         .route(ASSETS_PATH, get(assets))
         .route(SUMMARY_PATH, get(summary))
         .route(DEEP_SUPPLY_PATH, get(deep_supply))
@@ -824,7 +824,7 @@ async fn last_trade(
     Ok(Json(vec![trade]))
 }
 
-async fn total_trades(
+async fn trade_count(
     Query(params): Query<HashMap<String, String>>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<i64>, DeepBookError> {
