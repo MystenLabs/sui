@@ -13,7 +13,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use diesel::dsl::sql;
+use diesel::dsl::{count_star, sql};
 use diesel::BoolExpressionMethods;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
@@ -44,7 +44,8 @@ pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 pub const TICKER_PATH: &str = "/ticker";
-pub const TRADES_PATH: &str = "/trades/:pool_name";
+pub const LAST_TRADE_PATH: &str = "/last_trade/:pool_name";
+pub const TOTAL_TRADES_PATH: &str = "/total_trades";
 pub const ASSETS_PATH: &str = "/assets";
 pub const SUMMARY_PATH: &str = "/summary";
 pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
@@ -84,7 +85,8 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route(LEVEL2_PATH, get(orderbook))
         .route(GET_NET_DEPOSITS, get(get_net_deposits))
         .route(TICKER_PATH, get(ticker))
-        .route(TRADES_PATH, get(trades))
+        .route(LAST_TRADE_PATH, get(last_trade))
+        .route(TOTAL_TRADES_PATH, get(total_trades))
         .route(ASSETS_PATH, get(assets))
         .route(SUMMARY_PATH, get(summary))
         .route(DEEP_SUPPLY_PATH, get(deep_supply))
@@ -741,7 +743,7 @@ async fn price_change_24h(
     Ok(response)
 }
 
-async fn trades(
+async fn last_trade(
     Path(pool_name): Path<String>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<Vec<HashMap<String, Value>>>, DeepBookError> {
@@ -820,6 +822,38 @@ async fn trades(
     ]);
 
     Ok(Json(vec![trade]))
+}
+
+async fn total_trades(
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<i64>, DeepBookError> {
+    // Parse start_time and end_time
+    let end_time = params
+        .get("end_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        });
+
+    let start_time = params
+        .get("start_time")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|t| t * 1000) // Convert to milliseconds
+        .unwrap_or_else(|| end_time - 24 * 60 * 60 * 1000);
+
+    let connection = &mut state.pool.get().await?;
+    let result: i64 = schema::order_fills::table
+        .select(count_star())
+        .filter(schema::order_fills::checkpoint_timestamp_ms.between(start_time, end_time))
+        .first(connection)
+        .await?;
+
+    Ok(Json(result))
 }
 
 fn calculate_trade_id(maker_id: &str, taker_id: &str) -> Result<u128, DeepBookError> {
