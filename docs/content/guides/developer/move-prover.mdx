@@ -139,6 +139,10 @@ Let's break down the specification:
    ensures(new_shares.mul(old_balance).lte(old_shares.mul(new_balance)));
    ```
 
+   `ensures` is a spec-only keyword that specifies a condition which must hold as an effect of the function call.
+
+   `mul` and `lte` are spec-only operators over the unbounded integer types described above.
+
 6. Finally, we return the result of the function call:
 
    ```
