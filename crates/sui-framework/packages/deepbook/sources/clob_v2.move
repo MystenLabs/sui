@@ -2008,7 +2008,7 @@ module deepbook::clob_v2 {
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
 
-        // If price_low is greater than the higest element in the tree, we return empty
+        // If price_low is greater than the highest element in the tree, we return empty
         if (price_low > price_high_) {
             return (price_vec, depth_vec)
         };

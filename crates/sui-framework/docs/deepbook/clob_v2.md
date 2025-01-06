@@ -3822,7 +3822,7 @@ The latter is the corresponding depth list
     <b>let</b> (price_low_, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.bids);
     <b>let</b> (price_high_, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.bids);
 
-    // If price_low is greater than the higest element in the tree, we <b>return</b> empty
+    // If price_low is greater than the highest element in the tree, we <b>return</b> empty
     <b>if</b> (price_low &gt; price_high_) {
         <b>return</b> (price_vec, depth_vec)
     };
