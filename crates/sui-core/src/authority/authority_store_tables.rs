@@ -158,7 +158,7 @@ impl AuthorityPerpetualTables {
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
         registry: &Registry,
     ) -> Self {
-        const MUTEXES: usize = 512;
+        const MUTEXES: usize = 1024;
         let db_options_override = db_options_override.unwrap_or_default();
         let db_options =
             db_options_override.apply_to(default_db_options().optimize_db_for_write_throughput(4));
