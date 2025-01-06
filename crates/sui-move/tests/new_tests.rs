@@ -5,7 +5,6 @@ use anyhow;
 use cli_sandbox::Project;
 use insta::{assert_debug_snapshot, assert_snapshot};
 use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
-use std::io::Read;
 use std::path::Path;
 use std::{fs, path::PathBuf, process::Command};
 
@@ -326,7 +325,7 @@ fn new_file(proj: &mut Project, path: impl AsRef<Path>, contents: &str) -> anyho
 
 /// return the contents of the file `[proj]/[path]`
 fn slurp_file(proj: &Project, path: impl AsRef<Path>) -> anyhow::Result<String> {
-    fs::read_to_string(proj.path().join(path))
+    Ok(fs::read_to_string(proj.path().join(path))?)
 }
 
 /// return the set of files (and directories) recursively contained in the directory at [root].
