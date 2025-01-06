@@ -305,6 +305,18 @@ ConsensusDeterminedVersionAssignments:
                   TUPLE:
                     - TYPENAME: ObjectID
                     - TYPENAME: SequenceNumber
+    1:
+      CancelledTransactionsV2:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TUPLE:
+                        - TYPENAME: ObjectID
+                        - TYPENAME: SequenceNumber
+                    - TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
