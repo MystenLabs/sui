@@ -50,6 +50,25 @@ pub static MODULE_MEMBER_OR_MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     token_set
 });
 
+pub static DOC_COMMENT_STOP_SET: Lazy<TokenSet> = Lazy::new(|| {
+    let mut token_set = TokenSet::new();
+    // start of a new item that could have a doc comment
+    token_set.add_all(MODULE_MEMBER_TOKENS);
+    token_set.add_all(MEMBER_VISIBILITY_TOKENS);
+    token_set.add_all(MEMBER_MODIFIER_TOKENS);
+    token_set.add_identifier(MACRO_MODIFIER);
+    token_set.add_identifier(ENTRY_MODIFIER);
+    token_set.add_identifier(NATIVE_MODIFIER);
+    // TODO how to deal with 2024 keywords?
+    token_set.add(Tok::Enum);
+    token_set.add(Tok::Module);
+    // end of an item that might have had a doc comment
+    token_set.add(Tok::Semicolon);
+    token_set.add(Tok::RBrace);
+    token_set.add(Tok::RParen);
+    token_set
+});
+
 const PARAM_STARTS: &[Tok] = &[
     Tok::Identifier,
     Tok::Mut,

@@ -4550,13 +4550,11 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
     match context.tokens.peek() {
         // Top-level specification constructs
         Tok::Invariant => {
-            context.tokens.advance_doc_comment();
             let spec_string = consume_spec_string(context)?;
             consume_token(context.tokens, Tok::Semicolon)?;
             Ok(ModuleMember::Spec(spec_string))
         }
         Tok::Spec => {
-            context.tokens.advance_doc_comment();
             match context.tokens.lookahead() {
                 Ok(Tok::Fun) | Ok(Tok::Native) => {
                     context.tokens.advance()?;
@@ -4579,12 +4577,9 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             }
         }
         // Regular move constructs
-        Tok::Friend => {
-            context.tokens.advance_doc_comment();
-            Ok(ModuleMember::Friend(parse_friend_decl(
-                attributes, context,
-            )?))
-        }
+        Tok::Friend => Ok(ModuleMember::Friend(parse_friend_decl(
+            attributes, context,
+        )?)),
         _ => {
             let doc = match_doc_comments(context);
             let start_loc = context.tokens.start_loc();

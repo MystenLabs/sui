@@ -6,7 +6,10 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    parser::{syntax::make_loc, token_set::TokenSet},
+    parser::{
+        syntax::make_loc,
+        token_set::{TokenSet, DOC_COMMENT_STOP_SET},
+    },
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
@@ -412,7 +415,7 @@ impl<'input> Lexer<'input> {
         Ok(text)
     }
 
-    pub fn advance_doc_comment(&mut self) {
+    fn advance_doc_comment(&mut self) {
         if let Some(c) = self.current_doc_comment.take() {
             self.unmatched_doc_comments.push(c)
         }
@@ -519,6 +522,9 @@ impl<'input> Lexer<'input> {
     /// skipping over non-tokens, the first diagnostic will be recorded and returned, so that it can
     /// be acted upon (if parsing needs to stop) or ignored (if parsing should proceed regardless).
     pub fn advance(&mut self) -> Result<(), Box<Diagnostic>> {
+        if DOC_COMMENT_STOP_SET.contains(self.token, self.content()) {
+            self.advance_doc_comment();
+        }
         let text_end = self.text.len();
         self.prev_end = self.cur_end;
         let mut err = None;
