@@ -15,7 +15,7 @@ parentPort.on('message', async (message) => {
 	const { text, options } = JSON.parse(message);
 
 	return format(text, {
-		parser: 'move-parse',
+		parser: 'move',
 		plugins: [plugin],
 		tabWidth: options.tabWidth,
 		printWidth: options.printWidth,

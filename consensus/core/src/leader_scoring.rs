@@ -182,7 +182,7 @@ pub(crate) struct ScoringSubdag {
     // TODO: Include skipped leaders as well
     pub(crate) leaders: HashSet<BlockRef>,
     // A map of votes to the stake of strongly linked blocks that include that vote
-    // Note: Inlcuding stake aggregator so that we can quickly check if it exceeds
+    // Note: Including stake aggregator so that we can quickly check if it exceeds
     // quourum threshold and only include those scores for certain scoring strategies.
     pub(crate) votes: BTreeMap<BlockRef, StakeAggregator<QuorumThreshold>>,
 }

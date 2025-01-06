@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{ApiEndpoint, RouteHandler};
 use crate::reader::StateReader;
-use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::Result;
 use crate::{rest::PageCursor, RpcService, RpcServiceError};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::Json;
-use openapiv3::v3_1::Operation;
-use sui_sdk_types::types::{Address, ObjectId, StructTag, Version};
+use sui_sdk_types::{Address, ObjectId, StructTag, Version};
 use sui_types::sui_sdk_types_conversions::struct_tag_core_to_sdk;
 use tap::Pipe;
 
@@ -24,23 +23,7 @@ impl ApiEndpoint<RpcService> for ListAccountObjects {
         "/accounts/{account}/objects"
     }
 
-    fn operation(&self, generator: &mut schemars::gen::SchemaGenerator) -> Operation {
-        OperationBuilder::new()
-            .tag("Account")
-            .operation_id("ListAccountObjects")
-            .path_parameter::<Address>("account", generator)
-            .query_parameters::<ListAccountOwnedObjectsQueryParameters>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<Vec<AccountOwnedObjectInfo>>(generator)
-                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
-                    .build(),
-            )
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_account_objects)
     }
 }
@@ -82,7 +65,7 @@ async fn list_account_objects(
     Ok((PageCursor(cursor), Json(object_info)))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ListAccountOwnedObjectsQueryParameters {
     pub limit: Option<u32>,
     pub start: Option<ObjectId>,
@@ -101,12 +84,11 @@ impl ListAccountOwnedObjectsQueryParameters {
 }
 
 #[serde_with::serde_as]
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct AccountOwnedObjectInfo {
     pub owner: Address,
     pub object_id: ObjectId,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::rest::_schemars::U64")]
     pub version: Version,
     #[serde(rename = "type")]
     pub type_: StructTag,

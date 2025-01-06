@@ -23,6 +23,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use watermarks::CommitterWatermark;
 
+pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod pipeline;

@@ -34,6 +34,7 @@ pub struct SharedObjectCongestionTracker {
     gas_budget_based_txn_cost_cap_factor: Option<u64>,
     gas_budget_based_txn_cost_absolute_cap: Option<u64>,
     max_txn_cost_overage_per_object_in_commit: u64,
+    allowed_txn_cost_overage_burst_per_object_in_commit: u64,
 }
 
 impl SharedObjectCongestionTracker {
@@ -44,7 +45,13 @@ impl SharedObjectCongestionTracker {
         gas_budget_based_txn_cost_cap_factor: Option<u64>,
         gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
         max_txn_cost_overage_per_object_in_commit: u64,
+        allowed_txn_cost_overage_burst_per_object_in_commit: u64,
     ) -> Self {
+        assert!(
+            allowed_txn_cost_overage_burst_per_object_in_commit <= max_txn_cost_overage_per_object_in_commit,
+            "burst limit bust be <= absolute limit; allowed_txn_cost_overage_burst_per_object_in_commit = {allowed_txn_cost_overage_burst_per_object_in_commit}, max_txn_cost_overage_per_object_in_commit = {max_txn_cost_overage_per_object_in_commit}"
+        );
+
         let object_execution_cost: HashMap<ObjectID, u64> =
             initial_object_debts.into_iter().collect();
         let max_accumulated_txn_cost_per_object_in_commit =
@@ -75,6 +82,7 @@ impl SharedObjectCongestionTracker {
             gas_budget_based_txn_cost_cap_factor,
             gas_budget_based_txn_cost_absolute_cap,
             max_txn_cost_overage_per_object_in_commit,
+            allowed_txn_cost_overage_burst_per_object_in_commit,
         }
     }
 
@@ -106,6 +114,9 @@ impl SharedObjectCongestionTracker {
             protocol_config.gas_budget_based_txn_cost_absolute_cap_commit_count_as_option(),
             protocol_config
                 .max_txn_cost_overage_per_object_in_commit_as_option()
+                .unwrap_or(0),
+            protocol_config
+                .allowed_txn_cost_overage_burst_per_object_in_commit_as_option()
                 .unwrap_or(0),
         ))
     }
@@ -149,20 +160,16 @@ impl SharedObjectCongestionTracker {
             return None;
         }
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
+        let end_cost = start_cost.saturating_add(tx_cost);
 
-        // Allow tx if it's within budget.
-        if start_cost.saturating_add(tx_cost) <= self.max_accumulated_txn_cost_per_object_in_commit
-        {
-            return None;
-        }
-
-        // Allow over-budget tx if it's not above the overage limit.
-        if start_cost <= self.max_accumulated_txn_cost_per_object_in_commit
-            && start_cost.saturating_add(tx_cost)
-                <= self
-                    .max_accumulated_txn_cost_per_object_in_commit
-                    .saturating_add(self.max_txn_cost_overage_per_object_in_commit)
-        {
+        // Allow tx if it's within configured limits.
+        let burst_limit = self
+            .max_accumulated_txn_cost_per_object_in_commit
+            .saturating_add(self.allowed_txn_cost_overage_burst_per_object_in_commit);
+        let absolute_limit = self
+            .max_accumulated_txn_cost_per_object_in_commit
+            .saturating_add(self.max_txn_cost_overage_per_object_in_commit);
+        if start_cost <= burst_limit && end_cost <= absolute_limit {
             return None;
         }
 
@@ -332,6 +339,7 @@ mod object_cost_tests {
             None,
             None,
             0,
+            0,
         );
 
         let shared_input_objects = construct_shared_input_objects(&[(object_id_0, false)]);
@@ -483,6 +491,7 @@ mod object_cost_tests {
                     None,
                     None,
                     0,
+                    0,
                 )
             }
             PerObjectCongestionControlMode::TotalTxCount => {
@@ -497,6 +506,7 @@ mod object_cost_tests {
                     None,
                     None,
                     0,
+                    0,
                 )
             }
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
@@ -510,6 +520,7 @@ mod object_cost_tests {
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
                     None,
+                    0,
                     0,
                 )
             }
@@ -575,6 +586,7 @@ mod object_cost_tests {
             Some(0), // Make should_defer_due_to_object_congestion always defer transactions.
             Some(2),
             None,
+            0,
             0,
         );
 
@@ -700,6 +712,7 @@ mod object_cost_tests {
                     None,
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
+                    0,
                 )
             }
             PerObjectCongestionControlMode::TotalTxCount => {
@@ -714,6 +727,7 @@ mod object_cost_tests {
                     None,
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
+                    0,
                 )
             }
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
@@ -728,6 +742,7 @@ mod object_cost_tests {
                     Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
+                    0,
                 )
             }
         };
@@ -746,6 +761,138 @@ mod object_cost_tests {
         }
 
         // Read/write to object 1 should go through even though the budget is exceeded.
+        for mutable in [true, false].iter() {
+            let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
+            assert!(shared_object_congestion_tracker
+                .should_defer_due_to_object_congestion(&tx, &HashMap::new(), 0,)
+                .is_none());
+        }
+
+        // Transactions touching both objects should be deferred, with object 0 as the congested object.
+        for mutable_0 in [true, false].iter() {
+            for mutable_1 in [true, false].iter() {
+                let tx = build_transaction(
+                    &[(shared_obj_0, *mutable_0), (shared_obj_1, *mutable_1)],
+                    tx_gas_budget,
+                );
+                if let Some((_, congested_objects)) = shared_object_congestion_tracker
+                    .should_defer_due_to_object_congestion(&tx, &HashMap::new(), 0)
+                {
+                    assert_eq!(congested_objects.len(), 1);
+                    assert_eq!(congested_objects[0], shared_obj_0);
+                } else {
+                    panic!("should defer");
+                }
+            }
+        }
+    }
+
+    #[rstest]
+    fn test_should_defer_allow_overage_with_burst(
+        #[values(
+            PerObjectCongestionControlMode::TotalGasBudget,
+            PerObjectCongestionControlMode::TotalTxCount,
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap
+        )]
+        mode: PerObjectCongestionControlMode,
+    ) {
+        telemetry_subscribers::init_for_testing();
+
+        let shared_obj_0 = ObjectID::random();
+        let shared_obj_1 = ObjectID::random();
+
+        let tx_gas_budget = 100;
+
+        // Set max_accumulated_txn_cost_per_object_in_commit to allow 1 transaction to go through
+        // before overage occurs.
+        let max_accumulated_txn_cost_per_object_in_commit = match mode {
+            PerObjectCongestionControlMode::None => unreachable!(),
+            PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget,
+            PerObjectCongestionControlMode::TotalTxCount => 2,
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget,
+        };
+
+        // Set burst limit to allow 1 extra transaction to go through.
+        let allowed_txn_cost_overage_burst_per_object_in_commit = match mode {
+            PerObjectCongestionControlMode::None => unreachable!(),
+            PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget * 2,
+            PerObjectCongestionControlMode::TotalTxCount => 2,
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget * 2,
+        };
+
+        let shared_object_congestion_tracker = match mode {
+            PerObjectCongestionControlMode::None => unreachable!(),
+            PerObjectCongestionControlMode::TotalGasBudget => {
+                // Construct object execution cost as following
+                //                199   301
+                // object 0:            |
+                // object 1:      |
+                //
+                // burst limit is 100 + 200 = 300
+                // tx cost is 100 (gas budget)
+                SharedObjectCongestionTracker::new(
+                    [(shared_obj_0, 301), (shared_obj_1, 199)],
+                    mode,
+                    Some(max_accumulated_txn_cost_per_object_in_commit),
+                    None,
+                    None,
+                    max_accumulated_txn_cost_per_object_in_commit * 10,
+                    allowed_txn_cost_overage_burst_per_object_in_commit,
+                )
+            }
+            PerObjectCongestionControlMode::TotalTxCount => {
+                // Construct object execution cost as following
+                //                4     5
+                // object 0:            |
+                // object 1:      |
+                //
+                // burst limit is 2 + 2 = 4
+                // tx cost is 1 (tx count)
+                SharedObjectCongestionTracker::new(
+                    [(shared_obj_0, 5), (shared_obj_1, 4)],
+                    mode,
+                    Some(max_accumulated_txn_cost_per_object_in_commit),
+                    None,
+                    None,
+                    max_accumulated_txn_cost_per_object_in_commit * 10,
+                    allowed_txn_cost_overage_burst_per_object_in_commit,
+                )
+            }
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+                // Construct object execution cost as following
+                //                250   301
+                // object 0:            |
+                // object 1:      |
+                //
+                // burst limit is 100 + 200 = 300
+                // tx cost is 90 (gas budget capped at 45*(1 move call + 1 input))
+                SharedObjectCongestionTracker::new(
+                    [(shared_obj_0, 301), (shared_obj_1, 250)],
+                    mode,
+                    Some(max_accumulated_txn_cost_per_object_in_commit),
+                    Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
+                    None,
+                    max_accumulated_txn_cost_per_object_in_commit * 10,
+                    allowed_txn_cost_overage_burst_per_object_in_commit,
+                )
+            }
+        };
+
+        // Read/write to object 0 should be deferred.
+        for mutable in [true, false].iter() {
+            let tx = build_transaction(&[(shared_obj_0, *mutable)], tx_gas_budget);
+            if let Some((_, congested_objects)) = shared_object_congestion_tracker
+                .should_defer_due_to_object_congestion(&tx, &HashMap::new(), 0)
+            {
+                assert_eq!(congested_objects.len(), 1);
+                assert_eq!(congested_objects[0], shared_obj_0);
+            } else {
+                panic!("should defer");
+            }
+        }
+
+        // Read/write to object 1 should go through even though the budget is exceeded
+        // even before the cost of this tx is considered.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
             assert!(shared_object_congestion_tracker
@@ -794,6 +941,7 @@ mod object_cost_tests {
             cap_factor,
             None,
             0,
+            0,
         );
         assert_eq!(shared_object_congestion_tracker.max_cost(), 10);
 
@@ -808,6 +956,7 @@ mod object_cost_tests {
                 Some(0), // not part of this test
                 cap_factor,
                 None,
+                0,
                 0,
             )
         );
@@ -830,6 +979,7 @@ mod object_cost_tests {
                 Some(0), // not part of this test
                 cap_factor,
                 None,
+                0,
                 0,
             )
         );
@@ -867,6 +1017,7 @@ mod object_cost_tests {
                 cap_factor,
                 None,
                 0,
+                0,
             )
         );
         assert_eq!(
@@ -903,6 +1054,7 @@ mod object_cost_tests {
                 Some(0), // not part of this test
                 cap_factor,
                 None,
+                0,
                 0,
             )
         );
@@ -949,6 +1101,8 @@ mod object_cost_tests {
                     None,
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
+                    // Set a burst limit to verify that it does not affect debt calculation.
+                    max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
@@ -960,6 +1114,8 @@ mod object_cost_tests {
                     Some(45),
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
+                    // Set a burst limit to verify that it does not affect debt calculation.
+                    max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
             PerObjectCongestionControlMode::TotalTxCount => {
@@ -971,6 +1127,8 @@ mod object_cost_tests {
                     None,
                     None,
                     max_accumulated_txn_cost_per_object_in_commit * 10,
+                    // Set a burst limit to verify that it does not affect debt calculation.
+                    max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
         };
@@ -1011,6 +1169,7 @@ mod object_cost_tests {
             None,
             None,
             0,
+            0,
         );
 
         let accumulated_debts = shared_object_congestion_tracker.accumulated_debts();
@@ -1032,6 +1191,7 @@ mod object_cost_tests {
             Some(1000),
             Some(2),
             1000,
+            0,
         );
 
         // Create a transaction using all three objects

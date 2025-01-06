@@ -1,18 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{ApiEndpoint, RouteHandler};
 use crate::types::{GetObjectOptions, ObjectResponse};
-use crate::{
-    reader::StateReader,
-    rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
-    rest::PageCursor,
-    Result, RpcService, RpcServiceError,
-};
+use crate::{reader::StateReader, rest::PageCursor, Result, RpcService, RpcServiceError};
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
-use sui_sdk_types::types::{ObjectId, TypeTag, Version};
+use sui_sdk_types::{ObjectId, TypeTag, Version};
 use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
 use sui_types::{
     storage::{DynamicFieldIndexInfo, DynamicFieldKey},
@@ -31,26 +27,7 @@ impl ApiEndpoint<RpcService> for GetObject {
         "/objects/{object_id}"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Objects")
-            .operation_id("GetObject")
-            .path_parameter::<ObjectId>("object_id", generator)
-            .query_parameters::<GetObjectOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ObjectResponse>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_object)
     }
 }
@@ -76,27 +53,7 @@ impl ApiEndpoint<RpcService> for GetObjectWithVersion {
         "/objects/{object_id}/version/{version}"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Objects")
-            .operation_id("GetObjectWithVersion")
-            .path_parameter::<ObjectId>("object_id", generator)
-            .path_parameter::<Version>("version", generator)
-            .query_parameters::<GetObjectOptions>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<ObjectResponse>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_object_with_version)
     }
 }
@@ -122,26 +79,7 @@ impl ApiEndpoint<RpcService> for ListDynamicFields {
         "/objects/{object_id}/dynamic-fields"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Objects")
-            .operation_id("ListDynamicFields")
-            .path_parameter::<ObjectId>("object_id", generator)
-            .query_parameters::<ListDynamicFieldsQueryParameters>(generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<Vec<DynamicFieldInfo>>(generator)
-                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
-                    .build(),
-            )
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), list_dynamic_fields)
     }
 }
@@ -181,7 +119,7 @@ async fn list_dynamic_fields(
     Ok((PageCursor(cursor), Json(dynamic_fields)))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ListDynamicFieldsQueryParameters {
     pub limit: Option<u32>,
     pub start: Option<ObjectId>,
@@ -199,7 +137,7 @@ impl ListDynamicFieldsQueryParameters {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, schemars::JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 /// DynamicFieldInfo
 pub struct DynamicFieldInfo {
     pub parent: ObjectId,
@@ -236,9 +174,7 @@ impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
     }
 }
 
-#[derive(
-    Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug, schemars::JsonSchema,
-)]
+#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum DynamicFieldType {
     Field,

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_sdk_types::types::CheckpointDigest;
+use sui_sdk_types::CheckpointDigest;
 
 /// Extension trait used to facilitate retrieval of Sui specific data from responses
 pub trait ResponseExt {

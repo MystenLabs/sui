@@ -16,4 +16,3 @@ cd "$ROOT/crates/sui-swarm-config" && cargo insta test --review
 cd "$ROOT/crates/sui-open-rpc" && cargo run --example generate-json-rpc-spec -- record
 cd "$ROOT/crates/sui-core" && cargo run --example generate-format -- print > tests/staged/sui.yaml
 UPDATE=1 cargo test -p sui-framework --test build-system-packages
-UPDATE=1 cargo test -p sui-rpc-api

@@ -38,6 +38,16 @@ error[Compatibility E01001]: missing public declaration
   = structs are part of a module's public interface and cannot be removed or changed during an upgrade.
   = add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
-The following modules are missing from the new package: 'missing_module'
+error[Compatibility E01007]: module missing
+  ┌─ /Users/jordanjennings/code/sui/crates/sui/src/unit_tests/fixtures/upgrade_errors/declaration_errors_v2/Move.toml:1:1
+  │  
+1 │ ╭ [package]
+2 │ │ name = "upgrades"
+3 │ │ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+  │ ╰────────────────────────────────────────────────────────────────────────^ Package is missing module 'missing_module'
+  │  
+  = Modules which are part package cannot be removed during an upgrade.
+  = add missing module 'missing_module' back to the package.
+
 
 Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

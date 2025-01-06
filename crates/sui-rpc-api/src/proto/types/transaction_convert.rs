@@ -5,8 +5,8 @@ use tap::Pipe;
 // Transaction
 //
 
-impl From<sui_sdk_types::types::Transaction> for super::Transaction {
-    fn from(value: sui_sdk_types::types::Transaction) -> Self {
+impl From<sui_sdk_types::Transaction> for super::Transaction {
+    fn from(value: sui_sdk_types::Transaction) -> Self {
         let version = super::transaction::Version::V1(value.into());
 
         Self {
@@ -15,7 +15,7 @@ impl From<sui_sdk_types::types::Transaction> for super::Transaction {
     }
 }
 
-impl TryFrom<&super::Transaction> for sui_sdk_types::types::Transaction {
+impl TryFrom<&super::Transaction> for sui_sdk_types::Transaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Transaction) -> Result<Self, Self::Error> {
@@ -34,8 +34,8 @@ impl TryFrom<&super::Transaction> for sui_sdk_types::types::Transaction {
 // TransactionV1
 //
 
-impl From<sui_sdk_types::types::Transaction> for super::transaction::TransactionV1 {
-    fn from(value: sui_sdk_types::types::Transaction) -> Self {
+impl From<sui_sdk_types::Transaction> for super::transaction::TransactionV1 {
+    fn from(value: sui_sdk_types::Transaction) -> Self {
         Self {
             kind: Some(value.kind.into()),
             sender: Some(value.sender.into()),
@@ -45,7 +45,7 @@ impl From<sui_sdk_types::types::Transaction> for super::transaction::Transaction
     }
 }
 
-impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::types::Transaction {
+impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::Transaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::transaction::TransactionV1) -> Result<Self, Self::Error> {
@@ -86,8 +86,8 @@ impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::types::Trans
 // GasPayment
 //
 
-impl From<sui_sdk_types::types::GasPayment> for super::GasPayment {
-    fn from(value: sui_sdk_types::types::GasPayment) -> Self {
+impl From<sui_sdk_types::GasPayment> for super::GasPayment {
+    fn from(value: sui_sdk_types::GasPayment) -> Self {
         Self {
             objects: value.objects.into_iter().map(Into::into).collect(),
             owner: Some(value.owner.into()),
@@ -97,7 +97,7 @@ impl From<sui_sdk_types::types::GasPayment> for super::GasPayment {
     }
 }
 
-impl TryFrom<&super::GasPayment> for sui_sdk_types::types::GasPayment {
+impl TryFrom<&super::GasPayment> for sui_sdk_types::GasPayment {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::GasPayment) -> Result<Self, Self::Error> {
@@ -131,10 +131,10 @@ impl TryFrom<&super::GasPayment> for sui_sdk_types::types::GasPayment {
 // TransactionExpiration
 //
 
-impl From<sui_sdk_types::types::TransactionExpiration> for super::TransactionExpiration {
-    fn from(value: sui_sdk_types::types::TransactionExpiration) -> Self {
+impl From<sui_sdk_types::TransactionExpiration> for super::TransactionExpiration {
+    fn from(value: sui_sdk_types::TransactionExpiration) -> Self {
         use super::transaction_expiration::Expiration;
-        use sui_sdk_types::types::TransactionExpiration::*;
+        use sui_sdk_types::TransactionExpiration::*;
 
         let expiration = match value {
             None => Expiration::None(()),
@@ -147,7 +147,7 @@ impl From<sui_sdk_types::types::TransactionExpiration> for super::TransactionExp
     }
 }
 
-impl TryFrom<&super::TransactionExpiration> for sui_sdk_types::types::TransactionExpiration {
+impl TryFrom<&super::TransactionExpiration> for sui_sdk_types::TransactionExpiration {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::TransactionExpiration) -> Result<Self, Self::Error> {
@@ -169,10 +169,10 @@ impl TryFrom<&super::TransactionExpiration> for sui_sdk_types::types::Transactio
 // TransactionKind
 //
 
-impl From<sui_sdk_types::types::TransactionKind> for super::TransactionKind {
-    fn from(value: sui_sdk_types::types::TransactionKind) -> Self {
+impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
+    fn from(value: sui_sdk_types::TransactionKind) -> Self {
         use super::transaction_kind::Kind;
-        use sui_sdk_types::types::TransactionKind::*;
+        use sui_sdk_types::TransactionKind::*;
 
         let kind = match value {
             ProgrammableTransaction(ptb) => Kind::ProgrammableTransaction(ptb.into()),
@@ -192,7 +192,7 @@ impl From<sui_sdk_types::types::TransactionKind> for super::TransactionKind {
     }
 }
 
-impl TryFrom<&super::TransactionKind> for sui_sdk_types::types::TransactionKind {
+impl TryFrom<&super::TransactionKind> for sui_sdk_types::TransactionKind {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::TransactionKind) -> Result<Self, Self::Error> {
@@ -234,8 +234,8 @@ impl TryFrom<&super::TransactionKind> for sui_sdk_types::types::TransactionKind 
 // ConsensusCommitPrologue
 //
 
-impl From<sui_sdk_types::types::ConsensusCommitPrologue> for super::ConsensusCommitPrologue {
-    fn from(value: sui_sdk_types::types::ConsensusCommitPrologue) -> Self {
+impl From<sui_sdk_types::ConsensusCommitPrologue> for super::ConsensusCommitPrologue {
+    fn from(value: sui_sdk_types::ConsensusCommitPrologue) -> Self {
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
@@ -247,7 +247,7 @@ impl From<sui_sdk_types::types::ConsensusCommitPrologue> for super::ConsensusCom
     }
 }
 
-impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::types::ConsensusCommitPrologue {
+impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommitPrologue {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ConsensusCommitPrologue) -> Result<Self, Self::Error> {
@@ -269,8 +269,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::types::Consensu
     }
 }
 
-impl From<sui_sdk_types::types::ConsensusCommitPrologueV2> for super::ConsensusCommitPrologue {
-    fn from(value: sui_sdk_types::types::ConsensusCommitPrologueV2) -> Self {
+impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPrologue {
+    fn from(value: sui_sdk_types::ConsensusCommitPrologueV2) -> Self {
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
@@ -282,7 +282,7 @@ impl From<sui_sdk_types::types::ConsensusCommitPrologueV2> for super::ConsensusC
     }
 }
 
-impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::types::ConsensusCommitPrologueV2 {
+impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommitPrologueV2 {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ConsensusCommitPrologue) -> Result<Self, Self::Error> {
@@ -311,8 +311,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::types::Consensu
     }
 }
 
-impl From<sui_sdk_types::types::ConsensusCommitPrologueV3> for super::ConsensusCommitPrologue {
-    fn from(value: sui_sdk_types::types::ConsensusCommitPrologueV3) -> Self {
+impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPrologue {
+    fn from(value: sui_sdk_types::ConsensusCommitPrologueV3) -> Self {
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
@@ -326,7 +326,7 @@ impl From<sui_sdk_types::types::ConsensusCommitPrologueV3> for super::ConsensusC
     }
 }
 
-impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::types::ConsensusCommitPrologueV3 {
+impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommitPrologueV3 {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ConsensusCommitPrologue) -> Result<Self, Self::Error> {
@@ -367,12 +367,12 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::types::Consensu
 // ConsensusDeterminedVersionAssignments
 //
 
-impl From<sui_sdk_types::types::ConsensusDeterminedVersionAssignments>
+impl From<sui_sdk_types::ConsensusDeterminedVersionAssignments>
     for super::ConsensusDeterminedVersionAssignments
 {
-    fn from(value: sui_sdk_types::types::ConsensusDeterminedVersionAssignments) -> Self {
+    fn from(value: sui_sdk_types::ConsensusDeterminedVersionAssignments) -> Self {
         use super::consensus_determined_version_assignments::Kind;
-        use sui_sdk_types::types::ConsensusDeterminedVersionAssignments::*;
+        use sui_sdk_types::ConsensusDeterminedVersionAssignments::*;
 
         let kind = match value {
             CancelledTransactions {
@@ -390,7 +390,7 @@ impl From<sui_sdk_types::types::ConsensusDeterminedVersionAssignments>
 }
 
 impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
-    for sui_sdk_types::types::ConsensusDeterminedVersionAssignments
+    for sui_sdk_types::ConsensusDeterminedVersionAssignments
 {
     type Error = TryFromProtoError;
 
@@ -419,8 +419,8 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
 // CancelledTransaction
 //
 
-impl From<sui_sdk_types::types::CancelledTransaction> for super::CancelledTransaction {
-    fn from(value: sui_sdk_types::types::CancelledTransaction) -> Self {
+impl From<sui_sdk_types::CancelledTransaction> for super::CancelledTransaction {
+    fn from(value: sui_sdk_types::CancelledTransaction) -> Self {
         Self {
             digest: Some(value.digest.into()),
             version_assignments: value
@@ -432,7 +432,7 @@ impl From<sui_sdk_types::types::CancelledTransaction> for super::CancelledTransa
     }
 }
 
-impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::types::CancelledTransaction {
+impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CancelledTransaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CancelledTransaction) -> Result<Self, Self::Error> {
@@ -459,8 +459,8 @@ impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::types::CancelledTr
 // VersionAssignment
 //
 
-impl From<sui_sdk_types::types::VersionAssignment> for super::VersionAssignment {
-    fn from(value: sui_sdk_types::types::VersionAssignment) -> Self {
+impl From<sui_sdk_types::VersionAssignment> for super::VersionAssignment {
+    fn from(value: sui_sdk_types::VersionAssignment) -> Self {
         Self {
             object_id: Some(value.object_id.into()),
             version: Some(value.version),
@@ -468,7 +468,7 @@ impl From<sui_sdk_types::types::VersionAssignment> for super::VersionAssignment 
     }
 }
 
-impl TryFrom<&super::VersionAssignment> for sui_sdk_types::types::VersionAssignment {
+impl TryFrom<&super::VersionAssignment> for sui_sdk_types::VersionAssignment {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::VersionAssignment) -> Result<Self, Self::Error> {
@@ -489,15 +489,15 @@ impl TryFrom<&super::VersionAssignment> for sui_sdk_types::types::VersionAssignm
 // GenesisTransaction
 //
 
-impl From<sui_sdk_types::types::GenesisTransaction> for super::GenesisTransaction {
-    fn from(value: sui_sdk_types::types::GenesisTransaction) -> Self {
+impl From<sui_sdk_types::GenesisTransaction> for super::GenesisTransaction {
+    fn from(value: sui_sdk_types::GenesisTransaction) -> Self {
         Self {
             objects: value.objects.into_iter().map(Into::into).collect(),
         }
     }
 }
 
-impl TryFrom<&super::GenesisTransaction> for sui_sdk_types::types::GenesisTransaction {
+impl TryFrom<&super::GenesisTransaction> for sui_sdk_types::GenesisTransaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::GenesisTransaction) -> Result<Self, Self::Error> {
@@ -515,8 +515,8 @@ impl TryFrom<&super::GenesisTransaction> for sui_sdk_types::types::GenesisTransa
 // RandomnessStateUpdate
 //
 
-impl From<sui_sdk_types::types::RandomnessStateUpdate> for super::RandomnessStateUpdate {
-    fn from(value: sui_sdk_types::types::RandomnessStateUpdate) -> Self {
+impl From<sui_sdk_types::RandomnessStateUpdate> for super::RandomnessStateUpdate {
+    fn from(value: sui_sdk_types::RandomnessStateUpdate) -> Self {
         Self {
             epoch: Some(value.epoch),
             randomness_round: Some(value.randomness_round),
@@ -528,7 +528,7 @@ impl From<sui_sdk_types::types::RandomnessStateUpdate> for super::RandomnessStat
     }
 }
 
-impl TryFrom<&super::RandomnessStateUpdate> for sui_sdk_types::types::RandomnessStateUpdate {
+impl TryFrom<&super::RandomnessStateUpdate> for sui_sdk_types::RandomnessStateUpdate {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -563,8 +563,8 @@ impl TryFrom<&super::RandomnessStateUpdate> for sui_sdk_types::types::Randomness
 // AuthenticatorStateUpdate
 //
 
-impl From<sui_sdk_types::types::AuthenticatorStateUpdate> for super::AuthenticatorStateUpdate {
-    fn from(value: sui_sdk_types::types::AuthenticatorStateUpdate) -> Self {
+impl From<sui_sdk_types::AuthenticatorStateUpdate> for super::AuthenticatorStateUpdate {
+    fn from(value: sui_sdk_types::AuthenticatorStateUpdate) -> Self {
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
@@ -576,7 +576,7 @@ impl From<sui_sdk_types::types::AuthenticatorStateUpdate> for super::Authenticat
     }
 }
 
-impl TryFrom<&super::AuthenticatorStateUpdate> for sui_sdk_types::types::AuthenticatorStateUpdate {
+impl TryFrom<&super::AuthenticatorStateUpdate> for sui_sdk_types::AuthenticatorStateUpdate {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -609,8 +609,8 @@ impl TryFrom<&super::AuthenticatorStateUpdate> for sui_sdk_types::types::Authent
 // Jwk
 //
 
-impl From<sui_sdk_types::types::Jwk> for super::Jwk {
-    fn from(sui_sdk_types::types::Jwk { kty, e, n, alg }: sui_sdk_types::types::Jwk) -> Self {
+impl From<sui_sdk_types::Jwk> for super::Jwk {
+    fn from(sui_sdk_types::Jwk { kty, e, n, alg }: sui_sdk_types::Jwk) -> Self {
         Self {
             kty: Some(kty),
             e: Some(e),
@@ -620,7 +620,7 @@ impl From<sui_sdk_types::types::Jwk> for super::Jwk {
     }
 }
 
-impl TryFrom<&super::Jwk> for sui_sdk_types::types::Jwk {
+impl TryFrom<&super::Jwk> for sui_sdk_types::Jwk {
     type Error = TryFromProtoError;
 
     fn try_from(super::Jwk { kty, e, n, alg }: &super::Jwk) -> Result<Self, Self::Error> {
@@ -648,8 +648,8 @@ impl TryFrom<&super::Jwk> for sui_sdk_types::types::Jwk {
 // JwkId
 //
 
-impl From<sui_sdk_types::types::JwkId> for super::JwkId {
-    fn from(sui_sdk_types::types::JwkId { iss, kid }: sui_sdk_types::types::JwkId) -> Self {
+impl From<sui_sdk_types::JwkId> for super::JwkId {
+    fn from(sui_sdk_types::JwkId { iss, kid }: sui_sdk_types::JwkId) -> Self {
         Self {
             iss: Some(iss),
             kid: Some(kid),
@@ -657,7 +657,7 @@ impl From<sui_sdk_types::types::JwkId> for super::JwkId {
     }
 }
 
-impl TryFrom<&super::JwkId> for sui_sdk_types::types::JwkId {
+impl TryFrom<&super::JwkId> for sui_sdk_types::JwkId {
     type Error = TryFromProtoError;
 
     fn try_from(super::JwkId { iss, kid }: &super::JwkId) -> Result<Self, Self::Error> {
@@ -677,8 +677,8 @@ impl TryFrom<&super::JwkId> for sui_sdk_types::types::JwkId {
 // ActiveJwk
 //
 
-impl From<sui_sdk_types::types::ActiveJwk> for super::ActiveJwk {
-    fn from(value: sui_sdk_types::types::ActiveJwk) -> Self {
+impl From<sui_sdk_types::ActiveJwk> for super::ActiveJwk {
+    fn from(value: sui_sdk_types::ActiveJwk) -> Self {
         Self {
             id: Some(value.jwk_id.into()),
             jwk: Some(value.jwk.into()),
@@ -687,7 +687,7 @@ impl From<sui_sdk_types::types::ActiveJwk> for super::ActiveJwk {
     }
 }
 
-impl TryFrom<&super::ActiveJwk> for sui_sdk_types::types::ActiveJwk {
+impl TryFrom<&super::ActiveJwk> for sui_sdk_types::ActiveJwk {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ActiveJwk) -> Result<Self, Self::Error> {
@@ -715,8 +715,8 @@ impl TryFrom<&super::ActiveJwk> for sui_sdk_types::types::ActiveJwk {
 // ChangeEpoch
 //
 
-impl From<sui_sdk_types::types::ChangeEpoch> for super::ChangeEpoch {
-    fn from(value: sui_sdk_types::types::ChangeEpoch) -> Self {
+impl From<sui_sdk_types::ChangeEpoch> for super::ChangeEpoch {
+    fn from(value: sui_sdk_types::ChangeEpoch) -> Self {
         Self {
             epoch: Some(value.epoch),
             protocol_version: Some(value.protocol_version),
@@ -730,7 +730,7 @@ impl From<sui_sdk_types::types::ChangeEpoch> for super::ChangeEpoch {
     }
 }
 
-impl TryFrom<&super::ChangeEpoch> for sui_sdk_types::types::ChangeEpoch {
+impl TryFrom<&super::ChangeEpoch> for sui_sdk_types::ChangeEpoch {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -779,8 +779,8 @@ impl TryFrom<&super::ChangeEpoch> for sui_sdk_types::types::ChangeEpoch {
 // SystemPackage
 //
 
-impl From<sui_sdk_types::types::SystemPackage> for super::SystemPackage {
-    fn from(value: sui_sdk_types::types::SystemPackage) -> Self {
+impl From<sui_sdk_types::SystemPackage> for super::SystemPackage {
+    fn from(value: sui_sdk_types::SystemPackage) -> Self {
         Self {
             version: Some(value.version),
             modules: value.modules.into_iter().map(Into::into).collect(),
@@ -789,7 +789,7 @@ impl From<sui_sdk_types::types::SystemPackage> for super::SystemPackage {
     }
 }
 
-impl TryFrom<&super::SystemPackage> for sui_sdk_types::types::SystemPackage {
+impl TryFrom<&super::SystemPackage> for sui_sdk_types::SystemPackage {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::SystemPackage) -> Result<Self, Self::Error> {
@@ -811,10 +811,10 @@ impl TryFrom<&super::SystemPackage> for sui_sdk_types::types::SystemPackage {
 // EndOfEpochTransactionkind
 //
 
-impl From<sui_sdk_types::types::EndOfEpochTransactionKind> for super::EndOfEpochTransactionKind {
-    fn from(value: sui_sdk_types::types::EndOfEpochTransactionKind) -> Self {
+impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransactionKind {
+    fn from(value: sui_sdk_types::EndOfEpochTransactionKind) -> Self {
         use super::end_of_epoch_transaction_kind::Kind;
-        use sui_sdk_types::types::EndOfEpochTransactionKind::*;
+        use sui_sdk_types::EndOfEpochTransactionKind::*;
 
         let kind = match value {
             ChangeEpoch(change_epoch) => Kind::ChangeEpoch(change_epoch.into()),
@@ -832,9 +832,7 @@ impl From<sui_sdk_types::types::EndOfEpochTransactionKind> for super::EndOfEpoch
     }
 }
 
-impl TryFrom<&super::EndOfEpochTransactionKind>
-    for sui_sdk_types::types::EndOfEpochTransactionKind
-{
+impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTransactionKind {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::EndOfEpochTransactionKind) -> Result<Self, Self::Error> {
@@ -867,8 +865,8 @@ impl TryFrom<&super::EndOfEpochTransactionKind>
 // AuthenticatorStateExpire
 //
 
-impl From<sui_sdk_types::types::AuthenticatorStateExpire> for super::AuthenticatorStateExpire {
-    fn from(value: sui_sdk_types::types::AuthenticatorStateExpire) -> Self {
+impl From<sui_sdk_types::AuthenticatorStateExpire> for super::AuthenticatorStateExpire {
+    fn from(value: sui_sdk_types::AuthenticatorStateExpire) -> Self {
         Self {
             min_epoch: Some(value.min_epoch),
             authenticator_object_initial_shared_version: Some(
@@ -878,7 +876,7 @@ impl From<sui_sdk_types::types::AuthenticatorStateExpire> for super::Authenticat
     }
 }
 
-impl TryFrom<&super::AuthenticatorStateExpire> for sui_sdk_types::types::AuthenticatorStateExpire {
+impl TryFrom<&super::AuthenticatorStateExpire> for sui_sdk_types::AuthenticatorStateExpire {
     type Error = TryFromProtoError;
 
     fn try_from(
@@ -903,8 +901,8 @@ impl TryFrom<&super::AuthenticatorStateExpire> for sui_sdk_types::types::Authent
 // ProgrammableTransaction
 //
 
-impl From<sui_sdk_types::types::ProgrammableTransaction> for super::ProgrammableTransaction {
-    fn from(value: sui_sdk_types::types::ProgrammableTransaction) -> Self {
+impl From<sui_sdk_types::ProgrammableTransaction> for super::ProgrammableTransaction {
+    fn from(value: sui_sdk_types::ProgrammableTransaction) -> Self {
         Self {
             inputs: value.inputs.into_iter().map(Into::into).collect(),
             commands: value.commands.into_iter().map(Into::into).collect(),
@@ -912,7 +910,7 @@ impl From<sui_sdk_types::types::ProgrammableTransaction> for super::Programmable
     }
 }
 
-impl TryFrom<&super::ProgrammableTransaction> for sui_sdk_types::types::ProgrammableTransaction {
+impl TryFrom<&super::ProgrammableTransaction> for sui_sdk_types::ProgrammableTransaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ProgrammableTransaction) -> Result<Self, Self::Error> {
@@ -935,10 +933,10 @@ impl TryFrom<&super::ProgrammableTransaction> for sui_sdk_types::types::Programm
 // Input
 //
 
-impl From<sui_sdk_types::types::Input> for super::Input {
-    fn from(value: sui_sdk_types::types::Input) -> Self {
+impl From<sui_sdk_types::Input> for super::Input {
+    fn from(value: sui_sdk_types::Input) -> Self {
         use super::input::Kind;
-        use sui_sdk_types::types::Input::*;
+        use sui_sdk_types::Input::*;
 
         let kind = match value {
             Pure { value } => Kind::Pure(value.into()),
@@ -959,7 +957,7 @@ impl From<sui_sdk_types::types::Input> for super::Input {
     }
 }
 
-impl TryFrom<&super::Input> for sui_sdk_types::types::Input {
+impl TryFrom<&super::Input> for sui_sdk_types::Input {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Input) -> Result<Self, Self::Error> {
@@ -1000,10 +998,10 @@ impl TryFrom<&super::Input> for sui_sdk_types::types::Input {
 // Argument
 //
 
-impl From<sui_sdk_types::types::Argument> for super::Argument {
-    fn from(value: sui_sdk_types::types::Argument) -> Self {
+impl From<sui_sdk_types::Argument> for super::Argument {
+    fn from(value: sui_sdk_types::Argument) -> Self {
         use super::argument::Kind;
-        use sui_sdk_types::types::Argument::*;
+        use sui_sdk_types::Argument::*;
 
         let kind = match value {
             Gas => Kind::Gas(()),
@@ -1019,7 +1017,7 @@ impl From<sui_sdk_types::types::Argument> for super::Argument {
     }
 }
 
-impl TryFrom<&super::Argument> for sui_sdk_types::types::Argument {
+impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Argument) -> Result<Self, Self::Error> {
@@ -1050,10 +1048,10 @@ impl TryFrom<&super::Argument> for sui_sdk_types::types::Argument {
 // Command
 //
 
-impl From<sui_sdk_types::types::Command> for super::Command {
-    fn from(value: sui_sdk_types::types::Command) -> Self {
+impl From<sui_sdk_types::Command> for super::Command {
+    fn from(value: sui_sdk_types::Command) -> Self {
         use super::command::Command;
-        use sui_sdk_types::types::Command::*;
+        use sui_sdk_types::Command::*;
 
         let command = match value {
             MoveCall(move_call) => Command::MoveCall(move_call.into()),
@@ -1071,7 +1069,7 @@ impl From<sui_sdk_types::types::Command> for super::Command {
     }
 }
 
-impl TryFrom<&super::Command> for sui_sdk_types::types::Command {
+impl TryFrom<&super::Command> for sui_sdk_types::Command {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Command) -> Result<Self, Self::Error> {
@@ -1102,8 +1100,8 @@ impl TryFrom<&super::Command> for sui_sdk_types::types::Command {
 // MoveCall
 //
 
-impl From<sui_sdk_types::types::MoveCall> for super::MoveCall {
-    fn from(value: sui_sdk_types::types::MoveCall) -> Self {
+impl From<sui_sdk_types::MoveCall> for super::MoveCall {
+    fn from(value: sui_sdk_types::MoveCall) -> Self {
         Self {
             package: Some(value.package.into()),
             module: Some(value.module.into()),
@@ -1114,7 +1112,7 @@ impl From<sui_sdk_types::types::MoveCall> for super::MoveCall {
     }
 }
 
-impl TryFrom<&super::MoveCall> for sui_sdk_types::types::MoveCall {
+impl TryFrom<&super::MoveCall> for sui_sdk_types::MoveCall {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MoveCall) -> Result<Self, Self::Error> {
@@ -1161,8 +1159,8 @@ impl TryFrom<&super::MoveCall> for sui_sdk_types::types::MoveCall {
 // TransferObjects
 //
 
-impl From<sui_sdk_types::types::TransferObjects> for super::TransferObjects {
-    fn from(value: sui_sdk_types::types::TransferObjects) -> Self {
+impl From<sui_sdk_types::TransferObjects> for super::TransferObjects {
+    fn from(value: sui_sdk_types::TransferObjects) -> Self {
         Self {
             objects: value.objects.into_iter().map(Into::into).collect(),
             address: Some(value.address.into()),
@@ -1170,7 +1168,7 @@ impl From<sui_sdk_types::types::TransferObjects> for super::TransferObjects {
     }
 }
 
-impl TryFrom<&super::TransferObjects> for sui_sdk_types::types::TransferObjects {
+impl TryFrom<&super::TransferObjects> for sui_sdk_types::TransferObjects {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::TransferObjects) -> Result<Self, Self::Error> {
@@ -1194,8 +1192,8 @@ impl TryFrom<&super::TransferObjects> for sui_sdk_types::types::TransferObjects 
 // SplitCoins
 //
 
-impl From<sui_sdk_types::types::SplitCoins> for super::SplitCoins {
-    fn from(value: sui_sdk_types::types::SplitCoins) -> Self {
+impl From<sui_sdk_types::SplitCoins> for super::SplitCoins {
+    fn from(value: sui_sdk_types::SplitCoins) -> Self {
         Self {
             coin: Some(value.coin.into()),
             amounts: value.amounts.into_iter().map(Into::into).collect(),
@@ -1203,7 +1201,7 @@ impl From<sui_sdk_types::types::SplitCoins> for super::SplitCoins {
     }
 }
 
-impl TryFrom<&super::SplitCoins> for sui_sdk_types::types::SplitCoins {
+impl TryFrom<&super::SplitCoins> for sui_sdk_types::SplitCoins {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::SplitCoins) -> Result<Self, Self::Error> {
@@ -1227,8 +1225,8 @@ impl TryFrom<&super::SplitCoins> for sui_sdk_types::types::SplitCoins {
 // MergeCoins
 //
 
-impl From<sui_sdk_types::types::MergeCoins> for super::MergeCoins {
-    fn from(value: sui_sdk_types::types::MergeCoins) -> Self {
+impl From<sui_sdk_types::MergeCoins> for super::MergeCoins {
+    fn from(value: sui_sdk_types::MergeCoins) -> Self {
         Self {
             coin: Some(value.coin.into()),
             coins_to_merge: value.coins_to_merge.into_iter().map(Into::into).collect(),
@@ -1236,7 +1234,7 @@ impl From<sui_sdk_types::types::MergeCoins> for super::MergeCoins {
     }
 }
 
-impl TryFrom<&super::MergeCoins> for sui_sdk_types::types::MergeCoins {
+impl TryFrom<&super::MergeCoins> for sui_sdk_types::MergeCoins {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MergeCoins) -> Result<Self, Self::Error> {
@@ -1263,8 +1261,8 @@ impl TryFrom<&super::MergeCoins> for sui_sdk_types::types::MergeCoins {
 // Publish
 //
 
-impl From<sui_sdk_types::types::Publish> for super::Publish {
-    fn from(value: sui_sdk_types::types::Publish) -> Self {
+impl From<sui_sdk_types::Publish> for super::Publish {
+    fn from(value: sui_sdk_types::Publish) -> Self {
         Self {
             modules: value.modules.into_iter().map(Into::into).collect(),
             dependencies: value.dependencies.into_iter().map(Into::into).collect(),
@@ -1272,7 +1270,7 @@ impl From<sui_sdk_types::types::Publish> for super::Publish {
     }
 }
 
-impl TryFrom<&super::Publish> for sui_sdk_types::types::Publish {
+impl TryFrom<&super::Publish> for sui_sdk_types::Publish {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Publish) -> Result<Self, Self::Error> {
@@ -1295,8 +1293,8 @@ impl TryFrom<&super::Publish> for sui_sdk_types::types::Publish {
 // MakeMoveVector
 //
 
-impl From<sui_sdk_types::types::MakeMoveVector> for super::MakeMoveVector {
-    fn from(value: sui_sdk_types::types::MakeMoveVector) -> Self {
+impl From<sui_sdk_types::MakeMoveVector> for super::MakeMoveVector {
+    fn from(value: sui_sdk_types::MakeMoveVector) -> Self {
         Self {
             element_type: value.type_.map(Into::into),
             elements: value.elements.into_iter().map(Into::into).collect(),
@@ -1304,7 +1302,7 @@ impl From<sui_sdk_types::types::MakeMoveVector> for super::MakeMoveVector {
     }
 }
 
-impl TryFrom<&super::MakeMoveVector> for sui_sdk_types::types::MakeMoveVector {
+impl TryFrom<&super::MakeMoveVector> for sui_sdk_types::MakeMoveVector {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::MakeMoveVector) -> Result<Self, Self::Error> {
@@ -1331,8 +1329,8 @@ impl TryFrom<&super::MakeMoveVector> for sui_sdk_types::types::MakeMoveVector {
 // Upgrade
 //
 
-impl From<sui_sdk_types::types::Upgrade> for super::Upgrade {
-    fn from(value: sui_sdk_types::types::Upgrade) -> Self {
+impl From<sui_sdk_types::Upgrade> for super::Upgrade {
+    fn from(value: sui_sdk_types::Upgrade) -> Self {
         Self {
             modules: value.modules.into_iter().map(Into::into).collect(),
             dependencies: value.dependencies.into_iter().map(Into::into).collect(),
@@ -1342,7 +1340,7 @@ impl From<sui_sdk_types::types::Upgrade> for super::Upgrade {
     }
 }
 
-impl TryFrom<&super::Upgrade> for sui_sdk_types::types::Upgrade {
+impl TryFrom<&super::Upgrade> for sui_sdk_types::Upgrade {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Upgrade) -> Result<Self, Self::Error> {

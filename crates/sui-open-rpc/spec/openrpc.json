@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.40.0"
+    "version": "1.41.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "70",
+              "maxSupportedProtocolVersion": "71",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1374,6 +1374,7 @@
                 "address_to_u256_cost_base": {
                   "u64": "52"
                 },
+                "allowed_txn_cost_overage_burst_per_object_in_commit": null,
                 "base_tx_cost_fixed": {
                   "u64": "2000"
                 },
@@ -1902,6 +1903,7 @@
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
+                "sip_45_consensus_amplification_threshold": null,
                 "storage_fund_reinvest_rate": {
                   "u64": "500"
                 },

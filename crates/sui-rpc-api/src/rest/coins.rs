@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rest::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use super::{ApiEndpoint, RouteHandler};
 use crate::RpcService;
 use crate::RpcServiceError;
 use crate::{reader::StateReader, Result};
 use axum::extract::{Path, State};
 use axum::Json;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use sui_sdk_types::types::{ObjectId, StructTag};
+use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 pub struct GetCoinInfo;
@@ -23,25 +22,7 @@ impl ApiEndpoint<RpcService> for GetCoinInfo {
         "/coins/{coin_type}"
     }
 
-    fn operation(
-        &self,
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> openapiv3::v3_1::Operation {
-        OperationBuilder::new()
-            .tag("Coins")
-            .operation_id("GetCoinInfo")
-            .path_parameter::<StructTag>("coin_type", generator)
-            .response(
-                200,
-                ResponseBuilder::new()
-                    .json_content::<CoinInfo>(generator)
-                    .build(),
-            )
-            .response(404, ResponseBuilder::new().build())
-            .build()
-    }
-
-    fn handler(&self) -> crate::rest::openapi::RouteHandler<RpcService> {
+    fn handler(&self) -> RouteHandler<RpcService> {
         RouteHandler::new(self.method(), get_coin_info)
     }
 }
@@ -127,14 +108,14 @@ impl From<CoinNotFoundError> for crate::RpcServiceError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoinInfo {
     pub coin_type: StructTag,
     pub metadata: Option<CoinMetadata>,
     pub treasury: Option<CoinTreasury>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct CoinMetadata {
     pub id: ObjectId,
     /// Number of decimal places the coin uses.
@@ -163,11 +144,10 @@ impl From<sui_types::coin::CoinMetadata> for CoinMetadata {
 }
 
 #[serde_with::serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct CoinTreasury {
     pub id: Option<ObjectId>,
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::rest::_schemars::U64")]
     pub total_supply: u64,
 }
 
