@@ -60,6 +60,11 @@ pub struct IndexerArgs {
     /// Address to serve Prometheus Metrics from.
     #[arg(long, default_value_t = Self::default().metrics_address)]
     pub metrics_address: SocketAddr,
+
+    /// The genesis checkpoint to start ingestion from, this is useful for app indexer which only
+    /// needs to index checkpoint after the app contract's genesis.
+    #[arg(long, default_value_t = 0)]
+    pub genesis_checkpoint: u64,
 }
 
 pub struct Indexer {
@@ -103,6 +108,9 @@ pub struct Indexer {
 
     /// The handles for every task spawned by this indexer, used to manage graceful shutdown.
     handles: Vec<JoinHandle<()>>,
+
+    /// Default checkpoint lowerbound.
+    genesis_checkpoint: u64,
 }
 
 impl Indexer {
@@ -135,6 +143,7 @@ impl Indexer {
             pipeline,
             skip_watermark,
             metrics_address,
+            genesis_checkpoint,
         } = indexer_args;
 
         let db = Db::for_write(db_args)
@@ -173,6 +182,7 @@ impl Indexer {
             cancel,
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
+            genesis_checkpoint,
         })
     }
 
@@ -427,7 +437,7 @@ impl Indexer {
             watermark
                 .as_ref()
                 .map(|w| w.checkpoint_hi_inclusive as u64 + 1)
-                .unwrap_or_default()
+                .unwrap_or(self.genesis_checkpoint)
         };
 
         self.first_checkpoint_from_watermark =
@@ -445,6 +455,7 @@ impl Default for IndexerArgs {
             pipeline: vec![],
             skip_watermark: false,
             metrics_address: "0.0.0.0:9184".parse().unwrap(),
+            genesis_checkpoint: 0,
         }
     }
 }
