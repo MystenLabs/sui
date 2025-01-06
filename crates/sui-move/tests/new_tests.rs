@@ -87,7 +87,6 @@ fn test_new_basic() {
 }
 
 #[test]
-#[cfg(feature = "unit_test")]
 /// `sui-move build` and `sui-move test` succeed on a newly generated project
 fn test_new_build() {
     let (proj, mut cmd) = sui_move();
