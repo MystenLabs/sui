@@ -223,7 +223,8 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                     };
                     let disassembler =
                         Disassembler::new(source_mapping, DisassemblerOptions::new());
-                    merge_output(output, Some(disassembler.disassemble().unwrap()))
+                    let (disassemble_string, _) = disassembler.disassemble().unwrap();
+                    merge_output(output, Some(disassemble_string))
                 });
                 Ok(output)
             }

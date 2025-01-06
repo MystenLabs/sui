@@ -270,7 +270,7 @@ impl OnDiskCompiledPackage {
     }
 
     /// Save `bytes` under `path_under` relative to the package on disk
-    pub(crate) fn save_under(&self, file: impl AsRef<Path>, bytes: &[u8]) -> Result<()> {
+    pub fn save_under(&self, file: impl AsRef<Path>, bytes: &[u8]) -> Result<()> {
         let path_to_save = self.root_path.join(file);
         let parent = path_to_save.parent().unwrap();
         std::fs::create_dir_all(parent)?;
