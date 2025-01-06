@@ -112,6 +112,7 @@ pub async fn main() {
         Some(SCommands::Object { oid }) => {
             let oid = ObjectID::from_str(&oid).unwrap();
             let object = get_verified_object(&config, oid).await.unwrap();
+            info!("Successfully verified object: {}", oid);
 
             if let Data::Move(move_object) = &object.data {
                 let object_type = move_object.type_().clone();
@@ -143,6 +144,8 @@ pub async fn main() {
                 .await
                 .expect("Failed to sync checkpoints");
         }
-        _ => {}
+        _ => {
+            println!("No command...");
+        }
     }
 }
