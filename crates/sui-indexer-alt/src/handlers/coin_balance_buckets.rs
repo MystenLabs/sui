@@ -19,6 +19,11 @@ use sui_types::{
     TypeTag,
 };
 
+/// This handler is used to track the balance buckets of address-owned coins.
+/// The balance bucket is calculated using log10 of the coin balance.
+/// Whenever a coin object's presence, owner or balance bucket changes,
+/// we will insert a new row into the `coin_balance_buckets` table.
+/// A Delete record will be inserted when a coin object is no longer present or no longer owned by an address.
 pub(crate) struct CoinBalanceBuckets;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,7 +48,6 @@ impl Processor for CoinBalanceBuckets {
     const NAME: &'static str = "coin_balance_buckets";
     type Value = ProcessedCoinBalanceBucket;
 
-    // TODO: We need to add tests for this function.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
